@@ -1,0 +1,7 @@
+{
+  "python.defaultInterpreterPath": "python3",
+  "basedpyright.analysis": {
+    "ignore": ["**/backend/src/**"],
+    "typeCheckingMode": "basic"
+  }
+}

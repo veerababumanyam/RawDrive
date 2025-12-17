@@ -1,0 +1,409 @@
+# Implementation Plan
+
+- [x] 1. Set up backend project structure and dependencies
+  - [x] 1.1 Create FastAPI project structure with proper directory layout
+    - Create `backend/` directory with `src/`, `tests/`, `migrations/` subdirectories
+    - Set up `pyproject.toml` with dependencies (fastapi, uvicorn, asyncpg, aioredis, pydantic, python-jose, argon2-cffi, httpx, hypothesis)
+    - Create `requirements.txt` for pip compatibility
+    - _Requirements: 17.1, 17.2_
+  - [x] 1.2 Configure Pydantic Settings for environment configuration
+    - Create `src/config/settings.py` with all environment variables
+    - Implement fail-fast validation for required config
+    - Add sensitive value masking for logging
+    - _Requirements: 25.1, 25.2, 25.3, 25.4, 25.5_
+  - [x] 1.3 Write property test for configuration fail-fast
+    - **Property 23: Configuration Fail-Fast**
+    - **Validates: Requirements 25.2**
+
+- [x] 2. Set up database infrastructure
+  - [x] 2.1 Create Docker Compose configuration
+    - Configure PostgreSQL 16 with pgvector extension
+    - Configure Redis 7
+    - Set up health checks and dependency ordering
+    - Configure volume persistence
+    - _Requirements: 1.1, 2.1, 26.1, 26.2, 26.5_
+  - [x] 2.2 Create database connection pool module
+    - Implement asyncpg connection pool with configurable limits
+    - Add connection health checks and recycling
+    - Implement graceful shutdown
+    - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5_
+  - [x] 2.3 Create initial database migration (schema)
+    - Create all tables from design document (users, user_identities, workspaces, workspace_memberships, roles, member_roles, platform_roles, user_platform_roles, plans, workspace_subscriptions, audit_logs, sessions, invitations, embeddings)
+    - Add all indexes and constraints
+    - Enable pgvector extension
+    - _Requirements: 1.1, 1.2, 1.3, 1.4_
+  - [x] 2.4 Write property test for workspace_id column presence
+    - **Property 1: Workspace Data Isolation (schema check)**
+    - **Validates: Requirements 1.2**
+
+- [x] 3. Create seed data script with static test users
+  - [x] 3.1 Create subscription plans seed data
+    - Insert Free, Starter, Professional, Business, Enterprise plans with locked limits
+    - Use deterministic UUIDs for plans
+    - _Requirements: 9.4_
+  - [x] 3.2 Create platform roles seed data
+    - Insert all platform admin roles (super_admin, platform_admin, support_admin, billing_admin, content_moderator, security_admin, observability_admin, auditor_readonly, product_admin)
+    - Define permissions for each role
+    - _Requirements: 8.1_
+  - [x] 3.3 Create tier test users with workspaces
+    - Create users: free@test.rawdrive.in, starter@test.rawdrive.in, professional@test.rawdrive.in, business@test.rawdrive.in, enterprise@test.rawdrive.in
+    - Use deterministic UUIDs (11111111-1111-1111-1111-111111111001 through 005)
+    - Create corresponding workspaces with appropriate subscriptions
+    - Password: Test@123 (Argon2id hashed)
+    - _Requirements: 10.1, 10.2, 10.3_
+  - [x] 3.4 Create platform admin test users
+    - Create users: superadmin@test.rawdrive.in, platformadmin@test.rawdrive.in, supportadmin@test.rawdrive.in, billingadmin@test.rawdrive.in, contentmod@test.rawdrive.in, securityadmin@test.rawdrive.in, observabilityadmin@test.rawdrive.in, auditor@test.rawdrive.in, productadmin@test.rawdrive.in
+    - Use deterministic UUIDs (22222222-2222-2222-2222-222222222001 through 009)
+    - Assign appropriate platform roles
+    - _Requirements: 10.1, 10.2, 10.4_
+  - [x] 3.5 Create workspace role test users
+    - Create users: workspaceowner@test.rawdrive.in, workspaceadmin@test.rawdrive.in, staffuser@test.rawdrive.in, clientviewer@test.rawdrive.in
+    - Use deterministic UUIDs (33333333-3333-3333-3333-333333333001 through 004)
+    - Create test-roles-workspace with default roles
+    - Assign appropriate workspace roles
+    - _Requirements: 10.1, 10.2, 10.5_
+  - [x] 3.6 Write property test for deterministic seeding
+    - **Property 13: Deterministic Test User Seeding**
+    - **Validates: Requirements 10.1, 10.2**
+
+- [x] 4. Checkpoint - Verify database setup
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 5. Implement core authentication services
+  - [x] 5.1 Create password hashing utility with Argon2id
+    - Implement hash_password and verify_password functions
+    - Configure Argon2id parameters (memory_cost=65536, time_cost=3, parallelism=4)
+    - _Requirements: 3.1, 3.5_
+  - [x] 5.2 Write property test for password hashing
+    - **Property 2: Password Hashing Consistency**
+    - **Validates: Requirements 3.1, 3.5**
+  - [x] 5.3 Create JWT token utility
+    - Implement create_access_token and create_refresh_token functions
+    - Include user_id, workspace_id, permissions in payload
+    - Configure EdDSA signing
+    - _Requirements: 5.1, 5.2_
+  - [x] 5.4 Write property test for JWT token claims
+    - **Property 3: JWT Token Claims Completeness**
+    - **Validates: Requirements 5.1**
+  - [x] 5.5 Implement AuthService
+    - signup_local: Create user, identity, workspace, send verification email
+    - login_local: Verify credentials, issue tokens, create session
+    - refresh_token: Validate refresh token, rotate, issue new access token
+    - logout: Invalidate session and tokens
+    - _Requirements: 3.1, 3.2, 3.3, 5.2, 5.3_
+  - [x] 5.6 Write property test for token refresh rotation
+    - **Property 4: Token Refresh Rotation**
+    - **Validates: Requirements 5.3**
+  - [x] 5.7 Write property test for authentication error opacity
+    - **Property 5: Authentication Error Opacity**
+    - **Validates: Requirements 3.3**
+
+- [x] 6. Implement Google OAuth
+  - [x] 6.1 Create OAuth service for Google
+    - Implement get_authorization_url with state parameter
+    - Implement exchange_code_for_tokens
+    - Implement get_user_info from Google
+    - _Requirements: 4.1, 4.2_
+  - [x] 6.2 Implement OAuth callback handler
+    - Verify state parameter
+    - Exchange code for tokens
+    - Create or link user account
+    - Create workspace for new users
+    - Issue JWT tokens
+    - _Requirements: 4.2, 4.3, 4.4, 4.5_
+  - [x] 6.3 Write property test for OAuth account linking
+    - **Property 14: OAuth Account Linking**
+    - **Validates: Requirements 4.4**
+
+- [x] 7. Implement Redis services
+  - [x] 7.1 Create Redis connection module
+    - Implement aioredis connection pool
+    - Add health check and reconnection logic
+    - _Requirements: 2.1_
+  - [x] 7.2 Implement session storage service
+    - Store session data with configurable TTL
+    - Implement session lookup by refresh token hash
+    - Implement session invalidation
+    - _Requirements: 2.1, 2.4, 23.1, 23.3_
+  - [x] 7.3 Implement rate limiting service
+    - Sliding window rate limiting per IP and per user
+    - Configurable limits per endpoint type
+    - _Requirements: 2.2, 12.2_
+  - [x] 7.4 Write property test for rate limit enforcement
+    - **Property 6: Rate Limit Enforcement**
+    - **Validates: Requirements 2.2, 12.2**
+  - [x] 7.5 Implement permission cache service
+    - Cache role/permission lookups with TTL
+    - Implement cache invalidation on role updates
+    - _Requirements: 2.3, 7.4_
+  - [x] 7.6 Write property test for cache invalidation
+    - **Property 8: Cache Invalidation on Role Update**
+    - **Validates: Requirements 2.3, 7.4**
+
+- [x] 8. Checkpoint - Verify auth services
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 9. Implement RBAC system
+  - [x] 9.1 Create RBACService
+    - get_user_permissions: Compute effective permissions from all roles
+    - check_permission: Verify user has required permission
+    - create_role: Create custom role with validation
+    - update_role: Update role permissions with cache invalidation
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
+  - [x] 9.2 Write property test for permission union computation
+    - **Property 7: Permission Union Computation**
+    - **Validates: Requirements 7.3**
+  - [x] 9.3 Create default workspace roles on workspace creation
+    - Create owner, admin, editor, viewer roles with predefined permissions
+    - Assign owner role to workspace creator
+    - _Requirements: 7.1_
+
+- [x] 10. Implement workspace and subscription services
+  - [x] 10.1 Create WorkspaceService
+    - create_workspace: Create workspace with trial subscription
+    - get_workspace: Get workspace by ID with permission check
+    - update_workspace: Update settings with permission check
+    - disable_workspace: Disable workspace and prevent access
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+  - [x] 10.2 Write property test for workspace creation trial assignment
+    - **Property 10: Workspace Creation Trial Assignment**
+    - **Validates: Requirements 6.3, 21.1**
+  - [x] 10.3 Create SubscriptionService
+    - get_subscription_status: Return current status, days remaining, limits
+    - check_tier_limit: Verify workspace is within tier limits
+    - enforce_limit: Block action if limit exceeded
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 21.2_
+  - [x] 10.4 Write property test for tier limit enforcement
+    - **Property 11: Tier Limit Enforcement**
+    - **Validates: Requirements 9.1, 9.2, 9.3**
+
+- [x] 11. Implement audit logging
+  - [x] 11.1 Create AuditService
+    - log_event: Create audit log entry with actor, action, metadata
+    - log_auth_event: Log authentication events
+    - log_platform_action: Log platform admin actions with before/after
+    - query_logs: Query logs with workspace_id filter
+    - _Note: Implemented with Loki backend for scalability_
+    - _Requirements: 11.1, 11.2, 11.3, 11.4_
+  - [x] 11.2 Write property test for audit log creation
+    - **Property 12: Audit Log Creation**
+    - **Validates: Requirements 11.1, 11.2**
+
+- [x] 12. Implement middleware stack
+  - [x] 12.1 Create authentication middleware
+    - Extract and validate JWT from Authorization header
+    - Attach user context to request
+    - Handle token expiry and refresh
+    - _Requirements: 12.1, 5.5_
+  - [x] 12.2 Create RBAC middleware
+    - Check required permission for endpoint
+    - Return 403 if permission denied
+    - _Requirements: 7.2, 12.3_
+  - [x] 12.3 Create rate limiting middleware
+    - Apply rate limits based on endpoint type
+    - Return 429 with Retry-After header
+    - _Requirements: 12.2_
+  - [x] 12.4 Create audit logging middleware
+    - Log all requests with correlation ID
+    - Mask sensitive data in logs
+    - _Requirements: 12.5, 15.4_
+  - [x] 12.5 Write property test for sensitive data masking
+    - **Property 24: Sensitive Data Masking**
+    - **Validates: Requirements 12.5, 25.5**
+
+- [x] 13. Checkpoint - Verify middleware
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 14. Implement API endpoints
+  - [x] 14.1 Create auth endpoints
+    - POST /api/v1/auth/signup - Local signup
+    - POST /api/v1/auth/login - Local login
+    - POST /api/v1/auth/refresh - Token refresh
+    - POST /api/v1/auth/logout - Logout
+    - GET /api/v1/auth/oauth/google/start - Start Google OAuth
+    - GET /api/v1/auth/oauth/google/callback - Google OAuth callback
+    - POST /api/v1/auth/verify-email - Verify email
+    - POST /api/v1/auth/forgot-password - Request password reset
+    - POST /api/v1/auth/reset-password - Reset password
+    - _Requirements: 3.1, 3.2, 3.4, 4.1, 4.2, 22.1, 22.2_
+  - [x] 14.2 Create user endpoints
+    - GET /api/v1/users/me - Get current user
+    - PATCH /api/v1/users/me - Update current user
+    - GET /api/v1/users/me/sessions - List active sessions
+    - DELETE /api/v1/users/me/sessions/{session_id} - Terminate session
+    - _Requirements: 23.2, 23.3_
+  - [x] 14.3 Write property test for session termination
+    - **Property 9: Session Termination Token Invalidation**
+    - **Validates: Requirements 2.4, 23.3**
+  - [x] 14.4 Create workspace endpoints
+    - GET /api/v1/workspaces/{workspace_id} - Get workspace
+    - PATCH /api/v1/workspaces/{workspace_id} - Update workspace
+    - GET /api/v1/workspaces/{workspace_id}/members - List members
+    - POST /api/v1/workspaces/{workspace_id}/members/invite - Invite member
+    - DELETE /api/v1/workspaces/{workspace_id}/members/{user_id} - Remove member
+    - _Requirements: 6.2, 6.4, 28.1_
+  - [x] 14.5 Write property test for workspace data isolation
+    - **Property 1: Workspace Data Isolation**
+    - **Validates: Requirements 1.2, 6.2, 14.1, 14.2, 14.5**
+  - [x] 14.6 Create role endpoints
+    - GET /api/v1/workspaces/{workspace_id}/roles - List roles
+    - POST /api/v1/workspaces/{workspace_id}/roles - Create custom role
+    - PATCH /api/v1/workspaces/{workspace_id}/roles/{role_id} - Update role
+    - DELETE /api/v1/workspaces/{workspace_id}/roles/{role_id} - Delete role
+    - _Requirements: 7.1, 7.5_
+  - [x] 14.7 Create subscription endpoints
+    - GET /api/v1/workspaces/{workspace_id}/subscription - Get subscription status
+    - GET /api/v1/billing/plans - List available plans
+    - _Requirements: 21.2_
+  - [x] 14.8 Write property test for API route versioning
+    - **Property 19: API Route Versioning**
+    - **Validates: Requirements 24.1**
+
+- [x] 15. Implement invitation system
+  - [x] 15.1 Create InvitationService
+    - create_invitation: Create invitation with token and send email
+    - accept_invitation: Verify token, create/link user, activate membership
+    - revoke_invitation: Invalidate token
+    - expire_invitations: Mark expired invitations (background job)
+    - _Requirements: 28.1, 28.2, 28.3, 28.4, 28.5_
+  - [x] 15.2 Write property test for invitation expiry
+    - **Property 15: Invitation Token Expiry**
+    - **Validates: Requirements 28.4**
+
+- [x] 16. Implement session management
+  - [x] 16.1 Create SessionService
+    - create_session: Create session with device info
+    - list_sessions: List all active sessions for user
+    - terminate_session: Invalidate specific session
+    - enforce_max_sessions: Terminate oldest if limit exceeded
+    - _Requirements: 23.1, 23.2, 23.3, 23.4_
+  - [x] 16.2 Write property test for maximum session enforcement
+    - **Property 16: Maximum Session Enforcement**
+    - **Validates: Requirements 23.4**
+
+- [x] 17. Implement email verification
+  - [x] 17.1 Create EmailVerificationService
+    - send_verification_email: Generate token and send email
+    - verify_email: Validate token and mark email verified
+    - resend_verification: Generate new token if expired
+    - _Requirements: 22.1, 22.2, 22.3, 22.4, 22.5_
+  - [x] 17.2 Write property test for email verification state
+    - **Property 17: Email Verification State**
+    - **Validates: Requirements 22.2**
+
+- [x] 18. Checkpoint - Verify API endpoints
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 19. Implement platform admin endpoints
+  - [x] 19.1 Create admin auth middleware
+    - Verify platform admin JWT
+    - Check platform role permissions
+    - Require MFA for admin endpoints
+    - _Requirements: 8.5_
+  - [x] 19.2 Create admin endpoints
+    - GET /api/v1/admin/admins - List platform admins
+    - POST /api/v1/admin/admins/{user_id}/roles - Grant platform role
+    - DELETE /api/v1/admin/admins/{user_id}/roles/{role} - Revoke platform role
+    - GET /api/v1/admin/workspaces - List all workspaces
+    - POST /api/v1/admin/workspaces/{workspace_id}/support-access - Start support session
+    - DELETE /api/v1/admin/support-access/{session_id} - End support session
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+
+- [x] 20. Implement error handling
+  - [x] 20.1 Create error response schema and handlers
+    - Define ErrorResponse Pydantic model
+    - Create exception handlers for all error types
+    - Add correlation ID to all error responses
+    - _Requirements: 27.1, 27.2, 27.3, 27.4, 27.5_
+  - [x] 20.2 Write property test for error response consistency
+    - **Property 20: Error Response Consistency**
+    - **Validates: Requirements 17.5, 27.1, 27.2, 27.3, 27.4, 27.5**
+
+- [x] 21. Implement health checks and monitoring
+  - [x] 21.1 Create health check endpoints
+    - GET /health - Basic health check
+    - GET /ready - Readiness check (DB + Redis)
+    - GET /metrics - Prometheus metrics
+    - _Requirements: 15.1, 15.2, 15.3_
+
+- [x] 22. Implement background task processing
+  - [x] 22.1 Create task queue with Redis
+    - Implement task enqueue and dequeue
+    - Add retry logic with exponential backoff
+    - Implement task status tracking
+    - _Requirements: 20.1, 20.3, 20.4_
+  - [x] 22.2 Write property test for background task retry
+    - **Property 22: Background Task Retry**
+    - **Validates: Requirements 20.3**
+  - [x] 22.3 Create worker process
+    - Process tasks from queue with configurable concurrency
+    - Handle graceful shutdown
+    - _Requirements: 20.5_
+
+- [x] 23. Implement FastMCP server
+  - [x] 23.1 Create FastMCP server configuration
+    - Set up FastMCP on port 8001
+    - Configure authentication for MCP calls
+    - _Requirements: 18.1, 18.5_
+  - [x] 23.2 Create MCP tools for workspace operations
+    - list_galleries: List galleries in workspace
+    - get_gallery: Get gallery details
+    - list_photos: List photos in gallery
+    - search_photos: Search photos with filters
+    - _Requirements: 18.1, 18.4_
+  - [x] 23.3 Write property test for MCP tool authentication
+    - **Property 21: MCP Tool Authentication**
+    - **Validates: Requirements 18.2, 18.3**
+
+- [x] 24. Checkpoint - Verify all backend services
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 25. Implement frontend authentication integration
+  - [x] 25.1 Create AuthContext and AuthProvider
+    - Manage authentication state (user, tokens, loading)
+    - Implement login, logout, refresh methods
+    - Persist tokens appropriately (httpOnly cookies for refresh)
+    - _Requirements: 13.2, 13.4, 13.5_
+  - [x] 25.2 Create ProtectedRoute component
+    - Check authentication state
+    - Redirect to signin if not authenticated
+    - Handle loading state
+    - _Requirements: 13.1_
+  - [x] 25.3 Create API client with auth interceptors
+    - Add Authorization header to requests
+    - Handle 401 responses with token refresh
+    - Redirect to signin on refresh failure
+    - _Requirements: 13.3_
+  - [x] 25.4 Update SignInPage to use real auth
+    - Connect to POST /api/v1/auth/login
+    - Handle Google OAuth flow
+    - Store tokens and redirect to workspace
+    - _Requirements: 3.2, 4.1_
+  - [x] 25.5 Update SignUpPage to use real auth
+    - Connect to POST /api/v1/auth/signup
+    - Handle email verification flow
+    - _Requirements: 3.1, 22.1_
+  - [x] 25.6 Update router with protected routes
+    - Wrap workspace routes with ProtectedRoute
+    - Add redirect parameter to signin
+    - _Requirements: 13.1_
+
+- [x] 26. Create Docker development environment
+  - [x] 26.1 Create docker-compose.yml for full stack
+    - PostgreSQL with pgvector
+    - Redis
+    - FastAPI backend with hot reload
+    - Loki for audit logging
+    - Grafana for observability
+    - _Requirements: 26.1, 26.2, 26.3, 26.4_
+  - [x] 26.2 Create Dockerfile for backend
+    - Multi-stage build for production
+    - Development mode with hot reload
+    - _Requirements: 26.4_
+  - [x] 26.3 Create database initialization script
+    - Run migrations on startup
+    - Run seed script for test data
+    - _Requirements: 26.3_
+
+- [x] 27. Final Checkpoint - Full integration test
+  - Ensure all tests pass, ask the user if questions arise.

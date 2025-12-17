@@ -1,0 +1,145 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "geo_search",
+  "name": "GEO Search (Internal AI Discovery)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/GEO_Search.md",
+    "docs/Features/AI_POWERED_FEATURES.md",
+    "docs/Features/PRD.md"
+  ],
+  "description": "Semantic + metadata search across galleries/assets using geolocation (EXIF GPS), place names, and embeddings. Enables users to find photos by location intent (e.g., 'Goa beach sunset') while keeping strict workspace isolation.",
+  "goals": [
+    "Fast search across large media libraries within a workspace.",
+    "Support both structured geo filters (radius, city) and semantic queries.",
+    "Respect privacy controls: do not leak precise locations when disabled.",
+    "Provide explainable results (why a result matched)."
+  ],
+  "nonGoals": [
+    "Public search engine indexing of private assets.",
+    "Cross-workspace discovery marketplace."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "All search indexes are partitioned by workspace_id.",
+      "EXIF GPS extraction must respect workspace privacy policy (exif_visible).",
+      "Embeddings and query logs must not be shared across workspaces."
+    ]
+  },
+  "actors": [
+    { "id": "staff_user", "name": "Staff User", "description": "Searches library and galleries." },
+    { "id": "system", "name": "System", "description": "Indexes metadata/embeddings and serves queries." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "AssetGeo",
+        "table": "asset_geo",
+        "primaryKey": "asset_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "asset_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "lat", "type": "number", "nullable": true },
+          { "name": "lng", "type": "number", "nullable": true },
+          { "name": "accuracy_m", "type": "number", "nullable": true },
+          { "name": "place", "type": "json", "nullable": true, "notes": "reverse geocode: city, state, country" },
+          { "name": "extracted_at", "type": "timestamp" }
+        ],
+        "indexes": ["asset_geo_ws_lat_lng_idx"]
+      },
+      {
+        "name": "AssetEmbedding",
+        "table": "asset_embeddings",
+        "primaryKey": "embedding_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "embedding_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "asset_id", "type": "uuid" },
+          { "name": "model_profile_id", "type": "uuid" },
+          { "name": "vector", "type": "vector", "notes": "pgvector" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["asset_embeddings_ws_asset_unique", "asset_embeddings_ws_ivfflat_idx"]
+      },
+      {
+        "name": "SearchQueryLog",
+        "table": "search_query_logs",
+        "primaryKey": "query_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "query_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "actor_user_id", "type": "uuid" },
+          { "name": "query", "type": "string" },
+          { "name": "filters", "type": "json", "nullable": true },
+          { "name": "result_count", "type": "number" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["search_query_logs_ws_time_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "geoSearch.query",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/search/geo",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "query": { "q": "string", "radius_km": "number?", "lat": "number?", "lng": "number?", "date_from": "string?", "date_to": "string?" } },
+      "response": { "body": { "results": "paginated assets", "explanations": "object?" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.geo.indexing",
+      "name": "Indexing Geo + Embeddings",
+      "steps": [
+        "On asset ingestion, extract EXIF metadata (including GPS if present).",
+        "If allowed, reverse geocode to place names.",
+        "Generate embeddings (optional) and store with pgvector.",
+        "Update search indexes incrementally and idempotently."
+      ]
+    }
+  ],
+  "security": {
+    "controls": [
+      "RBAC-protected search endpoints.",
+      "Respect gallery/exif visibility and privacy policies.",
+      "Avoid returning precise lat/lng to client portal if exif_visible is false."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "search_queries_total",
+      "search_latency_seconds",
+      "search_zero_results_total"
+    ],
+    "logs": [
+      "Query logs (workspace-scoped, PII-safe)"
+    ],
+    "traces": [
+      "Search request spans including pgvector queries"
+    ],
+    "alerts": [
+      "Search latency regression",
+      "High DB load from search queries"
+    ]
+  },
+  "acceptanceTests": [
+    "Geo search results never include assets from other workspaces.",
+    "If exif_visible is false, returned results do not expose precise GPS coordinates.",
+    "Vector search returns deterministic ordering for identical inputs and stable indexes."
+  ],
+  "dependencies": [
+    "media_processing",
+    "ai_platform_model_router",
+    "observability"
+  ]
+}

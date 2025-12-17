@@ -1,0 +1,251 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "payments_billing_subscriptions",
+  "name": "Payments, Billing, Invoicing, and Subscriptions",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/PRD.md",
+    "docs/Features/ADMIN_AND_PLATFORM_MANAGEMENT.md",
+    "docs/Features/API_AND_INTEGRATIONS.md",
+    "docs/Features/AUTHENTICATION_AND_SECURITY.md"
+  ],
+  "description": "Workspace subscription plans, 30-day trial conversion, usage limits, invoices (GST for India), and payment provider integrations (Razorpay/Stripe). Also supports client payments for quotes and deposits.",
+  "goals": [
+    "Support SaaS billing for workspaces (trial -> active subscription).",
+    "Support India-first payments (Razorpay primary) with optional Stripe.",
+    "Generate GST-compliant invoices for subscriptions and studio client invoices for quotes.",
+    "Enforce plan limits (storage, exports, AI credits) via metering.",
+    "Provide admin controls for refunds, plan changes, and dunning."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Billing records are workspace-scoped.",
+      "Payment provider credentials are platform-level (SaaS) while customer identifiers map per workspace.",
+      "Client payments (for quotes) are linked to jobs/quotes but still workspace-scoped."
+    ]
+  },
+  "actors": [
+    { "id": "workspace_owner", "name": "Workspace Owner", "description": "Manages subscription and billing details." },
+    { "id": "platform_admin", "name": "Platform Admin", "description": "Handles escalations, refunds, enterprise billing." },
+    { "id": "client_viewer", "name": "Client", "description": "Pays deposits or invoices for a quote (optional)." },
+    { "id": "system", "name": "System", "description": "Runs dunning, invoice issuance, metering aggregation." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "Plan",
+        "table": "plans",
+        "primaryKey": "plan_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "plan_id", "type": "uuid" },
+          { "name": "code", "type": "string" },
+          { "name": "name", "type": "string" },
+          { "name": "currency", "type": "string", "example": "INR" },
+          { "name": "price_monthly", "type": "number" },
+          { "name": "limits", "type": "json", "notes": "storage_gb, exports_per_month, ai_credits" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["plans_code_unique"]
+      },
+      {
+        "name": "WorkspaceSubscription",
+        "table": "workspace_subscriptions",
+        "primaryKey": "subscription_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "subscription_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "plan_id", "type": "uuid" },
+          { "name": "provider", "type": "enum(razorpay,stripe,manual)" },
+          { "name": "provider_customer_id", "type": "string", "nullable": true },
+          { "name": "provider_subscription_id", "type": "string", "nullable": true },
+          { "name": "status", "type": "enum(trialing,active,past_due,canceled,paused)" },
+          { "name": "current_period_start", "type": "timestamp" },
+          { "name": "current_period_end", "type": "timestamp" },
+          { "name": "cancel_at_period_end", "type": "boolean" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["workspace_subscriptions_ws_unique", "workspace_subscriptions_status_idx"]
+      },
+      {
+        "name": "Invoice",
+        "table": "invoices",
+        "primaryKey": "invoice_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "invoice_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "type", "type": "enum(subscription,client_quote)" },
+          { "name": "provider_invoice_id", "type": "string", "nullable": true },
+          { "name": "currency", "type": "string" },
+          { "name": "subtotal", "type": "number" },
+          { "name": "tax", "type": "number" },
+          { "name": "total", "type": "number" },
+          { "name": "gst", "type": "json", "nullable": true },
+          { "name": "status", "type": "enum(draft,issued,paid,void,refunded,failed)" },
+          { "name": "issued_at", "type": "timestamp", "nullable": true },
+          { "name": "paid_at", "type": "timestamp", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["invoices_ws_type_idx", "invoices_ws_status_idx"]
+      },
+      {
+        "name": "UsageMeter",
+        "table": "usage_meters",
+        "primaryKey": "usage_meter_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "usage_meter_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "period_start", "type": "timestamp" },
+          { "name": "period_end", "type": "timestamp" },
+          { "name": "storage_bytes", "type": "number" },
+          { "name": "exports_count", "type": "number" },
+          { "name": "ai_credits_used", "type": "number" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["usage_meters_ws_period_unique"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "billing.plans.list",
+      "method": "GET",
+      "path": "/v1/billing/plans",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "plans": "array" } },
+      "errors": []
+    },
+    {
+      "id": "billing.subscription.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/billing/subscription",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "plan_id": "uuid", "provider": "razorpay|stripe", "billing_details": "object" } },
+      "response": { "body": { "subscription_id": "uuid", "checkout_url": "string?" } },
+      "errors": ["FORBIDDEN", "WORKSPACE_DISABLED", "TRIAL_EXPIRED"]
+    },
+    {
+      "id": "billing.invoices.list",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/billing/invoices",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "invoices": "array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "billing.webhooks.razorpay",
+      "method": "POST",
+      "path": "/v1/billing/webhooks/razorpay",
+      "auth": "webhook_signature",
+      "rateLimit": "high",
+      "request": { "body": "raw provider payload" },
+      "response": { "body": { "ok": true } },
+      "errors": ["WEBHOOK_INVALID_SIGNATURE"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.trial_to_paid",
+      "name": "Trial -> Paid Conversion",
+      "steps": [
+        "Workspace starts with 30-day trial in status trialing.",
+        "Owner selects plan and begins checkout.",
+        "Payment provider webhook confirms payment/subscription.",
+        "System marks subscription active and updates workspace access.",
+        "Usage metering continues for enforcement/overages (future)."
+      ]
+    },
+    {
+      "id": "wf.dunning",
+      "name": "Dunning and Payment Failures",
+      "steps": [
+        "Provider reports payment failed/past_due.",
+        "System notifies owner and retries per schedule.",
+        "If unresolved, workspace access downgraded/paused per policy.",
+        "Retain data per retention rules; allow reactivation upon payment."
+      ]
+    }
+  ],
+  "events": [
+    { "name": "billing.subscription_created", "payload": { "workspace_id": "uuid", "subscription_id": "uuid" } },
+    { "name": "billing.subscription_activated", "payload": { "workspace_id": "uuid", "subscription_id": "uuid" } },
+    { "name": "billing.payment_failed", "payload": { "workspace_id": "uuid", "provider": "string" } },
+    { "name": "billing.invoice_paid", "payload": { "workspace_id": "uuid", "invoice_id": "uuid" } }
+  ],
+  "backgroundJobs": [
+    { "id": "job.billing.metering.aggregate", "trigger": "hourly", "inputs": { "workspace_id": "uuid" }, "outputs": { "updated": "boolean" } },
+    { "id": "job.billing.dunning", "trigger": "scheduled", "inputs": { "workspace_id": "uuid" }, "outputs": { "action": "string" } }
+  ],
+  "integrations": [
+    { "name": "Razorpay", "purpose": "India-first subscriptions and payments" },
+    { "name": "Stripe", "purpose": "Optional global payments" }
+  ],
+  "observability": {
+    "metrics": [
+      "billing_checkout_started_total{provider}",
+      "billing_webhook_received_total{provider,event}",
+      "billing_webhook_invalid_signature_total{provider}",
+      "subscriptions_active_total",
+      "subscriptions_past_due_total"
+    ],
+    "logs": [
+      "Webhook verification logs (no sensitive payload stored beyond necessary)",
+      "Subscription status transitions"
+    ],
+    "traces": [
+      "Trace webhook handling -> DB updates -> notifications"
+    ],
+    "alerts": [
+      "Webhook invalid signature spike",
+      "Payment failed spike",
+      "Subscription activation lag"
+    ]
+  },
+  "security": {
+    "controls": [
+      "Webhook signature verification",
+      "Idempotency keys for provider events",
+      "RBAC: only owner/admin can manage subscription",
+      "PII minimization and encryption for billing addresses"
+    ],
+    "compliance": [
+      "GST fields for India (workspace GSTIN, place of supply)"
+    ]
+  },
+  "i18n": {
+    "notes": "Invoices and billing UI should be localizable; currency formatting INR default for India-first."
+  },
+  "performance": {
+    "targets": {
+      "webhook_ack_p95": "< 500ms",
+      "plans_list_p95": "< 150ms"
+    }
+  },
+  "acceptanceTests": [
+    "Workspace owner can subscribe via Razorpay and workspace becomes active after webhook confirmation.",
+    "Webhook requests with invalid signature are rejected.",
+    "Usage metering record updates for workspace each period.",
+    "Only authorized roles can view invoices and billing details."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "trial_lifecycle",
+    "notifications",
+    "admin_platform",
+    "retention_customer_removal"
+  ],
+  "openQuestions": [
+    "Do we support annual plans and coupon codes at launch?",
+    "How do we handle overages (hard cap vs soft cap + add-on)?",
+    "Do we support client-facing payment links for quotes using same provider integration?"
+  ]
+}

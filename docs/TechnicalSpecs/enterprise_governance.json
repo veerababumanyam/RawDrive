@@ -1,0 +1,169 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "enterprise_governance",
+  "name": "Enterprise Governance (SSO, Policies, BYOS Controls, Audit Exports)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/BYOS_Requiremetns.md",
+    "docs/Features/ADMIN_AND_PLATFORM_MANAGEMENT.md",
+    "docs/Features/STORAGE_AND_BACKUP.md",
+    "docs/Features/AUTHENTICATION_AND_SECURITY.md",
+    "docs/Features/PRD.md"
+  ],
+  "description": "Enterprise-grade controls: SAML/OIDC SSO, optional SCIM provisioning, policy enforcement (downloads, sharing, watermarking), BYOS governance requirements, audit logs and exports, and data residency constraints.",
+  "goals": [
+    "Support enterprise tenants with strict access and compliance needs.",
+    "Centralize policy enforcement at API layer.",
+    "Provide auditable controls and exportable audit trails.",
+    "Support BYOS with security guardrails and validation."
+  ],
+  "nonGoals": [
+    "Full GRC suite (integrate with external tooling where required)."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Enterprise controls are workspace-scoped and may only be set by authorized roles.",
+      "Policy evaluation must always include workspace_id and actor context.",
+      "Audit logs must be workspace-scoped, immutable, and exportable."
+    ]
+  },
+  "actors": [
+    { "id": "workspace_owner", "name": "Workspace Owner", "description": "Configures enterprise settings and approvals." },
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Manages members, policies, storage connectors." },
+    { "id": "platform_admin", "name": "Platform Admin", "description": "Assists with enterprise setup and escalations." },
+    { "id": "system", "name": "System", "description": "Evaluates policies, enforces governance, exports audits." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "WorkspacePolicy",
+        "table": "workspace_policies",
+        "primaryKey": "policy_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "policy_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "key", "type": "string", "notes": "e.g., downloads.allowed, sharing.allowed" },
+          { "name": "value", "type": "json" },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["workspace_policies_ws_key_unique"]
+      },
+      {
+        "name": "AuditExport",
+        "table": "audit_exports",
+        "primaryKey": "export_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "export_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "requested_by_user_id", "type": "uuid" },
+          { "name": "range", "type": "json" },
+          { "name": "status", "type": "enum(queued,running,ready,failed)" },
+          { "name": "artifact", "type": "json", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["audit_exports_ws_time_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "enterprise.policies.get",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/enterprise/policies",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "policies": "array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "enterprise.policies.upsert",
+      "method": "PUT",
+      "path": "/v1/workspaces/{workspace_id}/enterprise/policies/{key}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "value": "object" } },
+      "response": { "body": { "ok": true } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "enterprise.audit.export",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/enterprise/audit/exports",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "from": "timestamp", "to": "timestamp", "format": "csv|json" } },
+      "response": { "body": { "export_id": "uuid", "status": "queued" } },
+      "errors": ["FORBIDDEN"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.policy.enforcement",
+      "name": "Policy Enforcement",
+      "steps": [
+        "Workspace admin sets policies (downloads, sharing, watermark, BYOS constraints).",
+        "API middleware loads policy set for workspace and caches it.",
+        "Each sensitive endpoint evaluates policy + RBAC + share link policy.",
+        "Denied actions return stable error codes and are logged to audit."
+      ]
+    },
+    {
+      "id": "wf.audit.export",
+      "name": "Audit Export",
+      "steps": [
+        "Admin requests export for a date range.",
+        "Background job queries audit logs and writes export artifact to managed storage.",
+        "Generate signed download URL and notify admin when ready.",
+        "Exports are retained per policy and are access-controlled."
+      ]
+    }
+  ],
+  "backgroundJobs": [
+    { "id": "job.audit.export", "trigger": "queue", "inputs": { "export_id": "uuid" }, "outputs": { "status": "ready|failed" } }
+  ],
+  "security": {
+    "controls": [
+      "SSO enforcement and conditional access (enterprise).",
+      "BYOS validation: allowlist buckets/regions, verify ownership, least-privilege IAM policies.",
+      "Immutable audit logs with tamper-evident storage options.",
+      "Policy changes require elevated role and are audited."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "policy_denials_total{policy_key}",
+      "audit_exports_total{status}",
+      "audit_export_latency_seconds"
+    ],
+    "logs": [
+      "Policy evaluation decisions (sanitized)",
+      "Audit export job logs"
+    ],
+    "traces": [
+      "Policy evaluation spans",
+      "Audit export job spans"
+    ],
+    "alerts": [
+      "Policy denial spike (misconfig)",
+      "Audit export failures"
+    ]
+  },
+  "acceptanceTests": [
+    "A download-disallowed policy blocks all download endpoints for share-link viewers and staff without override.",
+    "Audit export produces a signed URL and is only accessible to authorized admins.",
+    "BYOS configuration rejects unsafe IAM policies and disallowed regions."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "storage_ingestion_byos",
+    "share_links_access",
+    "observability"
+  ]
+}

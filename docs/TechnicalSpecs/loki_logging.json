@@ -1,0 +1,278 @@
+{
+  "$schema": "./_schema.json",
+  "specId": "loki_logging",
+  "title": "Loki Audit Logging & Retention Policy",
+  "version": "1.1.0",
+  "lastUpdated": "2025-12-17",
+  "status": "implemented",
+  "owner": "platform-team",
+
+  "overview": {
+    "description": "Centralized audit logging infrastructure using Grafana Loki for security compliance, incident investigation, and operational monitoring.",
+    "goals": [
+      "Capture all authentication and security events",
+      "Maintain 30-day log retention for compliance",
+      "Provide real-time dashboards for security monitoring",
+      "Enable efficient log querying with LogQL"
+    ]
+  },
+
+  "retention_policy": {
+    "description": "Log retention settings to balance security compliance with storage efficiency",
+    "configuration_file": "infrastructure/docker/loki/loki-config.yaml",
+    "policy_documentation": "infrastructure/docker/loki/RETENTION_POLICY.md",
+    "settings": {
+      "default_retention_period": "30d",
+      "retention_delete_delay": "2h",
+      "compaction_interval": "10m",
+      "retention_delete_worker_count": 150
+    },
+    "rationale": [
+      "30-day retention meets most regulatory requirements (GDPR, SOC2)",
+      "2-hour delete delay allows recovery from accidental deletion",
+      "10-minute compaction ensures efficient storage usage"
+    ]
+  },
+
+  "ingestion_limits": {
+    "rate_mb_per_second": 10,
+    "burst_size_mb": 20,
+    "max_line_size": "256kb",
+    "max_line_size_truncate": true,
+    "max_streams_per_user": 10000,
+    "max_label_names_per_series": 30
+  },
+
+  "query_limits": {
+    "max_query_length": "30d",
+    "max_entries_limit_per_query": 5000,
+    "max_query_series": 500,
+    "max_query_parallelism": 32,
+    "split_queries_by_interval": "15m"
+  },
+
+  "audit_event_types": {
+    "authentication": {
+      "auth.login": "User login attempt (success or failure)",
+      "auth.logout": "User logout",
+      "auth.signup": "New user registration",
+      "auth.token_refresh": "Token refresh attempt",
+      "auth.oauth_callback": "OAuth authentication callback",
+      "auth.password_change": "Password change",
+      "auth.password_reset": "Password reset request",
+      "auth.session_invalidated": "Session invalidation"
+    },
+    "workspace": {
+      "workspace.created": "Workspace creation",
+      "workspace.updated": "Workspace modification",
+      "workspace.deleted": "Workspace deletion"
+    },
+    "member": {
+      "member.invited": "Member invitation sent",
+      "member.joined": "Member accepted invitation",
+      "member.removed": "Member removed from workspace",
+      "member.role_changed": "Member role updated"
+    }
+  },
+
+  "log_labels": {
+    "app": {
+      "description": "Application identifier",
+      "value": "rawdrive",
+      "mandatory": true
+    },
+    "type": {
+      "description": "Event type (e.g., auth.login)",
+      "mandatory": true
+    },
+    "workspace_id": {
+      "description": "Workspace UUID or 'none'",
+      "mandatory": false
+    },
+    "env": {
+      "description": "Environment (development, production)",
+      "mandatory": true
+    }
+  },
+
+  "log_payload_schema": {
+    "event_id": "UUID - unique event identifier",
+    "event_type": "Event type string",
+    "workspace_id": "Workspace UUID or null",
+    "actor_user_id": "User UUID performing action",
+    "target_entity_type": "Type of entity affected",
+    "target_entity_id": "UUID of affected entity",
+    "details": "JSON object with event-specific data",
+    "ip_address": "Client IP address",
+    "user_agent": "Client user agent",
+    "created_at": "ISO 8601 timestamp"
+  },
+
+  "grafana_dashboards": {
+    "location": "infrastructure/docker/grafana/provisioning/dashboards/",
+    "dashboards": [
+      {
+        "name": "RawDrive Audit & Security",
+        "file": "audit-security.json",
+        "uid": "rawdrive-audit",
+        "url": "http://localhost:3000/d/rawdrive-audit",
+        "panels": [
+          "Total Logins (stat)",
+          "Failed Logins (stat with thresholds)",
+          "New Signups (stat)",
+          "Total Audit Events (stat)",
+          "Audit Events Over Time (timeseries by type)",
+          "Event Distribution (piechart)",
+          "Authentication Events Log (live stream)",
+          "Events by Workspace (timeseries)",
+          "Login Success vs Failure (comparison chart)"
+        ]
+      }
+    ],
+    "access": {
+      "default_credentials": {
+        "username": "admin",
+        "password": "admin (or GRAFANA_ADMIN_PASSWORD env var)"
+      },
+      "anonymous_access": "Enabled as Viewer role"
+    }
+  },
+
+  "logql_query_examples": [
+    {
+      "description": "All audit events",
+      "query": "{app=\"rawdrive\"}"
+    },
+    {
+      "description": "Failed login attempts",
+      "query": "{app=\"rawdrive\", type=\"auth.login\"} |= \"failure\""
+    },
+    {
+      "description": "Events for specific workspace",
+      "query": "{app=\"rawdrive\", workspace_id=\"<uuid>\"}"
+    },
+    {
+      "description": "All authentication events",
+      "query": "{app=\"rawdrive\", type=~\"auth.*\"}"
+    },
+    {
+      "description": "Events from specific IP address",
+      "query": "{app=\"rawdrive\"} |= \"<ip_address>\""
+    },
+    {
+      "description": "Count events by type (last hour)",
+      "query": "sum by (type) (count_over_time({app=\"rawdrive\"} [1h]))"
+    },
+    {
+      "description": "Login failure rate",
+      "query": "sum(rate({app=\"rawdrive\", type=\"auth.login\"} |= \"failure\" [5m]))"
+    }
+  ],
+
+  "api_endpoints": {
+    "loki_query": {
+      "url": "http://localhost:3100/loki/api/v1/query_range",
+      "method": "GET",
+      "headers": {
+        "X-Scope-OrgID": "rawdrive"
+      },
+      "parameters": {
+        "query": "LogQL query string",
+        "limit": "Max results (default 100)",
+        "start": "Start timestamp (nanoseconds)",
+        "end": "End timestamp (nanoseconds)"
+      }
+    },
+    "loki_health": "http://localhost:3100/ready",
+    "loki_config": "http://localhost:3100/config",
+    "loki_metrics": "http://localhost:3100/metrics"
+  },
+
+  "implementation_details": {
+    "backend_service": "backend/src/app/services/audit_service.py",
+    "auth_integration": "backend/src/app/api/v1/auth.py",
+    "features": [
+      "Async queue-based logging (~0ms latency impact)",
+      "Batch push to Loki (100 events or 5-second interval)",
+      "Automatic retry on Loki push failure",
+      "Re-queue failed events at front of queue",
+      "Graceful shutdown with final flush"
+    ],
+    "configuration": {
+      "LOKI_URL": "Loki push API endpoint",
+      "LOKI_TENANT_ID": "Tenant ID for multi-tenancy",
+      "AUDIT_BATCH_SIZE": "100 (events per batch)",
+      "AUDIT_FLUSH_INTERVAL": "5.0 (seconds)"
+    }
+  },
+
+  "storage_estimates": {
+    "description": "Estimated storage with 30-day retention",
+    "by_scale": {
+      "small_100_users": "~500 MB/month",
+      "medium_1000_users": "~5 GB/month",
+      "large_10000_users": "~50 GB/month"
+    }
+  },
+
+  "monitoring_alerts": [
+    {
+      "name": "High Disk Usage",
+      "condition": "Disk usage > 80%",
+      "severity": "warning"
+    },
+    {
+      "name": "Ingestion Rate Spike",
+      "condition": "Ingestion rate > 2x normal",
+      "severity": "warning"
+    },
+    {
+      "name": "Compaction Failure",
+      "condition": "Compaction job fails",
+      "severity": "critical"
+    },
+    {
+      "name": "High Failed Login Rate",
+      "condition": "Failed logins > 50 in 5 minutes",
+      "severity": "warning"
+    }
+  ],
+
+  "security_considerations": {
+    "tenant_isolation": "X-Scope-OrgID header enforces tenant separation",
+    "data_privacy": [
+      "No PII in log messages (use user IDs only)",
+      "IP addresses stored for security tracking",
+      "Workspace-scoped logs for multi-tenant isolation"
+    ],
+    "compliance": {
+      "retention": "30-day default meets GDPR, SOC2 requirements",
+      "extended_retention": "Available via per-tenant overrides",
+      "archival": "Export to S3/GCS before expiry if needed"
+    }
+  },
+
+  "related_specs": ["auth_rbac", "admin_platform"],
+
+  "logging_best_practices": {
+    "format": "JSON structured logs",
+    "required_fields": [
+      "timestamp (ISO 8601)",
+      "level (INFO, WARN, ERROR)",
+      "service name",
+      "message",
+      "request_id (for tracing)"
+    ],
+    "sensitive_data": [
+      "NEVER log passwords, tokens, or API keys",
+      "Use user IDs instead of email addresses",
+      "Sanitize request/response bodies"
+    ],
+    "log_levels": {
+      "DEBUG": "Development/diagnosis only",
+      "INFO": "Standard operations, successful actions",
+      "WARN": "Non-critical issues, recoverable errors",
+      "ERROR": "Failures requiring attention"
+    }
+  }
+}

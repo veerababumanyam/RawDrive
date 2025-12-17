@@ -1,0 +1,310 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "public_profile",
+  "name": "Photographer Public Profile & Company Information",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/PHOTOGRAPHER_PUBLIC_PROFILE.md",
+    "docs/Features/PRD.md",
+    "docs/Features/CLIENT_FACING_FEATURES.md"
+  ],
+  "description": "Public, SEO-friendly profile pages for photographers and studios (company) that showcase portfolio galleries, services, testimonials, team members, and contact/booking entry points. Supports custom domains and share links as access primitives.",
+  "goals": [
+    "Provide a professional online presence for photographers/studios.",
+    "Showcase curated portfolio galleries and services.",
+    "Enable lead capture and booking requests.",
+    "Support workspace-controlled branding and custom domains.",
+    "Drive discoverability with SEO-optimized public pages."
+  ],
+  "nonGoals": [
+    "Full CMS/blog platform (basic posts/sections only).",
+    "Marketplace or bidding system between photographers and clients."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Profiles belong to a workspace_id and (optionally) a user_id.",
+      "Public pages must never leak private workspace data (unpublished galleries, internal notes).",
+      "Custom domains are mapped per workspace and validated before activation."
+    ]
+  },
+  "actors": [
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Configures company profile and public profile settings." },
+    { "id": "staff_user", "name": "Photographer/Staff", "description": "Updates personal photographer profile details." },
+    { "id": "public_visitor", "name": "Public Visitor", "description": "Browses profile and portfolio; submits inquiries." },
+    { "id": "system", "name": "System", "description": "Renders pages, enforces publish states, handles SEO and caching." }
+  ],
+  "permissions": [
+    "profiles:read",
+    "profiles:write",
+    "profiles:publish",
+    "branding:write"
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "BrandingProfile",
+        "table": "branding_profiles",
+        "primaryKey": "branding_profile_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "branding_profile_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "brand_color", "type": "string" },
+          { "name": "brand_font", "type": "string" },
+          { "name": "logo_object_key", "type": "string", "nullable": true },
+          { "name": "cover_object_key", "type": "string", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["branding_profiles_ws_default_idx"]
+      },
+      {
+        "name": "PhotographerProfile",
+        "table": "photographer_profiles",
+        "primaryKey": "photographer_profile_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "photographer_profile_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "user_id", "type": "uuid" },
+          { "name": "display_name", "type": "string" },
+          { "name": "bio", "type": "string", "nullable": true },
+          { "name": "profile_photo_object_key", "type": "string", "nullable": true },
+          { "name": "email", "type": "string" },
+          { "name": "phone", "type": "string", "nullable": true },
+          { "name": "website", "type": "string", "nullable": true },
+          { "name": "city", "type": "string" },
+          { "name": "state", "type": "string" },
+          { "name": "country", "type": "string" },
+          { "name": "service_area", "type": "string[]", "nullable": true },
+          { "name": "specialties", "type": "string[]" },
+          { "name": "experience_years", "type": "number" },
+          { "name": "social_links", "type": "json", "nullable": true },
+          { "name": "branding_profile_id", "type": "uuid", "nullable": true },
+          { "name": "is_public", "type": "boolean" },
+          { "name": "slug", "type": "string", "notes": "Public path segment" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["photographer_profiles_ws_user_unique", "photographer_profiles_slug_unique"]
+      },
+      {
+        "name": "CompanyProfile",
+        "table": "company_profiles",
+        "primaryKey": "company_profile_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "company_profile_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "company_name", "type": "string" },
+          { "name": "description", "type": "string", "nullable": true },
+          { "name": "logo_object_key", "type": "string", "nullable": true },
+          { "name": "email", "type": "string" },
+          { "name": "phone", "type": "string" },
+          { "name": "website", "type": "string", "nullable": true },
+          { "name": "address", "type": "string", "nullable": true },
+          { "name": "city", "type": "string" },
+          { "name": "state", "type": "string" },
+          { "name": "country", "type": "string" },
+          { "name": "zip_code", "type": "string", "nullable": true },
+          { "name": "coordinates", "type": "json", "nullable": true },
+          { "name": "business_type", "type": "string", "nullable": true },
+          { "name": "specialties", "type": "string[]", "nullable": true },
+          { "name": "team_size", "type": "number", "nullable": true },
+          { "name": "years_in_business", "type": "number", "nullable": true },
+          { "name": "certifications", "type": "string[]", "nullable": true },
+          { "name": "awards", "type": "string[]", "nullable": true },
+          { "name": "social_links", "type": "json", "nullable": true },
+          { "name": "branding_profile_id", "type": "uuid", "nullable": true },
+          { "name": "cover_object_key", "type": "string", "nullable": true },
+          { "name": "is_public", "type": "boolean" },
+          { "name": "custom_domain", "type": "string", "nullable": true },
+          { "name": "verification_status", "type": "enum(unverified,verified,premium)" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["company_profiles_ws_unique", "company_profiles_custom_domain_unique"]
+      },
+      {
+        "name": "ProfileSection",
+        "table": "profile_sections",
+        "primaryKey": "section_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "section_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "profile_type", "type": "enum(photographer,company)" },
+          { "name": "profile_id", "type": "uuid" },
+          { "name": "type", "type": "enum(about,portfolio,services,testimonials,team,blog,contact)" },
+          { "name": "enabled", "type": "boolean" },
+          { "name": "title", "type": "string", "nullable": true },
+          { "name": "content", "type": "json", "nullable": true },
+          { "name": "sort_order", "type": "number" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["profile_sections_ws_profile_idx", "profile_sections_ws_profile_type_order_idx"]
+      },
+      {
+        "name": "Inquiry",
+        "table": "inquiries",
+        "primaryKey": "inquiry_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "inquiry_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "source", "type": "enum(public_profile,custom_domain)" },
+          { "name": "profile_type", "type": "enum(photographer,company)" },
+          { "name": "profile_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "email", "type": "string", "nullable": true },
+          { "name": "phone", "type": "string", "nullable": true },
+          { "name": "message", "type": "string" },
+          { "name": "preferred_language", "type": "string", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["inquiries_ws_time_idx", "inquiries_ws_profile_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "profiles.company.upsert",
+      "method": "PUT",
+      "path": "/v1/workspaces/{workspace_id}/profiles/company",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "company_name": "string", "description": "string?", "email": "string", "phone": "string", "website": "string?", "address": "string?", "city": "string", "state": "string", "country": "string", "social_links": "object?", "custom_domain": "string?", "is_public": "boolean" } },
+      "response": { "body": { "company_profile_id": "uuid" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "profiles.photographer.upsert",
+      "method": "PUT",
+      "path": "/v1/workspaces/{workspace_id}/profiles/photographer/{user_id}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "display_name": "string", "bio": "string?", "email": "string", "phone": "string?", "city": "string", "state": "string", "country": "string", "specialties": "string[]", "experience_years": "number", "is_public": "boolean" } },
+      "response": { "body": { "photographer_profile_id": "uuid" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "public.profile.getBySlug",
+      "method": "GET",
+      "path": "/v1/public/profiles/{slug}",
+      "auth": "public",
+      "rateLimit": "public-standard",
+      "response": { "body": { "profile": "object", "sections": "array", "branding": "object" } },
+      "errors": ["NOT_FOUND", "PROFILE_NOT_PUBLIC"]
+    },
+    {
+      "id": "public.inquiries.create",
+      "method": "POST",
+      "path": "/v1/public/profiles/{slug}/inquiries",
+      "auth": "public",
+      "rateLimit": "public-standard",
+      "request": { "body": { "name": "string", "email": "string?", "phone": "string?", "message": "string", "preferred_language": "string?" } },
+      "response": { "body": { "inquiry_id": "uuid" } },
+      "errors": ["CONTENT_REJECTED", "RATE_LIMITED"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.publish_profile",
+      "name": "Publish Profile",
+      "steps": [
+        "Workspace Admin completes company and/or photographer profile fields.",
+        "Admin configures sections (portfolio galleries, services, testimonials, team).",
+        "Admin sets is_public true and optionally configures custom domain.",
+        "System validates domain ownership (DNS) and enables HTTPS via cert-manager/ingress.",
+        "Public pages become accessible; caching rules applied via Cloudflare." 
+      ]
+    },
+    {
+      "id": "wf.public_inquiry",
+      "name": "Public Inquiry -> CRM Lead",
+      "steps": [
+        "Visitor submits inquiry form on public profile.",
+        "System applies abuse protection and content moderation.",
+        "Inquiry is stored and optionally converted into CRM lead/client record.",
+        "Notify workspace staff via configured channel (email/WhatsApp)."
+      ]
+    }
+  ],
+  "events": [
+    { "name": "profile.published", "payload": { "workspace_id": "uuid", "profile_type": "string", "profile_id": "uuid" } },
+    { "name": "profile.domain_verified", "payload": { "workspace_id": "uuid", "custom_domain": "string" } },
+    { "name": "public.inquiry_received", "payload": { "workspace_id": "uuid", "inquiry_id": "uuid" } }
+  ],
+  "backgroundJobs": [
+    { "id": "job.profile.domain_verify", "trigger": "on demand", "inputs": { "workspace_id": "uuid", "domain": "string" }, "outputs": { "verified": "boolean" } },
+    { "id": "job.profile.seo.sitemap", "trigger": "daily", "inputs": { "workspace_id": "uuid" }, "outputs": { "updated": "boolean" } }
+  ],
+  "i18n": {
+    "supportedLanguages": ["en-IN", "hi-IN", "bn-IN", "te-IN", "mr-IN", "ta-IN", "gu-IN", "kn-IN", "ml-IN", "pa-IN", "ur-IN"],
+    "rtl": ["ur-IN"],
+    "notes": [
+      "Public profile UI should support language selection (visitor-controlled) and/or a default language configured by workspace.",
+      "Inquiry form should accept preferred_language and notify staff accordingly."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "public_profile_views_total{profile_type}",
+      "public_inquiries_total",
+      "custom_domain_active_total",
+      "profile_not_found_total"
+    ],
+    "logs": [
+      "Public page request logs with domain/slug",
+      "Inquiry submission logs (PII minimized)"
+    ],
+    "traces": [
+      "Trace public profile render path (cache hit/miss)"
+    ],
+    "alerts": [
+      "Spike in inquiry submissions (potential spam)",
+      "High 5xx rate on custom domains"
+    ]
+  },
+  "security": {
+    "controls": [
+      "Only published profile data is served publicly",
+      "Cloudflare Turnstile (or equivalent) on inquiry forms",
+      "Rate limiting for public endpoints",
+      "Content moderation for inquiry message bodies (see content_moderation_abuse)",
+      "Prevent host header/domain confusion; strict domain allowlist per workspace"
+    ]
+  },
+  "performance": {
+    "targets": {
+      "public_profile_ttfb_p95": "< 300ms (cache-hit)",
+      "public_profile_ttfb_p95_uncached": "< 900ms"
+    },
+    "cdn": {
+      "provider": "cloudflare_cdn",
+      "cacheStrategy": "Cache public profile pages aggressively; purge on profile updates"
+    }
+  },
+  "acceptanceTests": [
+    "A workspace can publish a company profile and it becomes reachable via slug URL.",
+    "Unpublished profiles return PROFILE_NOT_PUBLIC.",
+    "Inquiry submissions are rate-limited and bot-protected.",
+    "Custom domains only serve the workspace that verified them; no cross-tenant domain takeover.",
+    "Urdu RTL renders correctly on public profile pages."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "share_links_access",
+    "crm_booking_calendar",
+    "notifications",
+    "content_moderation_abuse",
+    "i18n_localization"
+  ],
+  "openQuestions": [
+    "Do we expose portfolio galleries as public share links or as a separate public-gallery publish mode?",
+    "Do we allow multiple photographer profiles per workspace on separate slugs (team pages)?",
+    "What is the exact custom domain verification method (DNS TXT vs CNAME)?"
+  ]
+}

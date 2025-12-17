@@ -1,0 +1,218 @@
+{
+  "$schema": "./_schema.json",
+  "specId": "test_users",
+  "title": "Test Users and Seed Data",
+  "version": "1.0.0",
+  "lastUpdated": "2024-12-17",
+  "status": "active",
+  "description": "Canonical test users for development and testing. All users share password: Test@123",
+  "defaultPassword": "Test@123",
+  "passwordHash": "Argon2id (memory=65536, time=3, parallelism=4)",
+  "emailDomain": "test.rawdrive.in",
+  "tierUsers": {
+    "description": "Users representing each subscription tier",
+    "users": [
+      {
+        "email": "free@test.rawdrive.in",
+        "userId": "11111111-1111-1111-1111-111111111001",
+        "displayName": "Free User",
+        "plan": "free",
+        "workspaceId": "d049a58f-0a4f-5b35-95cb-99b572886b5f",
+        "workspaceName": "free-tier-workspace",
+        "limits": {
+          "storage_gb": 2,
+          "galleries": 3,
+          "members": 1,
+          "api_access": false
+        }
+      },
+      {
+        "email": "starter@test.rawdrive.in",
+        "userId": "11111111-1111-1111-1111-111111111002",
+        "displayName": "Starter User",
+        "plan": "starter",
+        "workspaceId": "e049a58f-0a4f-5b35-95cb-99b572886b5f",
+        "workspaceName": "starter-tier-workspace",
+        "limits": {
+          "storage_gb": 50,
+          "galleries": 20,
+          "members": 3,
+          "api_access": false
+        }
+      },
+      {
+        "email": "professional@test.rawdrive.in",
+        "userId": "11111111-1111-1111-1111-111111111003",
+        "displayName": "Professional User",
+        "plan": "professional",
+        "workspaceId": "f049a58f-0a4f-5b35-95cb-99b572886b5f",
+        "workspaceName": "professional-tier-workspace",
+        "limits": {
+          "storage_gb": 500,
+          "galleries": 100,
+          "members": 10,
+          "api_access": true
+        }
+      },
+      {
+        "email": "business@test.rawdrive.in",
+        "userId": "11111111-1111-1111-1111-111111111004",
+        "displayName": "Business User",
+        "plan": "business",
+        "workspaceId": "a149a58f-0a4f-5b35-95cb-99b572886b5f",
+        "workspaceName": "business-tier-workspace",
+        "limits": {
+          "storage_gb": 2000,
+          "galleries": -1,
+          "members": 50,
+          "api_access": true
+        }
+      },
+      {
+        "email": "enterprise@test.rawdrive.in",
+        "userId": "11111111-1111-1111-1111-111111111005",
+        "displayName": "Enterprise User",
+        "plan": "enterprise",
+        "workspaceId": "b149a58f-0a4f-5b35-95cb-99b572886b5f",
+        "workspaceName": "enterprise-tier-workspace",
+        "limits": {
+          "storage_gb": -1,
+          "galleries": -1,
+          "members": -1,
+          "api_access": true
+        }
+      }
+    ]
+  },
+  "platformAdmins": {
+    "description": "Users with platform-level administrative roles",
+    "users": [
+      {
+        "email": "superadmin@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222001",
+        "displayName": "Super Admin",
+        "platformRole": "superadmin",
+        "permissions": ["*"]
+      },
+      {
+        "email": "platformadmin@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222002",
+        "displayName": "Platform Admin",
+        "platformRole": "platformadmin",
+        "permissions": ["platform:admins:*", "platform:workspaces:*", "platform:config:*"]
+      },
+      {
+        "email": "supportadmin@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222003",
+        "displayName": "Support Admin",
+        "platformRole": "supportadmin",
+        "permissions": ["platform:workspaces:read", "platform:support_access:*"]
+      },
+      {
+        "email": "billingadmin@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222004",
+        "displayName": "Billing Admin",
+        "platformRole": "billingadmin",
+        "permissions": ["platform:billing:*", "platform:workspaces:read"]
+      },
+      {
+        "email": "contentmod@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222005",
+        "displayName": "Content Moderator",
+        "platformRole": "contentmod",
+        "permissions": ["platform:moderation:*"]
+      },
+      {
+        "email": "securityadmin@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222006",
+        "displayName": "Security Admin",
+        "platformRole": "securityadmin",
+        "permissions": ["platform:audit:*", "platform:security:*"]
+      },
+      {
+        "email": "observability@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222007",
+        "displayName": "Observability Admin",
+        "platformRole": "observabilityadmin",
+        "permissions": ["platform:observability:*", "platform:audit:read"]
+      },
+      {
+        "email": "auditor@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222008",
+        "displayName": "Auditor",
+        "platformRole": "auditor",
+        "permissions": ["platform:audit:read"]
+      },
+      {
+        "email": "productadmin@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222009",
+        "displayName": "Product Admin",
+        "platformRole": "productadmin",
+        "permissions": ["platform:feature_flags:*", "platform:config:read"]
+      },
+      {
+        "email": "financeadmin@test.rawdrive.in",
+        "userId": "22222222-2222-2222-2222-222222222010",
+        "displayName": "Finance Admin",
+        "platformRole": "financeadmin",
+        "permissions": ["platform:billing:*", "platform:finance:*", "platform:invoices:*", "platform:refunds:write"]
+      }
+    ]
+  },
+  "workspaceRoleUsers": {
+    "description": "Users demonstrating workspace-level RBAC roles",
+    "workspaceId": "c149a58f-0a4f-5b35-95cb-99b572886b5f",
+    "workspaceName": "test-roles-workspace",
+    "users": [
+      {
+        "email": "owner@test.rawdrive.in",
+        "userId": "33333333-3333-3333-3333-333333333001",
+        "displayName": "Workspace Owner",
+        "workspaceRole": "owner",
+        "permissions": ["workspace:*", "members:*", "roles:*", "galleries:*", "assets:*", "billing:*", "audit:read"]
+      },
+      {
+        "email": "admin@test.rawdrive.in",
+        "userId": "33333333-3333-3333-3333-333333333002",
+        "displayName": "Workspace Admin",
+        "workspaceRole": "admin",
+        "permissions": ["workspace:write", "members:write", "roles:write", "galleries:*", "assets:*", "billing:read", "audit:read"]
+      },
+      {
+        "email": "editor@test.rawdrive.in",
+        "userId": "33333333-3333-3333-3333-333333333003",
+        "displayName": "Workspace Editor",
+        "workspaceRole": "editor",
+        "permissions": ["galleries:write", "galleries:read", "assets:write", "assets:read"]
+      },
+      {
+        "email": "viewer@test.rawdrive.in",
+        "userId": "33333333-3333-3333-3333-333333333004",
+        "displayName": "Workspace Viewer",
+        "workspaceRole": "viewer",
+        "permissions": ["galleries:read", "assets:read"]
+      }
+    ]
+  },
+  "seedDataLocation": {
+    "migrations": "backend/alembic/versions/",
+    "seedScript": "backend/scripts/seed_data.py",
+    "documentation": "docs/TEST_USERS.md"
+  },
+  "usage": {
+    "login": {
+      "endpoint": "POST /api/v1/auth/login",
+      "body": {
+        "email": "<user_email>",
+        "password": "Test@123"
+      }
+    },
+    "testingGuidelines": [
+      "Use tier users to test plan limits and feature gating",
+      "Use platform admins to test admin panel functionality",
+      "Use workspace role users to test RBAC enforcement",
+      "Never use test users in production environments",
+      "Password is intentionally weak - for dev/test only"
+    ]
+  }
+}

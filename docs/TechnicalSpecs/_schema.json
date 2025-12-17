@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rawdrive://docs/TechnicalSpecs/schema/v1",
+  "title": "RawDrive Technical Feature Spec",
+  "type": "object",
+  "required": [
+    "specVersion",
+    "featureId",
+    "name",
+    "status",
+    "lastUpdated",
+    "description",
+    "tenancy",
+    "actors",
+    "workflows",
+    "apis",
+    "dataModel",
+    "security",
+    "observability"
+  ],
+  "properties": {
+    "specVersion": { "type": "string", "enum": ["1.0"] },
+    "featureId": { "type": "string" },
+    "name": { "type": "string" },
+    "status": { "type": "string", "enum": ["draft", "approved", "deprecated"] },
+    "lastUpdated": { "type": "string", "description": "ISO date" },
+    "owners": {
+      "type": "object",
+      "properties": {
+        "productOwner": { "type": "string" },
+        "techOwner": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "description": { "type": "string" },
+    "goals": { "type": "array", "items": { "type": "string" } },
+    "nonGoals": { "type": "array", "items": { "type": "string" } },
+    "tenancy": {
+      "type": "object",
+      "required": ["scopingKey", "rules"],
+      "properties": {
+        "scopingKey": { "type": "string", "enum": ["workspace_id"] },
+        "rules": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "permissions": { "type": "array", "items": { "type": "string" } },
+    "dataModel": {
+      "type": "object",
+      "required": ["entities"],
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "table": { "type": "string" },
+              "primaryKey": { "type": "string" },
+              "workspaceScoped": { "type": "boolean" },
+              "fields": { "type": "array", "items": { "type": "object" } },
+              "indexes": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "apis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "method", "path", "auth"],
+        "properties": {
+          "id": { "type": "string" },
+          "method": { "type": "string" },
+          "path": { "type": "string" },
+          "auth": { "type": "string" },
+          "rateLimit": { "type": "string" },
+          "request": { "type": "object" },
+          "response": { "type": "object" },
+          "errors": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "workflows": { "type": "array", "items": { "type": "object" } },
+    "events": { "type": "array", "items": { "type": "object" } },
+    "backgroundJobs": { "type": "array", "items": { "type": "object" } },
+    "config": { "type": "object" },
+    "integrations": { "type": "array", "items": { "type": "object" } },
+    "i18n": { "type": "object" },
+    "observability": { "type": "object" },
+    "security": { "type": "object" },
+    "performance": { "type": "object" },
+    "acceptanceTests": { "type": "array", "items": { "type": "string" } },
+    "dependencies": { "type": "array", "items": { "type": "string" } },
+    "openQuestions": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

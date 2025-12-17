@@ -1,0 +1,252 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "downloads_watermarking",
+  "name": "Downloads, Exports, and Watermarking",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/GalleryFeatures.md",
+    "docs/Features/CLIENT_FACING_FEATURES.md",
+    "docs/Features/PRD.md",
+    "docs/Features/NOTIFICATIONS_AND_COMMUNICATION.md"
+  ],
+  "description": "Controlled downloads of individual assets and bulk exports (ZIP), including watermarking rules, expiry, per-link policy enforcement, and export job orchestration.",
+  "goals": [
+    "Allow secure client downloads via share links with granular policy.",
+    "Support bulk download exports (e.g., selection set ZIP) with background jobs.",
+    "Support watermarking profiles and enforce watermark-only downloads when required.",
+    "Provide reliable, resumable delivery via CDN/signed URLs."
+  ],
+  "nonGoals": [
+    "On-the-fly user-customized watermark editors beyond predefined profiles (phase later).",
+    "Unlimited public downloads without authentication/policy checks."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Exports are workspace-scoped and reference allowed assets by ID.",
+      "All download attempts are authorized through RBAC (staff) or Share Link policy (client portal).",
+      "Export objects are stored under workspace_id prefix and deleted per retention policy."
+    ]
+  },
+  "actors": [
+    { "id": "client_viewer", "name": "Client", "description": "Downloads permitted variants via share link." },
+    { "id": "staff_user", "name": "Staff", "description": "Configures watermark policies and triggers exports." },
+    { "id": "system", "name": "System", "description": "Builds ZIP exports and generates signed download URLs." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "WatermarkProfile",
+        "table": "watermark_profiles",
+        "primaryKey": "watermark_profile_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "watermark_profile_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "type", "type": "enum(image,text)" },
+          { "name": "image_object_key", "type": "string", "nullable": true },
+          { "name": "text", "type": "string", "nullable": true },
+          { "name": "opacity", "type": "number" },
+          { "name": "position", "type": "enum(top_left,top_right,bottom_left,bottom_right,center,tiled)" },
+          { "name": "scale", "type": "number", "notes": "relative size" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["watermark_profiles_ws_name_unique"]
+      },
+      {
+        "name": "Export",
+        "table": "exports",
+        "primaryKey": "export_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "export_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "requested_by", "type": "json", "notes": "user_id or share_link_session" },
+          { "name": "source", "type": "enum(gallery,selection_set,ad_hoc)" },
+          { "name": "source_id", "type": "uuid", "nullable": true },
+          { "name": "asset_ids", "type": "uuid[]" },
+          { "name": "variant", "type": "enum(original,download,watermarked)" },
+          { "name": "watermark_profile_id", "type": "uuid", "nullable": true },
+          { "name": "state", "type": "enum(queued,running,ready,failed,expired)" },
+          { "name": "object_key", "type": "string", "nullable": true },
+          { "name": "bytes", "type": "number", "nullable": true },
+          { "name": "sha256", "type": "string", "nullable": true },
+          { "name": "expires_at", "type": "timestamp" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["exports_ws_state_idx", "exports_ws_created_idx", "exports_expires_idx"]
+      },
+      {
+        "name": "DownloadAudit",
+        "table": "download_audits",
+        "primaryKey": "download_audit_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "download_audit_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "actor", "type": "json" },
+          { "name": "target_type", "type": "enum(asset,export)" },
+          { "name": "target_id", "type": "uuid" },
+          { "name": "result", "type": "enum(allowed,denied)" },
+          { "name": "reason", "type": "string", "nullable": true },
+          { "name": "ip", "type": "string", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["download_audits_ws_time_idx", "download_audits_ws_target_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "watermarks.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/watermarks",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "name": "string", "type": "image|text", "opacity": "number", "position": "string", "scale": "number", "text": "string?", "image_upload": "object?" } },
+      "response": { "body": { "watermark_profile_id": "uuid" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "exports.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/exports",
+      "auth": "user_jwt_or_share_link",
+      "rateLimit": "standard",
+      "request": { "body": { "source": "gallery|selection_set|ad_hoc", "source_id": "uuid?", "asset_ids": "uuid[]?", "variant": "original|download|watermarked", "watermark_profile_id": "uuid?" } },
+      "response": { "body": { "export_id": "uuid", "state": "queued" } },
+      "errors": ["FORBIDDEN", "POLICY_ACTION_NOT_ALLOWED", "PLAN_LIMIT", "TOO_MANY_ASSETS"]
+    },
+    {
+      "id": "exports.get",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/exports/{export_id}",
+      "auth": "user_jwt_or_share_link",
+      "rateLimit": "standard",
+      "response": { "body": { "export_id": "uuid", "state": "queued|running|ready|failed|expired", "download_url": "string?", "expires_at": "timestamp" } },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    },
+    {
+      "id": "downloads.assetUrl",
+      "method": "POST",
+      "path": "/v1/portal/assets/{asset_id}/download-url",
+      "auth": "share_link_or_user_jwt",
+      "rateLimit": "public-standard",
+      "request": { "body": { "variant": "download|watermarked|original" } },
+      "response": { "body": { "url": "string", "expires_in": "number" } },
+      "errors": ["POLICY_ACTION_NOT_ALLOWED", "ASSET_NOT_FOUND"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.client.single_download",
+      "name": "Client Single Asset Download",
+      "steps": [
+        "Client requests download URL for asset with desired variant.",
+        "Backend validates share link policy (download allowed, allowed variant).",
+        "If watermark required and derivative missing, enqueue generate_watermark job.",
+        "Return short-lived signed URL or tokenized CDN URL.",
+        "Write download audit record."
+      ]
+    },
+    {
+      "id": "wf.bulk_export_zip",
+      "name": "Bulk Export ZIP",
+      "steps": [
+        "Client/staff requests export creation specifying source (selection_set) and variant.",
+        "Backend validates policy/plan limits and creates Export in queued state.",
+        "Worker gathers assets, ensures required derivatives exist, builds ZIP in streaming mode.",
+        "Worker writes ZIP object and marks Export ready with expiry.",
+        "Optional: notify requester when ready."
+      ]
+    }
+  ],
+  "events": [
+    { "name": "export.created", "payload": { "workspace_id": "uuid", "export_id": "uuid" } },
+    { "name": "export.ready", "payload": { "workspace_id": "uuid", "export_id": "uuid", "expires_at": "timestamp" } },
+    { "name": "download.attempted", "payload": { "workspace_id": "uuid", "target_type": "string", "target_id": "uuid", "result": "allowed|denied" } }
+  ],
+  "backgroundJobs": [
+    { "id": "job.exports.build_zip", "trigger": "export.created", "inputs": { "export_id": "uuid" }, "outputs": { "state": "ready|failed", "bytes": "number" }, "retries": "idempotent output key" },
+    { "id": "job.watermark.generate", "trigger": "on-demand", "inputs": { "workspace_id": "uuid", "asset_id": "uuid", "watermark_profile_id": "uuid" }, "outputs": { "derivative_variant": "watermarked" } },
+    { "id": "job.exports.expire", "trigger": "hourly", "inputs": {}, "outputs": { "expired": "number" }, "notes": "Delete expired export objects and mark Export expired." }
+  ],
+  "config": {
+    "export": {
+      "maxAssetsPerExport": 2000,
+      "defaultExpiryHours": 48,
+      "zipStreaming": true
+    },
+    "download": {
+      "signedUrlTtlSeconds": 120,
+      "cdn": "cloudflare"
+    }
+  },
+  "observability": {
+    "metrics": [
+      "exports_created_total{variant}",
+      "exports_ready_total",
+      "exports_failed_total",
+      "export_build_duration_seconds_bucket",
+      "download_denied_total{reason}",
+      "download_allowed_total{variant}"
+    ],
+    "logs": [
+      "Export worker logs (export_id, workspace_id)",
+      "Policy denial logs for portal downloads"
+    ],
+    "traces": [
+      "Trace export creation to worker completion",
+      "Trace download URL issuance endpoint"
+    ],
+    "alerts": [
+      "Export failure rate above threshold",
+      "Export queue lag high",
+      "Abnormally high download_denied_total (policy misconfig or abuse)"
+    ]
+  },
+  "security": {
+    "controls": [
+      "Per-request policy enforcement for downloads",
+      "Short-lived signed URLs; no public bucket access",
+      "Download audit logging",
+      "Rate limiting for public download-url endpoints",
+      "Optional Turnstile for suspicious traffic patterns"
+    ],
+    "abuse": [
+      "Download caps per share link (optional)",
+      "IP throttling and anomaly detection"
+    ]
+  },
+  "performance": {
+    "targets": {
+      "download_url_p95": "< 250ms",
+      "export_zip_ready_p95": "< 10 min for 500 photos (size dependent)"
+    },
+    "notes": [
+      "ZIP exports should be built as streaming to reduce memory.",
+      "Use worker concurrency controls to avoid saturating storage bandwidth."
+    ]
+  },
+  "acceptanceTests": [
+    "Client cannot download originals if link policy allows only watermarked downloads.",
+    "Export ZIP becomes available and expires at configured time; expired exports cannot be downloaded.",
+    "All download attempts produce a DownloadAudit entry.",
+    "Export worker retries safely without creating multiple ZIP objects for same export."
+  ],
+  "dependencies": [
+    "share_links_access",
+    "media_processing",
+    "proofing_selections_comments",
+    "notifications",
+    "retention_customer_removal"
+  ],
+  "openQuestions": [
+    "Should we support partial exports (only selected variants/sizes)?",
+    "Do we need per-gallery watermark profiles or only per-workspace?",
+    "Do we support client-side resumable download for very large ZIPs?"
+  ]
+}

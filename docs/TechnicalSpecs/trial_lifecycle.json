@@ -1,0 +1,245 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "trial_lifecycle",
+  "name": "30-day Trial Lifecycle (Activation → Reminders → Conversion)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/FreeTrailLifecycle.md",
+    "docs/Features/PRD.md",
+    "docs/Features/ADMIN_AND_PLATFORM_MANAGEMENT.md",
+    "docs/project/06-PRICING_MODEL.md"
+  ],
+  "description": "End-to-end lifecycle for the Business-equivalent 30-day trial, including activation rules, entitlement gating, reminder schedule, conversion to paid plans, grace periods, and billing-safe state transitions.",
+  "goals": [
+    "Consistent and auditable trial state machine per workspace.",
+    "Prevent revenue leakage: enforce entitlements at API boundary, not only UI.",
+    "Ensure idempotent billing operations and safe retries for webhooks/jobs.",
+    "Provide clear UX for remaining days, upgrade path, and downgrade/cancel handling."
+  ],
+  "nonGoals": [
+    "Complex A/B experimentation framework for trial rules (can be added later).",
+    "Multi-seat invoicing engine beyond what subscriptions/invoicing already cover (see payments_billing_subscriptions)."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Trial state is strictly workspace-scoped and must be enforced for every gated action.",
+      "All trial/billing events must include workspace_id for attribution and audit.",
+      "No trial state is derived from client-provided claims; it is always server-authoritative."
+    ]
+  },
+  "actors": [
+    { "id": "workspace_owner", "name": "Workspace Owner", "description": "Starts trial, upgrades/downgrades plans, updates billing settings." },
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "May manage plan settings if allowed by RBAC." },
+    { "id": "platform_admin", "name": "Platform Admin", "description": "Handles payment disputes, fraud, edge cases." },
+    { "id": "system", "name": "System", "description": "Trial scheduler, entitlement enforcer, notification dispatcher." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "WorkspaceSubscription",
+        "table": "workspace_subscriptions",
+        "primaryKey": "subscription_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "subscription_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "plan_id", "type": "uuid" },
+          { "name": "status", "type": "enum(trialing,active,past_due,canceled,paused)" },
+          { "name": "trial_started_at", "type": "timestamp", "nullable": true },
+          { "name": "trial_expires_at", "type": "timestamp", "nullable": true },
+          { "name": "grace_expires_at", "type": "timestamp", "nullable": true },
+          { "name": "current_period_start", "type": "timestamp", "nullable": true },
+          { "name": "current_period_end", "type": "timestamp", "nullable": true },
+          { "name": "billing_provider", "type": "enum(razorpay,stripe,manual)" },
+          { "name": "billing_customer_id", "type": "string", "nullable": true },
+          { "name": "billing_subscription_id", "type": "string", "nullable": true },
+          { "name": "cancel_at_period_end", "type": "boolean" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["workspace_subscriptions_ws_unique", "workspace_subscriptions_status_idx"]
+      },
+      {
+        "name": "EntitlementSnapshot",
+        "table": "entitlement_snapshots",
+        "primaryKey": "snapshot_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "snapshot_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "effective_plan", "type": "string" },
+          { "name": "limits", "type": "json", "notes": "e.g., storage_gb, galleries_count, ai_credits" },
+          { "name": "generated_at", "type": "timestamp" }
+        ],
+        "indexes": ["entitlement_snapshots_ws_time_idx"]
+      },
+      {
+        "name": "BillingEvent",
+        "table": "billing_events",
+        "primaryKey": "billing_event_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "billing_event_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "provider", "type": "enum(razorpay,stripe)" },
+          { "name": "provider_event_id", "type": "string" },
+          { "name": "type", "type": "string" },
+          { "name": "payload", "type": "json" },
+          { "name": "received_at", "type": "timestamp" },
+          { "name": "processed_at", "type": "timestamp", "nullable": true }
+        ],
+        "indexes": ["billing_events_provider_event_unique", "billing_events_ws_time_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "trial.getStatus",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/trial",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": {
+        "body": {
+          "status": "trialing|active|past_due|canceled",
+          "trial_expires_at": "timestamp?",
+          "days_remaining": "number?",
+          "effective_plan": "string",
+          "limits": "object"
+        }
+      },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "trial.start",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/trial/start",
+      "auth": "user_jwt",
+      "rateLimit": "strict",
+      "request": { "body": { "accept_terms": "boolean" } },
+      "response": { "body": { "status": "trialing", "trial_expires_at": "timestamp" } },
+      "errors": ["FORBIDDEN", "TRIAL_ALREADY_STARTED", "WORKSPACE_DISABLED"]
+    },
+    {
+      "id": "billing.upgrade",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/billing/upgrade",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "plan_id": "uuid", "provider": "razorpay|stripe", "payment_method": "object?" } },
+      "response": { "body": { "status": "active|requires_action", "checkout": "object?" } },
+      "errors": ["FORBIDDEN", "PLAN_INVALID", "BILLING_PROVIDER_ERROR"]
+    },
+    {
+      "id": "billing.webhook",
+      "method": "POST",
+      "path": "/v1/billing/webhooks/{provider}",
+      "auth": "provider_signature",
+      "rateLimit": "public-standard",
+      "request": { "body": "raw" },
+      "response": { "body": { "ok": true } },
+      "errors": ["SIGNATURE_INVALID", "EVENT_DUPLICATE"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.trial.activation",
+      "name": "Activate Trial on Signup",
+      "steps": [
+        "Create workspace with status=active and default language.",
+        "Create WorkspaceSubscription with status=trialing and set trial_started_at/trial_expires_at (30 days).",
+        "Generate entitlement snapshot for Business-equivalent trial.",
+        "Emit event trial.started and schedule reminders.",
+        "Expose remaining days + upgrade CTA via API."
+      ]
+    },
+    {
+      "id": "wf.trial.reminders",
+      "name": "Trial Reminder Cadence",
+      "steps": [
+        "Daily job computes days_remaining for all trialing workspaces.",
+        "Send reminders at configurable milestones (e.g., day 1, 7, 14, 23, 27, 29).",
+        "Do not spam: respect per-workspace notification settings and per-user preferences.",
+        "Log every notification attempt and outcome."
+      ]
+    },
+    {
+      "id": "wf.trial.expiry_grace",
+      "name": "Expiry + Grace + Restriction",
+      "steps": [
+        "At trial_expires_at, mark subscription past_due unless upgraded.",
+        "Apply grace period window for read-only access if configured.",
+        "Enforce entitlements: block creation of new galleries/uploads if not allowed.",
+        "Allow export/download of owned data per retention policy."
+      ]
+    }
+  ],
+  "events": [
+    { "name": "trial.started", "payload": { "workspace_id": "uuid", "trial_expires_at": "timestamp" } },
+    { "name": "trial.reminder_sent", "payload": { "workspace_id": "uuid", "days_remaining": "number", "channel": "string" } },
+    { "name": "trial.expired", "payload": { "workspace_id": "uuid" } },
+    { "name": "subscription.activated", "payload": { "workspace_id": "uuid", "plan_id": "uuid" } },
+    { "name": "subscription.past_due", "payload": { "workspace_id": "uuid" } },
+    { "name": "subscription.canceled", "payload": { "workspace_id": "uuid", "cancel_at_period_end": "boolean" } }
+  ],
+  "backgroundJobs": [
+    {
+      "id": "job.trial.daily_sweep",
+      "trigger": "daily",
+      "inputs": { "as_of": "timestamp" },
+      "outputs": { "reminders_sent": "number", "expired_marked": "number" }
+    },
+    {
+      "id": "job.entitlements.recompute",
+      "trigger": "subscription state change",
+      "inputs": { "workspace_id": "uuid" },
+      "outputs": { "snapshot_id": "uuid" }
+    }
+  ],
+  "security": {
+    "controls": [
+      "RBAC: only workspace_owner/admin can change plan/billing settings.",
+      "Webhook signature verification and replay protection (dedupe by provider_event_id).",
+      "Server-authoritative subscription status; no client-controlled gating.",
+      "Audit log: trial start, upgrade, cancel, webhook processing outcomes."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "trial_workspaces_total",
+      "trial_conversions_total",
+      "trial_expirations_total",
+      "billing_webhook_processing_seconds",
+      "billing_webhook_failures_total"
+    ],
+    "logs": [
+      "Billing webhook receipt/validation",
+      "Subscription state transitions",
+      "Entitlement enforcement denials"
+    ],
+    "traces": [
+      "Upgrade flow checkout creation",
+      "Webhook processing pipeline"
+    ],
+    "alerts": [
+      "Spike in billing webhook failures",
+      "High trial expiry without reminders (scheduler failure)",
+      "Repeated entitlement-denied errors for active subscribers (misconfig)"
+    ]
+  },
+  "acceptanceTests": [
+    "A new workspace enters trialing status with trial_expires_at exactly 30 days after activation.",
+    "Entitlements are enforced at API boundary for trial-expired workspaces.",
+    "Billing webhooks are idempotent: duplicate provider_event_id does not double-apply changes.",
+    "Upgrade moves workspace to active and recomputes entitlements within one minute."
+  ],
+  "dependencies": [
+    "payments_billing_subscriptions",
+    "notifications",
+    "auth_rbac",
+    "observability"
+  ]
+}

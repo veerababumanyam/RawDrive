@@ -1,0 +1,143 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "observability",
+  "name": "Observability & Monitoring (OTel + Metrics + Logs + Tracing)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/HLD.md",
+    "docs/Features/PRD.md",
+    "docs/project/07-PROD_CHECKLIST.md"
+  ],
+  "description": "Production-grade observability for RawDrive services using OpenTelemetry for traces/metrics/logs, Prometheus/Grafana for metrics, Loki for logs, Tempo/Jaeger for traces, and Alertmanager for alerting. Enforces consistent correlation and tenant-safe metadata.",
+  "goals": [
+    "End-to-end tracing for user and public portal requests with correlation IDs.",
+    "High-signal metrics and dashboards aligned to SLOs.",
+    "Centralized logging with PII-safe patterns.",
+    "Actionable alerts with runbook links and escalation paths."
+  ],
+  "nonGoals": [
+    "Replacing incident management tooling (PagerDuty/Opsgenie) if adopted later.",
+    "Storing raw media content in logs/traces."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "All telemetry MUST include workspace_id when available, but never for unauthenticated public requests unless resolved safely via share link.",
+      "Never emit PII (emails/phones/access codes) as labels/tags; use hashes or omit.",
+      "High-cardinality IDs (asset_id, share_token) must not be used as metric labels; allowed only in logs/traces with sampling."
+    ]
+  },
+  "actors": [
+    { "id": "platform_admin", "name": "Platform Admin", "description": "Owns monitoring, alerting, SLOs, incident response." },
+    { "id": "system", "name": "System", "description": "Services emit telemetry; collectors and backends store/process." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "SLODefinition",
+        "table": "slo_definitions",
+        "primaryKey": "slo_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "slo_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "service", "type": "string" },
+          { "name": "objective", "type": "string", "notes": "e.g., 99.9%" },
+          { "name": "window", "type": "string", "notes": "e.g., 30d" },
+          { "name": "burn_rate_alerts", "type": "json" },
+          { "name": "created_at", "type": "timestamp" }
+        ]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "system.health",
+      "method": "GET",
+      "path": "/healthz",
+      "auth": "public",
+      "rateLimit": "public-standard",
+      "response": { "body": { "ok": true } },
+      "errors": []
+    },
+    {
+      "id": "system.ready",
+      "method": "GET",
+      "path": "/readyz",
+      "auth": "public",
+      "rateLimit": "public-standard",
+      "response": { "body": { "ok": true, "checks": "object" } },
+      "errors": []
+    },
+    {
+      "id": "system.metrics",
+      "method": "GET",
+      "path": "/metrics",
+      "auth": "internal_only",
+      "rateLimit": "internal",
+      "response": { "body": "prometheus text" },
+      "errors": ["FORBIDDEN"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.request.telemetry",
+      "name": "Request Telemetry Standards",
+      "steps": [
+        "Assign/request correlation id (x-request-id) at edge/gateway; propagate downstream.",
+        "Create root span per request and add attributes: service.name, http.route, http.method.",
+        "Attach workspace_id only after authentication or secure share-link resolution.",
+        "Record errors with stable error codes; avoid raw stack traces in user-facing responses.",
+        "Export via OTel Collector to Prometheus/Loki/Tempo backends."
+      ]
+    }
+  ],
+  "security": {
+    "controls": [
+      "Protect /metrics endpoints (network policy + auth).",
+      "PII scrubbing in logs; structured logging with allowlisted fields.",
+      "Sampling policies for high-volume public portal traffic.",
+      "Retention policies: logs/traces retained per environment and compliance requirements."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "http_requests_total{service,route,method,status_code}",
+      "http_request_duration_seconds{service,route,method}",
+      "db_query_duration_seconds{service,operation}",
+      "queue_job_duration_seconds{queue,job}",
+      "queue_job_failures_total{queue,job}",
+      "cdn_signed_url_issuance_total",
+      "upload_ingestion_errors_total",
+      "auth_login_failures_total"
+    ],
+    "logs": [
+      "Structured JSON logs with request_id, workspace_id (when safe), actor_type",
+      "Audit logs are separate stream with longer retention"
+    ],
+    "traces": [
+      "Gateway → API → DB spans",
+      "Background job spans (ingestion, processing, AI)"
+    ],
+    "alerts": [
+      "SLO burn rate alerts for key routes",
+      "DB connection pool exhaustion",
+      "Queue backlog and job failure spikes",
+      "Elevated 5xx rates on portal endpoints"
+    ]
+  },
+  "acceptanceTests": [
+    "Every API response includes x-request-id and is searchable in logs.",
+    "Metrics do not include high-cardinality IDs as labels.",
+    "workspace_id is only present in telemetry after auth or safe share-link resolution.",
+    "/metrics is inaccessible from the public internet."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "storage_ingestion_byos",
+    "media_processing",
+    "ai_platform_model_router"
+  ]
+}

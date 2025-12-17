@@ -1,0 +1,1194 @@
+/* =============================================================================
+   RawDrive Landing Page Design System v2.0
+
+   High-conversion landing page optimized for 50%+ signup rates.
+   2025 design trends: glassmorphism 2.0, micro-3D, particle systems
+   ============================================================================= */
+
+/* =============================================================================
+   1. LANDING PAGE CSS VARIABLES (2025 Enhanced)
+   ============================================================================= */
+
+:root {
+  /* Background Gradients - Premium Dark */
+  --landing-bg-start: #050a15;
+  --landing-bg-mid: #0a1628;
+  --landing-bg-end: #0f1d32;
+
+  /* Text Colors */
+  --landing-text-primary: #ffffff;
+  --landing-text-secondary: #94a3b8;
+  --landing-text-muted: #64748b;
+
+  /* Primary Brand Colors */
+  --landing-accent: #3b82f6;
+  --landing-accent-hover: #60a5fa;
+  --landing-accent-glow: rgba(59, 130, 246, 0.5);
+
+  /* Cyan Accent */
+  --landing-cyan: #06b6d4;
+  --landing-cyan-hover: #22d3ee;
+  --landing-cyan-glow: rgba(6, 182, 212, 0.5);
+
+  /* Gold Premium */
+  --landing-gold: #d4af37;
+  --landing-gold-hover: #eac74a;
+  --landing-gold-glow: rgba(212, 175, 55, 0.5);
+
+  /* Purple Accent (2025 gradients) */
+  --landing-purple: #7c3aed;
+  --landing-purple-glow: rgba(124, 58, 237, 0.4);
+
+  /* Glass Morphism 2.0 - Enhanced */
+  --landing-glass-bg: rgba(255, 255, 255, 0.04);
+  --landing-glass-bg-hover: rgba(255, 255, 255, 0.08);
+  --landing-glass-border: rgba(255, 255, 255, 0.08);
+  --landing-glass-border-hover: rgba(255, 255, 255, 0.15);
+  --landing-glass-blur: 16px;
+  --landing-glass-blur-heavy: 24px;
+  --landing-glass-blur-light: 8px;
+
+  /* Neumorphic shadows */
+  --landing-neu-shadow-light: rgba(255, 255, 255, 0.05);
+  --landing-neu-shadow-dark: rgba(0, 0, 0, 0.4);
+
+  /* Typography - Fluid Sizes */
+  --landing-text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --landing-text-sm: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);
+  --landing-text-base: clamp(1rem, 0.9rem + 0.5vw, 1.125rem);
+  --landing-text-lg: clamp(1.125rem, 1rem + 0.625vw, 1.25rem);
+  --landing-text-xl: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+  --landing-text-2xl: clamp(1.5rem, 1.25rem + 1.25vw, 2rem);
+  --landing-text-3xl: clamp(1.875rem, 1.5rem + 1.875vw, 2.5rem);
+  --landing-text-4xl: clamp(2.25rem, 1.75rem + 2.5vw, 3.5rem);
+  --landing-text-5xl: clamp(3rem, 2rem + 5vw, 4.5rem);
+  --landing-text-6xl: clamp(3.75rem, 2.5rem + 6.25vw, 5.5rem);
+
+  /* Spacing */
+  --landing-section-padding: clamp(4rem, 8vw, 8rem);
+  --landing-container-max: 1400px;
+  --landing-container-padding: clamp(1rem, 4vw, 2rem);
+
+  /* Header */
+  --landing-header-height: 72px;
+
+  /* Enhanced Shadows */
+  --landing-shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --landing-shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+  --landing-shadow-lg: 0 20px 40px -5px rgba(0, 0, 0, 0.5);
+  --landing-shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  --landing-shadow-glow: 0 0 40px rgba(59, 130, 246, 0.3);
+  --landing-shadow-glow-strong: 0 0 60px rgba(59, 130, 246, 0.4);
+  --landing-shadow-gold-glow: 0 0 40px rgba(212, 175, 55, 0.3);
+
+  /* CTA Glow Effect */
+  --landing-cta-glow: 0 4px 30px rgba(6, 182, 212, 0.4), 0 0 50px rgba(59, 130, 246, 0.2);
+  --landing-cta-glow-hover: 0 6px 40px rgba(6, 182, 212, 0.5), 0 0 70px rgba(59, 130, 246, 0.3);
+
+  /* Animation Timing */
+  --landing-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --landing-ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --landing-ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* =============================================================================
+   2. LANDING PAGE BASE STYLES
+   ============================================================================= */
+
+.landing-page {
+  background: #ffffff;
+  color: #0f172a;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.landing-light {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+/* Override common light/dark utility colors inside light wrapper */
+.landing-light .text-white { color: #0f172a !important; }
+.landing-light .text-slate-50 { color: #0f172a !important; }
+.landing-light .text-slate-100 { color: #0f172a !important; }
+.landing-light .text-slate-200 { color: #1f2937 !important; }
+.landing-light .text-slate-300 { color: #334155 !important; }
+.landing-light .text-slate-400 { color: #475569 !important; }
+.landing-light .text-slate-500 { color: #475569 !important; }
+.landing-light .text-slate-600 { color: #334155 !important; }
+.landing-light .text-slate-700 { color: #1f2937 !important; }
+.landing-light .text-slate-800 { color: #0f172a !important; }
+.landing-light .text-slate-900 { color: #0f172a !important; }
+
+.landing-light .bg-white\/5,
+.landing-light .bg-white\/8,
+.landing-light .bg-white\/10,
+.landing-light .bg-white\/20 {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+}
+
+.landing-light .border-white\/10,
+.landing-light .border-white\/20,
+.landing-light .border-white\/5 {
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}
+
+.landing-light .shadow-primary-500\/25,
+.landing-light .shadow-primary-500\/30 {
+  box-shadow: 0 10px 30px rgba(14, 165, 233, 0.18) !important;
+}
+
+/* =============================================================================
+   3. HERO GRADIENTS & PATTERNS (2025 Premium)
+   ============================================================================= */
+
+/* Premium multi-stop hero gradient with shimmer */
+.bg-hero-gradient {
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(6, 182, 212, 0.22) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(59, 130, 246, 0.2) 0%, transparent 45%),
+    radial-gradient(ellipse 50% 60% at 70% 80%, rgba(124, 58, 237, 0.16) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 30% at 10% 90%, rgba(212, 175, 55, 0.1) 0%, transparent 40%),
+    linear-gradient(180deg, var(--landing-bg-start) 0%, var(--landing-bg-mid) 50%, var(--landing-bg-end) 100%);
+  position: relative;
+}
+
+/* Hero gradient shimmer overlay */
+.bg-hero-gradient::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.02) 40%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0.02) 60%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  animation: hero-shimmer 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes hero-shimmer {
+  0%, 100% { background-position: 200% 0; }
+  50% { background-position: -200% 0; }
+}
+
+/* Premium hexagon pattern */
+.hero-pattern-hex {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104' viewBox='0 0 120 104'%3E%3Cg fill='none' stroke='white' stroke-opacity='0.25' stroke-width='0.5'%3E%3Cpath d='M30 2 L60 2 L75 28 L60 54 L30 54 L15 28 Z'/%3E%3Cpath d='M75 28 L105 28 L120 54 L105 80 L75 80 L60 54 Z'/%3E%3Cpath d='M15 28 L45 28 L60 54 L45 80 L15 80 L0 54 Z'/%3E%3Cpath d='M30 54 L60 54 L75 80 L60 102 L30 102 L15 80 Z'/%3E%3Cpath d='M75 80 L105 80 L120 104 L120 104 L105 104 L75 104 L60 102 Z'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 120px 104px;
+}
+
+/* Refined grid pattern */
+.hero-pattern-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+/* Dot pattern */
+.hero-pattern-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* =============================================================================
+   4. GLASS MORPHISM 2.0 (Enhanced)
+   ============================================================================= */
+
+.landing-glass {
+  background: var(--landing-glass-bg);
+  backdrop-filter: blur(var(--landing-glass-blur));
+  -webkit-backdrop-filter: blur(var(--landing-glass-blur));
+  border: 1px solid var(--landing-glass-border);
+  border-radius: 1rem;
+}
+
+.landing-glass-sm {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(var(--landing-glass-blur-light));
+  -webkit-backdrop-filter: blur(var(--landing-glass-blur-light));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.75rem;
+}
+
+.landing-glass-md {
+  background: var(--landing-glass-bg);
+  backdrop-filter: blur(var(--landing-glass-blur));
+  -webkit-backdrop-filter: blur(var(--landing-glass-blur));
+  border: 1px solid var(--landing-glass-border);
+  border-radius: 1rem;
+}
+
+.landing-glass-lg {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(var(--landing-glass-blur-heavy));
+  -webkit-backdrop-filter: blur(var(--landing-glass-blur-heavy));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1.5rem;
+}
+
+/* Premium glass with gradient border */
+.landing-glass-premium {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  backdrop-filter: blur(var(--landing-glass-blur-heavy));
+  -webkit-backdrop-filter: blur(var(--landing-glass-blur-heavy));
+  border: 1px solid transparent;
+  border-radius: 1.5rem;
+  position: relative;
+}
+
+.landing-glass-premium::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.2), rgba(124, 58, 237, 0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.landing-glass-hover {
+  transition: all 0.3s var(--landing-ease-smooth);
+}
+
+.landing-glass-hover:hover {
+  background: var(--landing-glass-bg-hover);
+  border-color: var(--landing-glass-border-hover);
+  transform: translateY(-4px);
+  box-shadow: var(--landing-shadow-lg);
+}
+
+/* =============================================================================
+   5. LANDING TYPOGRAPHY
+   ============================================================================= */
+
+.landing-heading-1 {
+  font-size: var(--landing-text-6xl);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.landing-heading-2 {
+  font-size: var(--landing-text-5xl);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.landing-heading-3 {
+  font-size: var(--landing-text-4xl);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.landing-heading-4 {
+  font-size: var(--landing-text-3xl);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.landing-body {
+  font-size: var(--landing-text-base);
+  line-height: 1.7;
+  color: var(--landing-text-secondary);
+}
+
+.landing-body-lg {
+  font-size: var(--landing-text-lg);
+  line-height: 1.7;
+  color: var(--landing-text-secondary);
+}
+
+/* Text Gradients - Enhanced */
+.landing-text-gradient {
+  background: linear-gradient(135deg, var(--landing-cyan) 0%, var(--landing-accent) 50%, var(--landing-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.landing-text-gradient-gold {
+  background: linear-gradient(135deg, var(--landing-gold) 0%, #f4e4b0 50%, var(--landing-gold-hover) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.landing-text-gradient-hero {
+  background: linear-gradient(135deg, #ffffff 0%, rgba(6, 182, 212, 0.9) 50%, rgba(59, 130, 246, 0.9) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* =============================================================================
+   6. LANDING BUTTONS (2025 Premium)
+   ============================================================================= */
+
+.landing-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 0.75rem;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.25s var(--landing-ease-bounce);
+  min-height: 48px;
+  min-width: 48px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Primary CTA with glow pulse */
+.landing-btn-primary {
+  background: linear-gradient(135deg, var(--landing-cyan) 0%, var(--landing-accent) 100%);
+  color: white;
+  box-shadow: var(--landing-cta-glow);
+}
+
+.landing-btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--landing-cyan-hover) 0%, var(--landing-accent-hover) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.landing-btn-primary:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: var(--landing-cta-glow-hover);
+}
+
+.landing-btn-primary:hover::before {
+  opacity: 1;
+}
+
+.landing-btn-primary:active {
+  transform: translateY(-1px) scale(1.01);
+}
+
+.landing-btn-primary > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Sparkle effect on primary button */
+.landing-btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  opacity: 0;
+  transition: all 0.4s ease;
+}
+
+.landing-btn-primary:hover::after {
+  width: 200%;
+  height: 200%;
+  opacity: 1;
+  transition: all 0.6s ease;
+}
+
+/* Secondary button */
+.landing-btn-secondary {
+  background: var(--landing-glass-bg);
+  backdrop-filter: blur(var(--landing-glass-blur-light));
+  border: 1px solid var(--landing-glass-border);
+  color: white;
+}
+
+.landing-btn-secondary:hover {
+  background: var(--landing-glass-bg-hover);
+  border-color: var(--landing-glass-border-hover);
+  transform: translateY(-2px);
+}
+
+/* Outline button */
+.landing-btn-outline {
+  background: transparent;
+  border: 2px solid var(--landing-glass-border-hover);
+  color: white;
+}
+
+.landing-btn-outline:hover {
+  background: var(--landing-glass-bg);
+  border-color: var(--landing-cyan);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+}
+
+/* Gold premium button */
+.landing-btn-gold {
+  background: linear-gradient(135deg, var(--landing-gold) 0%, #b8960c 100%);
+  color: #0a1628;
+  font-weight: 700;
+  box-shadow: var(--landing-shadow-gold-glow);
+}
+
+.landing-btn-gold:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 8px 30px rgba(212, 175, 55, 0.5);
+}
+
+/* Button sizes */
+.landing-btn-sm {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  min-height: 40px;
+  border-radius: 0.5rem;
+}
+
+.landing-btn-lg {
+  padding: 1.125rem 2.5rem;
+  font-size: 1.125rem;
+  min-height: 56px;
+  border-radius: 1rem;
+}
+
+.landing-btn-xl {
+  padding: 1.25rem 3rem;
+  font-size: 1.25rem;
+  min-height: 64px;
+  border-radius: 1rem;
+}
+
+/* =============================================================================
+   7. LANDING HEADER
+   ============================================================================= */
+
+.landing-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--landing-header-height);
+  z-index: 50;
+  transition: all 0.3s var(--landing-ease-smooth);
+}
+
+.landing-header-scrolled {
+  background: rgba(5, 10, 21, 0.92);
+  backdrop-filter: blur(var(--landing-glass-blur));
+  -webkit-backdrop-filter: blur(var(--landing-glass-blur));
+  border-bottom: 1px solid var(--landing-glass-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+}
+
+.landing-header-inner {
+  max-width: var(--landing-container-max);
+  margin: 0 auto;
+  padding: 0 var(--landing-container-padding);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.landing-nav-link {
+  color: var(--landing-text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.landing-nav-link:hover {
+  color: var(--landing-text-primary);
+  background: var(--landing-glass-bg);
+}
+
+.landing-container {
+  max-width: var(--landing-container-max);
+  margin: 0 auto;
+  padding-left: var(--landing-container-padding);
+  padding-right: var(--landing-container-padding);
+}
+
+.landing-section {
+  padding-top: var(--landing-section-padding);
+  padding-bottom: var(--landing-section-padding);
+  position: relative;
+}
+
+/* Toggle helpers */
+.toggle-active {
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+}
+
+.btn-high-contrast {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+.btn-high-contrast:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* =============================================================================
+   8. LANDING CARDS (Enhanced)
+   ============================================================================= */
+
+.landing-card {
+  background: var(--landing-glass-bg);
+  backdrop-filter: blur(var(--landing-glass-blur));
+  -webkit-backdrop-filter: blur(var(--landing-glass-blur));
+  border: 1px solid var(--landing-glass-border);
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  transition: all 0.35s var(--landing-ease-smooth);
+}
+
+.landing-card:hover {
+  background: var(--landing-glass-bg-hover);
+  border-color: var(--landing-glass-border-hover);
+  transform: translateY(-6px);
+  box-shadow: var(--landing-shadow-xl);
+}
+
+.landing-card-highlight {
+  border-color: var(--landing-cyan);
+  box-shadow: 0 0 30px var(--landing-cyan-glow);
+}
+
+.landing-card-highlight:hover {
+  box-shadow: 0 0 50px var(--landing-cyan-glow);
+}
+
+/* Feature Cards */
+.landing-feature-card {
+  background: var(--landing-glass-bg);
+  backdrop-filter: blur(var(--landing-glass-blur));
+  -webkit-backdrop-filter: blur(var(--landing-glass-blur));
+  border: 1px solid var(--landing-glass-border);
+  border-radius: 1.25rem;
+  padding: 2rem;
+  transition: all 0.35s var(--landing-ease-smooth);
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-feature-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), transparent 50%);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.landing-feature-card:hover {
+  background: var(--landing-glass-bg-hover);
+  border-color: rgba(6, 182, 212, 0.3);
+  transform: translateY(-8px);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4), 0 0 40px var(--landing-cyan-glow);
+}
+
+.landing-feature-card:hover::before {
+  opacity: 1;
+}
+
+.landing-feature-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--landing-cyan) 0%, var(--landing-accent) 100%);
+  border-radius: 1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 8px 20px rgba(6, 182, 212, 0.3);
+}
+
+/* Pricing Cards */
+.landing-pricing-card {
+  background: var(--landing-glass-bg);
+  backdrop-filter: blur(var(--landing-glass-blur));
+  border: 1px solid var(--landing-glass-border);
+  border-radius: 1.5rem;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  transition: all 0.35s var(--landing-ease-smooth);
+  position: relative;
+}
+
+.landing-pricing-card-recommended {
+  border: 2px solid var(--landing-cyan);
+  transform: scale(1.05);
+  box-shadow: 0 0 50px var(--landing-cyan-glow);
+  z-index: 2;
+}
+
+.landing-pricing-card-recommended::before {
+  content: 'Most Popular';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(135deg, var(--landing-cyan) 0%, var(--landing-accent) 100%);
+  color: white;
+  padding: 0.5rem 1.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 4px 15px rgba(6, 182, 212, 0.4);
+}
+
+/* =============================================================================
+   9. BACKGROUND DECORATIONS (Enhanced)
+   ============================================================================= */
+
+.landing-bg-gradient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  pointer-events: none;
+  animation: orb-float 20s ease-in-out infinite;
+}
+
+@keyframes orb-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(30px, -30px) scale(1.05); }
+  50% { transform: translate(-20px, 20px) scale(0.95); }
+  75% { transform: translate(20px, 30px) scale(1.02); }
+}
+
+.landing-bg-orb-blue {
+  background: var(--landing-accent);
+  width: 500px;
+  height: 500px;
+  animation-delay: 0s;
+}
+
+.landing-bg-orb-cyan {
+  background: var(--landing-cyan);
+  width: 400px;
+  height: 400px;
+  animation-delay: -5s;
+}
+
+.landing-bg-orb-gold {
+  background: var(--landing-gold);
+  width: 250px;
+  height: 250px;
+  opacity: 0.2;
+  animation-delay: -10s;
+}
+
+.landing-bg-orb-purple {
+  background: var(--landing-purple);
+  width: 350px;
+  height: 350px;
+  opacity: 0.2;
+  animation-delay: -15s;
+}
+
+.landing-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 64px 64px;
+  pointer-events: none;
+}
+
+/* =============================================================================
+   10. TESTIMONIAL SECTION
+   ============================================================================= */
+
+.landing-testimonial-card {
+  background: var(--landing-glass-bg);
+  backdrop-filter: blur(var(--landing-glass-blur));
+  border: 1px solid var(--landing-glass-border);
+  border-radius: 1.25rem;
+  padding: 2rem;
+  transition: all 0.3s var(--landing-ease-smooth);
+}
+
+.landing-testimonial-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--landing-shadow-lg);
+}
+
+.landing-testimonial-quote {
+  font-size: var(--landing-text-lg);
+  line-height: 1.7;
+  color: var(--landing-text-primary);
+  font-style: italic;
+  margin-bottom: 1.5rem;
+}
+
+.landing-testimonial-author {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.landing-testimonial-avatar {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--landing-cyan);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+}
+
+/* =============================================================================
+   11. STATS SECTION
+   ============================================================================= */
+
+.landing-stat-card {
+  text-align: center;
+  padding: 2rem;
+}
+
+.landing-stat-value {
+  font-size: var(--landing-text-5xl);
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 0.75rem;
+  background: linear-gradient(135deg, #ffffff 0%, var(--landing-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.landing-stat-label {
+  font-size: var(--landing-text-sm);
+  color: var(--landing-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+/* =============================================================================
+   12. FOOTER
+   ============================================================================= */
+
+.landing-footer {
+  background: rgba(5, 10, 21, 0.98);
+  border-top: 1px solid var(--landing-glass-border);
+  padding: 5rem 0 2rem;
+}
+
+.landing-footer-link {
+  color: var(--landing-text-secondary);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  transition: color 0.2s ease;
+}
+
+.landing-footer-link:hover {
+  color: var(--landing-cyan);
+}
+
+/* =============================================================================
+   13. ANIMATIONS (2025 Enhanced)
+   ============================================================================= */
+
+@keyframes landing-float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-15px) rotate(2deg);
+  }
+}
+
+@keyframes landing-float-reverse {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(15px) rotate(-2deg);
+  }
+}
+
+@keyframes landing-pulse-glow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+    box-shadow: 0 0 30px var(--landing-cyan-glow);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+    box-shadow: 0 0 50px var(--landing-cyan-glow);
+  }
+}
+
+@keyframes landing-gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes landing-sparkle {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(180deg);
+  }
+}
+
+@keyframes landing-particle-float {
+  0% {
+    transform: translateY(100vh) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-10vh) translateX(100px) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes counter-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.landing-animate-float {
+  animation: landing-float 4s ease-in-out infinite;
+}
+
+.landing-animate-float-delayed {
+  animation: landing-float 4s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+.landing-animate-float-reverse {
+  animation: landing-float-reverse 5s ease-in-out infinite;
+}
+
+.landing-animate-pulse-glow {
+  animation: landing-pulse-glow 3s ease-in-out infinite;
+}
+
+.landing-animate-gradient {
+  background-size: 200% 200%;
+  animation: landing-gradient-shift 4s ease infinite;
+}
+
+/* Staggered animation delays */
+.landing-delay-100 { animation-delay: 0.1s; }
+.landing-delay-200 { animation-delay: 0.2s; }
+.landing-delay-300 { animation-delay: 0.3s; }
+.landing-delay-400 { animation-delay: 0.4s; }
+.landing-delay-500 { animation-delay: 0.5s; }
+.landing-delay-600 { animation-delay: 0.6s; }
+.landing-delay-700 { animation-delay: 0.7s; }
+.landing-delay-800 { animation-delay: 0.8s; }
+
+/* =============================================================================
+   14. RESPONSIVE UTILITIES
+   ============================================================================= */
+
+@media (max-width: 640px) {
+  .landing-mobile-full {
+    width: 100%;
+  }
+
+  .landing-mobile-stack {
+    flex-direction: column;
+  }
+
+  .landing-mobile-center {
+    text-align: center;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .landing-mobile-hidden {
+    display: none;
+  }
+
+  .landing-mobile-menu {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 21, 0.98);
+    backdrop-filter: blur(24px);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s var(--landing-ease-smooth);
+  }
+
+  .landing-mobile-menu.open {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .landing-mobile-nav-link {
+    color: var(--landing-text-primary);
+    font-size: 1.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 0.75rem 1.5rem;
+  }
+}
+
+@media (min-width: 769px) {
+  .landing-desktop-hidden {
+    display: none;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .landing-tablet-2col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Large desktop */
+@media (min-width: 1440px) {
+  :root {
+    --landing-container-max: 1400px;
+  }
+}
+
+/* 5K displays */
+@media (min-width: 2560px) {
+  :root {
+    --landing-container-max: 1600px;
+  }
+}
+
+/* =============================================================================
+   15. REDUCED MOTION
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-animate-float,
+  .landing-animate-float-delayed,
+  .landing-animate-float-reverse,
+  .landing-animate-pulse-glow,
+  .landing-animate-gradient,
+  .landing-bg-gradient-orb {
+    animation: none;
+  }
+
+  .bg-hero-gradient::before {
+    animation: none;
+  }
+
+  .landing-card:hover,
+  .landing-btn:hover,
+  .landing-glass-hover:hover,
+  .landing-feature-card:hover {
+    transform: none;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =============================================================================
+   16. FOCUS STYLES (Accessibility)
+   ============================================================================= */
+
+.landing-btn:focus-visible,
+.landing-nav-link:focus-visible,
+.landing-footer-link:focus-visible {
+  outline: 2px solid var(--landing-cyan);
+  outline-offset: 3px;
+}
+
+/* Skip link */
+.landing-skip-link {
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--landing-cyan);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  z-index: 9999;
+  transition: top 0.3s ease;
+}
+
+.landing-skip-link:focus {
+  top: 0;
+}
+
+/* =============================================================================
+   17. MOBILE STICKY CTA
+   ============================================================================= */
+
+.landing-mobile-cta-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 1rem;
+  background: rgba(5, 10, 21, 0.95);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--landing-glass-border);
+  z-index: 40;
+  display: none;
+  gap: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .landing-mobile-cta-bar {
+    display: flex;
+  }
+
+  .landing-mobile-cta-bar .landing-btn {
+    flex: 1;
+  }
+}
+
+/* =============================================================================
+   18. URGENCY & SCARCITY ELEMENTS
+   ============================================================================= */
+
+.landing-urgency-banner {
+  background: linear-gradient(90deg, var(--landing-gold) 0%, var(--landing-gold-hover) 50%, var(--landing-gold) 100%);
+  background-size: 200% 100%;
+  animation: landing-gradient-shift 3s ease infinite;
+  color: #0a1628;
+  text-align: center;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.landing-countdown {
+  display: inline-flex;
+  gap: 0.5rem;
+  font-family: var(--font-mono, 'Roboto Mono', monospace);
+}
+
+.landing-countdown-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3rem;
+}
+
+.landing-countdown-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  background: linear-gradient(135deg, #ffffff, var(--landing-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.landing-countdown-label {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--landing-text-muted);
+  margin-top: 0.25rem;
+}
+
+/* Live visitor counter */
+.landing-live-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--landing-glass-bg);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: 9999px;
+  font-size: 0.875rem;
+}
+
+.landing-live-dot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: landing-pulse-glow 2s ease-in-out infinite;
+}
+
+/* =============================================================================
+   19. PARTICLE SYSTEM (CSS-only lightweight particles)
+   ============================================================================= */
+
+.landing-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.landing-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--landing-cyan);
+  border-radius: 50%;
+  opacity: 0;
+  animation: landing-particle-float 15s linear infinite;
+}
+
+.landing-particle:nth-child(1) { left: 10%; animation-delay: 0s; animation-duration: 12s; }
+.landing-particle:nth-child(2) { left: 20%; animation-delay: 2s; animation-duration: 14s; background: var(--landing-accent); }
+.landing-particle:nth-child(3) { left: 30%; animation-delay: 4s; animation-duration: 16s; }
+.landing-particle:nth-child(4) { left: 40%; animation-delay: 1s; animation-duration: 13s; background: var(--landing-gold); }
+.landing-particle:nth-child(5) { left: 50%; animation-delay: 3s; animation-duration: 15s; }
+.landing-particle:nth-child(6) { left: 60%; animation-delay: 5s; animation-duration: 11s; background: var(--landing-purple); }
+.landing-particle:nth-child(7) { left: 70%; animation-delay: 2.5s; animation-duration: 14s; }
+.landing-particle:nth-child(8) { left: 80%; animation-delay: 4.5s; animation-duration: 12s; background: var(--landing-accent); }
+.landing-particle:nth-child(9) { left: 90%; animation-delay: 1.5s; animation-duration: 16s; }
+.landing-particle:nth-child(10) { left: 15%; animation-delay: 3.5s; animation-duration: 13s; background: var(--landing-gold); }

@@ -1,0 +1,223 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "people_face_recognition",
+  "name": "People / Face Recognition (Grouping, Consent, Privacy)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/FaceRecognizationRequiremtns.md",
+    "docs/Features/AI_POWERED_FEATURES.md",
+    "docs/Features/PRD.md",
+    "docs/Features/AUTHENTICATION_AND_SECURITY.md"
+  ],
+  "description": "Face detection, embedding generation, clustering, and People albums within a workspace. Supports consent controls, biometric data governance, secure storage of embeddings, and share-link safe browsing (no biometric leakage to unauthorized viewers).",
+  "goals": [
+    "Automatically group photos by person within a workspace.",
+    "Enable creation of People albums/smart galleries and quick filtering.",
+    "Maintain strict privacy/consent controls around biometric data.",
+    "Provide deterministic reprocessing and explainable grouping changes."
+  ],
+  "nonGoals": [
+    "Cross-workspace identification or a public face search.",
+    "Identity verification/KYC."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "All face detections, embeddings, clusters, and person records are workspace-scoped.",
+      "Embeddings must never be shared or compared across workspaces.",
+      "Share-link viewers may only see People grouping if explicitly enabled by workspace policy and link policy (default: disabled)."
+    ]
+  },
+  "actors": [
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Enables face features, configures consent and retention." },
+    { "id": "staff_user", "name": "Staff User", "description": "Uses People albums for curation and delivery." },
+    { "id": "system", "name": "System", "description": "Runs detection/embedding/clustering pipelines." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "FaceDetection",
+        "table": "face_detections",
+        "primaryKey": "face_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "face_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "asset_id", "type": "uuid" },
+          { "name": "bbox", "type": "json", "notes": "x,y,w,h in normalized coordinates" },
+          { "name": "confidence", "type": "number" },
+          { "name": "detected_at", "type": "timestamp" }
+        ],
+        "indexes": ["face_detections_ws_asset_idx"]
+      },
+      {
+        "name": "FaceEmbedding",
+        "table": "face_embeddings",
+        "primaryKey": "embedding_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "embedding_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "face_id", "type": "uuid" },
+          { "name": "model_profile_id", "type": "uuid" },
+          { "name": "vector", "type": "vector", "notes": "pgvector; encrypt at rest if required" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["face_embeddings_ws_face_unique", "face_embeddings_ws_ivfflat_idx"]
+      },
+      {
+        "name": "Person",
+        "table": "people",
+        "primaryKey": "person_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "person_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "display_name", "type": "string", "nullable": true },
+          { "name": "status", "type": "enum(active,hidden,deleted)" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["people_ws_status_idx"]
+      },
+      {
+        "name": "FaceCluster",
+        "table": "face_clusters",
+        "primaryKey": "cluster_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "cluster_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "person_id", "type": "uuid", "nullable": true },
+          { "name": "algorithm", "type": "string" },
+          { "name": "params", "type": "json" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["face_clusters_ws_person_idx"]
+      },
+      {
+        "name": "FaceClusterMember",
+        "table": "face_cluster_members",
+        "primaryKey": "member_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "member_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "cluster_id", "type": "uuid" },
+          { "name": "face_id", "type": "uuid" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["face_cluster_members_ws_cluster_idx", "face_cluster_members_ws_face_unique"]
+      },
+      {
+        "name": "BiometricPolicy",
+        "table": "biometric_policies",
+        "primaryKey": "policy_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "policy_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "enabled", "type": "boolean" },
+          { "name": "share_link_allowed", "type": "boolean" },
+          { "name": "retention_days", "type": "number" },
+          { "name": "consent_required", "type": "boolean" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["biometric_policies_ws_unique"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "people.list",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/people",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "people": "paginated array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "people.merge",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/people/merge",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "source_person_id": "uuid", "target_person_id": "uuid" } },
+      "response": { "body": { "ok": true } },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    },
+    {
+      "id": "people.recluster",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/people/recluster",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "scope": "workspace|gallery", "gallery_id": "uuid?" } },
+      "response": { "body": { "job_id": "uuid" } },
+      "errors": ["FORBIDDEN", "AI_QUOTA_EXCEEDED"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.people.pipeline",
+      "name": "Detection → Embeddings → Clustering",
+      "steps": [
+        "On asset derivative availability, run face detection and store bounding boxes.",
+        "Generate face embeddings using configured model profile.",
+        "Cluster embeddings within workspace (or per-gallery) and assign to Person records.",
+        "Allow staff to merge/split people; persist manual overrides.",
+        "Re-cluster jobs must be idempotent and versioned (algorithm + params)."
+      ]
+    }
+  ],
+  "backgroundJobs": [
+    { "id": "job.people.detect_faces", "trigger": "asset ready", "inputs": { "asset_id": "uuid" }, "outputs": { "faces": "number" } },
+    { "id": "job.people.embed_faces", "trigger": "faces detected", "inputs": { "face_ids": "uuid[]" }, "outputs": { "embeddings": "number" } },
+    { "id": "job.people.cluster", "trigger": "scheduled or manual", "inputs": { "workspace_id": "uuid" }, "outputs": { "clusters": "number" } },
+    { "id": "job.people.retention", "trigger": "daily", "inputs": { "workspace_id": "uuid" }, "outputs": { "deleted_embeddings": "number" } }
+  ],
+  "security": {
+    "controls": [
+      "BiometricPolicy governs enablement, share-link exposure, and retention.",
+      "Embeddings are treated as sensitive data; access is RBAC-restricted and audited.",
+      "Export/download of embeddings is forbidden by default; enterprise-only with explicit approval.",
+      "Delete/retention pipeline must purge embeddings and cluster memberships reliably."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "faces_detected_total",
+      "people_clusters_total",
+      "people_recluster_jobs_total{status}",
+      "biometric_policy_enabled_total"
+    ],
+    "logs": [
+      "Clustering algorithm versions and params",
+      "Manual merge/split operations"
+    ],
+    "traces": [
+      "Face detection and embedding job spans",
+      "Clustering job spans"
+    ],
+    "alerts": [
+      "Sustained failures in face pipeline jobs",
+      "Unexpected growth in embeddings storage"
+    ]
+  },
+  "acceptanceTests": [
+    "Face groupings never cross workspace boundaries.",
+    "Disabling biometric features prevents new embeddings and blocks People APIs.",
+    "Retention job deletes embeddings older than retention_days.",
+    "Share-link viewers cannot access People grouping unless explicitly enabled by policy."
+  ],
+  "dependencies": [
+    "ai_platform_model_router",
+    "media_processing",
+    "storage_ingestion_byos",
+    "observability",
+    "content_moderation_abuse"
+  ]
+}

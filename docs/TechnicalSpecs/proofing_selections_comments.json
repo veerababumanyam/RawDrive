@@ -1,0 +1,213 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "proofing_selections_comments",
+  "name": "Proofing: Selections, Comments, Approvals",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/GalleryFeatures.md",
+    "docs/Features/CLIENT_FACING_FEATURES.md",
+    "docs/Features/PRD.md"
+  ],
+  "description": "Client proofing workflows: favorites, selection sets, star ratings, comments/annotations, and final approval submissions. Supports staff review and export of selection lists.",
+  "goals": [
+    "Allow clients to communicate preferences clearly with minimal friction.",
+    "Provide staff with a structured selection list and an approval checkpoint.",
+    "Support moderated comments and anti-abuse controls for public links."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Proofing data is always scoped to workspace_id and the target gallery.",
+      "Client identity is derived from share_link_session or authenticated user.",
+      "Actions must be permitted by share link policy (e.g., allow_comment, allow_select)."
+    ]
+  },
+  "actors": [
+    { "id": "client_viewer", "name": "Client", "description": "Marks favorites, comments, selects." },
+    { "id": "staff_user", "name": "Staff", "description": "Reviews selections and approves completion." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "SelectionSet",
+        "table": "selection_sets",
+        "primaryKey": "selection_set_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "selection_set_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "gallery_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "created_by", "type": "json", "notes": "share_link_session or user" },
+          { "name": "state", "type": "enum(active,submitted,locked)" },
+          { "name": "submitted_at", "type": "timestamp", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["selection_sets_ws_gallery_idx", "selection_sets_ws_gallery_state_idx"]
+      },
+      {
+        "name": "SelectionItem",
+        "table": "selection_items",
+        "primaryKey": "selection_item_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "selection_item_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "selection_set_id", "type": "uuid" },
+          { "name": "asset_id", "type": "uuid" },
+          { "name": "rating", "type": "number", "nullable": true },
+          { "name": "favorite", "type": "boolean" },
+          { "name": "notes", "type": "string", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["selection_items_ws_set_asset_unique", "selection_items_ws_set_idx"]
+      },
+      {
+        "name": "Comment",
+        "table": "comments",
+        "primaryKey": "comment_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "comment_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "gallery_id", "type": "uuid" },
+          { "name": "asset_id", "type": "uuid", "nullable": true },
+          { "name": "album_id", "type": "uuid", "nullable": true, "notes": "For album proofing comments" },
+          { "name": "spread_id", "type": "uuid", "nullable": true },
+          { "name": "author", "type": "json" },
+          { "name": "body", "type": "string" },
+          { "name": "annotations", "type": "json", "nullable": true, "notes": "optional coords" },
+          { "name": "is_internal", "type": "boolean", "notes": "Internal-only photographer notes; never visible in client portal" },
+          { "name": "status", "type": "enum(open,resolved)", "notes": "Used for client requests / issue tracking" },
+          { "name": "resolved_by_user_id", "type": "uuid", "nullable": true },
+          { "name": "resolved_at", "type": "timestamp", "nullable": true },
+          { "name": "moderation_state", "type": "enum(published,pending,blocked)" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["comments_ws_gallery_time_idx", "comments_ws_asset_time_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "portal.selectionSets.create",
+      "method": "POST",
+      "path": "/v1/portal/galleries/{gallery_id}/selection-sets",
+      "auth": "share_link_or_user_jwt",
+      "rateLimit": "public-standard",
+      "request": { "body": { "name": "string" } },
+      "response": { "body": { "selection_set_id": "uuid", "state": "active" } },
+      "errors": ["POLICY_ACTION_NOT_ALLOWED"]
+    },
+    {
+      "id": "portal.selectionSets.addItem",
+      "method": "POST",
+      "path": "/v1/portal/selection-sets/{selection_set_id}/items",
+      "auth": "share_link_or_user_jwt",
+      "rateLimit": "public-standard",
+      "request": { "body": { "asset_id": "uuid", "favorite": "boolean", "rating": "number?", "notes": "string?" } },
+      "response": { "body": { "ok": true } },
+      "errors": ["NOT_FOUND", "POLICY_ACTION_NOT_ALLOWED", "SELECTION_SET_LOCKED"]
+    },
+    {
+      "id": "portal.comments.create",
+      "method": "POST",
+      "path": "/v1/portal/galleries/{gallery_id}/comments",
+      "auth": "share_link_or_user_jwt",
+      "rateLimit": "public-standard",
+      "request": { "body": { "asset_id": "uuid?", "body": "string", "annotations": "object?" } },
+      "response": { "body": { "comment_id": "uuid", "moderation_state": "published|pending" } },
+      "errors": ["POLICY_ACTION_NOT_ALLOWED", "CONTENT_REJECTED"]
+    },
+    {
+      "id": "staff.comments.resolve",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/comments/{comment_id}/resolve",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "resolved": "boolean" } },
+      "response": { "body": { "status": "open|resolved", "resolved_at": "timestamp?" } },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    },
+    {
+      "id": "staff.comments.createInternal",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/galleries/{gallery_id}/comments/internal",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "asset_id": "uuid?", "album_id": "uuid?", "spread_id": "uuid?", "body": "string" } },
+      "response": { "body": { "comment_id": "uuid", "is_internal": true } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "staff.selectionSets.list",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/galleries/{gallery_id}/selection-sets",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "selection_sets": "array" } },
+      "errors": ["FORBIDDEN"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.client.proofing",
+      "name": "Client Proofing",
+      "steps": [
+        "Client opens share link and optionally provides identity.",
+        "Client creates a selection set (or uses default).",
+        "Client favorites/selects assets and leaves comments/annotations.",
+        "Client submits selection set for approval (locks further edits).",
+        "Staff reviews selections and exports list or triggers edits/album design workflow."
+      ]
+    }
+  ],
+  "observability": {
+    "metrics": [
+      "proofing_favorites_total",
+      "proofing_selections_total",
+      "comments_created_total{moderation_state}",
+      "selection_sets_submitted_total"
+    ],
+    "logs": [
+      "Comment moderation decisions",
+      "Selection set state changes"
+    ],
+    "traces": [
+      "Trace selection item write path; ensure low latency on portal"
+    ],
+    "alerts": [
+      "Comment spam spike",
+      "Portal write endpoint error rate"
+    ]
+  },
+  "security": {
+    "controls": [
+      "Policy enforcement per link (allow_comment, allow_select)",
+      "Content moderation pipeline for comments (see content_moderation_abuse)",
+      "Rate limits and bot protection for public endpoints",
+      "Internal comments are filtered out of all portal APIs by default",
+      "Staff-only endpoints require RBAC permissions (e.g., galleries:write or comments:moderate)"
+    ]
+  },
+  "acceptanceTests": [
+    "Client cannot comment if share link policy disables comments.",
+    "Submitting a selection set prevents further modifications.",
+    "Staff can view selection sets and export a list of chosen asset IDs.",
+    "Spam comments are blocked or placed in pending state based on workspace policy.",
+    "Internal-only comments never appear in client portal responses.",
+    "Staff can resolve a client comment and it reflects in staff view immediately."
+  ],
+  "dependencies": [
+    "share_links_access",
+    "galleries_client_portal",
+    "content_moderation_abuse",
+    "notifications"
+  ],
+  "openQuestions": [
+    "Do we support per-asset annotation drawing shapes (polygons) or only point/rect?",
+    "Do we support multiple clients collaborating on same selection set with live updates? (WebSockets)"
+  ]
+}

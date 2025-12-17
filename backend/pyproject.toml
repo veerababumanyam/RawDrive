@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rawdrive-backend"
+version = "0.1.0"
+description = "RawDrive FastAPI backend for authentication, RBAC, and workspace services"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "RawDrive", email = "engineering@rawdrive.in" }]
+license = { text = "MIT" }
+keywords = ["fastapi", "multitenant", "rawdrive", "rbac", "auth"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Framework :: FastAPI",
+  "Topic :: Internet :: WWW/HTTP",
+  "Topic :: Security :: Authentication",
+]
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.30",
+  "asyncpg>=0.29",
+  "redis[hiredis]>=5.0",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.4",
+  "python-jose[cryptography]>=3.3",
+  "argon2-cffi>=23.1",
+  "httpx>=0.27",
+  "email-validator>=2.1",
+  "alembic>=1.13",
+  "SQLAlchemy>=2.0",
+  "psycopg2-binary>=2.9",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.23",
+  "hypothesis>=6.100",
+  "faker>=25.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "types-redis>=4.6",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["app*", "tests*"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC" ]
+
+[tool.mypy]
+python_version = "3.10"
+plugins = []
+warn_unused_configs = true
+ignore_missing_imports = true

@@ -1,0 +1,185 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "content_moderation_abuse",
+  "name": "Content Moderation & Abuse Prevention",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/PRD.md",
+    "docs/Features/AUTHENTICATION_AND_SECURITY.md",
+    "docs/Features/CLIENT_FACING_FEATURES.md",
+    "docs/Features/ADMIN_AND_PLATFORM_MANAGEMENT.md"
+  ],
+  "description": "Cross-cutting controls to prevent abuse across public and authenticated surfaces: rate limiting, CAPTCHA/Turnstile, spam detection, reporting flows, moderation actions, and auditability. Covers comments, inquiries, invitations RSVP, share links, and upload abuse.",
+  "goals": [
+    "Protect public endpoints from spam, credential stuffing, brute force, and scraping.",
+    "Provide consistent reporting and moderation workflows.",
+    "Minimize false positives while maintaining platform safety.",
+    "Maintain strong audit trail for all moderation actions."
+  ],
+  "nonGoals": [
+    "Full trust & safety machine learning suite (start with rules + signals; ML optional).",
+    "Replacing WAF capabilities (Cloudflare WAF remains primary network defense)."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Abuse reports are workspace-scoped unless they concern platform-wide threats.",
+      "Moderation actions must be attributed to workspace_id and actor.",
+      "Public actors are represented by share_link_session_id, IP, and user-agent (sanitized)."
+    ]
+  },
+  "actors": [
+    { "id": "client_viewer", "name": "Public Actor", "description": "Guest user interacting via share links." },
+    { "id": "staff_user", "name": "Staff User", "description": "Moderates within a workspace." },
+    { "id": "platform_admin", "name": "Platform Admin", "description": "Platform-level moderation and enforcement." },
+    { "id": "system", "name": "System", "description": "Risk scoring and enforcement engine." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "AbuseReport",
+        "table": "abuse_reports",
+        "primaryKey": "report_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "report_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "target_type", "type": "enum(comment,inquiry,invitation_rsvp,share_link,asset,gallery)" },
+          { "name": "target_id", "type": "uuid|string" },
+          { "name": "reporter", "type": "json", "notes": "user_id or share_link_session_id" },
+          { "name": "reason", "type": "string" },
+          { "name": "details", "type": "string", "nullable": true },
+          { "name": "status", "type": "enum(open,investigating,resolved,rejected)" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["abuse_reports_ws_status_idx"]
+      },
+      {
+        "name": "ModerationAction",
+        "table": "moderation_actions",
+        "primaryKey": "action_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "action_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "actor_user_id", "type": "uuid", "nullable": true },
+          { "name": "action", "type": "enum(hide,unhide,delete,block_ip,block_identity,rate_limit_override,resolve_report)" },
+          { "name": "target_type", "type": "string" },
+          { "name": "target_id", "type": "string" },
+          { "name": "metadata", "type": "json", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["moderation_actions_ws_time_idx"]
+      },
+      {
+        "name": "RiskSignal",
+        "table": "risk_signals",
+        "primaryKey": "signal_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "signal_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "signal_type", "type": "string" },
+          { "name": "subject", "type": "json", "notes": "ip hash, share_link_session, user_id" },
+          { "name": "score", "type": "number" },
+          { "name": "evidence", "type": "json", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["risk_signals_ws_time_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "abuse.report",
+      "method": "POST",
+      "path": "/v1/portal/abuse/report",
+      "auth": "share_link_or_user_jwt",
+      "rateLimit": "public-strict",
+      "request": { "body": { "target_type": "string", "target_id": "string", "reason": "string", "details": "string?", "turnstile_token": "string?" } },
+      "response": { "body": { "report_id": "uuid", "status": "open" } },
+      "errors": ["VALIDATION_ERROR", "TURNSTILE_REQUIRED", "TURNSTILE_FAILED"]
+    },
+    {
+      "id": "moderation.listReports",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/moderation/reports",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "reports": "paginated array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "moderation.takeAction",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/moderation/actions",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "action": "string", "target_type": "string", "target_id": "string", "metadata": "object?" } },
+      "response": { "body": { "action_id": "uuid" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.public_abuse_protection",
+      "name": "Public Endpoint Protection",
+      "steps": [
+        "Apply edge + app-level rate limiting (per IP + per share link token hash).",
+        "Use Turnstile on sensitive public mutations (RSVP, inquiries, abuse report, login).",
+        "Detect brute force (asset access codes/passwords) with backoff and temporary bans.",
+        "Record risk signals; auto-escalate to platform admin when thresholds are exceeded."
+      ]
+    },
+    {
+      "id": "wf.moderation.review",
+      "name": "Moderation Review & Action",
+      "steps": [
+        "Staff/admin reviews report, evidence, and associated activity.",
+        "Take action: hide/delete content, block identity/IP, resolve report.",
+        "Notify reporter (optional) and log moderation action to audit.",
+        "Maintain a reversible state where possible (hide/unhide), but allow permanent delete for severe abuse."
+      ]
+    }
+  ],
+  "security": {
+    "controls": [
+      "Audit logs for all moderation actions.",
+      "PII-safe storage of IP (store hashed IP, keep raw only in edge logs if needed).",
+      "Anti-bruteforce for passwords/access codes.",
+      "CSRF protection on authenticated surfaces; strict CORS for APIs.",
+      "Separation between workspace moderation and platform-level enforcement."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "abuse_reports_total{target_type,status}",
+      "turnstile_failures_total",
+      "rate_limit_denials_total{route}",
+      "access_code_bruteforce_detected_total"
+    ],
+    "logs": [
+      "Moderation actions stream",
+      "Public mutation denials (rate limit/turnstile)"
+    ],
+    "traces": [
+      "Public mutation spans with enforcement decisions"
+    ],
+    "alerts": [
+      "Spike in abuse reports",
+      "Turnstile failures > threshold (misconfig)"
+    ]
+  },
+  "acceptanceTests": [
+    "Public RSVP and inquiry endpoints are rate limited and Turnstile-protected when enabled.",
+    "Brute forcing access codes triggers backoff and blocks further attempts.",
+    "Moderation actions are auditable and reversible where applicable."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "observability",
+    "share_links_access"
+  ]
+}

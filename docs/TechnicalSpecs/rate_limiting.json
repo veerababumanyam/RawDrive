@@ -1,0 +1,154 @@
+{
+  "$schema": "./_schema.json",
+  "specId": "rate_limiting",
+  "title": "Rate Limiting and Throttling",
+  "version": "1.0.0",
+  "lastUpdated": "2024-12-17",
+  "status": "active",
+  "description": "Rate limiting configuration, strategies, and enforcement rules for RawDrive APIs",
+  "storage": {
+    "backend": "Redis",
+    "keyPrefix": "rl:",
+    "algorithm": "sliding_window",
+    "windowSizeSeconds": 60
+  },
+  "identifiers": {
+    "unauthenticated": {
+      "key": "ip:{client_ip}",
+      "description": "Rate limit by client IP for unauthenticated requests"
+    },
+    "authenticated": {
+      "key": "user:{user_id}",
+      "description": "Rate limit by user ID for authenticated requests"
+    },
+    "workspace": {
+      "key": "ws:{workspace_id}",
+      "description": "Aggregate rate limit per workspace for certain endpoints"
+    },
+    "combined": {
+      "key": "user:{user_id}:ws:{workspace_id}",
+      "description": "Per-user-per-workspace limits for sensitive operations"
+    }
+  },
+  "tiers": {
+    "free": {
+      "api_access": false,
+      "ui_rpm": 100,
+      "description": "Free tier - UI access only, no API"
+    },
+    "starter": {
+      "api_access": false,
+      "ui_rpm": 200,
+      "description": "Starter tier - UI access only, no API"
+    },
+    "professional": {
+      "api_access": true,
+      "api_rpm": 300,
+      "ui_rpm": 300,
+      "burst_multiplier": 1.5,
+      "description": "Professional tier - API access enabled"
+    },
+    "business": {
+      "api_access": true,
+      "api_rpm": 1000,
+      "ui_rpm": 500,
+      "burst_multiplier": 2.0,
+      "description": "Business tier - Higher API limits"
+    },
+    "enterprise": {
+      "api_access": true,
+      "api_rpm": 5000,
+      "ui_rpm": 1000,
+      "burst_multiplier": 3.0,
+      "custom_limits": true,
+      "description": "Enterprise tier - Custom negotiated limits"
+    }
+  },
+  "endpointLimits": {
+    "auth": {
+      "login": { "rpm": 10, "identifier": "ip", "description": "Prevent brute force" },
+      "signup": { "rpm": 5, "identifier": "ip", "description": "Prevent spam registration" },
+      "password_reset": { "rpm": 3, "identifier": "ip", "description": "Prevent enumeration" },
+      "refresh": { "rpm": 30, "identifier": "user", "description": "Token refresh" }
+    },
+    "upload": {
+      "asset_upload": { "rpm": 60, "identifier": "workspace", "mb_per_minute": 500, "description": "Asset upload rate" },
+      "bulk_upload": { "rpm": 10, "identifier": "workspace", "description": "Bulk upload initiation" }
+    },
+    "ai": {
+      "face_detection": { "rpm": 30, "identifier": "workspace", "description": "AI face detection calls" },
+      "auto_cull": { "rpm": 10, "identifier": "workspace", "description": "AI culling operations" },
+      "search": { "rpm": 60, "identifier": "user", "description": "AI-powered search" }
+    },
+    "export": {
+      "gallery_export": { "rpm": 5, "identifier": "user", "description": "Gallery export/download" },
+      "bulk_download": { "rpm": 2, "identifier": "user", "description": "Bulk asset download" }
+    },
+    "admin": {
+      "platform_api": { "rpm": 120, "identifier": "user", "description": "Platform admin API" },
+      "support_access": { "rpm": 10, "identifier": "user", "description": "Support session operations" }
+    }
+  },
+  "enforcement": {
+    "headers": {
+      "X-RateLimit-Limit": "Maximum requests per window",
+      "X-RateLimit-Remaining": "Remaining requests in current window",
+      "X-RateLimit-Reset": "Unix timestamp when window resets",
+      "Retry-After": "Seconds until next allowed request (on 429)"
+    },
+    "response": {
+      "status": 429,
+      "body": {
+        "error": {
+          "code": "RATE_LIMIT_EXCEEDED",
+          "message": "Rate limit exceeded. Please retry after {retry_after} seconds.",
+          "retryAfter": "{seconds}",
+          "limit": "{limit}",
+          "windowSeconds": 60
+        }
+      }
+    }
+  },
+  "exemptions": {
+    "healthChecks": ["/health", "/ready"],
+    "staticAssets": ["/static/*", "/favicon.ico"],
+    "webhooks": ["/webhooks/*"],
+    "platformAdmins": {
+      "roles": ["super_admin", "platform_admin"],
+      "multiplier": 10,
+      "description": "Platform admins get 10x normal limits"
+    }
+  },
+  "monitoring": {
+    "metrics": [
+      "rate_limit_hits_total{endpoint, tier}",
+      "rate_limit_exceeded_total{endpoint, tier, identifier_type}",
+      "rate_limit_remaining_gauge{endpoint}"
+    ],
+    "alerts": [
+      {
+        "name": "high_rate_limit_rejections",
+        "condition": "rate_limit_exceeded_total > 100 in 5m",
+        "severity": "warning"
+      },
+      {
+        "name": "potential_abuse",
+        "condition": "rate_limit_exceeded_total by (identifier) > 500 in 15m",
+        "severity": "critical"
+      }
+    ]
+  },
+  "implementation": {
+    "middleware": "backend/src/app/middleware/rate_limit.py",
+    "service": "backend/src/app/services/rate_limit_service.py",
+    "redisKeys": {
+      "pattern": "rl:{identifier}:{endpoint_group}:{window_start}",
+      "ttl": "windowSizeSeconds + 60 (buffer for clock skew)"
+    }
+  },
+  "relatedSpecs": [
+    "api_standards.json",
+    "auth_rbac.json",
+    "observability.json"
+  ]
+}

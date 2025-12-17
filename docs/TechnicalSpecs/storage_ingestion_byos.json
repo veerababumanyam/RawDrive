@@ -1,0 +1,272 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "storage_ingestion_byos",
+  "name": "Storage, Ingestion, and Sync (Managed + BYOS)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/STORAGE_AND_BACKUP.md",
+    "docs/Features/BYOS_Requiremetns.md",
+    "docs/Features/PRD.md",
+    "docs/Features/DEVELOPER_TOOLS_AND_PROTOCOLS.md"
+  ],
+  "description": "Upload, ingest, store, and synchronize photos/videos into workspace libraries using Cloudflare R2 (managed) or customer-provided storage (BYOS). Supports resumable upload, checksum verification, foldering, and scalable metadata indexing.",
+  "goals": [
+    "Fast, reliable ingestion of large media sets with resumable uploads.",
+    "Support both managed storage (Cloudflare R2) and BYOS (S3-compatible, Azure Blob via S3 gateway where needed).",
+    "Maintain content integrity (checksums, immutability options).",
+    "Enable downstream processing pipelines (derivatives, AI, sharing)."
+  ],
+  "nonGoals": [
+    "General-purpose file system replacement (focus is media assets + related artifacts).",
+    "Client-side desktop sync app (can be added later)."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "All assets and objects are partitioned by workspace_id.",
+      "Object keys MUST include workspace_id prefix to avoid cross-tenant overlap.",
+      "BYOS credentials/policies are stored encrypted and scoped to workspace_id.",
+      "Deletion must respect retention policies (see retention_customer_removal)."
+    ],
+    "objectKeyFormat": "workspaces/{workspace_id}/assets/{asset_id}/original/{filename}",
+    "artifactKeyFormat": "workspaces/{workspace_id}/assets/{asset_id}/derived/{variant}/{filename}"
+  },
+  "actors": [
+    { "id": "staff_user", "name": "Staff User", "description": "Uploads media and organizes folders." },
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Configures BYOS/retention settings." },
+    { "id": "system", "name": "System", "description": "Processes ingestion jobs and verifies integrity." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "Asset",
+        "table": "assets",
+        "primaryKey": "asset_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "asset_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "library_id", "type": "uuid" },
+          { "name": "folder_id", "type": "uuid", "nullable": true },
+          { "name": "type", "type": "enum(photo,video)" },
+          { "name": "original_object_key", "type": "string" },
+          { "name": "original_bytes", "type": "number" },
+          { "name": "sha256", "type": "string" },
+          { "name": "mime_type", "type": "string" },
+          { "name": "exif", "type": "json", "nullable": true },
+          { "name": "status", "type": "enum(uploading,available,processing,failed,deleted)" },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["assets_ws_created_idx", "assets_ws_sha256_idx", "assets_ws_folder_idx"]
+      },
+      {
+        "name": "UploadSession",
+        "table": "upload_sessions",
+        "primaryKey": "upload_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "upload_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "file_name", "type": "string" },
+          { "name": "mime_type", "type": "string" },
+          { "name": "size_bytes", "type": "number" },
+          { "name": "sha256", "type": "string", "nullable": true },
+          { "name": "resumable_protocol", "type": "enum(tus,s3_multipart)" },
+          { "name": "provider", "type": "enum(r2,byos)" },
+          { "name": "state", "type": "enum(created,uploading,verifying,committed,aborted,expired)" },
+          { "name": "expires_at", "type": "timestamp" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["upload_sessions_ws_state_idx", "upload_sessions_expires_idx"]
+      },
+      {
+        "name": "StorageProfile",
+        "table": "storage_profiles",
+        "primaryKey": "storage_profile_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "storage_profile_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "mode", "type": "enum(managed_r2,byos_s3)" },
+          { "name": "bucket", "type": "string" },
+          { "name": "endpoint", "type": "string", "nullable": true },
+          { "name": "region", "type": "string", "nullable": true },
+          { "name": "key_prefix", "type": "string" },
+          { "name": "credentials_ref", "type": "string", "notes": "Reference to encrypted secret store" },
+          { "name": "encryption", "type": "enum(none,sse_s3,sse_kms)" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["storage_profiles_ws_unique"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "uploads.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/uploads",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": {
+        "body": {
+          "file_name": "string",
+          "mime_type": "string",
+          "size_bytes": "number",
+          "sha256": "string (optional)",
+          "folder_id": "uuid (optional)",
+          "library_id": "uuid",
+          "resumable_protocol": "tus|s3_multipart"
+        }
+      },
+      "response": {
+        "body": {
+          "upload_id": "uuid",
+          "provider": "r2|byos",
+          "upload_url": "string",
+          "headers": "object",
+          "expires_at": "timestamp"
+        }
+      },
+      "errors": ["FORBIDDEN", "UPLOAD_TOO_LARGE", "WORKSPACE_STORAGE_DISABLED"]
+    },
+    {
+      "id": "uploads.commit",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/uploads/{upload_id}/commit",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "sha256": "string (required if not provided earlier)", "etag": "string (optional)" } },
+      "response": { "body": { "asset_id": "uuid", "status": "available|processing" } },
+      "errors": ["UPLOAD_NOT_FOUND", "UPLOAD_NOT_COMPLETE", "CHECKSUM_MISMATCH"]
+    },
+    {
+      "id": "assets.list",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/assets",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "assets": [{ "asset_id": "uuid", "type": "photo|video", "created_at": "timestamp" }], "next_cursor": "string?" } },
+      "errors": ["FORBIDDEN"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.upload.resumable",
+      "name": "Resumable Upload + Commit",
+      "steps": [
+        "Client requests upload session -> receives upload_url + protocol.",
+        "Client uploads bytes (tus or multipart) directly to storage endpoint.",
+        "Client commits upload with checksum and optional etag.",
+        "Server verifies object presence and checksum, creates Asset record.",
+        "Emit asset.created event; enqueue media_processing jobs." 
+      ]
+    },
+    {
+      "id": "wf.byos.configure",
+      "name": "Configure BYOS Storage",
+      "steps": [
+        "Workspace Admin enters S3 endpoint, bucket, key prefix, and credentials.",
+        "System validates connectivity (ListBucket + PutObject/GetObject/DeleteObject on a test key).",
+        "Store credentials encrypted; persist StorageProfile.",
+        "Switch workspace storage mode to BYOS; new uploads write to BYOS profile." 
+      ]
+    }
+  ],
+  "events": [
+    { "name": "asset.created", "payload": { "workspace_id": "uuid", "asset_id": "uuid", "library_id": "uuid" } },
+    { "name": "asset.deleted", "payload": { "workspace_id": "uuid", "asset_id": "uuid" } },
+    { "name": "storage.byos_configured", "payload": { "workspace_id": "uuid", "storage_profile_id": "uuid" } }
+  ],
+  "backgroundJobs": [
+    {
+      "id": "job.upload.verify_checksum",
+      "trigger": "uploads.commit",
+      "inputs": { "workspace_id": "uuid", "upload_id": "uuid" },
+      "outputs": { "verified": "boolean" },
+      "retries": "idempotent, exponential backoff"
+    },
+    {
+      "id": "job.storage.lifecycle.transition",
+      "trigger": "daily",
+      "inputs": { "workspace_id": "uuid" },
+      "outputs": { "objects_transitioned": "number" },
+      "notes": "Optional: move old originals/derivatives to cheaper tier if supported by provider."
+    }
+  ],
+  "integrations": [
+    {
+      "name": "Cloudflare R2",
+      "purpose": "Managed object storage for originals and derivatives",
+      "notes": "Use R2 + Cloudflare CDN for delivery; presigned URLs for direct upload/download."
+    },
+    {
+      "name": "BYOS S3-compatible",
+      "purpose": "Enterprise governance: customer-controlled buckets",
+      "notes": "Support custom endpoints; require minimum IAM policy; validate at setup."
+    }
+  ],
+  "observability": {
+    "metrics": [
+      "uploads_created_total{workspace_id,provider}",
+      "uploads_committed_total{workspace_id,result}",
+      "upload_bytes_total{workspace_id}",
+      "asset_ingest_latency_seconds_bucket"
+    ],
+    "logs": [
+      "Upload session state transitions (no secrets)",
+      "Checksum mismatch and verification failures"
+    ],
+    "traces": [
+      "Trace upload session creation and commit; propagate request_id to background verification job"
+    ],
+    "alerts": [
+      "Sustained checksum mismatch rate > threshold",
+      "High upload commit error rate",
+      "Storage provider connectivity failures"
+    ]
+  },
+  "security": {
+    "controls": [
+      "Direct-to-storage upload using short-lived presigned URLs",
+      "Enforce workspace_id prefix in object keys",
+      "Encrypt BYOS credentials at rest; rotate credentials",
+      "Limit IAM policies to bucket + prefix; no wildcard beyond prefix",
+      "Virus/malware scanning hook (optional, can be enabled per workspace)"
+    ],
+    "dataProtection": [
+      "Checksum verification on commit",
+      "Optional immutability/WORM for enterprise"
+    ]
+  },
+  "performance": {
+    "targets": {
+      "commit_p95": "< 500ms (excluding background checksum for large files)",
+      "list_assets_p95": "< 250ms for 50 items"
+    },
+    "notes": [
+      "Prefer chunked uploads and parallel multipart for videos.",
+      "Do not proxy bytes through application servers in normal flow."
+    ]
+  },
+  "acceptanceTests": [
+    "Resumable upload can resume after network interruption without re-uploading entire file.",
+    "Commit rejects when checksum mismatches.",
+    "Workspace configured for BYOS writes new objects to BYOS bucket/prefix.",
+    "Users cannot upload into another workspace by manipulating object keys."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "retention_customer_removal",
+    "media_processing",
+    "observability"
+  ],
+  "openQuestions": [
+    "Do we support client-side encryption (CSE) for originals in BYOS mode?",
+    "Do we implement server-side dedupe by sha256 per workspace (or global)?",
+    "What is the official resumable protocol choice: tus vs S3 multipart as default?"
+  ]
+}

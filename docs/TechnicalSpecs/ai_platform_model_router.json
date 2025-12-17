@@ -1,0 +1,258 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "ai_platform_model_router",
+  "name": "AI Platform: Model Router, Jobs, Costing, and Governance",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/AI_POWERED_FEATURES.md",
+    "docs/Features/PRD.md",
+    "docs/Features/ADMIN_AND_PLATFORM_MANAGEMENT.md",
+    "docs/Features/DEVELOPER_TOOLS_AND_PROTOCOLS.md"
+  ],
+  "description": "Provider-agnostic AI layer that routes requests to Gemini (default), OpenAI, Anthropic, Azure-hosted models, and OpenAI-compatible local endpoints. Provides Model Profiles, credential management, job orchestration for vision/NLP tasks, usage accounting, and policy controls.",
+  "goals": [
+    "Admin-switchable providers/models without redeploy.",
+    "Job-based AI execution for long-running tasks (vision scoring, captions, face grouping).",
+    "Cost and quota enforcement per workspace and plan.",
+    "Safe credential handling and tenant isolation.",
+    "Deterministic tracing/metrics per model run for debugging and governance."
+  ],
+  "nonGoals": [
+    "Training foundation models.",
+    "Storing raw provider API keys in frontend clients."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Model profiles and AI usage are workspace-scoped.",
+      "AI jobs must only access assets belonging to the job.workspace_id.",
+      "Provider credentials are encrypted at rest and scoped to workspace_id (or platform-wide with strict access control)."
+    ]
+  },
+  "actors": [
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Configures model profiles and AI policies." },
+    { "id": "staff_user", "name": "Staff User", "description": "Triggers AI actions from galleries/albums." },
+    { "id": "platform_admin", "name": "Platform Admin", "description": "Manages global defaults, platform credentials, abuse controls." },
+    { "id": "system", "name": "System", "description": "AI router, workers, and usage accounting." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "AIProvider",
+        "table": "ai_providers",
+        "primaryKey": "provider_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "provider_id", "type": "uuid" },
+          { "name": "key", "type": "enum(gemini,openai,anthropic,azure_openai,openai_compatible)" },
+          { "name": "display_name", "type": "string" },
+          { "name": "supports", "type": "json", "notes": "chat, vision, embeddings" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["ai_providers_key_unique"]
+      },
+      {
+        "name": "AICredential",
+        "table": "ai_credentials",
+        "primaryKey": "credential_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "credential_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "provider_key", "type": "string" },
+          { "name": "name", "type": "string" },
+          { "name": "secret_ref", "type": "string", "notes": "Pointer to KMS/Vault entry" },
+          { "name": "endpoint", "type": "string", "nullable": true, "notes": "For azure/openai_compatible endpoints" },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "revoked_at", "type": "timestamp", "nullable": true }
+        ],
+        "indexes": ["ai_credentials_ws_provider_idx"]
+      },
+      {
+        "name": "ModelProfile",
+        "table": "ai_model_profiles",
+        "primaryKey": "model_profile_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "model_profile_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "provider_key", "type": "string" },
+          { "name": "credential_id", "type": "uuid", "nullable": true },
+          { "name": "model", "type": "string", "notes": "e.g., gemini-2.0-flash, gpt-4.1-mini" },
+          { "name": "capabilities", "type": "json" },
+          { "name": "routing_rules", "type": "json", "notes": "fallbacks, timeouts, budget ceilings" },
+          { "name": "enabled", "type": "boolean" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["ai_model_profiles_ws_name_unique"]
+      },
+      {
+        "name": "AIJob",
+        "table": "ai_jobs",
+        "primaryKey": "job_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "job_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "type", "type": "enum(quality_score,caption,face_grouping,geo_tags,embeddings)" },
+          { "name": "model_profile_id", "type": "uuid" },
+          { "name": "inputs", "type": "json", "notes": "asset_ids, gallery_id, prompts" },
+          { "name": "status", "type": "enum(queued,running,succeeded,failed,canceled)" },
+          { "name": "error", "type": "json", "nullable": true },
+          { "name": "started_at", "type": "timestamp", "nullable": true },
+          { "name": "completed_at", "type": "timestamp", "nullable": true },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["ai_jobs_ws_time_idx", "ai_jobs_ws_status_idx"]
+      },
+      {
+        "name": "AIModelRun",
+        "table": "ai_model_runs",
+        "primaryKey": "run_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "run_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "job_id", "type": "uuid", "nullable": true },
+          { "name": "provider_key", "type": "string" },
+          { "name": "model", "type": "string" },
+          { "name": "request", "type": "json", "notes": "sanitized; never store secrets" },
+          { "name": "response", "type": "json", "nullable": true, "notes": "sanitized" },
+          { "name": "usage", "type": "json", "notes": "tokens, images, seconds" },
+          { "name": "cost", "type": "json", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["ai_model_runs_ws_time_idx", "ai_model_runs_job_idx"]
+      },
+      {
+        "name": "AICreditLedger",
+        "table": "ai_credit_ledger",
+        "primaryKey": "ledger_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "ledger_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "delta", "type": "number", "notes": "Positive credit, negative spend" },
+          { "name": "reason", "type": "string" },
+          { "name": "job_id", "type": "uuid", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["ai_credit_ledger_ws_time_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "ai.modelProfiles.list",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/ai/model-profiles",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "model_profiles": "array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "ai.modelProfiles.upsert",
+      "method": "PUT",
+      "path": "/v1/workspaces/{workspace_id}/ai/model-profiles/{model_profile_id}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "name": "string", "provider_key": "string", "model": "string", "routing_rules": "object" } },
+      "response": { "body": { "model_profile_id": "uuid" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "ai.jobs.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/ai/jobs",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "type": "string", "model_profile_id": "uuid", "inputs": "object" } },
+      "response": { "body": { "job_id": "uuid", "status": "queued" } },
+      "errors": ["FORBIDDEN", "AI_QUOTA_EXCEEDED", "MODEL_PROFILE_DISABLED"]
+    },
+    {
+      "id": "ai.jobs.get",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/ai/jobs/{job_id}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "job": "object" } },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.ai.router.fallback",
+      "name": "Model Router With Fallback",
+      "steps": [
+        "Resolve model profile for capability (vision/chat/embeddings).",
+        "Apply routing rules: timeouts, max retries, fallback provider/model order.",
+        "Execute request via provider adapter; sanitize and store AIModelRun.",
+        "Account usage and apply AI credit spend.",
+        "If job-based, persist outputs to domain tables (captions, scores, embeddings)."
+      ]
+    }
+  ],
+  "events": [
+    { "name": "ai.job.queued", "payload": { "workspace_id": "uuid", "job_id": "uuid", "type": "string" } },
+    { "name": "ai.job.completed", "payload": { "workspace_id": "uuid", "job_id": "uuid", "status": "succeeded|failed" } },
+    { "name": "ai.credits.spent", "payload": { "workspace_id": "uuid", "job_id": "uuid?", "delta": "number" } }
+  ],
+  "backgroundJobs": [
+    { "id": "job.ai.execute", "trigger": "queue", "inputs": { "job_id": "uuid" }, "outputs": { "status": "succeeded|failed" } },
+    { "id": "job.ai.usage_rollup", "trigger": "hourly", "inputs": { "as_of": "timestamp" }, "outputs": { "rows": "number" } }
+  ],
+  "security": {
+    "controls": [
+      "Encrypt provider credentials using KMS/Vault; only workers may decrypt.",
+      "Never log prompts/responses containing customer PII without explicit opt-in; store sanitized copies.",
+      "Enforce per-workspace quotas and plan-based limits.",
+      "Allowlist outbound endpoints for openai_compatible local servers to prevent SSRF.",
+      "Audit log: model profile changes, credential changes, job submissions."
+    ],
+    "privacy": [
+      "Support per-workspace AI data handling policy: do_not_store, store_sanitized, store_full (enterprise-only)."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "ai_jobs_total{type,status}",
+      "ai_model_runs_total{provider_key,model}",
+      "ai_quota_denials_total",
+      "ai_latency_seconds{provider_key,model}",
+      "ai_cost_total{provider_key,model}"
+    ],
+    "logs": [
+      "Routing decisions (fallbacks, timeouts)",
+      "Provider adapter errors (sanitized)"
+    ],
+    "traces": [
+      "AI job end-to-end spans",
+      "Provider call spans with correlation ids"
+    ],
+    "alerts": [
+      "Sustained provider error rate > threshold",
+      "Quota denials spike",
+      "Cost anomaly detection (workspace or global)"
+    ]
+  },
+  "acceptanceTests": [
+    "Admin can switch default model profile without redeploy; new jobs route to the new provider.",
+    "Quota enforcement blocks job creation when AI credits are exhausted.",
+    "Fallback routing triggers on provider timeout and completes with next provider when configured.",
+    "openai_compatible endpoints are blocked unless explicitly allowlisted."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "media_processing",
+    "storage_ingestion_byos",
+    "observability"
+  ]
+}

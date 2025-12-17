@@ -1,0 +1,222 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "media_processing",
+  "name": "Media Processing & Derivatives",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/STORAGE_AND_BACKUP.md",
+    "docs/Features/GalleryFeatures.md",
+    "docs/Features/PRD.md"
+  ],
+  "description": "Asynchronous pipeline that generates previews/thumbnails, web-optimized derivatives, watermarked variants, video transcodes, and metadata extraction (EXIF/geo/time). Provides CDN-friendly delivery via Cloudflare.",
+  "goals": [
+    "Generate consistent derivative sets for fast browsing and sharing.",
+    "Ensure idempotent processing and safe retries.",
+    "Support plan-based policies (e.g., max resolution, watermark rules).",
+    "Enable downstream AI analysis triggers (labels, face embeddings, captions)."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Derivative objects stored under workspace_id prefix.",
+      "Processing jobs are workspace-scoped and must not read/write cross-workspace objects.",
+      "Processing concurrency and quotas can be enforced per workspace and plan."
+    ]
+  },
+  "actors": [
+    { "id": "system", "name": "System", "description": "Workers process assets and produce derivatives." },
+    { "id": "staff_user", "name": "Staff User", "description": "Uploads and requests exports/watermarks." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "AssetDerivative",
+        "table": "asset_derivatives",
+        "primaryKey": "derivative_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "derivative_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "asset_id", "type": "uuid" },
+          { "name": "variant", "type": "enum(thumb_sm,thumb_md,preview,web,download,watermarked,video_720p,video_1080p)" },
+          { "name": "object_key", "type": "string" },
+          { "name": "bytes", "type": "number" },
+          { "name": "width", "type": "number", "nullable": true },
+          { "name": "height", "type": "number", "nullable": true },
+          { "name": "duration_ms", "type": "number", "nullable": true },
+          { "name": "sha256", "type": "string" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["asset_derivatives_ws_asset_variant_unique", "asset_derivatives_ws_asset_idx"]
+      },
+      {
+        "name": "ProcessingJob",
+        "table": "processing_jobs",
+        "primaryKey": "job_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "job_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "asset_id", "type": "uuid" },
+          { "name": "job_type", "type": "enum(extract_metadata,generate_images,transcode_video,generate_watermark,export_zip)" },
+          { "name": "state", "type": "enum(queued,running,succeeded,failed,canceled)" },
+          { "name": "attempt", "type": "number" },
+          { "name": "error", "type": "string", "nullable": true },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["processing_jobs_ws_state_idx", "processing_jobs_ws_asset_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "assets.derivatives.list",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/assets/{asset_id}/derivatives",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": {
+        "body": {
+          "derivatives": [
+            {
+              "variant": "string",
+              "cdn_url": "string",
+              "width": "number?",
+              "height": "number?",
+              "bytes": "number"
+            }
+          ]
+        }
+      },
+      "errors": ["FORBIDDEN", "ASSET_NOT_FOUND"]
+    },
+    {
+      "id": "assets.export.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/exports",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": {
+        "body": {
+          "type": "zip",
+          "asset_ids": "uuid[]",
+          "variant": "download|watermarked",
+          "watermark_profile_id": "uuid?"
+        }
+      },
+      "response": { "body": { "export_id": "uuid", "state": "queued" } },
+      "errors": ["FORBIDDEN", "TOO_MANY_ASSETS", "PLAN_LIMIT"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.processing.on_ingest",
+      "name": "Automatic Processing on Asset Ingest",
+      "steps": [
+        "On asset.created event, enqueue extract_metadata and generate_images jobs.",
+        "Extract EXIF/metadata; update assets.exif and searchable fields.",
+        "Generate thumbnails + preview + web derivative; store records in asset_derivatives.",
+        "Optionally enqueue AI analysis jobs (labels/captions/faces) based on workspace settings.",
+        "Mark asset status available when minimum derivatives exist."
+      ]
+    },
+    {
+      "id": "wf.video.transcode",
+      "name": "Video Transcoding",
+      "steps": [
+        "Detect video assets and enqueue transcode_video jobs.",
+        "Produce 720p/1080p (plan-based) HLS or MP4 variants.",
+        "Write derived objects and update derivative table.",
+        "Expose signed or CDN URLs to portal."
+      ]
+    }
+  ],
+  "events": [
+    { "name": "processing.job_queued", "payload": { "workspace_id": "uuid", "job_id": "uuid", "job_type": "string" } },
+    { "name": "processing.job_succeeded", "payload": { "workspace_id": "uuid", "job_id": "uuid" } },
+    { "name": "processing.job_failed", "payload": { "workspace_id": "uuid", "job_id": "uuid", "error": "string" } }
+  ],
+  "backgroundJobs": [
+    {
+      "id": "job.processing.worker",
+      "trigger": "queue",
+      "inputs": { "job_id": "uuid" },
+      "outputs": { "state": "succeeded|failed", "derivatives_created": "number" },
+      "retries": "safe retry with idempotent output keys"
+    },
+    {
+      "id": "job.processing.reconcile",
+      "trigger": "hourly",
+      "inputs": { "workspace_id": "uuid" },
+      "outputs": { "fixed": "number" },
+      "notes": "Reconcile orphan derivatives, missing records, and stale running jobs."
+    }
+  ],
+  "config": {
+    "images": {
+      "thumbnailSizes": [256, 512],
+      "previewMaxEdge": 2048,
+      "webMaxEdge": 3840,
+      "formats": ["jpeg", "webp"],
+      "quality": { "jpeg": 82, "webp": 80 }
+    },
+    "videos": {
+      "enabled": true,
+      "transcodes": ["720p", "1080p"],
+      "hls": true
+    }
+  },
+  "observability": {
+    "metrics": [
+      "processing_jobs_total{job_type,state}",
+      "processing_job_duration_seconds_bucket{job_type}",
+      "derivatives_created_total{variant}",
+      "video_transcode_queue_depth"
+    ],
+    "logs": [
+      "Worker logs with job_id + asset_id + workspace_id",
+      "FFmpeg processing stderr captured (redacted)"
+    ],
+    "traces": [
+      "End-to-end trace: upload commit -> asset.created -> processing pipeline -> derivative ready"
+    ],
+    "alerts": [
+      "Queue depth high / worker lag",
+      "Processing failure rate above threshold",
+      "S3/R2 read/write errors spikes"
+    ]
+  },
+  "security": {
+    "controls": [
+      "Workers run in isolated pods with least privilege to storage prefixes",
+      "Validate file headers/mime sniffing to avoid polyglot attacks",
+      "Limit processing resource usage per workspace to prevent noisy-neighbor"
+    ]
+  },
+  "performance": {
+    "targets": {
+      "image_derivatives_ready_p95": "< 2 minutes for typical DSLR photo",
+      "video_720p_ready_p95": "< 15 minutes (size dependent)"
+    }
+  },
+  "acceptanceTests": [
+    "After upload commit, thumbnails and preview URLs are available for browsing.",
+    "Watermarked derivative matches configured watermark profile and is only generated when needed.",
+    "Failed processing retries safely without duplicate derivative records.",
+    "Derivatives never leak across workspaces (workspace_id enforced in object keys and DB queries)."
+  ],
+  "dependencies": [
+    "storage_ingestion_byos",
+    "auth_rbac",
+    "observability",
+    "retention_customer_removal"
+  ],
+  "openQuestions": [
+    "Do we standardize on imgproxy/thumbor or custom worker pipeline?",
+    "Do we store HLS manifests in R2 and serve via CDN directly, or proxy through an origin?",
+    "Watermark profile: per gallery, per workspace, or per share link?"
+  ]
+}

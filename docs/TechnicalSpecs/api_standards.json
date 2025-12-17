@@ -1,0 +1,197 @@
+{
+  "$schema": "./_schema.json",
+  "specId": "api_standards",
+  "title": "API Standards, Versioning & Error Codes",
+  "version": "1.0.0",
+  "lastUpdated": "2024-12-17",
+  "status": "active",
+  "description": "Canonical API versioning strategy, error response formats, and HTTP status code mappings for RawDrive platform",
+  "versioning": {
+    "strategy": "url-path",
+    "format": "/api/v{major}/*",
+    "currentVersion": "v1",
+    "deprecationPolicy": {
+      "noticeMinWeeks": 12,
+      "sunsetAfterDeprecationWeeks": 24,
+      "headers": {
+        "deprecation": "Deprecation",
+        "sunset": "Sunset",
+        "link": "Link"
+      }
+    },
+    "versionHistory": [
+      { "version": "v1", "status": "active", "releaseDate": "2024-12-01", "sunsetDate": null }
+    ]
+  },
+  "baseUrls": {
+    "production": "https://api.rawdrive.in",
+    "staging": "https://api.staging.rawdrive.in",
+    "development": "http://localhost:8000"
+  },
+  "endpoints": {
+    "public": {
+      "prefix": "/api/v1",
+      "requiresAuth": true,
+      "examples": ["/api/v1/users/me", "/api/v1/workspaces", "/api/v1/galleries"]
+    },
+    "admin": {
+      "prefix": "/api/v1/admin",
+      "requiresAuth": true,
+      "requiresPlatformRole": true,
+      "examples": ["/api/v1/admin/workspaces", "/api/v1/admin/users"]
+    },
+    "auth": {
+      "prefix": "/api/v1/auth",
+      "requiresAuth": false,
+      "examples": ["/api/v1/auth/login", "/api/v1/auth/signup", "/api/v1/auth/refresh"]
+    },
+    "health": {
+      "prefix": "/",
+      "requiresAuth": false,
+      "examples": ["/health", "/ready", "/metrics"]
+    },
+    "webhook": {
+      "prefix": "/webhooks",
+      "requiresAuth": false,
+      "signatureVerification": true
+    }
+  },
+  "errorResponse": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": { "type": "string", "description": "Machine-readable error code" },
+            "message": { "type": "string", "description": "Human-readable message" },
+            "details": { "type": "object", "description": "Additional context (optional)" },
+            "requestId": { "type": "string", "description": "Correlation ID for support" },
+            "timestamp": { "type": "string", "format": "date-time" }
+          },
+          "required": ["code", "message", "requestId", "timestamp"]
+        }
+      }
+    },
+    "example": {
+      "error": {
+        "code": "WORKSPACE_NOT_FOUND",
+        "message": "The requested workspace does not exist or you do not have access.",
+        "requestId": "req_abc123xyz",
+        "timestamp": "2024-12-17T10:30:00Z"
+      }
+    }
+  },
+  "errorCodes": {
+    "authentication": [
+      { "code": "AUTH_REQUIRED", "status": 401, "message": "Authentication required" },
+      { "code": "TOKEN_EXPIRED", "status": 401, "message": "Access token has expired" },
+      { "code": "TOKEN_INVALID", "status": 401, "message": "Invalid or malformed token" },
+      { "code": "REFRESH_TOKEN_EXPIRED", "status": 401, "message": "Refresh token has expired" },
+      { "code": "SESSION_INVALID", "status": 401, "message": "Session is invalid or revoked" },
+      { "code": "CREDENTIALS_INVALID", "status": 401, "message": "Invalid email or password" },
+      { "code": "ACCOUNT_DISABLED", "status": 403, "message": "Account has been disabled" },
+      { "code": "EMAIL_NOT_VERIFIED", "status": 403, "message": "Email verification required" },
+      { "code": "MFA_REQUIRED", "status": 403, "message": "Multi-factor authentication required" }
+    ],
+    "authorization": [
+      { "code": "PERMISSION_DENIED", "status": 403, "message": "You do not have permission to perform this action" },
+      { "code": "WORKSPACE_ACCESS_DENIED", "status": 403, "message": "Access to this workspace is denied" },
+      { "code": "ROLE_REQUIRED", "status": 403, "message": "Required role not assigned" },
+      { "code": "PLATFORM_ROLE_REQUIRED", "status": 403, "message": "Platform admin role required" }
+    ],
+    "resources": [
+      { "code": "WORKSPACE_NOT_FOUND", "status": 404, "message": "Workspace not found" },
+      { "code": "USER_NOT_FOUND", "status": 404, "message": "User not found" },
+      { "code": "GALLERY_NOT_FOUND", "status": 404, "message": "Gallery not found" },
+      { "code": "ASSET_NOT_FOUND", "status": 404, "message": "Asset not found" },
+      { "code": "INVITATION_NOT_FOUND", "status": 404, "message": "Invitation not found" },
+      { "code": "ROLE_NOT_FOUND", "status": 404, "message": "Role not found" },
+      { "code": "SHARE_LINK_NOT_FOUND", "status": 404, "message": "Share link not found" }
+    ],
+    "validation": [
+      { "code": "VALIDATION_ERROR", "status": 422, "message": "Request validation failed" },
+      { "code": "INVALID_UUID", "status": 422, "message": "Invalid UUID format" },
+      { "code": "INVALID_EMAIL", "status": 422, "message": "Invalid email format" },
+      { "code": "PASSWORD_TOO_WEAK", "status": 422, "message": "Password does not meet requirements" },
+      { "code": "FIELD_REQUIRED", "status": 422, "message": "Required field missing" },
+      { "code": "FIELD_TOO_LONG", "status": 422, "message": "Field exceeds maximum length" }
+    ],
+    "limits": [
+      { "code": "RATE_LIMIT_EXCEEDED", "status": 429, "message": "Rate limit exceeded", "headers": ["Retry-After", "X-RateLimit-Reset"] },
+      { "code": "TIER_LIMIT_EXCEEDED", "status": 403, "message": "Subscription tier limit exceeded" },
+      { "code": "STORAGE_LIMIT_EXCEEDED", "status": 403, "message": "Storage quota exceeded" },
+      { "code": "GALLERY_LIMIT_EXCEEDED", "status": 403, "message": "Maximum galleries reached for your plan" },
+      { "code": "MEMBER_LIMIT_EXCEEDED", "status": 403, "message": "Maximum team members reached for your plan" },
+      { "code": "AI_CREDITS_EXHAUSTED", "status": 403, "message": "AI credits exhausted for this billing period" }
+    ],
+    "conflict": [
+      { "code": "EMAIL_ALREADY_EXISTS", "status": 409, "message": "Email address already registered" },
+      { "code": "WORKSPACE_NAME_EXISTS", "status": 409, "message": "Workspace name already taken" },
+      { "code": "INVITATION_ALREADY_EXISTS", "status": 409, "message": "User already invited" },
+      { "code": "MEMBER_ALREADY_EXISTS", "status": 409, "message": "User is already a member" },
+      { "code": "CONCURRENT_MODIFICATION", "status": 409, "message": "Resource was modified by another request" }
+    ],
+    "server": [
+      { "code": "INTERNAL_ERROR", "status": 500, "message": "An unexpected error occurred" },
+      { "code": "DATABASE_ERROR", "status": 500, "message": "Database operation failed" },
+      { "code": "EXTERNAL_SERVICE_ERROR", "status": 502, "message": "External service unavailable" },
+      { "code": "SERVICE_UNAVAILABLE", "status": 503, "message": "Service temporarily unavailable" }
+    ]
+  },
+  "httpStatusUsage": {
+    "200": "Successful GET, PATCH",
+    "201": "Successful POST (resource created)",
+    "204": "Successful DELETE (no content)",
+    "400": "Malformed request syntax",
+    "401": "Authentication failed or missing",
+    "403": "Authorization denied or limits exceeded",
+    "404": "Resource not found",
+    "409": "Conflict with existing state",
+    "422": "Validation error (well-formed but invalid)",
+    "429": "Rate limit exceeded",
+    "500": "Internal server error",
+    "502": "External service failure",
+    "503": "Service temporarily unavailable"
+  },
+  "pagination": {
+    "defaultLimit": 20,
+    "maxLimit": 100,
+    "cursorBased": true,
+    "queryParams": {
+      "limit": "Number of items per page (default: 20, max: 100)",
+      "cursor": "Opaque cursor for next page",
+      "direction": "Pagination direction: 'next' or 'prev'"
+    },
+    "responseFormat": {
+      "data": "Array of items",
+      "pagination": {
+        "hasNext": "boolean",
+        "hasPrev": "boolean",
+        "nextCursor": "string | null",
+        "prevCursor": "string | null",
+        "totalCount": "number (only when countable)"
+      }
+    }
+  },
+  "headers": {
+    "request": {
+      "Authorization": "Bearer {access_token}",
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "X-Request-ID": "Optional client-provided correlation ID",
+      "X-Workspace-ID": "Optional workspace context override"
+    },
+    "response": {
+      "X-Request-ID": "Server-generated or echoed correlation ID",
+      "X-RateLimit-Limit": "Requests per window",
+      "X-RateLimit-Remaining": "Remaining requests in window",
+      "X-RateLimit-Reset": "Unix timestamp when limit resets"
+    }
+  },
+  "relatedSpecs": [
+    "auth_rbac.json",
+    "rate_limiting.json",
+    "observability.json"
+  ]
+}

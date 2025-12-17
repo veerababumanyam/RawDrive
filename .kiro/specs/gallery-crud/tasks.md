@@ -1,0 +1,417 @@
+# Implementation Plan
+
+- [ ] 1. Set up gallery module foundation
+  - [ ] 1.1 Create gallery component directory structure
+    - Create `frontend/src/components/gallery/` with subdirectories: GalleryList, GalleryDetail, PhotoGrid, PhotoList, Lightbox, Upload, Settings, shared
+    - Create `frontend/src/types/gallery.ts` with all TypeScript interfaces from design document
+    - Create `frontend/src/services/galleryService.ts` API client stub
+    - _Requirements: 1, 2, 3_
+  - [ ] 1.2 Create gallery service with API methods
+    - Implement `listGalleries()`, `getGallery()`, `createGallery()`, `updateGallery()`, `deleteGallery()`
+    - Implement `listGalleryAssets()`, `updateAsset()`, `deleteAsset()`, `reorderAssets()`
+    - Implement `createSubGallery()`, `updateSubGallery()`, `deleteSubGallery()`, `reorderSubGalleries()`
+    - Follow API contracts from `docs/project/03-API_CONTRACTS.md`
+    - _Requirements: 1.1, 2.2, 3.1, 4.2, 11.5_
+  - [ ] 1.3 Write property test for gallery title validation
+    - **Property 4: Gallery Title Validation**
+    - **Validates: Requirements 2.2**
+
+- [ ] 2. Implement Gallery List Page
+  - [ ] 2.1 Create GalleryCard component
+    - Display title, cover image (or placeholder), status badge, photo count, creation date
+    - Implement hover effects and click handler
+    - _Requirements: 1.1, 1.4_
+  - [ ] 2.2 Write property test for gallery list data completeness
+    - **Property 1: Gallery List Data Completeness**
+    - **Validates: Requirements 1.1**
+  - [ ] 2.3 Create GalleryStatusBadge component
+    - Implement distinct visual styles: draft (gray), published (green), archived (amber)
+    - _Requirements: 1.5_
+  - [ ] 2.4 Write property test for status badge visual distinction
+    - **Property 3: Status Badge Visual Distinction**
+    - **Validates: Requirements 1.5**
+  - [ ] 2.5 Create GalleryList component
+    - Implement grid layout with GalleryCard components
+    - Add sort controls (creation date, title, status)
+    - Implement "Create Gallery" button
+    - _Requirements: 1.1, 1.2, 1.3_
+  - [ ] 2.6 Write property test for gallery list default sort order
+    - **Property 2: Gallery List Default Sort Order**
+    - **Validates: Requirements 1.2**
+  - [ ] 2.7 Create GalleryEmptyState component
+    - Display illustration and "Create your first gallery" CTA
+    - _Requirements: 1.6_
+  - [ ] 2.8 Create GalleryListPage
+    - Compose GalleryList with data fetching via useGallery hook
+    - Handle loading and error states
+    - _Requirements: 1.1, 1.6_
+  - [ ] 2.9 Write unit tests for gallery list components
+    - Test GalleryCard renders all required fields
+    - Test GalleryList displays empty state when no galleries
+    - Test sort controls change order
+    - _Requirements: 1.1, 1.2, 1.6_
+
+- [ ] 3. Implement Gallery Creation Flow
+  - [ ] 3.1 Create GalleryCreateForm component
+    - Implement form with title (required), description (optional), client name (optional)
+    - Add inline validation for title (non-empty, max 255 chars)
+    - _Requirements: 2.1, 2.2_
+  - [ ] 3.2 Write property test for workspace scoping
+    - **Property 5: Workspace Scoping**
+    - **Validates: Requirements 2.5**
+  - [ ] 3.3 Create GalleryCreatePage
+    - Handle form submission and API call
+    - Navigate to gallery detail on success
+    - Display inline errors on failure without losing form data
+    - _Requirements: 2.2, 2.3, 2.4_
+  - [ ] 3.4 Write unit tests for gallery creation
+    - Test form validation rejects empty title
+    - Test successful creation navigates to detail page
+    - Test error handling preserves form data
+    - _Requirements: 2.2, 2.3, 2.4_
+
+- [ ] 4. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 5. Implement Gallery Detail Header and Toolbar
+  - [ ] 5.1 Create GalleryHeader component
+    - Display title (editable inline), client name, creation date, status badge
+    - Add "Back to All Galleries" link
+    - _Requirements: 3.1, 3.4, 3.5_
+  - [ ] 5.2 Write property test for gallery header data display
+    - **Property 6: Gallery Header Data Display**
+    - **Validates: Requirements 3.1**
+  - [ ] 5.3 Create GalleryStats component
+    - Display total items count and favorites count
+    - _Requirements: 3.3_
+  - [ ] 5.4 Write property test for statistics accuracy
+    - **Property 7: Statistics Accuracy**
+    - **Validates: Requirements 3.3**
+  - [ ] 5.5 Create GalleryToolbar component
+    - Implement action buttons: View as Client, Find People, AI Story, Share, Settings, Upload
+    - Add view mode toggle (grid/list icons)
+    - Add filter buttons (Picks, Favorites)
+    - Add search input
+    - _Requirements: 3.2, 8.1, 12.1, 13.1_
+  - [ ] 5.6 Write unit tests for header and toolbar
+    - Test header displays all required fields
+    - Test inline title editing works
+    - Test toolbar buttons are present
+    - _Requirements: 3.1, 3.2, 3.4_
+
+- [ ] 6. Implement Sub-Gallery Tabs
+  - [ ] 6.1 Create SubGalleryTabs component
+    - Display tabs in sort_order with "Root Gallery" first
+    - Implement "+ New Sub-Gallery" button
+    - Support tab selection and active state
+    - _Requirements: 4.1, 4.2, 4.3, 4.4_
+  - [ ] 6.2 Write property test for sub-gallery tab rendering
+    - **Property 8: Sub-Gallery Tab Rendering**
+    - **Validates: Requirements 4.1**
+  - [ ] 6.3 Write property test for sub-gallery filtering
+    - **Property 9: Sub-Gallery Filtering**
+    - **Validates: Requirements 4.3**
+  - [ ] 6.4 Implement tab drag-drop reordering
+    - Use react-beautiful-dnd or similar for drag-drop
+    - Persist new order via API
+    - _Requirements: 4.5_
+  - [ ] 6.5 Implement tab context menu
+    - Add right-click menu with rename, delete, visibility toggle
+    - _Requirements: 4.6_
+  - [ ] 6.6 Write unit tests for sub-gallery tabs
+    - Test tabs render in correct order
+    - Test tab selection filters photos
+    - Test new sub-gallery creation
+    - _Requirements: 4.1, 4.2, 4.3_
+
+- [ ] 7. Implement Photo Upload
+  - [ ] 7.1 Create uploadService with R2 integration
+    - Implement `createUploadSession()` to get signed URLs
+    - Implement `uploadFile()` with progress tracking
+    - Implement `commitUpload()` with checksum verification
+    - Follow `storage_ingestion_byos.json` spec
+    - _Requirements: 5.2, 5.3, 5.4_
+  - [ ] 7.2 Write property test for file type validation
+    - **Property 10: File Type Validation**
+    - **Validates: Requirements 5.1**
+  - [ ] 7.3 Create UploadDropzone component
+    - Accept drag-drop and click-to-select
+    - Validate file types (JPEG, PNG, WebP, HEIC, MP4, MOV)
+    - Generate local thumbnail previews
+    - _Requirements: 5.1_
+  - [ ] 7.4 Create UploadProgress component
+    - Display progress bar with percentage for each file
+    - Show thumbnail preview during upload
+    - _Requirements: 5.3_
+  - [ ] 7.5 Create UploadQueue component
+    - Manage upload queue with max 3 concurrent uploads
+    - Handle retry for failed uploads
+    - Display error messages with retry option
+    - _Requirements: 5.5, 5.6_
+  - [ ] 7.6 Write property test for upload concurrency limit
+    - **Property 11: Upload Concurrency Limit**
+    - **Validates: Requirements 5.6**
+  - [ ] 7.7 Write unit tests for upload components
+    - Test file type validation accepts valid types
+    - Test file type validation rejects invalid types
+    - Test progress updates during upload
+    - _Requirements: 5.1, 5.3_
+
+- [ ] 8. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 9. Implement Photo Grid
+  - [ ] 9.1 Create PhotoCard component
+    - Display thumbnail with preserved aspect ratio
+    - Show badges: FAVORITE (heart), PRIVATE (lock), video duration
+    - Implement hover actions (favorite toggle, selection checkbox, more options)
+    - _Requirements: 6.1, 6.3, 6.4, 6.5, 6.6_
+  - [ ] 9.2 Write property test for photo aspect ratio preservation
+    - **Property 12: Photo Aspect Ratio Preservation**
+    - **Validates: Requirements 6.1**
+  - [ ] 9.3 Write property test for lazy loading images
+    - **Property 13: Lazy Loading Images**
+    - **Validates: Requirements 6.2**
+  - [ ] 9.4 Write property test for favorite badge rendering
+    - **Property 14: Favorite Badge Rendering**
+    - **Validates: Requirements 6.3**
+  - [ ] 9.5 Write property test for private badge rendering
+    - **Property 15: Private Badge Rendering**
+    - **Validates: Requirements 6.4**
+  - [ ] 9.6 Write property test for video badge rendering
+    - **Property 16: Video Badge Rendering**
+    - **Validates: Requirements 6.5**
+  - [ ] 9.7 Create PhotoGrid component with masonry layout
+    - Use react-masonry-css or similar for masonry layout
+    - Implement lazy loading with Intersection Observer
+    - Support photo selection mode
+    - _Requirements: 6.1, 6.2_
+  - [ ] 9.8 Create VirtualizedGrid wrapper for performance
+    - Use react-window for virtualized scrolling with large photo sets
+    - _Requirements: 6.7_
+  - [ ] 9.9 Write unit tests for photo grid
+    - Test grid renders photos with correct badges
+    - Test selection mode works
+    - Test lazy loading triggers on scroll
+    - _Requirements: 6.1, 6.3, 6.4_
+
+- [ ] 10. Implement Photo List View
+  - [ ] 10.1 Create PhotoListView component
+    - Display table with columns: thumbnail, filename, dimensions, date, favorites, selections
+    - Support sorting by column
+    - _Requirements: 12.2, 12.3_
+  - [ ] 10.2 Write property test for list view columns
+    - **Property 25: List View Columns**
+    - **Validates: Requirements 12.3**
+  - [ ] 10.3 Write property test for view mode state preservation
+    - **Property 26: View Mode State Preservation**
+    - **Validates: Requirements 12.4**
+  - [ ] 10.4 Write unit tests for list view
+    - Test all required columns render
+    - Test sorting works
+    - _Requirements: 12.3_
+
+- [ ] 11. Implement Lightbox
+  - [ ] 11.1 Create Lightbox component
+    - Display full-resolution image in modal
+    - Implement navigation arrows (prev/next)
+    - Support keyboard navigation (arrows, Escape)
+    - _Requirements: 7.1, 7.2, 7.3_
+  - [ ] 11.2 Write property test for lightbox keyboard navigation
+    - **Property 17: Lightbox Keyboard Navigation**
+    - **Validates: Requirements 7.3**
+  - [ ] 11.3 Create LightboxMetadata component
+    - Display filename, dimensions, date taken
+    - Show EXIF data if gallery.exif_visible=true
+    - _Requirements: 7.4_
+  - [ ] 11.4 Write property test for lightbox metadata display
+    - **Property 18: Lightbox Metadata Display**
+    - **Validates: Requirements 7.4**
+  - [ ] 11.5 Implement zoom and pan functionality
+    - Add zoom controls (+/- buttons, scroll wheel)
+    - Support pan when zoomed
+    - _Requirements: 7.5_
+  - [ ] 11.6 Add favorite/selection toggle in lightbox
+    - Display current status and allow toggling
+    - _Requirements: 7.6_
+  - [ ] 11.7 Write unit tests for lightbox
+    - Test lightbox opens on photo click
+    - Test navigation works
+    - Test keyboard shortcuts work
+    - _Requirements: 7.1, 7.2, 7.3_
+
+- [ ] 12. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 13. Implement Favorites and Selections Management
+  - [ ] 13.1 Create FilterBar component
+    - Implement Picks and Favorites filter buttons
+    - Implement search input with debounce
+    - Support combining filters
+    - _Requirements: 8.1, 13.1, 13.3_
+  - [ ] 13.2 Write property test for favorites filter accuracy
+    - **Property 19: Favorites Filter Accuracy**
+    - **Validates: Requirements 8.2**
+  - [ ] 13.3 Write property test for picks filter accuracy
+    - **Property 20: Picks Filter Accuracy**
+    - **Validates: Requirements 8.3**
+  - [ ] 13.4 Write property test for search filter behavior
+    - **Property 27: Search Filter Behavior**
+    - **Validates: Requirements 13.2**
+  - [ ] 13.5 Write property test for combined filter support
+    - **Property 28: Combined Filter Support**
+    - **Validates: Requirements 13.3**
+  - [ ] 13.6 Create FavoritesSection component
+    - Display "♥ FAVORITES" header with count
+    - Group favorited photos at top of grid
+    - _Requirements: 8.2, 8.4_
+  - [ ] 13.7 Create BulkActionBar component
+    - Display when photos are selected
+    - Implement Select All button
+    - Add bulk actions: move to sub-gallery, delete, download
+    - _Requirements: 8.5, 8.6_
+  - [ ] 13.8 Write unit tests for filters and bulk actions
+    - Test filter buttons toggle correctly
+    - Test search filters by filename
+    - Test bulk selection works
+    - _Requirements: 8.1, 8.5, 13.2_
+
+- [ ] 14. Implement Gallery Settings
+  - [ ] 14.1 Create GallerySettingsPanel component
+    - Implement as slide-in panel or modal
+    - Organize settings into sections: General, Access, Downloads, Branding
+    - _Requirements: 9.1_
+  - [ ] 14.2 Create AccessSettings component
+    - Password protection toggle with password input
+    - Email registration required toggle
+    - Expiry date picker
+    - _Requirements: 9.3_
+  - [ ] 14.3 Create DownloadSettings component
+    - Download policy dropdown with 4 options
+    - _Requirements: 9.4_
+  - [ ] 14.4 Write property test for download policy options
+    - **Property 21: Download Policy Options**
+    - **Validates: Requirements 9.4**
+  - [ ] 14.5 Create BrandingSettings component
+    - Branding profile selector from workspace presets
+    - _Requirements: 9.5_
+  - [ ] 14.6 Implement settings save with confirmation
+    - Persist changes via API
+    - Display success toast on save
+    - _Requirements: 9.6_
+  - [ ] 14.7 Write unit tests for settings
+    - Test settings panel opens
+    - Test form fields render correctly
+    - Test save persists changes
+    - _Requirements: 9.1, 9.4, 9.6_
+
+- [ ] 15. Implement Gallery Status Management
+  - [ ] 15.1 Create PublishButton component
+    - Show "Publish" for draft galleries, "Unpublish" for published
+    - Validate gallery has at least one photo before publishing
+    - _Requirements: 10.1, 10.2, 10.3_
+  - [ ] 15.2 Write property test for publish button visibility
+    - **Property 22: Publish Button Visibility**
+    - **Validates: Requirements 10.1, 10.3**
+  - [ ] 15.3 Write property test for publish validation
+    - **Property 23: Publish Validation**
+    - **Validates: Requirements 10.2**
+  - [ ] 15.4 Implement archive functionality
+    - Add archive option in settings or menu
+    - Change status to archived and make read-only
+    - _Requirements: 10.4_
+  - [ ] 15.5 Write unit tests for status management
+    - Test publish button shows correct label
+    - Test publish fails for empty gallery
+    - Test archive makes gallery read-only
+    - _Requirements: 10.1, 10.2, 10.4_
+
+- [ ] 16. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 17. Implement Photo Organization
+  - [ ] 17.1 Implement photo drag-drop reordering
+    - Use react-beautiful-dnd for drag-drop within grid
+    - Persist new sort_order via API
+    - _Requirements: 11.1, 11.5_
+  - [ ] 17.2 Write property test for sort order persistence
+    - **Property 24: Sort Order Persistence**
+    - **Validates: Requirements 11.5**
+  - [ ] 17.3 Implement drag-to-tab for moving photos
+    - Allow dragging photo to sub-gallery tab to move it
+    - _Requirements: 11.2_
+  - [ ] 17.4 Implement bulk move to sub-gallery
+    - Add "Move to..." option in bulk action bar
+    - Show sub-gallery selector
+    - _Requirements: 11.3_
+  - [ ] 17.5 Implement photo delete with undo
+    - Soft delete with undo toast (5 second window)
+    - _Requirements: 11.4_
+  - [ ] 17.6 Write unit tests for photo organization
+    - Test drag-drop reordering works
+    - Test move to sub-gallery works
+    - Test delete with undo works
+    - _Requirements: 11.1, 11.3, 11.4_
+
+- [ ] 18. Implement Responsive Design
+  - [ ] 18.1 Make toolbar responsive
+    - Collapse toolbar into menu on mobile
+    - Keep essential actions visible
+    - _Requirements: 14.1_
+  - [ ] 18.2 Make sub-gallery tabs scrollable on mobile
+    - Horizontal scroll for tabs on small screens
+    - _Requirements: 14.2_
+  - [ ] 18.3 Adjust grid columns for mobile
+    - 2 columns on mobile (<768px), 3-4 on tablet (768-1024px)
+    - _Requirements: 14.3_
+  - [ ] 18.4 Write property test for mobile grid columns
+    - **Property 29: Mobile Grid Columns**
+    - **Validates: Requirements 14.3**
+  - [ ] 18.5 Write property test for mobile touch targets
+    - **Property 30: Mobile Touch Targets**
+    - **Validates: Requirements 14.5**
+  - [ ] 18.6 Write unit tests for responsive design
+    - Test toolbar collapses on mobile
+    - Test grid adjusts columns
+    - _Requirements: 14.1, 14.3_
+
+- [ ] 19. Implement Performance Optimizations
+  - [ ] 19.1 Implement CDN URL generation
+    - Generate CDN-optimized URLs with sizing parameters
+    - Use WebP format with fallbacks
+    - _Requirements: 15.3_
+  - [ ] 19.2 Write property test for CDN image URLs
+    - **Property 31: CDN Image URLs**
+    - **Validates: Requirements 15.3**
+  - [ ] 19.3 Implement infinite scroll with lazy loading
+    - Load more photos as user scrolls
+    - Use Intersection Observer for trigger
+    - _Requirements: 15.2_
+  - [ ] 19.4 Ensure non-blocking uploads
+    - Allow browsing during upload
+    - Show upload progress in corner/toast
+    - _Requirements: 15.4_
+  - [ ] 19.5 Write unit tests for performance features
+    - Test lazy loading triggers on scroll
+    - Test UI remains responsive during upload
+    - _Requirements: 15.2, 15.4_
+
+- [ ] 20. Assemble Gallery Detail Page
+  - [ ] 20.1 Create GalleryDetailPage
+    - Compose all components: Header, Toolbar, SubGalleryTabs, PhotoGrid/PhotoList, Lightbox
+    - Implement useGallery hook for state management
+    - Handle loading and error states
+    - _Requirements: 3-15_
+  - [ ] 20.2 Set up gallery routes
+    - Add routes: /workspace/galleries, /workspace/galleries/new, /workspace/galleries/:id
+    - Implement route guards for authentication
+    - _Requirements: 1-15_
+  - [ ] 20.3 Write integration tests for gallery pages
+    - Test full gallery list page flow
+    - Test gallery creation flow
+    - Test gallery detail page with all features
+    - _Requirements: 1-15_
+
+- [ ] 21. Final Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+

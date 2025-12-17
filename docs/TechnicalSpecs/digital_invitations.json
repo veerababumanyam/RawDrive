@@ -1,0 +1,217 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "digital_invitations",
+  "name": "Digital Invitations (Templates, RSVP, Guest Lists, QR)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/project/10-DIGITAL_INVITATIONS.md",
+    "docs/Features/PRD.md",
+    "docs/Features/NOTIFICATIONS_AND_COMMUNICATION.md",
+    "docs/Features/CLIENT_FACING_FEATURES.md"
+  ],
+  "description": "Digital invitation builder and guest management system. Enables template-based invitations, share links, RSVP collection, guest lists, reminders, QR codes for event check-in, and localized guest-facing pages.",
+  "goals": [
+    "Create and publish invitations quickly with reusable templates.",
+    "Guest-friendly RSVP with minimal friction and abuse protection.",
+    "Support multiple events/schedules and guest groups.",
+    "Enable QR-based check-in at the event venue."
+  ],
+  "nonGoals": [
+    "Full wedding website builder (keep scope to invitations + RSVP + essentials).",
+    "Ticketing/payments for guests (can integrate later)."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Invitations are workspace-scoped; public access is mediated via share links.",
+      "Guest PII is workspace-scoped and must never be exposed without link authorization.",
+      "Invitation media assets (cover images) follow workspace object key conventions."
+    ]
+  },
+  "actors": [
+    { "id": "staff_user", "name": "Staff User", "description": "Creates invitations, manages guest lists." },
+    { "id": "client_viewer", "name": "Guest (Share Link)", "description": "Views invitation and submits RSVP." },
+    { "id": "system", "name": "System", "description": "Renders pages, sends reminders, generates QR codes." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "Invitation",
+        "table": "invitations",
+        "primaryKey": "invitation_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "invitation_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "title", "type": "string" },
+          { "name": "status", "type": "enum(draft,published,archived)" },
+          { "name": "language", "type": "string", "nullable": true },
+          { "name": "template_id", "type": "uuid", "nullable": true },
+          { "name": "content", "type": "json", "notes": "sections, names, venue, maps links" },
+          { "name": "cover_asset_id", "type": "uuid", "nullable": true },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "published_at", "type": "timestamp", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["invitations_ws_status_idx"]
+      },
+      {
+        "name": "InvitationGuest",
+        "table": "invitation_guests",
+        "primaryKey": "guest_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "guest_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "invitation_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "phone", "type": "string", "nullable": true },
+          { "name": "email", "type": "string", "nullable": true },
+          { "name": "group", "type": "string", "nullable": true },
+          { "name": "notes", "type": "string", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["invitation_guests_ws_invitation_idx"]
+      },
+      {
+        "name": "InvitationRSVP",
+        "table": "invitation_rsvps",
+        "primaryKey": "rsvp_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "rsvp_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "invitation_id", "type": "uuid" },
+          { "name": "guest_id", "type": "uuid", "nullable": true },
+          { "name": "share_link_session_id", "type": "uuid", "nullable": true },
+          { "name": "status", "type": "enum(yes,no,maybe)" },
+          { "name": "attendee_count", "type": "number", "nullable": true },
+          { "name": "answers", "type": "json", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["invitation_rsvps_ws_invitation_time_idx"]
+      },
+      {
+        "name": "InvitationCheckIn",
+        "table": "invitation_checkins",
+        "primaryKey": "checkin_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "checkin_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "invitation_id", "type": "uuid" },
+          { "name": "guest_id", "type": "uuid" },
+          { "name": "checked_in_by_user_id", "type": "uuid" },
+          { "name": "checked_in_at", "type": "timestamp" }
+        ],
+        "indexes": ["invitation_checkins_ws_invitation_idx", "invitation_checkins_guest_unique"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "invitations.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/invitations",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "title": "string", "language": "string?" } },
+      "response": { "body": { "invitation_id": "uuid", "status": "draft" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "invitations.publish",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/invitations/{invitation_id}/publish",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "publish": true } },
+      "response": { "body": { "status": "published", "published_at": "timestamp" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "portal.invitation.view",
+      "method": "GET",
+      "path": "/v1/portal/invitations/{invitation_id}",
+      "auth": "share_link_or_user_jwt",
+      "rateLimit": "public-standard",
+      "response": { "body": { "invitation": "object", "content": "object" } },
+      "errors": ["NOT_FOUND", "SHARE_LINK_EXPIRED", "SHARE_LINK_PASSWORD_REQUIRED"]
+    },
+    {
+      "id": "portal.invitation.rsvp",
+      "method": "POST",
+      "path": "/v1/portal/invitations/{invitation_id}/rsvp",
+      "auth": "share_link_or_user_jwt",
+      "rateLimit": "public-strict",
+      "request": { "body": { "status": "yes|no|maybe", "attendee_count": "number?", "answers": "object?", "turnstile_token": "string?" } },
+      "response": { "body": { "ok": true } },
+      "errors": ["VALIDATION_ERROR", "TURNSTILE_REQUIRED", "TURNSTILE_FAILED"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.invite.publish_share",
+      "name": "Publish Invitation + Share",
+      "steps": [
+        "Staff creates invitation and configures template/content.",
+        "Publish invitation to enable public rendering.",
+        "Create share link with actions: view, rsvp.",
+        "Send to guest list via Notifications (WhatsApp/email).",
+        "Collect RSVPs and show summary dashboard."
+      ]
+    },
+    {
+      "id": "wf.checkin.qr",
+      "name": "QR-based Check-in",
+      "steps": [
+        "Generate per-guest QR codes that encode a signed token (not raw IDs).",
+        "At venue, staff scans QR using authenticated staff UI.",
+        "API validates token and records check-in (idempotent per guest).",
+        "Display real-time attendance count and exceptions."
+      ]
+    }
+  ],
+  "security": {
+    "controls": [
+      "Share-link protection for invitation pages (password/expiry optional).",
+      "Turnstile/rate limits on public RSVP endpoints.",
+      "QR token signed and short TTL or revocable; never expose guest_id directly.",
+      "PII handling for guest contact details: encryption at rest where required."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "invitation_views_total",
+      "invitation_rsvps_total{status}",
+      "invitation_checkins_total",
+      "rsvp_submission_failures_total"
+    ],
+    "logs": [
+      "RSVP submissions (sanitized)",
+      "Check-in attempts and denials"
+    ],
+    "traces": [
+      "Invitation render path",
+      "RSVP submission path"
+    ],
+    "alerts": [
+      "Spike in RSVP failures",
+      "Abnormal RSVP rate (potential abuse)"
+    ]
+  },
+  "acceptanceTests": [
+    "Guests can RSVP via share link without creating an account.",
+    "ur-IN invitation pages render RTL correctly.",
+    "QR check-in is idempotent: scanning the same guest twice does not double count.",
+    "Public RSVP endpoints are rate limited and protected by Turnstile when enabled."
+  ],
+  "dependencies": [
+    "share_links_access",
+    "notifications",
+    "i18n_localization",
+    "content_moderation_abuse"
+  ]
+}

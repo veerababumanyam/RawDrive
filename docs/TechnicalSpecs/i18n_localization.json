@@ -1,0 +1,157 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "i18n_localization",
+  "name": "Localization (i18n) + Urdu RTL Support",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/PRD.md",
+    "docs/Features/CLIENT_FACING_FEATURES.md",
+    "docs/Features/GLOSSARY.md",
+    "docs/Features/HLD.md"
+  ],
+  "description": "End-to-end localization strategy for UI and notifications across Studio, Admin, Client Portal, Invitations, and Public Profile. India-first language set with Urdu RTL. Includes locale resolution rules, translation lifecycle, and RTL-safe component guidelines.",
+  "goals": [
+    "Consistent locale resolution across all surfaces (authenticated and share-link based).",
+    "First-class RTL support for ur-IN.",
+    "Translation keys and content localization that remain stable across releases.",
+    "Localized formatting for dates, numbers, currency (INR), and address conventions."
+  ],
+  "nonGoals": [
+    "Real-time machine translation for arbitrary user-generated content (UGC) (optional enhancement).",
+    "Automatic translation of uploaded media text (handled by AI features if needed)."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Workspace may set default_language; users may set preferred_language.",
+      "Share links may override language (link-local) for client portal/invitations.",
+      "Localization configuration is workspace-scoped; translation catalogs are global per app version (unless enterprise overrides are enabled)."
+    ]
+  },
+  "actors": [
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Sets workspace default language and client portal language defaults." },
+    { "id": "staff_user", "name": "Staff User", "description": "Uses app in preferred language." },
+    { "id": "client_viewer", "name": "Client (Share Link)", "description": "Sees client portal in link/gallery language." },
+    { "id": "system", "name": "System", "description": "Resolves locale and renders translations." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "LanguagePreference",
+        "table": "language_preferences",
+        "primaryKey": "preference_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "preference_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "user_id", "type": "uuid", "nullable": true },
+          { "name": "surface", "type": "enum(studio,admin,portal,invitations,public_profile,notifications)" },
+          { "name": "locale", "type": "string", "example": "hi-IN" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["language_preferences_ws_user_surface_unique"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "i18n.languages.list",
+      "method": "GET",
+      "path": "/v1/i18n/languages",
+      "auth": "public",
+      "rateLimit": "public-standard",
+      "response": { "body": { "languages": "array" } },
+      "errors": []
+    },
+    {
+      "id": "i18n.preferences.upsert",
+      "method": "PUT",
+      "path": "/v1/workspaces/{workspace_id}/i18n/preferences",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "surface": "string", "locale": "string" } },
+      "response": { "body": { "ok": true } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.locale.resolution",
+      "name": "Locale Resolution Order",
+      "steps": [
+        "Resolve locale based on surface.",
+        "Authenticated surfaces (studio/admin): user.preferred_language -> workspace.default_language -> en-IN.",
+        "Share-link surfaces (portal/invitations/public pages): share_link.language -> gallery.portal_language/invitation.language -> workspace.default_language -> Accept-Language -> en-IN.",
+        "Persist last choice per surface to reduce user friction.",
+        "Apply RTL direction for ur-IN consistently (html dir=rtl, logical CSS properties)."
+      ]
+    },
+    {
+      "id": "wf.translation.lifecycle",
+      "name": "Translation Catalog Lifecycle",
+      "steps": [
+        "All strings referenced via stable keys (no raw UI text in code).",
+        "Catalogs versioned with application release; missing keys fall back to en-IN and log telemetry.",
+        "RTL review checklist for layouts, icons, paddings, truncation, and number formatting.",
+        "Automated i18n tests validate no missing keys for supported locales."
+      ]
+    }
+  ],
+  "i18n": {
+    "supportedLanguages": [
+      "en-IN",
+      "hi-IN",
+      "bn-IN",
+      "te-IN",
+      "mr-IN",
+      "ta-IN",
+      "gu-IN",
+      "kn-IN",
+      "ml-IN",
+      "pa-IN",
+      "ur-IN"
+    ],
+    "rtl": ["ur-IN"],
+    "formatting": {
+      "currency": "INR",
+      "dateTime": "Intl.DateTimeFormat",
+      "numbers": "Intl.NumberFormat",
+      "phone": "E.164 storage, localized display"
+    }
+  },
+  "security": {
+    "controls": [
+      "Do not accept arbitrary locale strings without validation (allowlist locales).",
+      "Do not allow translation catalogs to contain executable content (no HTML injection; use safe rendering).",
+      "Ensure localization does not leak sensitive information through fallback strings."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "i18n_missing_key_total{locale,surface}",
+      "i18n_fallback_total{from_locale,to_locale,surface}"
+    ],
+    "logs": [
+      "Missing translation key events (sampled)"
+    ],
+    "traces": [
+      "Locale resolution span (debug builds)"
+    ],
+    "alerts": [
+      "Spike in missing translation keys after deploy"
+    ]
+  },
+  "acceptanceTests": [
+    "Client portal renders RTL correctly for ur-IN (layout mirroring, punctuation, numerals).",
+    "Locale resolution matches documented order for both user and share-link surfaces.",
+    "Missing translation keys fall back to en-IN and emit telemetry."
+  ],
+  "dependencies": [
+    "share_links_access",
+    "notifications",
+    "observability"
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "share_links_access",
+  "name": "Share Links & Access Control",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/CLIENT_FACING_FEATURES.md",
+    "docs/project/10-DIGITAL_INVITATIONS.md",
+    "docs/Features/PRD.md",
+    "docs/Features/AUTHENTICATION_AND_SECURITY.md"
+  ],
+  "description": "Universal access primitive to share galleries, albums, invitations, and downloads securely without requiring end users to create accounts. Supports passwords, expiry, per-action permissions, and optional client identity capture.",
+  "goals": [
+    "A single, consistent mechanism for client access across features.",
+    "Fine-grained, auditable policies (view, download, comment, select, RSVP, etc.).",
+    "Support link revocation, expiry, and rate limiting to prevent abuse.",
+    "Enable link-local language/locale override for client UX."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Share links are workspace-scoped and reference a target resource (gallery_id, album_id, invitation_id, export_id).",
+      "Tokens are opaque and non-guessable; storage never exposes sequential IDs.",
+      "Policy checks must include workspace_id and target resource state (published, not deleted)."
+    ]
+  },
+  "actors": [
+    { "id": "staff_user", "name": "Staff User", "description": "Creates and configures share links." },
+    { "id": "client_viewer", "name": "Client (Share Link)", "description": "Consumes link in browser." },
+    { "id": "system", "name": "System", "description": "Validates tokens and enforces policies." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "ShareLink",
+        "table": "share_links",
+        "primaryKey": "share_link_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "share_link_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "token_hash", "type": "string", "notes": "Store hash of token; never store raw token" },
+          { "name": "target_type", "type": "enum(gallery,album,invitation,export,public_profile)" },
+          { "name": "target_id", "type": "uuid" },
+          { "name": "policy", "type": "json", "notes": "allowed_actions, download_variant, watermark, etc" },
+          { "name": "password_hash", "type": "string", "nullable": true },
+          { "name": "expires_at", "type": "timestamp", "nullable": true },
+          { "name": "revoked_at", "type": "timestamp", "nullable": true },
+          { "name": "language", "type": "string", "nullable": true },
+          { "name": "require_identity", "type": "boolean" },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["share_links_ws_target_idx", "share_links_token_hash_unique", "share_links_ws_active_idx"]
+      },
+      {
+        "name": "ShareLinkSession",
+        "table": "share_link_sessions",
+        "primaryKey": "session_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "session_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "share_link_id", "type": "uuid" },
+          { "name": "client_identity", "type": "json", "nullable": true, "notes": "name/email/phone (if captured)" },
+          { "name": "ip", "type": "string", "nullable": true },
+          { "name": "user_agent", "type": "string", "nullable": true },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "expires_at", "type": "timestamp" }
+        ],
+        "indexes": ["share_link_sessions_ws_link_time_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "shareLinks.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/share-links",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": {
+        "body": {
+          "target_type": "gallery|album|invitation|export|public_profile",
+          "target_id": "uuid",
+          "policy": "object",
+          "password": "string?",
+          "expires_at": "timestamp?",
+          "language": "string?",
+          "require_identity": "boolean"
+        }
+      },
+      "response": {
+        "body": {
+          "share_link_id": "uuid",
+          "url": "string",
+          "expires_at": "timestamp?"
+        }
+      },
+      "errors": ["FORBIDDEN", "TARGET_NOT_FOUND"]
+    },
+    {
+      "id": "shareLinks.validate",
+      "method": "POST",
+      "path": "/v1/share-links/validate",
+      "auth": "public",
+      "rateLimit": "public-strict",
+      "request": { "body": { "token": "string", "password": "string?", "identity": "object?" } },
+      "response": { "body": { "session_token": "string", "target": "object", "policy": "object", "language": "string?" } },
+      "errors": ["SHARE_LINK_INVALID", "SHARE_LINK_EXPIRED", "SHARE_LINK_REVOKED", "SHARE_LINK_PASSWORD_REQUIRED", "SHARE_LINK_PASSWORD_INVALID"]
+    },
+    {
+      "id": "shareLinks.revoke",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/share-links/{share_link_id}/revoke",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "revoked_at": "timestamp" } },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.shareLink.consume",
+      "name": "Consume Share Link",
+      "steps": [
+        "Client opens share URL containing opaque token.",
+        "Frontend exchanges token with validate endpoint to obtain session_token.",
+        "If password required, prompt and validate; if identity required, collect minimal fields.",
+        "Portal API calls include session_token; backend resolves share_link_id and policy.",
+        "Each action checks allowed_actions and logs interaction/audit."
+      ]
+    }
+  ],
+  "observability": {
+    "metrics": [
+      "share_links_created_total{target_type}",
+      "share_links_validations_total{result}",
+      "share_link_sessions_active",
+      "share_links_revoked_total"
+    ],
+    "logs": [
+      "Validation failures with reason (no raw token logged)",
+      "Policy denials for portal actions"
+    ],
+    "traces": [
+      "Trace validate -> downstream portal request chain"
+    ],
+    "alerts": [
+      "Excessive validations failures from same IP",
+      "High rate of password invalid attempts"
+    ]
+  },
+  "security": {
+    "controls": [
+      "Opaque tokens; store token_hash only",
+      "Optional password gate stored as hash",
+      "Short-lived session tokens for portal actions",
+      "Revocation and expiry checks on every request",
+      "Public endpoint rate limiting + Turnstile optionally for brute-force protection"
+    ],
+    "privacy": [
+      "Identity capture is optional and minimal; treat as PII.",
+      "Provide workspace setting to anonymize client interactions."
+    ]
+  },
+  "i18n": {
+    "languageOverride": "share_links.language overrides gallery/invitation defaults",
+    "rtl": ["ur-IN"]
+  },
+  "acceptanceTests": [
+    "Revoked share link blocks access immediately.",
+    "Expired share link returns SHARE_LINK_EXPIRED.",
+    "Password-protected links require correct password and rate-limit invalid attempts.",
+    "Session token cannot be used for a different share link or workspace."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "observability",
+    "content_moderation_abuse"
+  ],
+  "openQuestions": [
+    "Should share link session tokens be JWTs signed by backend or opaque IDs stored server-side?",
+    "Do we support per-link download caps and watermark-only enforcement?",
+    "Do we support one-time links (single view) for sensitive deliveries?"
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "retention_customer_removal",
+  "name": "Retention, Recycle Bin, and Customer Removal",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/DATA_RETENTION_AND_CUSTOMER_REMOVAL.md",
+    "docs/Features/STORAGE_AND_BACKUP.md",
+    "docs/Features/PRD.md",
+    "docs/Features/ADMIN_AND_PLATFORM_MANAGEMENT.md"
+  ],
+  "description": "Policy-driven retention and deletion system for workspace data: soft deletes, recycle bin, legal holds, export-before-delete, and full customer removal (account closure) across DB + object storage + caches + AI artifacts.",
+  "goals": [
+    "Reliable, auditable deletion pipeline that fully removes customer data when requested.",
+    "Prevent accidental loss via soft-delete + recycle bin with configurable retention.",
+    "Support enterprise legal holds and export requirements.",
+    "Ensure storage providers (R2/BYOS) and derived artifacts are purged consistently."
+  ],
+  "nonGoals": [
+    "Instant deletion for all objects in all backends (some providers require asynchronous cleanup).",
+    "Replacing backup/DR strategy."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Retention policies are workspace-scoped.",
+      "Deletion jobs must only operate on a single workspace per run.",
+      "Cross-workspace identifiers must never be referenced in deletion queries."
+    ]
+  },
+  "actors": [
+    { "id": "workspace_owner", "name": "Workspace Owner", "description": "Initiates customer removal and approves irreversible actions." },
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Manages retention settings and recycle bin." },
+    { "id": "platform_admin", "name": "Platform Admin", "description": "Handles legal holds and escalations." },
+    { "id": "system", "name": "System", "description": "Runs cleanup jobs, generates exports, verifies deletion." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "RetentionPolicy",
+        "table": "retention_policies",
+        "primaryKey": "policy_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "policy_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "recycle_bin_days", "type": "number" },
+          { "name": "audit_retention_days", "type": "number" },
+          { "name": "ai_artifact_retention_days", "type": "number" },
+          { "name": "legal_hold_enabled", "type": "boolean" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["retention_policies_ws_unique"]
+      },
+      {
+        "name": "DeletionRequest",
+        "table": "deletion_requests",
+        "primaryKey": "request_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "request_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "type", "type": "enum(soft_delete,restore,hard_delete,customer_removal)" },
+          { "name": "scope", "type": "json", "notes": "entity types/ids or full workspace" },
+          { "name": "status", "type": "enum(queued,running,completed,failed,canceled)" },
+          { "name": "requested_by_user_id", "type": "uuid" },
+          { "name": "approved_by_user_id", "type": "uuid", "nullable": true },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "completed_at", "type": "timestamp", "nullable": true }
+        ],
+        "indexes": ["deletion_requests_ws_status_idx", "deletion_requests_ws_time_idx"]
+      },
+      {
+        "name": "DeletionProof",
+        "table": "deletion_proofs",
+        "primaryKey": "proof_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "proof_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "request_id", "type": "uuid" },
+          { "name": "artifact", "type": "json", "notes": "counts deleted, provider confirmations" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["deletion_proofs_ws_time_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "retention.getPolicy",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/retention/policy",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "policy": "object" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "retention.updatePolicy",
+      "method": "PUT",
+      "path": "/v1/workspaces/{workspace_id}/retention/policy",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "recycle_bin_days": "number", "audit_retention_days": "number" } },
+      "response": { "body": { "ok": true } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "retention.customerRemoval.request",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/retention/customer-removal",
+      "auth": "user_jwt",
+      "rateLimit": "strict",
+      "request": { "body": { "confirm": "boolean" } },
+      "response": { "body": { "request_id": "uuid", "status": "queued" } },
+      "errors": ["FORBIDDEN", "LEGAL_HOLD_ACTIVE"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.recycle_bin",
+      "name": "Soft Delete + Recycle Bin",
+      "steps": [
+        "Soft delete sets deleted_at and excludes from default queries.",
+        "Recycle bin UI lists soft-deleted items within retention window.",
+        "Restore clears deleted_at and restores access.",
+        "After recycle_bin_days, hard delete job purges DB rows and storage objects."
+      ]
+    },
+    {
+      "id": "wf.customer_removal",
+      "name": "Full Customer Removal",
+      "steps": [
+        "Owner submits request and confirms irreversible deletion.",
+        "System checks legal hold and compliance constraints.",
+        "Generate export artifacts if required (optional).",
+        "Purge: DB records, object storage (R2/BYOS), caches, search indexes, AI artifacts, webhook secrets.",
+        "Write DeletionProof with counts and provider confirmations.",
+        "Deactivate workspace and prevent future access."
+      ]
+    }
+  ],
+  "backgroundJobs": [
+    { "id": "job.retention.hard_delete", "trigger": "daily", "inputs": { "workspace_id": "uuid" }, "outputs": { "deleted_rows": "number", "deleted_objects": "number" } },
+    { "id": "job.retention.customer_removal", "trigger": "queue", "inputs": { "request_id": "uuid" }, "outputs": { "proof_id": "uuid" } }
+  ],
+  "security": {
+    "controls": [
+      "Irreversible actions require explicit confirmation and elevated role.",
+      "Legal hold prevents deletion.",
+      "Deletion jobs run with least privilege credentials and are audited.",
+      "DeletionProof provides tamper-evident evidence of execution."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "retention_deletions_total{type}",
+      "retention_deletion_latency_seconds{type}",
+      "customer_removal_failures_total"
+    ],
+    "logs": [
+      "Deletion job logs (workspace_id scoped)",
+      "Provider delete confirmations (sanitized)"
+    ],
+    "traces": [
+      "Customer removal job span"
+    ],
+    "alerts": [
+      "Customer removal failures",
+      "Retention job backlog"
+    ]
+  },
+  "acceptanceTests": [
+    "Soft-deleted items are excluded from normal listings and appear in recycle bin.",
+    "After recycle_bin_days, items are hard deleted from DB and object storage.",
+    "Customer removal purges AI artifacts and search indexes in addition to media objects.",
+    "Legal hold blocks customer removal."
+  ],
+  "dependencies": [
+    "storage_ingestion_byos",
+    "media_processing",
+    "ai_platform_model_router",
+    "developer_platform",
+    "observability"
+  ]
+}

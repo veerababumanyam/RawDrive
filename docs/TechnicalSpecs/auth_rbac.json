@@ -1,0 +1,601 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "auth_rbac",
+  "name": "Identity, Authentication, and RBAC",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/AUTHENTICATION_AND_SECURITY.md",
+    "docs/Features/RBAC_AND_USER_MANAGEMENT.md",
+    "docs/Features/PRD.md",
+    "docs/Features/ADMIN_AND_PLATFORM_MANAGEMENT.md"
+  ],
+  "description": "Authentication, session management, MFA, passwordless options, workspace-scoped roles/permissions, and secure access patterns for internal users and client-facing share links.",
+  "tokenSigning": {
+    "algorithm": "EdDSA",
+    "curve": "Ed25519",
+    "privateKey": "JWT_PRIVATE_KEY_PATH (.env)",
+    "publicKey": "JWT_PUBLIC_KEY_PATH (.env)",
+    "rotation": "Generate new Ed25519 pair; update env paths; keep prior public key available until legacy tokens expire.",
+    "rationale": "Modern curve with small keys and strong security; replaces RSA in this deployment baseline."
+  },
+  "goals": [
+    "Provide secure authentication for direct users via Google OAuth (OIDC) with a fallback for local (email/password) users.",
+    "Support secure workspace-scoped authentication for studio staff (invites) and enterprise users (SSO where configured).",
+    "Enforce least-privilege access using workspace-scoped RBAC across all APIs and UI.",
+    "Support client-facing access through Share Links that do not require full accounts.",
+    "Centralize audit trails for security-sensitive actions."
+  ],
+  "nonGoals": [
+    "Consumer social graph / social login beyond Google as a primary identity provider (can be added later).",
+    "Full IAM replacement for enterprise directories; we integrate via SAML/OIDC where required."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "All workspace membership, workspace roles, and workspace policy data is scoped to workspace_id.",
+      "Platform roles and support access sessions are global (not workspace-scoped) and apply only to /v1/admin/* endpoints.",
+      "JWT/session tokens must include workspace_id and user_id.",
+      "Share Links are scoped to workspace_id and a resource_id (gallery/album/invite).",
+      "Legacy tenant_id fields, if present, are treated as a legacy alias for workspace_id — avoid in new schemas/docs."
+    ]
+  },
+  "actors": [
+    { "id": "super_admin", "name": "Super Admin", "description": "Full platform control plane; can create/manage platform admins and assign platform roles." },
+    { "id": "platform_admin", "name": "Platform Admin", "description": "Platform monitoring and operations (no implicit customer content access)." },
+    { "id": "support_admin", "name": "Support Admin", "description": "Customer support and troubleshooting (requires audited support access sessions)." },
+    { "id": "billing_admin", "name": "Billing Admin", "description": "Subscriptions, invoices, refunds, and billing support (no customer content access)." },
+    { "id": "content_moderator", "name": "Content Moderator", "description": "Abuse/content moderation workflows with minimized data exposure." },
+    { "id": "security_admin", "name": "Security Admin", "description": "Security investigations, incident response tooling, and security policy controls." },
+    { "id": "observability_admin", "name": "Observability Admin", "description": "Logs/metrics/traces access and alert operations." },
+    { "id": "auditor_readonly", "name": "Auditor (Read-only)", "description": "Read-only audit access to logs and exports." },
+    { "id": "product_admin", "name": "Product Admin", "description": "Feature flags/experiments/pricing rollouts (no customer content access)." },
+    { "id": "finance_admin", "name": "Finance Admin", "description": "Financial operations, invoice management, refunds, revenue tracking (no customer content access)." },
+
+    { "id": "workspace_owner", "name": "Workspace Owner", "description": "Top-level admin within a workspace." },
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Manages settings, members, roles, billing (if allowed)." },
+    { "id": "staff_user", "name": "Staff User", "description": "Photographer/editor/sales staff with scoped access." },
+    { "id": "client_viewer", "name": "Client (Share Link)", "description": "End client accessing galleries/proofing/invitations via share links." },
+    { "id": "api_client", "name": "API Client", "description": "External integration using API keys/OAuth where permitted." }
+  ],
+  "permissions": [
+    "platform:admins:read",
+    "platform:admins:write",
+    "platform:role_templates:read",
+    "platform:role_templates:write",
+    "platform:users:read",
+    "platform:users:write",
+    "platform:workspaces:read",
+    "platform:billing:read",
+    "platform:billing:write",
+    "platform:finance:read",
+    "platform:finance:write",
+    "platform:invoices:read",
+    "platform:invoices:write",
+    "platform:refunds:read",
+    "platform:refunds:write",
+    "platform:feature_flags:read",
+    "platform:feature_flags:write",
+    "platform:moderation:read",
+    "platform:moderation:write",
+    "platform:audit:read",
+    "platform:config:read",
+    "platform:config:write",
+    "platform:observability:read",
+    "platform:support_access:start",
+    "platform:support_access:stop",
+
+    "workspace:read",
+    "workspace:write",
+    "members:read",
+    "members:write",
+    "roles:read",
+    "roles:write",
+    "billing:read",
+    "billing:write",
+    "galleries:read",
+    "galleries:write",
+    "albums:read",
+    "albums:write",
+    "assets:read",
+    "assets:write",
+    "ai:use",
+    "ai:admin",
+    "audit:read"
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "PlatformRole",
+        "table": "platform_roles",
+        "primaryKey": "role_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "role_id", "type": "uuid" },
+          { "name": "name", "type": "string", "notes": "role template ID (e.g., super_admin, platform_admin, support_admin, billing_admin, content_moderator, security_admin, observability_admin, auditor_readonly, product_admin)" },
+          { "name": "permissions", "type": "string[]" },
+          { "name": "is_system", "type": "boolean" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["platform_roles_name_unique"]
+      },
+      {
+        "name": "UserPlatformRoleAssignment",
+        "table": "user_platform_roles",
+        "primaryKey": "assignment_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "assignment_id", "type": "uuid" },
+          { "name": "user_id", "type": "uuid" },
+          { "name": "role_id", "type": "uuid" },
+          { "name": "granted_by_user_id", "type": "uuid" },
+          { "name": "granted_reason", "type": "string", "nullable": true },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "revoked_at", "type": "timestamp", "nullable": true }
+        ],
+        "indexes": ["user_platform_roles_user_idx", "user_platform_roles_unique_active"]
+      },
+      {
+        "name": "SupportAccessSession",
+        "table": "support_access_sessions",
+        "primaryKey": "session_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "session_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "platform_user_id", "type": "uuid" },
+          { "name": "reason", "type": "string", "notes": "Support ticket ID + freeform justification" },
+          { "name": "approved_by_user_id", "type": "uuid", "nullable": true },
+          { "name": "approval_type", "type": "enum(workspace_approval,break_glass)" },
+          { "name": "started_at", "type": "timestamp" },
+          { "name": "expires_at", "type": "timestamp" },
+          { "name": "ended_at", "type": "timestamp", "nullable": true }
+        ],
+        "indexes": ["support_access_sessions_ws_idx", "support_access_sessions_platform_user_idx"]
+      },
+      {
+        "name": "User",
+        "table": "users",
+        "primaryKey": "user_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "user_id", "type": "uuid" },
+          { "name": "email", "type": "string", "notes": "Unique globally or per workspace; recommend global unique to avoid account confusion." },
+          { "name": "phone", "type": "string", "nullable": true },
+          { "name": "display_name", "type": "string" },
+          { "name": "preferred_language", "type": "string", "example": "hi-IN" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "disabled_at", "type": "timestamp", "nullable": true }
+        ],
+        "indexes": ["users_email_unique"]
+      },
+      {
+        "name": "UserIdentity",
+        "table": "user_identities",
+        "primaryKey": "identity_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "identity_id", "type": "uuid" },
+          { "name": "user_id", "type": "uuid" },
+          { "name": "provider", "type": "enum(google,local)" },
+          { "name": "provider_user_id", "type": "string", "nullable": true, "notes": "Required for google; null for local" },
+          { "name": "email", "type": "string" },
+          { "name": "email_verified", "type": "boolean" },
+          { "name": "password_hash", "type": "string", "nullable": true, "notes": "Only for provider=local" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "last_used_at", "type": "timestamp", "nullable": true }
+        ],
+        "indexes": ["user_identities_user_idx", "user_identities_provider_subject_unique"]
+      },
+      {
+        "name": "Workspace",
+        "table": "workspaces",
+        "primaryKey": "workspace_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "status", "type": "enum(active,disabled,deleted)" },
+          { "name": "default_language", "type": "string", "example": "en-IN" },
+          { "name": "trial_expires_at", "type": "timestamp", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["workspaces_status_idx"]
+      },
+      {
+        "name": "WorkspaceMembership",
+        "table": "workspace_memberships",
+        "primaryKey": "membership_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "membership_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "user_id", "type": "uuid" },
+          { "name": "role_ids", "type": "uuid[]" },
+          { "name": "status", "type": "enum(active,invited,suspended)" },
+          { "name": "invited_by_user_id", "type": "uuid", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["workspace_memberships_ws_user_unique", "workspace_memberships_ws_idx"]
+      },
+      {
+        "name": "Role",
+        "table": "roles",
+        "primaryKey": "role_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "role_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "permissions", "type": "string[]" },
+          { "name": "is_system", "type": "boolean" }
+        ],
+        "indexes": ["roles_ws_name_unique"]
+      },
+      {
+        "name": "AuditLog",
+        "table": "audit_logs",
+        "primaryKey": "audit_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "audit_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "actor_user_id", "type": "uuid", "nullable": true },
+          { "name": "actor_type", "type": "enum(user,share_link,api_key,system)" },
+          { "name": "action", "type": "string" },
+          { "name": "target_type", "type": "string", "nullable": true },
+          { "name": "target_id", "type": "string", "nullable": true },
+          { "name": "ip", "type": "string", "nullable": true },
+          { "name": "user_agent", "type": "string", "nullable": true },
+          { "name": "metadata", "type": "json" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["audit_logs_ws_time_idx", "audit_logs_action_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "auth.oauth.google.start",
+      "method": "GET",
+      "path": "/v1/auth/oauth/google/start",
+      "auth": "public",
+      "rateLimit": "moderate",
+      "response": { "body": { "redirect_url": "string" } },
+      "errors": ["OAUTH_CONFIG_INVALID"]
+    },
+    {
+      "id": "auth.oauth.google.callback",
+      "method": "GET",
+      "path": "/v1/auth/oauth/google/callback",
+      "auth": "public",
+      "rateLimit": "moderate",
+      "response": {
+        "body": {
+          "access_token": "jwt",
+          "refresh_token": "opaque",
+          "expires_in": "number",
+          "workspace_id": "uuid?",
+          "user": { "user_id": "uuid", "display_name": "string", "email": "string" }
+        }
+      },
+      "errors": ["OAUTH_STATE_INVALID", "OAUTH_CODE_INVALID", "OAUTH_EMAIL_UNVERIFIED"]
+    },
+    {
+      "id": "auth.signup.local",
+      "method": "POST",
+      "path": "/v1/auth/signup",
+      "auth": "public",
+      "rateLimit": "strict (per IP + per identifier)",
+      "request": { "body": { "email": "string", "password": "string", "display_name": "string" } },
+      "response": { "body": { "status": "verification_required" } },
+      "errors": ["EMAIL_INVALID", "PASSWORD_WEAK", "EMAIL_ALREADY_EXISTS"]
+    },
+    {
+      "id": "admin.admins.list",
+      "method": "GET",
+      "path": "/v1/admin/admins",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "response": {
+        "body": {
+          "admins": [
+            {
+              "user_id": "uuid",
+              "email": "string",
+              "roles": "string[]",
+              "created_at": "timestamp",
+              "disabled_at": "timestamp?"
+            }
+          ]
+        }
+      },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "admin.admins.grantRole",
+      "method": "POST",
+      "path": "/v1/admin/admins/{user_id}/roles",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "role": "string", "reason": "string" } },
+      "response": { "body": { "status": "ok" } },
+      "errors": ["FORBIDDEN", "ROLE_INVALID"]
+    },
+    {
+      "id": "admin.admins.revokeRole",
+      "method": "DELETE",
+      "path": "/v1/admin/admins/{user_id}/roles/{role}",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "status": "ok" } },
+      "errors": ["FORBIDDEN", "ROLE_INVALID"]
+    },
+    {
+      "id": "admin.supportAccess.start",
+      "method": "POST",
+      "path": "/v1/admin/workspaces/{workspace_id}/support-access",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "reason": "string", "duration_minutes": "number" } },
+      "response": { "body": { "session_id": "uuid", "expires_at": "timestamp" } },
+      "errors": ["FORBIDDEN", "APPROVAL_REQUIRED", "DURATION_INVALID"]
+    },
+    {
+      "id": "admin.supportAccess.end",
+      "method": "DELETE",
+      "path": "/v1/admin/support-access/{session_id}",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "status": "ended" } },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    },
+    {
+      "id": "auth.login",
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "auth": "public",
+      "rateLimit": "strict (per IP + per identifier)",
+      "request": {
+        "body": {
+          "email": "string",
+          "password": "string",
+          "workspace_id": "uuid (optional if email unique)"
+        }
+      },
+      "response": {
+        "body": {
+          "access_token": "jwt",
+          "refresh_token": "opaque",
+          "expires_in": "number",
+          "workspace_id": "uuid",
+          "user": { "user_id": "uuid", "display_name": "string" }
+        }
+      },
+      "errors": ["AUTH_INVALID_CREDENTIALS", "AUTH_MFA_REQUIRED", "WORKSPACE_DISABLED"]
+    },
+    {
+      "id": "auth.refresh",
+      "method": "POST",
+      "path": "/v1/auth/refresh",
+      "auth": "public",
+      "rateLimit": "moderate",
+      "request": { "body": { "refresh_token": "string" } },
+      "response": { "body": { "access_token": "jwt", "expires_in": "number" } },
+      "errors": ["AUTH_REFRESH_INVALID", "AUTH_REFRESH_EXPIRED"]
+    },
+    {
+      "id": "rbac.listRoles",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/roles",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "roles": [{ "role_id": "uuid", "name": "string", "permissions": "string[]" }] } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "members.invite",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/members/invite",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "email": "string", "role_ids": "uuid[]" } },
+      "response": { "body": { "membership_id": "uuid", "status": "invited" } },
+      "errors": ["FORBIDDEN", "INVITE_LIMIT_REACHED", "EMAIL_INVALID"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.admin.admin_provisioning",
+      "name": "Provision Platform Admin + Assign Role Template",
+      "steps": [
+        "Super Admin creates or selects an existing user account.",
+        "Super Admin grants one or more platform role templates (least privilege) with a reason.",
+        "System enforces MFA requirement for platform admins.",
+        "All grants/revocations are written to the platform audit log.",
+        "Admin can now access /v1/admin/* endpoints guarded by platform RBAC."
+      ]
+    },
+    {
+      "id": "wf.admin.support_access",
+      "name": "Start Support Access Session (Audited)",
+      "steps": [
+        "Platform admin requests support access for a specific workspace_id with reason and duration.",
+        "System checks platform role permissions and whether workspace approval is required.",
+        "If required, Workspace Owner/Admin approves; otherwise Super Admin may use break-glass.",
+        "System creates a time-boxed support access session and issues a support-scoped token/claim.",
+        "All access is audited; session ends automatically on expiry or manual termination."
+      ]
+    },
+    {
+      "id": "wf.auth.session",
+      "name": "User Login + Session",
+      "steps": [
+        "User authenticates via Google OAuth (OIDC) or local email/password.",
+        "If configured, enforce MFA (TOTP/SMS/email OTP) after primary auth.",
+        "Issue access JWT (short-lived) + refresh token (rotating).",
+        "Record audit log for successful/failed login events.",
+        "Client stores tokens securely (httpOnly cookies preferred)."
+      ]
+    },
+    {
+      "id": "wf.rbac.enforce",
+      "name": "Request Authorization",
+      "steps": [
+        "API gateway extracts JWT, validates signature/expiry.",
+        "If request is to /v1/admin/*: resolve platform roles and enforce platform permissions.",
+        "If request is workspace-scoped: resolve workspace_id from token and route params; must match.",
+        "Load membership and compute effective permissions (role union + overrides).",
+        "If platform admin is accessing a workspace for support: require a valid, unexpired support access session.",
+        "Enforce policy; emit audit log for sensitive actions."
+      ]
+    },
+    {
+      "id": "wf.member.invite",
+      "name": "Invite Workspace Member",
+      "steps": [
+        "Workspace Admin invites member by email.",
+        "System creates membership in invited state with role_ids.",
+        "Send invite email with one-time token link.",
+        "Invitee accepts -> account created or existing account linked.",
+        "Membership becomes active; audit log recorded."
+      ]
+    }
+  ],
+  "events": [
+    { "name": "auth.login_succeeded", "payload": { "workspace_id": "uuid", "user_id": "uuid", "ip": "string" } },
+    { "name": "auth.login_failed", "payload": { "workspace_id": "uuid?", "email": "string", "ip": "string", "reason": "string" } },
+    { "name": "workspace.member_invited", "payload": { "workspace_id": "uuid", "membership_id": "uuid", "email": "string" } },
+    { "name": "rbac.role_updated", "payload": { "workspace_id": "uuid", "role_id": "uuid" } }
+  ],
+  "backgroundJobs": [
+    {
+      "id": "job.sessions.revoke_on_password_change",
+      "trigger": "user password reset/change",
+      "inputs": { "user_id": "uuid" },
+      "outputs": { "revoked_refresh_tokens": "number" }
+    },
+    {
+      "id": "job.audit.retention",
+      "trigger": "daily",
+      "inputs": { "workspace_id": "uuid" },
+      "outputs": { "deleted": "number" },
+      "notes": "Retention policy may vary by plan/enterprise."
+    }
+  ],
+  "config": {
+    "turnstile": {
+      "enabled": true,
+      "provider": "cloudflare_turnstile",
+      "appliesTo": ["login", "signup", "password_reset"]
+    },
+    "mfa": {
+      "supported": ["totp", "email_otp"],
+      "defaultRequiredForRoles": [
+        "workspace_owner",
+        "workspace_admin",
+        "super_admin",
+        "platform_admin",
+        "support_admin",
+        "billing_admin",
+        "content_moderator",
+        "security_admin",
+        "observability_admin",
+        "auditor_readonly",
+        "product_admin"
+      ]
+    },
+    "passwordPolicy": {
+      "minLength": 10,
+      "requireBreachCheck": true,
+      "rotation": "optional"
+    }
+  },
+  "i18n": {
+    "supportedLanguages": [
+      "en-IN",
+      "hi-IN",
+      "bn-IN",
+      "te-IN",
+      "mr-IN",
+      "ta-IN",
+      "gu-IN",
+      "kn-IN",
+      "ml-IN",
+      "pa-IN",
+      "ur-IN"
+    ],
+    "rtl": ["ur-IN"],
+    "uiStrings": ["auth_errors", "mfa_prompts", "invite_emails"]
+  },
+  "observability": {
+    "metrics": [
+      "auth_login_success_total{workspace_id}",
+      "auth_login_failure_total{reason}",
+      "auth_refresh_total{result}",
+      "rbac_forbidden_total{permission}"
+    ],
+    "logs": [
+      "Structured security logs for auth and RBAC decisions (no passwords/tokens)."
+    ],
+    "traces": [
+      "Trace auth endpoints and RBAC middleware with workspace_id attribute."
+    ],
+    "alerts": [
+      "Spike in auth_login_failure_total",
+      "Unusual geo/IP changes for same user",
+      "High rate of FORBIDDEN responses (potential probing)"
+    ]
+  },
+  "security": {
+    "threats": [
+      "Credential stuffing",
+      "Session fixation",
+      "Cross-workspace data leakage",
+      "Privilege escalation"
+    ],
+    "controls": [
+      "Cloudflare Turnstile on auth endpoints",
+      "Rate limiting per IP/identifier",
+      "Short-lived JWT + rotating refresh tokens",
+      "CSRF protection when using cookies",
+      "Strict workspace_id checks on all resources",
+      "Audit logs for sensitive actions",
+      "Secure password hashing (Argon2id/bcrypt)"
+    ],
+    "privacy": [
+      "Minimize PII in logs",
+      "Encrypt sensitive fields at rest where applicable"
+    ]
+  },
+  "performance": {
+    "targets": {
+      "p95_login": "< 800ms",
+      "p95_rbac_middleware": "< 20ms (cached membership/roles)"
+    },
+    "caching": [
+      "Cache role/permission resolution per (workspace_id,user_id) with short TTL",
+      "Invalidate cache on role/membership updates"
+    ]
+  },
+  "acceptanceTests": [
+    "A user in Workspace A cannot access resources in Workspace B even if resource IDs are guessed.",
+    "Workspace Admin can create a custom role and assign it to a member; permissions take effect immediately.",
+    "Share Link access never grants staff-only permissions (write/upload) unless explicitly configured.",
+    "A platform admin cannot access any workspace content without an active, scoped support access session; all such access is audited.",
+    "A Super Admin can grant and revoke platform admin roles; the action is reflected immediately and audited.",
+    "Login is blocked/slowdown after repeated failures and Turnstile is enforced."
+  ],
+  "dependencies": [
+    "share_links_access",
+    "admin_platform",
+    "observability",
+    "i18n_localization"
+  ],
+  "openQuestions": [
+    "Do we support global user accounts spanning multiple workspaces with a workspace picker, or per-workspace accounts?",
+    "Which MFA methods are mandatory for enterprise (TOTP vs WebAuthn)?",
+    "Do we allow API clients to use OAuth2 client credentials, or only API keys scoped to workspace?"
+  ]
+}

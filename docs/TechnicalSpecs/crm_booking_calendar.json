@@ -1,0 +1,252 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "crm_booking_calendar",
+  "name": "CRM, Bookings, and Calendar (India-first)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/CALENDAR_INTEGRATIONS_AND_BOOKINGS.md",
+    "docs/Features/PRD.md",
+    "docs/Features/NOTIFICATIONS_AND_COMMUNICATION.md",
+    "docs/Features/API_AND_INTEGRATIONS.md"
+  ],
+  "description": "Client management (CRM), leads, booking pipeline, scheduling, calendar sync, and communication hooks (WhatsApp/email/SMS). Focused on Indian studio workflows: events, packages, advance payments, and coordination.",
+  "goals": [
+    "Centralize client and event/job tracking within a workspace.",
+    "Support booking lifecycle: lead -> quote -> booked -> delivered.",
+    "Prevent schedule conflicts; support multi-day weddings and multiple teams.",
+    "Integrate with external calendars (Google Calendar first) and communications."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "All CRM and booking records are workspace-scoped.",
+      "RBAC gates access to client PII and bookings.",
+      "Calendar integrations are stored per workspace and optionally per user."
+    ]
+  },
+  "actors": [
+    { "id": "staff_user", "name": "Staff", "description": "Creates clients, quotes, bookings." },
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Configures calendar and communication integrations." },
+    { "id": "client_viewer", "name": "Client", "description": "Receives quotes/booking confirmations, possibly via share links." },
+    { "id": "system", "name": "System", "description": "Runs reminders and sync jobs." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "Client",
+        "table": "clients",
+        "primaryKey": "client_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "client_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "company_name", "type": "string", "nullable": true },
+          { "name": "email", "type": "string", "nullable": true },
+          { "name": "phone", "type": "string", "nullable": true },
+          { "name": "address", "type": "string", "nullable": true },
+          { "name": "city", "type": "string", "nullable": true },
+          { "name": "state", "type": "string", "nullable": true },
+          { "name": "country", "type": "string", "nullable": true, "example": "IN" },
+          { "name": "preferred_language", "type": "string", "nullable": true, "example": "hi-IN" },
+          { "name": "tags", "type": "string[]", "nullable": true },
+          { "name": "notes", "type": "string", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["clients_ws_name_idx", "clients_ws_phone_idx"]
+      },
+      {
+        "name": "Job",
+        "table": "jobs",
+        "primaryKey": "job_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "job_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "client_id", "type": "uuid" },
+          { "name": "type", "type": "enum(wedding,prewedding,corporate,other)" },
+          { "name": "title", "type": "string" },
+          { "name": "status", "type": "enum(lead,quoted,booked,in_progress,delivered,canceled)" },
+          { "name": "start_at", "type": "timestamp" },
+          { "name": "end_at", "type": "timestamp" },
+          { "name": "timezone", "type": "string", "example": "Asia/Kolkata" },
+          { "name": "location", "type": "string", "nullable": true },
+          { "name": "assigned_team", "type": "json", "nullable": true },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["jobs_ws_time_idx", "jobs_ws_status_idx", "jobs_ws_client_idx"]
+      },
+      {
+        "name": "Quote",
+        "table": "quotes",
+        "primaryKey": "quote_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "quote_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "job_id", "type": "uuid" },
+          { "name": "currency", "type": "string", "example": "INR" },
+          { "name": "items", "type": "json" },
+          { "name": "subtotal", "type": "number" },
+          { "name": "discount", "type": "number" },
+          { "name": "tax", "type": "number" },
+          { "name": "total", "type": "number" },
+          { "name": "state", "type": "enum(draft,sent,accepted,rejected,expired)" },
+          { "name": "sent_at", "type": "timestamp", "nullable": true },
+          { "name": "accepted_at", "type": "timestamp", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["quotes_ws_job_idx", "quotes_ws_state_idx"]
+      },
+      {
+        "name": "CalendarIntegration",
+        "table": "calendar_integrations",
+        "primaryKey": "calendar_integration_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "calendar_integration_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "provider", "type": "enum(google,ms365,ical)" },
+          { "name": "scope", "type": "enum(workspace,user)" },
+          { "name": "user_id", "type": "uuid", "nullable": true },
+          { "name": "credentials_ref", "type": "string" },
+          { "name": "status", "type": "enum(active,revoked,expired)" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["calendar_integrations_ws_provider_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "crm.clients.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/crm/clients",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "name": "string", "email": "string?", "phone": "string?", "tags": "string[]?" } },
+      "response": { "body": { "client_id": "uuid" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "bookings.jobs.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/jobs",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "client_id": "uuid", "type": "string", "title": "string", "start_at": "timestamp", "end_at": "timestamp", "timezone": "string", "location": "string?" } },
+      "response": { "body": { "job_id": "uuid", "status": "lead" } },
+      "errors": ["FORBIDDEN", "SCHEDULE_CONFLICT"]
+    },
+    {
+      "id": "bookings.quotes.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/jobs/{job_id}/quotes",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "items": "array", "discount": "number?", "tax": "number?", "currency": "string" } },
+      "response": { "body": { "quote_id": "uuid", "state": "draft" } },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    },
+    {
+      "id": "bookings.quotes.send",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/quotes/{quote_id}/send",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "channel": "email|whatsapp|sms", "to": "string", "message": "string?", "language": "string?" } },
+      "response": { "body": { "sent_at": "timestamp" } },
+      "errors": ["FORBIDDEN", "INTEGRATION_NOT_CONFIGURED"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.lead_to_booking",
+      "name": "Lead -> Quote -> Booking",
+      "steps": [
+        "Staff creates Client and Job (lead).",
+        "System checks schedule conflicts for assigned team/resources.",
+        "Staff generates a Quote and sends to client.",
+        "Client accepts quote; system transitions job to booked.",
+        "Calendar integration creates/updates an external calendar event.",
+        "Reminders and follow-ups are scheduled."
+      ]
+    }
+  ],
+  "events": [
+    { "name": "crm.client_created", "payload": { "workspace_id": "uuid", "client_id": "uuid" } },
+    { "name": "booking.job_created", "payload": { "workspace_id": "uuid", "job_id": "uuid" } },
+    { "name": "booking.quote_sent", "payload": { "workspace_id": "uuid", "quote_id": "uuid" } },
+    { "name": "booking.job_booked", "payload": { "workspace_id": "uuid", "job_id": "uuid" } }
+  ],
+  "backgroundJobs": [
+    { "id": "job.calendar.sync_out", "trigger": "booking.job_booked|job.updated", "inputs": { "workspace_id": "uuid", "job_id": "uuid" }, "outputs": { "external_event_id": "string" } },
+    { "id": "job.calendar.sync_in", "trigger": "periodic", "inputs": { "calendar_integration_id": "uuid" }, "outputs": { "events_imported": "number" } },
+    { "id": "job.reminders.send", "trigger": "scheduled", "inputs": { "workspace_id": "uuid", "job_id": "uuid", "template": "string" }, "outputs": { "sent": "boolean" } }
+  ],
+  "integrations": [
+    { "name": "Google Calendar", "purpose": "Two-way sync of job events" },
+    { "name": "WhatsApp", "purpose": "India-first client communication", "notes": "Provider could be WhatsApp Business API via supported BSP." }
+  ],
+  "i18n": {
+    "supportedLanguages": ["en-IN", "hi-IN", "bn-IN", "te-IN", "mr-IN", "ta-IN", "gu-IN", "kn-IN", "ml-IN", "pa-IN", "ur-IN"],
+    "rtl": ["ur-IN"],
+    "notes": "Quote messages/reminders should be localized; default to workspace language if unspecified."
+  },
+  "observability": {
+    "metrics": [
+      "crm_clients_created_total",
+      "jobs_created_total{type}",
+      "quotes_sent_total{channel}",
+      "calendar_sync_failures_total{provider}"
+    ],
+    "logs": [
+      "Calendar sync logs with external_event_id",
+      "Reminder delivery logs"
+    ],
+    "traces": [
+      "Trace quote send workflow including provider API call"
+    ],
+    "alerts": [
+      "Calendar sync failures spike",
+      "Reminder send failures spike"
+    ]
+  },
+  "security": {
+    "controls": [
+      "RBAC restrictions for CRM PII access",
+      "Encrypt integration credentials at rest",
+      "Audit logging for quote sends and booking state transitions"
+    ],
+    "privacy": [
+      "PII minimization in logs",
+      "Allow export/delete client data as part of customer removal policies"
+    ]
+  },
+  "performance": {
+    "targets": {
+      "jobs_list_p95": "< 300ms",
+      "calendar_sync_latency": "< 60s best-effort"
+    }
+  },
+  "acceptanceTests": [
+    "System blocks or warns on schedule conflicts based on workspace policy.",
+    "Quote can be sent via configured channel with localized content.",
+    "Booking creates/updates a calendar event in Google Calendar.",
+    "Access to client phone/email is blocked for users without CRM permissions."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "notifications",
+    "share_links_access",
+    "payments_billing_subscriptions"
+  ],
+  "openQuestions": [
+    "Do we model resources (photographers/teams/cameras) explicitly for conflict checking?",
+    "Do we support client acceptance via share link without account (quote portal)?",
+    "WhatsApp integration provider selection and template approval workflow?"
+  ]
+}

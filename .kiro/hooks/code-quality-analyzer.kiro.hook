@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Code Quality Analyzer",
+  "description": "Analyzes modified source code files in context of the surrounding project to identify potential improvements in correctness, architecture, and long‑term maintainability. Reviews for code smells, anti‑patterns, and missing or misused design patterns; evaluates adherence to language/framework best practices, security guidelines, and team style conventions. Provides specific, actionable suggestions to improve readability, testability, modularity, and performance, while strictly preserving existing behavior unless explicitly asked to refactor. When proposing changes, explains the rationale, trade‑offs, and potential impact, and can supply concrete code examples or patches that fit seamlessly into the existing codebase.\n",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analyze the modified code for potential improvements. Focus on:\n\n1. **Code Smells**: Identify issues like long methods, duplicate code, magic numbers, deep nesting, or overly complex conditionals.\n\n2. **Design Patterns**: Suggest applicable patterns (e.g., Factory, Strategy, Observer) where they could improve structure.\n\n3. **Best Practices**: Check for TypeScript/React/Python best practices including proper typing, error handling, and component composition.\n\n4. **Readability**: Evaluate naming conventions, function length, comments, and code organization.\n\n5. **Maintainability**: Look for tight coupling, missing abstractions, or code that would be difficult to test or extend.\n\n6. **Performance**: Identify potential bottlenecks like unnecessary re-renders, missing memoization, inefficient algorithms, or N+1 query patterns.\n\nProvide specific, actionable suggestions with code examples where helpful. Prioritize suggestions by impact and ensure all recommendations maintain existing functionality."
+  }
+}

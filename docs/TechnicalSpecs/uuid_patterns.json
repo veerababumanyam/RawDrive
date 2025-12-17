@@ -1,0 +1,147 @@
+{
+  "$schema": "./_schema.json",
+  "specId": "uuid_patterns",
+  "title": "UUID Patterns and Conventions",
+  "version": "1.0.0",
+  "lastUpdated": "2024-12-17",
+  "status": "active",
+  "description": "Canonical UUID patterns for deterministic test data and entity identification across RawDrive platform",
+  "rationale": [
+    "Deterministic UUIDs enable reliable test assertions and debugging",
+    "Pattern prefixes allow quick identification of entity types during development",
+    "Consistent numbering enables sequential test user/entity creation",
+    "UUID v4 format maintains compatibility with standard UUID parsers"
+  ],
+  "patterns": {
+    "plans": {
+      "prefix": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaa",
+      "suffix": "NNN",
+      "example": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaa001",
+      "description": "Subscription plans (Free=001, Starter=002, Professional=003, Business=004, Enterprise=005)",
+      "entities": [
+        { "code": "free", "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaa001" },
+        { "code": "starter", "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaa002" },
+        { "code": "professional", "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaa003" },
+        { "code": "business", "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaa004" },
+        { "code": "enterprise", "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaa005" }
+      ]
+    },
+    "tierUsers": {
+      "prefix": "11111111-1111-1111-1111-111111111",
+      "suffix": "NNN",
+      "example": "11111111-1111-1111-1111-111111111001",
+      "description": "Test users representing each subscription tier",
+      "entities": [
+        { "email": "free@test.rawdrive.in", "uuid": "11111111-1111-1111-1111-111111111001" },
+        { "email": "starter@test.rawdrive.in", "uuid": "11111111-1111-1111-1111-111111111002" },
+        { "email": "professional@test.rawdrive.in", "uuid": "11111111-1111-1111-1111-111111111003" },
+        { "email": "business@test.rawdrive.in", "uuid": "11111111-1111-1111-1111-111111111004" },
+        { "email": "enterprise@test.rawdrive.in", "uuid": "11111111-1111-1111-1111-111111111005" }
+      ]
+    },
+    "platformAdmins": {
+      "prefix": "22222222-2222-2222-2222-222222222",
+      "suffix": "NNN",
+      "example": "22222222-2222-2222-2222-222222222001",
+      "description": "Platform administrator users",
+      "entities": [
+        { "role": "super_admin", "uuid": "22222222-2222-2222-2222-222222222001" },
+        { "role": "platform_admin", "uuid": "22222222-2222-2222-2222-222222222002" },
+        { "role": "support_admin", "uuid": "22222222-2222-2222-2222-222222222003" },
+        { "role": "billing_admin", "uuid": "22222222-2222-2222-2222-222222222004" },
+        { "role": "content_moderator", "uuid": "22222222-2222-2222-2222-222222222005" },
+        { "role": "security_admin", "uuid": "22222222-2222-2222-2222-222222222006" },
+        { "role": "observability_admin", "uuid": "22222222-2222-2222-2222-222222222007" },
+        { "role": "auditor_readonly", "uuid": "22222222-2222-2222-2222-222222222008" },
+        { "role": "product_admin", "uuid": "22222222-2222-2222-2222-222222222009" },
+        { "role": "finance_admin", "uuid": "22222222-2222-2222-2222-222222222010" }
+      ]
+    },
+    "workspaceRoleUsers": {
+      "prefix": "33333333-3333-3333-3333-333333333",
+      "suffix": "NNN",
+      "example": "33333333-3333-3333-3333-333333333001",
+      "description": "Test users for workspace-level RBAC testing",
+      "entities": [
+        { "role": "owner", "uuid": "33333333-3333-3333-3333-333333333001" },
+        { "role": "admin", "uuid": "33333333-3333-3333-3333-333333333002" },
+        { "role": "editor", "uuid": "33333333-3333-3333-3333-333333333003" },
+        { "role": "viewer", "uuid": "33333333-3333-3333-3333-333333333004" }
+      ]
+    },
+    "platformRoles": {
+      "prefix": "44444444-4444-4444-4444-444444444",
+      "suffix": "NNN",
+      "example": "44444444-4444-4444-4444-444444444001",
+      "description": "Platform role definitions",
+      "reserved": true
+    },
+    "workspaceRoles": {
+      "prefix": "55555555-5555-5555-5555-555555555",
+      "suffix": "NNN",
+      "example": "55555555-5555-5555-5555-555555555001",
+      "description": "Default workspace role definitions",
+      "reserved": true
+    },
+    "testWorkspaces": {
+      "format": "XNNNNNNN-NNNN-NNNN-NNNN-NNNNNNNNNNNN",
+      "description": "Test workspaces use UUIDv5 derived from tier name",
+      "examples": [
+        { "name": "free-tier-workspace", "uuid": "d049a58f-0a4f-5b35-95cb-99b572886b5f" },
+        { "name": "starter-tier-workspace", "uuid": "e049a58f-0a4f-5b35-95cb-99b572886b5f" },
+        { "name": "professional-tier-workspace", "uuid": "f049a58f-0a4f-5b35-95cb-99b572886b5f" },
+        { "name": "business-tier-workspace", "uuid": "a149a58f-0a4f-5b35-95cb-99b572886b5f" },
+        { "name": "enterprise-tier-workspace", "uuid": "b149a58f-0a4f-5b35-95cb-99b572886b5f" },
+        { "name": "test-roles-workspace", "uuid": "c149a58f-0a4f-5b35-95cb-99b572886b5f" }
+      ]
+    },
+    "testGalleries": {
+      "prefix": "66666666-6666-6666-6666-666666666",
+      "suffix": "NNN",
+      "example": "66666666-6666-6666-6666-666666666001",
+      "description": "Test galleries for development/testing",
+      "reserved": true
+    },
+    "testAssets": {
+      "prefix": "77777777-7777-7777-7777-777777777",
+      "suffix": "NNN",
+      "example": "77777777-7777-7777-7777-777777777001",
+      "description": "Test assets/photos for development/testing",
+      "reserved": true
+    },
+    "testInvitations": {
+      "prefix": "88888888-8888-8888-8888-888888888",
+      "suffix": "NNN",
+      "example": "88888888-8888-8888-8888-888888888001",
+      "description": "Test invitation records",
+      "reserved": true
+    },
+    "testSessions": {
+      "prefix": "99999999-9999-9999-9999-999999999",
+      "suffix": "NNN",
+      "example": "99999999-9999-9999-9999-999999999001",
+      "description": "Test session records",
+      "reserved": true
+    }
+  },
+  "productionGuidelines": [
+    "Production entities MUST use standard UUID v4 (random)",
+    "Deterministic patterns are ONLY for test/seed data",
+    "Never expose pattern prefixes in error messages or logs",
+    "Test data detection: check if UUID matches any reserved prefix pattern"
+  ],
+  "utilityFunctions": {
+    "isTestUuid": {
+      "description": "Check if a UUID follows test data patterns",
+      "pseudocode": "uuid.startsWith('11111111-') || uuid.startsWith('22222222-') || ... || uuid.startsWith('aaaaaaaa-')"
+    },
+    "generateDeterministicUuid": {
+      "description": "Generate deterministic UUID from prefix and sequence number",
+      "signature": "generateDeterministicUuid(prefix: string, sequence: number) -> UUID"
+    }
+  },
+  "relatedSpecs": [
+    "test_users.json",
+    "auth_rbac.json"
+  ]
+}

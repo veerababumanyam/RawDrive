@@ -1,0 +1,215 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "notifications",
+  "name": "Notifications & Communication (Email, WhatsApp, In-App)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/NOTIFICATIONS_AND_COMMUNICATION.md",
+    "docs/Features/PRD.md",
+    "docs/Features/API_AND_INTEGRATIONS.md",
+    "docs/Features/AUTHENTICATION_AND_SECURITY.md"
+  ],
+  "description": "Central notification service for transactional and product communications across channels (email, WhatsApp, SMS, in-app, push). Supports i18n/RTL templates, per-workspace policies, opt-outs, and delivery observability.",
+  "goals": [
+    "Single abstraction layer over multiple delivery providers.",
+    "Template-driven, localized messaging with safe variable interpolation.",
+    "User and workspace-level preferences and consent management.",
+    "Idempotent send behavior with dedupe keys and retry policies."
+  ],
+  "nonGoals": [
+    "Bulk marketing campaigns (separate product).",
+    "Replacing CRM tooling; focus on transactional/product messages."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Notification settings, templates, and send records are workspace-scoped.",
+      "Client-facing messages triggered from share links must not require user accounts.",
+      "Outbound metadata must never include cross-workspace identifiers."
+    ]
+  },
+  "actors": [
+    { "id": "system", "name": "System", "description": "Emits events and schedules sends." },
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Configures notification settings and templates." },
+    { "id": "staff_user", "name": "Staff User", "description": "Triggers invites/updates that send notifications." },
+    { "id": "client_viewer", "name": "Client (Share Link)", "description": "Receives link-based messages (invites, updates)." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "NotificationPreference",
+        "table": "notification_preferences",
+        "primaryKey": "preference_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "preference_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "user_id", "type": "uuid", "nullable": true, "notes": "null for workspace defaults" },
+          { "name": "topic", "type": "string", "notes": "e.g., trial, billing, gallery, comments" },
+          { "name": "channel", "type": "enum(email,whatsapp,sms,in_app,push)" },
+          { "name": "enabled", "type": "boolean" },
+          { "name": "quiet_hours", "type": "json", "nullable": true },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["notification_prefs_ws_user_topic_channel_unique"]
+      },
+      {
+        "name": "NotificationTemplate",
+        "table": "notification_templates",
+        "primaryKey": "template_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "template_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "topic", "type": "string" },
+          { "name": "channel", "type": "enum(email,whatsapp,sms,in_app,push)" },
+          { "name": "locale", "type": "string", "example": "hi-IN" },
+          { "name": "subject", "type": "string", "nullable": true },
+          { "name": "body", "type": "string" },
+          { "name": "is_system", "type": "boolean" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["notification_templates_ws_topic_channel_locale_unique"]
+      },
+      {
+        "name": "NotificationSend",
+        "table": "notification_sends",
+        "primaryKey": "send_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "send_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "topic", "type": "string" },
+          { "name": "channel", "type": "enum(email,whatsapp,sms,in_app,push)" },
+          { "name": "recipient", "type": "json", "notes": "email/phone/user_id/share_link_session" },
+          { "name": "dedupe_key", "type": "string", "notes": "Idempotency key" },
+          { "name": "provider", "type": "string", "nullable": true },
+          { "name": "provider_message_id", "type": "string", "nullable": true },
+          { "name": "status", "type": "enum(queued,sent,failed,skipped)" },
+          { "name": "error", "type": "json", "nullable": true },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "sent_at", "type": "timestamp", "nullable": true }
+        ],
+        "indexes": ["notification_sends_ws_time_idx", "notification_sends_dedupe_unique"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "notifications.preferences.get",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/notifications/preferences",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "preferences": "array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "notifications.preferences.update",
+      "method": "PUT",
+      "path": "/v1/workspaces/{workspace_id}/notifications/preferences",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "preferences": "array" } },
+      "response": { "body": { "ok": true } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "notifications.inbox.list",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/notifications/inbox",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "items": "paginated array" } },
+      "errors": ["FORBIDDEN"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.notify.event_to_send",
+      "name": "Event → Template → Delivery",
+      "steps": [
+        "Domain emits event (e.g., trial.reminder, comment.added, album.export_ready).",
+        "Notification service resolves recipients (users, client email captured in share link session).",
+        "Resolve locale using: user.preferred_language -> workspace.default_language -> fallback en-IN.",
+        "Select template by (topic, channel, locale) with fallback to en-IN.",
+        "Render template using safe variable mapping; reject unknown variables.",
+        "Create NotificationSend record with dedupe_key and enqueue delivery job.",
+        "Delivery worker calls provider API and records provider_message_id and final status."
+      ]
+    }
+  ],
+  "events": [
+    { "name": "notification.queued", "payload": { "workspace_id": "uuid", "send_id": "uuid", "topic": "string", "channel": "string" } },
+    { "name": "notification.sent", "payload": { "workspace_id": "uuid", "send_id": "uuid" } },
+    { "name": "notification.failed", "payload": { "workspace_id": "uuid", "send_id": "uuid", "reason": "string" } }
+  ],
+  "backgroundJobs": [
+    { "id": "job.notifications.deliver", "trigger": "queue", "inputs": { "send_id": "uuid" }, "outputs": { "status": "sent|failed|skipped" } },
+    { "id": "job.notifications.cleanup", "trigger": "daily", "inputs": { "retention_days": "number" }, "outputs": { "deleted": "number" } }
+  ],
+  "i18n": {
+    "supportedLanguages": [
+      "en-IN",
+      "hi-IN",
+      "bn-IN",
+      "te-IN",
+      "mr-IN",
+      "ta-IN",
+      "gu-IN",
+      "kn-IN",
+      "ml-IN",
+      "pa-IN",
+      "ur-IN"
+    ],
+    "rtl": ["ur-IN"],
+    "templateGuidelines": [
+      "Templates must be stored per locale and validated for required variables.",
+      "RTL rendering must be tested in email clients and web inbox for ur-IN.",
+      "Avoid embedding private URLs without signed tokens/Share Links."
+    ]
+  },
+  "security": {
+    "controls": [
+      "RBAC: Only admins can change workspace-wide notification settings.",
+      "PII minimization in logs (mask email/phone where possible).",
+      "Dedupe keys to prevent duplicate sends.",
+      "Provider credentials stored encrypted; access limited to notification worker."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "notifications_queued_total{topic,channel}",
+      "notifications_sent_total{topic,channel}",
+      "notifications_failed_total{topic,channel}",
+      "notification_delivery_latency_seconds{channel}"
+    ],
+    "logs": [
+      "Send pipeline decisions (template fallback, preference skip)",
+      "Provider response codes (sanitized)"
+    ],
+    "traces": [
+      "Event-to-send render path",
+      "Provider call spans"
+    ],
+    "alerts": [
+      "Spike in notification failures for any channel",
+      "Queue lag for deliver jobs"
+    ]
+  },
+  "acceptanceTests": [
+    "A trial reminder event creates exactly one NotificationSend with a stable dedupe_key.",
+    "If a hi-IN template is missing, system falls back to en-IN and logs a template fallback.",
+    "ur-IN templates render RTL correctly in the web inbox UI.",
+    "User opt-out for a topic prevents sends on that channel without blocking other topics/channels."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "i18n_localization",
+    "observability"
+  ]
+}

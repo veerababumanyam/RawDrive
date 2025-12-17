@@ -1,0 +1,122 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rawdrive-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rawdrive}
+      POSTGRES_USER: ${POSTGRES_USER:-rawdrive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rawdrive}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./init/enable_pgvector.sql:/docker-entrypoint-initdb.d/enable_pgvector.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-rawdrive}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: rawdrive-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: rawdrive-loki
+    restart: unless-stopped
+    user: "10001:10001"  # Run as loki user for security
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - loki_data:/loki
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G          # Limit memory to prevent OOM
+        reservations:
+          memory: 256M
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: rawdrive-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: rawdrive-backend
+    restart: unless-stopped
+    environment:
+      # Override to use service hostnames inside the compose network
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      LOKI_URL: http://loki:3100
+      LOKI_TENANT_ID: rawdrive
+      APP_ENV: ${APP_ENV:-development}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-/run/secrets/jwt_private_key}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/secrets/jwt_public_key}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-EdDSA}
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-15}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
+      ARGON2_MEMORY_COST: ${ARGON2_MEMORY_COST:-65536}
+      ARGON2_TIME_COST: ${ARGON2_TIME_COST:-3}
+      ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-4}
+      DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-1}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
+      DB_POOL_MAX_LIFETIME_SEC: ${DB_POOL_MAX_LIFETIME_SEC:-1800}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3002/api/v1/auth/oauth/google/callback}
+      ALLOWED_CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-["http://localhost:5173","http://localhost:5173/","http://localhost:3002","http://localhost:3002/"]}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    volumes:
+      - ../../backend:/app
+      - ../../backend/secrets/jwtEd25519.key:/run/secrets/jwt_private_key:ro
+      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+
+volumes:
+  pg_data:
+  loki_data:
+  grafana_data:

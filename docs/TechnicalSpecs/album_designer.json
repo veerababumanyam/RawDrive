@@ -1,0 +1,244 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "album_designer",
+  "name": "Album Designer (Print + Digital)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/DigitalAlbumFeatures.md",
+    "docs/Features/PRD.md",
+    "docs/Features/CLIENT_FACING_FEATURES.md"
+  ],
+  "description": "Interactive album design tool to arrange selected photos into spreads, apply templates, manage crops/positions, collaborate with clients for proofing/approval, and export lab-ready PDFs and digital variants.",
+  "goals": [
+    "Enable fast album layout creation from a gallery/selection set.",
+    "Support print-ready exports (PDF) with lab presets and safe areas.",
+    "Support client proofing of album pages via share links.",
+    "Optionally leverage AI to suggest layouts/captions (via AI platform)."
+  ],
+  "nonGoals": [
+    "Full desktop DTP parity (InDesign replacement).",
+    "Arbitrary vector illustration tooling."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Albums are workspace-scoped and typically linked to a gallery or project.",
+      "Client proofing access is granted via share links referencing album_id.",
+      "Exports are stored under workspace_id and governed by retention policies."
+    ]
+  },
+  "actors": [
+    { "id": "staff_user", "name": "Staff", "description": "Designs albums and sends proofs." },
+    { "id": "client_viewer", "name": "Client", "description": "Reviews and approves album via share link." },
+    { "id": "system", "name": "System", "description": "Renders previews and exports." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "Album",
+        "table": "albums",
+        "primaryKey": "album_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "album_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "gallery_id", "type": "uuid", "nullable": true },
+          { "name": "title", "type": "string" },
+          { "name": "status", "type": "enum(draft,proof_sent,changes_requested,approved,exported,archived)" },
+          { "name": "lab_preset_id", "type": "uuid", "nullable": true },
+          { "name": "page_size", "type": "string", "example": "12x36" },
+          { "name": "bleed_mm", "type": "number" },
+          { "name": "safe_margin_mm", "type": "number" },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["albums_ws_status_idx", "albums_ws_gallery_idx"]
+      },
+      {
+        "name": "AlbumSpread",
+        "table": "album_spreads",
+        "primaryKey": "spread_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "spread_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "album_id", "type": "uuid" },
+          { "name": "page_number", "type": "number" },
+          { "name": "template_id", "type": "uuid", "nullable": true },
+          { "name": "background", "type": "json", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["album_spreads_ws_album_page_unique", "album_spreads_ws_album_idx"]
+      },
+      {
+        "name": "AlbumElement",
+        "table": "album_elements",
+        "primaryKey": "element_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "element_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "spread_id", "type": "uuid" },
+          { "name": "type", "type": "enum(photo,text,shape)" },
+          { "name": "asset_id", "type": "uuid", "nullable": true },
+          { "name": "text", "type": "string", "nullable": true },
+          { "name": "frame", "type": "json", "notes": "x,y,w,h in spread coords" },
+          { "name": "crop", "type": "json", "nullable": true, "notes": "normalized crop rect" },
+          { "name": "z_index", "type": "number" },
+          { "name": "style", "type": "json", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["album_elements_ws_spread_idx"]
+      },
+      {
+        "name": "AlbumRender",
+        "table": "album_renders",
+        "primaryKey": "render_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "render_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "album_id", "type": "uuid" },
+          { "name": "type", "type": "enum(preview_image,proof_pdf,print_pdf)" },
+          { "name": "state", "type": "enum(queued,running,ready,failed,expired)" },
+          { "name": "object_key", "type": "string", "nullable": true },
+          { "name": "expires_at", "type": "timestamp" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["album_renders_ws_album_type_idx", "album_renders_expires_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "albums.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/albums",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "title": "string", "gallery_id": "uuid?", "lab_preset_id": "uuid?", "page_size": "string" } },
+      "response": { "body": { "album_id": "uuid", "status": "draft" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "albums.spreads.upsert",
+      "method": "PUT",
+      "path": "/v1/workspaces/{workspace_id}/albums/{album_id}/spreads/{page_number}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "template_id": "uuid?", "elements": "array" } },
+      "response": { "body": { "ok": true } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "albums.render.request",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/albums/{album_id}/renders",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "type": "preview_image|proof_pdf|print_pdf" } },
+      "response": { "body": { "render_id": "uuid", "state": "queued" } },
+      "errors": ["FORBIDDEN", "PLAN_LIMIT"]
+    },
+    {
+      "id": "portal.album.view",
+      "method": "GET",
+      "path": "/v1/portal/albums/{album_id}",
+      "auth": "share_link_or_user_jwt",
+      "rateLimit": "public-standard",
+      "response": { "body": { "album": "object", "spreads": "array", "renders": "array", "policy": "object" } },
+      "errors": ["NOT_FOUND", "SHARE_LINK_EXPIRED", "FORBIDDEN"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.album.design_to_proof",
+      "name": "Design -> Proof -> Approve",
+      "steps": [
+        "Staff creates album from a gallery/selection set.",
+        "Staff designs spreads via editor; changes saved incrementally.",
+        "Staff requests proof render (preview images + proof PDF).",
+        "Create share link targeting album_id with comment/approve permissions.",
+        "Client reviews, comments, requests changes or approves.",
+        "Staff requests print PDF render when approved." 
+      ]
+    }
+  ],
+  "events": [
+    { "name": "album.created", "payload": { "workspace_id": "uuid", "album_id": "uuid" } },
+    { "name": "album.render_requested", "payload": { "workspace_id": "uuid", "album_id": "uuid", "render_id": "uuid" } },
+    { "name": "album.render_ready", "payload": { "workspace_id": "uuid", "album_id": "uuid", "render_id": "uuid" } },
+    { "name": "album.approved", "payload": { "workspace_id": "uuid", "album_id": "uuid" } }
+  ],
+  "backgroundJobs": [
+    { "id": "job.album.render", "trigger": "album.render_requested", "inputs": { "render_id": "uuid" }, "outputs": { "state": "ready|failed", "object_key": "string" }, "notes": "Render engine: headless browser/canvas pipeline + PDF generator." },
+    { "id": "job.album.render.expire", "trigger": "hourly", "inputs": {}, "outputs": { "expired": "number" } }
+  ],
+  "integrations": [
+    { "name": "Share Links", "purpose": "Client proofing access for albums", "dependency": "share_links_access" },
+    { "name": "Storage", "purpose": "Store renders (PDF/images) in R2/BYOS", "dependency": "storage_ingestion_byos" },
+    { "name": "AI Platform (optional)", "purpose": "Suggest layouts/captions", "dependency": "ai_platform_model_router" }
+  ],
+  "i18n": {
+    "clientPortal": "Album proof UI must respect share link language override and Urdu RTL.",
+    "print": "Locale-aware number/date formatting for quotes/invoices is handled in billing, not album render itself."
+  },
+  "observability": {
+    "metrics": [
+      "album_created_total",
+      "album_render_requested_total{type}",
+      "album_render_ready_total{type}",
+      "album_render_duration_seconds_bucket{type}"
+    ],
+    "logs": [
+      "Render worker logs with render_id + album_id"
+    ],
+    "traces": [
+      "Trace UI save -> API -> DB write",
+      "Trace render request -> worker pipeline"
+    ],
+    "alerts": [
+      "Render failure rate above threshold",
+      "Render queue lag high"
+    ]
+  },
+  "security": {
+    "controls": [
+      "RBAC for staff album editing endpoints",
+      "Share link policy for client proofing",
+      "Signed URLs for render downloads",
+      "Prevent IDOR: enforce workspace_id + album_id association"
+    ]
+  },
+  "performance": {
+    "targets": {
+      "spread_save_p95": "< 300ms",
+      "proof_preview_ready_p95": "< 2 min for 40-page album (content dependent)"
+    },
+    "notes": [
+      "Store spread elements as normalized JSON but keep queryable fields (page count, status) in columns.",
+      "Generate lightweight preview images for portal; reserve full PDF for final export."
+    ]
+  },
+  "acceptanceTests": [
+    "Staff can design a spread, reload, and see the exact layout preserved.",
+    "Client can view album proof via share link and leave comments.",
+    "Print PDF export respects lab preset size/bleed/safe margins.",
+    "Album renders expire and are removed based on configured TTL."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "share_links_access",
+    "storage_ingestion_byos",
+    "media_processing",
+    "notifications",
+    "retention_customer_removal"
+  ],
+  "openQuestions": [
+    "Which rendering engine is preferred: headless Chromium (HTML/CSS) vs server-side canvas/PDF libs?",
+    "Do we support collaborative real-time editing (WebSocket/CRDT) or only sequential edits?",
+    "Do we version spreads for undo/history and client change tracking?"
+  ]
+}

@@ -1,0 +1,193 @@
+{
+  "$schema": "./_schema.json",
+  "specId": "session_management",
+  "title": "Session Management",
+  "version": "1.0.0",
+  "lastUpdated": "2024-12-17",
+  "status": "active",
+  "description": "Session lifecycle, storage, security policies, and multi-device management for RawDrive",
+  "sessionTypes": {
+    "user_session": {
+      "description": "Standard user login session",
+      "storage": "Redis (fast lookup) + PostgreSQL (audit trail)",
+      "ttl": {
+        "access_token": "15 minutes",
+        "refresh_token": "7 days",
+        "session_record": "30 days (for audit)"
+      }
+    },
+    "support_session": {
+      "description": "Platform admin support access session",
+      "storage": "PostgreSQL only (full audit)",
+      "ttl": "4 hours max",
+      "requiresMfa": true,
+      "requiresJustification": true
+    },
+    "share_link_session": {
+      "description": "Anonymous/client access via share link",
+      "storage": "Redis only",
+      "ttl": "24 hours or link expiry (whichever is shorter)"
+    }
+  },
+  "sessionData": {
+    "userSession": {
+      "schema": {
+        "session_id": "uuid",
+        "user_id": "uuid",
+        "workspace_id": "uuid | null",
+        "refresh_token_hash": "sha256 hash",
+        "device_info": {
+          "user_agent": "string",
+          "ip_address": "string",
+          "device_type": "desktop | mobile | tablet",
+          "browser": "string",
+          "os": "string"
+        },
+        "location": {
+          "country": "string",
+          "city": "string | null",
+          "timezone": "string"
+        },
+        "created_at": "timestamp",
+        "last_active_at": "timestamp",
+        "expires_at": "timestamp",
+        "revoked_at": "timestamp | null",
+        "revoked_reason": "logout | password_change | admin_action | security | session_limit"
+      }
+    }
+  },
+  "storage": {
+    "redis": {
+      "keyPatterns": {
+        "session": "session:{session_id}",
+        "userSessions": "user_sessions:{user_id}",
+        "refreshToken": "refresh:{token_hash}",
+        "sessionActivity": "session_activity:{session_id}"
+      },
+      "ttlStrategy": "EXPIREAT based on session expiry"
+    },
+    "postgresql": {
+      "table": "sessions",
+      "indexes": ["user_id", "workspace_id", "created_at", "revoked_at"],
+      "retention": "90 days after revocation"
+    }
+  },
+  "limits": {
+    "maxConcurrentSessions": {
+      "free": 3,
+      "starter": 5,
+      "professional": 10,
+      "business": 25,
+      "enterprise": "unlimited"
+    },
+    "enforcementPolicy": "oldest_session_revoked",
+    "description": "When limit exceeded, oldest session is automatically revoked"
+  },
+  "security": {
+    "tokenBinding": {
+      "enabled": true,
+      "bindTo": ["user_id", "session_id"],
+      "description": "Tokens are bound to session; session revocation invalidates all tokens"
+    },
+    "refreshTokenRotation": {
+      "enabled": true,
+      "gracePeriodSeconds": 30,
+      "description": "Old refresh token valid for 30s after rotation to handle race conditions"
+    },
+    "suspiciousActivityDetection": {
+      "checks": [
+        "ip_change_frequency",
+        "impossible_travel",
+        "concurrent_different_locations",
+        "unusual_user_agent_change"
+      ],
+      "action": "flag_for_review",
+      "threshold": {
+        "ip_changes_per_hour": 5,
+        "travel_speed_km_per_hour": 1000
+      }
+    }
+  },
+  "operations": {
+    "create": {
+      "trigger": "successful login or OAuth callback",
+      "steps": [
+        "Generate session_id (UUID v4)",
+        "Hash refresh token (SHA-256)",
+        "Extract device info from request",
+        "Store in Redis with TTL",
+        "Insert into PostgreSQL sessions table",
+        "Check and enforce session limits"
+      ]
+    },
+    "refresh": {
+      "trigger": "POST /api/v1/auth/refresh",
+      "steps": [
+        "Validate refresh token",
+        "Lookup session by token hash",
+        "Verify session not revoked",
+        "Rotate refresh token",
+        "Issue new access token",
+        "Update last_active_at"
+      ]
+    },
+    "revoke": {
+      "trigger": "logout, password change, admin action, or security event",
+      "steps": [
+        "Mark session as revoked in PostgreSQL",
+        "Delete session from Redis",
+        "Delete refresh token from Redis",
+        "Clear permission cache for user"
+      ]
+    },
+    "revokeAll": {
+      "trigger": "password change, security breach, or user request",
+      "steps": [
+        "List all sessions for user",
+        "Revoke each session",
+        "Invalidate all permission caches"
+      ]
+    }
+  },
+  "api": {
+    "listSessions": {
+      "method": "GET",
+      "path": "/api/v1/users/me/sessions",
+      "response": "List of active sessions with device info"
+    },
+    "terminateSession": {
+      "method": "DELETE",
+      "path": "/api/v1/users/me/sessions/{session_id}",
+      "constraints": "Cannot terminate current session via this endpoint"
+    },
+    "terminateAllOther": {
+      "method": "DELETE",
+      "path": "/api/v1/users/me/sessions",
+      "queryParams": "?except_current=true",
+      "description": "Terminates all sessions except current"
+    },
+    "logout": {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "description": "Terminates current session"
+    }
+  },
+  "auditEvents": [
+    { "event": "session.created", "severity": "info" },
+    { "event": "session.refreshed", "severity": "debug" },
+    { "event": "session.revoked", "severity": "info", "includeReason": true },
+    { "event": "session.expired", "severity": "info" },
+    { "event": "session.suspicious_activity", "severity": "warning" },
+    { "event": "session.limit_enforced", "severity": "info" }
+  ],
+  "implementation": {
+    "service": "backend/src/app/services/session_service.py",
+    "redisService": "backend/src/app/services/redis_services.py",
+    "middleware": "backend/src/app/middleware/auth.py"
+  },
+  "relatedSpecs": [
+    "auth_rbac.json",
+    "rate_limiting.json",
+    "observability.json"
+  ]
+}

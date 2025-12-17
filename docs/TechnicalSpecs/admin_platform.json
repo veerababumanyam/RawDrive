@@ -1,0 +1,197 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "admin_platform",
+  "name": "Admin & Platform Management",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/ADMIN_AND_PLATFORM_MANAGEMENT.md",
+    "docs/Features/AUTHENTICATION_AND_SECURITY.md",
+    "docs/Features/PRD.md"
+  ],
+  "description": "Platform-level admin capabilities: tenant/workspace management, support tooling, feature flags, plan enforcement, global defaults (AI providers, notification providers), incident response actions, and auditability.",
+  "goals": [
+    "Operate a production multi-tenant SaaS safely.",
+    "Provide support tooling without violating tenant isolation.",
+    "Centralize feature flags and progressive rollouts.",
+    "Provide immutable audit trails for privileged actions."
+  ],
+  "nonGoals": [
+    "Replacing a full CRM/support suite (integrate with external tools where needed)."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Platform admins can access limited tenant data via audited support sessions.",
+      "Every privileged action must record workspace_id (if applicable) and platform_admin user_id.",
+      "Support tooling must prefer metadata views over raw content views; require explicit escalation for sensitive data."
+    ]
+  },
+  "actors": [
+    { "id": "super_admin", "name": "Super Admin", "description": "Highest privilege platform admin; can provision/disable other admins and assign role templates." },
+    { "id": "platform_admin", "name": "Platform Admin", "description": "Operates the SaaS across all tenants using least-privilege templates." },
+    { "id": "support_admin", "name": "Support Admin", "description": "Customer support tooling via scoped support sessions." },
+    { "id": "billing_admin", "name": "Billing Admin", "description": "Subscriptions, invoices, refunds/credits." },
+    { "id": "content_moderator", "name": "Content Moderator", "description": "Abuse/content moderation workflows." },
+    { "id": "security_admin", "name": "Security Admin", "description": "Security incident tooling and policy operations." },
+    { "id": "observability_admin", "name": "Observability Admin", "description": "Logs/metrics/traces access and alert ops." },
+    { "id": "auditor_readonly", "name": "Auditor (Read-only)", "description": "Read-only access and audit exports." },
+    { "id": "product_admin", "name": "Product Admin", "description": "Feature flags, experiments, rollout controls." },
+    { "id": "system", "name": "System", "description": "Applies feature flags, plan policies, and admin actions." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "FeatureFlag",
+        "table": "feature_flags",
+        "primaryKey": "flag_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "flag_id", "type": "uuid" },
+          { "name": "key", "type": "string" },
+          { "name": "enabled", "type": "boolean" },
+          { "name": "rules", "type": "json", "notes": "workspace allowlist, percentage rollouts" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "updated_at", "type": "timestamp" }
+        ],
+        "indexes": ["feature_flags_key_unique"]
+      },
+      {
+        "name": "SupportSession",
+        "table": "support_sessions",
+        "primaryKey": "session_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "session_id", "type": "uuid" },
+          { "name": "platform_admin_user_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "reason", "type": "string" },
+          { "name": "scope", "type": "json", "notes": "what can be viewed/acted on" },
+          { "name": "expires_at", "type": "timestamp" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["support_sessions_ws_time_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "admin.admins.list",
+      "method": "GET",
+      "path": "/v1/admin/admins",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "admins": "paginated array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "admin.admins.invite",
+      "method": "POST",
+      "path": "/v1/admin/admins/invite",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "strict",
+      "request": { "body": { "email": "string", "role_template_ids": "string[]" } },
+      "response": { "body": { "admin_user_id": "uuid", "status": "invited" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "admin.roleTemplates.list",
+      "method": "GET",
+      "path": "/v1/admin/role-templates",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "role_templates": "array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "admin.workspaces.list",
+      "method": "GET",
+      "path": "/v1/admin/workspaces",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "workspaces": "paginated array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "admin.featureFlags.upsert",
+      "method": "PUT",
+      "path": "/v1/admin/feature-flags/{key}",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "enabled": "boolean", "rules": "object" } },
+      "response": { "body": { "ok": true } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "admin.supportSessions.create",
+      "method": "POST",
+      "path": "/v1/admin/support-sessions",
+      "auth": "platform_admin_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "workspace_id": "uuid", "reason": "string", "scope": "object" } },
+      "response": { "body": { "session_id": "uuid", "expires_at": "timestamp" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.admin.provision",
+      "name": "Provision Platform Admin (Super Admin)",
+      "steps": [
+        "Super Admin creates an admin invite and selects role template IDs.",
+        "System enforces MFA setup at first login and records an immutable audit entry.",
+        "Super Admin may later grant/revoke templates; all changes are audited with before/after.",
+        "Disabled admins immediately lose access to /v1/admin/* endpoints."
+      ]
+    },
+    {
+      "id": "wf.support.session",
+      "name": "Audited Support Session",
+      "steps": [
+        "Platform admin requests temporary support session for a workspace.",
+        "System validates reason and assigns least-privilege scope with expiry.",
+        "All actions performed under support session are logged to audit.",
+        "Session auto-expires and cannot be extended without creating a new session."
+      ]
+    }
+  ],
+  "security": {
+    "controls": [
+      "Separate platform admin auth realm (MFA mandatory, IP allowlists recommended).",
+      "Platform admin authorization is permission-based using system role templates (no role-name bypass).",
+      "All privileged actions logged immutably with before/after states.",
+      "Support sessions are time-bounded and scoped.",
+      "No direct DB access for routine support operations; use audited APIs."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "admin_actions_total{action}",
+      "support_sessions_total",
+      "feature_flag_changes_total"
+    ],
+    "logs": [
+      "Platform admin action audit log stream"
+    ],
+    "traces": [
+      "Admin endpoints tracing"
+    ],
+    "alerts": [
+      "Unusual spike in admin actions",
+      "Failed admin logins spike"
+    ]
+  },
+  "acceptanceTests": [
+    "Only Super Admin can invite/disable platform admins and assign role templates; all changes are audited.",
+    "Support sessions expire automatically and cannot be used afterward.",
+    "Feature flag changes take effect without redeploy and are auditable.",
+    "Platform admin endpoints require MFA-backed auth and are rate limited."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "observability",
+    "trial_lifecycle",
+    "ai_platform_model_router"
+  ]
+}

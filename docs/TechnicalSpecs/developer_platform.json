@@ -1,0 +1,207 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "developer_platform",
+  "name": "Developer Platform (API, Webhooks, SDK, MCP)",
+  "status": "draft",
+  "lastUpdated": "2025-12-17",
+  "sourceDocs": [
+    "docs/Features/DEVELOPER_TOOLS_AND_PROTOCOLS.md",
+    "docs/Features/API_AND_INTEGRATIONS.md",
+    "docs/Features/PRD.md",
+    "docs/Features/AUTHENTICATION_AND_SECURITY.md"
+  ],
+  "description": "External developer capabilities: API keys/OAuth clients, webhooks, event delivery guarantees, SDK conventions, and integration governance. Includes MCP (Model Context Protocol) guidance for safe tool exposure.",
+  "goals": [
+    "Secure, scoped API access for third-party integrations.",
+    "Reliable webhook delivery with retries, signatures, and idempotency.",
+    "Clear versioning and deprecation strategy for APIs.",
+    "Tenant-safe developer experiences that prevent cross-workspace data access.",
+    "MCP readiness: expose approved tools/resources via a hosted MCP endpoint (SSE) backed by FastAPI + FastMCP reference architecture."
+  ],
+  "nonGoals": [
+    "Public marketplace of apps (later phase).",
+    "Arbitrary code execution in integrations."
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "API credentials are scoped to a workspace_id and a permission set.",
+      "Webhook endpoints are workspace-scoped and only receive workspace events.",
+      "All integration requests must pass workspace middleware and RBAC-equivalent checks."
+    ]
+  },
+  "actors": [
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Creates API keys/webhooks and grants scopes." },
+    { "id": "api_client", "name": "API Client", "description": "Third-party service calling RawDrive APIs." },
+    { "id": "mcp_client", "name": "MCP Client", "description": "LLM app/agent using MCP to discover tools/resources and call them within a single workspace scope." },
+    { "id": "system", "name": "System", "description": "Signs webhooks, retries delivery, enforces scopes." }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "ApiKey",
+        "table": "api_keys",
+        "primaryKey": "api_key_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "api_key_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "name", "type": "string" },
+          { "name": "key_hash", "type": "string", "notes": "Store hash; show only once" },
+          { "name": "scopes", "type": "string[]" },
+          { "name": "created_by_user_id", "type": "uuid" },
+          { "name": "created_at", "type": "timestamp" },
+          { "name": "revoked_at", "type": "timestamp", "nullable": true }
+        ],
+        "indexes": ["api_keys_ws_name_unique", "api_keys_key_hash_unique"]
+      },
+      {
+        "name": "WebhookEndpoint",
+        "table": "webhook_endpoints",
+        "primaryKey": "webhook_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "webhook_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "url", "type": "string" },
+          { "name": "secret_ref", "type": "string" },
+          { "name": "events", "type": "string[]" },
+          { "name": "enabled", "type": "boolean" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["webhook_endpoints_ws_enabled_idx"]
+      },
+      {
+        "name": "WebhookDelivery",
+        "table": "webhook_deliveries",
+        "primaryKey": "delivery_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "delivery_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "webhook_id", "type": "uuid" },
+          { "name": "event_id", "type": "uuid" },
+          { "name": "attempt", "type": "number" },
+          { "name": "status", "type": "enum(queued,sent,failed)" },
+          { "name": "response_code", "type": "number", "nullable": true },
+          { "name": "next_retry_at", "type": "timestamp", "nullable": true },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["webhook_deliveries_ws_time_idx", "webhook_deliveries_ws_status_idx"]
+      },
+      {
+        "name": "OutboundEvent",
+        "table": "outbound_events",
+        "primaryKey": "event_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "event_id", "type": "uuid" },
+          { "name": "workspace_id", "type": "uuid" },
+          { "name": "type", "type": "string" },
+          { "name": "payload", "type": "json" },
+          { "name": "created_at", "type": "timestamp" }
+        ],
+        "indexes": ["outbound_events_ws_time_idx", "outbound_events_ws_type_idx"]
+      }
+    ]
+  },
+  "apis": [
+    {
+      "id": "dev.apiKeys.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/developer/api-keys",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "name": "string", "scopes": "string[]" } },
+      "response": { "body": { "api_key_id": "uuid", "api_key": "string (shown once)" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "dev.webhooks.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/developer/webhooks",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "body": { "url": "string", "events": "string[]" } },
+      "response": { "body": { "webhook_id": "uuid", "secret": "string (shown once)" } },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"]
+    },
+    {
+      "id": "dev.webhooks.deliveries.list",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/developer/webhooks/{webhook_id}/deliveries",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "deliveries": "paginated array" } },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "dev.mcp.connect",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/mcp",
+      "auth": "api_key_or_oauth_or_user_jwt",
+      "rateLimit": "standard",
+      "notes": "Hosted MCP endpoint. Recommended transport is Server-Sent Events (SSE) over HTTPS. Credentials must be scoped to a single workspace_id and a scope set. Tool/resource exposure is allowlisted and deny-by-default.",
+      "response": { "body": "SSE stream (MCP protocol messages)" },
+      "errors": ["UNAUTHORIZED", "FORBIDDEN", "RATE_LIMITED"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.webhooks.delivery",
+      "name": "Webhook Delivery and Retry",
+      "steps": [
+        "Domain emits OutboundEvent with stable event_id.",
+        "For each enabled WebhookEndpoint subscribed to event type, create WebhookDelivery attempt=1.",
+        "Send HTTPS POST with signature header (HMAC over timestamp + body).",
+        "On 2xx mark sent; otherwise schedule exponential backoff retries with jitter.",
+        "Provide replay tooling to workspace admins; never replay without audit logging."
+      ]
+    }
+  ],
+  "security": {
+    "controls": [
+      "API keys stored hashed; show only once.",
+      "Scopes map to permissions; enforce at middleware.",
+      "Webhook signing secret stored in KMS/Vault.",
+      "SSRF protection: validate webhook URLs (no link-local, no private IP ranges) and enforce allowlists for enterprise.",
+      "MCP tool allowlisting: expose only approved tools/resources; deny-by-default; optionally require workspace admin enablement.",
+      "MCP tenancy enforcement: all MCP calls must bind to exactly one workspace_id and must be rejected if the credential workspace scope mismatches.",
+      "MCP scope enforcement: each tool/resource requires explicit scopes; do not infer broad access from role names.",
+      "MCP rate limiting: apply per workspace and per credential; consider stricter limits for expensive tools (AI/processing)."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "api_key_requests_total{route,status_code}",
+      "webhook_deliveries_total{status}",
+      "webhook_delivery_latency_seconds",
+      "webhook_retry_total"
+    ],
+    "logs": [
+      "Webhook delivery attempts (response code, latency)"
+    ],
+    "traces": [
+      "Webhook send spans"
+    ],
+    "alerts": [
+      "High webhook failure rate for a workspace",
+      "Webhook queue backlog"
+    ]
+  },
+  "acceptanceTests": [
+    "API keys cannot be retrieved in plaintext after creation.",
+    "Webhook signatures validate and reject tampered payloads.",
+    "Webhook retries follow backoff and stop after max attempts, surfacing failure in UI.",
+    "MCP endpoint requires authentication and rejects invalid/expired credentials.",
+    "MCP endpoint enforces workspace scoping (cannot access another workspace by changing workspace_id in the URL).",
+    "MCP tools/resources are deny-by-default and only appear when allowlisted/enabled for the credential scopes.",
+    "MCP tool calls are rate-limited and audited (tool name, workspace_id, credential id, status, latency)."
+  ],
+  "dependencies": [
+    "auth_rbac",
+    "observability",
+    "content_moderation_abuse"
+  ]
+}
