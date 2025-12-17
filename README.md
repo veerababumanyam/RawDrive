@@ -1,7 +1,7 @@
 # RawDrive
 
 <div align="center">
-  <img src="frontend/public/android-chrome-512x512.png" alt="RawDrive Logo" width="300" height="90">
+  <img src="frontend/public/android-chrome-192x192.png" alt="RawDrive Logo" width="150" height="150">
 
   ## Enterprise SaaS Professional Photography Management Platform
 
