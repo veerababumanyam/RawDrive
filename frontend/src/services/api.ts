@@ -24,17 +24,51 @@ export interface ApiResponse<T> {
 
 // Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const MAX_RETRIES = 3;
+const RETRY_DELAY_BASE = 1000; // 1 second
+const TIMEOUT_MS = 30000; // 30 seconds
 
 /**
- * Check if an error is an API error
+ * Sleep for a given number of milliseconds
  */
-export function isApiError(error: unknown): error is ApiError {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'error' in error &&
-    typeof (error as ApiError).error === 'object'
-  );
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculate retry delay with exponential backoff and jitter
+ */
+function calculateRetryDelay(attempt: number): number {
+  const baseDelay = RETRY_DELAY_BASE * Math.pow(2, attempt - 1);
+  const jitter = Math.random() * 0.25 * baseDelay; // ±25% jitter
+  return Math.min(baseDelay + jitter, 30000); // Cap at 30 seconds
+}
+
+/**
+ * Check if an error is retryable
+ */
+function isRetryableError(error: any): boolean {
+  // Network errors
+  if (error instanceof TypeError && error.message.includes('fetch')) {
+    return true;
+  }
+  
+  // Timeout errors
+  if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+    return true;
+  }
+  
+  // 5xx server errors
+  if (error.status >= 500 && error.status < 600) {
+    return true;
+  }
+  
+  // 429 Too Many Requests
+  if (error.status === 429) {
+    return true;
+  }
+  
+  return false;
 }
 
 /**
@@ -121,11 +155,12 @@ class ApiClient {
   }
 
   /**
-   * Make an authenticated API request
+   * Make an authenticated API request with retry logic
    */
   async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryCount: number = 0
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
 
@@ -136,11 +171,18 @@ class ApiClient {
       ...(options.headers as Record<string, string>),
     };
 
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
     try {
       let response = await fetch(url, {
         ...options,
         headers,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       // Handle 401 - try token refresh
       if (response.status === 401) {
@@ -148,13 +190,22 @@ class ApiClient {
 
         if (newToken) {
           // Retry request with new token
-          response = await fetch(url, {
-            ...options,
-            headers: {
-              ...headers,
-              Authorization: `Bearer ${newToken}`,
-            },
-          });
+          clearTimeout(timeoutId);
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(() => retryController.abort(), TIMEOUT_MS);
+          
+          try {
+            response = await fetch(url, {
+              ...options,
+              headers: {
+                ...headers,
+                Authorization: `Bearer ${newToken}`,
+              },
+              signal: retryController.signal,
+            });
+          } finally {
+            clearTimeout(retryTimeoutId);
+          }
         } else {
           // Redirect to signin
           window.location.href = `/signin?redirect=${encodeURIComponent(window.location.pathname)}`;
@@ -188,20 +239,41 @@ class ApiClient {
           statusText: response.statusText,
           data,
         });
-        return {
-          error: data.error || data.detail || {
-            code: `HTTP_${response.status}`,
-            message: data.message || response.statusText || 'Request failed',
-          },
+        
+        // Check if error is retryable and we haven't exceeded max retries
+        const error = data.error || data.detail || {
+          code: `HTTP_${response.status}`,
+          message: data.message || response.statusText || 'Request failed',
+          status: response.status,
         };
+        
+        if (isRetryableError(error) && retryCount < MAX_RETRIES) {
+          const delay = calculateRetryDelay(retryCount + 1);
+          console.log(`Retrying request in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          await sleep(delay);
+          return this.request<T>(endpoint, options, retryCount + 1);
+        }
+        
+        return { error };
       }
 
       return { data };
     } catch (error) {
+      clearTimeout(timeoutId);
+      
       console.error('API request failed:', error);
+      
+      // Check if error is retryable (network/timeout errors)
+      if (isRetryableError(error) && retryCount < MAX_RETRIES) {
+        const delay = calculateRetryDelay(retryCount + 1);
+        console.log(`Retrying request after network error in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+        await sleep(delay);
+        return this.request<T>(endpoint, options, retryCount + 1);
+      }
+      
       return {
         error: {
-          code: 'NETWORK_ERROR',
+          code: error instanceof Error && error.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK_ERROR',
           message: error instanceof Error ? error.message : 'Network error',
         },
       };

@@ -9,8 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.api.schemas import (
     AuthResponse,
@@ -33,6 +32,7 @@ from app.services.auth_service import (
     TokenInvalidError,
     UserExistsError,
 )
+from app.api.exceptions import ConflictError, UnauthorizedError, InternalError
 from app.services.audit_service import (
     AuditEventType,
     log_auth_event,
@@ -107,7 +107,7 @@ async def signup(
             user_agent=user_agent,
             details={"email": request.email, "outcome": "failure", "reason": "user_exists"},
         )
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise ConflictError(message=str(e), code=e.code)
 
     return AuthResponse(
         user=UserResponse(
@@ -171,13 +171,10 @@ async def login(
             )
         except Exception:
             pass  # Don't fail on audit log errors
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise UnauthorizedError(message=str(e), code=e.code)
     except Exception as e:
         logger.exception("Unexpected error during login")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"},
-        )
+        raise InternalError("An unexpected error occurred")
 
     return AuthResponse(
         user=UserResponse(
@@ -231,7 +228,7 @@ async def refresh_token(
             user_agent=user_agent,
             details={"outcome": "failure", "reason": e.code},
         )
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise UnauthorizedError(message=str(e), code=e.code)
 
     return TokenResponse(
         access_token=tokens.access_token,
@@ -328,7 +325,7 @@ async def oauth_google_callback(
             user_agent=user_agent,
             details={"provider": "google", "outcome": "failure", "reason": e.code},
         )
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise UnauthorizedError(message=str(e), code=e.code)
 
     return AuthResponse(
         user=UserResponse(

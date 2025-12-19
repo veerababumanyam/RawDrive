@@ -26,6 +26,122 @@ MCP_HOST = os.getenv("MCP_HOST", "0.0.0.0")
 
 
 # ---------------------------------------------------------------------------
+# MCP Error Classes
+# ---------------------------------------------------------------------------
+
+class MCPError(Exception):
+    """Base class for MCP-specific errors.
+    
+    Requirement 7.1, 7.2
+    """
+    
+    def __init__(
+        self,
+        message: str,
+        error_type: str,
+        workspace_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.error_type = error_type
+        self.workspace_id = workspace_id
+        self.details = details or {}
+        self.timestamp = datetime.now(timezone.utc)
+    
+    def to_dict(self) -> dict[str, Any]:
+        """Convert error to dictionary format."""
+        return {
+            "error": {
+                "type": self.error_type,
+                "code": f"MCP_{self.error_type.upper()}",
+                "message": str(self),
+                "workspace_id": self.workspace_id,
+                "timestamp": self.timestamp.isoformat(),
+                "details": self.details,
+            }
+        }
+
+
+class MCPDatabaseError(MCPError):
+    """Database-related MCP errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        operation: str,
+        workspace_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ):
+        super().__init__(
+            message=message,
+            error_type="database_error",
+            workspace_id=workspace_id,
+            details={"operation": operation, **(details or {})},
+        )
+
+
+class MCPModelError(MCPError):
+    """AI model-related MCP errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        model: str,
+        operation: str,
+        workspace_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ):
+        super().__init__(
+            message=message,
+            error_type="model_error",
+            workspace_id=workspace_id,
+            details={"model": model, "operation": operation, **(details or {})},
+        )
+
+
+class MCPTimeoutError(MCPError):
+    """Timeout-related MCP errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        operation: str,
+        timeout_seconds: float,
+        workspace_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ):
+        super().__init__(
+            message=message,
+            error_type="timeout_error",
+            workspace_id=workspace_id,
+            details={
+                "operation": operation,
+                "timeout_seconds": timeout_seconds,
+                **(details or {}),
+            },
+        )
+
+
+class MCPValidationError(MCPError):
+    """Validation-related MCP errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        field: str,
+        value: Any,
+        workspace_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ):
+        super().__init__(
+            message=message,
+            error_type="validation_error",
+            workspace_id=workspace_id,
+            details={"field": field, "value": str(value), **(details or {})},
+        )
+
+
+# ---------------------------------------------------------------------------
 # MCP Server Instance
 # ---------------------------------------------------------------------------
 

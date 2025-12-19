@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -21,7 +21,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useGalleryList } from '../../hooks/useGallery';
 import { GalleryCard, GalleryEmptyState, GalleryStatusBadge } from '../../components/features/gallery';
 import { AppButton } from '../../components/ui/AppButton';
-import type { GalleryStatus } from '../../types/gallery';
+import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmationDialog';
+import { useToast } from '../../components/ui/Toast';
+import { galleryService } from '../../services/galleryService';
+import type { GalleryStatus, GalleryListItem } from '../../types/gallery';
 
 /* =============================================================================
    GalleriesPage Component
@@ -36,6 +39,7 @@ type FilterStatus = 'all' | GalleryStatus;
 const GalleriesPage: React.FC = () => {
   const navigate = useNavigate();
   const { workspace } = useAuth();
+  const { addToast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('created_at');
@@ -43,6 +47,11 @@ const GalleriesPage: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [selectedGalleryIds, setSelectedGalleryIds] = useState<Set<string>>(new Set());
+
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [galleryToDelete, setGalleryToDelete] = useState<GalleryListItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch galleries
   const {
@@ -101,6 +110,48 @@ const GalleriesPage: React.FC = () => {
       return next;
     });
   };
+
+  // Delete handlers
+  const handleDeleteClick = useCallback((gallery: GalleryListItem) => {
+    setGalleryToDelete(gallery);
+    setDeleteDialogOpen(true);
+    setActiveMenu(null);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!galleryToDelete || !workspace?.workspace_id) return;
+
+    setIsDeleting(true);
+    try {
+      await galleryService.deleteGallery(workspace.workspace_id, galleryToDelete.gallery_id);
+
+      addToast({
+        variant: 'success',
+        message: `"${galleryToDelete.title}" moved to Recycle Bin`,
+        duration: 8000,
+        action: {
+          label: 'View Trash',
+          onClick: () => navigate('/workspace/trash'),
+        },
+      });
+
+      setDeleteDialogOpen(false);
+      setGalleryToDelete(null);
+      refetch();
+    } catch (err) {
+      addToast({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'Failed to delete gallery',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [galleryToDelete, workspace?.workspace_id, addToast, navigate, refetch]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteDialogOpen(false);
+    setGalleryToDelete(null);
+  }, []);
 
   // NOTE: This page is rendered inside WorkspaceLayout via routes.tsx
   // Do NOT wrap in WorkspaceLayout here - it's already provided by the router
@@ -303,6 +354,7 @@ const GalleriesPage: React.FC = () => {
               onClick={() => handleGalleryClick(gallery.gallery_id)}
               onEdit={() => handleGalleryEdit(gallery.gallery_id)}
               onShare={() => handleGalleryShare(gallery.gallery_id)}
+              onDelete={() => handleDeleteClick(gallery)}
               selectable={true}
               isSelected={selectedGalleryIds.has(gallery.gallery_id)}
               onSelect={handleGallerySelect}
@@ -435,7 +487,7 @@ const GalleriesPage: React.FC = () => {
                                 className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-error hover:bg-error/10 transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // TODO: Implement delete
+                                  handleDeleteClick(gallery);
                                 }}
                               >
                                 <Trash2 size={14} />
@@ -453,6 +505,19 @@ const GalleriesPage: React.FC = () => {
           </table>
         </motion.div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        deleteType="soft"
+        entityType="gallery"
+        entityName={galleryToDelete?.title || ''}
+        photoCount={galleryToDelete?.photo_count || 0}
+        retentionDays={30}
+        isLoading={isDeleting}
+      />
     </motion.div>
   );
 };

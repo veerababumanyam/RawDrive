@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from src.app.utils.error_logger import ErrorLogger
+from src.app.utils.error_validator import TenantSafeErrorValidator
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +37,16 @@ class AppError(Exception):
         code: str,
         status_code: int = 400,
         details: list[dict[str, Any]] | None = None,
+        user_message: str | None = None,
+        log_level: str = "error",
     ):
         super().__init__(message)
         self.message = message
         self.code = code
         self.status_code = status_code
         self.details = details
+        self.user_message = user_message
+        self.log_level = log_level
 
 
 class NotFoundError(AppError):
@@ -51,6 +58,7 @@ class NotFoundError(AppError):
             message=f"{resource} not found{detail}",
             code=f"{resource.upper()}_NOT_FOUND",
             status_code=404,
+            user_message="The item you're looking for doesn't exist.",
         )
 
 
@@ -58,21 +66,21 @@ class ConflictError(AppError):
     """Resource conflict (duplicate, etc.)."""
 
     def __init__(self, message: str, code: str):
-        super().__init__(message=message, code=code, status_code=409)
+        super().__init__(message=message, code=code, status_code=409, user_message="This action conflicts with existing data.")
 
 
 class ForbiddenError(AppError):
     """Permission denied."""
 
     def __init__(self, message: str = "Permission denied", code: str = "FORBIDDEN"):
-        super().__init__(message=message, code=code, status_code=403)
+        super().__init__(message=message, code=code, status_code=403, user_message="You don't have permission to perform this action.")
 
 
 class UnauthorizedError(AppError):
     """Authentication required or failed."""
 
     def __init__(self, message: str = "Authentication required", code: str = "AUTH_REQUIRED"):
-        super().__init__(message=message, code=code, status_code=401)
+        super().__init__(message=message, code=code, status_code=401, user_message="Please log in to continue.")
 
 
 class RateLimitError(AppError):
@@ -83,6 +91,7 @@ class RateLimitError(AppError):
             message="Rate limit exceeded. Please retry later.",
             code="RATE_LIMIT_EXCEEDED",
             status_code=429,
+            user_message=f"You're doing that too often. Please wait {retry_after} seconds before trying again.",
         )
         self.retry_after = retry_after
 
@@ -97,6 +106,19 @@ class ValidationAppError(AppError):
             code="VALIDATION_ERROR",
             status_code=422,
             details=details,
+            user_message="The provided data is invalid. Please check and try again.",
+        )
+
+
+class InternalError(AppError):
+    """Internal server error."""
+
+    def __init__(self, message: str = "An internal error occurred"):
+        super().__init__(
+            message=message,
+            code="INTERNAL_ERROR",
+            status_code=500,
+            user_message="Something went wrong on our end. Please try again later.",
         )
 
 
@@ -153,10 +175,11 @@ def build_error_response(
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """Handle AppError and its subclasses."""
+    user_message = exc.user_message if exc.user_message else exc.message
     response = build_error_response(
         status_code=exc.status_code,
         code=exc.code,
-        message=exc.message,
+        message=user_message,
         request=request,
         details=exc.details,
     )
@@ -165,14 +188,13 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     if isinstance(exc, RateLimitError):
         headers["Retry-After"] = str(exc.retry_after)
 
-    logger.warning(
-        "Application error",
-        extra={
-            "code": exc.code,
-            "status": exc.status_code,
-            "message": exc.message,
-            "request_id": response["error"]["requestId"],
-        },
+    # Use ErrorLogger for structured logging
+    error_logger = ErrorLogger()
+    error_logger.log_app_error(
+        exc,
+        request_id=response["error"]["requestId"],
+        user_id=getattr(request.state, "user_id", None),
+        workspace_id=getattr(request.state, "workspace_id", None),
     )
 
     return JSONResponse(
@@ -261,6 +283,22 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
         message="An unexpected error occurred",
         request=request,
     )
+
+    # Validate the error response for tenant safety
+    workspace_id = getattr(request.state, "workspace_id", None)
+    user_id = getattr(request.state, "user_id", None)
+    is_safe = TenantSafeErrorValidator.validate_error_response(
+        response, workspace_id=workspace_id, user_id=user_id
+    )
+
+    if not is_safe:
+        # If not safe, return a generic message
+        response = build_error_response(
+            status_code=500,
+            code="INTERNAL_ERROR",
+            message="An error occurred",
+            request=request,
+        )
 
     return JSONResponse(status_code=500, content=response)
 

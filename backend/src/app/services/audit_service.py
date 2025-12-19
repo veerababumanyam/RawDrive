@@ -23,7 +23,6 @@ import asyncio
 import json
 import logging
 import os
-import time
 import uuid
 from collections import deque
 from dataclasses import dataclass
@@ -218,6 +217,16 @@ class AuditEventType(str, Enum):
     ASSET_UPLOADED = "asset.uploaded"
     ASSET_DOWNLOADED = "asset.downloaded"
     ASSET_DELETED = "asset.deleted"
+
+    # Deletion/Recycle Bin events
+    GALLERY_SOFT_DELETED = "gallery.soft_deleted"
+    GALLERY_RESTORED = "gallery.restored"
+    GALLERY_PERMANENT_DELETED = "gallery.permanent_deleted"
+    ASSET_SOFT_DELETED = "asset.soft_deleted"
+    ASSET_RESTORED = "asset.restored"
+    ASSET_PERMANENT_DELETED = "asset.permanent_deleted"
+    RECYCLE_BIN_CLEANUP = "recycle_bin.cleanup"
+    DELETION_FAILED = "deletion.failed"
 
     # Admin events
     ADMIN_ACTION = "admin.action"

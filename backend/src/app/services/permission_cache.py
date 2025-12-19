@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from typing import Any
 
 from app.db.postgres import get_postgres_pool
 from app.db.redis import get_redis_client

@@ -1,0 +1,41 @@
+Metadata-Version: 2.4
+Name: rawdrive-backend
+Version: 0.1.0
+Summary: RawDrive FastAPI backend for authentication, RBAC, and workspace services
+Author-email: RawDrive <engineering@rawdrive.in>
+License: MIT
+Keywords: fastapi,multitenant,rawdrive,rbac,auth
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Framework :: FastAPI
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Topic :: Security :: Authentication
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: uvicorn[standard]>=0.30
+Requires-Dist: asyncpg>=0.29
+Requires-Dist: redis[hiredis]>=5.0
+Requires-Dist: pydantic>=2.7
+Requires-Dist: pydantic-settings>=2.4
+Requires-Dist: python-jose[cryptography]>=3.3
+Requires-Dist: argon2-cffi>=23.1
+Requires-Dist: httpx>=0.27
+Requires-Dist: email-validator>=2.1
+Requires-Dist: alembic>=1.13
+Requires-Dist: SQLAlchemy>=2.0
+Requires-Dist: psycopg2-binary>=2.9
+Provides-Extra: dev
+Requires-Dist: pytest>=8.3; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: hypothesis>=6.100; extra == "dev"
+Requires-Dist: faker>=25.0; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
+Requires-Dist: mypy>=1.11; extra == "dev"
+Requires-Dist: types-redis>=4.6; extra == "dev"
+Requires-Dist: asyncpg-stubs>=0.29; extra == "dev"
+
+# RawDrive Backend
+
+FastAPI-based backend for RawDrive authentication, RBAC, workspace management, and platform services. This directory uses a `src/` layout. Install dependencies with `pip install -e .[dev]` from this folder. See `.kiro/specs/auth-infrastructure` for the implementation plan.

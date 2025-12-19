@@ -9,12 +9,11 @@ import logging
 from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request
+from fastapi import APIRouter, UploadFile, File, Form, status, Request
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
 from app.api.schemas import (
     CreateUploadSessionRequest,
-    CommitUploadRequest,
     UploadSessionResponse,
     UploadCommitResponse,
     CheckDuplicateRequest,
@@ -22,6 +21,7 @@ from app.api.schemas import (
     DuplicateAssetResponse,
     ErrorResponse,
 )
+from app.api.exceptions import ValidationAppError, InternalError, NotFoundError
 from app.services.upload_service import UploadError, get_upload_service
 
 logger = logging.getLogger(__name__)
@@ -61,16 +61,15 @@ async def create_upload_session(
 
         return UploadSessionResponse(**result)
     except UploadError as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"code": e.code, "message": str(e)},
-        )
+        if e.status == 400:
+            raise ValidationAppError(str(e), "file")
+        elif e.status == 404:
+            raise NotFoundError("Gallery", request.gallery_id)
+        else:
+            raise InternalError(str(e))
     except Exception as e:
         logger.exception("Failed to create upload session")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to create upload session"},
-        )
+        raise InternalError("Failed to create upload session")
 
 
 @router.put(
@@ -112,16 +111,15 @@ async def upload_file_data(
             "upload_id": str(upload_id),
         }
     except UploadError as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"code": e.code, "message": str(e)},
-        )
+        if e.status == 400:
+            raise ValidationAppError(str(e), "file")
+        elif e.status == 404:
+            raise NotFoundError("Upload session", upload_id)
+        else:
+            raise InternalError(str(e))
     except Exception as e:
         logger.exception("Failed to upload file")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to upload file"},
-        )
+        raise InternalError("Failed to upload file")
 
 
 @router.post(
@@ -164,16 +162,15 @@ async def commit_upload(
 
         return UploadCommitResponse(**result)
     except UploadError as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"code": e.code, "message": str(e)},
-        )
+        if e.status == 400:
+            raise ValidationAppError(str(e), "file")
+        elif e.status == 404:
+            raise NotFoundError("Upload session", upload_id)
+        else:
+            raise InternalError(str(e))
     except Exception as e:
         logger.exception("Failed to commit upload")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to commit upload"},
-        )
+        raise InternalError("Failed to commit upload")
 
 
 @router.post(
@@ -275,8 +272,5 @@ async def check_duplicate(
 
     except Exception as e:
         logger.exception("Failed to check for duplicates")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to check for duplicates"},
-        ) from e
+        raise InternalError("Failed to check for duplicates") from e
 

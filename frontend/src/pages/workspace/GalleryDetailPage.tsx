@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload, Settings, Share2, Eye } from 'lucide-react';
+import { ArrowLeft, Upload, Settings, Share2, Eye, Trash2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useGallery } from '../../hooks/useGallery';
 import { useGalleryAssets } from '../../hooks/useGalleryAssets';
@@ -28,6 +28,7 @@ import { AppButton } from '../../components/ui/AppButton';
 import { AppCard } from '../../components/ui/AppCard';
 import { AppInput } from '../../components/ui/AppInput';
 import Modal, { ModalBody, ModalFooter } from '../../components/ui/Modal';
+import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmationDialog';
 import { useToast } from '../../components/ui/Toast';
 import { useSearch } from '../../contexts/SearchContext';
 import { galleryService } from '../../services/galleryService';
@@ -56,6 +57,8 @@ const GalleryDetailPage: React.FC = () => {
   const [showCreateSubGallery, setShowCreateSubGallery] = useState(false);
   const [newSubGalleryName, setNewSubGalleryName] = useState('');
   const [renameSubGallery, setRenameSubGallery] = useState<{ id: string; name: string } | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Register search handler
   const { registerHandler, unregisterHandler } = useSearch();
@@ -372,6 +375,34 @@ const GalleryDetailPage: React.FC = () => {
     }
   }, [workspace?.workspace_id, galleryId, gallery?.sub_galleries, activeSubGalleryId, refetchGallery, addToast]);
 
+  // Handle gallery delete
+  const handleDeleteGallery = useCallback(async () => {
+    if (!workspace?.workspace_id || !galleryId) return;
+
+    setIsDeleting(true);
+    try {
+      await galleryService.deleteGallery(workspace.workspace_id, galleryId);
+      addToast({
+        variant: 'success',
+        message: `"${gallery?.title}" moved to Recycle Bin`,
+        duration: 8000,
+        action: {
+          label: 'View Trash',
+          onClick: () => navigate('/workspace/trash'),
+        },
+      });
+      navigate('/workspace/galleries');
+    } catch (error) {
+      addToast({
+        variant: 'error',
+        message: error instanceof Error ? error.message : 'Failed to delete gallery',
+      });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  }, [workspace?.workspace_id, galleryId, gallery?.title, navigate, addToast]);
+
   // Handle toggle visibility
   const handleToggleVisibility = useCallback(async (subGalleryId: string, visible: boolean) => {
     if (!workspace?.workspace_id || !galleryId) return;
@@ -478,6 +509,14 @@ const GalleryDetailPage: React.FC = () => {
         <AppButton variant="outline" onClick={() => setShowSettings(true)} className="hover:-translate-y-0.5 transition-all">
           <Settings size={16} className="mr-2" />
           Settings
+        </AppButton>
+        <AppButton
+          variant="outline"
+          onClick={() => setShowDeleteDialog(true)}
+          className="hover:-translate-y-0.5 transition-all text-error hover:bg-error/10 hover:border-error/50"
+        >
+          <Trash2 size={16} className="mr-2" />
+          Delete
         </AppButton>
       </div>
 
@@ -819,6 +858,19 @@ const GalleryDetailPage: React.FC = () => {
           </AppButton>
         </ModalFooter>
       </Modal>
+
+      {/* Delete Gallery Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={handleDeleteGallery}
+        deleteType="soft"
+        entityType="gallery"
+        entityName={gallery.title}
+        photoCount={gallery.stats.total_photos}
+        retentionDays={30}
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

@@ -14,7 +14,6 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from app.db.postgres import get_postgres_pool
 from app.db.redis import get_redis_client

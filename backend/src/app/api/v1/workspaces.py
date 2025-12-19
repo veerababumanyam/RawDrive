@@ -14,9 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.dependencies.auth import (
     CurrentUserDep,
-    require_permissions,
-    WorkspaceAccessDep,
 )
+from app.api.exceptions import ForbiddenError
 from app.api.schemas import (
     CreateRoleRequest,
     CreateWorkspaceRequest,
@@ -39,11 +38,6 @@ from app.services.rbac_service import RBACService
 from app.services.subscription_service import SubscriptionService
 from app.services.workspace_service import (
     WorkspaceService,
-    WorkspaceAccessDeniedError,
-    WorkspaceDisabledError,
-    WorkspaceNotFoundError,
-    WorkspaceSlugTakenError,
-    WorkspaceError,
 )
 
 logger = logging.getLogger(__name__)
@@ -124,18 +118,12 @@ async def create_workspace(
 
     Property 10: Workspace Creation Trial Assignment enforced.
     """
-    try:
-        ws = await workspace_service.create_workspace(
-            owner_user_id=current_user.user_id,
-            name=request.name,
-            slug=request.slug,
-            default_language=request.default_language,
-        )
-    except WorkspaceSlugTakenError as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"code": e.code, "message": str(e)},
-        )
+    ws = await workspace_service.create_workspace(
+        owner_user_id=current_user.user_id,
+        name=request.name,
+        slug=request.slug,
+        default_language=request.default_language,
+    )
 
     return WorkspaceWithSubscriptionResponse(
         workspace=WorkspaceResponse(
@@ -168,13 +156,7 @@ async def get_workspace(
     workspace_service: WorkspaceServiceDep,
 ) -> WorkspaceWithSubscriptionResponse:
     """Get workspace by ID."""
-    try:
-        ws = await workspace_service.get_workspace(workspace_id, current_user.user_id)
-    except (WorkspaceNotFoundError, WorkspaceAccessDeniedError, WorkspaceDisabledError) as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"code": e.code, "message": str(e)},
-        )
+    ws = await workspace_service.get_workspace(workspace_id, current_user.user_id)
 
     return WorkspaceWithSubscriptionResponse(
         workspace=WorkspaceResponse(
@@ -216,29 +198,18 @@ async def update_workspace(
         required_permission="settings:write",
     )
     if not permission.allowed:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+        raise ForbiddenError(
+            message=permission.reason or "Permission denied",
+            code="PERMISSION_DENIED",
         )
 
-    try:
-        workspace = await workspace_service.update_workspace(
-            workspace_id=workspace_id,
-            user_id=current_user.user_id,
-            name=request.name,
-            slug=request.slug,
-            default_language=request.default_language,
-        )
-    except WorkspaceSlugTakenError as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"code": e.code, "message": str(e)},
-        )
-    except WorkspaceNotFoundError as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"code": e.code, "message": str(e)},
-        )
+    workspace = await workspace_service.update_workspace(
+        workspace_id=workspace_id,
+        user_id=current_user.user_id,
+        name=request.name,
+        slug=request.slug,
+        default_language=request.default_language,
+    )
 
     return WorkspaceResponse(
         workspace_id=workspace.workspace_id,
@@ -272,21 +243,15 @@ async def disable_workspace(
         required_permission="workspace:*",
     )
     if not permission.allowed:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": "Only workspace owner can disable workspace"},
+        raise ForbiddenError(
+            message="Only workspace owner can disable workspace",
+            code="PERMISSION_DENIED",
         )
 
-    try:
-        await workspace_service.disable_workspace(
-            workspace_id=workspace_id,
-            user_id=current_user.user_id,
-        )
-    except WorkspaceNotFoundError as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"code": e.code, "message": str(e)},
-        )
+    await workspace_service.disable_workspace(
+        workspace_id=workspace_id,
+        user_id=current_user.user_id,
+    )
 
     return MessageResponse(message="Workspace disabled successfully")
 
@@ -317,9 +282,9 @@ async def list_members(
         required_permission="member:read",
     )
     if not permission.allowed:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+        raise ForbiddenError(
+            message=permission.reason or "Permission denied",
+            code="PERMISSION_DENIED",
         )
 
     members = await workspace_service.list_members(workspace_id)
@@ -367,22 +332,16 @@ async def remove_member(
         required_permission="member:write",
     )
     if not permission.allowed:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+        raise ForbiddenError(
+            message=permission.reason or "Permission denied",
+            code="PERMISSION_DENIED",
         )
 
-    try:
-        await workspace_service.remove_member(
-            workspace_id=workspace_id,
-            user_id=user_id,
-            removed_by_user_id=current_user.user_id,
-        )
-    except WorkspaceError as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"code": e.code, "message": str(e)},
-        )
+    await workspace_service.remove_member(
+        workspace_id=workspace_id,
+        user_id=user_id,
+        removed_by_user_id=current_user.user_id,
+    )
 
     return MessageResponse(message="Member removed successfully")
 
@@ -661,7 +620,6 @@ from app.services.invitation_service import (
     InvitationService,
     InvitationError,
     InvitationNotFoundError,
-    InvitationExpiredError,
     MemberAlreadyExistsError,
 )
 

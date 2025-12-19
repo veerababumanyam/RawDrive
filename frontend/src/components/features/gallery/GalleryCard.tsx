@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Edit, Share2, Image, Clock, Check } from 'lucide-react';
+import { Edit, Share2, Image, Clock, Check, Trash2 } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
 import { GalleryStatusBadge } from './GalleryStatusBadge';
 import { galleryService } from '../../../services/galleryService';
@@ -17,6 +17,7 @@ export interface GalleryCardProps {
   onClick: () => void;
   onEdit?: () => void;
   onShare?: () => void;
+  onDelete?: () => void;
   /** Whether selection mode is enabled */
   selectable?: boolean;
   /** Whether this gallery is selected */
@@ -30,6 +31,7 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
   onClick,
   onEdit,
   onShare,
+  onDelete,
   selectable = true,
   isSelected = false,
   onSelect,
@@ -74,6 +76,11 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation();
     onShare?.();
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete?.();
   };
 
   const handleSelect = (e: React.MouseEvent) => {
@@ -159,6 +166,15 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
                 aria-label="Share gallery"
               >
                 <Share2 size={14} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={handleDelete}
+                className="p-1.5 rounded-full bg-white/90 hover:bg-error/90 text-text-primary hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/20"
+                aria-label="Delete gallery"
+              >
+                <Trash2 size={14} />
               </button>
             )}
           </div>

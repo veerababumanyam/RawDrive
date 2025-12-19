@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.dependencies.auth import CurrentUserDep, OptionalUserDep, WorkspaceAccessDep
 from app.api.schemas import ErrorResponse
+from app.api.exceptions import NotFoundError, ForbiddenError, ValidationAppError, InternalError
 from app.db.postgres import get_postgres_pool
 from app.services.encryption_service import EncryptionError, get_encryption_service
 from app.services.media_audit_service import (
@@ -73,6 +74,9 @@ async def stream_media(
         pool: asyncpg.Pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             # Get asset and gallery info
+            # Note: We allow soft-deleted assets (deleted=TRUE, delete_status IS NULL)
+            # so that thumbnails can be shown in the recycle bin.
+            # Assets being permanently deleted (delete_status='permanent_deleting') are excluded.
             row: asyncpg.Record | None = await conn.fetchrow(
                 """
                 SELECT
@@ -80,7 +84,9 @@ async def stream_media(
                     ga.gallery_id
                 FROM assets a
                 JOIN gallery_assets ga ON a.asset_id = ga.asset_id
+                JOIN galleries g ON ga.gallery_id = g.gallery_id
                 WHERE a.asset_id = $1 AND a.workspace_id = $2
+                AND a.delete_status IS DISTINCT FROM 'permanent_deleting'
                 LIMIT 1
                 """,
                 asset_id,
@@ -88,10 +94,7 @@ async def stream_media(
             )
 
             if not row:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail={"code": "ASSET_NOT_FOUND", "message": "Asset not found"},
-                )
+                raise NotFoundError("Asset", asset_id)
 
             gallery_id = UUID(str(row["gallery_id"]))
             original_object_key: str = str(row["original_object_key"] or "")
@@ -141,10 +144,7 @@ async def stream_media(
             )
         except StorageError as e:
             if e.code == "FILE_NOT_FOUND":
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail={"code": "FILE_NOT_FOUND", "message": "Media file not found"},
-                ) from e
+                raise NotFoundError("Media file", asset_id) from e
             raise
 
         # Decrypt file
@@ -154,10 +154,7 @@ async def stream_media(
             )
         except EncryptionError as e:
             logger.error(f"Decryption failed for asset {asset_id}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={"code": "DECRYPTION_FAILED", "message": "Failed to decrypt media"},
-            ) from e
+            raise InternalError("Failed to decrypt media") from e
 
         # Convert RAW to JPEG if needed
         content_type: str
@@ -187,22 +184,10 @@ async def stream_media(
                 )
             except RawProcessingError as e:
                 logger.error(f"Failed to convert RAW to JPEG for asset {asset_id}: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail={
-                        "code": "RAW_CONVERSION_FAILED",
-                        "message": "Failed to convert RAW file to JPEG",
-                    },
-                ) from e
+                raise InternalError("Failed to convert RAW file to JPEG") from e
             except Exception as e:
                 logger.exception(f"Unexpected error converting RAW to JPEG: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail={
-                        "code": "RAW_CONVERSION_FAILED",
-                        "message": "Failed to convert RAW file to JPEG",
-                    },
-                ) from e
+                raise InternalError("Failed to convert RAW file to JPEG") from e
         else:
             # Determine content type for non-RAW files
             content_type = "image/webp" if variant != "original" else (mime_type or "application/octet-stream")
@@ -292,22 +277,13 @@ async def stream_media(
         # )
 
     except SignedUrlError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": e.code, "message": str(e)},
-        )
+        raise ValidationAppError(str(e), "url")
     except EncryptionError as e:
         logger.error(f"Encryption error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "ENCRYPTION_ERROR", "message": "Failed to decrypt media"},
-        )
+        raise InternalError("Failed to decrypt media")
     except Exception as e:
         logger.exception("Failed to stream media")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to stream media"},
-        )
+        raise InternalError("Failed to stream media")
 
 
 @router.get(
@@ -331,18 +307,20 @@ async def get_signed_url(
     pool: asyncpg.Pool = await get_postgres_pool()
 
     try:
-        # Verify asset exists and belongs to workspace
+        # Verify asset exists and belongs to workspace (exclude deleted)
         async with pool.acquire() as conn:
             asset: asyncpg.Record | None = await conn.fetchrow(
                 """
-                SELECT 
-                    a.asset_id, 
-                    a.workspace_id, 
+                SELECT
+                    a.asset_id,
+                    a.workspace_id,
                     a.status,
                     ga.gallery_id
                 FROM assets a
                 INNER JOIN gallery_assets ga ON a.asset_id = ga.asset_id
+                INNER JOIN galleries g ON ga.gallery_id = g.gallery_id
                 WHERE a.asset_id = $1 AND a.workspace_id = $2
+                AND a.deleted = FALSE AND g.deleted = FALSE
                 LIMIT 1
                 """,
                 asset_id,
@@ -350,19 +328,13 @@ async def get_signed_url(
             )
 
             if not asset:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail={"code": "ASSET_NOT_FOUND", "message": "Asset not found"},
-                )
+                raise NotFoundError("Asset", asset_id)
 
             # Verify asset is available
             if asset["status"] != "available":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={
-                        "code": "ASSET_NOT_AVAILABLE",
-                        "message": f"Asset is {asset['status']}",
-                    },
+                raise ForbiddenError(
+                    message=f"Asset is {asset['status']}",
+                    code="ASSET_NOT_AVAILABLE"
                 )
 
             # Check gallery download policy if requesting original download
@@ -370,19 +342,16 @@ async def get_signed_url(
                 gallery: asyncpg.Record | None = await conn.fetchrow(
                     """
                     SELECT download_policy FROM galleries
-                    WHERE gallery_id = $1
+                    WHERE gallery_id = $1 AND deleted = FALSE
                     """,
                     asset["gallery_id"],
                 )
                 if gallery:
                     download_policy: str = str(gallery["download_policy"])
                     if download_policy == "view_only":
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail={
-                                "code": "DOWNLOAD_NOT_ALLOWED",
-                                "message": "Gallery policy does not allow downloads",
-                            },
+                        raise ForbiddenError(
+                            message="Gallery policy does not allow downloads",
+                            code="DOWNLOAD_NOT_ALLOWED"
                         )
 
         # Generate signed URL
@@ -401,14 +370,8 @@ async def get_signed_url(
     except HTTPException:
         raise
     except SignedUrlError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": e.code, "message": str(e)},
-        )
+        raise ValidationAppError(str(e), "url")
     except Exception as e:
         logger.exception("Failed to generate signed URL")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to generate signed URL"},
-        )
+        raise InternalError("Failed to generate signed URL")
 

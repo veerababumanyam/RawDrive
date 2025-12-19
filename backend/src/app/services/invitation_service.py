@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import asyncpg
 
 from app.config.settings import AppSettings, get_settings
 from app.db.postgres import get_postgres_pool

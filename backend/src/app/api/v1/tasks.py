@@ -5,18 +5,17 @@ Provides monitoring and management for background tasks.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Annotated, Any
-from uuid import UUID
+from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 
 from app.api.dependencies.auth import require_platform_permission
+from app.api.exceptions import NotFoundError, ValidationAppError
 from app.services.task_queue import (
     Task,
     TaskPriority,
-    TaskStatus,
     get_task_queue,
 )
 
@@ -134,10 +133,7 @@ async def get_task(task_id: str) -> TaskResponse:
     task = await queue.get_task(task_id)
 
     if task is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found",
-        )
+        raise NotFoundError("Task", task_id)
 
     return TaskResponse.from_task(task)
 
@@ -157,9 +153,9 @@ async def enqueue_task_endpoint(request: EnqueueTaskRequest) -> EnqueueTaskRespo
     try:
         priority = TaskPriority[request.priority.upper()]
     except KeyError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid priority: {request.priority}. Must be one of: LOW, NORMAL, HIGH, CRITICAL",
+        raise ValidationAppError(
+            f"Invalid priority: {request.priority}. Must be one of: LOW, NORMAL, HIGH, CRITICAL",
+            field="priority"
         )
 
     queue = get_task_queue()
@@ -192,9 +188,9 @@ async def retry_failed_task(task_id: str) -> RetryTaskResponse:
     success = await queue.retry_failed_task(task_id)
 
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Task not found or not in failed state",
+        raise ValidationAppError(
+            "Task not found or not in failed state",
+            field="task_id"
         )
 
     return RetryTaskResponse(

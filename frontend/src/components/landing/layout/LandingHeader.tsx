@@ -30,6 +30,8 @@ interface LandingHeaderProps {
   ctaText?: string;
   /** CTA link */
   ctaLink?: string;
+  /** When true, header will render in the scrolled (white) style initially */
+  initialScrolled?: boolean;
 }
 
 const defaultNavItems: NavItem[] = [
@@ -47,8 +49,9 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
   showCTA = true,
   ctaText = 'Start Free Trial',
   ctaLink = '/signup',
+  initialScrolled = false,
 }) => {
-  const [isScrolled, setIsScrolled] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(initialScrolled);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 

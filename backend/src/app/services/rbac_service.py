@@ -16,7 +16,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional, Sequence
+from typing import Sequence
 
 from app.db.postgres import get_postgres_pool
 from app.services.permission_cache import get_permission_cache

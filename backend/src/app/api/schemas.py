@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -134,6 +134,7 @@ class UserProfileResponse(BaseModel):
     email_verified: bool
     preferred_language: str
     created_at: datetime
+    workspace_id: Optional[UUID] = None
 
 
 class TokenResponse(BaseModel):

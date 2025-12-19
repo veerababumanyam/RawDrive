@@ -12,9 +12,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
-from fastapi.exceptions import HTTPException
 
-from app.api.dependencies.auth import get_current_user_optional
 from app.db.redis import get_redis_client
 from app.utils.security import decode_token
 

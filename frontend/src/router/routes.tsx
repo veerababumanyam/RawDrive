@@ -1,6 +1,8 @@
 import React, { Suspense, lazy } from 'react';
 import { RouteObject } from 'react-router-dom';
 import { ProtectedRoute } from '../components/auth';
+import ErrorBoundary from '../components/error/ErrorBoundary';
+import { RouteErrorFallback } from '../components/error/ErrorFallbacks';
 
 /* =============================================================================
    Route Configuration
@@ -42,6 +44,7 @@ const DashboardPage = lazy(() => import('../pages/workspace/DashboardPage'));
 const GalleriesPage = lazy(() => import('../pages/workspace/GalleriesPage'));
 const GalleryCreatePage = lazy(() => import('../pages/workspace/GalleryCreatePage'));
 const GalleryDetailPage = lazy(() => import('../pages/workspace/GalleryDetailPage'));
+const RecycleBinPage = lazy(() => import('../pages/workspace/RecycleBinPage'));
 
 // Wrapper for lazy loaded components
 const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
@@ -50,6 +53,17 @@ const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
   <Suspense fallback={<PageLoader />}>
     <Component />
   </Suspense>
+);
+
+// Wrapper for critical lazy loaded components with error boundary
+const CriticalLazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
+  component: Component,
+}) => (
+  <ErrorBoundary fallback={<RouteErrorFallback />}>
+    <Suspense fallback={<PageLoader />}>
+      <Component />
+    </Suspense>
+  </ErrorBoundary>
 );
 
 // Wrapper for protected lazy loaded components
@@ -139,15 +153,15 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'galleries',
-        element: <LazyPage component={GalleriesPage} />,
+        element: <CriticalLazyPage component={GalleriesPage} />,
       },
       {
         path: 'galleries/new',
-        element: <LazyPage component={GalleryCreatePage} />,
+        element: <CriticalLazyPage component={GalleryCreatePage} />,
       },
       {
         path: 'galleries/:id',
-        element: <LazyPage component={GalleryDetailPage} />,
+        element: <CriticalLazyPage component={GalleryDetailPage} />,
       },
       {
         path: 'libraries',
@@ -171,7 +185,7 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'trash',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
+        element: <CriticalLazyPage component={RecycleBinPage} />,
       },
       {
         path: 'settings',

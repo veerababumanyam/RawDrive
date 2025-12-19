@@ -9,12 +9,14 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Body, Path
-from pydantic import BaseModel
+from fastapi import APIRouter, Query, status, Path
+from pydantic import BaseModel, Field
 
-from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep, CurrentUser
+from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
 from app.api.schemas import ErrorResponse
+from app.api.exceptions import NotFoundError, ValidationAppError
 from app.db.postgres import get_postgres_pool
+from app.services.deletion_service import get_deletion_service
 
 logger = logging.getLogger(__name__)
 
@@ -23,30 +25,30 @@ router = APIRouter()
 
 class UpdateSortOrderRequest(BaseModel):
     """Request to update sort order for gallery assets."""
-    asset_ids: list[UUID] = Body(..., description="List of asset IDs in new order")
+    asset_ids: list[UUID] = Field(..., description="List of asset IDs in new order")
 
 
 class MoveAssetsRequest(BaseModel):
     """Request to move assets to a sub-gallery."""
-    asset_ids: list[UUID] = Body(..., description="List of asset IDs to move")
-    sub_gallery_id: UUID | None = Body(None, description="Sub-gallery ID (null for root gallery)")
+    asset_ids: list[UUID] = Field(..., description="List of asset IDs to move")
+    sub_gallery_id: UUID | None = Field(None, description="Sub-gallery ID (null for root gallery)")
 
 
 class DeleteAssetsRequest(BaseModel):
     """Request to delete assets."""
-    asset_ids: list[UUID] = Body(..., description="List of asset IDs to delete")
+    asset_ids: list[UUID] = Field(..., description="List of asset IDs to delete")
 
 
 class ToggleFavoriteRequest(BaseModel):
     """Request to toggle favorite status for gallery assets."""
-    asset_ids: list[UUID] = Body(..., description="List of asset IDs to toggle")
-    favorited: bool = Body(..., description="True to favorite, False to unfavorite")
+    asset_ids: list[UUID] = Field(..., description="List of asset IDs to toggle")
+    favorited: bool = Field(..., description="True to favorite, False to unfavorite")
 
 
 class ToggleSelectionRequest(BaseModel):
     """Request to toggle selection status for gallery assets."""
-    asset_ids: list[UUID] = Body(..., description="List of asset IDs to toggle")
-    selected: bool = Body(..., description="True to select, False to deselect")
+    asset_ids: list[UUID] = Field(..., description="List of asset IDs to toggle")
+    selected: bool = Field(..., description="True to select, False to deselect")
 
 
 @router.get(
@@ -77,29 +79,27 @@ async def list_gallery_assets(
     pool = await get_postgres_pool()
     
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access
+        # Verify gallery exists and user has access (exclude deleted)
         gallery = await conn.fetchrow(
             """
             SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
             """,
             workspace_id,
             gallery_id,
         )
-        
+
         if not gallery:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"code": "GALLERY_NOT_FOUND", "message": "Gallery not found"},
-            )
-        
-        # Build query with filters
+            raise NotFoundError("Gallery", str(gallery_id))
+
+        # Build query with filters (exclude deleted assets)
         offset = (page - 1) * limit
         where_conditions = [
             "ga.workspace_id = $1",
             "ga.gallery_id = $2",
             "ga.visible = TRUE",
             "a.status = 'available'",
+            "a.deleted = FALSE",
         ]
         params = [workspace_id, gallery_id]
         param_idx = 3
@@ -113,28 +113,10 @@ async def list_gallery_assets(
             where_conditions.append("ga.sub_gallery_id IS NULL")
         
         if picks_only or selections_only:
-            # is_selected is computed from client_interactions, use EXISTS subquery
-            where_conditions.append("""
-                EXISTS (
-                    SELECT 1 FROM client_interactions ci
-                    WHERE ci.workspace_id = ga.workspace_id
-                    AND ci.gallery_id = ga.gallery_id
-                    AND ci.asset_id = ga.asset_id
-                    AND ci.type = 'select'
-                )
-            """)
+            where_conditions.append("ga.is_selected = TRUE")
         
         if favorites_only:
-            # is_favorited is computed from client_interactions, use EXISTS subquery
-            where_conditions.append("""
-                EXISTS (
-                    SELECT 1 FROM client_interactions ci
-                    WHERE ci.workspace_id = ga.workspace_id
-                    AND ci.gallery_id = ga.gallery_id
-                    AND ci.asset_id = ga.asset_id
-                    AND ci.type = 'favorite'
-                )
-            """)
+            where_conditions.append("ga.is_favorited = TRUE")
         
         if search_query:
             # Search by filename extracted from original_object_key (case-insensitive)
@@ -170,20 +152,8 @@ async def list_gallery_assets(
                 ga.visible,
                 ga.is_private,
                 ga.sub_gallery_id,
-                EXISTS (
-                    SELECT 1 FROM client_interactions ci
-                    WHERE ci.workspace_id = ga.workspace_id
-                    AND ci.gallery_id = ga.gallery_id
-                    AND ci.asset_id = ga.asset_id
-                    AND ci.type = 'favorite'
-                ) AS is_favorited,
-                EXISTS (
-                    SELECT 1 FROM client_interactions ci
-                    WHERE ci.workspace_id = ga.workspace_id
-                    AND ci.gallery_id = ga.gallery_id
-                    AND ci.asset_id = ga.asset_id
-                    AND ci.type = 'select'
-                ) AS is_selected,
+                ga.is_favorited,
+                ga.is_selected,
                 (
                     SELECT COUNT(*) FROM client_interactions ci
                     WHERE ci.workspace_id = ga.workspace_id
@@ -266,41 +236,37 @@ async def update_sort_order(
     """Update sort order for gallery assets."""
     _, workspace_id = workspace_access
     pool = await get_postgres_pool()
-    
+
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access
+        # Verify gallery exists and user has access (exclude deleted)
         gallery = await conn.fetchrow(
             """
             SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
             """,
             workspace_id,
             gallery_id,
         )
-        
+
         if not gallery:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"code": "GALLERY_NOT_FOUND", "message": "Gallery not found"},
-            )
-        
-        # Verify all assets belong to this gallery
+            raise NotFoundError("Gallery", str(gallery_id))
+
+        # Verify all assets belong to this gallery (exclude deleted)
         asset_count = await conn.fetchval(
             """
-            SELECT COUNT(*) FROM gallery_assets
-            WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = ANY($3::uuid[])
+            SELECT COUNT(*) FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
+            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
             """,
             workspace_id,
             gallery_id,
             request.asset_ids,
         )
-        
+
         if asset_count != len(request.asset_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"code": "INVALID_ASSETS", "message": "Some assets do not belong to this gallery"},
-            )
-        
+            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
+
         # Update sort_order for each asset
         for index, asset_id in enumerate(request.asset_ids):
             await conn.execute(
@@ -337,59 +303,52 @@ async def move_assets(
     """Move assets to a sub-gallery (or root gallery)."""
     _, workspace_id = workspace_access
     pool = await get_postgres_pool()
-    
+
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access
+        # Verify gallery exists and user has access (exclude deleted)
         gallery = await conn.fetchrow(
             """
             SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
             """,
             workspace_id,
             gallery_id,
         )
-        
+
         if not gallery:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"code": "GALLERY_NOT_FOUND", "message": "Gallery not found"},
-            )
-        
-        # Verify sub-gallery exists if provided
+            raise NotFoundError("Gallery", str(gallery_id))
+
+        # Verify sub-gallery exists if provided (exclude deleted)
         if request.sub_gallery_id:
             sub_gallery = await conn.fetchrow(
                 """
                 SELECT sub_gallery_id FROM sub_galleries
-                WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
+                WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3 AND deleted = FALSE
                 """,
                 workspace_id,
                 gallery_id,
                 request.sub_gallery_id,
             )
-            
+
             if not sub_gallery:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail={"code": "SUB_GALLERY_NOT_FOUND", "message": "Sub-gallery not found"},
-                )
-        
-        # Verify all assets belong to this gallery
+                raise NotFoundError("Sub-gallery", str(request.sub_gallery_id))
+
+        # Verify all assets belong to this gallery (exclude deleted)
         asset_count = await conn.fetchval(
             """
-            SELECT COUNT(*) FROM gallery_assets
-            WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = ANY($3::uuid[])
+            SELECT COUNT(*) FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
+            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
             """,
             workspace_id,
             gallery_id,
             request.asset_ids,
         )
-        
+
         if asset_count != len(request.asset_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"code": "INVALID_ASSETS", "message": "Some assets do not belong to this gallery"},
-            )
-        
+            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
+
         # Update sub_gallery_id for each asset
         for asset_id in request.asset_ids:
             await conn.execute(
@@ -423,45 +382,47 @@ async def delete_assets(
     current_user: CurrentUserDep,
     request: DeleteAssetsRequest,
 ) -> dict:
-    """Soft delete assets from gallery (set visible = FALSE)."""
+    """Soft delete assets from gallery (moves to recycle bin).
+    
+    This properly soft-deletes assets by setting deleted=TRUE and deleted_at
+    on the assets table, making them appear in the recycle bin.
+    Also hides the gallery_asset link by setting visible=FALSE.
+    """
     _, workspace_id = workspace_access
     pool = await get_postgres_pool()
-    
+    deletion_service = get_deletion_service()
+
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access
+        # Verify gallery exists and user has access (exclude deleted)
         gallery = await conn.fetchrow(
             """
             SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
             """,
             workspace_id,
             gallery_id,
         )
-        
+
         if not gallery:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"code": "GALLERY_NOT_FOUND", "message": "Gallery not found"},
-            )
-        
-        # Verify all assets belong to this gallery
+            raise NotFoundError("Gallery", str(gallery_id))
+
+        # Verify all assets belong to this gallery (exclude deleted)
         asset_count = await conn.fetchval(
             """
-            SELECT COUNT(*) FROM gallery_assets
-            WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = ANY($3::uuid[])
+            SELECT COUNT(*) FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
+            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
             """,
             workspace_id,
             gallery_id,
             request.asset_ids,
         )
-        
+
         if asset_count != len(request.asset_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"code": "INVALID_ASSETS", "message": "Some assets do not belong to this gallery"},
-            )
-        
-        # Soft delete assets (set visible = FALSE)
+            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
+
+        # Hide from gallery view (set visible = FALSE)
         await conn.execute(
             """
             UPDATE gallery_assets
@@ -472,8 +433,17 @@ async def delete_assets(
             gallery_id,
             request.asset_ids,
         )
-        
-        return {"message": f"Deleted {len(request.asset_ids)} asset(s) successfully"}
+
+    # Soft delete assets using the deletion service (sets deleted=TRUE, deleted_at)
+    # This makes them appear in the recycle bin
+    results = await deletion_service.soft_delete_photos_batch(
+        workspace_id=workspace_id,
+        asset_ids=request.asset_ids,
+        user_id=current_user.user_id,
+    )
+    
+    deleted_count = len(results)
+    return {"message": f"Deleted {deleted_count} asset(s) successfully. Items moved to recycle bin."}
 
 
 @router.patch(
@@ -495,41 +465,37 @@ async def restore_assets(
     """Restore soft-deleted assets (set visible = TRUE)."""
     _, workspace_id = workspace_access
     pool = await get_postgres_pool()
-    
+
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access
+        # Verify gallery exists and user has access (exclude deleted)
         gallery = await conn.fetchrow(
             """
             SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
             """,
             workspace_id,
             gallery_id,
         )
-        
+
         if not gallery:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"code": "GALLERY_NOT_FOUND", "message": "Gallery not found"},
-            )
-        
-        # Verify all assets belong to this gallery
+            raise NotFoundError("Gallery", str(gallery_id))
+
+        # Verify all assets belong to this gallery (exclude deleted assets)
         asset_count = await conn.fetchval(
             """
-            SELECT COUNT(*) FROM gallery_assets
-            WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = ANY($3::uuid[])
+            SELECT COUNT(*) FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
+            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
             """,
             workspace_id,
             gallery_id,
             request.asset_ids,
         )
-        
+
         if asset_count != len(request.asset_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"code": "INVALID_ASSETS", "message": "Some assets do not belong to this gallery"},
-            )
-        
+            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
+
         # Restore assets (set visible = TRUE)
         await conn.execute(
             """
@@ -564,41 +530,37 @@ async def toggle_favorite(
     """Toggle favorite status for gallery assets."""
     _, workspace_id = workspace_access
     pool = await get_postgres_pool()
-    
+
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access
+        # Verify gallery exists and user has access (exclude deleted)
         gallery = await conn.fetchrow(
             """
             SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
             """,
             workspace_id,
             gallery_id,
         )
-        
+
         if not gallery:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"code": "GALLERY_NOT_FOUND", "message": "Gallery not found"},
-            )
-        
-        # Verify all assets belong to this gallery
+            raise NotFoundError("Gallery", str(gallery_id))
+
+        # Verify all assets belong to this gallery (exclude deleted)
         asset_count = await conn.fetchval(
             """
-            SELECT COUNT(*) FROM gallery_assets
-            WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = ANY($3::uuid[])
+            SELECT COUNT(*) FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
+            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
             """,
             workspace_id,
             gallery_id,
             request.asset_ids,
         )
-        
+
         if asset_count != len(request.asset_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"code": "INVALID_ASSETS", "message": "Some assets do not belong to this gallery"},
-            )
-        
+            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
+
         # Update favorite status
         await conn.execute(
             """
@@ -640,40 +602,36 @@ async def toggle_selection(
     """Toggle selection (pick) status for gallery assets."""
     _, workspace_id = workspace_access
     pool = await get_postgres_pool()
-    
+
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access
+        # Verify gallery exists and user has access (exclude deleted)
         gallery = await conn.fetchrow(
             """
             SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
             """,
             workspace_id,
             gallery_id,
         )
-        
+
         if not gallery:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"code": "GALLERY_NOT_FOUND", "message": "Gallery not found"},
-            )
-        
-        # Verify all assets belong to this gallery
+            raise NotFoundError("Gallery", str(gallery_id))
+
+        # Verify all assets belong to this gallery (exclude deleted)
         asset_count = await conn.fetchval(
             """
-            SELECT COUNT(*) FROM gallery_assets
-            WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = ANY($3::uuid[])
+            SELECT COUNT(*) FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
+            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
             """,
             workspace_id,
             gallery_id,
             request.asset_ids,
         )
-        
+
         if asset_count != len(request.asset_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"code": "INVALID_ASSETS", "message": "Some assets do not belong to this gallery"},
-            )
+            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
         
         # Update selection status
         await conn.execute(

@@ -12,7 +12,6 @@ import logging
 import uuid
 from dataclasses import dataclass
 from typing import Annotated, Optional
-from uuid import UUID as UUIDType
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer

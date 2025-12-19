@@ -1,0 +1,50 @@
+{
+  "AUTH_REQUIRED": {
+    "title": "Authentication Required",
+    "message": "Please log in to continue."
+  },
+  "FORBIDDEN": {
+    "title": "Access Denied",
+    "message": "You don't have permission to perform this action."
+  },
+  "USER_EXISTS": {
+    "title": "Account Already Exists",
+    "message": "An account with this email already exists."
+  },
+  "INVALID_CREDENTIALS": {
+    "title": "Invalid Credentials",
+    "message": "The email or password you entered is incorrect."
+  },
+  "GALLERY_NOT_FOUND": {
+    "title": "Gallery Not Found",
+    "message": "The gallery you're looking for doesn't exist."
+  },
+  "PHOTO_NOT_FOUND": {
+    "title": "Photo Not Found",
+    "message": "The photo you're looking for doesn't exist."
+  },
+  "VALIDATION_ERROR": {
+    "title": "Invalid Input",
+    "message": "Please check your input and try again."
+  },
+  "NETWORK_ERROR": {
+    "title": "Connection Problem",
+    "message": "Please check your internet connection and try again."
+  },
+  "TIMEOUT": {
+    "title": "Request Timeout",
+    "message": "The request took too long. Please try again."
+  },
+  "INTERNAL_ERROR": {
+    "title": "Something Went Wrong",
+    "message": "An unexpected error occurred. Please try again later."
+  },
+  "SERVICE_UNAVAILABLE": {
+    "title": "Service Unavailable",
+    "message": "The service is temporarily unavailable. Please try again later."
+  },
+  "RATE_LIMIT_EXCEEDED": {
+    "title": "Too Many Requests",
+    "message": "You're making requests too quickly. Please wait a moment before trying again."
+  }
+}

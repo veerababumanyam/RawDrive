@@ -60,25 +60,22 @@ export const GalleryCreateForm: React.FC<GalleryCreateFormProps> = ({
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setTitle(value);
-    if (errors.title) {
-      setErrors((prev) => ({ ...prev, title: validateTitle(value) }));
-    }
+    const error = validateTitle(value);
+    setErrors((prev) => ({ ...prev, title: error }));
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setDescription(value);
-    if (errors.description) {
-      setErrors((prev) => ({ ...prev, description: validateDescription(value) }));
-    }
+    const error = validateDescription(value);
+    setErrors((prev) => ({ ...prev, description: error }));
   };
 
   const handleClientNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setClientName(value);
-    if (errors.client_name) {
-      setErrors((prev) => ({ ...prev, client_name: validateClientName(value) }));
-    }
+    const error = validateClientName(value);
+    setErrors((prev) => ({ ...prev, client_name: error }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -95,12 +92,11 @@ export const GalleryCreateForm: React.FC<GalleryCreateFormProps> = ({
     if (descriptionError) newErrors.description = descriptionError;
     if (clientNameError) newErrors.client_name = clientNameError;
 
+    setErrors(newErrors);
+
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
       return;
     }
-
-    setErrors({});
 
     try {
       await onSubmit({
@@ -141,7 +137,6 @@ export const GalleryCreateForm: React.FC<GalleryCreateFormProps> = ({
           onChange={handleDescriptionChange}
           placeholder="Add a description for this gallery..."
           rows={4}
-          maxLength={1000}
           className={`
             w-full px-4 py-3
             bg-surface border rounded-input

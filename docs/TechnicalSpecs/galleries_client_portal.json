@@ -3,7 +3,7 @@
   "specVersion": "1.0",
   "featureId": "galleries_client_portal",
   "name": "Galleries, Client Portal, and Sharing",
-  "status": "in_progress",
+  "status": "draft",
   "lastUpdated": "2025-01-27",
   "sourceDocs": [
     "docs/Features/GalleryFeatures.md",
@@ -26,9 +26,21 @@
     ]
   },
   "actors": [
-    { "id": "staff_user", "name": "Staff User", "description": "Creates galleries, publishes to clients." },
-    { "id": "client_viewer", "name": "Client (Share Link)", "description": "Views and interacts with galleries." },
-    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Configures branding, portal defaults." }
+    {
+      "id": "staff_user",
+      "name": "Staff User",
+      "description": "Creates galleries, publishes to clients."
+    },
+    {
+      "id": "client_viewer",
+      "name": "Client (Share Link)",
+      "description": "Views and interacts with galleries."
+    },
+    {
+      "id": "workspace_admin",
+      "name": "Workspace Admin",
+      "description": "Configures branding, portal defaults."
+    }
   ],
   "fieldClassification": {
     "legend": {
@@ -46,35 +58,183 @@
         "primaryKey": "gallery_id",
         "workspaceScoped": true,
         "fields": [
-          { "name": "gallery_id", "type": "uuid", "classification": "SYSTEM", "notes": "Primary key, auto-generated" },
-          { "name": "workspace_id", "type": "uuid", "classification": "SYSTEM", "notes": "Tenant isolation key" },
-          { "name": "title", "type": "string", "classification": "MANDATORY", "constraints": { "minLength": 1, "maxLength": 255 } },
-          { "name": "description", "type": "string", "nullable": true, "classification": "OPTIONAL", "constraints": { "maxLength": 1000 } },
-          { "name": "client_name", "type": "string", "nullable": true, "classification": "OPTIONAL", "constraints": { "maxLength": 255 }, "notes": "Display name for client in header" },
-          { "name": "status", "type": "enum(draft,published,archived)", "classification": "MANDATORY", "default": "draft" },
-          { "name": "branding_profile_id", "type": "uuid", "nullable": true, "classification": "OPTIONAL", "notes": "Reference to workspace branding preset" },
-          { "name": "portal_language", "type": "string", "nullable": true, "classification": "OPTIONAL", "notes": "ISO language code (e.g., en-IN, hi-IN)" },
-          { "name": "layout_style", "type": "enum(tabs,continuous)", "nullable": true, "classification": "OPTIONAL", "default": "tabs" },
-          { "name": "theme", "type": "enum(light,dark,system)", "nullable": true, "classification": "OPTIONAL", "default": "system" },
-          { "name": "download_policy", "type": "enum(view_only,web_only,original_allowed,watermarked_only)", "nullable": true, "classification": "OPTIONAL", "default": "view_only" },
-          { "name": "exif_visible", "type": "boolean", "nullable": true, "classification": "OPTIONAL", "default": false },
-          { "name": "password_hash", "type": "string", "nullable": true, "classification": "OPTIONAL", "notes": "bcrypt hash if password protected" },
-          { "name": "email_registration_required", "type": "boolean", "nullable": true, "classification": "OPTIONAL", "default": false },
-          { "name": "expires_at", "type": "timestamp", "nullable": true, "classification": "OPTIONAL", "notes": "ISO timestamp for auto-expiry" },
-          { "name": "custom_domain", "type": "string", "nullable": true, "classification": "OPTIONAL", "notes": "Tier-gated feature" },
-          { "name": "cover_asset_id", "type": "uuid", "nullable": true, "classification": "OPTIONAL", "notes": "Reference to cover photo asset" },
-          { "name": "created_by_user_id", "type": "uuid", "classification": "MANDATORY", "notes": "User who created the gallery" },
-          { "name": "published_at", "type": "timestamp", "nullable": true, "classification": "OPTIONAL", "notes": "Set when status changes to published" },
-          { "name": "created_at", "type": "timestamp", "classification": "SYSTEM" }
+          {
+            "name": "gallery_id",
+            "type": "uuid",
+            "classification": "SYSTEM",
+            "notes": "Primary key, auto-generated"
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "classification": "SYSTEM",
+            "notes": "Tenant isolation key"
+          },
+          {
+            "name": "title",
+            "type": "string",
+            "classification": "MANDATORY",
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "constraints": {
+              "maxLength": 1000
+            }
+          },
+          {
+            "name": "client_name",
+            "type": "string",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "constraints": {
+              "maxLength": 255
+            },
+            "notes": "Display name for client in header"
+          },
+          {
+            "name": "status",
+            "type": "enum(draft,published,archived)",
+            "classification": "MANDATORY",
+            "default": "draft"
+          },
+          {
+            "name": "branding_profile_id",
+            "type": "uuid",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "Reference to workspace branding preset"
+          },
+          {
+            "name": "portal_language",
+            "type": "string",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "ISO language code (e.g., en-IN, hi-IN)"
+          },
+          {
+            "name": "layout_style",
+            "type": "enum(tabs,continuous)",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "default": "tabs"
+          },
+          {
+            "name": "theme",
+            "type": "enum(light,dark,system)",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "default": "system"
+          },
+          {
+            "name": "download_policy",
+            "type": "enum(view_only,web_only,original_allowed,watermarked_only)",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "default": "view_only"
+          },
+          {
+            "name": "exif_visible",
+            "type": "boolean",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "default": false
+          },
+          {
+            "name": "password_hash",
+            "type": "string",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "bcrypt hash if password protected"
+          },
+          {
+            "name": "email_registration_required",
+            "type": "boolean",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "default": false
+          },
+          {
+            "name": "expires_at",
+            "type": "timestamp",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "ISO timestamp for auto-expiry"
+          },
+          {
+            "name": "custom_domain",
+            "type": "string",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "Tier-gated feature"
+          },
+          {
+            "name": "cover_asset_id",
+            "type": "uuid",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "Reference to cover photo asset"
+          },
+          {
+            "name": "created_by_user_id",
+            "type": "uuid",
+            "classification": "MANDATORY",
+            "notes": "User who created the gallery"
+          },
+          {
+            "name": "published_at",
+            "type": "timestamp",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "Set when status changes to published"
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp",
+            "classification": "SYSTEM"
+          }
         ],
-        "indexes": ["galleries_ws_status_idx", "galleries_ws_created_idx"],
+        "indexes": [
+          "galleries_ws_status_idx",
+          "galleries_ws_created_idx"
+        ],
         "computedFields": [
-          { "name": "photo_count", "type": "number", "notes": "Count of gallery_assets" },
-          { "name": "video_count", "type": "number", "notes": "Count of video assets" },
-          { "name": "favorites_count", "type": "number", "notes": "Count from selection_items where favorite=true" },
-          { "name": "selections_count", "type": "number", "notes": "Count from selection_items" },
-          { "name": "password_protected", "type": "boolean", "notes": "True if password_hash is not null" },
-          { "name": "cover_image_url", "type": "string", "notes": "CDN URL from cover_asset_id or first asset" }
+          {
+            "name": "photo_count",
+            "type": "number",
+            "notes": "Count of gallery_assets"
+          },
+          {
+            "name": "video_count",
+            "type": "number",
+            "notes": "Count of video assets"
+          },
+          {
+            "name": "favorites_count",
+            "type": "number",
+            "notes": "Count from selection_items where favorite=true"
+          },
+          {
+            "name": "selections_count",
+            "type": "number",
+            "notes": "Count from selection_items"
+          },
+          {
+            "name": "password_protected",
+            "type": "boolean",
+            "notes": "True if password_hash is not null"
+          },
+          {
+            "name": "cover_image_url",
+            "type": "string",
+            "notes": "CDN URL from cover_asset_id or first asset"
+          }
         ]
       },
       {
@@ -83,19 +243,76 @@
         "primaryKey": "sub_gallery_id",
         "workspaceScoped": true,
         "fields": [
-          { "name": "sub_gallery_id", "type": "uuid", "classification": "SYSTEM", "notes": "Primary key, auto-generated" },
-          { "name": "workspace_id", "type": "uuid", "classification": "SYSTEM", "notes": "Tenant isolation key" },
-          { "name": "gallery_id", "type": "uuid", "classification": "MANDATORY", "notes": "Parent gallery reference" },
-          { "name": "name", "type": "string", "classification": "MANDATORY", "constraints": { "minLength": 1, "maxLength": 100 }, "notes": "Unique within gallery" },
-          { "name": "sort_order", "type": "number", "classification": "MANDATORY", "default": 0, "notes": "Integer for ordering tabs" },
-          { "name": "visible", "type": "boolean", "classification": "MANDATORY", "default": true, "notes": "Controls visibility in client portal" },
-          { "name": "cover_asset_id", "type": "uuid", "nullable": true, "classification": "OPTIONAL", "notes": "Reference to cover photo" },
-          { "name": "created_at", "type": "timestamp", "classification": "SYSTEM" }
+          {
+            "name": "sub_gallery_id",
+            "type": "uuid",
+            "classification": "SYSTEM",
+            "notes": "Primary key, auto-generated"
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "classification": "SYSTEM",
+            "notes": "Tenant isolation key"
+          },
+          {
+            "name": "gallery_id",
+            "type": "uuid",
+            "classification": "MANDATORY",
+            "notes": "Parent gallery reference"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "classification": "MANDATORY",
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "notes": "Unique within gallery"
+          },
+          {
+            "name": "sort_order",
+            "type": "number",
+            "classification": "MANDATORY",
+            "default": 0,
+            "notes": "Integer for ordering tabs"
+          },
+          {
+            "name": "visible",
+            "type": "boolean",
+            "classification": "MANDATORY",
+            "default": true,
+            "notes": "Controls visibility in client portal"
+          },
+          {
+            "name": "cover_asset_id",
+            "type": "uuid",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "Reference to cover photo"
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp",
+            "classification": "SYSTEM"
+          }
         ],
-        "indexes": ["sub_galleries_ws_gallery_order_idx", "sub_galleries_ws_gallery_name_unique"],
+        "indexes": [
+          "sub_galleries_ws_gallery_order_idx",
+          "sub_galleries_ws_gallery_name_unique"
+        ],
         "computedFields": [
-          { "name": "photo_count", "type": "number", "notes": "Count of gallery_assets in this sub-gallery" },
-          { "name": "cover_image_url", "type": "string", "notes": "CDN URL from cover_asset_id or first asset" }
+          {
+            "name": "photo_count",
+            "type": "number",
+            "notes": "Count of gallery_assets in this sub-gallery"
+          },
+          {
+            "name": "cover_image_url",
+            "type": "string",
+            "notes": "CDN URL from cover_asset_id or first asset"
+          }
         ]
       },
       {
@@ -104,22 +321,92 @@
         "primaryKey": "gallery_asset_id",
         "workspaceScoped": true,
         "fields": [
-          { "name": "gallery_asset_id", "type": "uuid", "classification": "SYSTEM", "notes": "Primary key, auto-generated" },
-          { "name": "workspace_id", "type": "uuid", "classification": "SYSTEM", "notes": "Tenant isolation key" },
-          { "name": "gallery_id", "type": "uuid", "classification": "MANDATORY", "notes": "Parent gallery reference" },
-          { "name": "sub_gallery_id", "type": "uuid", "nullable": true, "classification": "OPTIONAL", "notes": "null = Root Gallery (unassigned)" },
-          { "name": "asset_id", "type": "uuid", "classification": "MANDATORY", "notes": "Reference to assets table" },
-          { "name": "sort_order", "type": "number", "classification": "MANDATORY", "default": 0, "notes": "Integer for ordering within gallery/sub-gallery" },
-          { "name": "visible", "type": "boolean", "classification": "MANDATORY", "default": true, "notes": "Controls visibility in client portal" },
-          { "name": "is_private", "type": "boolean", "classification": "MANDATORY", "default": false, "notes": "Per-asset lock (requires access code to view)" },
-          { "name": "access_code_hash", "type": "string", "nullable": true, "classification": "OPTIONAL", "notes": "bcrypt hash for private photo access code" },
-          { "name": "created_at", "type": "timestamp", "classification": "SYSTEM" }
+          {
+            "name": "gallery_asset_id",
+            "type": "uuid",
+            "classification": "SYSTEM",
+            "notes": "Primary key, auto-generated"
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid",
+            "classification": "SYSTEM",
+            "notes": "Tenant isolation key"
+          },
+          {
+            "name": "gallery_id",
+            "type": "uuid",
+            "classification": "MANDATORY",
+            "notes": "Parent gallery reference"
+          },
+          {
+            "name": "sub_gallery_id",
+            "type": "uuid",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "null = Root Gallery (unassigned)"
+          },
+          {
+            "name": "asset_id",
+            "type": "uuid",
+            "classification": "MANDATORY",
+            "notes": "Reference to assets table"
+          },
+          {
+            "name": "sort_order",
+            "type": "number",
+            "classification": "MANDATORY",
+            "default": 0,
+            "notes": "Integer for ordering within gallery/sub-gallery"
+          },
+          {
+            "name": "visible",
+            "type": "boolean",
+            "classification": "MANDATORY",
+            "default": true,
+            "notes": "Controls visibility in client portal"
+          },
+          {
+            "name": "is_private",
+            "type": "boolean",
+            "classification": "MANDATORY",
+            "default": false,
+            "notes": "Per-asset lock (requires access code to view)"
+          },
+          {
+            "name": "access_code_hash",
+            "type": "string",
+            "nullable": true,
+            "classification": "OPTIONAL",
+            "notes": "bcrypt hash for private photo access code"
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp",
+            "classification": "SYSTEM"
+          }
         ],
-        "indexes": ["gallery_assets_ws_gallery_idx", "gallery_assets_ws_asset_idx", "gallery_assets_ws_gallery_asset_unique"],
+        "indexes": [
+          "gallery_assets_ws_gallery_idx",
+          "gallery_assets_ws_asset_idx",
+          "gallery_assets_ws_gallery_asset_unique"
+        ],
         "computedFields": [
-          { "name": "is_favorited", "type": "boolean", "notes": "True if any selection_item has favorite=true for this asset" },
-          { "name": "is_selected", "type": "boolean", "notes": "True if any selection_item exists for this asset" },
-          { "name": "favorites_count", "type": "number", "notes": "Count of selection_items with favorite=true" }
+          {
+            "name": "is_favorited",
+            "type": "boolean",
+            "notes": "True if any selection_item has favorite=true for this asset"
+          },
+          {
+            "name": "is_selected",
+            "type": "boolean",
+            "notes": "True if any selection_item exists for this asset"
+          },
+          {
+            "name": "favorites_count",
+            "type": "number",
+            "notes": "Count of selection_items with favorite=true"
+          }
         ]
       },
       {
@@ -128,16 +415,46 @@
         "primaryKey": "interaction_id",
         "workspaceScoped": true,
         "fields": [
-          { "name": "interaction_id", "type": "uuid" },
-          { "name": "workspace_id", "type": "uuid" },
-          { "name": "gallery_id", "type": "uuid" },
-          { "name": "asset_id", "type": "uuid", "nullable": true },
-          { "name": "type", "type": "enum(view,favorite,select,comment,download)" },
-          { "name": "actor", "type": "json", "notes": "share_link_id or client profile" },
-          { "name": "payload", "type": "json", "nullable": true },
-          { "name": "created_at", "type": "timestamp" }
+          {
+            "name": "interaction_id",
+            "type": "uuid"
+          },
+          {
+            "name": "workspace_id",
+            "type": "uuid"
+          },
+          {
+            "name": "gallery_id",
+            "type": "uuid"
+          },
+          {
+            "name": "asset_id",
+            "type": "uuid",
+            "nullable": true
+          },
+          {
+            "name": "type",
+            "type": "enum(view,favorite,select,comment,download)"
+          },
+          {
+            "name": "actor",
+            "type": "json",
+            "notes": "share_link_id or client profile"
+          },
+          {
+            "name": "payload",
+            "type": "json",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp"
+          }
         ],
-        "indexes": ["client_interactions_ws_gallery_time_idx", "client_interactions_ws_asset_time_idx"]
+        "indexes": [
+          "client_interactions_ws_gallery_time_idx",
+          "client_interactions_ws_asset_time_idx"
+        ]
       }
     ]
   },
@@ -159,10 +476,17 @@
       "response": {
         "body": {
           "galleries": "array",
-          "meta": { "total": "integer", "page": "integer", "limit": "integer" }
+          "meta": {
+            "total": "integer",
+            "page": "integer",
+            "limit": "integer"
+          }
         }
       },
-      "errors": ["FORBIDDEN", "NOT_FOUND"],
+      "errors": [
+        "FORBIDDEN",
+        "NOT_FOUND"
+      ],
       "implementationStatus": "implemented"
     },
     {
@@ -186,7 +510,10 @@
           "created_at": "timestamp"
         }
       },
-      "errors": ["FORBIDDEN", "VALIDATION_ERROR"],
+      "errors": [
+        "FORBIDDEN",
+        "VALIDATION_ERROR"
+      ],
       "implementationStatus": "implemented"
     },
     {
@@ -206,7 +533,10 @@
           "stats": "object"
         }
       },
-      "errors": ["FORBIDDEN", "NOT_FOUND"],
+      "errors": [
+        "FORBIDDEN",
+        "NOT_FOUND"
+      ],
       "implementationStatus": "implemented"
     },
     {
@@ -231,7 +561,11 @@
           "status": "enum"
         }
       },
-      "errors": ["FORBIDDEN", "NOT_FOUND", "VALIDATION_ERROR"],
+      "errors": [
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "VALIDATION_ERROR"
+      ],
       "implementationStatus": "implemented",
       "notes": "Password hashing placeholder - needs bcrypt implementation"
     },
@@ -246,7 +580,10 @@
           "message": "string"
         }
       },
-      "errors": ["FORBIDDEN", "NOT_FOUND"],
+      "errors": [
+        "FORBIDDEN",
+        "NOT_FOUND"
+      ],
       "implementationStatus": "implemented",
       "notes": "Soft delete - sets status to archived"
     },
@@ -268,7 +605,11 @@
           "published_at": "timestamp?"
         }
       },
-      "errors": ["FORBIDDEN", "GALLERY_EMPTY", "NOT_FOUND"],
+      "errors": [
+        "FORBIDDEN",
+        "GALLERY_EMPTY",
+        "NOT_FOUND"
+      ],
       "implementationStatus": "implemented"
     },
     {
@@ -279,12 +620,20 @@
       "rateLimit": "public-standard",
       "response": {
         "body": {
-          "gallery": { "gallery_id": "uuid", "title": "string", "branding": "object" },
+          "gallery": {
+            "gallery_id": "uuid",
+            "title": "string",
+            "branding": "object"
+          },
           "policy": "object",
           "assets": "paginated list with cdn urls"
         }
       },
-      "errors": ["NOT_FOUND", "SHARE_LINK_EXPIRED", "SHARE_LINK_PASSWORD_REQUIRED"]
+      "errors": [
+        "NOT_FOUND",
+        "SHARE_LINK_EXPIRED",
+        "SHARE_LINK_PASSWORD_REQUIRED"
+      ]
     },
     {
       "id": "portal.asset.favorite",
@@ -292,9 +641,20 @@
       "path": "/v1/portal/galleries/{gallery_id}/assets/{asset_id}/favorite",
       "auth": "share_link_or_user_jwt",
       "rateLimit": "public-standard",
-      "request": { "body": { "favorite": true } },
-      "response": { "body": { "ok": true } },
-      "errors": ["FORBIDDEN", "POLICY_ACTION_NOT_ALLOWED"]
+      "request": {
+        "body": {
+          "favorite": true
+        }
+      },
+      "response": {
+        "body": {
+          "ok": true
+        }
+      },
+      "errors": [
+        "FORBIDDEN",
+        "POLICY_ACTION_NOT_ALLOWED"
+      ]
     },
     {
       "id": "portal.asset.unlock",
@@ -302,9 +662,111 @@
       "path": "/v1/portal/galleries/{gallery_id}/assets/{asset_id}/unlock",
       "auth": "share_link_or_user_jwt",
       "rateLimit": "public-strict",
-      "request": { "body": { "access_code": "string" } },
-      "response": { "body": { "unlocked": true } },
-      "errors": ["ASSET_LOCKED", "ACCESS_CODE_INVALID", "POLICY_ACTION_NOT_ALLOWED"]
+      "request": {
+        "body": {
+          "access_code": "string"
+        }
+      },
+      "response": {
+        "body": {
+          "unlocked": true
+        }
+      },
+      "errors": [
+        "ASSET_LOCKED",
+        "ACCESS_CODE_INVALID",
+        "POLICY_ACTION_NOT_ALLOWED"
+      ]
+    },
+    {
+      "id": "recycle_bin.list",
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspace_id}/recycle-bin",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": {
+        "query": {
+          "type": "string?",
+          "page": "integer?",
+          "limit": "integer?"
+        }
+      },
+      "response": {
+        "body": {
+          "items": "array",
+          "meta": {
+            "total": "integer",
+            "page": "integer",
+            "limit": "integer"
+          }
+        },
+        "item_schema": {
+          "id": "uuid",
+          "type": "enum(gallery,photo)",
+          "name": "string",
+          "deletedAt": "timestamp",
+          "daysUntilPermanentDelete": "integer",
+          "deleted": "boolean",
+          "deleteStatus": "string?"
+        }
+      },
+      "errors": [
+        "FORBIDDEN"
+      ],
+      "implementationStatus": "implemented"
+    },
+    {
+      "id": "recycle_bin.restore",
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspace_id}/recycle-bin/restore",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": {
+        "body": {
+          "item_id": "uuid",
+          "item_type": "enum(gallery,photo)",
+          "new_name": "string?"
+        }
+      },
+      "response": {
+        "body": {
+          "success": "boolean",
+          "entity_id": "uuid",
+          "new_name": "string?"
+        }
+      },
+      "errors": [
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "NAME_CONFLICT"
+      ],
+      "implementationStatus": "implemented"
+    },
+    {
+      "id": "recycle_bin.permanent_delete",
+      "method": "DELETE",
+      "path": "/api/v1/workspaces/{workspace_id}/recycle-bin/permanent",
+      "auth": "user_jwt",
+      "rateLimit": "sensitive-action",
+      "request": {
+        "body": {
+          "item_id": "uuid",
+          "item_type": "enum(gallery,photo)"
+        }
+      },
+      "response": {
+        "body": {
+          "success": "boolean",
+          "files_deleted": "integer",
+          "storage_freed": "integer"
+        }
+      },
+      "errors": [
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "CONFLICT"
+      ],
+      "implementationStatus": "implemented"
     }
   ],
   "workflows": [
@@ -365,7 +827,9 @@
       "pa-IN",
       "ur-IN"
     ],
-    "rtl": ["ur-IN"],
+    "rtl": [
+      "ur-IN"
+    ],
     "resolutionOrder": [
       "share_link.language (if set)",
       "gallery.portal_language (if set)",
@@ -425,37 +889,64 @@
           {
             "name": "GalleryCard",
             "path": "frontend/src/components/features/gallery/GalleryCard.tsx",
-            "features": ["Cover image display", "Status badge", "Photo count", "Hover actions"]
+            "features": [
+              "Cover image display",
+              "Status badge",
+              "Photo count",
+              "Hover actions"
+            ]
           },
           {
             "name": "GalleryStatusBadge",
             "path": "frontend/src/components/features/gallery/GalleryStatusBadge.tsx",
-            "features": ["Draft/Published/Archived status display"]
+            "features": [
+              "Draft/Published/Archived status display"
+            ]
           },
           {
             "name": "GalleryEmptyState",
             "path": "frontend/src/components/features/gallery/GalleryEmptyState.tsx",
-            "features": ["Empty state with CTA"]
+            "features": [
+              "Empty state with CTA"
+            ]
           },
           {
             "name": "GalleryCreateForm",
             "path": "frontend/src/components/features/gallery/GalleryCreateForm.tsx",
-            "features": ["Form validation", "Title/description/client name fields", "Error handling"]
+            "features": [
+              "Form validation",
+              "Title/description/client name fields",
+              "Error handling"
+            ]
           },
           {
             "name": "GalleryHeader",
             "path": "frontend/src/components/features/gallery/GalleryHeader.tsx",
-            "features": ["Title display with inline editing", "Client name and date", "Status badge", "Back navigation"]
+            "features": [
+              "Title display with inline editing",
+              "Client name and date",
+              "Status badge",
+              "Back navigation"
+            ]
           },
           {
             "name": "GalleryStats",
             "path": "frontend/src/components/features/gallery/GalleryStats.tsx",
-            "features": ["Total items count", "Favorites count"]
+            "features": [
+              "Total items count",
+              "Favorites count"
+            ]
           },
           {
             "name": "GalleryToolbar",
             "path": "frontend/src/components/features/gallery/GalleryToolbar.tsx",
-            "features": ["Action buttons (View as Client, Find People, AI Story, Share, Settings, Upload)", "Search input", "View mode toggle (grid/list)", "Filter buttons (Picks, Favorites)", "Select All checkbox"]
+            "features": [
+              "Action buttons (View as Client, Find People, AI Story, Share, Settings, Upload)",
+              "Search input",
+              "View mode toggle (grid/list)",
+              "Filter buttons (Picks, Favorites)",
+              "Select All checkbox"
+            ]
           }
         ],
         "pending": [
@@ -475,12 +966,20 @@
           {
             "name": "GalleriesPage",
             "path": "frontend/src/pages/workspace/GalleriesPage.tsx",
-            "features": ["Gallery list with grid/list views", "Search and filter", "Sort controls", "Real API integration"]
+            "features": [
+              "Gallery list with grid/list views",
+              "Search and filter",
+              "Sort controls",
+              "Real API integration"
+            ]
           },
           {
             "name": "GalleryCreatePage",
             "path": "frontend/src/pages/workspace/GalleryCreatePage.tsx",
-            "features": ["Gallery creation form", "Navigation to detail page on success"]
+            "features": [
+              "Gallery creation form",
+              "Navigation to detail page on success"
+            ]
           }
         ],
         "pending": [
@@ -492,7 +991,15 @@
           {
             "name": "galleryService",
             "path": "frontend/src/services/galleryService.ts",
-            "methods": ["listGalleries", "getGallery", "createGallery", "updateGallery", "deleteGallery", "publishGallery", "unpublishGallery"]
+            "methods": [
+              "listGalleries",
+              "getGallery",
+              "createGallery",
+              "updateGallery",
+              "deleteGallery",
+              "publishGallery",
+              "unpublishGallery"
+            ]
           }
         ]
       },
@@ -501,17 +1008,26 @@
           {
             "name": "useGallery",
             "path": "frontend/src/hooks/useGallery.ts",
-            "features": ["Single gallery state management", "Loading/error states"]
+            "features": [
+              "Single gallery state management",
+              "Loading/error states"
+            ]
           },
           {
             "name": "useGalleryList",
             "path": "frontend/src/hooks/useGallery.ts",
-            "features": ["Gallery list with pagination", "Create gallery function"]
+            "features": [
+              "Gallery list with pagination",
+              "Create gallery function"
+            ]
           },
           {
             "name": "useGalleryAssets",
             "path": "frontend/src/hooks/useGalleryAssets.ts",
-            "features": ["Asset list management", "Pagination and filtering"]
+            "features": [
+              "Asset list management",
+              "Pagination and filtering"
+            ]
           }
         ]
       },

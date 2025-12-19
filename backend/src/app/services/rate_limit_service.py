@@ -13,7 +13,6 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 
 from app.config.settings import get_settings
 from app.db.redis import get_redis_client

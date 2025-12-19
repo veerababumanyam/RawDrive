@@ -1,5 +1,5 @@
 import React from 'react';
-import { LandingLayout } from '../landing/layout';
+import { LandingLayout, LandingHeader } from '../landing/layout';
 import { SEOHead, StructuredData } from '../landing/seo';
 import { PolicyDocument } from '../../types/policies';
 
@@ -46,6 +46,13 @@ const LegalPageLayout: React.FC<Props> = ({ policy, children }) => {
 
       {/* Landing Layout with legal page styling */}
       <LandingLayout showOrbs={false} showGrid={true}>
+        {/* Landing header / top navigation (matches landing pages) */}
+        {/* On inner/legal pages we prefer the scrolled (white) header style */}
+        <LandingHeader initialScrolled />
+
+        {/* Spacer to offset fixed header height so page content is not overlapped */}
+        <div aria-hidden className="h-[72px] md:h-[72px]" />
+
         {/* Skip to main content link */}
         <a
           href="#main-content"

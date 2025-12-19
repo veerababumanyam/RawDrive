@@ -13,7 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response, status
 
 from app.config.settings import AppSettings, get_settings
-from app.db.postgres import get_postgres_pool, postgres_healthcheck
+from app.db.postgres import postgres_healthcheck
 from app.db.redis import get_redis_client
 
 logger = logging.getLogger(__name__)

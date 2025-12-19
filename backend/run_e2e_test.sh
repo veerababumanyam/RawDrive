@@ -20,7 +20,8 @@ echo ""
 
 # Run the test
 cd "$(dirname "$0")"
-./venv/bin/python -m tests.e2e.test_gallery_workflow
+# Run test in Docker container
+docker-compose -f /Users/v13478/Desktop/RawDrive/infrastructure/docker/docker-compose.yml exec -T backend python -m tests.e2e.test_gallery_workflow
 
 echo ""
 echo "✅ Test completed!"

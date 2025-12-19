@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
-from app.api.dependencies.auth import CurrentUserDep, get_current_user
+from app.api.dependencies.auth import CurrentUserDep
 from app.api.schemas import (
     ErrorResponse,
     MessageResponse,
@@ -24,6 +24,7 @@ from app.api.schemas import (
 )
 from app.db.postgres import get_postgres_pool
 from app.services.session_service import SessionService
+from app.api.exceptions import NotFoundError, ForbiddenError
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ async def get_current_user_profile(
     )
 
     if not row:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise NotFoundError("User", str(current_user.user_id))
 
     return UserProfileResponse(
         user_id=row["user_id"],
@@ -73,6 +74,7 @@ async def get_current_user_profile(
         email_verified=row["email_verified"],
         preferred_language=row["preferred_language"] or "en-IN",
         created_at=row["created_at"],
+        workspace_id=current_user.workspace_ids[0] if current_user.workspace_ids else None,
     )
 
 
@@ -115,7 +117,7 @@ async def update_current_user(
     row = await pool.fetchrow(query, *params)
 
     if not row:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise NotFoundError("User", str(current_user.user_id))
 
     logger.info(
         "User profile updated",
@@ -129,6 +131,7 @@ async def update_current_user(
         email_verified=row["email_verified"],
         preferred_language=row["preferred_language"] or "en-IN",
         created_at=row["created_at"],
+        workspace_id=current_user.workspace_ids[0] if current_user.workspace_ids else None,
     )
 
 
@@ -193,16 +196,10 @@ async def terminate_session(
     )
 
     if not session:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "SESSION_NOT_FOUND", "message": "Session not found"},
-        )
+        raise NotFoundError("Session", str(session_id))
 
     if session["user_id"] != current_user.user_id:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "FORBIDDEN", "message": "Cannot terminate another user's session"},
-        )
+        raise ForbiddenError("Cannot terminate another user's session")
 
     await session_service.terminate_session(session_id)
 

@@ -86,7 +86,7 @@ async def close_postgres_pool() -> None:
 async def postgres_healthcheck(timeout: float = 1.0) -> bool:
     """Run a lightweight health check (SELECT 1)."""
 
-    pool = await init_postgres_pool()
+    pool = await get_postgres_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
             result = await conn.fetchval("SELECT 1")

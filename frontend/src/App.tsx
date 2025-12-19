@@ -4,6 +4,8 @@ import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, SearchProvider } from './contexts';
 import { ToastProvider } from './components/ui';
 import { routes } from './router';
+import ErrorBoundary from './components/error/ErrorBoundary';
+import { AppErrorFallback } from './components/error/ErrorFallbacks';
 
 /* =============================================================================
    App Component
@@ -19,15 +21,17 @@ const router = createBrowserRouter(routes, {
 
 const App: React.FC = () => {
   return (
-    <HelmetProvider>
-      <AuthProvider>
-        <ToastProvider position="bottom-center">
-          <SearchProvider>
-            <RouterProvider router={router} />
-          </SearchProvider>
-        </ToastProvider>
-      </AuthProvider>
-    </HelmetProvider>
+    <ErrorBoundary fallback={<AppErrorFallback />}>
+      <HelmetProvider>
+        <AuthProvider>
+          <ToastProvider position="bottom-center">
+            <SearchProvider>
+              <RouterProvider router={router} />
+            </SearchProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </HelmetProvider>
+    </ErrorBoundary>
   );
 };
 

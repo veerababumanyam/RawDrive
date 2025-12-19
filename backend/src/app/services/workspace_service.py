@@ -15,6 +15,7 @@ from typing import Optional
 
 import asyncpg
 
+from app.api.exceptions import AppError, ConflictError, ForbiddenError, NotFoundError
 from app.config.settings import AppSettings, get_settings
 from app.db.postgres import get_postgres_pool
 
@@ -26,56 +27,47 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class WorkspaceError(Exception):
+class WorkspaceError(AppError):
     """Base workspace error."""
 
-    def __init__(self, message: str, code: str, status: int = 400):
-        super().__init__(message)
-        self.code = code
-        self.status = status
+    def __init__(self, message: str, code: str, status: int = 400, user_message: str | None = None):
+        super().__init__(message=message, code=code, status_code=status, user_message=user_message)
 
 
-class WorkspaceNotFoundError(WorkspaceError):
+class WorkspaceNotFoundError(NotFoundError):
     """Workspace not found."""
 
     def __init__(self, workspace_id: uuid.UUID) -> None:
-        super().__init__(
-            f"Workspace {workspace_id} not found",
-            "WORKSPACE_NOT_FOUND",
-            404,
-        )
+        super().__init__(resource="Workspace", resource_id=workspace_id)
 
 
-class WorkspaceSlugTakenError(WorkspaceError):
+class WorkspaceSlugTakenError(ConflictError):
     """Workspace slug already in use."""
 
     def __init__(self, slug: str) -> None:
         super().__init__(
-            f"Workspace slug '{slug}' is already taken",
-            "WORKSPACE_SLUG_TAKEN",
-            409,
+            message=f"Workspace slug '{slug}' is already taken",
+            code="WORKSPACE_SLUG_TAKEN",
         )
 
 
-class WorkspaceDisabledError(WorkspaceError):
+class WorkspaceDisabledError(ForbiddenError):
     """Workspace is disabled."""
 
     def __init__(self, workspace_id: uuid.UUID) -> None:
         super().__init__(
-            "Workspace has been disabled",
-            "WORKSPACE_DISABLED",
-            403,
+            message=f"Workspace {workspace_id} has been disabled",
+            code="WORKSPACE_DISABLED",
         )
 
 
-class WorkspaceAccessDeniedError(WorkspaceError):
+class WorkspaceAccessDeniedError(ForbiddenError):
     """User doesn't have access to workspace."""
 
     def __init__(self) -> None:
         super().__init__(
-            "Access to workspace denied",
-            "WORKSPACE_ACCESS_DENIED",
-            403,
+            message="Access to workspace denied",
+            code="WORKSPACE_ACCESS_DENIED",
         )
 
 

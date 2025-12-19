@@ -6,11 +6,9 @@ Implements gallery management within workspace scope.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-import asyncpg
 
 from app.db.postgres import get_postgres_pool
 
@@ -83,9 +81,9 @@ class GalleryService:
         """Create a new gallery."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Check for duplicate title
+            # Check for duplicate title (exclude deleted galleries)
             existing_id = await conn.fetchval(
-                "SELECT gallery_id FROM galleries WHERE workspace_id = $1 AND title = $2 AND status != 'archived'",
+                "SELECT gallery_id FROM galleries WHERE workspace_id = $1 AND title = $2 AND deleted = FALSE",
                 workspace_id,
                 title,
             )
@@ -126,9 +124,9 @@ class GalleryService:
                     password_hash IS NOT NULL as password_protected,
                     email_registration_required, expires_at, custom_domain,
                     cover_asset_id, created_by_user_id, published_at,
-                    created_at, updated_at
+                    created_at, updated_at, deleted
                 FROM galleries
-                WHERE workspace_id = $1 AND gallery_id = $2
+                WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
                 """,
                 workspace_id,
                 gallery_id,
@@ -136,26 +134,28 @@ class GalleryService:
             if not row:
                 raise GalleryNotFoundError(gallery_id)
 
-            # Get sub-galleries
+            # Get sub-galleries (exclude deleted)
             sub_galleries = await conn.fetch(
                 """
                 SELECT
                     sub_gallery_id, name, sort_order, visible, cover_asset_id,
                     (
                         SELECT COUNT(*)
-                        FROM gallery_assets
-                        WHERE sub_gallery_id = sub_galleries.sub_gallery_id
-                        AND visible = TRUE
+                        FROM gallery_assets ga
+                        JOIN assets a ON ga.asset_id = a.asset_id
+                        WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
+                        AND ga.visible = TRUE
+                        AND a.deleted = FALSE
                     ) as photo_count
                 FROM sub_galleries
-                WHERE workspace_id = $1 AND gallery_id = $2
+                WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
                 ORDER BY sort_order ASC
                 """,
                 workspace_id,
                 gallery_id,
             )
 
-            # Get stats
+            # Get stats (exclude deleted assets)
             stats = await conn.fetchrow(
                 """
                 SELECT
@@ -163,19 +163,21 @@ class GalleryService:
                     COUNT(*) FILTER (WHERE assets.type = 'video') as total_videos,
                     COUNT(*) as total_items,
                     (
-                        SELECT COUNT(DISTINCT asset_id)
-                        FROM client_interactions
-                        WHERE gallery_id = $2 AND type = 'favorite'
+                        SELECT COUNT(DISTINCT ci.asset_id)
+                        FROM client_interactions ci
+                        JOIN assets a ON ci.asset_id = a.asset_id
+                        WHERE ci.gallery_id = $2 AND ci.type = 'favorite' AND a.deleted = FALSE
                     ) as favorites_count,
                     (
-                        SELECT COUNT(DISTINCT asset_id)
-                        FROM client_interactions
-                        WHERE gallery_id = $2 AND type = 'select'
+                        SELECT COUNT(DISTINCT ci.asset_id)
+                        FROM client_interactions ci
+                        JOIN assets a ON ci.asset_id = a.asset_id
+                        WHERE ci.gallery_id = $2 AND ci.type = 'select' AND a.deleted = FALSE
                     ) as selections_count
                 FROM gallery_assets ga
                 JOIN assets ON ga.asset_id = assets.asset_id
                 WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
-                AND ga.visible = TRUE
+                AND ga.visible = TRUE AND assets.deleted = FALSE
                 """,
                 workspace_id,
                 gallery_id,
@@ -234,8 +236,8 @@ class GalleryService:
         async with pool.acquire() as conn:
             offset = (page - 1) * limit
 
-            # Build WHERE clause
-            where_clauses = ["workspace_id = $1"]
+            # Build WHERE clause (always exclude deleted galleries)
+            where_clauses = ["workspace_id = $1", "deleted = FALSE"]
             params = [workspace_id]
             param_idx = 2
 
@@ -266,9 +268,11 @@ class GalleryService:
                     cover_asset_id, published_at, created_at,
                     (
                         SELECT COUNT(*)
-                        FROM gallery_assets
-                        WHERE gallery_id = galleries.gallery_id
-                        AND visible = TRUE
+                        FROM gallery_assets ga
+                        JOIN assets a ON ga.asset_id = a.asset_id
+                        WHERE ga.gallery_id = galleries.gallery_id
+                        AND ga.visible = TRUE
+                        AND a.deleted = FALSE
                     ) as photo_count
                 FROM galleries
                 WHERE {where_sql}
@@ -312,9 +316,9 @@ class GalleryService:
         """Update gallery fields."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Check gallery exists
+            # Check gallery exists (exclude deleted)
             exists = await conn.fetchval(
-                "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2",
+                "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
                 workspace_id,
                 gallery_id,
             )
@@ -388,9 +392,9 @@ class GalleryService:
         """Publish or unpublish a gallery."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Check gallery exists
+            # Check gallery exists (exclude deleted)
             gallery = await conn.fetchrow(
-                "SELECT status FROM galleries WHERE workspace_id = $1 AND gallery_id = $2",
+                "SELECT status FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
                 workspace_id,
                 gallery_id,
             )
@@ -398,13 +402,14 @@ class GalleryService:
                 raise GalleryNotFoundError(gallery_id)
 
             if publish:
-                # Validate gallery has at least one photo
+                # Validate gallery has at least one photo (exclude deleted assets)
                 photo_count = await conn.fetchval(
                     """
                     SELECT COUNT(*)
-                    FROM gallery_assets
-                    WHERE workspace_id = $1 AND gallery_id = $2
-                    AND visible = TRUE
+                    FROM gallery_assets ga
+                    JOIN assets a ON ga.asset_id = a.asset_id
+                    WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
+                    AND ga.visible = TRUE AND a.deleted = FALSE
                     """,
                     workspace_id,
                     gallery_id,
@@ -446,18 +451,18 @@ class GalleryService:
         """Create a sub-gallery."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Verify gallery exists
+            # Verify gallery exists (exclude deleted)
             gallery = await conn.fetchrow(
-                "SELECT gallery_id FROM galleries WHERE workspace_id = $1 AND gallery_id = $2",
+                "SELECT gallery_id FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
                 workspace_id,
                 gallery_id,
             )
             if not gallery:
                 raise GalleryNotFoundError(gallery_id)
 
-            # Check for duplicate name
+            # Check for duplicate name (exclude deleted sub-galleries)
             existing_id = await conn.fetchval(
-                "SELECT sub_gallery_id FROM sub_galleries WHERE gallery_id = $1 AND name = $2",
+                "SELECT sub_gallery_id FROM sub_galleries WHERE gallery_id = $1 AND name = $2 AND deleted = FALSE",
                 gallery_id,
                 name,
             )
@@ -468,13 +473,13 @@ class GalleryService:
                     409,
                 )
 
-            # Get max sort_order to append at end if not specified
+            # Get max sort_order to append at end if not specified (exclude deleted)
             if sort_order == 0:
                 max_sort = await conn.fetchval(
                     """
                     SELECT COALESCE(MAX(sort_order), 0)
                     FROM sub_galleries
-                    WHERE workspace_id = $1 AND gallery_id = $2
+                    WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
                     """,
                     workspace_id,
                     gallery_id,
@@ -496,16 +501,18 @@ class GalleryService:
                 sort_order,
             )
 
-            # Return sub-gallery data
+            # Return sub-gallery data (photo_count excludes deleted assets)
             row = await conn.fetchrow(
                 """
                 SELECT
                     sub_gallery_id, name, sort_order, visible, cover_asset_id,
                     (
                         SELECT COUNT(*)
-                        FROM gallery_assets
-                        WHERE sub_gallery_id = sub_galleries.sub_gallery_id
-                        AND visible = TRUE
+                        FROM gallery_assets ga
+                        JOIN assets a ON ga.asset_id = a.asset_id
+                        WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
+                        AND ga.visible = TRUE
+                        AND a.deleted = FALSE
                     ) as photo_count
                 FROM sub_galleries
                 WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
@@ -536,11 +543,11 @@ class GalleryService:
         """Update a sub-gallery."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Verify sub-gallery exists
+            # Verify sub-gallery exists (exclude deleted)
             sub_gallery = await conn.fetchrow(
                 """
                 SELECT sub_gallery_id FROM sub_galleries
-                WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
+                WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3 AND deleted = FALSE
                 """,
                 workspace_id,
                 gallery_id,
@@ -555,11 +562,11 @@ class GalleryService:
             param_idx = 1
 
             if name is not None:
-                # Check for duplicate name
+                # Check for duplicate name (exclude deleted sub-galleries)
                 existing_id = await conn.fetchval(
                     """
-                    SELECT sub_gallery_id FROM sub_galleries 
-                    WHERE gallery_id = $1 AND name = $2 AND sub_gallery_id != $3
+                    SELECT sub_gallery_id FROM sub_galleries
+                    WHERE gallery_id = $1 AND name = $2 AND sub_gallery_id != $3 AND deleted = FALSE
                     """,
                     gallery_id,
                     name,
@@ -587,16 +594,18 @@ class GalleryService:
                 param_idx += 1
 
             if not set_clauses:
-                # No updates, return current data
+                # No updates, return current data (photo_count excludes deleted assets)
                 row = await conn.fetchrow(
                     """
                     SELECT
                         sub_gallery_id, name, sort_order, visible, cover_asset_id,
                         (
                             SELECT COUNT(*)
-                            FROM gallery_assets
-                            WHERE sub_gallery_id = sub_galleries.sub_gallery_id
-                            AND visible = TRUE
+                            FROM gallery_assets ga
+                            JOIN assets a ON ga.asset_id = a.asset_id
+                            WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
+                            AND ga.visible = TRUE
+                            AND a.deleted = FALSE
                         ) as photo_count
                     FROM sub_galleries
                     WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
@@ -616,16 +625,18 @@ class GalleryService:
                     *params,
                 )
 
-                # Fetch updated data
+                # Fetch updated data (photo_count excludes deleted assets)
                 row = await conn.fetchrow(
                     """
                     SELECT
                         sub_gallery_id, name, sort_order, visible, cover_asset_id,
                         (
                             SELECT COUNT(*)
-                            FROM gallery_assets
-                            WHERE sub_gallery_id = sub_galleries.sub_gallery_id
-                            AND visible = TRUE
+                            FROM gallery_assets ga
+                            JOIN assets a ON ga.asset_id = a.asset_id
+                            WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
+                            AND ga.visible = TRUE
+                            AND a.deleted = FALSE
                         ) as photo_count
                     FROM sub_galleries
                     WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
@@ -650,14 +661,14 @@ class GalleryService:
         gallery_id: UUID,
         sub_gallery_id: UUID,
     ) -> None:
-        """Delete a sub-gallery."""
+        """Delete a sub-gallery (soft delete)."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Verify sub-gallery exists
+            # Verify sub-gallery exists (exclude deleted)
             sub_gallery = await conn.fetchrow(
                 """
                 SELECT sub_gallery_id FROM sub_galleries
-                WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
+                WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3 AND deleted = FALSE
                 """,
                 workspace_id,
                 gallery_id,
@@ -678,17 +689,18 @@ class GalleryService:
                 sub_gallery_id,
             )
 
-            # Delete sub-gallery
+            # Soft delete sub-gallery
             result = await conn.execute(
                 """
-                DELETE FROM sub_galleries
+                UPDATE sub_galleries
+                SET deleted = TRUE, deleted_at = NOW()
                 WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
                 """,
                 workspace_id,
                 gallery_id,
                 sub_gallery_id,
             )
-            if result == "DELETE 0":
+            if result == "UPDATE 0":
                 raise SubGalleryNotFoundError(sub_gallery_id)
 
     async def update_sub_galleries_sort_order(
@@ -700,20 +712,21 @@ class GalleryService:
         """Update sort order for multiple sub-galleries."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Verify gallery exists
+            # Verify gallery exists (exclude deleted)
             gallery = await conn.fetchrow(
-                "SELECT gallery_id FROM galleries WHERE workspace_id = $1 AND gallery_id = $2",
+                "SELECT gallery_id FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
                 workspace_id,
                 gallery_id,
             )
             if not gallery:
                 raise GalleryNotFoundError(gallery_id)
 
-            # Verify all sub-galleries belong to this gallery
+            # Verify all sub-galleries belong to this gallery (exclude deleted)
             sub_gallery_count = await conn.fetchval(
                 """
                 SELECT COUNT(*) FROM sub_galleries
                 WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = ANY($3::uuid[])
+                AND deleted = FALSE
                 """,
                 workspace_id,
                 gallery_id,

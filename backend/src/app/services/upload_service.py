@@ -111,11 +111,11 @@ class UploadService:
         """Get or create sub-gallery by name."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Try to find existing
+            # Try to find existing (exclude deleted)
             row = await conn.fetchrow(
                 """
                 SELECT sub_gallery_id FROM sub_galleries
-                WHERE gallery_id = $1 AND name = $2
+                WHERE gallery_id = $1 AND name = $2 AND deleted = FALSE
                 """,
                 gallery_id,
                 name,
@@ -142,19 +142,20 @@ class UploadService:
                     gallery_id,
                     name,
                 )
-                
+
                 # Fetch again to get the authoritative ID (ours or the one that won the race)
+                # Exclude deleted in case a race created then deleted
                 row = await conn.fetchrow(
                     """
                     SELECT sub_gallery_id FROM sub_galleries
-                    WHERE gallery_id = $1 AND name = $2
+                    WHERE gallery_id = $1 AND name = $2 AND deleted = FALSE
                     """,
                     gallery_id,
                     name,
                 )
                 if row:
                     return row["sub_gallery_id"]
-                
+
                 # Should not happen unless delete happened in between
                 raise UploadError("Failed to create sub-gallery", "SUB_GALLERY_CREATION_FAILED")
                 

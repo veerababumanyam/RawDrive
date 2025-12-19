@@ -9,7 +9,9 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Path, Query, status
+
+from fastapi import Request
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
 from app.api.schemas import (
@@ -23,12 +25,17 @@ from app.api.schemas import (
     UpdateGalleryRequest,
     UpdateSubGalleryRequest,
 )
+from app.api.exceptions import AppError, ForbiddenError, NotFoundError, ValidationAppError, InternalError
 from app.services.gallery_service import (
     GalleryEmptyError,
     GalleryError,
     GalleryNotFoundError,
     SubGalleryNotFoundError,
     get_gallery_service,
+)
+from app.services.deletion_service import (
+    DeletionError,
+    get_deletion_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,12 +75,13 @@ async def list_galleries(
         )
         return GalleryListResponse(**result)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise AppError(message=str(e), code=e.code, status_code=e.status)
     except Exception as e:
         logger.exception("Failed to list galleries")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to list galleries"},
+        raise AppError(
+            message="Failed to list galleries",
+            code="INTERNAL_ERROR",
+            status_code=500,
         )
 
 
@@ -106,12 +114,13 @@ async def create_gallery(
         )
         return GalleryDetailResponse(**result)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise AppError(message=str(e), code=e.code, status_code=e.status)
     except Exception as e:
         logger.exception("Failed to create gallery")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to create gallery"},
+        raise AppError(
+            message="Failed to create gallery",
+            code="INTERNAL_ERROR",
+            status_code=500,
         )
 
 
@@ -137,12 +146,13 @@ async def get_gallery(
         result = await service.get_gallery(workspace_id=workspace_id, gallery_id=gallery_id)
         return GalleryDetailResponse(**result)
     except GalleryNotFoundError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise NotFoundError("gallery", gallery_id, code=e.code)
     except Exception as e:
         logger.exception("Failed to get gallery")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to get gallery"},
+        raise AppError(
+            message="Failed to get gallery",
+            code="INTERNAL_ERROR",
+            status_code=500,
         )
 
 
@@ -184,13 +194,10 @@ async def update_gallery(
         )
         return GalleryDetailResponse(**result)
     except GalleryNotFoundError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise NotFoundError("Gallery", str(gallery_id))
     except Exception as e:
         logger.exception("Failed to update gallery")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to update gallery"},
-        )
+        raise InternalError("Failed to update gallery")
 
 
 @router.delete(
@@ -201,6 +208,7 @@ async def update_gallery(
     responses={
         403: {"model": ErrorResponse, "description": "Access denied"},
         404: {"model": ErrorResponse, "description": "Gallery not found"},
+        409: {"model": ErrorResponse, "description": "Gallery already deleted"},
     },
 )
 async def delete_gallery(
@@ -208,20 +216,39 @@ async def delete_gallery(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    request: Request,
 ) -> MessageResponse:
-    """Delete (archive) a gallery."""
-    service = get_gallery_service()
+    """Soft delete a gallery (moves to recycle bin).
+
+    The gallery and its contents are moved to the recycle bin and can be
+    restored within the retention period. Use the recycle bin endpoints
+    for permanent deletion.
+    """
+    service = get_deletion_service()
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
     try:
-        await service.delete_gallery(workspace_id=workspace_id, gallery_id=gallery_id)
-        return MessageResponse(message="Gallery deleted successfully")
-    except GalleryNotFoundError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        result = await service.soft_delete_gallery(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            user_id=current_user.user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        return MessageResponse(
+            message=f"Gallery moved to recycle bin. {result.cascaded_photos} photos also moved."
+        )
+    except DeletionError as e:
+        if e.status == 404:
+            raise NotFoundError("Gallery", str(gallery_id))
+        elif e.status == 403:
+            raise ForbiddenError(str(e))
+        else:
+            raise ValidationAppError(str(e))
     except Exception as e:
         logger.exception("Failed to delete gallery")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to delete gallery"},
-        )
+        raise InternalError("Failed to delete gallery")
 
 
 @router.post(
@@ -252,15 +279,12 @@ async def publish_gallery(
         )
         return GalleryDetailResponse(**result)
     except GalleryEmptyError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise ValidationAppError(str(e), field="gallery_id")
     except GalleryNotFoundError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        raise NotFoundError("Gallery", str(gallery_id))
     except Exception as e:
         logger.exception("Failed to publish gallery")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to publish gallery"},
-        )
+        raise InternalError("Failed to publish gallery")
 
 
 # Sub-gallery endpoints
@@ -293,18 +317,17 @@ async def create_sub_gallery(
         )
         return result
     except GalleryNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "GALLERY_NOT_FOUND", "message": str(e)},
-        )
+        raise NotFoundError("Gallery", str(gallery_id))
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        if e.status == 400:
+            raise ValidationAppError(str(e))
+        elif e.status == 403:
+            raise ForbiddenError(str(e))
+        else:
+            raise InternalError(str(e))
     except Exception as e:
         logger.exception("Failed to create sub-gallery")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to create sub-gallery"},
-        )
+        raise InternalError("Failed to create sub-gallery")
 
 
 @router.patch(
@@ -338,18 +361,17 @@ async def update_sub_gallery(
         )
         return result
     except SubGalleryNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "SUB_GALLERY_NOT_FOUND", "message": str(e)},
-        )
+        raise NotFoundError("Sub-gallery", str(sub_gallery_id))
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        if e.status == 400:
+            raise ValidationAppError(str(e))
+        elif e.status == 403:
+            raise ForbiddenError(str(e))
+        else:
+            raise InternalError(str(e))
     except Exception as e:
         logger.exception("Failed to update sub-gallery")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to update sub-gallery"},
-        )
+        raise InternalError("Failed to update sub-gallery")
 
 
 @router.delete(
@@ -379,16 +401,15 @@ async def delete_sub_gallery(
         )
         return MessageResponse(message="Sub-gallery deleted successfully")
     except SubGalleryNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "SUB_GALLERY_NOT_FOUND", "message": str(e)},
-        )
+        raise NotFoundError("Sub-gallery", str(sub_gallery_id))
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+        if e.status == 400:
+            raise ValidationAppError(str(e))
+        elif e.status == 403:
+            raise ForbiddenError(str(e))
+        else:
+            raise InternalError(str(e))
     except Exception as e:
         logger.exception("Failed to delete sub-gallery")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to delete sub-gallery"},
-        )
+        raise InternalError("Failed to delete sub-gallery")
 
