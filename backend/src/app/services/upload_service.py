@@ -261,11 +261,13 @@ class UploadService:
         # For now, return backend endpoint URL
         from app.config.settings import get_settings
         settings = get_settings()
-        api_base_url = f"http://{settings.api_host}:{settings.api_port}"
-        # If api_host is 0.0.0.0, use localhost for client-facing URLs
-        if settings.api_host == "0.0.0.0":
+
+        # Use API_BASE_URL if configured, otherwise fallback to localhost
+        if settings.api_base_url:
+            api_base_url = settings.api_base_url.rstrip("/")
+        else:
             api_base_url = f"http://localhost:{settings.api_port}"
-        
+
         return {
             "upload_id": str(upload_id),
             "provider": "r2",

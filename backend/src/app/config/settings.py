@@ -39,6 +39,11 @@ class AppSettings(BaseSettings):
     app_env: Environment = Field(Environment.DEVELOPMENT, alias="APP_ENV")
     api_host: str = Field("0.0.0.0", alias="API_HOST")
     api_port: int = Field(8000, alias="API_PORT")
+    api_base_url: Optional[str] = Field(
+        None,
+        alias="API_BASE_URL",
+        description="Public base URL for API (e.g., https://rawdrive.in). Used for upload URLs. If not set, falls back to http://localhost:8000",
+    )
 
     # Database and cache (Requirements 1, 2, 19)
     database_url: AnyUrl = Field(..., alias="DATABASE_URL", description="Supports postgres:// or postgresql+asyncpg:// DSNs")
