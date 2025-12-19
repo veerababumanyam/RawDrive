@@ -22,6 +22,19 @@ export interface ApiResponse<T> {
   error?: ApiError['error'];
 }
 
+// Type guard for API errors
+export function isApiError(error: unknown): error is ApiError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'error' in error &&
+    typeof (error as ApiError).error === 'object' &&
+    (error as ApiError).error !== null &&
+    'code' in (error as ApiError).error &&
+    'message' in (error as ApiError).error
+  );
+}
+
 // Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const MAX_RETRIES = 3;

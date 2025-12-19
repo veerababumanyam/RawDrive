@@ -11,7 +11,7 @@ interface ErrorContext {
 }
 
 export const useErrorHandler = () => {
-  const { showToast } = useToast();
+  const { addToast } = useToast();
 
   // Load locale on mount
   useEffect(() => {
@@ -59,14 +59,16 @@ export const useErrorHandler = () => {
     });
 
     // Show toast notification
-    showToast({
-      type: 'error',
+    const recoveryAction = errorMapping.recoveryAction
+      ? ErrorMessageMapper.getRecoveryAction(errorMapping.recoveryAction)
+      : undefined;
+
+    addToast({
+      variant: 'error',
       title: errorMapping.title,
       message: errorMapping.message,
       duration: 5000,
-      action: errorMapping.recoveryAction ?
-        ErrorMessageMapper.getRecoveryAction(errorMapping.recoveryAction) :
-        undefined
+      action: recoveryAction ? { label: recoveryAction.label, onClick: recoveryAction.action } : undefined
     });
 
     // Return error info for further handling if needed
@@ -76,7 +78,7 @@ export const useErrorHandler = () => {
       mapping: errorMapping,
       originalError: error
     };
-  }, [showToast]);
+  }, [addToast]);
 
   const handleApiError = useCallback((
     error: any,

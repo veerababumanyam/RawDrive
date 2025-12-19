@@ -5,7 +5,7 @@ interface AppErrorFallbackProps {
   resetError?: () => void;
 }
 
-export const AppErrorFallback: React.FC<AppErrorFallbackProps> = ({ error, resetError }) => (
+export const AppErrorFallback: React.FC<AppErrorFallbackProps> = ({ resetError }) => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50">
     <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
       <div className="mb-4">
@@ -44,7 +44,7 @@ interface RouteErrorFallbackProps {
   resetError?: () => void;
 }
 
-export const RouteErrorFallback: React.FC<RouteErrorFallbackProps> = ({ error, resetError }) => (
+export const RouteErrorFallback: React.FC<RouteErrorFallbackProps> = ({ resetError }) => (
   <div className="flex items-center justify-center min-h-[400px] bg-gray-50">
     <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
       <div className="mb-4">
@@ -89,7 +89,7 @@ interface ComponentErrorFallbackProps {
   resetError?: () => void;
 }
 
-export const ComponentErrorFallback: React.FC<ComponentErrorFallbackProps> = ({ error, resetError }) => (
+export const ComponentErrorFallback: React.FC<ComponentErrorFallbackProps> = ({ resetError }) => (
   <div className="bg-red-50 border border-red-200 rounded-md p-4 my-4">
     <div className="flex">
       <div className="flex-shrink-0">
