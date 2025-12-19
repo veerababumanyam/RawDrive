@@ -40,7 +40,7 @@ export function isApiError(error: unknown): error is ApiError {
 /**
  * Refresh the access token using the refresh token
  */
-async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<string | null> {
   const tokens = getStoredTokens();
   if (!tokens?.refreshToken) {
     return null;
@@ -163,10 +163,37 @@ class ApiClient {
       }
 
       // Parse response
-      const data = await response.json().catch(() => ({}));
+      let data: any = {};
+      try {
+        const text = await response.text();
+        if (text) {
+          data = JSON.parse(text);
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        // If response is not JSON, try to extract error message
+        if (!response.ok) {
+          return {
+            error: {
+              code: `HTTP_${response.status}`,
+              message: `Request failed with status ${response.status}`,
+            },
+          };
+        }
+      }
 
       if (!response.ok) {
-        return { error: data.error || { code: 'UNKNOWN', message: 'Request failed' } };
+        console.error('API error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          data,
+        });
+        return {
+          error: data.error || data.detail || {
+            code: `HTTP_${response.status}`,
+            message: data.message || response.statusText || 'Request failed',
+          },
+        };
       }
 
       return { data };
@@ -200,8 +227,11 @@ class ApiClient {
     });
   }
 
-  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  async delete<T>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+      body: data ? JSON.stringify(data) : undefined,
+    });
   }
 }
 

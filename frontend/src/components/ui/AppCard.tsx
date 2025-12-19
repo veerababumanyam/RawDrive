@@ -7,7 +7,15 @@ import React, { forwardRef, createContext } from 'react';
    for structured content layout.
    ============================================================================= */
 
-export type CardVariant = 'default' | 'elevated' | 'outlined' | 'flat' | 'glass';
+export type CardVariant =
+  | 'default'
+  | 'elevated'
+  | 'outlined'
+  | 'flat'
+  | 'glass'
+  | 'glass-premium'
+  | 'gradient-border'
+  | 'premium';
 
 export interface AppCardProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Visual variant of the card */
@@ -22,6 +30,10 @@ export interface AppCardProps extends React.HTMLAttributes<HTMLDivElement> {
   radius?: 'sm' | 'md' | 'lg' | 'xl';
   /** Full width */
   fullWidth?: boolean;
+  /** Enable glow effect on hover */
+  glow?: boolean;
+  /** Enable animated gradient border */
+  animatedBorder?: boolean;
 }
 
 const CardContext = createContext<{ variant: CardVariant }>({ variant: 'default' });
@@ -31,7 +43,10 @@ const variantStyles: Record<CardVariant, string> = {
   elevated: 'bg-surface border-none shadow-lg',
   outlined: 'bg-surface border border-border shadow-none',
   flat: 'bg-background-alt border-none shadow-none',
-  glass: 'glass',
+  glass: 'card-glass',
+  'glass-premium': 'glass-premium',
+  'gradient-border': 'gradient-border bg-surface',
+  premium: 'card-premium',
 };
 
 const paddingStyles: Record<string, string> = {
@@ -57,6 +72,8 @@ export const AppCard = forwardRef<HTMLDivElement, AppCardProps>(
       padding = 'none',
       radius = 'lg',
       fullWidth = false,
+      glow = false,
+      animatedBorder = false,
       className = '',
       children,
       onClick,
@@ -67,12 +84,18 @@ export const AppCard = forwardRef<HTMLDivElement, AppCardProps>(
     const baseStyles = 'overflow-hidden';
 
     const hoverStyles = hoverable
-      ? 'transition-all duration-200 ease-out cursor-pointer hover:shadow-card-hover hover:-translate-y-0.5 hover:border-border-hover'
+      ? 'transition-all duration-200 ease-out cursor-pointer hover:shadow-card-hover hover:-translate-y-1 hover:border-border-hover'
       : '';
 
     const clickableStyles = clickable
       ? 'cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 outline-none'
       : '';
+
+    // Modern effect classes
+    const effectClasses = [
+      glow ? 'glow-accent-hover' : '',
+      animatedBorder ? 'gradient-border-animated' : '',
+    ].filter(Boolean).join(' ');
 
     const classes = [
       baseStyles,
@@ -81,6 +104,7 @@ export const AppCard = forwardRef<HTMLDivElement, AppCardProps>(
       radiusStyles[radius],
       hoverStyles,
       clickableStyles,
+      effectClasses,
       fullWidth ? 'w-full' : '',
       className,
     ].filter(Boolean).join(' ');

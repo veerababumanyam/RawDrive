@@ -13,10 +13,12 @@ import {
   Clock,
   Star,
   Trash2,
+  LogOut,
+  PanelLeftClose,
+  PanelLeft,
 } from 'lucide-react';
 import {
   Sidebar,
-  SidebarHeader,
   SidebarContent,
   SidebarFooter,
   SidebarSection,
@@ -24,11 +26,16 @@ import {
   SidebarDivider,
 } from '../layout/Sidebar';
 import { useAppShell } from '../layout/AppShell';
+import { useAuth } from '../../contexts/AuthContext';
+import { AppButton } from '../ui/AppButton';
 
 /* =============================================================================
    WorkspaceSidebar Component
 
    Main navigation sidebar for the workspace application.
+
+   IMPORTANT: Sidebar includes its own header with logo and collapse toggle.
+   This follows standard practice where the sidebar is self-contained.
    ============================================================================= */
 
 interface WorkspaceSidebarProps {
@@ -50,7 +57,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { sidebarCollapsed } = useAppShell();
+  const { sidebarCollapsed, toggleCollapse } = useAppShell();
+  const { logout } = useAuth();
 
   const currentPath = location.pathname;
 
@@ -86,57 +94,69 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     navigate(path);
   };
 
-  return (
-    <Sidebar collapsed={sidebarCollapsed} activeItem={currentPath}>
-      {/* Header with Logo/Workspace */}
-      <SidebarHeader>
-        {!sidebarCollapsed ? (
-          <div className="flex items-center gap-3 w-full">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-sm">R</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-text-primary truncate">
-                {workspaceName}
-              </div>
-              <div className="text-xs text-text-tertiary flex items-center gap-1">
-                {plan !== 'free' && <Crown size={12} className="text-gold" />}
-                {plan.charAt(0).toUpperCase() + plan.slice(1)} Plan
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <span className="text-white font-bold text-sm">R</span>
-          </div>
-        )}
-      </SidebarHeader>
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/signin');
+    } catch {
+      navigate('/signin');
+    }
+  };
 
+  return (
+    <Sidebar collapsed={sidebarCollapsed} activeItem={currentPath} className="h-full">
       {/* Main Navigation */}
-      <SidebarContent>
+      <SidebarContent className="pt-2">
+        {/* Collapse Toggle & Workspace Info */}
+        <div className={`px-3 mb-3 ${sidebarCollapsed ? 'flex justify-center' : ''}`}>
+          {/* Collapse Toggle Button */}
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} mb-3`}>
+            {!sidebarCollapsed && (
+              <div className="flex items-center gap-3 p-2 rounded-xl bg-surface-hover/50 flex-1 mr-2">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <span className="text-white font-bold text-sm">
+                    {workspaceName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-text-primary truncate text-sm">
+                    {workspaceName}
+                  </div>
+                  <div className="text-xs text-text-tertiary flex items-center gap-1">
+                    {plan !== 'free' && <Crown size={12} className="text-gold" />}
+                    {plan.charAt(0).toUpperCase() + plan.slice(1)} Plan
+                  </div>
+                </div>
+              </div>
+            )}
+            <button
+              onClick={toggleCollapse}
+              className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center flex-shrink-0"
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {sidebarCollapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
+            </button>
+          </div>
+        </div>
+
         {/* New Gallery Button */}
-        <div className="px-2 mb-4">
-          <button
+        <div className="px-3 mb-4">
+          <AppButton
+            variant="accent"
+            size={sidebarCollapsed ? 'icon' : 'md'}
             onClick={() => navigate('/workspace/galleries/new')}
-            className={`
-              w-full flex items-center justify-center gap-2
-              px-4 py-2.5
-              bg-primary hover:bg-primary-hover
-              text-white font-medium
-              rounded-lg
-              transition-colors duration-150
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
-              min-h-[44px]
-              ${sidebarCollapsed ? 'px-2' : ''}
-            `}
+            fullWidth
+            leftIcon={<Plus size={20} />}
+            title={sidebarCollapsed ? 'New Gallery' : undefined}
+            shine
           >
-            <Plus size={20} />
-            {!sidebarCollapsed && <span>New Gallery</span>}
-          </button>
+            {!sidebarCollapsed && 'New Gallery'}
+          </AppButton>
         </div>
 
         {/* Main Nav */}
-        <SidebarSection>
+        <SidebarSection title={sidebarCollapsed ? undefined : 'Main'}>
           {mainNavItems.map((item) => (
             <SidebarItem
               key={item.id}
@@ -168,45 +188,11 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             />
           ))}
         </SidebarSection>
-      </SidebarContent>
 
-      {/* Footer */}
-      <SidebarFooter>
-        {/* Storage Usage */}
-        {!sidebarCollapsed && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
-              <span>Storage</span>
-              <span>
-                {formatStorage(storageUsed)} / {formatStorage(storageLimit)}
-              </span>
-            </div>
-            <div className="h-2 bg-surface-hover rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  storagePercent > 90
-                    ? 'bg-error'
-                    : storagePercent > 70
-                    ? 'bg-warning'
-                    : 'bg-primary'
-                }`}
-                style={{ width: `${storagePercent}%` }}
-              />
-            </div>
-            {plan === 'free' && (
-              <button
-                onClick={() => navigate('/workspace/settings/billing')}
-                className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-primary hover:text-primary-hover font-medium rounded-lg hover:bg-primary-100/50 transition-colors"
-              >
-                <Crown size={14} />
-                Upgrade for more storage
-              </button>
-            )}
-          </div>
-        )}
+        <SidebarDivider />
 
-        {/* Bottom Nav Items */}
-        <div className="space-y-1">
+        {/* System Section */}
+        <SidebarSection title={sidebarCollapsed ? undefined : 'System'}>
           {bottomNavItems.map((item) => (
             <SidebarItem
               key={item.id}
@@ -217,7 +203,60 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               onClick={() => handleNavigation(item.path)}
             />
           ))}
-        </div>
+        </SidebarSection>
+      </SidebarContent>
+
+      {/* Footer */}
+      <SidebarFooter>
+        {/* Storage Usage */}
+        {!sidebarCollapsed && (
+          <div className="mb-4 p-3 rounded-xl bg-surface-hover/50">
+            <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
+              <span className="font-medium">Storage</span>
+              <span>
+                {formatStorage(storageUsed)} / {formatStorage(storageLimit)}
+              </span>
+            </div>
+            <div className="h-2 bg-background rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  storagePercent > 90
+                    ? 'bg-error'
+                    : storagePercent > 70
+                    ? 'bg-warning'
+                    : 'bg-gradient-to-r from-primary to-accent'
+                }`}
+                style={{ width: `${storagePercent}%` }}
+              />
+            </div>
+            {plan === 'free' && (
+              <AppButton
+                variant="gold"
+                size="sm"
+                onClick={() => navigate('/workspace/settings/billing')}
+                fullWidth
+                leftIcon={<Crown size={14} />}
+                className="mt-3"
+                shine
+              >
+                Upgrade
+              </AppButton>
+            )}
+          </div>
+        )}
+
+        {/* Logout Button */}
+        <AppButton
+          variant="ghost"
+          size={sidebarCollapsed ? 'icon' : 'md'}
+          onClick={handleLogout}
+          fullWidth
+          leftIcon={<LogOut size={20} />}
+          title={sidebarCollapsed ? 'Log Out' : undefined}
+          className="hover:!text-error hover:!bg-error/5"
+        >
+          {!sidebarCollapsed && 'Log Out'}
+        </AppButton>
       </SidebarFooter>
     </Sidebar>
   );

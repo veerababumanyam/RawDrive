@@ -5,12 +5,13 @@ Failed auth attempts and API calls are rate limited.
 """
 
 import logging
-from typing import Callable
+from typing import Callable, Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.config.settings import get_settings
 from app.services.rate_limit_service import RateLimitService, RateLimitType
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ EXEMPT_ROUTES = [
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Middleware that enforces rate limits on API requests."""
 
-    def __init__(self, app: Callable, exclude_paths: list[str] | None = None):
+    def __init__(self, app: Callable, exclude_paths: Optional[list[str]] = None):
         super().__init__(app)
         self.rate_limiter = RateLimitService()
         self.exclude_paths = exclude_paths or EXEMPT_ROUTES
@@ -106,6 +107,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "retry_after": result.retry_after,
                 },
             )
+            # Add CORS headers to rate limit response
+            # This ensures CORS works even when rate limited
+            origin = request.headers.get("origin")
+            if origin:
+                try:
+                    settings = get_settings()
+                    if origin in settings.allowed_cors_origins or "*" in settings.allowed_cors_origins:
+                        response.headers["Access-Control-Allow-Origin"] = origin
+                        response.headers["Access-Control-Allow-Credentials"] = "true"
+                        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+                        response.headers["Access-Control-Allow-Headers"] = "*"
+                except Exception:
+                    # If settings can't be loaded, don't add CORS headers
+                    pass
 
         # Add rate limit headers
         response.headers["X-RateLimit-Limit"] = str(result.limit)
@@ -116,7 +131,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    def _get_limit_type(self, path: str) -> RateLimitType | None:
+    def _get_limit_type(self, path: str) -> Optional[RateLimitType]:
         """Determine rate limit type for path."""
         for prefix, limit_type in RATE_LIMIT_ROUTES.items():
             if path.startswith(prefix):

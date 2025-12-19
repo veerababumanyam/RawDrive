@@ -197,3 +197,9 @@ docs/.vuepress/dist/
 
 # Project specific
 rawdrive_deploy_key
+
+
+
+
+
+backend/venv/

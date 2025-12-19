@@ -287,56 +287,64 @@ export const PricingSection: React.FC<PricingSectionProps> = ({
   return (
     <section
       id={id}
-      className={`py-20 lg:py-28 bg-white relative overflow-hidden ${className}`}
+      className={`landing-light py-20 lg:py-28 bg-white relative overflow-hidden ${className}`}
       aria-labelledby="pricing-heading"
     >
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
         <FadeIn direction="up" className="text-center mb-12">
-          <span className="text-cyan-600 font-medium text-sm mb-3 block">Pricing</span>
+          <span className="text-cyan-600 font-semibold text-sm mb-3 block">Pricing</span>
           <h2
             id="pricing-heading"
             className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 mb-4"
           >
             {title}
           </h2>
-          <p className="text-lg text-slate-600 max-w-2xl mx-auto mb-8">
+          <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-8">
             {subtitle}
           </p>
 
           {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-full">
+          <div 
+            className="inline-flex items-center gap-1 p-1.5 bg-slate-100 rounded-full"
+            role="radiogroup"
+            aria-label="Billing period"
+          >
             <button
               onClick={() => setIsAnnual(false)}
               className={`
-                px-6 py-2.5 rounded-full font-medium text-sm transition-all duration-200
+                px-6 py-2.5 rounded-full font-semibold text-sm transition-all duration-200
                 ${!isAnnual
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-slate-900 shadow-md'
+                  : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/60'
                 }
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2
-                min-h-[40px]
+                min-h-[44px]
               `}
-              aria-pressed={!isAnnual}
+              style={!isAnnual ? { color: '#ffffff' } : undefined}
+              role="radio"
+              aria-checked={!isAnnual}
             >
               Monthly
             </button>
             <button
               onClick={() => setIsAnnual(true)}
               className={`
-                px-6 py-2.5 rounded-full font-medium text-sm transition-all duration-200
+                px-6 py-2.5 rounded-full font-semibold text-sm transition-all duration-200
                 flex items-center gap-2
                 ${isAnnual
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-slate-900 shadow-md'
+                  : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/60'
                 }
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2
-                min-h-[40px]
+                min-h-[44px]
               `}
-              aria-pressed={isAnnual}
+              style={isAnnual ? { color: '#ffffff' } : undefined}
+              role="radio"
+              aria-checked={isAnnual}
             >
               Annual
-              <span className="px-2 py-0.5 text-xs font-bold bg-emerald-500 text-white rounded-full">
+              <span className="px-2 py-0.5 text-xs font-bold bg-emerald-500 text-white rounded-full shadow-sm">
                 -17%
               </span>
             </button>

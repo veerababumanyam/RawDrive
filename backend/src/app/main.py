@@ -32,15 +32,23 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
     await init_redis_client(settings)
     start_audit_worker()  # Start Loki audit log worker
 
+    # Import worker handlers to register them
+    # This must happen before starting the worker
+    import app.services.asset_processing_worker  # noqa: F401
+
     # Start background task worker and scheduler (only if not disabled)
     enable_worker = os.getenv("DISABLE_TASK_WORKER", "false").lower() != "true"
     worker_task = None
     if enable_worker:
         task_queue = get_task_queue()
-        worker_task = asyncio.create_task(task_queue.start_worker(concurrency=5))
+        # Increase concurrency for asset processing (can be tuned based on load)
+        worker_concurrency = int(os.getenv("TASK_WORKER_CONCURRENCY", "10"))
+        worker_task = asyncio.create_task(task_queue.start_worker(concurrency=worker_concurrency))
         scheduler = get_scheduler()
         await scheduler.start()
-        logger.info("Background task worker and scheduler started")
+        logger.info(
+            f"Background task worker started with concurrency={worker_concurrency}"
+        )
 
     logger.info("Application configuration loaded", extra={"config": settings.safe_dump()})
 
@@ -74,8 +82,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware - MUST be added first (processed last on request, first on response)
-# This ensures CORS headers are added to all responses including errors
+# Add other middleware (applied in reverse order)
+# 1. Request ID - first to process, last to respond
+app.add_middleware(RequestIdMiddleware)  # type: ignore
+# 2. Audit logging - logs all requests
+app.add_middleware(AuditLoggingMiddleware)  # type: ignore
+# 3. Rate limiting - before processing
+app.add_middleware(RateLimitMiddleware)  # type: ignore
+
+# CORS middleware - MUST be added last to update ALL responses (including errors from other middleware)
 app.add_middleware(  # type: ignore
     CORSMiddleware,
     allow_origins=settings.allowed_cors_origins,
@@ -84,14 +99,6 @@ app.add_middleware(  # type: ignore
     allow_headers=["*"],
     expose_headers=["X-Request-ID"],
 )
-
-# Add other middleware (applied in reverse order)
-# 1. Request ID - first to process, last to respond
-app.add_middleware(RequestIdMiddleware)  # type: ignore
-# 2. Audit logging - logs all requests
-app.add_middleware(AuditLoggingMiddleware)  # type: ignore
-# 3. Rate limiting - before processing
-app.add_middleware(RateLimitMiddleware)  # type: ignore
 
 # Include API v1 routes
 app.include_router(v1_router)  # type: ignore

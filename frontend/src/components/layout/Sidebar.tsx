@@ -30,6 +30,8 @@ export interface SidebarProps {
   activeItem?: string | null;
   /** Callback when active item changes */
   onActiveChange?: (id: string) => void;
+  /** Use glass effect styling */
+  glass?: boolean;
   className?: string;
 }
 
@@ -38,6 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   collapsed = false,
   activeItem = null,
   onActiveChange,
+  glass = false,
   className = '',
 }) => {
   const [internalActive, setInternalActive] = useState<string | null>(activeItem);
@@ -60,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           flex flex-col
           h-full
           overflow-hidden
+          ${glass ? 'glass-light' : ''}
           ${className}
         `}
         aria-label="Sidebar navigation"
@@ -196,7 +200,7 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
           className={`
             flex items-center justify-between
             px-3 py-2
-            ${collapsible ? 'cursor-pointer hover:bg-surface-hover rounded-lg' : ''}
+            ${collapsible ? 'cursor-pointer hover:bg-surface-hover hover:shadow-sm rounded-lg transition-all duration-200' : ''}
           `}
           onClick={collapsible ? () => setExpanded(!expanded) : undefined}
           role={collapsible ? 'button' : undefined}
@@ -249,6 +253,10 @@ export interface SidebarItemProps {
   href?: string;
   /** Nested items */
   children?: React.ReactNode;
+  /** Use gradient effect for active state */
+  gradientActive?: boolean;
+  /** Use glow effect on hover */
+  glowHover?: boolean;
   className?: string;
 }
 
@@ -264,6 +272,8 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   onClick,
   href,
   children,
+  gradientActive = false,
+  glowHover = false,
   className = '',
 }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -285,23 +295,50 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
 
   const baseStyles = `
     group
+    relative
     flex items-center
     w-full
     px-3
     ${collapsed ? 'justify-center' : ''}
     py-2.5
-    rounded-lg
+    rounded-xl
     text-sm font-medium
-    transition-all duration-150 ease-out
+    transition-all duration-200 ease-out
     outline-none
     focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
   `;
 
+  // Modern active state with gradient option
+  const getActiveStyles = () => {
+    if (gradientActive) {
+      return `
+        bg-gradient-to-r from-primary-500/10 to-accent-500/10
+        text-primary-600 dark:text-primary-400
+        border border-primary-200/50 dark:border-primary-800/50
+        shadow-sm
+      `;
+    }
+    return 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 shadow-sm';
+  };
+
+  // Modern hover state with optional glow
+  const getHoverStyles = () => {
+    if (glowHover) {
+      return `
+        hover:bg-surface-hover
+        hover:text-text-primary
+        hover:shadow-md
+        hover:shadow-primary-500/10
+      `;
+    }
+    return 'hover:bg-surface-hover hover:text-text-primary';
+  };
+
   const stateStyles = disabled
     ? 'opacity-50 cursor-not-allowed'
     : isActive
-    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-    : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary';
+    ? getActiveStyles()
+    : `text-text-secondary ${getHoverStyles()}`;
 
   const Component = href && !disabled ? 'a' : 'button';
 
@@ -312,7 +349,11 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
           className={`
             flex-shrink-0
             ${collapsed ? '' : 'mr-3'}
-            ${isActive ? 'text-primary' : 'text-text-tertiary group-hover:text-text-secondary'}
+            transition-all duration-200
+            ${isActive
+              ? 'text-primary-600 dark:text-primary-400'
+              : 'text-text-tertiary group-hover:text-accent group-hover:scale-110'
+            }
           `}
         >
           {icon}
@@ -328,12 +369,19 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
               className={`
                 flex-shrink-0 ml-2
                 text-text-tertiary
-                transition-transform duration-200
+                transition-transform duration-200 ease-spring
                 ${expanded ? 'rotate-90' : ''}
               `}
             />
           )}
         </>
+      )}
+      {/* Subtle glow indicator for active state */}
+      {isActive && gradientActive && (
+        <span
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-gradient-to-b from-primary to-accent"
+          aria-hidden="true"
+        />
       )}
     </>
   );
@@ -352,7 +400,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
         {content}
       </Component>
       {hasNestedItems && expanded && !collapsed && (
-        <div className="ml-6 mt-1 space-y-1 border-l border-border pl-3">
+        <div className="ml-6 mt-1 space-y-1 border-l border-border/50 pl-3">
           {children}
         </div>
       )}

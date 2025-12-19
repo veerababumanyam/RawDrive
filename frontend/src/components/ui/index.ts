@@ -82,6 +82,7 @@ export type {
   SpinnerSize,
   SkeletonProps,
   SkeletonGroupProps,
+  SkeletonCardProps,
 } from './Progress';
 
 // Data Display Components

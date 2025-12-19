@@ -9,13 +9,19 @@ import { Loader2 } from 'lucide-react';
    ============================================================================= */
 
 export type ButtonVariant =
-  | 'primary'
-  | 'secondary'
-  | 'outline'
-  | 'ghost'
-  | 'destructive'
-  | 'gold'
-  | 'accent';
+  | 'primary'      // Main actions (Create, Save, Submit) - Deep blue gradient
+  | 'secondary'    // Secondary actions (Cancel, Back) - Subtle glass
+  | 'outline'      // Tertiary actions - Transparent with border
+  | 'ghost'        // Minimal actions (icon buttons) - No background
+  | 'destructive'  // Dangerous actions (Delete, Remove) - Red gradient
+  | 'gold'         // Premium/Upgrade actions - Rich gold shimmer
+  | 'accent'       // Creative/positive actions (New, Add) - Cyan to blue
+  | 'success'      // Confirm/Complete actions - Green gradient
+  | 'warning'      // Caution actions - Amber gradient
+  | 'info'         // Information actions - Soft blue
+  | 'glow'         // Glowing effect button
+  | 'glass'        // Glassmorphism button
+  | 'gradient-border'; // Gradient border button
 
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'icon';
 
@@ -36,85 +42,134 @@ export interface AppButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEle
   fullWidth?: boolean;
   /** Render as a different element (e.g., 'a' for links) */
   as?: React.ElementType;
+  /** Enable shine effect on hover */
+  shine?: boolean;
+  /** Enable ripple effect on click */
+  ripple?: boolean;
+  /** Enable glow pulse animation */
+  glowPulse?: boolean;
 }
 
+/* =============================================================================
+   Modern 2025 Button Variant Styles
+
+   Each variant uses:
+   - Layered gradients for depth (top highlight + main gradient)
+   - Inner shadows for dimension
+   - Colored glow shadows matching the button color
+   - Subtle border for definition
+   - Micro-interactions on hover/active
+   ============================================================================= */
+
 const variantStyles: Record<ButtonVariant, string> = {
+  // PRIMARY - Main actions (Create, Save, Submit)
+  // Deep blue with layered highlight and cyan glow
   primary: `
-    bg-gradient-to-br from-primary-600 to-primary-700
-    text-white
-    shadow-sm shadow-primary/30
-    hover:from-primary-500 hover:to-primary-600 hover:shadow-md hover:shadow-primary/40 hover:-translate-y-0.5
-    active:from-primary-700 active:to-primary-800 active:translate-y-0
+    btn-primary
     focus-visible:ring-primary-500
   `,
+
+  // SECONDARY - Secondary actions (Cancel, Back, Close)
+  // Subtle glass effect with soft border
   secondary: `
-    bg-surface
-    text-text-primary
-    border border-border
-    shadow-sm
-    hover:bg-surface-hover hover:border-border-hover hover:shadow-md
-    active:bg-surface-active
+    btn-secondary
     focus-visible:ring-primary-500
   `,
+
+  // OUTLINE - Tertiary actions
+  // Transparent with colored border, expands on hover
   outline: `
-    bg-transparent
-    text-primary
-    border border-primary
-    hover:bg-primary-50
-    dark:hover:bg-primary-950
-    active:bg-primary-100
+    btn-outline
     focus-visible:ring-primary-500
   `,
+
+  // GHOST - Minimal actions (icon buttons, subtle links)
+  // No background, subtle hover state
   ghost: `
-    bg-transparent
-    text-text-secondary
-    border border-transparent
-    hover:bg-surface-hover hover:text-text-primary
-    active:bg-surface-active
+    btn-ghost
     focus-visible:ring-primary-500
   `,
+
+  // DESTRUCTIVE - Dangerous actions (Delete, Remove)
+  // Red gradient with warning glow
   destructive: `
-    bg-gradient-to-br from-error-600 to-error-700
-    text-white
-    shadow-sm shadow-error/30
-    hover:from-error-500 hover:to-error-600 hover:shadow-md
-    active:from-error-700 active:to-error-800
+    btn-destructive
     focus-visible:ring-error-500
   `,
+
+  // GOLD - Premium/Upgrade actions
+  // Rich gold gradient with shimmer effect
   gold: `
-    bg-gradient-to-br from-gold-500 to-gold-600
-    text-white
-    shadow-sm shadow-gold/30
-    hover:from-gold-400 hover:to-gold-500 hover:shadow-md hover:shadow-gold/40 hover:-translate-y-0.5
-    active:from-gold-600 active:to-gold-700 active:translate-y-0
+    btn-gold
     focus-visible:ring-gold-500
   `,
+
+  // ACCENT - Creative/positive actions (New, Add, Create)
+  // Cyan to blue gradient, energetic feel
   accent: `
-    bg-gradient-to-br from-accent-500 to-accent-600
-    text-white
-    shadow-sm shadow-accent/30
-    hover:from-accent-400 hover:to-accent-500 hover:shadow-md hover:-translate-y-0.5
-    active:from-accent-600 active:to-accent-700 active:translate-y-0
+    btn-accent
     focus-visible:ring-accent-500
+  `,
+
+  // SUCCESS - Confirm, Complete, Approve actions
+  // Green gradient with positive feel
+  success: `
+    btn-success
+    focus-visible:ring-success-500
+  `,
+
+  // WARNING - Caution actions
+  // Amber/orange gradient for attention
+  warning: `
+    btn-warning
+    focus-visible:ring-warning-500
+  `,
+
+  // INFO - Information, Help actions
+  // Softer blue, informational feel
+  info: `
+    btn-info
+    focus-visible:ring-info-500
+  `,
+
+  // GLOW - Special glowing effect
+  // Pulsing glow animation for attention-grabbing CTAs
+  glow: `
+    btn-glow
+    focus-visible:ring-accent-500
+  `,
+
+  // GLASS - Glassmorphism button
+  // For use on dark/image backgrounds
+  glass: `
+    btn-glass
+    focus-visible:ring-white/50
+  `,
+
+  // GRADIENT-BORDER - Gradient border effect
+  // Surface background with animated gradient border
+  'gradient-border': `
+    btn-gradient-border
+    focus-visible:ring-primary-500
   `,
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  xs: 'px-2 py-1 text-xs gap-1 min-h-[28px]',
-  sm: 'px-3 py-1.5 text-sm gap-1.5 min-h-[32px]',
-  md: 'px-4 py-2.5 text-sm gap-2 min-h-[40px]',
-  lg: 'px-6 py-3 text-base gap-2.5 min-h-[48px]',
-  xl: 'px-8 py-4 text-lg gap-3 min-h-[56px]',
-  icon: 'p-2 aspect-square min-h-[40px] min-w-[40px]',
+  xs: 'btn-xs min-h-[28px]',
+  sm: 'btn-sm min-h-[34px]',
+  md: 'min-h-[42px]', // Default size from .btn
+  lg: 'btn-lg min-h-[50px]',
+  xl: 'btn-xl min-h-[58px]',
+  icon: 'btn-icon min-h-[42px] min-w-[42px]',
 };
 
 const iconSizeStyles: Record<ButtonSize, string> = {
-  xs: 'p-1 min-h-[24px] min-w-[24px]',
-  sm: 'p-1.5 min-h-[28px] min-w-[28px]',
-  md: 'p-2 min-h-[40px] min-w-[40px]',
-  lg: 'p-3 min-h-[48px] min-w-[48px]',
-  xl: 'p-4 min-h-[56px] min-w-[56px]',
-  icon: 'p-2 min-h-[40px] min-w-[40px]',
+  xs: 'btn-icon btn-xs min-h-[28px] min-w-[28px]',
+  sm: 'btn-icon btn-sm min-h-[34px] min-w-[34px]',
+  md: 'btn-icon min-h-[42px] min-w-[42px]',
+  lg: 'btn-icon btn-lg min-h-[50px] min-w-[50px]',
+  xl: 'btn-icon min-h-[58px] min-w-[58px]',
+  icon: 'btn-icon min-h-[42px] min-w-[42px]',
 };
 
 export const AppButton = forwardRef<HTMLButtonElement, AppButtonProps>(
@@ -132,6 +187,9 @@ export const AppButton = forwardRef<HTMLButtonElement, AppButtonProps>(
       className = '',
       as: Component = 'button',
       type = 'button',
+      shine = false,
+      ripple = false,
+      glowPulse = false,
       ...props
     },
     ref
@@ -139,23 +197,26 @@ export const AppButton = forwardRef<HTMLButtonElement, AppButtonProps>(
     const isDisabled = disabled || isLoading;
     const isIconOnly = size === 'icon' || (!children && (leftIcon || rightIcon));
 
+    // Base styles are now defined in index.css .btn class
+    // This ensures consistency with CSS-based button styles
     const baseStyles = `
-      inline-flex items-center justify-center
-      font-medium
-      rounded-button
-      outline-none
-      select-none
-      whitespace-nowrap
-      transition-all duration-150 ease-out
+      btn
       focus-visible:ring-2 focus-visible:ring-offset-2
-      disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none
     `;
+
+    // Modern effect classes
+    const effectClasses = [
+      shine ? 'btn-shine' : '',
+      ripple ? 'ripple active-press' : '',
+      glowPulse ? 'glow-pulse' : '',
+    ].filter(Boolean).join(' ');
 
     const classes = [
       baseStyles,
       variantStyles[variant],
       isIconOnly ? iconSizeStyles[size] : sizeStyles[size],
       fullWidth ? 'w-full' : '',
+      effectClasses,
       className,
     ].filter(Boolean).join(' ');
 

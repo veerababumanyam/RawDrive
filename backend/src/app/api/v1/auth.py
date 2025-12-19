@@ -7,7 +7,7 @@ Implements Requirements: 3.1, 3.2, 3.4, 4.1, 4.2, 22.1, 22.2
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -148,24 +148,36 @@ async def login(
             password=request.password,
             workspace_id=request.workspace_id,
         )
-        # Log successful login
-        await log_auth_event(
-            event_type=AuditEventType.AUTH_LOGIN,
-            user_id=user.user_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            details={"email": user.email, "outcome": "success", "workspace_id": str(user.workspace_id)},
-        )
+        # Log successful login (non-blocking, don't fail on error)
+        try:
+            await log_auth_event(
+                event_type=AuditEventType.AUTH_LOGIN,
+                user_id=user.user_id,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                details={"email": user.email, "outcome": "success", "workspace_id": str(user.workspace_id)},
+            )
+        except Exception as log_error:
+            logger.warning(f"Failed to log auth event: {log_error}")
     except (InvalidCredentialsError, AuthError) as e:
-        # Log failed login attempt
-        await log_auth_event(
-            event_type=AuditEventType.AUTH_LOGIN,
-            user_id=None,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            details={"email": request.email, "outcome": "failure", "reason": e.code},
-        )
+        # Log failed login attempt (non-blocking)
+        try:
+            await log_auth_event(
+                event_type=AuditEventType.AUTH_LOGIN,
+                user_id=None,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                details={"email": request.email, "outcome": "failure", "reason": e.code},
+            )
+        except Exception:
+            pass  # Don't fail on audit log errors
         raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
+    except Exception as e:
+        logger.exception("Unexpected error during login")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"},
+        )
 
     return AuthResponse(
         user=UserResponse(
@@ -271,7 +283,7 @@ async def logout(
 )
 async def oauth_google_start(
     oauth_service: OAuthServiceDep,
-    redirect_uri: str | None = Query(None, description="Override redirect URI"),
+    redirect_uri: Optional[str] = Query(None, description="Override redirect URI"),
 ) -> OAuthStartResponse:
     """Generate Google OAuth authorization URL."""
     url, state = await oauth_service.get_authorization_url(redirect_uri)

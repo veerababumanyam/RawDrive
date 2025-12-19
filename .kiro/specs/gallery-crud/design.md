@@ -20,7 +20,7 @@ This design document outlines the technical architecture for RawDrive's Gallery 
 │                   /workspace/galleries/*                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  ┌──────────────────────┐    ┌──────────────────────────────┐  │
+│  ┌──────────────────────┐     ┌──────────────────────────────┐   │
 │  │   Gallery List        │    │      Gallery Detail           │  │
 │  │   /galleries          │    │   /galleries/:id              │  │
 │  │                       │    │                               │  │
@@ -28,28 +28,28 @@ This design document outlines the technical architecture for RawDrive's Gallery 
 │  │  - Status badges      │    │  - Sub-gallery tabs           │  │
 │  │  - Create button      │    │  - Photo grid/list            │  │
 │  │  - Sort/filter        │    │  - Lightbox viewer            │  │
-│  └──────────────────────┘    └──────────────────────────────┘  │
+│  └──────────────────────┘     └──────────────────────────────┘   │
 │           │                              │                       │
 │           ▼                              ▼                       │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                   Gallery Services                         │  │
-│  │  - galleryService.ts (API client)                         │  │
-│  │  - uploadService.ts (R2 signed URLs + progress)           │  │
-│  │  - useGallery hook (state management)                     │  │
-│  └──────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                   Gallery Services                        │   │
+│  │  - galleryService.ts (API client)                         │   │
+│  │  - uploadService.ts (R2 signed URLs + progress)           │   │
+│  │  - useGallery hook (state management)                     │   │
+│  └──────────────────────────────────────────────────────────┘    │
 │                              │                                   │
 │                              ▼                                   │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                   Backend API (v1)                        │   │
+│  │  POST /galleries, GET /galleries/:id, PATCH, DELETE       │   │
+│  │  POST /uploads, POST /uploads/:id/commit                  │   │
+│  │  GET /galleries/:id/assets, PATCH /assets/:id             │   │
+│  └──────────────────────────────────────────────────────────┘    │
+│                              │                                 │
+│                              ▼                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │                   Backend API (v1)                         │  │
-│  │  POST /galleries, GET /galleries/:id, PATCH, DELETE       │  │
-│  │  POST /uploads, POST /uploads/:id/commit                  │  │
-│  │  GET /galleries/:id/assets, PATCH /assets/:id             │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                              │                                   │
-│                              ▼                                   │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              PostgreSQL + Cloudflare R2                    │  │
-│  │  galleries, sub_galleries, gallery_assets, assets         │  │
+│  │              PostgreSQL + Cloudflare R2                  │  │
+│  │  galleries, sub_galleries, gallery_assets, assets        │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -63,6 +63,133 @@ This design document outlines the technical architecture for RawDrive's Gallery 
 /workspace/galleries/:id          → GalleryDetailPage
 /workspace/galleries/:id/settings → GallerySettingsPage
 ```
+
+## Upload Service Architecture
+
+### Upload Flow Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend Upload Flow                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. User selects files via UploadDropzone                       │
+│     ↓                                                            │
+│  2. Validate file types (JPEG, PNG, WebP, HEIC, MP4, MOV)      │
+│     ↓                                                            │
+│  3. Generate local thumbnail preview (for UI feedback)          │
+│     ↓                                                            │
+│  4. Request upload session: POST /uploads                       │
+│     - Include: gallery_id, sub_gallery_id, filename, mime_type │
+│     - Receive: upload_id, signed_url, headers, expires_at      │
+│     ↓                                                            │
+│  5. Upload file directly to R2 using signed URL                 │
+│     - Path: galleries/{gallery_id}/sub_galleries/{sub_id}/...   │
+│     - Track progress and display in UI                          │
+│     ↓                                                            │
+│  6. Commit upload: POST /uploads/{upload_id}/commit             │
+│     - Include: sha256 checksum for integrity verification       │
+│     - Backend extracts metadata and generates derivatives       │
+│     ↓                                                            │
+│  7. Backend processes asynchronously:                           │
+│     - Extract EXIF metadata                                     │
+│     - Generate WebP preview (2048px)                            │
+│     - Generate thumbnail (512px)                                │
+│     - Store all variants in R2                                  │
+│     - Update database with asset and derivatives                │
+│     ↓                                                            │
+│  8. Frontend receives asset_id and displays in gallery          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### R2 Storage Organization
+
+```
+rawdrive-bucket/
+├── galleries/
+│   ├── {gallery_id}/
+│   │   ├── root/                          # Unassigned photos
+│   │   │   ├── {asset_id}/
+│   │   │   │   ├── original.jpg           # Original uploaded file
+│   │   │   │   ├── preview.webp           # 2048px WebP for lightbox
+│   │   │   │   └── thumb.webp             # 512px WebP for grid
+│   │   │   └── ...
+│   │   ├── sub_galleries/
+│   │   │   ├── {sub_gallery_id}/
+│   │   │   │   ├── {asset_id}/
+│   │   │   │   │   ├── original.jpg
+│   │   │   │   │   ├── preview.webp
+│   │   │   │   │   └── thumb.webp
+│   │   │   │   └── ...
+│   │   │   └── ...
+│   │   └── ...
+│   └── ...
+└── ...
+```
+
+### Metadata Extraction
+
+When a file is uploaded, the backend extracts and stores:
+
+```typescript
+interface ExtractedMetadata {
+  // === FILE INFO ===
+  filename: string;                 // original filename
+  mime_type: string;                // e.g., 'image/jpeg'
+  file_size: number;                // bytes
+  sha256: string;                   // content hash
+  
+  // === IMAGE DIMENSIONS ===
+  width: number;                    // pixels
+  height: number;                   // pixels
+  
+  // === EXIF DATA (if available) ===
+  exif?: {
+    make?: string;                  // camera manufacturer
+    model?: string;                 // camera model
+    lens?: string;                  // lens model
+    aperture?: number;              // f-stop
+    shutter_speed?: string;         // e.g., "1/250"
+    iso?: number;                   // ISO sensitivity
+    focal_length?: number;          // mm
+    flash?: boolean;                // flash fired
+    date_taken?: string;            // ISO timestamp
+    latitude?: number;              // GPS latitude
+    longitude?: number;             // GPS longitude
+    altitude?: number;              // GPS altitude in meters
+    orientation?: number;           // EXIF orientation (1-8)
+  };
+}
+```
+
+### Image Variants (Derivatives)
+
+Three variants are generated for each uploaded image:
+
+1. **Original** (`original.{ext}`)
+   - Full quality, original format
+   - Stored for download when policy allows
+   - Size: varies (typically 2-50MB for photos)
+
+2. **Preview** (`preview.webp`)
+   - WebP format, 2048px max dimension
+   - Used in lightbox for fast viewing
+   - Size: typically 200-800KB
+
+3. **Thumbnail** (`thumb.webp`)
+   - WebP format, 512px max dimension
+   - Used in masonry grid for fast loading
+   - Size: typically 20-100KB
+
+### Download Options
+
+Based on gallery `download_policy`:
+
+- **view_only**: Only thumbnail and preview available (no download)
+- **web_only**: WebP preview available for download
+- **watermarked_only**: Watermarked variant available (future)
+- **original_allowed**: Both WebP preview and original available
 
 ## Components and Interfaces
 
@@ -220,13 +347,14 @@ interface PhotoCardProps {
 
 interface UploadDropzoneProps {
   // === MANDATORY PROPS ===
-  galleryId: string;
+  galleryId: string;                // target gallery
   onUploadComplete: (assets: GalleryAssetItem[]) => void;
   
   // === OPTIONAL PROPS ===
-  subGalleryId?: string;            // target sub-gallery
+  subGalleryId?: string | null;     // target sub-gallery (null = root)
   onUploadStart?: () => void;
   onUploadError?: (error: UploadError) => void;
+  onUploadProgress?: (fileId: string, progress: number) => void;
 }
 
 interface UploadFile {
@@ -238,9 +366,10 @@ interface UploadFile {
   
   // === OPTIONAL FIELDS ===
   error?: string;                   // error message if status='error'
-  thumbnailUrl?: string;            // local blob URL for preview
+  localThumbnailUrl?: string;       // local blob URL for preview (before upload)
   uploadId?: string;                // server upload session ID
   assetId?: string;                 // assigned after commit
+  metadata?: ExtractedMetadata;     // populated after commit
 }
 
 type UploadStatus = 'queued' | 'uploading' | 'processing' | 'complete' | 'error';
@@ -258,7 +387,37 @@ type UploadErrorCode =
   | 'CHECKSUM_MISMATCH'
   | 'FILE_TOO_LARGE'
   | 'INVALID_FILE_TYPE'
-  | 'QUOTA_EXCEEDED';
+  | 'QUOTA_EXCEEDED'
+  | 'METADATA_EXTRACTION_FAILED';
+
+interface ExtractedMetadata {
+  // === FILE INFO ===
+  filename: string;
+  mime_type: string;
+  file_size: number;
+  sha256: string;
+  
+  // === IMAGE DIMENSIONS ===
+  width: number;
+  height: number;
+  
+  // === EXIF DATA (optional) ===
+  exif?: {
+    make?: string;
+    model?: string;
+    lens?: string;
+    aperture?: number;
+    shutter_speed?: string;
+    iso?: number;
+    focal_length?: number;
+    flash?: boolean;
+    date_taken?: string;
+    latitude?: number;
+    longitude?: number;
+    altitude?: number;
+    orientation?: number;
+  };
+}
 
 // ============================================
 // LIGHTBOX COMPONENTS
@@ -669,16 +828,43 @@ interface AssetInfo {
 }
 
 /**
+ * Upload Session Request
+ * POST /v1/workspaces/{workspace_id}/uploads
+ */
+interface UploadSessionRequest {
+  // === MANDATORY FIELDS ===
+  gallery_id: string;               // target gallery
+  filename: string;                 // original filename
+  mime_type: string;                // e.g., 'image/jpeg'
+  file_size: number;                // bytes
+  
+  // === OPTIONAL FIELDS ===
+  sub_gallery_id?: string | null;   // target sub-gallery (null = root)
+}
+
+/**
  * Upload Session Response
  * POST /v1/workspaces/{workspace_id}/uploads
  */
 interface UploadSessionResponse {
   // === MANDATORY FIELDS ===
-  upload_id: string;
-  provider: 'r2' | 'byos';
+  upload_id: string;                // unique upload session ID
+  provider: 'r2' | 'byos';          // storage provider
   upload_url: string;               // presigned URL for direct upload
   headers: Record<string, string>;  // required headers for upload
   expires_at: string;               // ISO timestamp, typically 1 hour
+  
+  // === OPTIONAL FIELDS ===
+  object_key?: string;              // R2 object key for reference
+}
+
+/**
+ * Upload Commit Request
+ * POST /v1/workspaces/{workspace_id}/uploads/{upload_id}/commit
+ */
+interface UploadCommitRequest {
+  // === MANDATORY FIELDS ===
+  sha256: string;                   // SHA256 checksum of uploaded file
 }
 
 /**
@@ -687,11 +873,13 @@ interface UploadSessionResponse {
  */
 interface UploadCommitResponse {
   // === MANDATORY FIELDS ===
-  asset_id: string;
-  status: 'available' | 'processing';
+  asset_id: string;                 // assigned asset ID
+  status: 'available' | 'processing'; // processing status
   
-  // === OPTIONAL (available after processing) ===
-  thumbnail_url?: string;
+  // === OPTIONAL FIELDS (available after processing) ===
+  thumbnail_url?: string;           // CDN URL to thumbnail
+  preview_url?: string;             // CDN URL to preview
+  metadata?: ExtractedMetadata;     // extracted metadata
 }
 
 /**
@@ -855,6 +1043,90 @@ Based on the prework analysis, the following properties have been identified aft
 ### Property 31: CDN Image URLs
 *For any* thumbnail displayed, the image src SHALL use CDN-optimized URLs with appropriate sizing parameters.
 **Validates: Requirements 15.3**
+
+### Property 32: Metadata Extraction Completeness
+*For any* uploaded image with EXIF data, the system SHALL extract and store all MANDATORY fields (filename, file_size, mime_type, sha256_checksum, width, height, orientation, aspect_ratio) and all available OPTIONAL fields based on camera make (Canon, Sony, Nikon, Fuji, etc.).
+**Validates: Requirements 5.5, 5.6, 5.7, 5.8, 5.9, 5.10**
+
+### Property 33: Image Variant Generation
+*For any* uploaded image, the system SHALL generate exactly three variants: original (full quality), WebP preview (2048px max, quality 85), and WebP thumbnail (512px max, quality 80).
+**Validates: Requirements 5.15**
+
+### Property 34: Encryption Round-Trip
+*For any* file encrypted with AES-256-GCM, decrypting with the same workspace key and stored IV SHALL produce the original file content byte-for-byte.
+**Validates: Requirements 5.32**
+
+### Property 35: Signed URL Expiry
+*For any* signed URL generated with 1-hour TTL, the URL SHALL be valid before expiry and SHALL return 403 Forbidden after expiry.
+**Validates: Requirements 5.34**
+
+### Property 36: Signed URL Security
+*For any* signed URL, modifying any parameter (asset_id, workspace_id, expiry, signature) SHALL result in 403 Forbidden.
+**Validates: Requirements 5.34, 5.35**
+
+### Property 37: Secure Deletion
+*For any* deleted gallery or asset, the encrypted files SHALL be removed from R2 storage and the encryption keys SHALL be destroyed (cryptographic erasure).
+**Validates: Requirements 5.37, 5.38**
+
+### Property 38: Audit Log Integrity
+*For any* media access, download, or modification, an immutable audit log entry SHALL be created with timestamp, user_id, action, resource_id, IP address, and user_agent.
+**Validates: Requirements 5.36, 5.40**
+
+### Property 39: Input Validation Security
+*For any* user input (filenames, titles, descriptions), the system SHALL sanitize to prevent XSS, SQL injection, and path traversal attacks.
+**Validates: Requirements 18.8, 18.9, 18.10**
+
+### Property 40: Workspace Isolation
+*For any* API request, the system SHALL verify workspace membership and include workspace_id as a mandatory filter on all database queries, preventing cross-workspace data access.
+**Validates: Requirements 19.8**
+
+### Property 41: Client Tag Association
+*For any* photo with a client tag applied during upload, the association SHALL be stored in gallery_asset_clients junction table and retrievable for filtering.
+**Validates: Requirements 5.11, 5.12, 5.13, 5.14**
+
+### Property 42: Resumable Upload Recovery
+*For any* interrupted upload using TUS protocol, resuming SHALL continue from the last successful chunk rather than restarting from the beginning.
+**Validates: Requirements 5.21, 5.22, 5.46**
+
+### Property 43: Duplicate Detection Accuracy
+*For any* file with SHA256 checksum matching an existing asset in the same gallery, the system SHALL detect it as a duplicate and offer Skip/Replace/Keep Both options.
+**Validates: Requirements 5.27, 5.28**
+
+### Property 44: Adaptive Upload Concurrency
+*For any* connection speed below 1 Mbps, the system SHALL reduce concurrent uploads to 1 and use smaller chunk sizes (256KB instead of 5MB).
+**Validates: Requirements 5.20, 5.21**
+
+### Property 45: Upload Queue State Persistence
+*For any* paused upload queue, the state SHALL be persisted to localStorage and restorable on page return with a "Resume X uploads" prompt.
+**Validates: Requirements 5.48, 5.49**
+
+### Property 46: RAW File Preview Generation
+*For any* RAW file upload (CR2, CR3, NEF, ARW, RAF, ORF, RW2, DNG), the system SHALL extract embedded JPEG preview for immediate display while generating full-quality conversion in background.
+**Validates: Requirements 5.16**
+
+### Property 47: Upload Progress Accuracy
+*For any* file in upload queue, the progress panel SHALL display accurate stage (Queued/Uploading/Processing/Thumbnail/Preview/Encrypting/Complete), percentage, and estimated time remaining.
+**Validates: Requirements 5.17**
+
+### Property 48: Real-Time Gallery Update
+*For any* completed upload, the thumbnail SHALL appear in the gallery grid immediately via WebSocket without requiring page refresh.
+**Validates: Requirements 5.18**
+
+### Property 49: Bulk Upload Capacity
+*For any* batch upload, the system SHALL accept up to 1000 files and reject batches exceeding this limit with a clear error message.
+**Validates: Requirements 5.3**
+
+### Property 50: Storage Path Organization
+*For any* uploaded file, the R2 storage path SHALL follow the pattern `galleries/{gallery_id}/sub_galleries/{sub_gallery_id}/` or `galleries/{gallery_id}/root/` for unassigned photos.
+**Validates: Requirements 5.2**
+
+### Property 51: Upload Accessibility
+*For any* upload panel element, the component SHALL have proper ARIA labels, be keyboard navigable, and announce status changes via ARIA live regions.
+**Validates: Requirements 5.68, 5.69**
+
+### Property 52: Localized Number Formatting
+*For any* file size or percentage displayed in upload progress, the value SHALL be formatted according to user locale settings.
+**Validates: Requirements 5.70**
 
 ## Error Handling
 

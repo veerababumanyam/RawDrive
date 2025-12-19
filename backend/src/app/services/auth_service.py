@@ -18,7 +18,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Sequence
+from typing import Any, Sequence, Optional, Union
 
 import asyncpg
 
@@ -113,7 +113,7 @@ class AuthUser:
     email: str
     display_name: str
     email_verified: bool
-    workspace_id: uuid.UUID | None = None
+    workspace_id: Optional[uuid.UUID] = None
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +152,7 @@ async def _get_user_permissions(
 async def _get_default_workspace(
     pool: asyncpg.Pool,
     user_id: uuid.UUID,
-) -> uuid.UUID | None:
+) -> Optional[uuid.UUID]:
     """Return first active workspace for user, or None."""
     query = """
         SELECT wm.workspace_id
@@ -174,7 +174,7 @@ async def _get_default_workspace(
 class AuthService:
     """Stateless service facade for authentication operations."""
 
-    def __init__(self, settings: AppSettings | None = None):
+    def __init__(self, settings: Optional[AppSettings] = None):
         self._settings = settings or get_settings()
 
     # -----------------------------------------------------------------------
@@ -336,7 +336,7 @@ class AuthService:
         self,
         email: str,
         password: str,
-        workspace_id: uuid.UUID | None = None,
+        workspace_id: Optional[uuid.UUID] = None,
     ) -> tuple[AuthUser, TokenPair]:
         """Authenticate user with email/password.
 
@@ -455,7 +455,7 @@ class AuthService:
         pool = await get_postgres_pool()
 
         # Resolve workspace
-        workspace_id: uuid.UUID | None = None
+        workspace_id: Optional[uuid.UUID] = None
         if workspace_id_str:
             workspace_id = uuid.UUID(workspace_id_str)
         else:
@@ -506,13 +506,14 @@ class AuthService:
         user_id: uuid.UUID,
         workspace_id: uuid.UUID,
         permissions: Sequence[str],
-        session_id: uuid.UUID | None = None,
+        session_id: Optional[uuid.UUID] = None,
     ) -> TokenPair:
         """Create access and refresh tokens."""
         access = create_access_token(
             user_id=user_id,
             workspace_id=workspace_id,
             permissions=permissions,
+            session_id=session_id,
             settings=self._settings,
         )
         refresh = create_refresh_token(
@@ -531,29 +532,21 @@ class AuthService:
         self,
         user_id: uuid.UUID,
         workspace_id: uuid.UUID,
-        device_info: dict[str, Any] | None = None,
+        device_info: Optional[dict[str, Any]] = None,
     ) -> uuid.UUID:
-        """Create session record in DB."""
-        pool = await get_postgres_pool()
-        session_id = uuid.uuid4()
-        now = datetime.now(timezone.utc)
-        expires = now + timedelta(days=self._settings.refresh_token_ttl_days)
-
-        # Placeholder refresh_token_hash, real one stored in Redis after token generation
-        await pool.execute(
-            """
-            INSERT INTO sessions (session_id, user_id, workspace_id, refresh_token_hash, device_info, created_at, last_used_at, expires_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $6, $7)
-            """,
-            session_id,
-            user_id,
-            workspace_id,
-            "pending",
-            device_info,
-            now,
-            expires,
+        """Create session record in DB and Redis using SessionService."""
+        from app.services.session_service import SessionService
+        
+        session_service = SessionService(settings=self._settings)
+        # Create session with placeholder token (will be updated after token generation)
+        placeholder_token = "placeholder_" + str(uuid.uuid4())
+        session = await session_service.create_session(
+            user_id=user_id,
+            workspace_id=workspace_id,
+            refresh_token=placeholder_token,
+            device_info=device_info,
         )
-        return session_id
+        return session.session_id
 
     async def _store_refresh_token(self, session_id: uuid.UUID, refresh_token: str) -> None:
         """Store refresh token hash in Redis for validation/rotation."""

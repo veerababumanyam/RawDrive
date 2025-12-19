@@ -70,5 +70,3 @@ export function useHasPermission(_permission: string): boolean {
   // TODO: Implement actual permission check
   return isAuthenticated;
 }
-
-export default ProtectedRoute;

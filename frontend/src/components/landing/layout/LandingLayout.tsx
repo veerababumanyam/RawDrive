@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import '../../../styles/landing.css';
 
@@ -7,6 +7,7 @@ import '../../../styles/landing.css';
 
    Wrapper component for all public/landing pages.
    Provides the gradient background and decorative elements.
+   Supports system dark/light mode detection.
    ============================================================================= */
 
 interface LandingLayoutProps {
@@ -20,23 +21,83 @@ interface LandingLayoutProps {
   showGrid?: boolean;
 }
 
+// Hook to detect system color scheme
+const useSystemTheme = () => {
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    // Check localStorage first, then system preference
+    const stored = localStorage.getItem('rawdrive-theme');
+    if (stored === 'dark') return true;
+    if (stored === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    const handleChange = (e: MediaQueryListEvent) => {
+      const stored = localStorage.getItem('rawdrive-theme');
+      // Only update if user hasn't set explicit preference (or set to 'system')
+      if (!stored || stored === 'system') {
+        setIsDark(e.matches);
+      }
+    };
+
+    // Also listen for storage changes (if user changes theme elsewhere)
+    const handleStorage = () => {
+      const stored = localStorage.getItem('rawdrive-theme');
+      if (stored === 'dark') setIsDark(true);
+      else if (stored === 'light') setIsDark(false);
+      else setIsDark(mediaQuery.matches);
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    window.addEventListener('storage', handleStorage);
+    
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  return isDark;
+};
+
 export const LandingLayout: React.FC<LandingLayoutProps> = ({
   children,
   className = '',
   showOrbs = true,
   showGrid = true,
 }) => {
+  const isDark = useSystemTheme();
+
+  // Apply dark mode class and data attribute
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.classList.add('landing-dark-mode');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'light');
+      document.documentElement.classList.remove('landing-dark-mode');
+    }
+  }, [isDark]);
+
   return (
-    <div className={`landing-page min-h-screen relative overflow-hidden ${className}`}>
+    <div className={`landing-page ${isDark ? 'landing-dark' : ''} min-h-screen relative overflow-hidden ${className}`}>
       {/* Background grid pattern */}
       {showGrid && (
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: `
-              linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px)
-            `,
+            backgroundImage: isDark
+              ? `
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px)
+              `
+              : `
+                linear-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.02) 1px, transparent 1px)
+              `,
             backgroundSize: '64px 64px',
           }}
           aria-hidden="true"

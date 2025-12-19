@@ -25,6 +25,12 @@ const FeaturesPage = lazy(() => import('../pages/public/FeaturesPage'));
 const PricingPage = lazy(() => import('../pages/public/PricingPage'));
 const FAQPage = lazy(() => import('../pages/public/FAQPage'));
 const HowItWorksPage = lazy(() => import('../pages/public/HowItWorksPage'));
+const ContactPage = lazy(() => import('../pages/public/ContactPage'));
+
+// Legal/Policy pages
+const TermsPage = lazy(() => import('../pages/public/legal/terms'));
+const PrivacyPage = lazy(() => import('../pages/public/legal/privacy'));
+const RefundPage = lazy(() => import('../pages/public/legal/refund'));
 
 // Auth pages
 const SignInPage = lazy(() => import('../pages/public/SignInPage'));
@@ -34,9 +40,11 @@ const ForgotPasswordPage = lazy(() => import('../pages/public/ForgotPasswordPage
 // Workspace pages
 const DashboardPage = lazy(() => import('../pages/workspace/DashboardPage'));
 const GalleriesPage = lazy(() => import('../pages/workspace/GalleriesPage'));
+const GalleryCreatePage = lazy(() => import('../pages/workspace/GalleryCreatePage'));
+const GalleryDetailPage = lazy(() => import('../pages/workspace/GalleryDetailPage'));
 
 // Wrapper for lazy loaded components
-const LazyPage: React.FC<{ component: React.LazyExoticComponent<React.FC> }> = ({
+const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
   component: Component,
 }) => (
   <Suspense fallback={<PageLoader />}>
@@ -45,15 +53,15 @@ const LazyPage: React.FC<{ component: React.LazyExoticComponent<React.FC> }> = (
 );
 
 // Wrapper for protected lazy loaded components
-const ProtectedLazyPage: React.FC<{ component: React.LazyExoticComponent<React.FC> }> = ({
-  component: Component,
-}) => (
-  <ProtectedRoute>
-    <Suspense fallback={<PageLoader />}>
-      <Component />
-    </Suspense>
-  </ProtectedRoute>
-);
+// const ProtectedLazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
+//   component: Component,
+// }) => (
+//   <ProtectedRoute>
+//     <Suspense fallback={<PageLoader />}>
+//       <Component />
+//     </Suspense>
+//   </ProtectedRoute>
+// );
 
 // Public routes (landing pages, marketing)
 export const publicRoutes: RouteObject[] = [
@@ -77,6 +85,23 @@ export const publicRoutes: RouteObject[] = [
     path: '/how-it-works',
     element: <LazyPage component={HowItWorksPage} />,
   },
+  {
+    path: '/contact',
+    element: <LazyPage component={ContactPage} />,
+  },
+  // Legal/Policy pages
+  {
+    path: '/legal/terms',
+    element: <LazyPage component={TermsPage} />,
+  },
+  {
+    path: '/legal/privacy',
+    element: <LazyPage component={PrivacyPage} />,
+  },
+  {
+    path: '/legal/refund',
+    element: <LazyPage component={RefundPage} />,
+  },
 ];
 
 // Auth routes
@@ -96,58 +121,71 @@ export const authRoutes: RouteObject[] = [
 ];
 
 // Workspace routes (require authentication)
+// Workspace routes (require authentication)
+import { WorkspaceLayout } from '../components/layout/WorkspaceLayout';
+
 export const workspaceRoutes: RouteObject[] = [
   {
     path: '/workspace',
-    element: <ProtectedLazyPage component={DashboardPage} />,
-  },
-  {
-    path: '/workspace/galleries',
-    element: <ProtectedLazyPage component={GalleriesPage} />,
-  },
-  {
-    path: '/workspace/galleries/new',
-    element: <ProtectedLazyPage component={GalleriesPage} />, // Placeholder - would be CreateGalleryPage
-  },
-  {
-    path: '/workspace/galleries/:id',
-    element: <ProtectedLazyPage component={GalleriesPage} />, // Placeholder - would be GalleryDetailPage
-  },
-  {
-    path: '/workspace/libraries',
-    element: <ProtectedLazyPage component={DashboardPage} />, // Placeholder
-  },
-  {
-    path: '/workspace/clients',
-    element: <ProtectedLazyPage component={DashboardPage} />, // Placeholder
-  },
-  {
-    path: '/workspace/shared',
-    element: <ProtectedLazyPage component={DashboardPage} />, // Placeholder
-  },
-  {
-    path: '/workspace/recent',
-    element: <ProtectedLazyPage component={DashboardPage} />, // Placeholder
-  },
-  {
-    path: '/workspace/favorites',
-    element: <ProtectedLazyPage component={DashboardPage} />, // Placeholder
-  },
-  {
-    path: '/workspace/trash',
-    element: <ProtectedLazyPage component={DashboardPage} />, // Placeholder
-  },
-  {
-    path: '/workspace/settings',
-    element: <ProtectedLazyPage component={DashboardPage} />, // Placeholder
-  },
-  {
-    path: '/workspace/settings/*',
-    element: <ProtectedLazyPage component={DashboardPage} />, // Placeholder
-  },
-  {
-    path: '/workspace/help',
-    element: <ProtectedLazyPage component={DashboardPage} />, // Placeholder
+    element: (
+      <ProtectedRoute>
+        <WorkspaceLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <LazyPage component={DashboardPage} />,
+      },
+      {
+        path: 'galleries',
+        element: <LazyPage component={GalleriesPage} />,
+      },
+      {
+        path: 'galleries/new',
+        element: <LazyPage component={GalleryCreatePage} />,
+      },
+      {
+        path: 'galleries/:id',
+        element: <LazyPage component={GalleryDetailPage} />,
+      },
+      {
+        path: 'libraries',
+        element: <LazyPage component={DashboardPage} />, // Placeholder
+      },
+      {
+        path: 'clients',
+        element: <LazyPage component={DashboardPage} />, // Placeholder
+      },
+      {
+        path: 'shared',
+        element: <LazyPage component={DashboardPage} />, // Placeholder
+      },
+      {
+        path: 'recent',
+        element: <LazyPage component={DashboardPage} />, // Placeholder
+      },
+      {
+        path: 'favorites',
+        element: <LazyPage component={DashboardPage} />, // Placeholder
+      },
+      {
+        path: 'trash',
+        element: <LazyPage component={DashboardPage} />, // Placeholder
+      },
+      {
+        path: 'settings',
+        element: <LazyPage component={DashboardPage} />, // Placeholder
+      },
+      {
+        path: 'settings/*',
+        element: <LazyPage component={DashboardPage} />, // Placeholder
+      },
+      {
+        path: 'help',
+        element: <LazyPage component={DashboardPage} />, // Placeholder
+      },
+    ],
   },
 ];
 

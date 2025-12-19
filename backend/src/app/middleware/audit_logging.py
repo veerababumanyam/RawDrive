@@ -7,7 +7,7 @@ must be logged to audit_logs table.
 
 import logging
 import time
-from typing import Callable
+from typing import Callable, Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -141,7 +141,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    def _get_event_type(self, path: str, method: str) -> str | None:
+    def _get_event_type(self, path: str, method: str) -> Optional[str]:
         """Determine audit event type for path."""
         # Check exact matches first
         if path in AUDIT_ROUTES:

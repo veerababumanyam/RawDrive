@@ -34,10 +34,13 @@ const SignInPage: React.FC = () => {
       if (result.success) {
         navigate(redirectTo);
       } else {
-        setError(result.error || 'Invalid email or password. Please try again.');
+        const errorMessage = result.error || 'Invalid email or password. Please try again.';
+        console.error('Login failed:', errorMessage);
+        setError(errorMessage);
       }
-    } catch {
-      setError('An unexpected error occurred. Please try again.');
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }

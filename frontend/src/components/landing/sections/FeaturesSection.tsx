@@ -177,7 +177,7 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
           >
             {title}
           </h2>
-          <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto">
+          <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto">
             {subtitle}
           </p>
         </FadeIn>
@@ -211,14 +211,14 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
                 aria-pressed={index === activeIndex}
               >
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 border border-white/10 flex items-center justify-center text-accent-300">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500/30 to-accent-500/30 border border-white/15 flex items-center justify-center text-cyan-300 shadow-lg shadow-cyan-500/10">
                     {feature.icon}
                   </div>
                   <div>
                     <div className="text-white font-semibold text-lg">{feature.title}</div>
-                    <div className="text-slate-400 text-sm mt-1">{feature.description}</div>
+                    <div className="text-slate-300 text-sm mt-1 line-clamp-2">{feature.description}</div>
                     {feature.stat ? (
-                      <div className="mt-3 inline-flex px-2 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300">
+                      <div className="mt-3 inline-flex px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-xs text-slate-200 font-medium">
                         {feature.stat}
                       </div>
                     ) : null}
@@ -242,12 +242,12 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
               <div className="relative rounded-3xl overflow-hidden bg-white/5 border border-white/10">
                 <div className="p-6 md:p-8">
                   <div className="flex items-start gap-4 mb-6">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25">
                       {activeFeature.icon}
                     </div>
                     <div>
                       <h3 className="text-2xl font-bold text-white">{activeFeature.title}</h3>
-                      <p className="text-slate-400 mt-1">{activeFeature.description}</p>
+                      <p className="text-slate-300 mt-1">{activeFeature.description}</p>
                     </div>
                   </div>
 
@@ -334,10 +334,10 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
             return (
               <div key={item.title} className="rounded-2xl bg-white/5 border border-white/10 p-6">
                 <div className="flex items-center gap-3 mb-2">
-                  <Icon className="w-5 h-5 text-accent-400" aria-hidden="true" />
+                  <Icon className="w-5 h-5 text-cyan-400" aria-hidden="true" />
                   <div className="text-white font-semibold">{item.title}</div>
                 </div>
-                <div className="text-sm text-slate-400">{item.desc}</div>
+                <div className="text-sm text-slate-300">{item.desc}</div>
               </div>
             );
           })}

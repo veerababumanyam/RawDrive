@@ -65,11 +65,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setWorkspace(storedWorkspace);
             setIsAuthenticated(true);
 
-            // Refresh user data in background
+            // Refresh user data and workspace in background
             getCurrentUser()
-              .then((freshUser) => {
+              .then(async (freshUser) => {
                 if (freshUser) {
                   setUser(freshUser);
+                  // Fetch workspace if we have workspace_id but no workspace
+                  if ((freshUser as any).workspace_id && !storedWorkspace) {
+                    const { getWorkspace } = await import('../services/auth');
+                    const workspace = await getWorkspace((freshUser as any).workspace_id);
+                    if (workspace) {
+                      setWorkspace(workspace);
+                    }
+                  }
                 }
               })
               .catch(console.error);
@@ -183,5 +191,3 @@ export function useAuth(): AuthContextType {
 
   return context;
 }
-
-export default AuthContext;

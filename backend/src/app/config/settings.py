@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
-from pydantic import AnyHttpUrl, AnyUrl, Field, RedisDsn, SecretStr, ValidationError
+from pydantic import AnyHttpUrl, AnyUrl, Field, RedisDsn, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -59,16 +60,82 @@ class AppSettings(BaseSettings):
     argon2_parallelism: int = Field(4, alias="ARGON2_PARALLELISM")
 
     # Google OAuth (Requirement 4)
-    google_client_id: str = Field(..., alias="GOOGLE_CLIENT_ID")
-    google_client_secret: SecretStr = Field(..., alias="GOOGLE_CLIENT_SECRET")
-    google_redirect_uri: AnyHttpUrl = Field(..., alias="GOOGLE_REDIRECT_URI")
+    google_client_id: str = Field(
+        default="dev-client-id",
+        alias="GOOGLE_CLIENT_ID",
+        description="Google OAuth client ID (required in production, optional in development)",
+    )
+    google_client_secret: SecretStr = Field(
+        default="dev-client-secret",
+        alias="GOOGLE_CLIENT_SECRET",
+        description="Google OAuth client secret (required in production, optional in development)",
+    )
+    google_redirect_uri: AnyHttpUrl = Field(
+        default="http://localhost:3000/api/v1/auth/oauth/google/callback",
+        alias="GOOGLE_REDIRECT_URI",
+        description="Google OAuth redirect URI",
+    )
+
+    # Cloudflare R2 Storage (S3-compatible)
+    r2_access_key_id: str = Field(
+        default="dev-key",
+        alias="R2_ACCESS_KEY_ID",
+        description="R2 access key (required in production, optional in development)",
+    )
+    r2_secret_access_key: SecretStr = Field(
+        default="dev-secret",
+        alias="R2_SECRET_ACCESS_KEY",
+        description="R2 secret key (required in production, optional in development)",
+    )
+    r2_bucket_name: str = Field(
+        default="dev-bucket",
+        alias="R2_BUCKET_NAME",
+        description="R2 bucket name (required in production, optional in development)",
+    )
+    r2_endpoint_url: str = Field(
+        "https://{account_id}.r2.cloudflarestorage.com",
+        alias="R2_ENDPOINT",  # Use R2_ENDPOINT from .env
+        description="R2 endpoint URL template (use {account_id} placeholder)",
+    )
+    r2_account_id: Optional[str] = Field(None, alias="R2_ACCOUNT_ID", description="Cloudflare account ID for R2")
+
+    # Encryption
+    encryption_master_key: SecretStr = Field(
+        default="0000000000000000000000000000000000000000000000000000000000000000",
+        alias="ENCRYPTION_MASTER_KEY",
+        description="32-byte hex key for encryption (required in production, optional in development)",
+    )
+    signed_url_secret: SecretStr = Field(
+        default="0000000000000000000000000000000000000000000000000000000000000000",
+        alias="SIGNED_URL_SECRET",
+        description="32-byte hex secret for signed URLs (required in production, optional in development)",
+    )
 
     # CORS / security
     allowed_cors_origins: list[str] = Field(default_factory=list, alias="ALLOWED_CORS_ORIGINS")
 
+    @field_validator("allowed_cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Any) -> list[str]:
+        """Parse CORS origins from JSON string or list."""
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            if not v.strip():
+                return []
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+                return [parsed] if parsed else []
+            except json.JSONDecodeError:
+                # If not JSON, treat as comma-separated string
+                return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return []
+
     # Observability
     log_level: str = Field("INFO", alias="LOG_LEVEL")
-    sentry_dsn: SecretStr | None = Field(None, alias="SENTRY_DSN")
+    sentry_dsn: Optional[SecretStr] = Field(None, alias="SENTRY_DSN")
 
     SENSITIVE_FIELDS: frozenset[str] = frozenset(
         {
@@ -78,6 +145,9 @@ class AppSettings(BaseSettings):
             "jwt_public_key_path",
             "google_client_secret",
             "sentry_dsn",
+            "r2_secret_access_key",
+            "encryption_master_key",
+            "signed_url_secret",
         }
     )
 
@@ -123,6 +193,15 @@ class AppSettings(BaseSettings):
         # Enforce additional invariants not covered by Field validators.
         self.api_port = self.validate_ports(self.api_port)
         _, _ = self.validate_pool_bounds(self.db_pool_min_size, self.db_pool_max_size)
+        
+        # Set default CORS origins for development
+        if self.app_env == Environment.DEVELOPMENT and not self.allowed_cors_origins:
+            self.allowed_cors_origins = [
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:3000",
+            ]
 
 
 @lru_cache
@@ -146,7 +225,7 @@ def ensure_settings_loaded() -> AppSettings:
         raise exc
 
 
-def iter_sensitive_keys(extra_keys: Iterable[str] | None = None) -> set[str]:
+def iter_sensitive_keys(extra_keys: Optional[Iterable[str]] = None) -> set[str]:
     """Return the set of sensitive keys used for masking."""
 
     keys = set(AppSettings.SENSITIVE_FIELDS)

@@ -3,8 +3,8 @@
   "specVersion": "1.0",
   "featureId": "galleries_client_portal",
   "name": "Galleries, Client Portal, and Sharing",
-  "status": "draft",
-  "lastUpdated": "2025-12-17",
+  "status": "in_progress",
+  "lastUpdated": "2025-01-27",
   "sourceDocs": [
     "docs/Features/GalleryFeatures.md",
     "docs/Features/CLIENT_FACING_FEATURES.md",
@@ -143,24 +143,133 @@
   },
   "apis": [
     {
-      "id": "galleries.create",
-      "method": "POST",
-      "path": "/v1/workspaces/{workspace_id}/galleries",
+      "id": "galleries.list",
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspace_id}/galleries",
       "auth": "user_jwt",
       "rateLimit": "standard",
-      "request": { "body": { "title": "string", "description": "string?", "portal_language": "string?" } },
-      "response": { "body": { "gallery_id": "uuid", "status": "draft" } },
-      "errors": ["FORBIDDEN"]
+      "request": {
+        "query": {
+          "page": "integer?",
+          "limit": "integer?",
+          "sort": "string?",
+          "status": "string?"
+        }
+      },
+      "response": {
+        "body": {
+          "galleries": "array",
+          "meta": { "total": "integer", "page": "integer", "limit": "integer" }
+        }
+      },
+      "errors": ["FORBIDDEN", "NOT_FOUND"],
+      "implementationStatus": "implemented"
+    },
+    {
+      "id": "galleries.create",
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspace_id}/galleries",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": {
+        "body": {
+          "title": "string",
+          "description": "string?",
+          "client_name": "string?"
+        }
+      },
+      "response": {
+        "body": {
+          "gallery_id": "uuid",
+          "title": "string",
+          "status": "draft",
+          "created_at": "timestamp"
+        }
+      },
+      "errors": ["FORBIDDEN", "VALIDATION_ERROR"],
+      "implementationStatus": "implemented"
+    },
+    {
+      "id": "galleries.get",
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": {
+        "body": {
+          "gallery_id": "uuid",
+          "title": "string",
+          "description": "string?",
+          "client_name": "string?",
+          "status": "enum",
+          "sub_galleries": "array",
+          "stats": "object"
+        }
+      },
+      "errors": ["FORBIDDEN", "NOT_FOUND"],
+      "implementationStatus": "implemented"
+    },
+    {
+      "id": "galleries.update",
+      "method": "PATCH",
+      "path": "/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": {
+        "body": {
+          "title": "string?",
+          "description": "string?",
+          "client_name": "string?",
+          "password": "string?",
+          "remove_password": "boolean?"
+        }
+      },
+      "response": {
+        "body": {
+          "gallery_id": "uuid",
+          "title": "string",
+          "status": "enum"
+        }
+      },
+      "errors": ["FORBIDDEN", "NOT_FOUND", "VALIDATION_ERROR"],
+      "implementationStatus": "implemented",
+      "notes": "Password hashing placeholder - needs bcrypt implementation"
+    },
+    {
+      "id": "galleries.delete",
+      "method": "DELETE",
+      "path": "/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": {
+        "body": {
+          "message": "string"
+        }
+      },
+      "errors": ["FORBIDDEN", "NOT_FOUND"],
+      "implementationStatus": "implemented",
+      "notes": "Soft delete - sets status to archived"
     },
     {
       "id": "galleries.publish",
       "method": "POST",
-      "path": "/v1/workspaces/{workspace_id}/galleries/{gallery_id}/publish",
+      "path": "/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/publish",
       "auth": "user_jwt",
       "rateLimit": "standard",
-      "request": { "body": { "publish": true } },
-      "response": { "body": { "status": "published", "published_at": "timestamp" } },
-      "errors": ["FORBIDDEN", "GALLERY_EMPTY"]
+      "request": {
+        "body": {
+          "publish": "boolean"
+        }
+      },
+      "response": {
+        "body": {
+          "gallery_id": "uuid",
+          "status": "enum",
+          "published_at": "timestamp?"
+        }
+      },
+      "errors": ["FORBIDDEN", "GALLERY_EMPTY", "NOT_FOUND"],
+      "implementationStatus": "implemented"
     },
     {
       "id": "portal.gallery.view",
@@ -291,5 +400,133 @@
   "openQuestions": [
     "Do we require clients to enter a name/email before interacting (favorites/comments), or allow fully anonymous interactions?",
     "Do we support per-gallery custom domain mapping (CNAME) as enterprise feature?"
-  ]
+  ],
+  "implementationStatus": {
+    "backend": {
+      "status": "partial",
+      "completed": [
+        "Database migration (galleries, sub_galleries, gallery_assets, client_interactions tables)",
+        "Gallery CRUD API endpoints (list, create, get, update, delete, publish)",
+        "Gallery service with workspace scoping",
+        "API schemas and validation"
+      ],
+      "pending": [
+        "Sub-gallery endpoints (currently return 501)",
+        "Asset listing endpoints",
+        "Upload session endpoints",
+        "Password hashing (bcrypt implementation)",
+        "Client portal endpoints"
+      ]
+    },
+    "frontend": {
+      "status": "partial",
+      "components": {
+        "completed": [
+          {
+            "name": "GalleryCard",
+            "path": "frontend/src/components/features/gallery/GalleryCard.tsx",
+            "features": ["Cover image display", "Status badge", "Photo count", "Hover actions"]
+          },
+          {
+            "name": "GalleryStatusBadge",
+            "path": "frontend/src/components/features/gallery/GalleryStatusBadge.tsx",
+            "features": ["Draft/Published/Archived status display"]
+          },
+          {
+            "name": "GalleryEmptyState",
+            "path": "frontend/src/components/features/gallery/GalleryEmptyState.tsx",
+            "features": ["Empty state with CTA"]
+          },
+          {
+            "name": "GalleryCreateForm",
+            "path": "frontend/src/components/features/gallery/GalleryCreateForm.tsx",
+            "features": ["Form validation", "Title/description/client name fields", "Error handling"]
+          },
+          {
+            "name": "GalleryHeader",
+            "path": "frontend/src/components/features/gallery/GalleryHeader.tsx",
+            "features": ["Title display with inline editing", "Client name and date", "Status badge", "Back navigation"]
+          },
+          {
+            "name": "GalleryStats",
+            "path": "frontend/src/components/features/gallery/GalleryStats.tsx",
+            "features": ["Total items count", "Favorites count"]
+          },
+          {
+            "name": "GalleryToolbar",
+            "path": "frontend/src/components/features/gallery/GalleryToolbar.tsx",
+            "features": ["Action buttons (View as Client, Find People, AI Story, Share, Settings, Upload)", "Search input", "View mode toggle (grid/list)", "Filter buttons (Picks, Favorites)", "Select All checkbox"]
+          }
+        ],
+        "pending": [
+          "SubGalleryTabs",
+          "PhotoGrid",
+          "PhotoListView",
+          "PhotoCard",
+          "Lightbox",
+          "UploadDropzone",
+          "UploadProgress",
+          "UploadQueue",
+          "GallerySettingsPanel"
+        ]
+      },
+      "pages": {
+        "completed": [
+          {
+            "name": "GalleriesPage",
+            "path": "frontend/src/pages/workspace/GalleriesPage.tsx",
+            "features": ["Gallery list with grid/list views", "Search and filter", "Sort controls", "Real API integration"]
+          },
+          {
+            "name": "GalleryCreatePage",
+            "path": "frontend/src/pages/workspace/GalleryCreatePage.tsx",
+            "features": ["Gallery creation form", "Navigation to detail page on success"]
+          }
+        ],
+        "pending": [
+          "GalleryDetailPage"
+        ]
+      },
+      "services": {
+        "completed": [
+          {
+            "name": "galleryService",
+            "path": "frontend/src/services/galleryService.ts",
+            "methods": ["listGalleries", "getGallery", "createGallery", "updateGallery", "deleteGallery", "publishGallery", "unpublishGallery"]
+          }
+        ]
+      },
+      "hooks": {
+        "completed": [
+          {
+            "name": "useGallery",
+            "path": "frontend/src/hooks/useGallery.ts",
+            "features": ["Single gallery state management", "Loading/error states"]
+          },
+          {
+            "name": "useGalleryList",
+            "path": "frontend/src/hooks/useGallery.ts",
+            "features": ["Gallery list with pagination", "Create gallery function"]
+          },
+          {
+            "name": "useGalleryAssets",
+            "path": "frontend/src/hooks/useGalleryAssets.ts",
+            "features": ["Asset list management", "Pagination and filtering"]
+          }
+        ]
+      },
+      "testing": {
+        "status": "partial",
+        "completed": [
+          "GalleryCreateForm tests (10/11 passing)",
+          "Test setup configured (Vitest + React Testing Library)"
+        ],
+        "pending": [
+          "Component unit tests",
+          "Property-based tests",
+          "Integration tests"
+        ]
+      }
+    }
+  }
 }

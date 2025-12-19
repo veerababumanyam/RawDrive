@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Menu,
   Search,
@@ -12,16 +12,21 @@ import {
   Sun,
   HelpCircle,
   CreditCard,
-  PanelLeftClose,
-  PanelLeft,
   X,
 } from 'lucide-react';
-import { useAppShell } from '../layout/AppShell';
+import { useAppShell, HEADER_HEIGHT } from '../layout/AppShell';
+import { useSearch } from '../../contexts/SearchContext';
 
 /* =============================================================================
    WorkspaceHeader Component
 
-   Top header bar for the workspace with search, notifications, and user menu.
+   Top header bar for the workspace with:
+   - RawDrive logo (matching landing page branding)
+   - Search bar with keyboard shortcut
+   - Notifications dropdown
+   - User menu with settings
+   - Theme toggle
+   - Mobile menu toggle
    ============================================================================= */
 
 interface NotificationItem {
@@ -55,7 +60,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   onToggleTheme,
 }) => {
   const navigate = useNavigate();
-  const { toggleMobileMenu, toggleCollapse, sidebarCollapsed } = useAppShell();
+  const { toggleMobileMenu } = useAppShell();
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -121,12 +126,17 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
     { id: 'help', label: 'Help & Support', icon: <HelpCircle size={16} />, path: '/workspace/help' },
   ];
 
+  const { submitSearch, hasHandler } = useSearch();
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/workspace/search?q=${encodeURIComponent(searchQuery)}`);
+      const handled = submitSearch(searchQuery);
+      if (!handled) {
+        navigate(`/workspace/search?q=${encodeURIComponent(searchQuery)}`);
+        setSearchQuery('');
+      }
       setSearchOpen(false);
-      setSearchQuery('');
     }
   };
 
@@ -136,10 +146,13 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   };
 
   return (
-    <header className="h-16 flex items-center justify-between px-4 lg:px-6 bg-surface border-b border-border sticky top-0 z-sticky">
-      {/* Left Section */}
-      <div className="flex items-center gap-2">
-        {/* Mobile Menu Button */}
+    <header
+      className="grid grid-cols-[auto_1fr_auto] items-center px-4 lg:px-6 bg-surface border-b border-border/50 flex-shrink-0"
+      style={{ height: `${HEADER_HEIGHT}px` }}
+    >
+      {/* Left Section - Logo */}
+      <div className="flex items-center gap-3">
+        {/* Mobile Menu Button - Only visible on mobile */}
         <button
           onClick={toggleMobileMenu}
           className="lg:hidden p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -148,20 +161,31 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
           <Menu size={20} />
         </button>
 
-        {/* Collapse Sidebar Button (Desktop) */}
-        <button
-          onClick={toggleCollapse}
-          className="hidden lg:flex p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors min-w-[44px] min-h-[44px] items-center justify-center"
-          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        {/* Logo - Matching Landing Page Branding */}
+        <Link
+          to="/workspace"
+          className="flex items-center gap-2.5 hover:opacity-90 transition-opacity"
+          aria-label="RawDrive Dashboard"
         >
-          {sidebarCollapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
-        </button>
+          <img
+            src="/android-chrome-192x192.png"
+            alt="RawDrive logo"
+            className="w-8 h-8 rounded-lg shadow-sm"
+            loading="eager"
+          />
+          <span className="hidden sm:block font-bold text-lg text-text-primary tracking-tight">
+            Raw<span className="text-gradient">Drive</span>
+          </span>
+        </Link>
+      </div>
 
+      {/* Center Section - Search Bar */}
+      <div className="flex justify-center px-4">
         {/* Search Bar (Desktop) */}
-        <div className="hidden md:block relative">
+        <div className="hidden md:block relative w-full max-w-md">
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-3 px-4 py-2 bg-surface-hover hover:bg-border/50 rounded-lg text-text-tertiary transition-colors min-w-[280px]"
+            className="w-full flex items-center gap-3 px-4 py-2 bg-surface-hover hover:bg-border/50 rounded-lg text-text-tertiary transition-colors"
           >
             <Search size={18} />
             <span className="text-sm">Search...</span>
@@ -181,7 +205,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         </button>
       </div>
 
-      {/* Right Section */}
+      {/* Right Section - Actions */}
       <div className="flex items-center gap-2">
         {/* Theme Toggle */}
         <button
@@ -229,21 +253,19 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                   notifications.map((notification) => (
                     <button
                       key={notification.id}
-                      className={`w-full px-4 py-3 text-left hover:bg-surface-hover transition-colors ${
-                        !notification.read ? 'bg-primary-50 dark:bg-primary-900/10' : ''
-                      }`}
+                      className={`w-full px-4 py-3 text-left hover:bg-surface-hover transition-colors ${!notification.read ? 'bg-primary-50 dark:bg-primary-900/10' : ''
+                        }`}
                     >
                       <div className="flex items-start gap-3">
                         <div
-                          className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                            notification.type === 'error'
-                              ? 'bg-error'
-                              : notification.type === 'warning'
+                          className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${notification.type === 'error'
+                            ? 'bg-error'
+                            : notification.type === 'warning'
                               ? 'bg-warning'
                               : notification.type === 'success'
-                              ? 'bg-success'
-                              : 'bg-info'
-                          }`}
+                                ? 'bg-success'
+                                : 'bg-info'
+                            }`}
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-text-primary truncate">
@@ -362,7 +384,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search galleries, photos, clients..."
+                  placeholder={hasHandler ? "Search in this view..." : "Search galleries, photos, clients..."}
                   className="w-full pl-12 pr-12 py-4 bg-transparent text-text-primary placeholder:text-text-tertiary focus:outline-none text-lg"
                 />
                 <button

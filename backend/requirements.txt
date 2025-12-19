@@ -1,5 +1,6 @@
 fastapi==0.115.5
 uvicorn[standard]==0.32.0
+python-multipart==0.0.9
 asyncpg==0.30.0
 redis[hiredis]==5.1.1
 pydantic==2.9.2
@@ -11,7 +12,16 @@ httpx==0.27.2
 email-validator==2.2.0
 alembic==1.13.2
 SQLAlchemy==2.0.36
-psycopg2-binary==2.9.10
+# psycopg2-binary==2.9.10
+
+# Storage (Cloudflare R2 - S3-compatible)
+boto3==1.35.0
+
+# Image processing (open-source)
+Pillow==10.4.0
+exifread==3.0.0
+# rawpy==0.25.1  # RAW file processing (requires LibRaw system library)
+pg8000==1.31.5
 
 # Dev and testing
 pytest==8.3.3
@@ -21,3 +31,4 @@ faker==25.9.0
 ruff==0.6.9
 mypy==1.11.2
 types-redis==4.6.0.20241004
+aiohttp==3.11.0  # For E2E tests

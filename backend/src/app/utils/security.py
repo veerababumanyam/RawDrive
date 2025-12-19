@@ -104,6 +104,7 @@ def create_access_token(
     user_id: str | uuid.UUID,
     workspace_id: str | uuid.UUID,
     permissions: Iterable[str],
+    session_id: str | uuid.UUID | None = None,
     jti: str | None = None,
     extra_claims: dict[str, Any] | None = None,
     settings: AppSettings | None = None,
@@ -111,6 +112,7 @@ def create_access_token(
     """Create a signed access token with required claims.
 
     Required claims: user_id, workspace_id, permissions (list).
+    Optional: session_id for session validation.
     """
 
     settings = settings or get_settings()
@@ -133,6 +135,10 @@ def create_access_token(
         "iss": "rawdrive-backend",
         "token_type": "access",
     }
+
+    # Include session_id if provided (for session validation)
+    if session_id:
+        payload["sid"] = str(session_id)
 
     if extra_claims:
         payload.update(extra_claims)

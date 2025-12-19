@@ -1,0 +1,563 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "secure_media_handling",
+  "name": "Secure Media Handling with Encryption",
+  "status": "draft",
+  "lastUpdated": "2025-12-18",
+  "sourceDocs": [
+    "docs/Features/GalleryFeatures.md",
+    "docs/Features/STORAGE_AND_BACKUP.md",
+    "docs/project/02-SECURITY_REQUIREMENTS.md"
+  ],
+  "description": "Enterprise-grade secure media handling with AES-256 encryption at rest, time-limited signed URLs, workspace-scoped encryption keys, and comprehensive audit logging for SOC2 and GDPR compliance.",
+  "goals": [
+    "Protect customer media with AES-256 encryption at rest",
+    "Prevent direct access to R2 objects - all access through signed URLs",
+    "Maintain workspace-level encryption key isolation",
+    "Provide comprehensive audit logging for SOC2 compliance",
+    "Support GDPR data portability and right to erasure",
+    "Enable secure key rotation without data loss"
+  ],
+  "nonGoals": [
+    "Client-side encryption (CSE) - handled separately for BYOS",
+    "End-to-end encryption for real-time collaboration"
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Each workspace has its own encryption key (derived from master key)",
+      "Encryption keys are never exposed to clients",
+      "Cross-workspace access is cryptographically impossible",
+      "Key rotation affects only the target workspace"
+    ]
+  },
+  "actors": [
+    { "id": "staff_user", "name": "Staff User", "description": "Uploads and manages encrypted media" },
+    { "id": "client_viewer", "name": "Client Viewer", "description": "Views decrypted media via signed URLs" },
+    { "id": "workspace_admin", "name": "Workspace Admin", "description": "Manages encryption settings and key rotation" },
+    { "id": "system", "name": "System", "description": "Handles encryption/decryption and key management" }
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "WorkspaceEncryptionKey",
+        "table": "workspace_encryption_keys",
+        "primaryKey": "key_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "key_id", "type": "uuid", "classification": "SYSTEM" },
+          { "name": "workspace_id", "type": "uuid", "classification": "SYSTEM" },
+          { "name": "key_version", "type": "integer", "classification": "MANDATORY", "notes": "Incremented on rotation" },
+          { "name": "encrypted_key", "type": "string", "classification": "MANDATORY", "notes": "AES-256 key encrypted with master key" },
+          { "name": "algorithm", "type": "string", "classification": "MANDATORY", "default": "AES-256-GCM" },
+          { "name": "status", "type": "enum(active,rotating,retired)", "classification": "MANDATORY" },
+          { "name": "created_at", "type": "timestamp", "classification": "SYSTEM" },
+          { "name": "rotated_at", "type": "timestamp", "nullable": true, "classification": "OPTIONAL" }
+        ],
+        "indexes": ["workspace_encryption_keys_ws_version_idx", "workspace_encryption_keys_ws_active_idx"]
+      },
+      {
+        "name": "AssetEncryption",
+        "table": "asset_encryption",
+        "primaryKey": "asset_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "asset_id", "type": "uuid", "classification": "SYSTEM" },
+          { "name": "workspace_id", "type": "uuid", "classification": "SYSTEM" },
+          { "name": "key_version", "type": "integer", "classification": "MANDATORY", "notes": "Version of key used for encryption" },
+          { "name": "iv", "type": "string", "classification": "MANDATORY", "notes": "Initialization vector (base64)" },
+          { "name": "auth_tag", "type": "string", "classification": "MANDATORY", "notes": "GCM authentication tag (base64)" },
+          { "name": "encrypted_at", "type": "timestamp", "classification": "SYSTEM" }
+        ],
+        "indexes": ["asset_encryption_ws_key_version_idx"]
+      },
+      {
+        "name": "MediaAccessLog",
+        "table": "media_access_logs",
+        "primaryKey": "log_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "log_id", "type": "uuid", "classification": "SYSTEM" },
+          { "name": "workspace_id", "type": "uuid", "classification": "SYSTEM" },
+          { "name": "asset_id", "type": "uuid", "classification": "MANDATORY" },
+          { "name": "user_id", "type": "uuid", "nullable": true, "classification": "OPTIONAL" },
+          { "name": "share_link_id", "type": "uuid", "nullable": true, "classification": "OPTIONAL" },
+          { "name": "action", "type": "enum(view_thumbnail,view_preview,view_original,download_webp,download_original)", "classification": "MANDATORY" },
+          { "name": "ip_address", "type": "string", "classification": "MANDATORY" },
+          { "name": "user_agent", "type": "string", "classification": "OPTIONAL" },
+          { "name": "created_at", "type": "timestamp", "classification": "SYSTEM" }
+        ],
+        "indexes": ["media_access_logs_ws_asset_idx", "media_access_logs_ws_time_idx", "media_access_logs_ws_user_idx"]
+      }
+    ]
+  },
+  "encryption": {
+    "algorithm": "AES-256-GCM",
+    "keyDerivation": {
+      "method": "HKDF-SHA256",
+      "masterKeySource": "Environment variable (ENCRYPTION_MASTER_KEY)",
+      "workspaceKeyDerivation": "HKDF(master_key, workspace_id, 'rawdrive-workspace-key')"
+    },
+    "atRest": {
+      "enabled": true,
+      "scope": "All media files (original, preview, thumbnail)",
+      "storage": "Encrypted before upload to R2"
+    },
+    "inTransit": {
+      "protocol": "TLS 1.3",
+      "enforcement": "HTTPS-only, HSTS enabled"
+    },
+    "keyRotation": {
+      "frequency": "On-demand or scheduled (quarterly recommended)",
+      "process": [
+        "Generate new key version",
+        "Mark old key as 'rotating'",
+        "Background job re-encrypts all assets",
+        "Mark old key as 'retired' when complete"
+      ]
+    }
+  },
+  "signedUrls": {
+    "ttl": "1 hour (3600 seconds)",
+    "scope": "workspace_id + asset_id + variant",
+    "validation": [
+      "Signature verification",
+      "Expiry check",
+      "Workspace membership verification",
+      "Permission check (view/download based on policy)"
+    ],
+    "antiSharing": [
+      "Short TTL prevents URL sharing",
+      "IP binding optional for enterprise",
+      "User-agent validation optional"
+    ]
+  },
+  "imageVariants": {
+    "thumbnail": {
+      "format": "WebP",
+      "maxDimension": 512,
+      "quality": 80,
+      "encrypted": true,
+      "objectKey": "galleries/{gallery_id}/{location}/{asset_id}/thumb.webp.enc"
+    },
+    "preview": {
+      "format": "WebP",
+      "maxDimension": 2048,
+      "quality": 85,
+      "encrypted": true,
+      "objectKey": "galleries/{gallery_id}/{location}/{asset_id}/preview.webp.enc"
+    },
+    "original": {
+      "format": "Preserved",
+      "encrypted": true,
+      "objectKey": "galleries/{gallery_id}/{location}/{asset_id}/original.{ext}.enc"
+    }
+  },
+  "apis": [
+    {
+      "id": "media.signed_url",
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspace_id}/assets/{asset_id}/url",
+      "auth": "user_jwt_or_share_link",
+      "rateLimit": "standard",
+      "request": {
+        "query": {
+          "variant": "thumbnail|preview|original",
+          "download": "boolean?"
+        }
+      },
+      "response": {
+        "body": {
+          "url": "string",
+          "expires_at": "timestamp",
+          "content_type": "string"
+        }
+      },
+      "errors": ["FORBIDDEN", "ASSET_NOT_FOUND", "DOWNLOAD_NOT_ALLOWED"],
+      "notes": "Returns time-limited signed URL for decrypted content"
+    },
+    {
+      "id": "media.stream",
+      "method": "GET",
+      "path": "/api/v1/media/{signed_token}",
+      "auth": "signed_url_token",
+      "rateLimit": "media-delivery",
+      "response": {
+        "body": "Binary stream (decrypted media)",
+        "headers": {
+          "Content-Type": "image/webp or original mime type",
+          "Cache-Control": "private, max-age=3600",
+          "Content-Disposition": "inline or attachment based on download param"
+        }
+      },
+      "errors": ["INVALID_TOKEN", "TOKEN_EXPIRED", "ASSET_NOT_FOUND"]
+    },
+    {
+      "id": "encryption.rotate_keys",
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspace_id}/encryption/rotate",
+      "auth": "user_jwt",
+      "permission": "workspace:admin",
+      "rateLimit": "admin",
+      "response": {
+        "body": {
+          "job_id": "uuid",
+          "new_key_version": "integer",
+          "status": "queued"
+        }
+      },
+      "errors": ["FORBIDDEN", "ROTATION_IN_PROGRESS"]
+    },
+    {
+      "id": "gdpr.export",
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspace_id}/gdpr/export",
+      "auth": "user_jwt",
+      "permission": "workspace:admin",
+      "rateLimit": "admin",
+      "request": {
+        "body": {
+          "user_id": "uuid?",
+          "include_media": "boolean",
+          "format": "json|csv"
+        }
+      },
+      "response": {
+        "body": {
+          "export_id": "uuid",
+          "status": "queued"
+        }
+      },
+      "errors": ["FORBIDDEN"]
+    },
+    {
+      "id": "gdpr.delete",
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspace_id}/gdpr/delete",
+      "auth": "user_jwt",
+      "permission": "workspace:admin",
+      "rateLimit": "admin",
+      "request": {
+        "body": {
+          "user_id": "uuid?",
+          "confirm": "boolean"
+        }
+      },
+      "response": {
+        "body": {
+          "deletion_id": "uuid",
+          "scheduled_completion": "timestamp"
+        }
+      },
+      "errors": ["FORBIDDEN", "CONFIRMATION_REQUIRED"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.upload.encrypted",
+      "name": "Encrypted Upload Flow",
+      "steps": [
+        "1. Client requests upload session with gallery_id, sub_gallery_id, filename, mime_type",
+        "2. Backend generates upload_id and returns signed URL for temporary upload",
+        "3. Client uploads original file to temporary location",
+        "4. Client commits upload with SHA256 checksum",
+        "5. Backend verifies checksum and extracts metadata (EXIF)",
+        "6. Backend generates WebP preview (2048px) and thumbnail (512px)",
+        "7. Backend encrypts all three variants with workspace key",
+        "8. Backend uploads encrypted files to R2 with .enc extension",
+        "9. Backend stores encryption metadata (IV, auth_tag, key_version)",
+        "10. Backend deletes temporary unencrypted file",
+        "11. Backend returns asset_id and CDN URLs (which require signed tokens)"
+      ]
+    },
+    {
+      "id": "wf.view.decrypted",
+      "name": "Decrypted View Flow",
+      "steps": [
+        "1. Client requests signed URL for asset variant",
+        "2. Backend verifies user permissions and workspace membership",
+        "3. Backend generates time-limited signed token (1 hour TTL)",
+        "4. Client requests media using signed token",
+        "5. Backend validates token signature and expiry",
+        "6. Backend fetches encrypted file from R2",
+        "7. Backend decrypts file using workspace key and stored IV",
+        "8. Backend streams decrypted content to client",
+        "9. Backend logs access for audit trail"
+      ]
+    },
+    {
+      "id": "wf.key.rotation",
+      "name": "Key Rotation Flow",
+      "steps": [
+        "1. Admin initiates key rotation",
+        "2. System generates new key version",
+        "3. System marks current key as 'rotating'",
+        "4. Background job iterates all assets encrypted with old key",
+        "5. For each asset: decrypt with old key, re-encrypt with new key",
+        "6. Update asset_encryption record with new key_version",
+        "7. When all assets migrated, mark old key as 'retired'",
+        "8. Notify admin of completion"
+      ]
+    }
+  ],
+  "compliance": {
+    "soc2": {
+      "trustServiceCriteria": {
+        "CC6_LogicalAccess": {
+          "CC6.1": "Implement MFA for admins, session timeouts (15min idle, 24hr absolute), HSM-backed key storage",
+          "CC6.2": "Role-based access control with deny-by-default, workspace isolation",
+          "CC6.3": "Unique user accounts, no shared credentials, password complexity requirements",
+          "CC6.6": "TLS 1.3 minimum, strong cipher suites, certificate pinning for mobile",
+          "CC6.7": "AES-256-GCM encryption at rest with workspace-isolated keys"
+        },
+        "CC7_SystemOperations": {
+          "CC7.1": "Intrusion detection, vulnerability scanning, penetration testing annually",
+          "CC7.2": "Immutable audit logs with 7-year retention, cryptographic integrity",
+          "CC7.3": "Anomaly detection within 5 minutes, security alerts within 15 minutes"
+        },
+        "CC8_ChangeManagement": {
+          "CC8.1": "Change management logs, approval workflows, rollback procedures"
+        },
+        "CC9_RiskMitigation": {
+          "CC9.2": "Vendor SOC2 validation, least-privilege API access"
+        },
+        "A1_Availability": {
+          "A1.1": "99.9% uptime SLA, automated failover, health monitoring",
+          "A1.2": "Encrypted backups with separate keys, quarterly restoration tests"
+        }
+      },
+      "auditLogs": {
+        "retention": "7 years",
+        "immutable": true,
+        "storage": "Append-only with cryptographic integrity verification",
+        "fields": ["timestamp", "workspace_id", "user_id", "asset_id", "action", "ip_address", "user_agent", "request_id", "result"]
+      }
+    },
+    "gdpr": {
+      "articles": {
+        "Article6_7_LawfulBasis": "Explicit consent with purpose specification, consent timestamp recording",
+        "Article12_13_14_Transparency": "Clear privacy notices in user's language, accessible format",
+        "Article15_RightOfAccess": "Complete data export within 30 days",
+        "Article17_RightToErasure": "Data deletion within 30 days with confirmation certificate",
+        "Article20_DataPortability": "Machine-readable export (JSON/CSV) of all personal data",
+        "Article22_AutomatedDecisions": "Human review option, decision logic explanation",
+        "Article25_PrivacyByDesign": "Data minimization, purpose limitation, storage limitation",
+        "Article30_ROPA": "Record of Processing Activities maintained",
+        "Article32_SecurityOfProcessing": "AES-256 encryption, access controls, integrity verification",
+        "Article33_34_BreachNotification": "Supervisory authority within 72 hours, users without undue delay",
+        "Article35_DPIA": "Data Protection Impact Assessments for high-risk processing",
+        "Article46_InternationalTransfers": "Standard Contractual Clauses for non-EU transfers"
+      },
+      "dataRetention": {
+        "default": "Until workspace deletion or user request",
+        "deletionTimeline": "30 days from request",
+        "method": "Cryptographic erasure (key destruction) + physical deletion + verification"
+      },
+      "dataSubjectRights": {
+        "access": "Export all personal data in JSON/CSV within 30 days",
+        "rectification": "Update personal data via API or UI",
+        "erasure": "Delete all data with confirmation certificate",
+        "restriction": "Pause processing while disputes are resolved",
+        "portability": "Machine-readable export of all data",
+        "objection": "Opt-out of specific processing activities"
+      }
+    },
+    "additionalStandards": {
+      "ISO27001": {
+        "A.8_AssetManagement": "Asset inventory, classification, handling procedures",
+        "A.9_AccessControl": "Access policy, user registration, privilege management",
+        "A.10_Cryptography": "Cryptographic controls policy, key management",
+        "A.12_OperationsSecurity": "Documented procedures, malware protection, backup",
+        "A.13_CommunicationsSecurity": "Network controls, information transfer policies",
+        "A.14_SystemAcquisition": "Security requirements, secure development, test data",
+        "A.18_Compliance": "Legal requirements, privacy protection, cryptographic controls"
+      },
+      "CCPA": {
+        "rightToKnow": "Disclose categories and specific pieces of personal information",
+        "rightToDelete": "Delete personal information upon request",
+        "rightToOptOut": "Opt-out of sale of personal information",
+        "nonDiscrimination": "No discrimination for exercising privacy rights"
+      },
+      "HIPAA": {
+        "note": "Not currently required but architecture supports PHI protection if needed",
+        "technicalSafeguards": "Access controls, audit controls, integrity controls, transmission security"
+      }
+    }
+  },
+  "security": {
+    "controls": {
+      "accessControl": [
+        "No public bucket access - all R2 objects private",
+        "Signed URLs required for all media access with 1-hour TTL",
+        "Workspace-scoped encryption keys with cryptographic isolation",
+        "Key material never exposed to clients or logs",
+        "Role-based access control (RBAC) with deny-by-default",
+        "Mandatory workspace_id filter on all database queries",
+        "JWT token validation on every API request",
+        "Session timeout: 15 minutes idle, 24 hours absolute"
+      ],
+      "encryption": [
+        "AES-256-GCM encryption for all media at rest",
+        "Unique IV (Initialization Vector) per file",
+        "HKDF-SHA256 for workspace key derivation",
+        "TLS 1.3 minimum for all data in transit",
+        "HTTPS-only with HSTS enabled",
+        "Certificate pinning for mobile applications"
+      ],
+      "inputValidation": [
+        "Parameterized queries for all database operations",
+        "Input sanitization and validation on all user inputs",
+        "File header (magic bytes) validation for uploads",
+        "MIME type verification against file content",
+        "Maximum file size limits enforced",
+        "Filename sanitization to prevent path traversal"
+      ],
+      "webSecurity": [
+        "Content Security Policy (CSP) headers",
+        "X-Content-Type-Options: nosniff",
+        "X-Frame-Options: DENY",
+        "X-XSS-Protection: 1; mode=block",
+        "Referrer-Policy: strict-origin-when-cross-origin",
+        "CSRF tokens on all state-changing requests",
+        "SameSite=Strict cookie attribute",
+        "HttpOnly cookies for session tokens"
+      ],
+      "rateLimiting": [
+        "100 requests/minute per IP for API endpoints",
+        "10 requests/minute for authentication endpoints",
+        "Progressive delays after failed login attempts",
+        "Account lockout after 5 failed attempts (15 minute cooldown)",
+        "Separate limits for media delivery endpoints"
+      ],
+      "monitoring": [
+        "Real-time anomaly detection for unusual access patterns",
+        "Failed authentication attempt tracking",
+        "Bulk download detection and alerting",
+        "Off-hours access flagging",
+        "New IP/device detection with optional verification"
+      ]
+    },
+    "threats": [
+      {
+        "threat": "Direct R2 access",
+        "severity": "Critical",
+        "mitigation": "Private bucket + AES-256-GCM encrypted content + no public URLs"
+      },
+      {
+        "threat": "URL sharing/leakage",
+        "severity": "High",
+        "mitigation": "Short TTL (1 hour) + optional IP binding + user-agent validation"
+      },
+      {
+        "threat": "Cross-workspace access",
+        "severity": "Critical",
+        "mitigation": "Workspace-scoped encryption keys + mandatory workspace_id filter + permission checks"
+      },
+      {
+        "threat": "Key compromise",
+        "severity": "Critical",
+        "mitigation": "Key rotation capability + HSM for master key (production) + key versioning"
+      },
+      {
+        "threat": "SQL injection",
+        "severity": "Critical",
+        "mitigation": "Parameterized queries exclusively + input validation + ORM usage"
+      },
+      {
+        "threat": "XSS attacks",
+        "severity": "High",
+        "mitigation": "CSP headers + output encoding + HttpOnly cookies + input sanitization"
+      },
+      {
+        "threat": "CSRF attacks",
+        "severity": "High",
+        "mitigation": "CSRF tokens + SameSite cookies + origin validation"
+      },
+      {
+        "threat": "Brute force attacks",
+        "severity": "Medium",
+        "mitigation": "Rate limiting + progressive delays + account lockout + CAPTCHA"
+      },
+      {
+        "threat": "Session hijacking",
+        "severity": "High",
+        "mitigation": "HttpOnly cookies + secure flag + session rotation + IP validation"
+      },
+      {
+        "threat": "Malicious file upload",
+        "severity": "High",
+        "mitigation": "Magic byte validation + malware scanning + sandboxed processing"
+      },
+      {
+        "threat": "Data exfiltration",
+        "severity": "Critical",
+        "mitigation": "Audit logging + anomaly detection + bulk download alerts + DLP policies"
+      },
+      {
+        "threat": "Insider threat",
+        "severity": "High",
+        "mitigation": "Least privilege access + audit trails + separation of duties + access reviews"
+      }
+    ],
+    "incidentResponse": {
+      "detection": "Anomaly detection within 5 minutes",
+      "alerting": "Security team notification within 15 minutes",
+      "containment": "Automated account lockout, session invalidation",
+      "investigation": "Correlation IDs for full request tracing",
+      "recovery": "Documented playbooks for common scenarios",
+      "postIncident": "Root cause analysis, impact assessment, remediation documentation"
+    }
+  },
+  "performance": {
+    "targets": {
+      "signed_url_generation_p95": "< 50ms",
+      "thumbnail_decryption_p95": "< 100ms",
+      "preview_decryption_p95": "< 200ms",
+      "original_first_byte_p95": "< 500ms"
+    },
+    "caching": {
+      "signedUrls": "No caching (security)",
+      "decryptedContent": "CDN edge caching with private cache-control",
+      "encryptionKeys": "In-memory cache with 5-minute TTL"
+    }
+  },
+  "observability": {
+    "metrics": [
+      "media_access_total{workspace_id,variant,action}",
+      "media_decryption_duration_seconds_bucket",
+      "signed_url_generation_total{workspace_id}",
+      "key_rotation_progress{workspace_id}",
+      "encryption_errors_total{error_type}"
+    ],
+    "logs": [
+      "All media access with user/share_link context",
+      "Encryption/decryption operations",
+      "Key rotation events",
+      "Permission denials"
+    ],
+    "alerts": [
+      "High rate of decryption failures",
+      "Unusual access patterns (potential abuse)",
+      "Key rotation failures",
+      "Expired key still in use"
+    ]
+  },
+  "dependencies": [
+    "storage_ingestion_byos",
+    "media_processing",
+    "auth_rbac",
+    "galleries_client_portal",
+    "share_links_access"
+  ],
+  "acceptanceTests": [
+    "Uploaded media is encrypted before storage in R2",
+    "Direct R2 URL returns encrypted (unusable) content",
+    "Signed URL returns decrypted content",
+    "Expired signed URL returns 401",
+    "Cross-workspace signed URL returns 403",
+    "Key rotation re-encrypts all assets without data loss",
+    "GDPR export includes all user media and metadata",
+    "GDPR deletion removes all user data within 30 days"
+  ]
+}

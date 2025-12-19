@@ -13,7 +13,7 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./init/enable_pgvector.sql:/docker-entrypoint-initdb.d/enable_pgvector.sql:ro
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-rawdrive}"]
+      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER:-rawdrive}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,11 +22,11 @@ services:
     image: redis:7-alpine
     container_name: rawdrive-redis
     restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    command: [ "redis-server", "--save", "", "--appendonly", "no" ]
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,7 +35,7 @@ services:
     image: grafana/loki:2.9.0
     container_name: rawdrive-loki
     restart: unless-stopped
-    user: "10001:10001"  # Run as loki user for security
+    user: "10001:10001" # Run as loki user for security
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/loki-config.yaml
@@ -43,14 +43,14 @@ services:
       - loki_data:/loki
       - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready" ]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          memory: 1G          # Limit memory to prevent OOM
+          memory: 1G # Limit memory to prevent OOM
         reservations:
           memory: 256M
 
@@ -77,10 +77,14 @@ services:
       dockerfile: Dockerfile
     container_name: rawdrive-backend
     restart: unless-stopped
+    env_file:
+      - ../../.env
     environment:
       # Override to use service hostnames inside the compose network
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # Force postgres hostname for Docker networking (ignore .env DATABASE_URL)
+      DATABASE_URL: postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive
+      # Force redis hostname for Docker networking (ignore .env REDIS_URL)
+      REDIS_URL: redis://redis:6379/0
       LOKI_URL: http://loki:3100
       LOKI_TENANT_ID: rawdrive
       APP_ENV: ${APP_ENV:-development}
@@ -97,11 +101,10 @@ services:
       DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-1}
       DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
       DB_POOL_MAX_LIFETIME_SEC: ${DB_POOL_MAX_LIFETIME_SEC:-1800}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3002/api/v1/auth/oauth/google/callback}
-      ALLOWED_CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-["http://localhost:5173","http://localhost:5173/","http://localhost:3002","http://localhost:3002/"]}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DB_POOL_MAX_LIFETIME_SEC: ${DB_POOL_MAX_LIFETIME_SEC:-1800}
+      # Removed redundant overrides that break env_file loading:
+      # GOOGLE_*, ALLOWED_CORS_ORIGINS, LOG_LEVEL, R2_*, ENCRYPTION_MASTER_KEY, SIGNED_URL_SECRET
+      # These are now loaded correctly from ../../.env via env_file directive
     ports:
       - "8000:8000"
     depends_on:
@@ -115,6 +118,25 @@ services:
       - ../../backend:/app
       - ../../backend/secrets/jwtEd25519.key:/run/secrets/jwt_private_key:ro
       - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+
+  one-api:
+    image: justsong/one-api:latest
+    platform: linux/amd64
+    container_name: rawdrive-one-api
+    restart: unless-stopped
+    ports:
+      - "4000:3000" # Map host 4000 to container 3000 to keep same port for user convenience
+    environment:
+      SQL_DSN: "postgres://rawdrive:rawdrive@postgres:5432/rawdrive" # Use existing DB
+      REDIS_CONN_STRING: "redis://redis:6379/0"
+      SESSION_SECRET: "${LITELLM_MASTER_KEY:-randomsecret123}" # Reusing a secret env var or default
+      NODE_TYPE: "master"
+      # One API can read standard OpenAI vars if we want to pre-seed, but mostly configured via UI
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   pg_data:

@@ -1,454 +1,423 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
-  Plus,
-  Image,
-  FolderOpen,
-  Users,
-  Eye,
-  Download,
-  TrendingUp,
-  Clock,
-  ArrowRight,
-  Share2,
-  Edit,
-  ExternalLink,
-  LayoutGrid,
+    Plus,
+    Image,
+    FolderOpen,
+    Users,
+    Eye,
+    Download,
+    TrendingUp,
+    Clock,
+    ArrowRight,
+    Share2,
+    Edit,
+    ExternalLink,
+    LayoutGrid,
+    Heart,
+    MessageCircle,
+    Camera,
+    Upload,
+    ChevronRight,
+    Activity,
+    Zap,
 } from 'lucide-react';
-import { WorkspaceLayout } from '../../components/workspace';
-import { staggerContainer, staggerItem } from '../../components/landing/animations/presets';
 
 /* =============================================================================
    DashboardPage Component
 
-   Main workspace dashboard with overview stats, recent galleries, and quick actions.
+   Main dashboard for the workspace showing:
+   - Key stats (galleries, photos, clients, views)
+   - Quick actions
+   - Recent galleries
+   - Activity feed
+
+   NOTE: This page is rendered inside WorkspaceLayout which provides
+   the header, sidebar, and main content area structure.
    ============================================================================= */
 
-// Mock data - replace with actual API calls
 const mockStats = [
-  {
-    id: 'galleries',
-    label: 'Total Galleries',
-    value: 24,
-    change: '+3 this month',
-    icon: <LayoutGrid size={24} />,
-    color: 'primary',
-  },
-  {
-    id: 'photos',
-    label: 'Total Photos',
-    value: 1847,
-    change: '+234 this week',
-    icon: <Image size={24} />,
-    color: 'accent',
-  },
-  {
-    id: 'clients',
-    label: 'Active Clients',
-    value: 12,
-    change: '+2 this month',
-    icon: <Users size={24} />,
-    color: 'success',
-  },
-  {
-    id: 'views',
-    label: 'Gallery Views',
-    value: 3420,
-    change: '+18% vs last month',
-    icon: <Eye size={24} />,
-    color: 'gold',
-  },
+    {
+        id: 'galleries',
+        label: 'Galleries',
+        value: 24,
+        change: '+3',
+        trend: 'up',
+        icon: LayoutGrid,
+        gradient: 'from-violet-500 to-purple-600',
+    },
+    {
+        id: 'photos',
+        label: 'Photos',
+        value: '1.8K',
+        change: '+234',
+        trend: 'up',
+        icon: Image,
+        gradient: 'from-blue-500 to-cyan-500',
+    },
+    {
+        id: 'clients',
+        label: 'Clients',
+        value: 12,
+        change: '+2',
+        trend: 'up',
+        icon: Users,
+        gradient: 'from-emerald-500 to-teal-500',
+    },
+    {
+        id: 'views',
+        label: 'Views',
+        value: '3.4K',
+        change: '+18%',
+        trend: 'up',
+        icon: Eye,
+        gradient: 'from-amber-500 to-orange-500',
+    },
 ];
 
 const mockRecentGalleries = [
-  {
-    id: '1',
-    name: 'Johnson Wedding',
-    client: 'Sarah & Mike Johnson',
-    photoCount: 342,
-    coverUrl: 'https://picsum.photos/seed/gallery1/400/300',
-    status: 'published',
-    views: 128,
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: '2',
-    name: 'Corporate Headshots',
-    client: 'Tech Corp Inc.',
-    photoCount: 45,
-    coverUrl: 'https://picsum.photos/seed/gallery2/400/300',
-    status: 'draft',
-    views: 0,
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: '3',
-    name: 'Smith Family Portrait',
-    client: 'The Smith Family',
-    photoCount: 87,
-    coverUrl: 'https://picsum.photos/seed/gallery3/400/300',
-    status: 'published',
-    views: 56,
-    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-  },
-  {
-    id: '4',
-    name: 'Product Photography',
-    client: 'Fashion Brand Co.',
-    photoCount: 156,
-    coverUrl: 'https://picsum.photos/seed/gallery4/400/300',
-    status: 'published',
-    views: 234,
-    createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-  },
+    {
+        id: '1',
+        name: 'Johnson Wedding',
+        client: 'Sarah & Mike Johnson',
+        photoCount: 342,
+        coverUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&h=600&fit=crop',
+        status: 'published',
+        views: 128,
+        likes: 45,
+        createdAt: '2d ago',
+    },
+    {
+        id: '2',
+        name: 'Corporate Headshots',
+        client: 'Tech Corp Inc.',
+        photoCount: 45,
+        coverUrl: 'https://images.unsplash.com/photo-1560439513-74b037a25d84?w=800&h=600&fit=crop',
+        status: 'draft',
+        views: 0,
+        likes: 0,
+        createdAt: '5d ago',
+    },
+    {
+        id: '3',
+        name: 'Smith Family Portrait',
+        client: 'The Smith Family',
+        photoCount: 87,
+        coverUrl: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=800&h=600&fit=crop',
+        status: 'published',
+        views: 56,
+        likes: 23,
+        createdAt: '1w ago',
+    },
 ];
 
 const mockActivity = [
-  {
-    id: '1',
-    type: 'download',
-    message: 'Sarah Johnson downloaded 12 photos from "Johnson Wedding"',
-    timestamp: new Date(Date.now() - 30 * 60 * 1000),
-  },
-  {
-    id: '2',
-    type: 'view',
-    message: 'New visitor viewed "Smith Family Portrait"',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-  },
-  {
-    id: '3',
-    type: 'comment',
-    message: 'Mike Johnson commented on a photo in "Johnson Wedding"',
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-  },
-  {
-    id: '4',
-    type: 'favorite',
-    message: 'Sarah Johnson favorited 5 photos in "Johnson Wedding"',
-    timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000),
-  },
+    {
+        id: '1',
+        type: 'download',
+        user: 'Sarah Johnson',
+        action: 'downloaded 12 photos',
+        gallery: 'Johnson Wedding',
+        time: '30m ago',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
+    },
+    {
+        id: '2',
+        type: 'view',
+        user: 'Guest',
+        action: 'viewed gallery',
+        gallery: 'Smith Family Portrait',
+        time: '2h ago',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guest',
+    },
+    {
+        id: '3',
+        type: 'comment',
+        user: 'Mike Johnson',
+        action: 'left a comment',
+        gallery: 'Johnson Wedding',
+        time: '5h ago',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike',
+    },
+    {
+        id: '4',
+        type: 'favorite',
+        user: 'Sarah Johnson',
+        action: 'favorited 5 photos',
+        gallery: 'Johnson Wedding',
+        time: '12h ago',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah2',
+    },
 ];
 
-const DashboardPage: React.FC = () => {
-  const navigate = useNavigate();
+const quickActions = [
+    { label: 'New Gallery', icon: Plus, gradient: 'from-violet-500 to-purple-600', path: '/new-gallery' },
+    { label: 'Upload', icon: Upload, gradient: 'from-blue-500 to-cyan-500', path: '/upload' },
+    { label: 'Clients', icon: Users, gradient: 'from-emerald-500 to-teal-500', path: '/clients' },
+    { label: 'Libraries', icon: FolderOpen, gradient: 'from-amber-500 to-orange-500', path: '/libraries' },
+];
 
-  const formatRelativeTime = (date: Date): string => {
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
+const DashboardPage = () => {
+    const navigate = useNavigate();
 
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString();
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'published':
-        return 'bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400';
-      case 'draft':
-        return 'bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400';
-      default:
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
-    }
-  };
-
-  return (
-    <WorkspaceLayout>
-      <motion.div
-        initial="hidden"
-        animate="visible"
-        variants={staggerContainer}
-        className="space-y-8"
-      >
-        {/* Page Header */}
-        <motion.div variants={staggerItem} className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
-            <p className="text-text-secondary mt-1">Welcome back! Here's what's happening.</p>
-          </div>
-          <button
-            onClick={() => navigate('/workspace/galleries/new')}
-            className="
-              flex items-center gap-2
-              px-4 py-2.5
-              bg-primary hover:bg-primary-hover
-              text-white font-medium
-              rounded-lg
-              transition-colors duration-150
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
-              min-h-[44px]
-            "
-          >
-            <Plus size={20} />
-            New Gallery
-          </button>
-        </motion.div>
-
-        {/* Stats Cards */}
-        <motion.div variants={staggerItem} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {mockStats.map((stat) => (
-            <div
-              key={stat.id}
-              className="bg-surface border border-border rounded-xl p-5 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-text-tertiary">{stat.label}</p>
-                  <p className="text-2xl font-bold text-text-primary mt-1">
-                    {stat.value.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-text-tertiary mt-2 flex items-center gap-1">
-                    <TrendingUp size={12} className="text-success" />
-                    {stat.change}
-                  </p>
-                </div>
-                <div
-                  className={`
-                    w-12 h-12 rounded-lg flex items-center justify-center
-                    ${
-                      stat.color === 'primary'
-                        ? 'bg-primary-100 text-primary dark:bg-primary-900/30'
-                        : stat.color === 'accent'
-                        ? 'bg-accent-100 text-accent dark:bg-accent-900/30'
-                        : stat.color === 'success'
-                        ? 'bg-success-100 text-success dark:bg-success-900/30'
-                        : 'bg-gold-100 text-gold dark:bg-gold-900/30'
-                    }
-                  `}
-                >
-                  {stat.icon}
-                </div>
-              </div>
-            </div>
-          ))}
-        </motion.div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Recent Galleries */}
-          <motion.div variants={staggerItem} className="lg:col-span-2">
-            <div className="bg-surface border border-border rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                <h2 className="font-semibold text-text-primary">Recent Galleries</h2>
-                <Link
-                  to="/workspace/galleries"
-                  className="text-sm text-primary hover:text-primary-hover font-medium flex items-center gap-1"
-                >
-                  View all
-                  <ArrowRight size={14} />
-                </Link>
-              </div>
-              <div className="divide-y divide-border">
-                {mockRecentGalleries.map((gallery) => (
-                  <div
-                    key={gallery.id}
-                    className="p-4 hover:bg-surface-hover transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      {/* Cover Image */}
-                      <div className="w-16 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-surface-hover">
-                        <img
-                          src={gallery.coverUrl}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-text-primary truncate">
-                            {gallery.name}
-                          </h3>
-                          <span
-                            className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(
-                              gallery.status
-                            )}`}
-                          >
-                            {gallery.status}
-                          </span>
+    return (
+        <div className="h-full overflow-auto bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+            {/* Page Header */}
+            <div className="sticky top-0 z-10 glass-premium border-b border-white/10 shadow-sm">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-between h-16">
+                        <div className="flex-1 min-w-0">
+                            <h1 className="text-xl sm:text-2xl font-bold text-gradient">
+                                Dashboard
+                            </h1>
+                            <p className="text-sm text-text-secondary hidden sm:block mt-0.5">
+                                Welcome back! Here's your overview
+                            </p>
                         </div>
-                        <p className="text-sm text-text-tertiary truncate">
-                          {gallery.client} • {gallery.photoCount} photos
-                        </p>
-                      </div>
-
-                      {/* Stats */}
-                      <div className="hidden sm:flex items-center gap-4 text-sm text-text-tertiary">
-                        <span className="flex items-center gap-1">
-                          <Eye size={14} />
-                          {gallery.views}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock size={14} />
-                          {formatRelativeTime(gallery.createdAt)}
-                        </span>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-1">
                         <button
-                          onClick={() => navigate(`/workspace/galleries/${gallery.id}`)}
-                          className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
-                          aria-label="Edit gallery"
+                            onClick={() => navigate('/workspace/galleries/new')}
+                            className="btn-shine flex items-center gap-2 px-4 sm:px-6 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-medium rounded-xl shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30 hover:-translate-y-0.5 active:scale-95"
                         >
-                          <Edit size={16} />
+                            <Plus size={20} />
+                            <span className="hidden sm:inline">New Gallery</span>
+                            <span className="sm:hidden">New</span>
                         </button>
-                        <button
-                          className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
-                          aria-label="Share gallery"
-                        >
-                          <Share2 size={16} />
-                        </button>
-                        {gallery.status === 'published' && (
-                          <a
-                            href={`/g/${gallery.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
-                            aria-label="View public gallery"
-                          >
-                            <ExternalLink size={16} />
-                          </a>
-                        )}
-                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Recent Activity */}
-          <motion.div variants={staggerItem}>
-            <div className="bg-surface border border-border rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-border">
-                <h2 className="font-semibold text-text-primary">Recent Activity</h2>
-              </div>
-              <div className="divide-y divide-border">
-                {mockActivity.map((activity) => (
-                  <div key={activity.id} className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`
-                          w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-                          ${
-                            activity.type === 'download'
-                              ? 'bg-primary-100 text-primary dark:bg-primary-900/30'
-                              : activity.type === 'view'
-                              ? 'bg-accent-100 text-accent dark:bg-accent-900/30'
-                              : activity.type === 'comment'
-                              ? 'bg-success-100 text-success dark:bg-success-900/30'
-                              : 'bg-gold-100 text-gold dark:bg-gold-900/30'
-                          }
-                        `}
-                      >
-                        {activity.type === 'download' && <Download size={14} />}
-                        {activity.type === 'view' && <Eye size={14} />}
-                        {activity.type === 'comment' && <Users size={14} />}
-                        {activity.type === 'favorite' && <Image size={14} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-text-secondary">{activity.message}</p>
-                        <p className="text-xs text-text-tertiary mt-1">
-                          {formatRelativeTime(activity.timestamp)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="px-5 py-3 border-t border-border">
-                <Link
-                  to="/workspace/activity"
-                  className="text-sm text-primary hover:text-primary-hover font-medium flex items-center gap-1"
-                >
-                  View all activity
-                  <ArrowRight size={14} />
-                </Link>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Quick Actions */}
-        <motion.div variants={staggerItem}>
-          <h2 className="font-semibold text-text-primary mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              {
-                label: 'Create Gallery',
-                icon: <Plus size={24} />,
-                path: '/workspace/galleries/new',
-                color: 'primary',
-              },
-              {
-                label: 'Upload Photos',
-                icon: <Image size={24} />,
-                path: '/workspace/upload',
-                color: 'accent',
-              },
-              {
-                label: 'Add Client',
-                icon: <Users size={24} />,
-                path: '/workspace/clients/new',
-                color: 'success',
-              },
-              {
-                label: 'View Libraries',
-                icon: <FolderOpen size={24} />,
-                path: '/workspace/libraries',
-                color: 'gold',
-              },
-            ].map((action) => (
-              <button
-                key={action.label}
-                onClick={() => navigate(action.path)}
-                className="
-                  flex flex-col items-center justify-center gap-3
-                  p-6
-                  bg-surface border border-border
-                  rounded-xl
-                  hover:border-primary hover:shadow-md
-                  transition-all duration-200
-                  group
-                  min-h-[120px]
-                "
-              >
-                <div
-                  className={`
-                    w-12 h-12 rounded-lg flex items-center justify-center
-                    transition-colors
-                    ${
-                      action.color === 'primary'
-                        ? 'bg-primary-100 text-primary group-hover:bg-primary group-hover:text-white dark:bg-primary-900/30'
-                        : action.color === 'accent'
-                        ? 'bg-accent-100 text-accent group-hover:bg-accent group-hover:text-white dark:bg-accent-900/30'
-                        : action.color === 'success'
-                        ? 'bg-success-100 text-success group-hover:bg-success group-hover:text-white dark:bg-success-900/30'
-                        : 'bg-gold-100 text-gold group-hover:bg-gold group-hover:text-white dark:bg-gold-900/30'
-                    }
-                  `}
-                >
-                  {action.icon}
                 </div>
-                <span className="text-sm font-medium text-text-secondary group-hover:text-text-primary">
-                  {action.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </motion.div>
-      </motion.div>
-    </WorkspaceLayout>
-  );
+            </div>
+
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    {mockStats.map((stat) => {
+                        const Icon = stat.icon;
+                        return (
+                            <div
+                                key={stat.id}
+                                className="group relative overflow-hidden card-glass rounded-2xl p-4 sm:p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+                            >
+                                <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
+
+                                <div className="relative">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className={`p-2 sm:p-2.5 rounded-xl bg-gradient-to-br ${stat.gradient} shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300`}>
+                                            <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                                        </div>
+                                        <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30">
+                                            <TrendingUp className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                                {stat.change}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div className="text-2xl sm:text-3xl font-bold text-text-primary mb-1">
+                                            {stat.value}
+                                        </div>
+                                        <div className="text-xs sm:text-sm text-text-secondary">
+                                            {stat.label}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Quick Actions */}
+                <div className="card-glass rounded-2xl p-4 sm:p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-base sm:text-lg font-semibold text-text-primary flex items-center gap-2">
+                            <Zap className="w-5 h-5 text-accent" />
+                            Quick Actions
+                        </h2>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {quickActions.map((action) => {
+                            const Icon = action.icon;
+                            return (
+                                <button
+                                    key={action.label}
+                                    className="group relative overflow-hidden glass-hover rounded-xl p-4 sm:p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95"
+                                >
+                                    <div className={`absolute inset-0 bg-gradient-to-br ${action.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
+
+                                    <div className="relative flex flex-col items-center gap-2 sm:gap-3">
+                                        <div className={`p-3 sm:p-3.5 rounded-xl bg-gradient-to-br ${action.gradient} shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300`}>
+                                            <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                                        </div>
+                                        <span className="text-xs sm:text-sm font-medium text-text-primary">
+                                            {action.label}
+                                        </span>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Main Content Grid */}
+                <div className="grid lg:grid-cols-3 gap-6 sm:gap-8">
+                    {/* Recent Galleries */}
+                    <div className="lg:col-span-2 card-glass rounded-2xl overflow-hidden">
+                        <div className="p-4 sm:p-6 border-b border-border/50">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-base sm:text-lg font-semibold text-text-primary flex items-center gap-2">
+                                    <Camera className="w-5 h-5 text-accent" />
+                                    Recent Galleries
+                                </h2>
+                                <button className="text-sm font-medium text-primary hover:text-primary-600 flex items-center gap-1 hover:gap-2 transition-all">
+                                    View all
+                                    <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="divide-y divide-border/50">
+                            {mockRecentGalleries.map((gallery) => (
+                                <div
+                                    key={gallery.id}
+                                    className="group p-3 sm:p-4 hover:bg-surface-hover/50 transition-colors cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 sm:gap-4">
+                                        {/* Cover Image */}
+                                        <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+                                            <img
+                                                src={gallery.coverUrl}
+                                                alt={gallery.name}
+                                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                            />
+                                            <div
+                                                className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
+                                            />
+                                        </div>
+
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-start justify-between gap-2 mb-1">
+                                                <h3 className="font-semibold text-text-primary truncate text-sm sm:text-base group-hover:text-primary transition-colors">
+                                                    {gallery.name}
+                                                </h3>
+                                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${gallery.status === 'published'
+                                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                                    }`}>
+                                                    {gallery.status}
+                                                </span>
+                                            </div>
+
+                                            <p className="text-xs sm:text-sm text-text-secondary truncate mb-2">
+                                                {gallery.client}
+                                            </p>
+
+                                            <div className="flex items-center gap-3 sm:gap-4 text-xs text-text-tertiary">
+                                                <span className="flex items-center gap-1">
+                                                    <Image size={14} />
+                                                    {gallery.photoCount}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <Eye size={14} />
+                                                    {gallery.views}
+                                                </span>
+                                                {gallery.likes > 0 && (
+                                                    <span className="flex items-center gap-1">
+                                                        <Heart size={14} />
+                                                        {gallery.likes}
+                                                    </span>
+                                                )}
+                                                <span className="flex items-center gap-1 ml-auto">
+                                                    <Clock size={14} />
+                                                    {gallery.createdAt}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors" aria-label="Edit">
+                                                <Edit size={18} />
+                                            </button>
+                                            <button className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors" aria-label="Share">
+                                                <Share2 size={18} />
+                                            </button>
+                                            {gallery.status === 'published' && (
+                                                <button className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors" aria-label="View">
+                                                    <ExternalLink size={18} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Activity Feed */}
+                    <div className="card-glass rounded-2xl overflow-hidden">
+                        <div className="p-4 sm:p-6 border-b border-border/50">
+                            <h2 className="text-base sm:text-lg font-semibold text-text-primary flex items-center gap-2">
+                                <Activity className="w-5 h-5 text-accent" />
+                                Activity
+                            </h2>
+                        </div>
+
+                        <div className="divide-y divide-border/50">
+                            {mockActivity.map((activity) => (
+                                <div
+                                    key={activity.id}
+                                    className="p-3 sm:p-4 hover:bg-surface-hover/50 transition-colors"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="relative flex-shrink-0">
+                                            <img
+                                                src={activity.avatar}
+                                                alt={activity.user}
+                                                className="w-10 h-10 rounded-full ring-2 ring-white/50 dark:ring-white/10"
+                                            />
+                                            <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow-sm ${activity.type === 'download'
+                                                    ? 'bg-violet-500'
+                                                    : activity.type === 'view'
+                                                        ? 'bg-blue-500'
+                                                        : activity.type === 'comment'
+                                                            ? 'bg-emerald-500'
+                                                            : 'bg-pink-500'
+                                                }`}>
+                                                {activity.type === 'download' && <Download size={12} className="text-white" />}
+                                                {activity.type === 'view' && <Eye size={12} className="text-white" />}
+                                                {activity.type === 'comment' && <MessageCircle size={12} className="text-white" />}
+                                                {activity.type === 'favorite' && <Heart size={12} className="text-white" />}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm text-text-primary">
+                                                <span className="font-semibold">{activity.user}</span>
+                                                {' '}
+                                                <span className="text-text-secondary">
+                                                    {activity.action}
+                                                </span>
+                                            </p>
+                                            <p className="text-xs text-text-tertiary mt-0.5">
+                                                {activity.gallery} • {activity.time}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-4 border-t border-border/50">
+                            <button className="w-full text-sm font-medium text-primary hover:text-primary-600 flex items-center justify-center gap-1 hover:gap-2 transition-all">
+                                View all activity
+                                <ArrowRight size={16} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    );
 };
 
 export default DashboardPage;

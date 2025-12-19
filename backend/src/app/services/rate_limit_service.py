@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from app.config.settings import get_settings
 from app.db.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -37,13 +38,33 @@ class RateLimitConfig:
     window_seconds: int  # Time window
 
 
-# Default rate limits per type
+# Default rate limits per type (production)
 DEFAULT_LIMITS: dict[RateLimitType, RateLimitConfig] = {
     RateLimitType.AUTH: RateLimitConfig(requests=10, window_seconds=900),  # 10 req / 15 min
     RateLimitType.API: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min
     RateLimitType.UPLOAD: RateLimitConfig(requests=20, window_seconds=3600),  # 20 req / hour
     RateLimitType.SEARCH: RateLimitConfig(requests=30, window_seconds=60),  # 30 req / min
 }
+
+# Development rate limits (more lenient)
+DEV_LIMITS: dict[RateLimitType, RateLimitConfig] = {
+    RateLimitType.AUTH: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min
+    RateLimitType.API: RateLimitConfig(requests=1000, window_seconds=60),  # 1000 req / min
+    RateLimitType.UPLOAD: RateLimitConfig(requests=200, window_seconds=3600),  # 200 req / hour
+    RateLimitType.SEARCH: RateLimitConfig(requests=300, window_seconds=60),  # 300 req / min
+}
+
+
+def get_rate_limits() -> dict[RateLimitType, RateLimitConfig]:
+    """Get rate limits based on environment."""
+    try:
+        settings = get_settings()
+        if settings.app_env.value == "development":
+            return DEV_LIMITS
+    except Exception:
+        # If settings can't be loaded, default to production limits
+        pass
+    return DEFAULT_LIMITS
 
 
 @dataclass
@@ -66,7 +87,7 @@ class RateLimitService:
     """Sliding window rate limiter using Redis sorted sets."""
 
     def __init__(self, limits: dict[RateLimitType, RateLimitConfig] | None = None):
-        self._limits = limits or DEFAULT_LIMITS
+        self._limits = limits or get_rate_limits()
 
     async def check_rate_limit(
         self,
@@ -87,7 +108,8 @@ class RateLimitService:
             RateLimitResult with allowed status and metadata
         """
         redis = await get_redis_client()
-        config = custom_config or self._limits.get(limit_type, DEFAULT_LIMITS[RateLimitType.API])
+        default_limits = get_rate_limits()
+        config = custom_config or self._limits.get(limit_type, default_limits[RateLimitType.API])
 
         key = _rate_limit_key(identifier, limit_type)
         now = time.time()
@@ -164,7 +186,8 @@ class RateLimitService:
     ) -> RateLimitResult:
         """Get current rate limit status without incrementing counter."""
         redis = await get_redis_client()
-        config = self._limits.get(limit_type, DEFAULT_LIMITS[RateLimitType.API])
+        default_limits = get_rate_limits()
+        config = self._limits.get(limit_type, default_limits[RateLimitType.API])
 
         key = _rate_limit_key(identifier, limit_type)
         now = time.time()

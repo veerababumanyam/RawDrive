@@ -134,7 +134,8 @@ async def seed_platform_roles(conn: asyncpg.Connection):
         await conn.execute(aSYNC_ROLES_INSERT, uuid.uuid4(), name, perms)
 
 
-async def seed_user(conn: asyncpg.Connection, user_id: uuid.UUID, email: str, display: str):
+async def seed_user(conn: asyncpg.Connection, user_id: uuid.UUID, email: str, display: str) -> uuid.UUID:
+    # Try to insert
     await conn.execute(
         """
         INSERT INTO users (user_id, email, display_name, email_verified, email_verified_at)
@@ -145,16 +146,23 @@ async def seed_user(conn: asyncpg.Connection, user_id: uuid.UUID, email: str, di
         email,
         display,
     )
+    
+    # Fetch the actual user_id (whether it was just inserted or already existed)
+    actual_user_id = await conn.fetchval("SELECT user_id FROM users WHERE email = $1", email)
+    
+    # Ensure identity exists
     await conn.execute(
         """
         INSERT INTO user_identities (identity_id, user_id, provider, email, email_verified, password_hash)
         VALUES (gen_random_uuid(), $1, 'local', $2, TRUE, $3)
         ON CONFLICT (provider, email) DO NOTHING;
         """,
-        user_id,
+        actual_user_id,
         email,
         hash_password(PASSWORD),
     )
+    
+    return actual_user_id
 
 
 async def seed_workspace_with_roles(conn: asyncpg.Connection, workspace_id: uuid.UUID, name: str, slug: str, owner_user_id: uuid.UUID, plan_code: str):
@@ -168,15 +176,25 @@ async def seed_workspace_with_roles(conn: asyncpg.Connection, workspace_id: uuid
         name,
         slug,
     )
-    membership_id = uuid.uuid4()
+    
+    # Fetch actual workspace_id
+    actual_workspace_id = await conn.fetchval("SELECT workspace_id FROM workspaces WHERE slug = $1", slug)
+    
+    # Create membership (or skip) using actual_workspace_id
     await conn.execute(
         """
         INSERT INTO workspace_memberships (membership_id, workspace_id, user_id, status)
-        VALUES ($1, $2, $3, 'active')
+        VALUES (gen_random_uuid(), $1, $2, 'active')
         ON CONFLICT (workspace_id, user_id) DO NOTHING;
         """,
-        membership_id,
-        workspace_id,
+        actual_workspace_id,
+        owner_user_id,
+    )
+    
+    # Fetch actual membership ID
+    membership_id = await conn.fetchval(
+        "SELECT membership_id FROM workspace_memberships WHERE workspace_id = $1 AND user_id = $2",
+        actual_workspace_id,
         owner_user_id,
     )
 
@@ -191,23 +209,30 @@ async def seed_workspace_with_roles(conn: asyncpg.Connection, workspace_id: uuid
             ON CONFLICT (workspace_id, name) DO NOTHING;
             """,
             role_id,
-            workspace_id,
+            actual_workspace_id,
             role_name,
             perms,
             is_system,
         )
 
     owner_role_id = role_ids.get("owner")
-    if owner_role_id:
-        await conn.execute(
-            """
-            INSERT INTO member_roles (member_role_id, membership_id, role_id)
-            VALUES (gen_random_uuid(), $1, $2)
-            ON CONFLICT (membership_id, role_id) DO NOTHING;
-            """,
-            membership_id,
-            owner_role_id,
+    if owner_role_id and membership_id:
+        # We need to fetch the actual role ID too as it might exist
+        actual_owner_role_id = await conn.fetchval(
+            "SELECT role_id FROM roles WHERE workspace_id = $1 AND name = 'owner'",
+            actual_workspace_id,
         )
+        
+        if actual_owner_role_id:
+            await conn.execute(
+                """
+                INSERT INTO member_roles (member_role_id, membership_id, role_id)
+                VALUES (gen_random_uuid(), $1, $2)
+                ON CONFLICT (membership_id, role_id) DO NOTHING;
+                """,
+                membership_id,
+                actual_owner_role_id,
+            )
 
     plan = next(p for p in PLANS if p.code == plan_code)
     await conn.execute(
@@ -217,29 +242,29 @@ async def seed_workspace_with_roles(conn: asyncpg.Connection, workspace_id: uuid
         ) VALUES (gen_random_uuid(), $1, $2, 'trialing', NOW(), NOW() + INTERVAL '30 days')
         ON CONFLICT (workspace_id) DO NOTHING;
         """,
-        workspace_id,
+        actual_workspace_id,
         plan.plan_id,
     )
 
 
 async def seed_tier_users(conn: asyncpg.Connection):
     for user_id, email, name, plan_code in TIER_USERS:
-        await seed_user(conn, user_id, email, name)
-        workspace_id = uuid.uuid5(user_id, "workspace")
+        actual_user_id = await seed_user(conn, user_id, email, name)
+        workspace_id = uuid.uuid5(actual_user_id, "workspace")
         slug = email.split("@")[0]
-        await seed_workspace_with_roles(conn, workspace_id, f"{name} Workspace", slug, user_id, plan_code)
+        await seed_workspace_with_roles(conn, workspace_id, f"{name} Workspace", slug, actual_user_id, plan_code)
 
 
 async def seed_admin_users(conn: asyncpg.Connection):
     for user_id, email, name, role_name in ADMIN_USERS:
-        await seed_user(conn, user_id, email, name)
+        actual_user_id = await seed_user(conn, user_id, email, name)
         await conn.execute(
             """
             INSERT INTO user_platform_roles (assignment_id, user_id, role_id)
             SELECT gen_random_uuid(), $1, pr.role_id FROM platform_roles pr WHERE pr.name = $2
             ON CONFLICT (user_id, role_id) DO NOTHING;
             """,
-            user_id,
+            actual_user_id,
             role_name,
         )
 
@@ -247,38 +272,45 @@ async def seed_admin_users(conn: asyncpg.Connection):
 async def seed_workspace_role_users(conn: asyncpg.Connection):
     # create a shared workspace for role testing
     ws_id = uuid.UUID("44444444-4444-4444-4444-444444444000")
-    owner_user_id = WORKSPACE_ROLE_USERS[0][0]
-    await seed_user(conn, owner_user_id, WORKSPACE_ROLE_USERS[0][1], WORKSPACE_ROLE_USERS[0][2])
+    owner_user_id_static = WORKSPACE_ROLE_USERS[0][0]
+    owner_user_id = await seed_user(conn, owner_user_id_static, WORKSPACE_ROLE_USERS[0][1], WORKSPACE_ROLE_USERS[0][2])
     await seed_workspace_with_roles(conn, ws_id, "Test Roles Workspace", "test-roles-workspace", owner_user_id, "starter")
 
     # map role names
     role_lookup = {"owner": "owner", "admin": "admin", "editor": "editor", "viewer": "viewer"}
 
-    for user_id, email, name, role_key in WORKSPACE_ROLE_USERS[1:]:
-        await seed_user(conn, user_id, email, name)
-        membership_id = uuid.uuid4()
+    for user_id_static, email, name, role_key in WORKSPACE_ROLE_USERS[1:]:
+        actual_user_id = await seed_user(conn, user_id_static, email, name)
+        # ensure membership exists
         await conn.execute(
             """
             INSERT INTO workspace_memberships (membership_id, workspace_id, user_id, status)
-            VALUES ($1, $2, $3, 'active')
+            VALUES (gen_random_uuid(), $1, $2, 'active')
             ON CONFLICT (workspace_id, user_id) DO NOTHING;
             """,
-            membership_id,
             ws_id,
-            user_id,
+            actual_user_id,
         )
-        # assign role
-        await conn.execute(
-            """
-            INSERT INTO member_roles (member_role_id, membership_id, role_id)
-            SELECT gen_random_uuid(), $1, r.role_id FROM roles r
-            WHERE r.workspace_id = $2 AND r.name = $3
-            ON CONFLICT (membership_id, role_id) DO NOTHING;
-            """,
-            membership_id,
+        
+        membership_id = await conn.fetchval(
+            "SELECT membership_id FROM workspace_memberships WHERE workspace_id = $1 AND user_id = $2",
             ws_id,
-            role_lookup.get(role_key, role_key),
+            actual_user_id
         )
+
+        # assign role if membership exists
+        if membership_id:
+            await conn.execute(
+                """
+                INSERT INTO member_roles (member_role_id, membership_id, role_id)
+                SELECT gen_random_uuid(), $1, r.role_id FROM roles r
+                WHERE r.workspace_id = $2 AND r.name = $3
+                ON CONFLICT (membership_id, role_id) DO NOTHING;
+                """,
+                membership_id,
+                ws_id,
+                role_lookup.get(role_key, role_key),
+            )
 
 
 async def main():

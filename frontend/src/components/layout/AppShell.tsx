@@ -1,21 +1,29 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 /* =============================================================================
    AppShell Component
 
    A responsive application shell that provides the main layout structure
    with header, sidebar, main content area, and optional footer.
-   Supports mobile drawer navigation and collapsible sidebar.
+
+   IMPORTANT: This layout follows best practices:
+   - Header is fixed at the top (full width)
+   - Sidebar starts BELOW the header (not from top)
+   - Content area fills remaining space
+   - Mobile-first responsive design
+   - Sidebar is collapsible (hide/show) and remembers state
    ============================================================================= */
 
 interface AppShellContextType {
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
   mobileMenuOpen: boolean;
+  headerHeight: number;
   toggleSidebar: () => void;
   toggleCollapse: () => void;
   toggleMobileMenu: () => void;
   closeMobileMenu: () => void;
+  setSidebarOpen: (open: boolean) => void;
 }
 
 const AppShellContext = createContext<AppShellContextType | null>(null);
@@ -27,6 +35,11 @@ export const useAppShell = () => {
   }
   return context;
 };
+
+// Constants for consistent sizing
+export const HEADER_HEIGHT = 64; // 16 * 4 = h-16
+export const SIDEBAR_WIDTH = 280;
+export const SIDEBAR_COLLAPSED_WIDTH = 72;
 
 export interface AppShellProps {
   children: React.ReactNode;
@@ -48,12 +61,59 @@ export const AppShell: React.FC<AppShellProps> = ({
   variant = 'default',
   className = '',
 }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(defaultCollapsed);
+  // Load persisted state from localStorage
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('rawdrive-sidebar-open');
+      return saved !== null ? JSON.parse(saved) : defaultSidebarOpen;
+    }
+    return defaultSidebarOpen;
+  });
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('rawdrive-sidebar-collapsed');
+      return saved !== null ? JSON.parse(saved) : defaultCollapsed;
+    }
+    return defaultCollapsed;
+  });
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const toggleSidebar = useCallback(() => setSidebarOpen((prev) => !prev), []);
-  const toggleCollapse = useCallback(() => setSidebarCollapsed((prev) => !prev), []);
+  // Persist sidebar state
+  useEffect(() => {
+    localStorage.setItem('rawdrive-sidebar-open', JSON.stringify(sidebarOpen));
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    localStorage.setItem('rawdrive-sidebar-collapsed', JSON.stringify(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  // Close mobile menu on resize to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024 && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [mobileMenuOpen]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
+  const toggleSidebar = useCallback(() => setSidebarOpen((prev: boolean) => !prev), []);
+  const toggleCollapse = useCallback(() => setSidebarCollapsed((prev: boolean) => !prev), []);
   const toggleMobileMenu = useCallback(() => setMobileMenuOpen((prev) => !prev), []);
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
@@ -63,15 +123,19 @@ export const AppShell: React.FC<AppShellProps> = ({
         sidebarOpen,
         sidebarCollapsed,
         mobileMenuOpen,
+        headerHeight: HEADER_HEIGHT,
         toggleSidebar,
         toggleCollapse,
         toggleMobileMenu,
         closeMobileMenu,
+        setSidebarOpen,
       }}
     >
       <div
         className={`
-          min-h-screen
+          h-screen
+          flex flex-col
+          overflow-hidden
           bg-background
           text-text-primary
           ${className}
@@ -98,6 +162,8 @@ export interface AppShellHeaderProps {
   bordered?: boolean;
   /** Transparent/glass background */
   transparent?: boolean;
+  /** Use premium glass effect */
+  glassPremium?: boolean;
   className?: string;
 }
 
@@ -107,6 +173,7 @@ export const AppShellHeader: React.FC<AppShellHeaderProps> = ({
   size = 'md',
   bordered = true,
   transparent = false,
+  glassPremium = false,
   className = '',
 }) => {
   const heightStyles = {
@@ -115,15 +182,23 @@ export const AppShellHeader: React.FC<AppShellHeaderProps> = ({
     lg: 'h-20',
   };
 
+  // Determine background style
+  const getBackgroundStyle = () => {
+    if (glassPremium) return 'glass-premium';
+    if (transparent) return 'glass-light';
+    return 'bg-surface';
+  };
+
   return (
     <header
       className={`
         ${heightStyles[size]}
         ${sticky ? 'sticky top-0 z-sticky' : ''}
-        ${transparent ? 'glass' : 'bg-surface'}
-        ${bordered ? 'border-b border-border' : ''}
+        ${getBackgroundStyle()}
+        ${bordered ? 'border-b border-border/50' : ''}
         flex items-center
         px-4 lg:px-6
+        transition-all duration-300 ease-out
         ${className}
       `}
     >
@@ -134,6 +209,10 @@ export const AppShellHeader: React.FC<AppShellHeaderProps> = ({
 
 /* =============================================================================
    AppShell.Sidebar Component
+
+   IMPORTANT: Sidebar is positioned BELOW the header, not from top.
+   - On mobile: Fixed overlay that slides in from left, starts below header
+   - On desktop: Static sidebar in the flex layout
    ============================================================================= */
 
 export interface AppShellSidebarProps {
@@ -148,19 +227,22 @@ export interface AppShellSidebarProps {
   position?: 'left' | 'right';
   /** Bordered */
   bordered?: boolean;
+  /** Use glass effect */
+  glass?: boolean;
   className?: string;
 }
 
 export const AppShellSidebar: React.FC<AppShellSidebarProps> = ({
   children,
-  width = 280,
-  collapsedWidth = 72,
+  width = SIDEBAR_WIDTH,
+  collapsedWidth = SIDEBAR_COLLAPSED_WIDTH,
   mobileOverlay = true,
   position = 'left',
   bordered = true,
+  glass = false,
   className = '',
 }) => {
-  const { sidebarOpen, sidebarCollapsed, mobileMenuOpen, closeMobileMenu } =
+  const { sidebarOpen, sidebarCollapsed, mobileMenuOpen, closeMobileMenu, headerHeight } =
     useAppShell();
 
   const currentWidth = sidebarCollapsed ? collapsedWidth : width;
@@ -170,7 +252,12 @@ export const AppShellSidebar: React.FC<AppShellSidebarProps> = ({
       {/* Mobile Overlay Backdrop */}
       {mobileOverlay && mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-modal-backdrop bg-black/50 lg:hidden"
+          className="
+            fixed inset-0 z-40 lg:hidden
+            bg-black/50 backdrop-blur-sm
+            transition-opacity duration-300 ease-out
+          "
+          style={{ top: `${headerHeight}px` }}
           onClick={closeMobileMenu}
           aria-hidden="true"
         />
@@ -179,20 +266,19 @@ export const AppShellSidebar: React.FC<AppShellSidebarProps> = ({
       {/* Sidebar */}
       <aside
         className={`
-          ${position === 'left' ? 'left-0' : 'right-0'}
           ${bordered ? (position === 'left' ? 'border-r' : 'border-l') : ''}
-          border-border
-          bg-surface
+          border-border/50
+          ${glass ? 'glass-light' : 'bg-surface'}
           flex flex-col
           overflow-hidden
-          transition-all duration-300 ease-out
+          transition-all duration-300 ease-spring
 
-          /* Mobile: Fixed overlay */
-          fixed top-0 bottom-0 z-modal
-          ${mobileMenuOpen ? 'translate-x-0' : position === 'left' ? '-translate-x-full' : 'translate-x-full'}
+          /* Mobile: Fixed overlay starting below header */
+          fixed ${position === 'left' ? 'left-0' : 'right-0'} bottom-0 z-50
+          ${mobileMenuOpen ? 'translate-x-0 shadow-2xl' : position === 'left' ? '-translate-x-full' : 'translate-x-full'}
 
-          /* Desktop: Static */
-          lg:static lg:translate-x-0
+          /* Desktop: Static in flex layout, starts from top */
+          lg:relative lg:translate-x-0 lg:shadow-none lg:z-auto lg:top-0
           ${sidebarOpen ? '' : 'lg:hidden'}
 
           ${className}
@@ -201,6 +287,8 @@ export const AppShellSidebar: React.FC<AppShellSidebarProps> = ({
           width: `${currentWidth}px`,
           minWidth: `${currentWidth}px`,
         }}
+        // Mobile: Start below header; Desktop: Handled by lg:top-0 class
+        data-mobile-top={headerHeight}
         role="navigation"
         aria-label="Main navigation"
       >
@@ -299,6 +387,9 @@ export const AppShellFooter: React.FC<AppShellFooterProps> = ({
 
 /* =============================================================================
    AppShell.Content Component (Wrapper for Sidebar + Main)
+
+   This component creates the horizontal flex container for sidebar and main.
+   It fills the remaining vertical space below the header.
    ============================================================================= */
 
 export interface AppShellContentProps {
@@ -317,6 +408,7 @@ export const AppShellContent: React.FC<AppShellContentProps> = ({
         flex-1
         min-h-0
         overflow-hidden
+        relative
         ${className}
       `}
     >

@@ -100,12 +100,12 @@ export const ProblemSolutionSection: React.FC<ProblemSolutionSectionProps> = ({
         aria-hidden="true"
       />
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
         <FadeIn direction="up" className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full mb-6">
             <AlertCircle size={16} className="text-amber-400" />
-            <span className="text-sm text-slate-300">Sound Familiar?</span>
+            <span className="text-sm text-slate-200">Sound Familiar?</span>
           </div>
           <h2
             id="problem-solution-heading"
@@ -114,7 +114,7 @@ export const ProblemSolutionSection: React.FC<ProblemSolutionSectionProps> = ({
             Stop Struggling with{' '}
             <span className="landing-text-gradient">Client Delivery</span>
           </h2>
-          <p className="text-lg text-slate-400 max-w-2xl mx-auto">
+          <p className="text-lg text-slate-300 max-w-2xl mx-auto">
             Most photographers lose 12+ hours per week on gallery management.
             There's a better way.
           </p>

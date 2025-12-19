@@ -143,6 +143,7 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
 
   const totalItems = safeTestimonials.length;
 
+  // When user interacts, pause auto-advance for 30s
   const pauseAutoRotate = () => {
     setIsAutoPaused(true);
     if (pauseTimeoutRef.current) {
@@ -151,7 +152,7 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
     pauseTimeoutRef.current = window.setTimeout(() => {
       setIsAutoPaused(false);
       pauseTimeoutRef.current = null;
-    }, 12000);
+    }, 30000); // 30 seconds pause
   };
 
   const handlePrevious = () => {
@@ -166,6 +167,7 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
     setCurrentIndex((prev) => (prev === totalItems - 1 ? 0 : prev + 1));
   };
 
+  // Throttle auto-advance: only rotate every 20s, and pause after user interaction for 30s
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (isAutoPaused) return;
@@ -174,7 +176,7 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
     const id = window.setInterval(() => {
       setDirection(1);
       setCurrentIndex((prev) => (prev === totalItems - 1 ? 0 : prev + 1));
-    }, 5000);
+    }, 20000); // 20 seconds per slide
 
     return () => window.clearInterval(id);
   }, [isAutoPaused, totalItems]);

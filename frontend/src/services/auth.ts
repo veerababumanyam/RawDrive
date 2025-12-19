@@ -23,10 +23,12 @@ export interface User {
   avatarUrl?: string;
   emailVerified: boolean;
   createdAt: string;
+  workspace_id?: string; // Workspace ID from backend
 }
 
 export interface Workspace {
-  id: string;
+  workspace_id: string;
+  id?: string; // Legacy alias
   name: string;
   slug: string;
   role: string;
@@ -47,14 +49,14 @@ export interface SignupData {
 }
 
 export interface AuthResponse {
-  user: User;
+  user: User & { workspace_id?: string };
   tokens: {
     access_token: string;
     refresh_token: string;
     expires_in: number;
     token_type: string;
   };
-  workspace: Workspace;
+  workspace?: Workspace; // Optional - may not be included in response
 }
 
 // User/workspace storage keys
@@ -138,7 +140,7 @@ export async function login(credentials: LoginCredentials): Promise<{
   }
 
   if (response.data) {
-    const { user, tokens, workspace } = response.data;
+    const { user, tokens, workspace: responseWorkspace } = response.data;
 
     // Store tokens
     setStoredTokens({
@@ -147,9 +149,27 @@ export async function login(credentials: LoginCredentials): Promise<{
       expiresAt: Date.now() + tokens.expires_in * 1000,
     });
 
-    // Store user and workspace
+    // Store user
     setStoredUser(user);
-    setStoredWorkspace(workspace);
+
+    // Fetch workspace if not in response but workspace_id is available
+    let workspace = responseWorkspace;
+    try {
+      if (!workspace && (user as any).workspace_id) {
+        console.log('[Login] Fetching workspace for workspace_id:', (user as any).workspace_id);
+        workspace = await getWorkspace((user as any).workspace_id) || undefined;
+      }
+    } catch (error) {
+      console.error('[Login] Error fetching workspace:', error);
+      // Continue without workspace - don't fail login
+    }
+
+    if (workspace) {
+      setStoredWorkspace(workspace);
+      console.log('[Login] Workspace loaded:', workspace.name);
+    } else {
+      console.warn('[Login] No workspace available after login');
+    }
 
     return { success: true, user, workspace };
   }
@@ -181,7 +201,7 @@ export async function signup(data: SignupData): Promise<{
   }
 
   if (response.data) {
-    const { user, tokens, workspace } = response.data;
+    const { user, tokens, workspace: responseWorkspace } = response.data;
 
     // Store tokens
     setStoredTokens({
@@ -190,9 +210,27 @@ export async function signup(data: SignupData): Promise<{
       expiresAt: Date.now() + tokens.expires_in * 1000,
     });
 
-    // Store user and workspace
+    // Store user
     setStoredUser(user);
-    setStoredWorkspace(workspace);
+
+    // Fetch workspace if not in response but workspace_id is available
+    let workspace = responseWorkspace;
+    try {
+      if (!workspace && (user as any).workspace_id) {
+        console.log('[Signup] Fetching workspace for workspace_id:', (user as any).workspace_id);
+        workspace = await getWorkspace((user as any).workspace_id) || undefined;
+      }
+    } catch (error) {
+      console.error('[Signup] Error fetching workspace:', error);
+      // Continue without workspace - don't fail signup
+    }
+
+    if (workspace) {
+      setStoredWorkspace(workspace);
+      console.log('[Signup] Workspace loaded:', workspace.name);
+    } else {
+      console.warn('[Signup] No workspace available after signup');
+    }
 
     return { success: true, user, workspace };
   }
@@ -235,6 +273,46 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 
   return null;
+}
+
+/**
+ * Get workspace by ID
+ */
+export async function getWorkspace(workspaceId: string): Promise<Workspace | null> {
+  try {
+    const response = await apiClient.get<{ workspace: WorkspaceResponse }>(`/api/v1/workspaces/${workspaceId}`);
+    
+    if (response.error) {
+      console.error('Failed to fetch workspace:', response.error);
+      return null;
+    }
+
+    if (response.data?.workspace) {
+      const workspace: Workspace = {
+        workspace_id: response.data.workspace.workspace_id,
+        name: response.data.workspace.name,
+        slug: response.data.workspace.slug,
+        role: 'owner', // Default role, could be enhanced to get actual role
+      };
+      setStoredWorkspace(workspace);
+      return workspace;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error fetching workspace:', error);
+    return null;
+  }
+}
+
+interface WorkspaceResponse {
+  workspace_id: string;
+  name: string;
+  slug: string;
+  status: string;
+  default_language: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /**

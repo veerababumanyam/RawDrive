@@ -5,7 +5,7 @@
   "pythonVersion": "3.11",
   "pythonPlatform": "Darwin",
   "typeCheckingMode": "basic",
-  "useLibraryCodeForTypes": false,
+  "useLibraryCodeForTypes": true,
   "reportMissingImports": "none",
   "reportUnknownVariableType": "none",
   "reportUnknownMemberType": "none",

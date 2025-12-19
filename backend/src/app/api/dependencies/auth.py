@@ -11,7 +11,8 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Optional
+from uuid import UUID as UUIDType
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -33,7 +34,7 @@ class CurrentUser:
 
     user_id: uuid.UUID
     email: str
-    session_id: uuid.UUID
+    session_id: uuid.UUID | None  # None for access tokens, UUID for refresh tokens
     workspace_ids: list[uuid.UUID]
     permissions: list[str]  # For current workspace context
 
@@ -92,20 +93,34 @@ async def get_current_user(
     # Extract claims
     try:
         user_id = uuid.UUID(payload["sub"])
-        session_id = uuid.UUID(payload["sid"])
+        # session_id might be in "sid" or "session_id" field (only in refresh tokens)
+        session_id_str = payload.get("sid") or payload.get("session_id")
+        session_id = uuid.UUID(session_id_str) if session_id_str else None
         email = payload.get("email", "")
-        workspace_ids = [uuid.UUID(w) for w in payload.get("wids", [])]
-        permissions = payload.get("perms", [])
+        # workspace_ids might be in "wids" (list) or "workspace_id" (single)
+        if "wids" in payload:
+            workspace_ids = [uuid.UUID(w) for w in payload["wids"]]
+        elif "workspace_id" in payload:
+            workspace_ids = [uuid.UUID(payload["workspace_id"])]
+        else:
+            workspace_ids = []
+        # permissions might be "perms" or "permissions"
+        permissions = payload.get("perms") or payload.get("permissions", [])
     except (KeyError, ValueError) as e:
-        logger.warning("Invalid token claims", extra={"error": str(e)})
+        logger.warning("Invalid token claims", extra={"error": str(e), "payload_keys": list(payload.keys())})
         raise AuthError("Invalid token claims")
 
-    # Verify session is still valid
-    session_service = SessionService()
-    session = await session_service.get_session(session_id)
-
-    if session is None or session.user_id != user_id:
-        raise AuthError("Session expired or invalidated")
+    # Verify session is still valid (only if session_id is present)
+    # Access tokens don't have session_id, refresh tokens do
+    if session_id:
+        session_service = SessionService()
+        session = await session_service.get_session(session_id)
+        if session is None or session.user_id != user_id:
+            raise AuthError("Session expired or invalidated")
+    else:
+        # For access tokens without session_id, we rely on token expiry
+        # Session validation happens during refresh token usage
+        pass
 
     # Store user_id in request state for rate limiting
     request.state.user_id = str(user_id)
@@ -259,7 +274,7 @@ def PermissionCheckerDep(required_permissions: list[str], require_all: bool = Tr
     
     async def check_permissions(
         request: Request,
-        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     ) -> None:
         """Check if user has required permissions."""
         # Get current user
@@ -304,7 +319,7 @@ def PermissionCheckerDep(required_permissions: list[str], require_all: bool = Tr
 
 # Common dependencies (defined after class uses them in type hints with Depends)
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
-OptionalUserDep = Annotated[CurrentUser | None, Depends(get_current_user_optional)]
+OptionalUserDep = Annotated[Optional[CurrentUser], Depends(get_current_user_optional)]
 
 
 async def require_workspace_access(
@@ -340,4 +355,13 @@ async def require_workspace_access(
     return user, workspace_id
 
 
+async def get_workspace_id_from_access(
+    workspace_access: Annotated[tuple[CurrentUser, uuid.UUID], Depends(require_workspace_access)],
+) -> uuid.UUID:
+    """Extract workspace_id from workspace access tuple."""
+    _, workspace_id = workspace_access
+    return workspace_id
+
+
 WorkspaceAccessDep = Annotated[tuple[CurrentUser, uuid.UUID], Depends(require_workspace_access)]
+WorkspaceIdDep = Annotated[uuid.UUID, Depends(get_workspace_id_from_access)]

@@ -141,7 +141,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     <section
       id="hero"
       className={`
-        relative min-h-screen pt-[72px] flex flex-col
+        relative min-h-[85vh] md:min-h-screen pt-[72px] flex flex-col
         bg-hero-gradient overflow-hidden
         ${className}
       `}
@@ -200,10 +200,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </span>
 
                 {/* Live Counter */}
-                <span className="landing-live-counter text-slate-300">
+                <div className="landing-live-counter text-slate-200" aria-live="polite" aria-atomic="true">
                   <span className="landing-live-dot" aria-hidden="true" />
                   <span>{liveViewers} viewing now</span>
-                </span>
+                </div>
               </motion.div>
 
               {/* Headline with Gradient */}
@@ -234,7 +234,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Subheadline with Value Prop */}
               <motion.p
                 variants={staggerItem}
-                className="text-lg sm:text-xl text-slate-300 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0"
+                className="text-lg sm:text-xl text-slate-200 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0"
               >
                 {subheadline}
               </motion.p>
@@ -413,9 +413,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                             <div className="aspect-[4/3] relative overflow-hidden">
                               <img
                                 src={card.src}
-                                alt={card.title}
+                                alt={`${card.title} gallery preview showing ${card.count} of professional photos`}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
+                                decoding="async"
                               />
                               {card.highlight && (
                                 <div className="absolute top-2 right-2 px-2 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/30 text-[10px] text-cyan-300 font-medium backdrop-blur-sm">

@@ -8,7 +8,7 @@ import React, { forwardRef, useId } from 'react';
    ============================================================================= */
 
 export type InputSize = 'sm' | 'md' | 'lg';
-export type InputVariant = 'default' | 'filled' | 'flushed';
+export type InputVariant = 'default' | 'filled' | 'flushed' | 'glass' | 'gradient-focus';
 
 export interface AppInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
@@ -110,6 +110,21 @@ export const AppInput = forwardRef<HTMLInputElement, AppInputProps>(
       default: '',
       filled: 'bg-background-alt border-transparent focus:bg-surface',
       flushed: 'border-0 border-b rounded-none px-0 focus:ring-0',
+      glass: `
+        bg-white/5 dark:bg-white/5
+        backdrop-blur-md
+        border-white/15 dark:border-white/10
+        focus:bg-white/10 dark:focus:bg-white/8
+        focus:border-accent focus:ring-accent/20
+        placeholder:text-text-tertiary/70
+      `,
+      'gradient-focus': `
+        focus:border-transparent
+        focus:bg-[linear-gradient(var(--color-surface),var(--color-surface)),linear-gradient(135deg,var(--color-accent-500),var(--color-primary-600))]
+        focus:bg-origin-border
+        focus:[background-clip:padding-box,border-box]
+        focus:ring-0
+      `,
     };
 
     const inputClasses = [

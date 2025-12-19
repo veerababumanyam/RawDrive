@@ -11,6 +11,9 @@ export {
   AppShellFooter,
   AppShellContent,
   useAppShell,
+  HEADER_HEIGHT,
+  SIDEBAR_WIDTH,
+  SIDEBAR_COLLAPSED_WIDTH,
 } from './AppShell';
 export type {
   AppShellProps,
@@ -40,3 +43,5 @@ export type {
   SidebarSectionProps,
   SidebarItemProps,
 } from './Sidebar';
+
+export { WorkspaceLayout } from './WorkspaceLayout';

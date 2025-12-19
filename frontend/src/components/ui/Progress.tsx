@@ -286,6 +286,8 @@ export interface SkeletonProps {
   variant?: 'text' | 'circular' | 'rectangular' | 'rounded';
   /** Enable animation */
   animated?: boolean;
+  /** Animation style: pulse (fade) or shimmer (sweep) */
+  animation?: 'pulse' | 'shimmer';
   className?: string;
 }
 
@@ -294,6 +296,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   height,
   variant = 'text',
   animated = true,
+  animation = 'shimmer',
   className = '',
 }) => {
   const variantStyles: Record<string, string> = {
@@ -303,9 +306,14 @@ export const Skeleton: React.FC<SkeletonProps> = ({
     rounded: 'rounded-lg',
   };
 
+  const animationStyles = animated
+    ? animation === 'shimmer'
+      ? 'skeleton-shimmer'
+      : 'skeleton-pulse bg-neutral-200 dark:bg-neutral-700'
+    : 'bg-neutral-200 dark:bg-neutral-700';
+
   const baseStyles = `
-    bg-neutral-200 dark:bg-neutral-700
-    ${animated ? 'animate-pulse' : ''}
+    ${animationStyles}
     ${variantStyles[variant]}
   `;
 
@@ -373,13 +381,38 @@ export const SkeletonGroup: React.FC<SkeletonGroupProps> = ({
    Pre-built Skeleton Patterns
    ============================================================================= */
 
-export const SkeletonCard: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <div className={`p-4 border border-border rounded-card ${className}`}>
-    <Skeleton variant="rounded" height="160px" className="mb-4" />
-    <Skeleton variant="text" width="75%" className="mb-2" />
-    <Skeleton variant="text" width="50%" />
-  </div>
-);
+export interface SkeletonCardProps {
+  /** Additional className */
+  className?: string;
+  /** Use glass effect background */
+  glass?: boolean;
+  /** Image aspect ratio */
+  imageAspect?: '16/9' | '4/3' | 'square';
+}
+
+export const SkeletonCard: React.FC<SkeletonCardProps> = ({
+  className = '',
+  glass = false,
+  imageAspect = '16/9',
+}) => {
+  const aspectStyles = {
+    '16/9': 'aspect-video',
+    '4/3': 'aspect-[4/3]',
+    square: 'aspect-square',
+  };
+
+  const containerClass = glass
+    ? 'p-4 card-glass rounded-card'
+    : 'p-4 border border-border rounded-card bg-surface';
+
+  return (
+    <div className={`${containerClass} ${className}`}>
+      <Skeleton variant="rounded" className={`${aspectStyles[imageAspect]} mb-4 w-full`} />
+      <Skeleton variant="text" width="75%" className="mb-2" />
+      <Skeleton variant="text" width="50%" />
+    </div>
+  );
+};
 
 export const SkeletonAvatar: React.FC<{ size?: number; className?: string }> = ({
   size = 40,

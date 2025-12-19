@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -28,7 +28,7 @@ class LoginRequest(BaseModel):
 
     email: EmailStr = Field(..., description="User email address")
     password: str = Field(..., description="User password")
-    workspace_id: UUID | None = Field(None, description="Optional workspace to login to")
+    workspace_id: Optional[UUID] = Field(None, description="Optional workspace to login to")
 
 
 class RefreshTokenRequest(BaseModel):
@@ -65,24 +65,24 @@ class ResetPasswordRequest(BaseModel):
 class UpdateUserRequest(BaseModel):
     """Update current user profile."""
 
-    display_name: str | None = Field(None, min_length=1, max_length=255)
-    preferred_language: str | None = Field(None, max_length=10)
+    display_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    preferred_language: Optional[str] = Field(None, max_length=10)
 
 
 class CreateWorkspaceRequest(BaseModel):
     """Create workspace request."""
 
     name: str = Field(..., min_length=1, max_length=255, description="Workspace name")
-    slug: str | None = Field(None, min_length=3, max_length=100, description="URL slug")
+    slug: Optional[str] = Field(None, min_length=3, max_length=100, description="URL slug")
     default_language: str = Field("en-IN", max_length=10, description="Default language")
 
 
 class UpdateWorkspaceRequest(BaseModel):
     """Update workspace request."""
 
-    name: str | None = Field(None, min_length=1, max_length=255)
-    slug: str | None = Field(None, min_length=3, max_length=100)
-    default_language: str | None = Field(None, max_length=10)
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    slug: Optional[str] = Field(None, min_length=3, max_length=100)
+    default_language: Optional[str] = Field(None, max_length=10)
 
 
 class InviteMemberRequest(BaseModel):
@@ -102,8 +102,8 @@ class CreateRoleRequest(BaseModel):
 class UpdateRoleRequest(BaseModel):
     """Update role request."""
 
-    name: str | None = None
-    permissions: list[str] | None = None
+    name: Optional[str] = None
+    permissions: Optional[list[str]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ class UserResponse(BaseModel):
     email: str
     display_name: str
     email_verified: bool
-    workspace_id: UUID | None = None
+    workspace_id: Optional[UUID] = None
 
 
 class UserProfileResponse(BaseModel):
@@ -170,9 +170,9 @@ class SessionResponse(BaseModel):
     """User session information."""
 
     session_id: UUID
-    device_info: dict | None
-    ip_address: str | None
-    user_agent: str | None
+    device_info: Optional[dict]
+    ip_address: Optional[str]
+    user_agent: Optional[str]
     created_at: datetime
     last_used_at: datetime
     is_current: bool = False
@@ -203,8 +203,8 @@ class WorkspaceMemberResponse(BaseModel):
     user_display_name: str
     status: str
     roles: list[str]
-    invited_at: datetime | None
-    accepted_at: datetime | None
+    invited_at: Optional[datetime]
+    accepted_at: Optional[datetime]
 
 
 class PlanResponse(BaseModel):
@@ -216,7 +216,7 @@ class PlanResponse(BaseModel):
     code: str
     name: str
     price_monthly: Decimal
-    price_annual: Decimal | None
+    price_annual: Optional[Decimal]
     currency: str
     storage_bytes: int
     max_galleries: int
@@ -233,9 +233,9 @@ class SubscriptionResponse(BaseModel):
     plan: PlanResponse
     status: str
     is_trial: bool
-    trial_days_remaining: int | None
-    current_period_start: datetime | None
-    current_period_end: datetime | None
+    trial_days_remaining: Optional[int]
+    current_period_start: Optional[datetime]
+    current_period_end: Optional[datetime]
     cancel_at_period_end: bool
     # Usage
     storage_used_bytes: int
@@ -252,8 +252,8 @@ class WorkspaceWithSubscriptionResponse(BaseModel):
     subscription_status: str
     plan_code: str
     plan_name: str
-    trial_expires_at: datetime | None
-    current_period_end: datetime | None
+    trial_expires_at: Optional[datetime]
+    current_period_end: Optional[datetime]
 
 
 class RoleResponse(BaseModel):
@@ -290,7 +290,7 @@ class InvitationResponse(BaseModel):
 class ErrorDetail(BaseModel):
     """Detailed error information."""
 
-    field: str | None = None
+    field: Optional[str] = None
     message: str
 
 
@@ -300,8 +300,8 @@ class ErrorResponse(BaseModel):
     status: int
     code: str
     message: str
-    details: list[ErrorDetail] | None = None
-    correlation_id: str | None = None
+    details: Optional[list[ErrorDetail]] = None
+    correlation_id: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -346,3 +346,216 @@ class PlanListResponse(BaseModel):
     """List of plans response."""
 
     items: list[PlanResponse]
+
+
+# ---------------------------------------------------------------------------
+# Gallery request schemas
+# ---------------------------------------------------------------------------
+
+
+class CreateGalleryRequest(BaseModel):
+    """Create gallery request."""
+
+    title: str = Field(..., min_length=1, max_length=255, description="Gallery title")
+    description: Optional[str] = Field(None, max_length=1000, description="Gallery description")
+    client_name: Optional[str] = Field(None, max_length=255, description="Client name")
+
+
+class UpdateGalleryRequest(BaseModel):
+    """Update gallery request."""
+
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = Field(None, max_length=1000)
+    client_name: Optional[str] = Field(None, max_length=255)
+    layout_style: Optional[Literal["tabs", "continuous"]] = None
+    theme: Optional[Literal["light", "dark", "system"]] = None
+    download_policy: Optional[Literal["view_only", "web_only", "watermarked_only", "original_allowed"]] = None
+    exif_visible: Optional[bool] = None
+    password: Optional[str] = Field(None, description="Password (will be hashed)")
+    remove_password: Optional[bool] = Field(None, description="Set to true to remove password")
+    email_registration_required: Optional[bool] = None
+    expires_at: Optional[datetime] = None
+    branding_profile_id: Optional[UUID] = None
+    cover_asset_id: Optional[UUID] = None
+
+
+class PublishGalleryRequest(BaseModel):
+    """Publish/unpublish gallery request."""
+
+    publish: bool = Field(..., description="True to publish, False to unpublish")
+
+
+class CreateSubGalleryRequest(BaseModel):
+    """Create sub-gallery request."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="Sub-gallery name")
+    sort_order: int = Field(0, description="Sort order")
+
+
+class UpdateSubGalleryRequest(BaseModel):
+    """Update sub-gallery request."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    sort_order: Optional[int] = None
+    visible: Optional[bool] = None
+
+
+class UpdateSubGalleriesSortOrderRequest(BaseModel):
+    """Request to update sort order for sub-galleries."""
+
+    sub_gallery_ids: list[UUID] = Field(..., description="List of sub-gallery IDs in new order")
+
+
+# ---------------------------------------------------------------------------
+# Gallery response schemas
+# ---------------------------------------------------------------------------
+
+
+class SubGalleryItemResponse(BaseModel):
+    """Sub-gallery item response."""
+
+    sub_gallery_id: UUID
+    name: str
+    sort_order: int
+    visible: bool
+    photo_count: int
+    cover_asset_id: Optional[UUID] = None
+    cover_image_url: Optional[str] = None
+
+
+class GalleryStatsResponse(BaseModel):
+    """Gallery statistics response."""
+
+    total_items: int
+    total_photos: int
+    total_videos: int
+    favorites_count: int
+    selections_count: int
+
+
+class GalleryDetailResponse(BaseModel):
+    """Gallery detail response."""
+
+    gallery_id: UUID
+    workspace_id: UUID
+    title: str
+    status: Literal["draft", "published", "archived"]
+    created_by_user_id: UUID
+    created_at: str
+    description: Optional[str] = None
+    client_name: Optional[str] = None
+    branding_profile_id: Optional[UUID] = None
+    portal_language: Optional[str] = None
+    layout_style: Optional[Literal["tabs", "continuous"]] = None
+    theme: Optional[Literal["light", "dark", "system"]] = None
+    download_policy: Optional[Literal["view_only", "web_only", "watermarked_only", "original_allowed"]] = None
+    exif_visible: Optional[bool] = None
+    password_protected: bool
+    email_registration_required: Optional[bool] = None
+    expires_at: Optional[str] = None
+    published_at: Optional[str] = None
+    cover_asset_id: Optional[UUID] = None
+    sub_galleries: list[SubGalleryItemResponse]
+    stats: GalleryStatsResponse
+
+
+class GalleryListItemResponse(BaseModel):
+    """Gallery list item response."""
+
+    gallery_id: UUID
+    title: str
+    status: Literal["draft", "published", "archived"]
+    photo_count: int
+    created_at: str
+    description: Optional[str] = None
+    client_name: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    published_at: Optional[str] = None
+
+
+class GalleryListMetaResponse(BaseModel):
+    """Gallery list pagination metadata."""
+
+    page: int
+    limit: int
+    total: int
+    totalPages: int
+
+
+class GalleryListResponse(BaseModel):
+    """Gallery list response."""
+
+    data: list[GalleryListItemResponse]
+    meta: GalleryListMetaResponse
+
+
+# ---------------------------------------------------------------------------
+# Upload request schemas
+# ---------------------------------------------------------------------------
+
+
+class CreateUploadSessionRequest(BaseModel):
+    """Create upload session request."""
+
+    gallery_id: UUID = Field(..., description="Target gallery UUID")
+    sub_gallery_id: Optional[UUID] = Field(None, description="Target sub-gallery UUID (null = root)")
+    file_name: str = Field(..., min_length=1, max_length=255, description="Original filename")
+    mime_type: str = Field(..., description="MIME type (e.g., image/jpeg)")
+    size_bytes: int = Field(..., ge=1, description="File size in bytes")
+    sha256: Optional[str] = Field(None, min_length=64, max_length=64, description="SHA256 checksum (optional, can provide at commit)")
+
+
+class CommitUploadRequest(BaseModel):
+    """Commit upload request."""
+
+    sha256: str = Field(..., min_length=64, max_length=64, description="SHA256 checksum for verification")
+    etag: Optional[str] = Field(None, description="ETag from storage (optional)")
+
+
+# ---------------------------------------------------------------------------
+# Upload response schemas
+# ---------------------------------------------------------------------------
+
+
+class UploadSessionResponse(BaseModel):
+    """Upload session response."""
+
+    upload_id: UUID
+    provider: Literal["r2", "byos"]
+    upload_url: str
+    headers: dict[str, str]
+    expires_at: datetime
+
+
+class UploadCommitResponse(BaseModel):
+    """Upload commit response."""
+
+    asset_id: UUID
+    status: Literal["available", "processing"]
+
+
+class CheckDuplicateRequest(BaseModel):
+    """Check for duplicate asset request."""
+
+    sha256: str = Field(..., min_length=64, max_length=64, description="SHA256 checksum")
+    gallery_id: Optional[UUID] = Field(None, description="Optional gallery ID to check within")
+
+
+class DuplicateAssetResponse(BaseModel):
+    """Duplicate asset information."""
+
+    asset_id: UUID
+    workspace_id: UUID
+    gallery_id: Optional[UUID]
+    file_name: str
+    mime_type: str
+    size_bytes: int
+    created_at: str
+    thumbnail_url: Optional[str] = None  # Signed URL for thumbnail
+
+
+class CheckDuplicateResponse(BaseModel):
+    """Check duplicate response."""
+
+    is_duplicate: bool
+    duplicates: list[DuplicateAssetResponse] = Field(default_factory=list)

@@ -68,11 +68,9 @@ const defaultSections: FooterSection[] = [
   {
     title: 'Legal',
     links: [
-      { label: 'Privacy Policy', href: '/privacy' },
-      { label: 'Terms of Service', href: '/terms' },
-      { label: 'Cookie Policy', href: '/cookies' },
-      { label: 'GDPR', href: '/gdpr' },
-      { label: 'Security', href: '/security' },
+      { label: 'Privacy Policy', href: '/legal/privacy' },
+      { label: 'Terms and Conditions', href: '/legal/terms' },
+      { label: 'Refund Policy', href: '/legal/refund' },
     ],
   },
 ];
@@ -202,29 +200,39 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
               <h3 className="text-white font-semibold mb-1">Stay in the loop</h3>
-              <p className="text-slate-400 text-sm">
+              <p className="text-slate-300 text-sm">
                 Get updates on new features and photography tips.
               </p>
             </div>
             <form
               className="flex flex-col sm:flex-row gap-3 w-full md:w-auto"
               onSubmit={(e) => e.preventDefault()}
+              aria-labelledby="newsletter-heading"
             >
-              <label htmlFor="footer-email" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="footer-email"
-                type="email"
-                placeholder="Enter your email"
-                className="
-                  px-4 py-2.5 text-sm text-white
-                  bg-white/5 border border-white/10
-                  rounded-lg placeholder:text-slate-500
-                  focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
-                  w-full sm:w-64 min-h-[44px]
-                "
-              />
+              <div className="flex flex-col gap-1.5 w-full sm:w-64">
+                <label htmlFor="footer-email" className="text-sm text-slate-200">
+                  Email address
+                </label>
+                <input
+                  id="footer-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  required
+                  aria-describedby="footer-email-hint footer-email-error"
+                  className="
+                    px-4 py-2.5 text-sm text-white
+                    bg-white/5 border border-white/10
+                    rounded-lg placeholder:text-slate-400
+                    focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                    w-full min-h-[44px]
+                    invalid:border-red-500/50 invalid:focus:ring-red-500
+                  "
+                />
+                <span id="footer-email-hint" className="sr-only">
+                  We'll send you photography tips and product updates. Unsubscribe anytime.
+                </span>
+                <span id="footer-email-error" className="sr-only" role="alert" aria-live="polite"></span>
+              </div>
               <button
                 type="submit"
                 className="
@@ -232,8 +240,8 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                   bg-gradient-to-r from-primary-600 to-primary-700
                   hover:from-primary-500 hover:to-primary-600
                   rounded-lg transition-all duration-200
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
-                  min-h-[44px] whitespace-nowrap
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900
+                  min-h-[44px] whitespace-nowrap self-end
                 "
               >
                 Subscribe
