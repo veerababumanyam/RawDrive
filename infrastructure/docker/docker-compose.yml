@@ -101,7 +101,6 @@ services:
       DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-1}
       DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
       DB_POOL_MAX_LIFETIME_SEC: ${DB_POOL_MAX_LIFETIME_SEC:-1800}
-      DB_POOL_MAX_LIFETIME_SEC: ${DB_POOL_MAX_LIFETIME_SEC:-1800}
       # Removed redundant overrides that break env_file loading:
       # GOOGLE_*, ALLOWED_CORS_ORIGINS, LOG_LEVEL, R2_*, ENCRYPTION_MASTER_KEY, SIGNED_URL_SECRET
       # These are now loaded correctly from ../../.env via env_file directive
