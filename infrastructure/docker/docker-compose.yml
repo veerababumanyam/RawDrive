@@ -7,8 +7,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-rawdrive}
       POSTGRES_USER: ${POSTGRES_USER:-rawdrive}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rawdrive}
-    ports:
-      - "5432:5432"
+    # Port 5432 only exposed internally via Docker network (not to host)
+    expose:
+      - "5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./init/enable_pgvector.sql:/docker-entrypoint-initdb.d/enable_pgvector.sql:ro
@@ -23,8 +24,9 @@ services:
     container_name: rawdrive-redis
     restart: unless-stopped
     command: [ "redis-server", "--save", "", "--appendonly", "no" ]
-    ports:
-      - "6379:6379"
+    # Port 6379 only exposed internally via Docker network (not to host)
+    expose:
+      - "6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -36,8 +38,9 @@ services:
     container_name: rawdrive-loki
     restart: unless-stopped
     user: "10001:10001" # Run as loki user for security
-    ports:
-      - "3100:3100"
+    # Port 3100 only exposed internally via Docker network (not to host)
+    expose:
+      - "3100"
     command: -config.file=/etc/loki/loki-config.yaml
     volumes:
       - loki_data:/loki
@@ -58,11 +61,13 @@ services:
     image: grafana/grafana:10.2.0
     container_name: rawdrive-grafana
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    # Port 3000 only exposed internally - access via nginx proxy if needed
+    expose:
+      - "3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      # Disable anonymous access for security
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     volumes:
       - grafana_data:/var/lib/grafana
@@ -105,7 +110,8 @@ services:
       # GOOGLE_*, ALLOWED_CORS_ORIGINS, LOG_LEVEL, R2_*, ENCRYPTION_MASTER_KEY, SIGNED_URL_SECRET
       # These are now loaded correctly from ../../.env via env_file directive
     ports:
-      - "8000:8000"
+      # Bind to localhost only - accessible via nginx reverse proxy, not directly from internet
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,8 +129,9 @@ services:
     platform: linux/amd64
     container_name: rawdrive-one-api
     restart: unless-stopped
-    ports:
-      - "4000:3000" # Map host 4000 to container 3000 to keep same port for user convenience
+    # Port 4000 only exposed internally - access via nginx proxy if needed
+    expose:
+      - "3000"
     environment:
       SQL_DSN: "postgres://rawdrive:rawdrive@postgres:5432/rawdrive" # Use existing DB
       REDIS_CONN_STRING: "redis://redis:6379/0"
@@ -141,3 +148,8 @@ volumes:
   pg_data:
   loki_data:
   grafana_data:
+
+networks:
+  default:
+    name: rawdrive-network
+    driver: bridge
