@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: rawdrive-backend
-Version: 0.1.0
+Version: 0.1.3
 Summary: RawDrive FastAPI backend for authentication, RBAC, and workspace services
 Author-email: RawDrive <engineering@rawdrive.in>
 License: MIT
