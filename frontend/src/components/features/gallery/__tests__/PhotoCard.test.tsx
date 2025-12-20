@@ -33,29 +33,23 @@ vi.mock('lucide-react', () => ({
 }));
 
 const mockAsset: GalleryAssetItem = {
+    gallery_asset_id: 'gallery-asset-1',
     asset_id: 'asset-1',
-    gallery_id: 'gallery-1',
-    workspace_id: 'workspace-1',
     sort_order: 0,
     visible: true,
     is_private: false,
     is_favorited: false,
     is_selected: false,
-    created_at: '2023-01-01T00:00:00Z',
+    favorites_count: 0,
     asset: {
-        asset_id: 'asset-1',
-        workspace_id: 'workspace-1',
-        filename: 'test.jpg',
-        mime_type: 'image/jpeg',
-        file_size: 1024,
+        type: 'photo',
         status: 'available',
-        created_at: '2023-01-01T00:00:00Z',
-        updated_at: '2023-01-01T00:00:00Z',
-        storage_path: 'path/to/test.jpg',
-        bucket_name: 'bucket',
-        provider: 'r2',
+        mime_type: 'image/jpeg',
+        filename: 'test.jpg',
+        file_size: 1024,
         width: 800,
         height: 600,
+        created_at: '2023-01-01T00:00:00Z',
     },
 };
 
