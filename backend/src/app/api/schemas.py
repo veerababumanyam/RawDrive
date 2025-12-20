@@ -559,3 +559,88 @@ class CheckDuplicateResponse(BaseModel):
 
     is_duplicate: bool
     duplicates: list[DuplicateAssetResponse] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Recycle Bin schemas
+# ---------------------------------------------------------------------------
+
+
+class RecycleBinItemResponse(BaseModel):
+    """Individual recycle bin item."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(..., description="Item ID (gallery_id or gallery_asset_id)")
+    type: Literal["gallery", "photo"] = Field(..., description="Item type")
+    name: str = Field(..., description="Item name (gallery title or asset filename)")
+    thumbnail_url: Optional[str] = Field(None, description="Thumbnail URL for photos")
+    asset_id: Optional[UUID] = Field(None, description="Asset ID (for photos, used for thumbnails)")
+    gallery_id: Optional[UUID] = Field(None, description="Parent gallery ID (for photos)")
+    gallery_title: Optional[str] = Field(None, description="Parent gallery title (for photos)")
+    sub_gallery_id: Optional[UUID] = Field(None, description="Sub-gallery ID (for photos, if applicable)")
+    sub_gallery_name: Optional[str] = Field(None, description="Sub-gallery name (for photos, if applicable)")
+    deleted_at: datetime = Field(..., description="When the item was deleted")
+    deleted_by_user_id: Optional[UUID] = Field(None, description="User who deleted the item")
+    days_until_permanent_delete: int = Field(..., description="Days until auto-permanent deletion")
+
+
+class RecycleBinListResponse(PaginatedResponse):
+    """Recycle bin list response."""
+
+    items: list[RecycleBinItemResponse]
+
+
+class RestoreItemRequest(BaseModel):
+    """Restore item from recycle bin."""
+
+    item_id: UUID = Field(..., description="ID of the item to restore")
+    item_type: Literal["gallery", "photo"] = Field(..., description="Type of item")
+
+
+class RestoreItemResponse(BaseModel):
+    """Restore item response."""
+
+    success: bool
+    message: str
+    restored_id: UUID
+
+
+class PermanentDeleteRequest(BaseModel):
+    """Permanently delete item from recycle bin."""
+
+    item_id: UUID = Field(..., description="ID of the item to permanently delete")
+    item_type: Literal["gallery", "photo"] = Field(..., description="Type of item")
+
+
+class PermanentDeleteResponse(BaseModel):
+    """Permanent delete response."""
+
+    success: bool
+    message: str
+    files_deleted: int = 0
+    storage_freed: int = 0
+
+
+class BulkRecycleBinRequest(BaseModel):
+    """Bulk operation on recycle bin items."""
+
+    items: list[RestoreItemRequest] = Field(..., min_length=1, description="Items to operate on")
+
+
+class BulkOperationResult(BaseModel):
+    """Result of a single item in bulk operation."""
+
+    item_id: UUID
+    item_type: Literal["gallery", "photo"]
+    success: bool
+    error: Optional[str] = None
+
+
+class BulkRecycleBinResponse(BaseModel):
+    """Bulk operation response."""
+
+    success: bool
+    results: list[BulkOperationResult]
+    success_count: int
+    failure_count: int

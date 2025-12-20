@@ -368,18 +368,21 @@ class GalleryService:
 
             return await self.get_gallery(workspace_id, gallery_id)
 
-    async def delete_gallery(self, workspace_id: UUID, gallery_id: UUID) -> None:
-        """Delete a gallery (soft delete by setting status to archived)."""
+    async def delete_gallery(
+        self, workspace_id: UUID, gallery_id: UUID, deleted_by_user_id: UUID | None = None
+    ) -> None:
+        """Delete a gallery (soft delete by setting status to archived and recording deletion time)."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             result = await conn.execute(
                 """
                 UPDATE galleries
-                SET status = 'archived', updated_at = NOW()
+                SET status = 'archived', deleted_at = NOW(), deleted_by_user_id = $3, updated_at = NOW()
                 WHERE workspace_id = $1 AND gallery_id = $2
                 """,
                 workspace_id,
                 gallery_id,
+                deleted_by_user_id,
             )
             if result == "UPDATE 0":
                 raise GalleryNotFoundError(gallery_id)

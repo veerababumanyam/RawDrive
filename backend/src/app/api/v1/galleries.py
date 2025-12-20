@@ -209,11 +209,15 @@ async def delete_gallery(
     current_user: CurrentUserDep,
     gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
 ) -> MessageResponse:
-    """Delete (archive) a gallery."""
+    """Delete (archive) a gallery. Moves gallery to recycle bin for 30 days."""
     service = get_gallery_service()
     try:
-        await service.delete_gallery(workspace_id=workspace_id, gallery_id=gallery_id)
-        return MessageResponse(message="Gallery deleted successfully")
+        await service.delete_gallery(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            deleted_by_user_id=current_user.user_id,
+        )
+        return MessageResponse(message="Gallery moved to recycle bin")
     except GalleryNotFoundError as e:
         raise HTTPException(status_code=e.status, detail={"code": e.code, "message": str(e)})
     except Exception as e:

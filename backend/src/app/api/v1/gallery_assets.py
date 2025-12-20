@@ -461,18 +461,19 @@ async def delete_assets(
                 detail={"code": "INVALID_ASSETS", "message": "Some assets do not belong to this gallery"},
             )
         
-        # Soft delete assets (set visible = FALSE)
+        # Soft delete assets (set visible = FALSE and record deletion time)
         await conn.execute(
             """
             UPDATE gallery_assets
-            SET visible = FALSE
+            SET visible = FALSE, deleted_at = NOW(), deleted_by_user_id = $4
             WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = ANY($3::uuid[])
             """,
             workspace_id,
             gallery_id,
             request.asset_ids,
+            current_user.user_id,
         )
-        
+
         return {"message": f"Deleted {len(request.asset_ids)} asset(s) successfully"}
 
 
@@ -530,18 +531,18 @@ async def restore_assets(
                 detail={"code": "INVALID_ASSETS", "message": "Some assets do not belong to this gallery"},
             )
         
-        # Restore assets (set visible = TRUE)
+        # Restore assets (set visible = TRUE and clear deletion info)
         await conn.execute(
             """
             UPDATE gallery_assets
-            SET visible = TRUE
+            SET visible = TRUE, deleted_at = NULL, deleted_by_user_id = NULL
             WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = ANY($3::uuid[])
             """,
             workspace_id,
             gallery_id,
             request.asset_ids,
         )
-        
+
         return {"message": f"Restored {len(request.asset_ids)} asset(s) successfully"}
 
 

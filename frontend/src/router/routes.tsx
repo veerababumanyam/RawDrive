@@ -42,6 +42,7 @@ const DashboardPage = lazy(() => import('../pages/workspace/DashboardPage'));
 const GalleriesPage = lazy(() => import('../pages/workspace/GalleriesPage'));
 const GalleryCreatePage = lazy(() => import('../pages/workspace/GalleryCreatePage'));
 const GalleryDetailPage = lazy(() => import('../pages/workspace/GalleryDetailPage'));
+const TrashPage = lazy(() => import('../pages/workspace/TrashPage'));
 
 // Wrapper for lazy loaded components
 const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
@@ -171,7 +172,7 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'trash',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
+        element: <LazyPage component={TrashPage} />,
       },
       {
         path: 'settings',

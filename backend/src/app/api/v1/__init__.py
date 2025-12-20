@@ -15,6 +15,7 @@ from app.api.v1.gallery_assets import router as gallery_assets_router
 from app.api.v1.media import router as media_router
 from app.api.v1.uploads import router as uploads_router
 from app.api.v1.websocket import router as websocket_router
+from app.api.v1.recycle_bin import router as recycle_bin_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -34,6 +35,11 @@ router.include_router(
     gallery_assets_router,
     prefix="/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/assets",
     tags=["gallery-assets"],
+)
+router.include_router(
+    recycle_bin_router,
+    prefix="/api/v1/workspaces/{workspace_id}/recycle-bin",
+    tags=["recycle-bin"],
 )
 router.include_router(media_router, prefix="/api/v1/media", tags=["media"])
 router.include_router(
