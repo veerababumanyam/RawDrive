@@ -17,6 +17,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   Search,
+  Building2,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -67,31 +68,33 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 
   // Calculate storage percentage
   const storagePercent = Math.min((storageUsed / storageLimit) * 100, 100);
-  const formatStorage = (bytes: number) => {
+
+  const formatStorage = React.useCallback((bytes: number) => {
     const gb = bytes / (1024 * 1024 * 1024);
     if (gb >= 1) return `${gb.toFixed(1)} GB`;
     const mb = bytes / (1024 * 1024);
     return `${mb.toFixed(0)} MB`;
-  };
+  }, []);
 
-  const mainNavItems = [
+  const mainNavItems = React.useMemo(() => [
     { id: 'dashboard', label: 'Dashboard', icon: <Home size={20} />, path: '/workspace' },
     { id: 'galleries', label: 'Galleries', icon: <LayoutGrid size={20} />, path: '/workspace/galleries' },
     { id: 'libraries', label: 'Libraries', icon: <FolderOpen size={20} />, path: '/workspace/libraries' },
     { id: 'clients', label: 'Clients', icon: <Users size={20} />, path: '/workspace/clients' },
     { id: 'shared', label: 'Shared', icon: <Share2 size={20} />, path: '/workspace/shared' },
-  ];
+  ], []);
 
-  const quickAccessItems = [
+  const quickAccessItems = React.useMemo(() => [
     { id: 'recent', label: 'Recent', icon: <Clock size={20} />, path: '/workspace/recent' },
     { id: 'favorites', label: 'Favorites', icon: <Star size={20} />, path: '/workspace/favorites' },
     { id: 'trash', label: 'Trash', icon: <Trash2 size={20} />, path: '/workspace/trash' },
-  ];
+  ], []);
 
-  const bottomNavItems = [
+  const bottomNavItems = React.useMemo(() => [
     { id: 'settings', label: 'Settings', icon: <Settings size={20} />, path: '/workspace/settings' },
+    { id: 'profile', label: 'Company Profile', icon: <Building2 size={20} />, path: '/workspace/settings/profile' },
     { id: 'help', label: 'Help & Support', icon: <HelpCircle size={20} />, path: '/workspace/help' },
-  ];
+  ], []);
 
   const handleNavigation = (path: string) => {
     navigate(path);

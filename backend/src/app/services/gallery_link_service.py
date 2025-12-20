@@ -101,7 +101,7 @@ class GalleryLinkService:
                 # Verify gallery exists and is not deleted
                 gallery = await conn.fetchrow(
                     """
-                    SELECT gallery_id, title, cover_asset_id, status, asset_count
+                    SELECT gallery_id, title, cover_asset_id, status
                     FROM galleries
                     WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
                     """,
@@ -310,7 +310,12 @@ class GalleryLinkService:
                     g.status,
                     g.created_at AS gallery_created_at,
                     g.updated_at AS gallery_updated_at,
-                    COALESCE(g.asset_count, 0) AS asset_count
+                    (
+                        SELECT COUNT(*)
+                        FROM gallery_assets ga
+                        WHERE ga.gallery_id = g.gallery_id
+                          AND ga.visible = TRUE
+                    ) AS asset_count
                 FROM client_gallery_links cgl
                 JOIN galleries g ON cgl.gallery_id = g.gallery_id
                 WHERE cgl.workspace_id = $1

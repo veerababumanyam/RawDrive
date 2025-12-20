@@ -7,9 +7,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-rawdrive}
       POSTGRES_USER: ${POSTGRES_USER:-rawdrive}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rawdrive}
-    # Port 5432 only exposed internally via Docker network (not to host)
-    expose:
-      - "5432"
+    # Expose port to host for local development
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./init/enable_pgvector.sql:/docker-entrypoint-initdb.d/enable_pgvector.sql:ro
@@ -24,9 +24,9 @@ services:
     container_name: rawdrive-redis
     restart: unless-stopped
     command: [ "redis-server", "--save", "", "--appendonly", "no" ]
-    # Port 6379 only exposed internally via Docker network (not to host)
-    expose:
-      - "6379"
+    # Expose port to host for local development
+    ports:
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -148,6 +148,7 @@ volumes:
   pg_data:
   loki_data:
   grafana_data:
+
 
 networks:
   default:

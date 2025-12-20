@@ -3,6 +3,8 @@ import { RouteObject } from 'react-router-dom';
 import { ProtectedRoute } from '../components/auth';
 import ErrorBoundary from '../components/error/ErrorBoundary';
 import { RouteErrorFallback } from '../components/error/ErrorFallbacks';
+import { WorkspaceLayout } from '../components/layout/WorkspaceLayout';
+import { RootLayout } from '../components/layout/RootLayout';
 
 /* =============================================================================
    Route Configuration
@@ -28,6 +30,8 @@ const PricingPage = lazy(() => import('../pages/public/PricingPage'));
 const FAQPage = lazy(() => import('../pages/public/FAQPage'));
 const HowItWorksPage = lazy(() => import('../pages/public/HowItWorksPage'));
 const ContactPage = lazy(() => import('../pages/public/ContactPage'));
+const PublicProfilePage = lazy(() => import('../pages/public/PublicProfilePage'));
+const PublicGalleryPage = lazy(() => import('../pages/public/PublicGalleryPage'));
 
 // Legal/Policy pages
 const TermsPage = lazy(() => import('../pages/public/legal/terms'));
@@ -50,6 +54,7 @@ const RecycleBinPage = lazy(() => import('../pages/workspace/RecycleBinPage'));
 const ClientsPage = lazy(() => import('../pages/workspace/ClientsPage'));
 const ClientDetailPage = lazy(() => import('../pages/workspace/ClientDetailPage'));
 const ClientFormPage = lazy(() => import('../pages/workspace/ClientFormPage'));
+const CompanyProfilePage = lazy(() => import('../pages/workspace/settings/CompanyProfilePage'));
 
 // Wrapper for lazy loaded components
 const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
@@ -108,6 +113,14 @@ export const publicRoutes: RouteObject[] = [
     path: '/contact',
     element: <LazyPage component={ContactPage} />,
   },
+  {
+    path: '/p/:slug',
+    element: <LazyPage component={PublicProfilePage} />,
+  },
+  {
+    path: '/g/:galleryId',
+    element: <LazyPage component={PublicGalleryPage} />,
+  },
   // Legal/Policy pages
   {
     path: '/legal/terms',
@@ -140,8 +153,6 @@ export const authRoutes: RouteObject[] = [
 ];
 
 // Workspace routes (require authentication)
-// Workspace routes (require authentication)
-import { WorkspaceLayout } from '../components/layout/WorkspaceLayout';
 
 export const workspaceRoutes: RouteObject[] = [
   {
@@ -209,6 +220,10 @@ export const workspaceRoutes: RouteObject[] = [
         element: <LazyPage component={DashboardPage} />, // Placeholder
       },
       {
+        path: 'settings/profile',
+        element: <LazyPage component={CompanyProfilePage} />,
+      },
+      {
         path: 'settings/*',
         element: <LazyPage component={DashboardPage} />, // Placeholder
       },
@@ -242,7 +257,6 @@ export const fallbackRoute: RouteObject = {
 };
 
 // All routes combined
-import { RootLayout } from '../components/layout/RootLayout';
 
 export const routes: RouteObject[] = [
   {

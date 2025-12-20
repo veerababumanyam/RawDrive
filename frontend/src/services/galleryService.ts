@@ -62,6 +62,18 @@ export class GalleryService {
   }
 
   /**
+   * Get public gallery details
+   */
+  async getPublicGallery(galleryId: string): Promise<GalleryDetailData> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}`;
+    const response = await apiClient.get<GalleryDetailData>(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to fetch public gallery');
+    }
+    return response.data!;
+  }
+
+  /**
    * Create a new gallery
    */
   async createGallery(

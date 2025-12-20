@@ -236,6 +236,11 @@ class AuditEventType(str, Enum):
     API_KEY_CREATED = "api.key_created"
     API_KEY_REVOKED = "api.key_revoked"
 
+    # Company Profile events
+    PROFILE_CREATED = "profile.created"
+    PROFILE_UPDATED = "profile.updated"
+    POLICY_GENERATED = "policy.generated"
+
 
 @dataclass
 class AuditEvent:

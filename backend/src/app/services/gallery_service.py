@@ -8,9 +8,11 @@ from __future__ import annotations
 import logging
 from typing import Optional
 from uuid import UUID
+from datetime import datetime, timezone
 
 
 from app.db.postgres import get_postgres_pool
+from app.services.company_profile_service import get_company_profile_service
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +185,16 @@ class GalleryService:
                 gallery_id,
             )
 
+            # Fetch company profile
+            company_profile = None
+            try:
+                profile_service = get_company_profile_service()
+                # If specific branding is selected, we might fetch by ID in future.
+                # Currently we have 1:1 workspace profile, so fetch by workspace_id.
+                company_profile = await profile_service.get_profile_optional(workspace_id)
+            except Exception as e:
+                logger.error(f"Failed to fetch company profile for gallery {gallery_id}: {e}")
+
             return {
                 "gallery_id": str(row["gallery_id"]),
                 "workspace_id": str(row["workspace_id"]),
@@ -191,6 +203,7 @@ class GalleryService:
                 "client_name": row["client_name"],
                 "status": row["status"],
                 "branding_profile_id": str(row["branding_profile_id"]) if row["branding_profile_id"] else None,
+                "company_profile": company_profile,
                 "portal_language": row["portal_language"],
                 "layout_style": row["layout_style"],
                 "theme": row["theme"],
@@ -220,6 +233,126 @@ class GalleryService:
                     "total_items": stats["total_items"] or 0,
                     "favorites_count": stats["favorites_count"] or 0,
                     "selections_count": stats["selections_count"] or 0,
+                },
+            }
+
+    async def get_public_gallery(self, gallery_id: UUID) -> dict:
+        """Get public gallery details (published only)."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Check gallery exists AND is published
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    gallery_id, workspace_id, title, description, client_name,
+                    status, branding_profile_id, portal_language, layout_style,
+                    theme, download_policy, exif_visible,
+                    password_hash IS NOT NULL as password_protected,
+                    email_registration_required, expires_at, custom_domain,
+                    cover_asset_id, created_by_user_id, published_at,
+                    created_at, updated_at, deleted
+                FROM galleries
+                WHERE gallery_id = $1 AND deleted = FALSE AND status = 'published'
+                """,
+                gallery_id,
+            )
+            
+            if not row:
+                # Security: distinguish 404 vs 403? 
+                # For public endpoints, if it's not published or doesn't match, just 404.
+                raise GalleryNotFoundError(gallery_id)
+
+            # Check expiration
+            if row["expires_at"] and row["expires_at"] < datetime.now(timezone.utc):
+                 # Or handle expiration properly
+                 raise GalleryNotFoundError(gallery_id) # Or explicit expired error
+
+            workspace_id = row["workspace_id"]
+
+            # Get sub-galleries (exclude deleted/hidden)
+            sub_galleries = await conn.fetch(
+                """
+                SELECT
+                    sub_gallery_id, name, sort_order, visible, cover_asset_id,
+                    (
+                        SELECT COUNT(*)
+                        FROM gallery_assets ga
+                        JOIN assets a ON ga.asset_id = a.asset_id
+                        WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
+                        AND ga.visible = TRUE
+                        AND a.deleted = FALSE
+                    ) as photo_count
+                FROM sub_galleries
+                WHERE gallery_id = $1 AND deleted = FALSE
+                AND visible = TRUE
+                ORDER BY sort_order ASC
+                """,
+                gallery_id,
+            )
+
+            # Get stats (exclude deleted)
+            stats = await conn.fetchrow(
+                """
+                SELECT
+                    COUNT(*) FILTER (WHERE assets.type = 'photo') as total_photos,
+                    COUNT(*) FILTER (WHERE assets.type = 'video') as total_videos,
+                    COUNT(*) as total_items,
+                    0 as favorites_count,
+                    0 as selections_count
+                FROM gallery_assets ga
+                JOIN assets ON ga.asset_id = assets.asset_id
+                WHERE ga.gallery_id = $1
+                AND ga.visible = TRUE AND assets.deleted = FALSE
+                """,
+                gallery_id,
+            )
+
+            # Fetch company profile
+            company_profile = None
+            try:
+                profile_service = get_company_profile_service()
+                company_profile = await profile_service.get_profile_optional(workspace_id)
+            except Exception as e:
+                logger.error(f"Failed to fetch profile for public gallery {gallery_id}: {e}")
+
+            return {
+                "gallery_id": str(row["gallery_id"]),
+                "workspace_id": str(row["workspace_id"]),
+                "title": row["title"],
+                "description": row["description"],
+                "client_name": row["client_name"],
+                "status": row["status"],
+                "branding_profile_id": str(row["branding_profile_id"]) if row["branding_profile_id"] else None,
+                "company_profile": company_profile,
+                "portal_language": row["portal_language"],
+                "layout_style": row["layout_style"],
+                "theme": row["theme"],
+                "download_policy": row["download_policy"],
+                "exif_visible": row["exif_visible"],
+                "password_protected": row["password_protected"],
+                "email_registration_required": row["email_registration_required"],
+                "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
+                "published_at": row["published_at"].isoformat() if row["published_at"] else None,
+                "cover_asset_id": str(row["cover_asset_id"]) if row["cover_asset_id"] else None,
+                "created_by_user_id": str(row["created_by_user_id"]),
+                "created_at": row["created_at"].isoformat(),
+                "sub_galleries": [
+                    {
+                        "sub_gallery_id": str(sg["sub_gallery_id"]),
+                        "name": sg["name"],
+                        "sort_order": sg["sort_order"],
+                        "visible": sg["visible"],
+                        "photo_count": sg["photo_count"],
+                        "cover_asset_id": str(sg["cover_asset_id"]) if sg["cover_asset_id"] else None,
+                    }
+                    for sg in sub_galleries
+                ],
+                "stats": {
+                    "total_photos": stats["total_photos"] or 0,
+                    "total_videos": stats["total_videos"] or 0,
+                    "total_items": stats["total_items"] or 0,
+                    "favorites_count": 0, # Don't show public total favorites usually? or maybe strictly session based
+                    "selections_count": 0,
                 },
             }
 

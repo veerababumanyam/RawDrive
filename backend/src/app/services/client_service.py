@@ -210,6 +210,20 @@ class ClientService:
         Raises:
             ClientValidationError: If required fields are missing or invalid
         """
+        # Log incoming parameters for debugging
+        logger.info(
+            "create_client called",
+            extra={
+                "workspace_id": str(workspace_id),
+                "user_id": str(user_id),
+                "first_name": first_name,
+                "full_name": full_name,
+                "date_of_birth_type": type(date_of_birth).__name__ if date_of_birth else "None",
+                "anniversary_date_type": type(anniversary_date).__name__ if anniversary_date else "None",
+                "referred_by_type": type(referred_by_client_id).__name__ if referred_by_client_id else "None",
+            },
+        )
+
         # Validate required fields
         if not full_name or not full_name.strip():
             raise ClientValidationError("Full name is required", "full_name")
@@ -382,6 +396,7 @@ class ClientService:
                         "value": c["value"],
                         "is_primary": c["is_primary"],
                         "verified": c["verified"],
+                        "created_at": c["created_at"],
                     }
                     for c in contacts
                 ]
@@ -420,6 +435,7 @@ class ClientService:
                         "country": a["country"],
                         "postal_code": a["postal_code"],
                         "is_primary": a["is_primary"],
+                        "created_at": a["created_at"],
                     }
                     for a in addresses
                 ]
@@ -465,10 +481,10 @@ class ClientService:
                         "link_id": str(g["link_id"]),
                         "gallery_id": str(g["gallery_id"]),
                         "role": g["role"],
-                        "title": g["title"],
+                        "gallery_title": g["title"],
                         "status": g["status"],
                         "cover_asset_id": str(g["cover_asset_id"]) if g["cover_asset_id"] else None,
-                        "linked_at": g["created_at"].isoformat(),
+                        "created_at": g["created_at"],
                     }
                     for g in galleries
                 ]

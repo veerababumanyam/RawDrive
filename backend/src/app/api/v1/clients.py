@@ -195,6 +195,19 @@ async def create_client(
     """Create a new client in the workspace."""
     service = get_client_service()
     try:
+        # Log sanitized request for debugging
+        logger.info(
+            "Creating client",
+            extra={
+                "workspace_id": str(workspace_id),
+                "user_id": str(current_user.user_id),
+                "first_name": request.first_name,
+                "has_date_of_birth": request.date_of_birth is not None,
+                "has_anniversary_date": request.anniversary_date is not None,
+                "has_referred_by": request.referred_by_client_id is not None,
+            },
+        )
+        
         result = await service.create_client(
             workspace_id=workspace_id,
             user_id=current_user.user_id,
@@ -231,7 +244,15 @@ async def create_client(
     except ClientError as e:
         raise AppError(message=str(e), code=e.code, status_code=e.status_code)
     except Exception as e:
-        logger.exception("Failed to create client")
+        logger.exception(
+            "Unexpected error creating client",
+            extra={
+                "workspace_id": str(workspace_id),
+                "user_id": str(current_user.user_id),
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            },
+        )
         raise InternalError("Failed to create client")
 
 

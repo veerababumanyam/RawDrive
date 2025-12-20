@@ -12,18 +12,6 @@ const refund: PolicyDocument = {
       content: `<p>This refund and cancellation policy outlines how you can cancel or seek a refund for a product/service that you have purchased through the Platform.</p>`,
     },
     {
-      id: 'cancellation-policy',
-      heading: 'Cancellation Policy',
-      content: `<p>Under this policy:</p>
-      <ol>
-        <li><strong>Cancellation Window:</strong> Cancellations will only be considered if the request is made within <strong>7 days</strong> of placing the order. However, cancellation requests may not be entertained if the orders have been communicated to such sellers/merchant(s) listed on the Platform and they have initiated the process of shipping them, or the product is out for delivery. In such an event, you may choose to reject the product at the doorstep.</li>
-        <li><strong>Perishable Items:</strong> SWAZ CONSULTANTS does not accept cancellation requests for perishable items like flowers, eatables, etc. However, the refund/replacement can be made if the user establishes that the quality of the product delivered is not good.</li>
-        <li><strong>Damaged or Defective Items:</strong> In case of receipt of damaged or defective items, please report to our customer service team. The request would be entertained once the seller/merchant listed on the Platform, has checked and determined the same at its own end. This should be reported within <strong>7 days</strong> of receipt of products.</li>
-        <li><strong>Product Not as Expected:</strong> In case you feel that the product received is not as shown on the site or as per your expectations, you must bring it to the notice of our customer service within <strong>7 days</strong> of receiving the product. The customer service team after looking into your complaint will take an appropriate decision.</li>
-        <li><strong>Warranty Items:</strong> In case of complaints regarding the products that come with a warranty from the manufacturers, please refer the issue to them.</li>
-      </ol>`,
-    },
-    {
       id: 'refund-processing',
       heading: 'Refund Processing',
       content: `<p>In case of any refunds approved by SWAZ CONSULTANTS, it will take <strong>7 days</strong> for the refund to be processed to you.</p>
@@ -46,21 +34,6 @@ const refund: PolicyDocument = {
       id: 'exempted-categories',
       heading: 'Exempted Categories',
       content: `<p>You agree that there may be a certain category of products/items that are exempted from returns or refunds. Such categories of the products would be identified to you at the time of purchase.</p>`,
-    },
-    {
-      id: 'return-process',
-      heading: 'Return Process',
-      content: `<p>For exchange/return accepted request(s) (as applicable), once your returned product/item is received and inspected by us, we will send you an email to notify you about receipt of the returned/exchanged product.</p>
-      <p>Further, if the same has been approved after the quality check at our end, your request (i.e. return/exchange) will be processed in accordance with our policies.</p>`,
-    },
-    {
-      id: 'shipping-policy',
-      heading: 'Shipping Policy',
-      content: `<p>The orders for the user are shipped through registered domestic courier companies and/or speed post only.</p>
-      <p><strong>Shipping Timeline:</strong> Orders are shipped within <strong>2 days</strong> from the date of the order and/or payment or as per the delivery date agreed at the time of order confirmation and delivering of the shipment, subject to courier company/post office norms.</p>
-      <p><strong>Delivery Address:</strong> Delivery of all orders will be made to the address provided by the buyer at the time of purchase. Delivery of our services will be confirmed on your email ID as specified at the time of registration.</p>
-      <p><strong>Shipping Costs:</strong> If there are any shipping cost(s) levied by the seller or the Platform Owner (as the case be), the same is not refundable.</p>
-      <p><strong>Delivery Delays:</strong> Platform Owner shall not be liable for any delay in delivery by the courier company/postal authority.</p>`,
     },
     {
       id: 'contact-customer-service',

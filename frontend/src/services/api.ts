@@ -14,6 +14,7 @@ export interface ApiError {
     requestId?: string;
     timestamp?: string;
     details?: Record<string, unknown>;
+    status?: number;
   };
 }
 
@@ -65,22 +66,22 @@ function isRetryableError(error: any): boolean {
   if (error instanceof TypeError && error.message.includes('fetch')) {
     return true;
   }
-  
+
   // Timeout errors
   if (error.name === 'AbortError' || error.message?.includes('timeout')) {
     return true;
   }
-  
+
   // 5xx server errors
   if (error.status >= 500 && error.status < 600) {
     return true;
   }
-  
+
   // 429 Too Many Requests
   if (error.status === 429) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -206,7 +207,7 @@ class ApiClient {
           clearTimeout(timeoutId);
           const retryController = new AbortController();
           const retryTimeoutId = setTimeout(() => retryController.abort(), TIMEOUT_MS);
-          
+
           try {
             response = await fetch(url, {
               ...options,
@@ -241,41 +242,49 @@ class ApiClient {
             error: {
               code: `HTTP_${response.status}`,
               message: `Request failed with status ${response.status}`,
+              status: response.status,
             },
           };
         }
       }
 
       if (!response.ok) {
-        console.error('API error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          data,
-        });
-        
+        // Only log actual errors to console, skip 404s which are often expected/handled
+        if (response.status !== 404) {
+          console.error('API error response:', {
+            status: response.status,
+            statusText: response.statusText,
+            data,
+          });
+        }
+
         // Check if error is retryable and we haven't exceeded max retries
-        const error = data.error || data.detail || {
+        const baseError = data.error || data.detail || {
           code: `HTTP_${response.status}`,
           message: data.message || response.statusText || 'Request failed',
+        };
+
+        const error = {
+          ...baseError,
           status: response.status,
         };
-        
+
         if (isRetryableError(error) && retryCount < MAX_RETRIES) {
           const delay = calculateRetryDelay(retryCount + 1);
           console.log(`Retrying request in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
           await sleep(delay);
           return this.request<T>(endpoint, options, retryCount + 1);
         }
-        
+
         return { error };
       }
 
       return { data };
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       console.error('API request failed:', error);
-      
+
       // Check if error is retryable (network/timeout errors)
       if (isRetryableError(error) && retryCount < MAX_RETRIES) {
         const delay = calculateRetryDelay(retryCount + 1);
@@ -283,7 +292,7 @@ class ApiClient {
         await sleep(delay);
         return this.request<T>(endpoint, options, retryCount + 1);
       }
-      
+
       return {
         error: {
           code: error instanceof Error && error.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK_ERROR',

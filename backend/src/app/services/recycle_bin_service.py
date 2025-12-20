@@ -141,38 +141,139 @@ class RecycleBinService:
 
         Requirement 10.2: WHEN a photographer accesses the Recycle Bin THEN the
         system SHALL filter all items by the authenticated user's workspace_id.
+        
+        OPTIMIZATIONS:
+        - Pushes sorting to database (ORDER BY in SQL)
+        - Uses batch URL generation (prevents N+1 queries)
+        - Applies LIMIT/OFFSET in database query
         """
         pool = await get_postgres_pool()
         offset = (page - 1) * limit
         items: list[RecycleBinItem] = []
 
         async with pool.acquire() as conn:
-            # Get deleted galleries
+            # ⚡ OPTIMIZATION 1: Combined query with sorting and pagination in database
+            # Get total count for all items first (for pagination metadata)
+            total_galleries = 0
+            total_photos = 0
+            
             if item_type is None or item_type == "gallery":
-                galleries = await conn.fetch(
+                total_galleries = await conn.fetchval(
                     """
+                    SELECT COUNT(*)
+                    FROM galleries
+                    WHERE workspace_id = $1
+                    AND deleted = TRUE
+                    AND (delete_status IS NULL OR delete_status = 'delete_failed')
+                    """,
+                    workspace_id,
+                )
+            
+            if item_type is None or item_type == "photo":
+                total_photos = await conn.fetchval(
+                    """
+                    SELECT COUNT(*)
+                    FROM assets a
+                    LEFT JOIN gallery_assets ga ON a.asset_id = ga.asset_id
+                    LEFT JOIN galleries g ON ga.gallery_id = g.gallery_id
+                    WHERE a.workspace_id = $1
+                    AND a.deleted = TRUE
+                    AND (a.delete_status IS NULL OR a.delete_status = 'delete_failed')
+                    AND (g.gallery_id IS NULL OR g.deleted = FALSE)
+                    """,
+                    workspace_id,
+                )
+            
+            total = total_galleries + total_photos
+            
+            # ⚡ OPTIMIZATION 2: Use UNION ALL to combine results and sort in single query
+            # This allows PostgreSQL to handle sorting efficiently with indexes
+            combined_query = """
+            WITH combined_items AS (
+            """
+            
+            query_parts = []
+            
+            if item_type is None or item_type == "gallery":
+                query_parts.append("""
                     SELECT
-                        gallery_id, title, deleted_at, delete_status,
+                        gallery_id::text as id,
+                        'gallery' as type,
+                        title as name,
+                        deleted_at,
+                        delete_status,
                         (
                             SELECT COUNT(*)
                             FROM gallery_assets
                             WHERE gallery_id = galleries.gallery_id
-                        ) as photo_count
+                        ) as photo_count,
+                        NULL::uuid as asset_id,
+                        NULL::text as original_object_key,
+                        NULL::bigint as original_bytes,
+                        NULL::uuid as parent_gallery_id
                     FROM galleries
                     WHERE workspace_id = $1
                     AND deleted = TRUE
-                    AND (delete_status IS NULL OR delete_status = 'delete_failed')  -- Include failed deletions for retry
-                    ORDER BY deleted_at DESC
-                    """,
-                    workspace_id,
+                    AND (delete_status IS NULL OR delete_status = 'delete_failed')
+                """)
+            
+            if item_type is None or item_type == "photo":
+                query_parts.append("""
+                    SELECT
+                        a.asset_id::text as id,
+                        'photo' as type,
+                        COALESCE(NULLIF(split_part(a.original_object_key, '/', -1), ''), 'Unknown') as name,
+                        a.deleted_at,
+                        a.delete_status,
+                        NULL::bigint as photo_count,
+                        a.asset_id,
+                        a.original_object_key,
+                        a.original_bytes,
+                        ga.gallery_id as parent_gallery_id
+                    FROM assets a
+                    LEFT JOIN gallery_assets ga ON a.asset_id = ga.asset_id
+                    LEFT JOIN galleries g ON ga.gallery_id = g.gallery_id
+                    WHERE a.workspace_id = $1
+                    AND a.deleted = TRUE
+                    AND (a.delete_status IS NULL OR a.delete_status = 'delete_failed')
+                    AND (g.gallery_id IS NULL OR g.deleted = FALSE)
+                """)
+            
+            combined_query += " UNION ALL ".join(query_parts)
+            combined_query += """
+            )
+            SELECT * FROM combined_items
+            ORDER BY deleted_at DESC
+            LIMIT $2 OFFSET $3
+            """
+            
+            rows = await conn.fetch(combined_query, workspace_id, limit, offset)
+            
+            # Extract asset IDs for batch URL generation
+            photo_asset_ids = [
+                row["asset_id"] for row in rows 
+                if row["type"] == "photo" and row["asset_id"]
+            ]
+            
+            # ⚡ OPTIMIZATION 3: Batch generate thumbnail URLs (prevents N+1 queries)
+            thumbnail_urls = {}
+            if photo_asset_ids:
+                signed_url_service = get_signed_url_service()
+                thumbnail_urls = signed_url_service.batch_generate_signed_urls(
+                    workspace_id=workspace_id,
+                    asset_ids=photo_asset_ids,
+                    variant="thumbnail",
+                    ttl=3600,  # 1 hour TTL
                 )
-
-                for row in galleries:
+            
+            # Build items list
+            for row in rows:
+                if row["type"] == "gallery":
                     items.append(
                         RecycleBinItem(
-                            id=row["gallery_id"],
+                            id=UUID(row["id"]),
                             type="gallery",
-                            name=row["title"],
+                            name=row["name"],
                             deleted_at=row["deleted_at"],
                             days_until_permanent_delete=self.calculate_days_until_permanent_delete(
                                 row["deleted_at"]
@@ -181,69 +282,25 @@ class RecycleBinService:
                             delete_status=row["delete_status"],
                         )
                     )
-
-            # Get deleted photos (not linked to deleted galleries)
-            if item_type is None or item_type == "photo":
-                photos = await conn.fetch(
-                    """
-                    SELECT
-                        a.asset_id, a.original_object_key, a.deleted_at,
-                        a.original_bytes, a.delete_status, ga.gallery_id
-                    FROM assets a
-                    LEFT JOIN gallery_assets ga ON a.asset_id = ga.asset_id
-                    LEFT JOIN galleries g ON ga.gallery_id = g.gallery_id
-                    WHERE a.workspace_id = $1
-                    AND a.deleted = TRUE
-                    AND (a.delete_status IS NULL OR a.delete_status = 'delete_failed')  -- Include failed deletions for retry
-                    AND (g.gallery_id IS NULL OR g.deleted = FALSE)  -- Exclude if gallery also deleted
-                    ORDER BY a.deleted_at DESC
-                    """,
-                    workspace_id,
-                )
-
-                # Get signed URL service for generating thumbnail URLs
-                signed_url_service = get_signed_url_service()
-
-                for row in photos:
-                    # Extract filename from object key for display
-                    key = row["original_object_key"]
-                    name = key.split("/")[-1] if key else "Unknown"
-
-                    # Generate thumbnail URL for the photo
-                    try:
-                        thumbnail_result = signed_url_service.generate_signed_url(
-                            workspace_id=workspace_id,
-                            asset_id=row["asset_id"],
-                            variant="thumbnail",
-                            ttl=3600,  # 1 hour TTL
-                        )
-                        thumbnail_url = thumbnail_result["url"]
-                    except Exception as e:
-                        logger.warning(f"Failed to generate thumbnail URL for asset {row['asset_id']}: {e}")
-                        thumbnail_url = None
-
+                else:  # photo
+                    thumbnail_result = thumbnail_urls.get(row["asset_id"])
+                    thumbnail_url = thumbnail_result["url"] if thumbnail_result else None
+                    
                     items.append(
                         RecycleBinItem(
-                            id=row["asset_id"],
+                            id=UUID(row["id"]),
                             type="photo",
-                            name=name,
+                            name=row["name"],
                             deleted_at=row["deleted_at"],
                             days_until_permanent_delete=self.calculate_days_until_permanent_delete(
                                 row["deleted_at"]
                             ),
                             original_bytes=row["original_bytes"],
-                            parent_gallery_id=row["gallery_id"],
+                            parent_gallery_id=row["parent_gallery_id"],
                             thumbnail_url=thumbnail_url,
                             delete_status=row["delete_status"],
                         )
                     )
-
-            # Sort all items by deleted_at descending
-            items.sort(key=lambda x: x.deleted_at, reverse=True)
-
-            # Apply pagination
-            total = len(items)
-            items = items[offset : offset + limit]
 
         return {
             "items": [

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -38,23 +38,18 @@ import type {
 /* =============================================================================
    ClientFormPage Component
 
-   Create and Edit client form with tabs for different sections.
+   Create and Edit client form with all sections in a single page.
    ============================================================================= */
-
-type FormTab = 'basic' | 'contacts' | 'addresses' | 'tags' | 'notes';
 
 const ClientFormPage: React.FC = () => {
   const { clientId } = useParams<{ clientId: string }>();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { workspace } = useAuth();
   const { addToast } = useToast();
 
   const isEditMode = !!clientId;
-  const initialTab = (searchParams.get('tab') as FormTab) || 'basic';
 
   // Form state
-  const [activeTab, setActiveTab] = useState<FormTab>(initialTab);
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
   const [client, setClient] = useState<ClientDetail | null>(null);
@@ -142,9 +137,10 @@ const ClientFormPage: React.FC = () => {
 
     try {
       const tags = await clientService.getWorkspaceTags(workspace.workspace_id);
-      setAvailableTags(tags);
+      setAvailableTags(Array.isArray(tags) ? tags : []);
     } catch (err) {
       console.error('Failed to fetch tags:', err);
+      setAvailableTags([]); // Ensure it's always an array even on error
     }
   }, [workspace?.workspace_id]);
 
@@ -188,17 +184,34 @@ const ClientFormPage: React.FC = () => {
     // Validation
     if (!formData.first_name.trim()) {
       addToast({ variant: 'error', message: 'First name is required' });
-      setActiveTab('basic');
       return;
     }
 
     setSaving(true);
     try {
+      // Sanitize payload: remove empty strings for optional fields
+      // This prevents 422 errors where backend expects UUID/Date but gets ""
+      const sanitizePayload = (data: CreateClientRequest) => {
+        const cleaned = { ...data };
+        Object.keys(cleaned).forEach((key) => {
+          const k = key as keyof CreateClientRequest;
+          if (cleaned[k] === '') {
+            // @ts-ignore - dynamic assignment
+            cleaned[k] = undefined;
+          }
+        });
+        return cleaned;
+      };
+
+      const payload = sanitizePayload(formData);
+
+      console.log('Creating/updating client with payload:', payload);
+
       if (isEditMode && clientId) {
-        await clientService.updateClient(workspace.workspace_id, clientId, formData);
+        await clientService.updateClient(workspace.workspace_id, clientId, payload);
         addToast({ variant: 'success', message: 'Client updated successfully' });
       } else {
-        const response = await clientService.createClient(workspace.workspace_id, formData);
+        const response = await clientService.createClient(workspace.workspace_id, payload);
         addToast({ variant: 'success', message: 'Client created successfully' });
         navigate(`/workspace/clients/${response.client_id}`);
         return;
@@ -206,6 +219,7 @@ const ClientFormPage: React.FC = () => {
 
       handleBack();
     } catch (err) {
+      console.error('Failed to save client:', err);
       addToast({
         variant: 'error',
         message: err instanceof Error ? err.message : 'Failed to save client',
@@ -327,14 +341,6 @@ const ClientFormPage: React.FC = () => {
     }
   };
 
-  const tabs: { id: FormTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'basic', label: 'Basic Info', icon: <User size={18} /> },
-    { id: 'contacts', label: 'Contacts', icon: <Phone size={18} /> },
-    { id: 'addresses', label: 'Addresses', icon: <MapPin size={18} /> },
-    { id: 'tags', label: 'Tags', icon: <Tag size={18} /> },
-    { id: 'notes', label: 'Notes', icon: <MessageSquare size={18} /> },
-  ];
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -348,7 +354,7 @@ const ClientFormPage: React.FC = () => {
       initial="hidden"
       animate="visible"
       variants={staggerContainer}
-      className="space-y-6 max-w-4xl mx-auto"
+      className="space-y-6 max-w-4xl mx-auto pb-12"
     >
       {/* Header */}
       <motion.div
@@ -384,50 +390,206 @@ const ClientFormPage: React.FC = () => {
         </AppButton>
       </motion.div>
 
-      {/* Tabs */}
-      <motion.div variants={staggerItem} className="card-glass rounded-2xl p-1">
-        <div className="flex gap-1 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              disabled={!isEditMode && tab.id !== 'basic' && tab.id !== 'notes'}
-              className={`
-                flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap
-                ${activeTab === tab.id
-                  ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover/50'
-                }
-                ${!isEditMode && tab.id !== 'basic' && tab.id !== 'notes'
-                  ? 'opacity-50 cursor-not-allowed'
-                  : ''
-                }
-              `}
-            >
-              {tab.icon}
-              {tab.label}
-              {tab.id === 'contacts' && contacts.length > 0 && (
-                <AppBadge variant="default" size="sm">{contacts.length}</AppBadge>
-              )}
-              {tab.id === 'addresses' && addresses.length > 0 && (
-                <AppBadge variant="default" size="sm">{addresses.length}</AppBadge>
-              )}
-              {tab.id === 'tags' && clientTags.length > 0 && (
-                <AppBadge variant="default" size="sm">{clientTags.length}</AppBadge>
-              )}
-            </button>
-          ))}
-        </div>
-      </motion.div>
+      {/* Single Page Form */}
+      <motion.div variants={staggerItem} className="card-glass rounded-2xl p-6 space-y-8">
+        {/* Personal Information Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <User size={20} className="text-primary" />
+            <h2 className="text-xl font-semibold text-text-primary">Personal Information</h2>
+          </div>
+          <div className="space-y-6">
+            {/* Name */}
+            <div>
+              <h3 className="font-medium text-text-primary mb-4">Name</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    First Name <span className="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="first_name"
+                    value={formData.first_name}
+                    onChange={handleInputChange}
+                    placeholder="John"
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    name="last_name"
+                    value={formData.last_name || ''}
+                    onChange={handleInputChange}
+                    placeholder="Doe"
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Nickname
+                  </label>
+                  <input
+                    type="text"
+                    name="nickname"
+                    value={formData.nickname || ''}
+                    onChange={handleInputChange}
+                    placeholder="Johnny"
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+            </div>
 
-      {/* Tab Content */}
-      <motion.div variants={staggerItem} className="card-glass rounded-2xl p-6">
-        {activeTab === 'basic' && (
-          <BasicInfoTab formData={formData} onChange={handleInputChange} />
-        )}
+            {/* Divider */}
+            <hr className="border-border/50" />
 
-        {activeTab === 'contacts' && (
-          <ContactsTab
+            {/* Work Information */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Building2 size={18} className="text-accent" />
+                <h3 className="font-medium text-text-primary">Work</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Organization
+                  </label>
+                  <input
+                    type="text"
+                    name="organization"
+                    value={formData.organization || ''}
+                    onChange={handleInputChange}
+                    placeholder="Acme Corp"
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Job Title
+                  </label>
+                  <input
+                    type="text"
+                    name="job_title"
+                    value={formData.job_title || ''}
+                    onChange={handleInputChange}
+                    placeholder="Marketing Manager"
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <hr className="border-border/50" />
+
+            {/* Important Dates */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar size={18} className="text-success" />
+                <h3 className="font-medium text-text-primary">Important Dates</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Date of Birth
+                  </label>
+                  <input
+                    type="date"
+                    name="date_of_birth"
+                    value={formData.date_of_birth || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Anniversary Date
+                  </label>
+                  <input
+                    type="date"
+                    name="anniversary_date"
+                    value={formData.anniversary_date || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <hr className="border-border/50" />
+
+            {/* Locale */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Globe size={18} className="text-info" />
+                <h3 className="font-medium text-text-primary">Locale</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Language
+                  </label>
+                  <select
+                    name="language"
+                    value={formData.language || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  >
+                    <option value="">Select language</option>
+                    <option value="en-US">English (US)</option>
+                    <option value="en-GB">English (UK)</option>
+                    <option value="en-IN">English (India)</option>
+                    <option value="hi-IN">Hindi</option>
+                    <option value="es-ES">Spanish</option>
+                    <option value="fr-FR">French</option>
+                    <option value="de-DE">German</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Timezone
+                  </label>
+                  <select
+                    name="timezone"
+                    value={formData.timezone || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  >
+                    <option value="">Select timezone</option>
+                    <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                    <option value="America/New_York">America/New_York (EST)</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                    <option value="Europe/London">Europe/London (GMT)</option>
+                    <option value="Europe/Paris">Europe/Paris (CET)</option>
+                    <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section Divider */}
+        <div className="border-t-2 border-border/30" />
+
+        {/* Contacts Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <Phone size={20} className="text-primary" />
+            <h2 className="text-xl font-semibold text-text-primary">Contact Information</h2>
+            {contacts.length > 0 && (
+              <AppBadge variant="default" size="sm">{contacts.length}</AppBadge>
+            )}
+          </div>
+
+          <ContactsSection
             contacts={contacts}
             newContact={newContact}
             setNewContact={setNewContact}
@@ -435,10 +597,22 @@ const ClientFormPage: React.FC = () => {
             onDelete={handleDeleteContact}
             isEditMode={isEditMode}
           />
-        )}
+        </section>
 
-        {activeTab === 'addresses' && (
-          <AddressesTab
+        {/* Section Divider */}
+        <div className="border-t-2 border-border/30" />
+
+        {/* Addresses Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <MapPin size={20} className="text-primary" />
+            <h2 className="text-xl font-semibold text-text-primary">Addresses</h2>
+            {addresses.length > 0 && (
+              <AppBadge variant="default" size="sm">{addresses.length}</AppBadge>
+            )}
+          </div>
+
+          <AddressesSection
             addresses={addresses}
             newAddress={newAddress}
             setNewAddress={setNewAddress}
@@ -446,225 +620,64 @@ const ClientFormPage: React.FC = () => {
             onDelete={handleDeleteAddress}
             isEditMode={isEditMode}
           />
-        )}
+        </section>
 
-        {activeTab === 'tags' && (
-          <TagsTab
+        {/* Section Divider */}
+        <div className="border-t-2 border-border/30" />
+
+        {/* Tags Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <Tag size={20} className="text-primary" />
+            <h2 className="text-xl font-semibold text-text-primary">Tags</h2>
+            {clientTags.length > 0 && (
+              <AppBadge variant="default" size="sm">{clientTags.length}</AppBadge>
+            )}
+          </div>
+
+          <TagsSection
             clientTags={clientTags}
             availableTags={availableTags}
             onAdd={handleAddTag}
             onRemove={handleRemoveTag}
             isEditMode={isEditMode}
           />
-        )}
+        </section>
 
-        {activeTab === 'notes' && (
-          <NotesTab
-            value={formData.internal_notes || ''}
-            onChange={(value) => setFormData((prev) => ({ ...prev, internal_notes: value }))}
-          />
-        )}
+        {/* Section Divider */}
+        <div className="border-t-2 border-border/30" />
+
+        {/* Notes Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <MessageSquare size={20} className="text-primary" />
+            <h2 className="text-xl font-semibold text-text-primary">Internal Notes</h2>
+          </div>
+
+          <div>
+            <p className="text-sm text-text-tertiary mb-4">
+              These notes are private and will not be visible to the client.
+            </p>
+            <textarea
+              name="internal_notes"
+              value={formData.internal_notes || ''}
+              onChange={handleInputChange}
+              placeholder="Add private notes about this client..."
+              rows={6}
+              className="w-full px-4 py-3 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none"
+            />
+          </div>
+        </section>
       </motion.div>
-
-      {/* Help text for new clients */}
-      {!isEditMode && activeTab !== 'basic' && activeTab !== 'notes' && (
-        <p className="text-text-tertiary text-sm text-center">
-          Save the client first to add {activeTab}
-        </p>
-      )}
     </motion.div>
   );
 };
 
 /* =============================================================================
-   Basic Info Tab
+   Contacts Section Component
    ============================================================================= */
 
-interface BasicInfoTabProps {
-  formData: CreateClientRequest;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
-}
-
-const BasicInfoTab: React.FC<BasicInfoTabProps> = ({ formData, onChange }) => {
-  return (
-    <div className="space-y-6">
-      {/* Name Section */}
-      <div>
-        <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
-          <User size={18} />
-          Name
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              First Name <span className="text-error">*</span>
-            </label>
-            <input
-              type="text"
-              name="first_name"
-              value={formData.first_name}
-              onChange={onChange}
-              placeholder="John"
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              Last Name
-            </label>
-            <input
-              type="text"
-              name="last_name"
-              value={formData.last_name || ''}
-              onChange={onChange}
-              placeholder="Doe"
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              Nickname
-            </label>
-            <input
-              type="text"
-              name="nickname"
-              value={formData.nickname || ''}
-              onChange={onChange}
-              placeholder="Johnny"
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Work Section */}
-      <div>
-        <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
-          <Building2 size={18} />
-          Work
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              Organization
-            </label>
-            <input
-              type="text"
-              name="organization"
-              value={formData.organization || ''}
-              onChange={onChange}
-              placeholder="Acme Corp"
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              Job Title
-            </label>
-            <input
-              type="text"
-              name="job_title"
-              value={formData.job_title || ''}
-              onChange={onChange}
-              placeholder="Marketing Manager"
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Dates Section */}
-      <div>
-        <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
-          <Calendar size={18} />
-          Important Dates
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              Date of Birth
-            </label>
-            <input
-              type="date"
-              name="date_of_birth"
-              value={formData.date_of_birth || ''}
-              onChange={onChange}
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              Anniversary Date
-            </label>
-            <input
-              type="date"
-              name="anniversary_date"
-              value={formData.anniversary_date || ''}
-              onChange={onChange}
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Locale Section */}
-      <div>
-        <h3 className="font-semibold text-text-primary mb-4 flex items-center gap-2">
-          <Globe size={18} />
-          Locale
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              Language
-            </label>
-            <select
-              name="language"
-              value={formData.language || ''}
-              onChange={onChange}
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-            >
-              <option value="">Select language</option>
-              <option value="en-US">English (US)</option>
-              <option value="en-GB">English (UK)</option>
-              <option value="en-IN">English (India)</option>
-              <option value="hi-IN">Hindi</option>
-              <option value="es-ES">Spanish</option>
-              <option value="fr-FR">French</option>
-              <option value="de-DE">German</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              Timezone
-            </label>
-            <select
-              name="timezone"
-              value={formData.timezone || ''}
-              onChange={onChange}
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-            >
-              <option value="">Select timezone</option>
-              <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-              <option value="America/New_York">America/New_York (EST)</option>
-              <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
-              <option value="Europe/London">Europe/London (GMT)</option>
-              <option value="Europe/Paris">Europe/Paris (CET)</option>
-              <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/* =============================================================================
-   Contacts Tab
-   ============================================================================= */
-
-interface ContactsTabProps {
+interface ContactsSectionProps {
   contacts: ClientContact[];
   newContact: AddContactRequest;
   setNewContact: React.Dispatch<React.SetStateAction<AddContactRequest>>;
@@ -673,7 +686,7 @@ interface ContactsTabProps {
   isEditMode: boolean;
 }
 
-const ContactsTab: React.FC<ContactsTabProps> = ({
+const ContactsSection: React.FC<ContactsSectionProps> = ({
   contacts,
   newContact,
   setNewContact,
@@ -715,13 +728,15 @@ const ContactsTab: React.FC<ContactsTabProps> = ({
                 {contact.verified && (
                   <AppBadge variant="success" size="sm">Verified</AppBadge>
                 )}
-                <button
-                  onClick={() => onDelete(contact.contact_id)}
-                  className="p-2 rounded-lg hover:bg-error/10 text-text-tertiary hover:text-error transition-colors"
-                  aria-label="Delete contact"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {isEditMode && (
+                  <button
+                    onClick={() => onDelete(contact.contact_id)}
+                    className="p-2 rounded-lg hover:bg-error/10 text-text-tertiary hover:text-error transition-colors"
+                    aria-label="Delete contact"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -773,8 +788,8 @@ const ContactsTab: React.FC<ContactsTabProps> = ({
                   newContact.contact_type === 'email'
                     ? 'john@example.com'
                     : newContact.contact_type === 'phone'
-                    ? '+1 234 567 8900'
-                    : 'https://...'
+                      ? '+1 234 567 8900'
+                      : 'https://...'
                 }
                 className="w-full px-3 py-2 rounded-lg border border-border bg-surface"
               />
@@ -805,20 +820,23 @@ const ContactsTab: React.FC<ContactsTabProps> = ({
         </div>
       )}
 
-      {!isEditMode && (
-        <p className="text-text-tertiary text-center py-8">
-          Save the client first to add contacts
-        </p>
+      {!isEditMode && contacts.length === 0 && (
+        <div className="p-8 rounded-xl border border-dashed border-border bg-surface-hover/10 text-center">
+          <Phone size={32} className="mx-auto text-text-tertiary mb-3" />
+          <p className="text-text-tertiary">
+            Contacts can be added after creating the client
+          </p>
+        </div>
       )}
     </div>
   );
 };
 
 /* =============================================================================
-   Addresses Tab
+   Addresses Section Component
    ============================================================================= */
 
-interface AddressesTabProps {
+interface AddressesSectionProps {
   addresses: ClientAddress[];
   newAddress: AddAddressRequest;
   setNewAddress: React.Dispatch<React.SetStateAction<AddAddressRequest>>;
@@ -827,7 +845,7 @@ interface AddressesTabProps {
   isEditMode: boolean;
 }
 
-const AddressesTab: React.FC<AddressesTabProps> = ({
+const AddressesSection: React.FC<AddressesSectionProps> = ({
   addresses,
   newAddress,
   setNewAddress,
@@ -857,13 +875,15 @@ const AddressesTab: React.FC<AddressesTabProps> = ({
                     <AppBadge variant="primary" size="sm">Primary</AppBadge>
                   )}
                 </div>
-                <button
-                  onClick={() => onDelete(address.address_id)}
-                  className="p-2 rounded-lg hover:bg-error/10 text-text-tertiary hover:text-error transition-colors"
-                  aria-label="Delete address"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {isEditMode && (
+                  <button
+                    onClick={() => onDelete(address.address_id)}
+                    className="p-2 rounded-lg hover:bg-error/10 text-text-tertiary hover:text-error transition-colors"
+                    aria-label="Delete address"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
               <p className="text-text-primary">
                 {[address.address_line1, address.address_line2].filter(Boolean).join(', ')}
@@ -997,20 +1017,23 @@ const AddressesTab: React.FC<AddressesTabProps> = ({
         </div>
       )}
 
-      {!isEditMode && (
-        <p className="text-text-tertiary text-center py-8">
-          Save the client first to add addresses
-        </p>
+      {!isEditMode && addresses.length === 0 && (
+        <div className="p-8 rounded-xl border border-dashed border-border bg-surface-hover/10 text-center">
+          <MapPin size={32} className="mx-auto text-text-tertiary mb-3" />
+          <p className="text-text-tertiary">
+            Addresses can be added after creating the client
+          </p>
+        </div>
       )}
     </div>
   );
 };
 
 /* =============================================================================
-   Tags Tab
+   Tags Section Component
    ============================================================================= */
 
-interface TagsTabProps {
+interface TagsSectionProps {
   clientTags: ClientTag[];
   availableTags: ClientTag[];
   onAdd: (tagId: string) => void;
@@ -1018,14 +1041,16 @@ interface TagsTabProps {
   isEditMode: boolean;
 }
 
-const TagsTab: React.FC<TagsTabProps> = ({
+const TagsSection: React.FC<TagsSectionProps> = ({
   clientTags,
   availableTags,
   onAdd,
   onRemove,
   isEditMode,
 }) => {
-  const unassignedTags = availableTags.filter(
+  // Ensure availableTags is always an array
+  const safeTags = Array.isArray(availableTags) ? availableTags : [];
+  const unassignedTags = safeTags.filter(
     (tag) => !clientTags.some((ct) => ct.tag_id === tag.tag_id)
   );
 
@@ -1085,41 +1110,14 @@ const TagsTab: React.FC<TagsTabProps> = ({
         </div>
       )}
 
-      {!isEditMode && (
-        <p className="text-text-tertiary text-center py-8">
-          Save the client first to manage tags
-        </p>
+      {!isEditMode && clientTags.length === 0 && (
+        <div className="p-8 rounded-xl border border-dashed border-border bg-surface-hover/10 text-center">
+          <Tag size={32} className="mx-auto text-text-tertiary mb-3" />
+          <p className="text-text-tertiary">
+            Tags can be added after creating the client
+          </p>
+        </div>
       )}
-    </div>
-  );
-};
-
-/* =============================================================================
-   Notes Tab
-   ============================================================================= */
-
-interface NotesTabProps {
-  value: string;
-  onChange: (value: string) => void;
-}
-
-const NotesTab: React.FC<NotesTabProps> = ({ value, onChange }) => {
-  return (
-    <div>
-      <h4 className="font-medium text-text-primary mb-4 flex items-center gap-2">
-        <MessageSquare size={18} />
-        Internal Notes
-      </h4>
-      <p className="text-sm text-text-tertiary mb-4">
-        These notes are private and will not be visible to the client.
-      </p>
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Add private notes about this client..."
-        rows={8}
-        className="w-full px-4 py-3 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none"
-      />
     </div>
   );
 };

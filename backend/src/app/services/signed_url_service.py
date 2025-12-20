@@ -199,6 +199,67 @@ class SignedUrlService:
             "ttl": ttl,
         }
 
+    def batch_generate_signed_urls(
+        self,
+        workspace_id: UUID,
+        asset_ids: list[UUID],
+        variant: str = "thumbnail",
+        base_url: str = "/api/v1/media",
+        ttl: int = DEFAULT_TTL,
+        download: bool = False,
+    ) -> dict[UUID, dict]:
+        """Generate signed URLs for multiple assets in batch.
+
+        This optimized method generates URLs for multiple assets without
+        making individual calls, preventing N+1 query patterns.
+
+        Args:
+            workspace_id: Workspace UUID (same for all assets)
+            asset_ids: List of asset UUIDs
+            variant: Media variant ('thumbnail', 'preview', 'original')
+            base_url: Base URL for media endpoint
+            ttl: Time to live in seconds
+            download: Whether this is for download
+
+        Returns:
+            Dictionary mapping asset_id to {url, expires_at, ttl}
+        """
+        if not asset_ids:
+            return {}
+
+        # Pre-calculate expiry once for all URLs (same TTL)
+        expiry = int(time.time()) + ttl
+        
+        # Generate all URLs in one pass
+        results = {}
+        for asset_id in asset_ids:
+            try:
+                # Build token payload
+                payload = f"{workspace_id}:{asset_id}:{variant}:{expiry}:{1 if download else 0}"
+                
+                # Generate HMAC signature
+                signature = hmac.new(
+                    self.secret, payload.encode("utf-8"), hashlib.sha256
+                ).digest()
+                
+                # Combine payload and signature
+                token_data = f"{payload}:{base64.urlsafe_b64encode(signature).decode('utf-8')}"
+                
+                # Base64 encode the entire token
+                token = base64.urlsafe_b64encode(token_data.encode("utf-8")).decode("utf-8")
+                url = f"{base_url}/{token}"
+                
+                results[asset_id] = {
+                    "url": url,
+                    "expires_at": expiry,
+                    "ttl": ttl,
+                }
+            except Exception as e:
+                logger.warning(f"Failed to generate URL for asset {asset_id}: {e}")
+                results[asset_id] = None
+        
+        return results
+
 
 # Export singleton instance
 _signed_url_service: Optional[SignedUrlService] = None

@@ -706,9 +706,9 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
 }) => {
   return (
     <div className="card-glass rounded-2xl overflow-hidden">
-      <button
+      <div
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 hover:bg-surface-hover/30 transition-colors"
+        className="w-full flex items-center justify-between p-4 hover:bg-surface-hover/30 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2">
           <span className="text-text-tertiary">{icon}</span>
@@ -729,7 +729,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             <ChevronDown size={18} className="text-text-tertiary" />
           )}
         </div>
-      </button>
+      </div>
       {expanded && <div className="px-4 pb-4">{children}</div>}
     </div>
   );

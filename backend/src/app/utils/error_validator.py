@@ -4,8 +4,7 @@ Ensures error responses do not leak information across tenants.
 Requirements: 6.1, 6.2, 6.5
 """
 
-from typing import Any, Dict, List
-
+from typing import Any, Dict, List, Optional, Union
 
 class TenantSafeErrorValidator:
     """Validates error responses for tenant safety."""
@@ -13,8 +12,8 @@ class TenantSafeErrorValidator:
     @staticmethod
     def validate_error_response(
         error_response: Dict[str, Any],
-        workspace_id: str | None = None,
-        user_id: str | None = None,
+        workspace_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> bool:
         """Validate that error response is safe for the given tenant context.
 

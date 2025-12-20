@@ -23,6 +23,9 @@ from app.api.v1.people import router as people_router
 from app.api.v1.search import router as search_router
 
 from app.api.v1.dashboard import router as dashboard_router
+from app.api.v1.company_profile import router as company_profile_router
+from app.api.v1.company_profile import public_router as public_profile_router
+from app.api.v1.public_galleries import router as public_galleries_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -81,6 +84,11 @@ router.include_router(
     tags=["comments"],
 )
 router.include_router(
+    company_profile_router,
+    prefix="/api/v1/workspaces/{workspace_id}/company-profile",
+    tags=["company-profile"],
+)
+router.include_router(
     people_router,
     prefix="/api/v1/workspaces/{workspace_id}/people",
     tags=["people"],
@@ -89,4 +97,15 @@ router.include_router(
     search_router,
     prefix="/api/v1/workspaces/{workspace_id}/search",
     tags=["search"],
+)
+
+router.include_router(
+    public_profile_router,
+    prefix="/api/v1/public/profiles",
+    tags=["public-profiles"],
+)
+router.include_router(
+    public_galleries_router,
+    prefix="/api/v1/public/galleries",
+    tags=["public-galleries"],
 )

@@ -32,3 +32,4 @@ ruff==0.6.9
 mypy==1.11.2
 types-redis==4.6.0.20241004
 aiohttp==3.11.0  # For E2E tests
+qrcode==7.4.2

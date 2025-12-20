@@ -3,6 +3,8 @@
  * Based on design document: .kiro/specs/gallery-crud/design.md
  */
 
+import { CompanyProfile } from './companyProfile';
+
 // Gallery Status
 export type GalleryStatus = 'draft' | 'published' | 'archived';
 export type LayoutStyle = 'tabs' | 'continuous';
@@ -21,6 +23,7 @@ export interface GalleryEntity {
   client_name?: string;
   status: GalleryStatus;
   branding_profile_id?: string;
+  company_profile?: CompanyProfile;
   portal_language?: string;
   layout_style?: LayoutStyle;
   theme?: ThemeMode;
@@ -106,6 +109,7 @@ export interface GalleryDetailData {
   description?: string;
   client_name?: string;
   branding_profile_id?: string;
+  company_profile?: CompanyProfile;
   portal_language?: string;
   layout_style?: LayoutStyle;
   theme?: ThemeMode;

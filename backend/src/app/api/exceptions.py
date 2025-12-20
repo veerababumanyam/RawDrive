@@ -17,8 +17,8 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from src.app.utils.error_logger import ErrorLogger
-from src.app.utils.error_validator import TenantSafeErrorValidator
+from app.utils.error_logger import ErrorLogger
+from app.utils.error_validator import TenantSafeErrorValidator
 
 logger = logging.getLogger(__name__)
 

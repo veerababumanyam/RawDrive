@@ -435,6 +435,8 @@ class GalleryStatsResponse(BaseModel):
     selections_count: int
 
 
+from app.api.company_profile_schemas import CompanyProfileResponse
+
 class GalleryDetailResponse(BaseModel):
     """Gallery detail response."""
 
@@ -447,6 +449,7 @@ class GalleryDetailResponse(BaseModel):
     description: Optional[str] = None
     client_name: Optional[str] = None
     branding_profile_id: Optional[UUID] = None
+    company_profile: Optional[CompanyProfileResponse] = None
     portal_language: Optional[str] = None
     layout_style: Optional[Literal["tabs", "continuous"]] = None
     theme: Optional[Literal["light", "dark", "system"]] = None

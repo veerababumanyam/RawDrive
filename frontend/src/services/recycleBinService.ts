@@ -13,6 +13,7 @@ import {
   BulkPermanentDeleteResponse,
   DeletionInfoResponse,
 } from '../types/recycleBin';
+import { RecycleBinError, RecycleBinErrorCode } from './errors';
 
 export interface RecycleBinListResponse {
   items: RecycleBinItem[];
@@ -27,6 +28,55 @@ export interface RecycleBinListResponse {
    ============================================================================= */
 
 export class RecycleBinService {
+  /**
+   * Handle API errors and throw typed RecycleBinError
+   */
+  private handleError(response: any, operation: string): never {
+    const error = response.error;
+
+    // Map backend error codes to our error codes
+    let errorCode = RecycleBinErrorCode.UNKNOWN_ERROR;
+    if (error?.code) {
+      switch (error.code) {
+        case 'NOT_FOUND':
+        case 'ENTITY_NOT_FOUND':
+          errorCode = RecycleBinErrorCode.NOT_FOUND;
+          break;
+        case 'ACCESS_DENIED':
+        case 'WORKSPACE_ACCESS_DENIED':
+          errorCode = RecycleBinErrorCode.ACCESS_DENIED;
+          break;
+        case 'NAME_CONFLICT':
+          errorCode = RecycleBinErrorCode.NAME_CONFLICT;
+          break;
+        case 'PARENT_NOT_FOUND':
+          errorCode = RecycleBinErrorCode.PARENT_NOT_FOUND;
+          break;
+        case 'PARENT_DELETED':
+          errorCode = RecycleBinErrorCode.PARENT_DELETED;
+          break;
+        case 'NOT_DELETED':
+          errorCode = RecycleBinErrorCode.NOT_DELETED;
+          break;
+        case 'DELETION_IN_PROGRESS':
+          errorCode = RecycleBinErrorCode.DELETION_IN_PROGRESS;
+          break;
+        default:
+          errorCode = RecycleBinErrorCode.UNKNOWN_ERROR;
+      }
+    } else if (!response.error) {
+      // Network error
+      errorCode = RecycleBinErrorCode.NETWORK_ERROR;
+    }
+
+    throw new RecycleBinError(
+      error?.message || `Failed to ${operation}`,
+      errorCode,
+      response.status || 500,
+      error
+    );
+  }
+
   /**
    * List items in recycle bin
    */
@@ -50,7 +100,7 @@ export class RecycleBinService {
 
     const response = await apiClient.get<RecycleBinApiResponse>(endpoint);
     if (response.error) {
-      throw new Error(response.error.message || 'Failed to fetch recycle bin');
+      this.handleError(response, 'fetch recycle bin');
     }
 
     const apiResponse = response.data!;
@@ -80,7 +130,7 @@ export class RecycleBinService {
       item_type: itemType,
     });
     if (response.error) {
-      throw new Error(response.error.message || 'Failed to restore item');
+      this.handleError(response, 'restore item');
     }
     return {
       message: response.data!.message,
@@ -103,7 +153,7 @@ export class RecycleBinService {
       item_type: itemType,
     });
     if (response.error) {
-      throw new Error(response.error.message || 'Failed to permanently delete item');
+      this.handleError(response, 'permanently delete item');
     }
     return {
       message: response.data!.message,
@@ -132,7 +182,7 @@ export class RecycleBinService {
       })),
     });
     if (response.error) {
-      throw new Error(response.error.message || 'Failed to restore items');
+      this.handleError(response, 'restore items');
     }
     return {
       message: response.data!.success ? 'Items restored successfully' : 'Some items failed to restore',
@@ -167,7 +217,7 @@ export class RecycleBinService {
       })),
     });
     if (response.error) {
-      throw new Error(response.error.message || 'Failed to permanently delete items');
+      this.handleError(response, 'permanently delete items');
     }
     return {
       message: response.data!.success ? 'Items deleted successfully' : 'Some items failed to delete',
@@ -193,7 +243,7 @@ export class RecycleBinService {
     const endpoint = `/api/v1/workspaces/${workspaceId}/recycle-bin/deletion-info/${itemType}/${itemId}`;
     const response = await apiClient.get<DeletionInfoResponse>(endpoint);
     if (response.error) {
-      throw new Error(response.error.message || 'Failed to get deletion info');
+      this.handleError(response, 'get deletion info');
     }
     return response.data!;
   }

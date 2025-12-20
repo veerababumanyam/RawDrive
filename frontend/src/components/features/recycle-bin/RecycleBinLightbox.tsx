@@ -8,6 +8,8 @@ import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Trash2 } from
 import { createPortal } from 'react-dom';
 import { AppButton } from '../../ui/AppButton';
 import { type RecycleBinItem } from '../../../types/recycleBin';
+import { RECYCLE_BIN_CONSTANTS } from './constants';
+import { buildAssetUrl } from './utils';
 
 export interface RecycleBinLightboxProps {
     /** Whether the lightbox is open */
@@ -31,8 +33,6 @@ export interface RecycleBinLightboxProps {
     /** Whether delete is in progress */
     isDeleting?: boolean;
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const RecycleBinLightbox: React.FC<RecycleBinLightboxProps> = ({
     isOpen,
@@ -103,11 +103,11 @@ export const RecycleBinLightbox: React.FC<RecycleBinLightboxProps> = ({
 
     // Zoom functions
     const handleZoomIn = useCallback(() => {
-        setZoom((prev) => Math.min(5, prev + 0.25));
+        setZoom((prev) => Math.min(RECYCLE_BIN_CONSTANTS.ZOOM_MAX, prev + RECYCLE_BIN_CONSTANTS.ZOOM_STEP));
     }, []);
 
     const handleZoomOut = useCallback(() => {
-        setZoom((prev) => Math.max(0.5, prev - 0.25));
+        setZoom((prev) => Math.max(RECYCLE_BIN_CONSTANTS.ZOOM_MIN, prev - RECYCLE_BIN_CONSTANTS.ZOOM_STEP));
     }, []);
 
     // Navigation
@@ -125,12 +125,8 @@ export const RecycleBinLightbox: React.FC<RecycleBinLightboxProps> = ({
 
     if (!isOpen || !currentItem) return null;
 
-    // Build full image URL
-    const imageUrl = currentItem.thumbnailUrl
-        ? currentItem.thumbnailUrl.startsWith('http')
-            ? currentItem.thumbnailUrl
-            : `${API_BASE_URL}${currentItem.thumbnailUrl}`
-        : null;
+    // Build full image URL using utility
+    const imageUrl = buildAssetUrl(currentItem.thumbnailUrl);
 
     const lightbox = (
         <div
@@ -223,7 +219,7 @@ export const RecycleBinLightbox: React.FC<RecycleBinLightboxProps> = ({
                             variant="ghost"
                             size="icon"
                             onClick={handleZoomOut}
-                            disabled={zoom <= 0.5}
+                            disabled={zoom <= RECYCLE_BIN_CONSTANTS.ZOOM_MIN}
                             className="text-white hover:bg-white/20 border-white/20"
                             aria-label="Zoom out"
                         >
@@ -234,7 +230,7 @@ export const RecycleBinLightbox: React.FC<RecycleBinLightboxProps> = ({
                             variant="ghost"
                             size="icon"
                             onClick={handleZoomIn}
-                            disabled={zoom >= 5}
+                            disabled={zoom >= RECYCLE_BIN_CONSTANTS.ZOOM_MAX}
                             className="text-white hover:bg-white/20 border-white/20"
                             aria-label="Zoom in"
                         >

@@ -1,34 +1,34 @@
 /**
- * RecycleBinView Component
+ * RecycleBinView Component (Refactored)
  * Displays soft-deleted galleries and photos with restore/permanent delete options
+ * 
+ * Major optimizations:
+ * - Extracted inline components to separate files
+ * - Added memoization for computed values
+ * - Improved performance with React.memo
+ * - Centralized constants and utilities
  */
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import {
-  Trash2,
-  RotateCcw,
-  Clock,
-  Image,
-  FolderOpen,
-  AlertTriangle,
-  Search,
-  Filter,
-  CheckSquare,
-  Square,
-} from 'lucide-react';
+import { Search, Filter, CheckSquare, Square } from 'lucide-react';
 import { AppButton } from '../../ui/AppButton';
-import { AppCard } from '../../ui/AppCard';
 import { AppInput } from '../../ui/AppInput';
 import {
   DeleteConfirmationDialog,
   BulkDeleteConfirmationDialog,
 } from '../../ui/DeleteConfirmationDialog';
 import { useToast } from '../../ui/Toast';
-import {
-  recycleBinService,
-} from '../../../services/recycleBinService';
+import { recycleBinService } from '../../../services/recycleBinService';
+import { RecycleBinError } from '../../../services/errors';
 import { type RecycleBinItem } from '../../../types/recycleBin';
 import { RecycleBinLightbox } from './RecycleBinLightbox';
+import { RECYCLE_BIN_CONSTANTS } from './constants';
+import { determineItemType } from './utils';
+
+// Extracted child components
+import { EmptyState } from './components/EmptyState';
+import { BulkActionBar } from './components/BulkActionBar';
+import { RecycleBinItemCard } from './components/RecycleBinItemCard';
 
 /* =============================================================================
    Types
@@ -42,320 +42,12 @@ interface RecycleBinViewProps {
 type FilterType = 'all' | 'gallery' | 'photo';
 
 /* =============================================================================
-   Bulk Action Bar Component
-   ============================================================================= */
-
-interface BulkActionBarProps {
-  selectedCount: number;
-  onRestore: () => void;
-  onPermanentDelete: () => void;
-  onClearSelection: () => void;
-  isRestoring: boolean;
-  isDeleting: boolean;
-}
-
-const BulkActionBar: React.FC<BulkActionBarProps> = ({
-  selectedCount,
-  onRestore,
-  onPermanentDelete,
-  onClearSelection,
-  isRestoring,
-  isDeleting,
-}) => {
-  if (selectedCount === 0) return null;
-
-  return (
-    <div
-      className="
-        fixed bottom-6 left-1/2 -translate-x-1/2
-        flex items-center gap-4
-        px-6 py-3
-        bg-surface/95 backdrop-blur-md
-        border border-border
-        rounded-full shadow-lg
-        animate-slide-in-bottom
-        z-50
-      "
-      role="toolbar"
-      aria-label="Bulk actions"
-    >
-      <span className="text-sm font-medium text-text-primary">
-        {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
-      </span>
-
-      <div className="h-6 w-px bg-border" />
-
-      <AppButton
-        variant="secondary"
-        size="sm"
-        leftIcon={<RotateCcw size={16} />}
-        onClick={onRestore}
-        isLoading={isRestoring}
-        disabled={isDeleting}
-      >
-        Restore
-      </AppButton>
-
-      <AppButton
-        variant="destructive"
-        size="sm"
-        leftIcon={<Trash2 size={16} />}
-        onClick={onPermanentDelete}
-        isLoading={isDeleting}
-        disabled={isRestoring}
-        className="bg-red-600 hover:bg-red-700 text-white border-red-600"
-      >
-        Delete Forever
-      </AppButton>
-
-      <div className="h-6 w-px bg-border" />
-
-      <AppButton
-        variant="ghost"
-        size="sm"
-        onClick={onClearSelection}
-        disabled={isRestoring || isDeleting}
-      >
-        Clear
-      </AppButton>
-    </div>
-  );
-};
-
-/* =============================================================================
-   Recycle Bin Item Component
-   ============================================================================= */
-
-interface RecycleBinItemCardProps {
-  item: RecycleBinItem;
-  isSelected: boolean;
-  onSelect: (id: string) => void;
-  onRestore: (item: RecycleBinItem) => void;
-  onPermanentDelete: (item: RecycleBinItem) => void;
-  onImageClick?: (item: RecycleBinItem) => void;
-  isRestoring: boolean;
-  isDeleting: boolean;
-}
-
-const RecycleBinItemCard: React.FC<RecycleBinItemCardProps> = ({
-  item,
-  isSelected,
-  onSelect,
-  onRestore,
-  onPermanentDelete,
-  onImageClick,
-  isRestoring,
-  isDeleting,
-}) => {
-  const getDaysLabel = () => {
-    if (item.daysUntilPermanentDelete <= 0) {
-      return 'Pending deletion';
-    }
-    if (item.daysUntilPermanentDelete === 1) {
-      return '1 day left';
-    }
-    return `${item.daysUntilPermanentDelete} days left`;
-  };
-
-  const getWarningLevel = () => {
-    if (item.deleteStatus === 'delete_failed') return 'failed';
-    if (item.daysUntilPermanentDelete <= 3) return 'critical';
-    if (item.daysUntilPermanentDelete <= 7) return 'warning';
-    return 'normal';
-  };
-
-  const warningLevel = getWarningLevel();
-  const hasFailed = item.deleteStatus === 'delete_failed';
-
-  return (
-    <AppCard
-      className={`
-        relative overflow-hidden transition-all
-        ${isSelected ? 'ring-2 ring-primary' : ''}
-        ${hasFailed ? 'ring-2 ring-error/50 bg-error/5' : ''}
-      `}
-      hoverable
-    >
-      {/* Selection checkbox */}
-      <button
-        onClick={() => onSelect(item.id)}
-        className="
-          absolute top-3 left-3 z-10
-          p-1 rounded
-          bg-surface/80 backdrop-blur-sm
-          hover:bg-surface
-          transition-colors
-        "
-        aria-label={isSelected ? 'Deselect item' : 'Select item'}
-      >
-        {isSelected ? (
-          <CheckSquare size={20} className="text-primary" />
-        ) : (
-          <Square size={20} className="text-text-tertiary" />
-        )}
-      </button>
-
-      {/* Thumbnail / Icon - clickable for photos */}
-      <div
-        className={`
-          aspect-[4/3] bg-background-alt
-          flex items-center justify-center
-          border-b border-border
-          ${item.type === 'photo' && item.thumbnailUrl ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''}
-        `}
-        onClick={() => {
-          if (item.type === 'photo' && item.thumbnailUrl && onImageClick) {
-            onImageClick(item);
-          }
-        }}
-        role={item.type === 'photo' && item.thumbnailUrl ? 'button' : undefined}
-        tabIndex={item.type === 'photo' && item.thumbnailUrl ? 0 : undefined}
-        aria-label={item.type === 'photo' && item.thumbnailUrl ? `View ${item.name}` : undefined}
-        onKeyDown={(e) => {
-          if ((e.key === 'Enter' || e.key === ' ') && item.type === 'photo' && item.thumbnailUrl && onImageClick) {
-            e.preventDefault();
-            onImageClick(item);
-          }
-        }}
-      >
-        {item.thumbnailUrl ? (
-          <img
-            src={
-              item.thumbnailUrl.startsWith('http')
-                ? item.thumbnailUrl
-                : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${item.thumbnailUrl}`
-            }
-            alt={item.name}
-            className="w-full h-full object-cover opacity-50"
-          />
-        ) : item.type === 'gallery' ? (
-          <FolderOpen size={48} className="text-text-tertiary" />
-        ) : (
-          <Image size={48} className="text-text-tertiary" />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="p-4 space-y-3">
-        <div>
-          <h3 className="font-medium text-text-primary truncate" title={item.name}>
-            {item.name}
-          </h3>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs text-text-tertiary capitalize">
-              {item.type}
-            </span>
-            {item.type === 'gallery' && item.photoCount !== undefined && (
-              <>
-                <span className="text-text-tertiary">·</span>
-                <span className="text-xs text-text-tertiary">
-                  {item.photoCount} photo{item.photoCount !== 1 ? 's' : ''}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Status indicator */}
-        <div
-          className={`
-            flex items-center gap-1.5 text-xs
-            ${warningLevel === 'failed'
-              ? 'text-error font-medium'
-              : warningLevel === 'critical'
-                ? 'text-error'
-                : warningLevel === 'warning'
-                  ? 'text-warning'
-                  : 'text-text-tertiary'
-            }
-          `}
-        >
-          {warningLevel === 'failed' ? (
-            <>
-              <AlertTriangle size={14} />
-              <span>Deletion failed - tap to retry</span>
-            </>
-          ) : warningLevel === 'critical' ? (
-            <>
-              <AlertTriangle size={14} />
-              <span>{getDaysLabel()}</span>
-            </>
-          ) : (
-            <>
-              <Clock size={14} />
-              <span>{getDaysLabel()}</span>
-            </>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2">
-          <AppButton
-            variant="secondary"
-            size="sm"
-            fullWidth
-            leftIcon={<RotateCcw size={14} />}
-            onClick={() => onRestore(item)}
-            isLoading={isRestoring}
-            disabled={isDeleting}
-          >
-            Restore
-          </AppButton>
-          <AppButton
-            variant="destructive"
-            size="sm"
-            className="bg-red-600 hover:bg-red-700 text-white border-red-600 px-3"
-            onClick={() => onPermanentDelete(item)}
-            isLoading={isDeleting}
-            disabled={isRestoring}
-            aria-label={hasFailed ? "Retry delete" : "Delete forever"}
-          >
-            <Trash2 size={14} />
-          </AppButton>
-        </div>
-      </div>
-    </AppCard>
-  );
-};
-
-/* =============================================================================
-   Empty State Component
-   ============================================================================= */
-
-const EmptyState: React.FC<{ filter: FilterType }> = ({ filter }) => {
-  const getMessage = () => {
-    switch (filter) {
-      case 'gallery':
-        return 'No deleted galleries';
-      case 'photo':
-        return 'No deleted photos';
-      default:
-        return 'Recycle bin is empty';
-    }
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-16 h-16 rounded-full bg-background-alt flex items-center justify-center mb-4">
-        <Trash2 size={32} className="text-text-tertiary" />
-      </div>
-      <h3 className="text-lg font-medium text-text-primary mb-2">
-        {getMessage()}
-      </h3>
-      <p className="text-sm text-text-secondary max-w-sm">
-        Deleted items will appear here for {30} days before being permanently removed.
-      </p>
-    </div>
-  );
-};
-
-/* =============================================================================
    Main RecycleBinView Component
    ============================================================================= */
 
 export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
   workspaceId,
-  retentionDays = 30,
+  retentionDays = RECYCLE_BIN_CONSTANTS.DEFAULT_RETENTION_DAYS,
 }) => {
   // State
   const [items, setItems] = useState<RecycleBinItem[]>([]);
@@ -392,7 +84,7 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
       const response = await recycleBinService.listItems(workspaceId, {
         type: filter === 'all' ? undefined : filter,
         page: currentPage,
-        limit: 20,
+        limit: RECYCLE_BIN_CONSTANTS.DEFAULT_PAGE_SIZE,
       });
 
       if (resetPage) {
@@ -407,7 +99,12 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
       setTotal(response.total);
       setHasMore(response.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load recycle bin');
+      const errorMessage = err instanceof RecycleBinError
+        ? err.getUserMessage()
+        : err instanceof Error
+          ? err.message
+          : 'Failed to load recycle bin';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -418,12 +115,33 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
     fetchItems(true);
   }, [workspaceId, filter]);
 
-  // Filter items by search query
-  const filteredItems = searchQuery
-    ? items.filter((item) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    : items;
+  // ⚡ OPTIMIZATION: Memoize filtered items
+  const filteredItems = useMemo(
+    () => searchQuery
+      ? items.filter((item) =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      : items,
+    [items, searchQuery]
+  );
+
+  // ⚡ OPTIMIZATION: Memoize selected items
+  const selectedItems = useMemo(
+    () => filteredItems.filter(item => selectedIds.has(item.id)),
+    [filteredItems, selectedIds]
+  );
+
+  // ⚡ OPTIMIZATION: Memoize item type determination
+  const selectedItemType = useMemo(
+    () => determineItemType(selectedItems),
+    [selectedItems]
+  );
+
+  // ⚡ OPTIMIZATION: Memoize photo items for lightbox
+  const photoItems = useMemo(
+    () => filteredItems.filter(item => item.type === 'photo' && item.thumbnailUrl),
+    [filteredItems]
+  );
 
   // Selection handlers
   const handleSelect = useCallback((id: string) => {
@@ -478,9 +196,14 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
         });
         setTotal((prev) => prev - 1);
       } catch (err) {
+        const errorMessage = err instanceof RecycleBinError
+          ? err.getUserMessage()
+          : err instanceof Error
+            ? err.message
+            : 'Failed to restore item';
         addToast({
           variant: 'error',
-          message: err instanceof Error ? err.message : 'Failed to restore item',
+          message: errorMessage,
         });
       } finally {
         setRestoringIds((prev) => {
@@ -528,9 +251,14 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
         ));
         setTotal((prev) => prev + 1);
 
+        const errorMessage = err instanceof RecycleBinError
+          ? err.getUserMessage()
+          : err instanceof Error
+            ? err.message
+            : 'Failed to delete item';
         addToast({
           variant: 'error',
-          message: err instanceof Error ? err.message : 'Failed to delete item',
+          message: errorMessage,
         });
       } finally {
         setDeletingIds((prev) => {
@@ -545,10 +273,6 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
 
   // Bulk restore handler
   const handleBulkRestore = useCallback(async () => {
-    const selectedItems = filteredItems.filter((item) =>
-      selectedIds.has(item.id)
-    );
-
     if (selectedItems.length === 0) return;
 
     const ids = selectedItems.map((item) => item.id);
@@ -580,21 +304,22 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
       fetchItems(true);
       setSelectedIds(new Set());
     } catch (err) {
+      const errorMessage = err instanceof RecycleBinError
+        ? err.getUserMessage()
+        : err instanceof Error
+          ? err.message
+          : 'Failed to restore items';
       addToast({
         variant: 'error',
-        message: err instanceof Error ? err.message : 'Failed to restore items',
+        message: errorMessage,
       });
     } finally {
       setRestoringIds(new Set());
     }
-  }, [workspaceId, filteredItems, selectedIds, fetchItems, addToast]);
+  }, [workspaceId, selectedItems, fetchItems, addToast]);
 
   // Bulk permanent delete handler
   const handleBulkPermanentDelete = useCallback(async () => {
-    const selectedItems = filteredItems.filter((item) =>
-      selectedIds.has(item.id)
-    );
-
     if (selectedItems.length === 0) return;
 
     // Close dialog immediately
@@ -643,14 +368,19 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
       ));
       setTotal((prev) => prev + itemsToDelete.length);
 
+      const errorMessage = err instanceof RecycleBinError
+        ? err.getUserMessage()
+        : err instanceof Error
+          ? err.message
+          : 'Failed to delete items';
       addToast({
         variant: 'error',
-        message: err instanceof Error ? err.message : 'Failed to delete items',
+        message: errorMessage,
       });
     } finally {
       setDeletingIds(new Set());
     }
-  }, [workspaceId, filteredItems, selectedIds, fetchItems, addToast]);
+  }, [workspaceId, selectedItems, fetchItems, addToast]);
 
   // Load more handler
   const handleLoadMore = useCallback(() => {
@@ -659,12 +389,6 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
       fetchItems(false);
     }
   }, [loading, hasMore, fetchItems]);
-
-  // Get photo items only (for lightbox navigation)
-  const photoItems = useMemo(() =>
-    filteredItems.filter(item => item.type === 'photo' && item.thumbnailUrl),
-    [filteredItems]
-  );
 
   // Handle image click to open lightbox
   const handleImageClick = useCallback((item: RecycleBinItem) => {
@@ -852,33 +576,25 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
         onConfirm={handleBulkPermanentDelete}
         deleteType="permanent"
         itemCount={selectedIds.size}
-        itemType={
-          filteredItems
-            .filter((item) => selectedIds.has(item.id))
-            .every((item) => item.type === 'gallery')
-            ? 'galleries'
-            : filteredItems
-              .filter((item) => selectedIds.has(item.id))
-              .every((item) => item.type === 'photo')
-              ? 'photos'
-              : 'mixed'
-        }
+        itemType={selectedItemType}
         isLoading={deletingIds.size > 0}
       />
 
       {/* Lightbox for viewing photos */}
-      <RecycleBinLightbox
-        isOpen={lightboxOpen}
-        onClose={() => setLightboxOpen(false)}
-        currentItem={photoItems[lightboxIndex] || null}
-        items={photoItems}
-        currentIndex={lightboxIndex}
-        onNavigate={handleLightboxNavigate}
-        onRestore={handleLightboxRestore}
-        onPermanentDelete={handleLightboxPermanentDelete}
-        isRestoring={restoringIds.has(photoItems[lightboxIndex]?.id || '')}
-        isDeleting={deletingIds.has(photoItems[lightboxIndex]?.id || '')}
-      />
+      {photoItems.length > 0 && (
+        <RecycleBinLightbox
+          isOpen={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          currentItem={photoItems[lightboxIndex] || null}
+          items={photoItems}
+          currentIndex={lightboxIndex}
+          onNavigate={handleLightboxNavigate}
+          onRestore={handleLightboxRestore}
+          onPermanentDelete={handleLightboxPermanentDelete}
+          isRestoring={restoringIds.has(photoItems[lightboxIndex]?.id || '')}
+          isDeleting={deletingIds.has(photoItems[lightboxIndex]?.id || '')}
+        />
+      )}
     </div>
   );
 };
