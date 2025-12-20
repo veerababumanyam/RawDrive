@@ -206,7 +206,7 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
       disabled: !droppable,
     });
 
-    const combinedRef = (node: HTMLButtonElement | null) => {
+    const combinedRef = (node: HTMLDivElement | null) => {
       setNodeRef(node);
       setDroppableRef(node);
     };
@@ -214,10 +214,18 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
     const hasContextMenu = onRename || onDelete || onToggleVisibility;
 
     return (
-      <button
+      <div
         ref={combinedRef}
         style={style}
+        role="tab"
+        tabIndex={0}
         onClick={() => onTabSelect(subGallery.sub_gallery_id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onTabSelect(subGallery.sub_gallery_id);
+          }
+        }}
         onContextMenu={(e) => {
           if (hasContextMenu) {
             handleContextMenu(e, subGallery.sub_gallery_id);
@@ -225,15 +233,16 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
         }}
         className={`
           flex-shrink-0 px-4 py-2 rounded-lg font-medium text-sm transition-colors
-          flex items-center gap-2 relative group
+          flex items-center gap-2 relative group select-none
           ${activeSubGalleryId === subGallery.sub_gallery_id
             ? 'bg-primary text-white'
             : 'bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary'
           }
           ${isOver && droppable ? 'ring-2 ring-primary ring-offset-2 bg-primary/20' : ''}
-          ${isDragging ? 'cursor-grabbing' : sortable ? 'cursor-grab' : ''}
+          ${isDragging ? 'cursor-grabbing' : sortable ? 'cursor-grab' : 'cursor-pointer'}
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2
         `}
-        aria-pressed={activeSubGalleryId === subGallery.sub_gallery_id}
+        aria-selected={activeSubGalleryId === subGallery.sub_gallery_id}
         aria-label={subGallery.name}
       >
         {sortable && (
@@ -253,6 +262,7 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
         )}
         {hasContextMenu && (
           <button
+            type="button"
             className="
               p-0.5 rounded
               opacity-0 group-hover:opacity-100
@@ -269,7 +279,7 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
             <MoreVertical size={14} />
           </button>
         )}
-      </button>
+      </div>
     );
   };
 
@@ -281,13 +291,45 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
     className: string;
     onClick: () => void;
     onContextMenu?: (e: React.MouseEvent) => void;
-    ariaPressed: boolean;
+    ariaSelected: boolean;
     ariaLabel: string;
-  }> = ({ id, children, className, onClick, onContextMenu, ariaPressed, ariaLabel }) => {
+    hasNestedButton?: boolean;
+  }> = ({ id, children, className, onClick, onContextMenu, ariaSelected, ariaLabel, hasNestedButton = false }) => {
     const { setNodeRef, isOver } = useDroppable({
       id,
       disabled: !droppable,
     });
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick();
+      }
+    };
+
+    // Use div with role="tab" when there are nested buttons to avoid invalid HTML
+    if (hasNestedButton) {
+      return (
+        <div
+          ref={setNodeRef}
+          role="tab"
+          tabIndex={0}
+          onClick={onClick}
+          onKeyDown={handleKeyDown}
+          onContextMenu={onContextMenu}
+          className={`
+            ${className}
+            ${isOver && droppable ? 'ring-2 ring-primary ring-offset-2 bg-primary/20' : ''}
+            cursor-pointer select-none
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2
+          `}
+          aria-selected={ariaSelected}
+          aria-label={ariaLabel}
+        >
+          {children}
+        </div>
+      );
+    }
 
     return (
       <button
@@ -298,7 +340,7 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
           ${className}
           ${isOver && droppable ? 'ring-2 ring-primary ring-offset-2 bg-primary/20' : ''}
         `}
-        aria-pressed={ariaPressed}
+        aria-pressed={ariaSelected}
         aria-label={ariaLabel}
       >
         {children}
@@ -320,7 +362,7 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
           }
         `}
         onClick={() => onTabSelect(null)}
-        ariaPressed={activeSubGalleryId === null}
+        ariaSelected={activeSubGalleryId === null}
         ariaLabel="Root Gallery"
       >
         Root Gallery
@@ -358,8 +400,9 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
                   handleContextMenu(e, subGallery.sub_gallery_id);
                 }
               }}
-              ariaPressed={activeSubGalleryId === subGallery.sub_gallery_id}
+              ariaSelected={activeSubGalleryId === subGallery.sub_gallery_id}
               ariaLabel={subGallery.name}
+              hasNestedButton={!!hasContextMenu}
             >
               <span className="flex-1">{subGallery.name}</span>
               {!subGallery.visible && (
@@ -367,6 +410,7 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
               )}
               {hasContextMenu && (
                 <button
+                  type="button"
                   className="
                     p-0.5 rounded
                     opacity-0 group-hover:opacity-100
