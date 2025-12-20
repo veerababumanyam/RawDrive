@@ -3,6 +3,11 @@
  * Type-safe error handling for API services
  */
 
+// V8 Error.captureStackTrace type extension
+interface ErrorConstructorWithCaptureStackTrace extends ErrorConstructor {
+    captureStackTrace?(targetObject: object, constructorOpt?: Function): void;
+}
+
 /**
  * Error codes for recycle bin operations
  */
@@ -33,8 +38,9 @@ export class RecycleBinError extends Error {
         this.name = 'RecycleBinError';
 
         // Maintains proper stack trace for where error was thrown (V8 only)
-        if (typeof Error.captureStackTrace === 'function') {
-            Error.captureStackTrace(this, RecycleBinError);
+        const ErrorWithCapture = Error as ErrorConstructorWithCaptureStackTrace;
+        if (ErrorWithCapture.captureStackTrace) {
+            ErrorWithCapture.captureStackTrace(this, RecycleBinError);
         }
     }
 
