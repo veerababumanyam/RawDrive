@@ -267,6 +267,164 @@ async def search_clients(
         raise InternalError("Failed to search clients")
 
 
+# ---------------------------------------------------------------------------
+# Analytics endpoints (must be before /{client_id} to avoid route conflicts)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/analytics",
+    response_model=ClientAnalyticsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get client analytics",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+    },
+)
+async def get_client_analytics(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    start_date: Annotated[datetime | None, Query(description="Start date")] = None,
+    end_date: Annotated[datetime | None, Query(description="End date")] = None,
+) -> ClientAnalyticsResponse:
+    """Get client overview analytics with growth trends."""
+    from app.services.analytics_service import get_analytics_service
+
+    service = get_analytics_service()
+    try:
+        result = await service.get_client_analytics(
+            workspace_id=workspace_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return ClientAnalyticsResponse(**result)
+    except Exception as e:
+        logger.exception("Failed to get client analytics")
+        raise InternalError("Failed to get client analytics")
+
+
+@router.get(
+    "/analytics/engagement",
+    response_model=EngagementMetricsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get engagement metrics",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+    },
+)
+async def get_engagement_metrics(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    start_date: Annotated[datetime | None, Query(description="Start date")] = None,
+    end_date: Annotated[datetime | None, Query(description="End date")] = None,
+) -> EngagementMetricsResponse:
+    """Get client engagement metrics."""
+    from app.services.analytics_service import get_analytics_service
+
+    service = get_analytics_service()
+    try:
+        result = await service.get_engagement_metrics(
+            workspace_id=workspace_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return EngagementMetricsResponse(**result)
+    except Exception as e:
+        logger.exception("Failed to get engagement metrics")
+        raise InternalError("Failed to get engagement metrics")
+
+
+@router.get(
+    "/analytics/referrals",
+    response_model=ReferralAnalyticsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get referral analytics",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+    },
+)
+async def get_referral_analytics(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+) -> ReferralAnalyticsResponse:
+    """Get referral source analytics."""
+    from app.services.analytics_service import get_analytics_service
+
+    service = get_analytics_service()
+    try:
+        result = await service.get_referral_analytics(workspace_id=workspace_id)
+        return ReferralAnalyticsResponse(**result)
+    except Exception as e:
+        logger.exception("Failed to get referral analytics")
+        raise InternalError("Failed to get referral analytics")
+
+
+@router.get(
+    "/analytics/revenue",
+    response_model=RevenueAnalyticsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get revenue per client",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+    },
+)
+async def get_revenue_per_client(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    start_date: Annotated[datetime | None, Query(description="Start date")] = None,
+    end_date: Annotated[datetime | None, Query(description="End date")] = None,
+) -> RevenueAnalyticsResponse:
+    """Get revenue metrics per client."""
+    from app.services.analytics_service import get_analytics_service
+
+    service = get_analytics_service()
+    try:
+        result = await service.get_revenue_per_client(
+            workspace_id=workspace_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return RevenueAnalyticsResponse(**result)
+    except Exception as e:
+        logger.exception("Failed to get revenue per client")
+        raise InternalError("Failed to get revenue per client")
+
+
+@router.get(
+    "/analytics/dashboard",
+    response_model=DashboardAnalyticsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get dashboard analytics",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+    },
+)
+async def get_dashboard_analytics(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+) -> DashboardAnalyticsResponse:
+    """Get combined dashboard analytics for CRM overview."""
+    from app.services.analytics_service import get_analytics_service
+
+    service = get_analytics_service()
+    try:
+        result = await service.get_dashboard_analytics(workspace_id=workspace_id)
+        return DashboardAnalyticsResponse(**result)
+    except Exception as e:
+        logger.exception("Failed to get dashboard analytics")
+        raise InternalError("Failed to get dashboard analytics")
+
+
+# ---------------------------------------------------------------------------
+# Client detail endpoints (/{client_id} routes)
+# ---------------------------------------------------------------------------
+
+
 @router.get(
     "/{client_id}",
     response_model=ClientDetailResponse,
@@ -1975,156 +2133,3 @@ async def get_import_template(
     except Exception as e:
         logger.exception("Failed to get import template")
         raise InternalError("Failed to get import template")
-
-
-# ---------------------------------------------------------------------------
-# Analytics endpoints
-# ---------------------------------------------------------------------------
-
-
-@router.get(
-    "/analytics",
-    response_model=ClientAnalyticsResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get client analytics",
-    responses={
-        403: {"model": ErrorResponse, "description": "Access denied"},
-    },
-)
-async def get_client_analytics(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
-    workspace_access: WorkspaceAccessDep,
-    current_user: CurrentUserDep,
-    start_date: Annotated[datetime | None, Query(description="Start date")] = None,
-    end_date: Annotated[datetime | None, Query(description="End date")] = None,
-) -> ClientAnalyticsResponse:
-    """Get client overview analytics with growth trends."""
-    from app.services.analytics_service import get_analytics_service
-
-    service = get_analytics_service()
-    try:
-        result = await service.get_client_analytics(
-            workspace_id=workspace_id,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        return ClientAnalyticsResponse(**result)
-    except Exception as e:
-        logger.exception("Failed to get client analytics")
-        raise InternalError("Failed to get client analytics")
-
-
-@router.get(
-    "/analytics/engagement",
-    response_model=EngagementMetricsResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get engagement metrics",
-    responses={
-        403: {"model": ErrorResponse, "description": "Access denied"},
-    },
-)
-async def get_engagement_metrics(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
-    workspace_access: WorkspaceAccessDep,
-    current_user: CurrentUserDep,
-    start_date: Annotated[datetime | None, Query(description="Start date")] = None,
-    end_date: Annotated[datetime | None, Query(description="End date")] = None,
-) -> EngagementMetricsResponse:
-    """Get client engagement metrics."""
-    from app.services.analytics_service import get_analytics_service
-
-    service = get_analytics_service()
-    try:
-        result = await service.get_engagement_metrics(
-            workspace_id=workspace_id,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        return EngagementMetricsResponse(**result)
-    except Exception as e:
-        logger.exception("Failed to get engagement metrics")
-        raise InternalError("Failed to get engagement metrics")
-
-
-@router.get(
-    "/analytics/referrals",
-    response_model=ReferralAnalyticsResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get referral analytics",
-    responses={
-        403: {"model": ErrorResponse, "description": "Access denied"},
-    },
-)
-async def get_referral_analytics(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
-    workspace_access: WorkspaceAccessDep,
-    current_user: CurrentUserDep,
-) -> ReferralAnalyticsResponse:
-    """Get referral source analytics."""
-    from app.services.analytics_service import get_analytics_service
-
-    service = get_analytics_service()
-    try:
-        result = await service.get_referral_analytics(workspace_id=workspace_id)
-        return ReferralAnalyticsResponse(**result)
-    except Exception as e:
-        logger.exception("Failed to get referral analytics")
-        raise InternalError("Failed to get referral analytics")
-
-
-@router.get(
-    "/analytics/revenue",
-    response_model=RevenueAnalyticsResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get revenue per client",
-    responses={
-        403: {"model": ErrorResponse, "description": "Access denied"},
-    },
-)
-async def get_revenue_per_client(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
-    workspace_access: WorkspaceAccessDep,
-    current_user: CurrentUserDep,
-    start_date: Annotated[datetime | None, Query(description="Start date")] = None,
-    end_date: Annotated[datetime | None, Query(description="End date")] = None,
-) -> RevenueAnalyticsResponse:
-    """Get revenue metrics per client."""
-    from app.services.analytics_service import get_analytics_service
-
-    service = get_analytics_service()
-    try:
-        result = await service.get_revenue_per_client(
-            workspace_id=workspace_id,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        return RevenueAnalyticsResponse(**result)
-    except Exception as e:
-        logger.exception("Failed to get revenue per client")
-        raise InternalError("Failed to get revenue per client")
-
-
-@router.get(
-    "/analytics/dashboard",
-    response_model=DashboardAnalyticsResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get dashboard analytics",
-    responses={
-        403: {"model": ErrorResponse, "description": "Access denied"},
-    },
-)
-async def get_dashboard_analytics(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
-    workspace_access: WorkspaceAccessDep,
-    current_user: CurrentUserDep,
-) -> DashboardAnalyticsResponse:
-    """Get combined dashboard analytics for CRM overview."""
-    from app.services.analytics_service import get_analytics_service
-
-    service = get_analytics_service()
-    try:
-        result = await service.get_dashboard_analytics(workspace_id=workspace_id)
-        return DashboardAnalyticsResponse(**result)
-    except Exception as e:
-        logger.exception("Failed to get dashboard analytics")
-        raise InternalError("Failed to get dashboard analytics")
