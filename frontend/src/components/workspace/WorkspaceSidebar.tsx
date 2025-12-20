@@ -16,6 +16,7 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeft,
+  Search,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -27,6 +28,7 @@ import {
 } from '../layout/Sidebar';
 import { useAppShell } from '../layout/AppShell';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSearch } from '../../contexts/SearchContext';
 import { AppButton } from '../ui/AppButton';
 
 /* =============================================================================
@@ -59,6 +61,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const navigate = useNavigate();
   const { sidebarCollapsed, toggleCollapse } = useAppShell();
   const { logout } = useAuth();
+  const { openGlobalSearch } = useSearch();
 
   const currentPath = location.pathname;
 
@@ -141,7 +144,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
         </div>
 
         {/* New Gallery Button */}
-        <div className="px-3 mb-4">
+        <div className="px-3 mb-2">
           <AppButton
             variant="accent"
             size={sidebarCollapsed ? 'icon' : 'md'}
@@ -153,6 +156,17 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
           >
             {!sidebarCollapsed && 'New Gallery'}
           </AppButton>
+        </div>
+
+        {/* Search Item */}
+        <div className="px-2 mb-2">
+          <SidebarItem
+            id="search"
+            label="Search"
+            icon={<Search size={20} />}
+            onClick={openGlobalSearch}
+            className="text-text-secondary hover:text-primary"
+          />
         </div>
 
         {/* Main Nav */}
@@ -219,13 +233,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             </div>
             <div className="h-2 bg-background rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  storagePercent > 90
-                    ? 'bg-error'
-                    : storagePercent > 70
+                className={`h-full rounded-full transition-all duration-300 ${storagePercent > 90
+                  ? 'bg-error'
+                  : storagePercent > 70
                     ? 'bg-warning'
                     : 'bg-gradient-to-r from-primary to-accent'
-                }`}
+                  }`}
                 style={{ width: `${storagePercent}%` }}
               />
             </div>

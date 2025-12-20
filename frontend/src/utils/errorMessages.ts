@@ -103,6 +103,197 @@ export class ErrorMessageMapper {
       title: 'Invalid Request',
       message: 'The request to the AI service was invalid.',
       recoveryAction: 'retry'
+    },
+
+    // =========================================================================
+    // Client CRM Module Errors
+    // =========================================================================
+
+    // Client Profile errors
+    'CLIENT_NOT_FOUND': {
+      title: 'Client Not Found',
+      message: 'The client you\'re looking for doesn\'t exist or has been deleted.',
+      recoveryAction: 'go_back'
+    },
+    'CLIENT_DUPLICATE_EMAIL': {
+      title: 'Email Already Exists',
+      message: 'A client with this email address already exists.',
+      recoveryAction: 'retry'
+    },
+    'CLIENT_DUPLICATE_PHONE': {
+      title: 'Phone Already Exists',
+      message: 'A client with this phone number already exists.',
+      recoveryAction: 'retry'
+    },
+    'CLIENT_VALIDATION_ERROR': {
+      title: 'Invalid Client Data',
+      message: 'Please check the client information and try again.',
+      recoveryAction: 'retry'
+    },
+    'CLIENT_DELETION_BLOCKED': {
+      title: 'Cannot Delete Client',
+      message: 'This client cannot be deleted due to existing data.',
+      recoveryAction: 'retry'
+    },
+    'CLIENT_ACTIVE_PROOFING': {
+      title: 'Active Proofing Sessions',
+      message: 'This client has active proofing sessions. Please complete or archive them first.',
+      recoveryAction: 'retry'
+    },
+
+    // Contact errors
+    'CONTACT_NOT_FOUND': {
+      title: 'Contact Not Found',
+      message: 'The contact method you\'re looking for doesn\'t exist.',
+      recoveryAction: 'retry'
+    },
+    'CONTACT_DUPLICATE': {
+      title: 'Contact Already Exists',
+      message: 'This contact is already saved for this client.',
+      recoveryAction: 'retry'
+    },
+    'CONTACT_LAST_METHOD': {
+      title: 'Cannot Remove Last Contact',
+      message: 'A client must have at least one contact method.',
+      recoveryAction: 'retry'
+    },
+    'CONTACT_PRIMARY_EXISTS': {
+      title: 'Primary Contact Exists',
+      message: 'This client already has a primary contact of this type.',
+      recoveryAction: 'retry'
+    },
+    'CONTACT_INVALID_FORMAT': {
+      title: 'Invalid Contact Format',
+      message: 'The contact format is invalid. Please check and try again.',
+      recoveryAction: 'retry'
+    },
+
+    // Address errors
+    'ADDRESS_NOT_FOUND': {
+      title: 'Address Not Found',
+      message: 'The address you\'re looking for doesn\'t exist.',
+      recoveryAction: 'retry'
+    },
+    'ADDRESS_VALIDATION_ERROR': {
+      title: 'Invalid Address',
+      message: 'Please check the address details and try again.',
+      recoveryAction: 'retry'
+    },
+
+    // Tag errors
+    'TAG_NOT_FOUND': {
+      title: 'Tag Not Found',
+      message: 'The tag you\'re looking for doesn\'t exist.',
+      recoveryAction: 'retry'
+    },
+    'TAG_DUPLICATE': {
+      title: 'Tag Already Exists',
+      message: 'A tag with this name already exists.',
+      recoveryAction: 'retry'
+    },
+    'TAG_ALREADY_ASSIGNED': {
+      title: 'Tag Already Assigned',
+      message: 'This tag is already assigned to the client.',
+      recoveryAction: 'retry'
+    },
+
+    // Gallery link errors
+    'GALLERY_LINK_NOT_FOUND': {
+      title: 'Gallery Link Not Found',
+      message: 'This client is not linked to the specified gallery.',
+      recoveryAction: 'retry'
+    },
+    'GALLERY_ALREADY_LINKED': {
+      title: 'Gallery Already Linked',
+      message: 'This client is already linked to this gallery.',
+      recoveryAction: 'retry'
+    },
+
+    // Avatar errors
+    'AVATAR_UPLOAD_FAILED': {
+      title: 'Avatar Upload Failed',
+      message: 'Failed to upload the avatar. Please try again.',
+      recoveryAction: 'retry'
+    },
+    'AVATAR_FILE_TOO_LARGE': {
+      title: 'Image Too Large',
+      message: 'Please use an image smaller than 5MB.',
+      recoveryAction: 'retry'
+    },
+    'AVATAR_INVALID_FORMAT': {
+      title: 'Invalid Image Format',
+      message: 'Please use JPEG, PNG, or WebP format.',
+      recoveryAction: 'retry'
+    },
+    'AVATAR_ASSET_NOT_IN_GALLERY': {
+      title: 'Photo Not Available',
+      message: 'This photo is not in a gallery linked to the client.',
+      recoveryAction: 'go_back'
+    },
+
+    // Communication errors
+    'COMMUNICATION_NOT_FOUND': {
+      title: 'Communication Not Found',
+      message: 'The communication record doesn\'t exist.',
+      recoveryAction: 'retry'
+    },
+
+    // Smart list errors
+    'SMART_LIST_NOT_FOUND': {
+      title: 'Smart List Not Found',
+      message: 'The smart list you\'re looking for doesn\'t exist.',
+      recoveryAction: 'go_back'
+    },
+    'SMART_LIST_SYSTEM_PROTECTED': {
+      title: 'System List Protected',
+      message: 'This system list cannot be modified.',
+      recoveryAction: 'go_back'
+    },
+    'SMART_LIST_INVALID_FILTER': {
+      title: 'Invalid Filter',
+      message: 'The filter criteria is invalid. Please check and try again.',
+      recoveryAction: 'retry'
+    },
+
+    // Import/Export errors
+    'IMPORT_INVALID_FORMAT': {
+      title: 'Invalid File Format',
+      message: 'Please provide a valid CSV file.',
+      recoveryAction: 'retry'
+    },
+    'IMPORT_VALIDATION_ERROR': {
+      title: 'Import Validation Failed',
+      message: 'Some rows have validation errors. Please fix and try again.',
+      recoveryAction: 'retry'
+    },
+    'EXPORT_FAILED': {
+      title: 'Export Failed',
+      message: 'Failed to export clients. Please try again later.',
+      recoveryAction: 'retry'
+    },
+
+    // Merge errors
+    'MERGE_SAME_CLIENT': {
+      title: 'Cannot Merge',
+      message: 'You cannot merge a client with itself.',
+      recoveryAction: 'retry'
+    },
+    'MERGE_FAILED': {
+      title: 'Merge Failed',
+      message: 'Failed to merge clients. Please try again later.',
+      recoveryAction: 'retry'
+    },
+
+    // Portal access errors
+    'PORTAL_ACCESS_ERROR': {
+      title: 'Portal Access Error',
+      message: 'Failed to manage portal access.',
+      recoveryAction: 'retry'
+    },
+    'PORTAL_USER_EXISTS': {
+      title: 'Portal Account Exists',
+      message: 'A portal account already exists for this email.',
+      recoveryAction: 'retry'
     }
   };
 

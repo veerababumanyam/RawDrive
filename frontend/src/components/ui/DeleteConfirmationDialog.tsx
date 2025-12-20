@@ -21,8 +21,8 @@ import { AppInput } from './AppInput';
    - Retention period information
    ============================================================================= */
 
-export type DeleteType = 'soft' | 'permanent';
-export type EntityType = 'gallery' | 'photo';
+export type DeleteType = 'soft' | 'permanent' | 'hard';
+export type EntityType = 'gallery' | 'photo' | 'client' | 'smart list' | 'gallery link';
 
 export interface DeleteConfirmationDialogProps {
   /** Whether the dialog is open */
@@ -65,6 +65,7 @@ export const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> =
   // Determine if name confirmation is required
   const requiresNameConfirmation =
     deleteType === 'permanent' ||
+    deleteType === 'hard' ||
     (entityType === 'gallery' && photoCount >= nameConfirmationThreshold);
 
   // Reset state when dialog opens/closes
@@ -100,13 +101,20 @@ export const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> =
     [handleConfirm, isLoading]
   );
 
+  const entityLabel =
+    entityType === 'gallery' ? 'Gallery' :
+    entityType === 'client' ? 'Client' :
+    entityType === 'smart list' ? 'Smart List' :
+    entityType === 'gallery link' ? 'Gallery Link' :
+    'Photo';
+
   const title =
-    deleteType === 'permanent'
-      ? `Permanently Delete ${entityType === 'gallery' ? 'Gallery' : 'Photo'}`
-      : `Delete ${entityType === 'gallery' ? 'Gallery' : 'Photo'}`;
+    deleteType === 'permanent' || deleteType === 'hard'
+      ? `Permanently Delete ${entityLabel}`
+      : `Delete ${entityLabel}`;
 
   const confirmButtonText =
-    deleteType === 'permanent' ? 'Permanently Delete' : 'Move to Recycle Bin';
+    deleteType === 'permanent' || deleteType === 'hard' ? 'Permanently Delete' : 'Move to Recycle Bin';
 
   const isConfirmDisabled =
     isLoading || (requiresNameConfirmation && confirmationText !== entityName);
@@ -149,16 +157,18 @@ export const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> =
             className={`
               p-3 rounded-lg text-sm
               ${
-                deleteType === 'permanent'
+                deleteType === 'permanent' || deleteType === 'hard'
                   ? 'bg-error/10 text-error border border-error/20'
                   : 'bg-warning/10 text-warning-600 dark:text-warning-400 border border-warning/20'
               }
             `}
           >
-            {deleteType === 'permanent' ? (
+            {deleteType === 'permanent' || deleteType === 'hard' ? (
               <>
-                <strong>Warning:</strong> This action cannot be undone. All
-                files will be permanently deleted from storage.
+                <strong>Warning:</strong> This action cannot be undone.
+                {entityType === 'client'
+                  ? ' This client and all associated data will be permanently deleted.'
+                  : ' All files will be permanently deleted from storage.'}
               </>
             ) : (
               <>

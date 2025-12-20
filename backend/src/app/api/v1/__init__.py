@@ -16,6 +16,13 @@ from app.api.v1.media import router as media_router
 from app.api.v1.uploads import router as uploads_router
 from app.api.v1.websocket import router as websocket_router
 from app.api.v1.recycle_bin import router as recycle_bin_router
+from app.api.v1.clients import router as clients_router
+from app.api.v1.tags import router as tags_router
+from app.api.v1.comments import router as comments_router
+from app.api.v1.people import router as people_router
+from app.api.v1.search import router as search_router
+
+from app.api.v1.dashboard import router as dashboard_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -52,4 +59,34 @@ router.include_router(
     recycle_bin_router,
     prefix="/api/v1/workspaces/{workspace_id}/recycle-bin",
     tags=["recycle-bin"],
+)
+router.include_router(
+    dashboard_router,
+    prefix="/api/v1/workspaces/{workspace_id}/dashboard",
+    tags=["dashboard"],
+)
+router.include_router(
+    clients_router,
+    prefix="/api/v1/workspaces/{workspace_id}/clients",
+    tags=["clients"],
+)
+router.include_router(
+    tags_router,
+    prefix="/api/v1/workspaces/{workspace_id}/tags",
+    tags=["tags"],
+)
+router.include_router(
+    comments_router,
+    prefix="/api/v1/workspaces/{workspace_id}/comments",
+    tags=["comments"],
+)
+router.include_router(
+    people_router,
+    prefix="/api/v1/workspaces/{workspace_id}/people",
+    tags=["people"],
+)
+router.include_router(
+    search_router,
+    prefix="/api/v1/workspaces/{workspace_id}/search",
+    tags=["search"],
 )

@@ -80,6 +80,7 @@ class RecycleBinItem:
     thumbnail_url: Optional[str] = None  # For photos
     original_bytes: Optional[int] = None  # For photos
     parent_gallery_id: Optional[UUID] = None  # For photos
+    delete_status: Optional[str] = None  # Track failed deletions
 
 
 @dataclass
@@ -151,7 +152,7 @@ class RecycleBinService:
                 galleries = await conn.fetch(
                     """
                     SELECT
-                        gallery_id, title, deleted_at,
+                        gallery_id, title, deleted_at, delete_status,
                         (
                             SELECT COUNT(*)
                             FROM gallery_assets
@@ -160,7 +161,7 @@ class RecycleBinService:
                     FROM galleries
                     WHERE workspace_id = $1
                     AND deleted = TRUE
-                    AND delete_status IS NULL  -- Not currently being permanently deleted
+                    AND (delete_status IS NULL OR delete_status = 'delete_failed')  -- Include failed deletions for retry
                     ORDER BY deleted_at DESC
                     """,
                     workspace_id,
@@ -177,6 +178,7 @@ class RecycleBinService:
                                 row["deleted_at"]
                             ),
                             photo_count=row["photo_count"],
+                            delete_status=row["delete_status"],
                         )
                     )
 
@@ -186,13 +188,13 @@ class RecycleBinService:
                     """
                     SELECT
                         a.asset_id, a.original_object_key, a.deleted_at,
-                        a.original_bytes, ga.gallery_id
+                        a.original_bytes, a.delete_status, ga.gallery_id
                     FROM assets a
                     LEFT JOIN gallery_assets ga ON a.asset_id = ga.asset_id
                     LEFT JOIN galleries g ON ga.gallery_id = g.gallery_id
                     WHERE a.workspace_id = $1
                     AND a.deleted = TRUE
-                    AND a.delete_status IS NULL
+                    AND (a.delete_status IS NULL OR a.delete_status = 'delete_failed')  -- Include failed deletions for retry
                     AND (g.gallery_id IS NULL OR g.deleted = FALSE)  -- Exclude if gallery also deleted
                     ORDER BY a.deleted_at DESC
                     """,
@@ -232,6 +234,7 @@ class RecycleBinService:
                             original_bytes=row["original_bytes"],
                             parent_gallery_id=row["gallery_id"],
                             thumbnail_url=thumbnail_url,
+                            delete_status=row["delete_status"],
                         )
                     )
 
@@ -256,6 +259,7 @@ class RecycleBinService:
                     "parent_gallery_id": str(item.parent_gallery_id)
                     if item.parent_gallery_id
                     else None,
+                    "delete_status": item.delete_status,
                 }
                 for item in items
             ],
@@ -437,6 +441,16 @@ class RecycleBinService:
                     )
                     if result != "UPDATE 0":
                         cascaded_photos += 1
+                        # Also restore visibility in gallery_assets
+                        await conn.execute(
+                            """
+                            UPDATE gallery_assets
+                            SET visible = TRUE
+                            WHERE workspace_id = $1 AND asset_id = $2
+                            """,
+                            workspace_id,
+                            row["asset_id"],
+                        )
 
         # 6. Log audit event
         await self._audit_service.log_restore(
@@ -545,6 +559,17 @@ class RecycleBinService:
                     WHERE workspace_id = $2 AND asset_id = $3
                     """,
                     now,
+                    workspace_id,
+                    asset_id,
+                )
+
+                # 4. Restore visibility in gallery_assets (was set to FALSE on delete)
+                await conn.execute(
+                    """
+                    UPDATE gallery_assets
+                    SET visible = TRUE
+                    WHERE workspace_id = $1 AND asset_id = $2
+                    """,
                     workspace_id,
                     asset_id,
                 )

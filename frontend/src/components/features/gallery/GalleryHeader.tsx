@@ -1,11 +1,11 @@
 /**
  * GalleryHeader Component
  * Displays gallery title, client name, creation date, and status badge
- * Property 6: Gallery Header Data Display
+ * Clean, professional layout matching modern gallery management UIs
  */
 
 import React, { useState } from 'react';
-import { ArrowLeft, Edit2, Check, X } from 'lucide-react';
+import { ArrowLeft, Edit2, Check, X, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AppButton } from '../../ui/AppButton';
 import { GalleryStatusBadge } from './GalleryStatusBadge';
@@ -30,7 +30,7 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
-      month: 'long',
+      month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
@@ -58,7 +58,6 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
       await onTitleUpdate?.(editedTitle.trim());
       setIsEditingTitle(false);
     } catch (error) {
-      // Error handling - could show toast here
       console.error('Failed to update title:', error);
       setEditedTitle(gallery.title);
     } finally {
@@ -80,29 +79,30 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Back Button */}
-      <AppButton
-        variant="ghost"
-        size="sm"
+    <div className="gallery-header">
+      {/* Back Navigation - Clean text link style */}
+      <button
         onClick={() => navigate('/workspace/galleries')}
-        leftIcon={<ArrowLeft size={16} />}
+        className="inline-flex items-center gap-1.5 text-sm text-text-tertiary hover:text-primary transition-colors mb-4 group"
       >
-        Back to All Galleries
-      </AppButton>
+        <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
+        <span>Back to All Galleries</span>
+      </button>
 
-      {/* Title and Status */}
-      <div className="flex items-start justify-between gap-4">
+      {/* Main Header Content */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        {/* Left: Title and Meta */}
         <div className="flex-1 min-w-0">
+          {/* Title */}
           {isEditingTitle ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-2">
               <AppInput
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onBlur={handleTitleSave}
                 inputSize="lg"
-                className="flex-1"
+                className="flex-1 text-2xl font-bold"
                 autoFocus
                 disabled={isSaving}
                 maxLength={255}
@@ -113,8 +113,9 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
                 onClick={handleTitleSave}
                 disabled={isSaving}
                 aria-label="Save title"
+                className="text-success hover:bg-success/10"
               >
-                <Check size={18} />
+                <Check size={20} />
               </AppButton>
               <AppButton
                 variant="ghost"
@@ -122,43 +123,50 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
                 onClick={handleTitleCancel}
                 disabled={isSaving}
                 aria-label="Cancel editing"
+                className="text-text-tertiary hover:text-error hover:bg-error/10"
               >
-                <X size={18} />
+                <X size={20} />
               </AppButton>
             </div>
           ) : (
-            <div className="flex items-center gap-3 group">
-              <h1 className="text-3xl font-bold text-text-primary truncate">
+            <div className="flex items-center gap-2 group mb-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-text-primary truncate">
                 {gallery.title}
               </h1>
               {onTitleUpdate && (
                 <button
                   onClick={handleTitleEdit}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-surface-hover"
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-surface-hover transition-all flex-shrink-0"
                   aria-label="Edit title"
                 >
-                  <Edit2 size={18} className="text-text-tertiary" />
+                  <Edit2 size={16} className="text-text-tertiary" />
                 </button>
               )}
             </div>
           )}
 
-          {/* Client Name and Date */}
-          <div className="flex items-center gap-2 mt-2 text-text-secondary">
+          {/* Client Name and Date - With user icon */}
+          <div className="flex items-center gap-2 text-sm text-text-secondary">
             {gallery.client_name && (
               <>
+                <User size={14} className="text-text-tertiary" />
                 <span className="font-medium">{gallery.client_name}</span>
-                <span>•</span>
+                <span className="text-text-tertiary">•</span>
               </>
             )}
             <span>{formatDate(gallery.created_at)}</span>
           </div>
         </div>
 
-        {/* Status Badge */}
-        <div className="flex-shrink-0">
+        {/* Right: Status Badge - Hidden on mobile, shown on sm+ */}
+        <div className="hidden sm:block flex-shrink-0">
           <GalleryStatusBadge status={gallery.status} size="md" />
         </div>
+      </div>
+
+      {/* Mobile Status Badge - Below title on small screens */}
+      <div className="sm:hidden mt-3">
+        <GalleryStatusBadge status={gallery.status} size="sm" />
       </div>
     </div>
   );

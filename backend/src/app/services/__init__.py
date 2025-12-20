@@ -69,6 +69,39 @@ from app.services.task_queue import (
     enqueue_task,
     register_task_handler,
 )
+from app.services.tag_service import TagService, get_tag_service, TagError, TagNotFoundError, DuplicateTagError
+from app.services.comment_service import CommentService, get_comment_service, CommentError, CommentNotFoundError, CommentForbiddenError
+from app.services.people_service import PeopleService, get_people_service, PeopleError, PersonNotFoundError, FaceNotFoundError
+from app.services.search_service import SearchService, get_search_service
+from app.services.communication_service import CommunicationService, get_communication_service
+from app.services.client_tag_service import ClientTagService, get_client_tag_service
+from app.services.duplicate_detection_service import DuplicateDetectionService, get_duplicate_detection_service
+from app.services.smart_list_service import (
+    SmartListService,
+    get_smart_list_service,
+    SmartListError,
+    SmartListNotFoundError,
+    SmartListValidationError,
+    SmartListDuplicateError,
+    SystemSmartListError,
+)
+from app.services.import_export_service import (
+    ImportExportService,
+    get_import_export_service,
+    ImportExportError,
+    ImportValidationError,
+    ExportError,
+    InvalidFileFormatError,
+    EmptyFileError,
+    MissingRequiredFieldsError,
+)
+from app.services.analytics_service import (
+    AnalyticsService,
+    get_analytics_service,
+    AnalyticsError,
+    InvalidDateRangeError,
+)
+
 
 __all__ = [
     # Auth
@@ -143,4 +176,56 @@ __all__ = [
     "get_task_queue",
     "enqueue_task",
     "register_task_handler",
+    # Tags
+    "TagService",
+    "get_tag_service",
+    "TagError",
+    "TagNotFoundError",
+    "DuplicateTagError",
+    # Comments
+    "CommentService",
+    "get_comment_service",
+    "CommentError",
+    "CommentNotFoundError",
+    "CommentForbiddenError",
+    # People
+    "PeopleService",
+    "get_people_service",
+    "PeopleError",
+    "PersonNotFoundError",
+    "FaceNotFoundError",
+    # Search
+    "SearchService",
+    "get_search_service",
+    # Communication (Client CRM)
+    "CommunicationService",
+    "get_communication_service",
+    # Client Tags (Client CRM)
+    "ClientTagService",
+    "get_client_tag_service",
+    # Duplicate Detection (Client CRM)
+    "DuplicateDetectionService",
+    "get_duplicate_detection_service",
+    # Smart Lists (Client CRM)
+    "SmartListService",
+    "get_smart_list_service",
+    "SmartListError",
+    "SmartListNotFoundError",
+    "SmartListValidationError",
+    "SmartListDuplicateError",
+    "SystemSmartListError",
+    # Import/Export (Client CRM)
+    "ImportExportService",
+    "get_import_export_service",
+    "ImportExportError",
+    "ImportValidationError",
+    "ExportError",
+    "InvalidFileFormatError",
+    "EmptyFileError",
+    "MissingRequiredFieldsError",
+    # Analytics (Client CRM)
+    "AnalyticsService",
+    "get_analytics_service",
+    "AnalyticsError",
+    "InvalidDateRangeError",
 ]

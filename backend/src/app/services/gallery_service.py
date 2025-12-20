@@ -273,7 +273,21 @@ class GalleryService:
                         WHERE ga.gallery_id = galleries.gallery_id
                         AND ga.visible = TRUE
                         AND a.deleted = FALSE
-                    ) as photo_count
+                    ) as photo_count,
+                    -- Fallback to first asset if no explicit cover is set
+                    COALESCE(
+                        cover_asset_id,
+                        (
+                            SELECT ga.asset_id
+                            FROM gallery_assets ga
+                            JOIN assets a ON ga.asset_id = a.asset_id
+                            WHERE ga.gallery_id = galleries.gallery_id
+                            AND ga.visible = TRUE
+                            AND a.deleted = FALSE
+                            ORDER BY ga.created_at ASC
+                            LIMIT 1
+                        )
+                    ) as effective_cover_asset_id
                 FROM galleries
                 WHERE {where_sql}
                 {order_sql}
@@ -295,7 +309,9 @@ class GalleryService:
                         "photo_count": g["photo_count"] or 0,
                         "created_at": g["created_at"].isoformat(),
                         "published_at": g["published_at"].isoformat() if g["published_at"] else None,
-                        "cover_image_url": None,  # TODO: Generate CDN URL from cover_asset_id
+                        # Use effective_cover_asset_id which falls back to first asset
+                        "cover_asset_id": str(g["effective_cover_asset_id"]) if g["effective_cover_asset_id"] else None,
+                        "cover_image_url": None,  # Frontend fetches signed URL using cover_asset_id
                     }
                     for g in galleries
                 ],
@@ -539,6 +555,7 @@ class GalleryService:
         name: str | None = None,
         sort_order: int | None = None,
         visible: bool | None = None,
+        cover_asset_id: UUID | None = None,
     ) -> dict:
         """Update a sub-gallery."""
         pool = await get_postgres_pool()
@@ -591,6 +608,11 @@ class GalleryService:
             if visible is not None:
                 set_clauses.append(f"visible = ${param_idx}")
                 params.append(visible)
+                param_idx += 1
+
+            if cover_asset_id is not None:
+                set_clauses.append(f"cover_asset_id = ${param_idx}")
+                params.append(cover_asset_id)
                 param_idx += 1
 
             if not set_clauses:

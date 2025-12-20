@@ -17,7 +17,7 @@ import logging
 from typing import Annotated, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
@@ -339,7 +339,7 @@ async def restore_item(
 @router.delete(
     "/permanent",
     response_model=PermanentDeleteResponse,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_202_ACCEPTED,
     summary="Permanently delete item",
     responses={
         400: {"model": ErrorResponse, "description": "Item not in recycle bin"},
@@ -354,8 +354,13 @@ async def permanent_delete_item(
     current_user: CurrentUserDep,
     request_obj: PermanentDeleteRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
 ) -> PermanentDeleteResponse:
     """Permanently delete a gallery or photo from the recycle bin.
+
+    The deletion is performed asynchronously - the API returns immediately
+    after marking the item for deletion. The actual R2 cleanup and database
+    removal happens in the background.
 
     Requirement 4.1: WHEN a photographer initiates permanent deletion from the
     Recycle Bin THEN the system SHALL display a confirmation dialog warning
@@ -366,39 +371,47 @@ async def permanent_delete_item(
 
     try:
         if request_obj.item_type == "gallery":
-            result = await service.permanent_delete_gallery(
+            # Mark for deletion (fast, validates and updates status)
+            info = await service.mark_gallery_for_permanent_deletion(
+                workspace_id=workspace_id,
+                gallery_id=request_obj.item_id,
+            )
+            # Schedule background deletion
+            background_tasks.add_task(
+                service.perform_gallery_permanent_delete_background,
                 workspace_id=workspace_id,
                 gallery_id=request_obj.item_id,
                 user_id=current_user.user_id,
+                gallery_title=info["title"],
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
         else:
-            result = await service.permanent_delete_photo(
+            # Mark for deletion (fast, validates and updates status)
+            info = await service.mark_photo_for_permanent_deletion(
+                workspace_id=workspace_id,
+                asset_id=request_obj.item_id,
+            )
+            # Schedule background deletion
+            background_tasks.add_task(
+                service.perform_photo_permanent_delete_background,
                 workspace_id=workspace_id,
                 asset_id=request_obj.item_id,
                 user_id=current_user.user_id,
+                original_object_key=info["original_object_key"],
+                original_bytes=info["original_bytes"],
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
 
-        if result.success:
-            return PermanentDeleteResponse(
-                success=True,
-                message=f"{request_obj.item_type.capitalize()} permanently deleted",
-                files_deleted=result.files_deleted,
-                storage_freed=result.storage_freed,
-                storage_freed_formatted=format_bytes(result.storage_freed),
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "code": "DELETION_FAILED",
-                    "message": "Permanent deletion failed",
-                    "errors": result.errors,
-                },
-            )
+        # Return immediately - deletion happens in background
+        return PermanentDeleteResponse(
+            success=True,
+            message=f"{request_obj.item_type.capitalize()} deletion started",
+            files_deleted=0,  # Will be updated when background task completes
+            storage_freed=0,
+            storage_freed_formatted="0 B",
+        )
 
     except DeletionInProgressError as e:
         raise HTTPException(
@@ -426,10 +439,10 @@ async def permanent_delete_item(
             detail={"code": e.code, "message": str(e)},
         )
     except Exception as e:
-        logger.exception("Failed to permanently delete item")
+        logger.exception("Failed to initiate permanent deletion")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "INTERNAL_ERROR", "message": "Failed to permanently delete item"},
+            detail={"code": "INTERNAL_ERROR", "message": "Failed to initiate permanent deletion"},
         )
 
 
@@ -518,7 +531,7 @@ async def bulk_restore(
 @router.post(
     "/bulk-permanent-delete",
     response_model=BulkOperationResponse,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_202_ACCEPTED,
     summary="Bulk permanent delete items",
     responses={
         403: {"model": ErrorResponse, "description": "Access denied"},
@@ -530,8 +543,12 @@ async def bulk_permanent_delete(
     current_user: CurrentUserDep,
     request_obj: BulkPermanentDeleteRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
 ) -> BulkOperationResponse:
     """Permanently delete multiple items from the recycle bin.
+
+    Deletions are performed asynchronously - the API returns immediately
+    after marking items for deletion. Actual cleanup happens in background.
 
     Requirement 7.2: WHEN a photographer selects multiple items in the Recycle Bin
     THEN the system SHALL enable bulk permanent delete action.
@@ -545,47 +562,51 @@ async def bulk_permanent_delete(
     results: list[BulkOperationResultItem] = []
     success_count = 0
     failure_count = 0
-    total_storage_freed = 0
 
     for item in request_obj.items:
         try:
             if item.item_type == "gallery":
-                result = await service.permanent_delete_gallery(
+                # Mark for deletion (fast)
+                info = await service.mark_gallery_for_permanent_deletion(
+                    workspace_id=workspace_id,
+                    gallery_id=item.item_id,
+                )
+                # Schedule background deletion
+                background_tasks.add_task(
+                    service.perform_gallery_permanent_delete_background,
                     workspace_id=workspace_id,
                     gallery_id=item.item_id,
                     user_id=current_user.user_id,
+                    gallery_title=info["title"],
                     ip_address=ip_address,
                     user_agent=user_agent,
                 )
             else:
-                result = await service.permanent_delete_photo(
+                # Mark for deletion (fast)
+                info = await service.mark_photo_for_permanent_deletion(
+                    workspace_id=workspace_id,
+                    asset_id=item.item_id,
+                )
+                # Schedule background deletion
+                background_tasks.add_task(
+                    service.perform_photo_permanent_delete_background,
                     workspace_id=workspace_id,
                     asset_id=item.item_id,
                     user_id=current_user.user_id,
+                    original_object_key=info["original_object_key"],
+                    original_bytes=info["original_bytes"],
                     ip_address=ip_address,
                     user_agent=user_agent,
                 )
 
-            if result.success:
-                results.append(
-                    BulkOperationResultItem(
-                        item_id=str(item.item_id),
-                        item_type=item.item_type,
-                        success=True,
-                    )
+            results.append(
+                BulkOperationResultItem(
+                    item_id=str(item.item_id),
+                    item_type=item.item_type,
+                    success=True,
                 )
-                success_count += 1
-                total_storage_freed += result.storage_freed
-            else:
-                results.append(
-                    BulkOperationResultItem(
-                        item_id=str(item.item_id),
-                        item_type=item.item_type,
-                        success=False,
-                        error="; ".join(result.errors) if result.errors else "Deletion failed",
-                    )
-                )
-                failure_count += 1
+            )
+            success_count += 1
 
         except Exception as e:
             error_msg = str(e) if isinstance(e, DeletionError) else "Deletion failed"
@@ -604,7 +625,7 @@ async def bulk_permanent_delete(
         results=results,
         success_count=success_count,
         failure_count=failure_count,
-        total_storage_freed=total_storage_freed,
+        total_storage_freed=0,  # Will be calculated after background tasks complete
     )
 
 

@@ -18,6 +18,7 @@
     { "featureId": "proofing_selections_comments", "file": "proofing_selections_comments.json", "name": "Proofing: Selections, Comments, Approvals" },
     { "featureId": "downloads_watermarking", "file": "downloads_watermarking.json", "name": "Downloads & Watermarking" },
     { "featureId": "album_designer", "file": "album_designer.json", "name": "Album Designer" },
+    { "featureId": "client_crm", "file": "client_crm.json", "name": "Client CRM Module" },
     { "featureId": "crm_booking_calendar", "file": "crm_booking_calendar.json", "name": "CRM, Bookings, Calendar" },
     { "featureId": "payments_billing_subscriptions", "file": "payments_billing_subscriptions.json", "name": "Payments, Billing, Subscriptions" },
     { "featureId": "trial_lifecycle", "file": "trial_lifecycle.json", "name": "30-day Trial Lifecycle" },

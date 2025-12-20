@@ -104,13 +104,20 @@ async def list_gallery_assets(
         params = [workspace_id, gallery_id]
         param_idx = 3
         
-        if sub_gallery_id:
-            where_conditions.append(f"ga.sub_gallery_id = ${param_idx}")
-            params.append(UUID(sub_gallery_id))
-            param_idx += 1
-        elif sub_gallery_id is not None and sub_gallery_id == "":
-            # Empty string means root gallery (no sub-gallery)
-            where_conditions.append("ga.sub_gallery_id IS NULL")
+        # Handle sub_gallery_id filtering:
+        # - sub_gallery_id = "" (empty string) → root gallery only (sub_gallery_id IS NULL)
+        # - sub_gallery_id = "<uuid>" → specific sub-gallery
+        # - sub_gallery_id = None (not provided) → all assets (no filter)
+        if sub_gallery_id is not None:
+            if sub_gallery_id == "":
+                # Empty string = root gallery only (no sub-gallery assigned)
+                where_conditions.append("ga.sub_gallery_id IS NULL")
+            else:
+                # Specific sub-gallery filter
+                where_conditions.append(f"ga.sub_gallery_id = ${param_idx}")
+                params.append(UUID(sub_gallery_id))
+                param_idx += 1
+        # If sub_gallery_id is None (not provided as query param), show all assets
         
         if picks_only or selections_only:
             where_conditions.append("ga.is_selected = TRUE")

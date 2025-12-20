@@ -56,13 +56,17 @@ export const useGalleryAssets = ({
         const response = await galleryService.listGalleryAssets(workspaceId, galleryId, {
           page: pageNum,
           limit,
-          sub_gallery_id: subGalleryId || undefined,
+          // Pass sub_gallery_id correctly:
+          // - null → '' (root gallery only, no sub-gallery)
+          // - undefined → undefined (all assets, no filter - for aggregate views)
+          // - string → specific sub-gallery UUID
+          sub_gallery_id: subGalleryId === null ? '' : subGalleryId,
           picks_only: picksOnly,
           favorites_only: favoritesOnly,
           selections_only: selectionsOnly,
           search_query: searchQuery || undefined,
         });
-        
+
         if (append) {
           setAssets((prev) => [...prev, ...response.data]);
         } else {

@@ -6,10 +6,8 @@ import {
     Users,
     Eye,
     Download,
-    TrendingUp,
     Clock,
     ArrowRight,
-    Share2,
     Edit,
     ExternalLink,
     LayoutGrid,
@@ -20,7 +18,20 @@ import {
     ChevronRight,
     Activity,
     Zap,
+    UserPlus,
+    TrendingUp,
+    Calendar,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import dashboardService, { DashboardStats } from '../../services/dashboardService';
+import galleryService from '../../services/galleryService';
+import { clientService } from '../../services/clientService';
+import { GalleryListItem } from '../../types/gallery';
+import type { ClientAnalyticsResponse, ClientListItem } from '../../types/client';
+import { formatDistanceToNow } from 'date-fns';
+import { DashboardUploadModal } from '../../components/features/dashboard/DashboardUploadModal';
+import { StatusBadge } from '../../components/ui/AppBadge';
 
 /* =============================================================================
    DashboardPage Component
@@ -34,81 +45,6 @@ import {
    NOTE: This page is rendered inside WorkspaceLayout which provides
    the header, sidebar, and main content area structure.
    ============================================================================= */
-
-const mockStats = [
-    {
-        id: 'galleries',
-        label: 'Galleries',
-        value: 24,
-        change: '+3',
-        trend: 'up',
-        icon: LayoutGrid,
-        gradient: 'from-violet-500 to-purple-600',
-    },
-    {
-        id: 'photos',
-        label: 'Photos',
-        value: '1.8K',
-        change: '+234',
-        trend: 'up',
-        icon: Image,
-        gradient: 'from-blue-500 to-cyan-500',
-    },
-    {
-        id: 'clients',
-        label: 'Clients',
-        value: 12,
-        change: '+2',
-        trend: 'up',
-        icon: Users,
-        gradient: 'from-emerald-500 to-teal-500',
-    },
-    {
-        id: 'views',
-        label: 'Views',
-        value: '3.4K',
-        change: '+18%',
-        trend: 'up',
-        icon: Eye,
-        gradient: 'from-amber-500 to-orange-500',
-    },
-];
-
-const mockRecentGalleries = [
-    {
-        id: '1',
-        name: 'Johnson Wedding',
-        client: 'Sarah & Mike Johnson',
-        photoCount: 342,
-        coverUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&h=600&fit=crop',
-        status: 'published',
-        views: 128,
-        likes: 45,
-        createdAt: '2d ago',
-    },
-    {
-        id: '2',
-        name: 'Corporate Headshots',
-        client: 'Tech Corp Inc.',
-        photoCount: 45,
-        coverUrl: 'https://images.unsplash.com/photo-1560439513-74b037a25d84?w=800&h=600&fit=crop',
-        status: 'draft',
-        views: 0,
-        likes: 0,
-        createdAt: '5d ago',
-    },
-    {
-        id: '3',
-        name: 'Smith Family Portrait',
-        client: 'The Smith Family',
-        photoCount: 87,
-        coverUrl: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=800&h=600&fit=crop',
-        status: 'published',
-        views: 56,
-        likes: 23,
-        createdAt: '1w ago',
-    },
-];
 
 const mockActivity = [
     {
@@ -150,14 +86,110 @@ const mockActivity = [
 ];
 
 const quickActions = [
-    { label: 'New Gallery', icon: Plus, gradient: 'from-violet-500 to-purple-600', path: '/new-gallery' },
-    { label: 'Upload', icon: Upload, gradient: 'from-blue-500 to-cyan-500', path: '/upload' },
-    { label: 'Clients', icon: Users, gradient: 'from-emerald-500 to-teal-500', path: '/clients' },
-    { label: 'Libraries', icon: FolderOpen, gradient: 'from-amber-500 to-orange-500', path: '/libraries' },
+    { label: 'New Gallery', icon: Plus, gradient: 'from-violet-500 to-purple-600', path: '/workspace/galleries/new' },
+    { label: 'Upload', icon: Upload, gradient: 'from-blue-500 to-cyan-500', path: '/workspace/upload' },
+    { label: 'Clients', icon: Users, gradient: 'from-emerald-500 to-teal-500', path: '/workspace/clients' },
+    { label: 'Libraries', icon: FolderOpen, gradient: 'from-amber-500 to-orange-500', path: '/workspace/libraries' },
 ];
 
 const DashboardPage = () => {
     const navigate = useNavigate();
+    const { workspace } = useAuth();
+    const [stats, setStats] = useState<DashboardStats | null>(null);
+    const [recentGalleries, setRecentGalleries] = useState<GalleryListItem[]>([]);
+    const [recentClients, setRecentClients] = useState<ClientListItem[]>([]);
+    const [clientAnalytics, setClientAnalytics] = useState<ClientAnalyticsResponse | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
+
+    useEffect(() => {
+        const loadDashboardData = async () => {
+            if (!workspace?.workspace_id) return;
+
+            try {
+                const [statsData, galleriesData, clientsData, analyticsData] = await Promise.all([
+                    dashboardService.getStats(workspace.workspace_id),
+                    galleryService.listGalleries(workspace.workspace_id, {
+                        sort: 'created_at',
+                        limit: 5
+                    }),
+                    clientService.listClients(workspace.workspace_id, {
+                        limit: 5,
+                        sort_by: 'created_at',
+                        sort_order: 'desc'
+                    }).catch(() => ({ clients: [], meta: null })),
+                    clientService.getAnalytics(workspace.workspace_id).catch(() => null)
+                ]);
+
+                setStats(statsData);
+                setRecentGalleries(galleriesData.data);
+                setRecentClients(clientsData.clients);
+                setClientAnalytics(analyticsData);
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadDashboardData();
+    }, [workspace?.workspace_id]);
+
+    const handleQuickAction = (path: string) => {
+        if (path === '/workspace/upload') {
+            setIsUploadModalOpen(true);
+            return;
+        }
+        navigate(path);
+    };
+
+    const statsConfig = [
+        {
+            id: 'galleries',
+            label: 'Galleries',
+            value: stats?.galleries || 0,
+            change: '+0', // Placeholder for now
+            trend: 'neutral',
+            icon: LayoutGrid,
+            gradient: 'from-violet-500 to-purple-600',
+        },
+        {
+            id: 'photos',
+            label: 'Photos',
+            value: stats?.photos || 0,
+            change: '+0',
+            trend: 'neutral',
+            icon: Image,
+            gradient: 'from-blue-500 to-cyan-500',
+        },
+        {
+            id: 'clients',
+            label: 'Clients',
+            value: stats?.clients || 0,
+            change: '+0',
+            trend: 'neutral',
+            icon: Users,
+            gradient: 'from-emerald-500 to-teal-500',
+        },
+        {
+            id: 'views',
+            label: 'Views',
+            value: stats?.views || 0,
+            change: '+0%',
+            trend: 'neutral',
+            icon: Eye,
+            gradient: 'from-amber-500 to-orange-500',
+        },
+    ];
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full overflow-auto bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
@@ -188,12 +220,17 @@ const DashboardPage = () => {
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                    {mockStats.map((stat) => {
+                    {statsConfig.map((stat) => {
                         const Icon = stat.icon;
                         return (
                             <div
                                 key={stat.id}
-                                className="group relative overflow-hidden card-glass rounded-2xl p-4 sm:p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+                                onClick={() => {
+                                    if (stat.id === 'galleries') navigate('/workspace/galleries');
+                                    if (stat.id === 'clients') navigate('/workspace/clients');
+                                    // Add other navigations as needed
+                                }}
+                                className="group relative overflow-hidden card-glass rounded-2xl p-4 sm:p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
                             >
                                 <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
 
@@ -202,12 +239,13 @@ const DashboardPage = () => {
                                         <div className={`p-2 sm:p-2.5 rounded-xl bg-gradient-to-br ${stat.gradient} shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300`}>
                                             <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                                         </div>
-                                        <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30">
+                                        {/* Trend indicator - Hidden for now as we don't track history yet */}
+                                        {/* <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30">
                                             <TrendingUp className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                                             <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
                                                 {stat.change}
                                             </span>
-                                        </div>
+                                        </div> */}
                                     </div>
 
                                     <div>
@@ -239,6 +277,7 @@ const DashboardPage = () => {
                             return (
                                 <button
                                     key={action.label}
+                                    onClick={() => handleQuickAction(action.path)}
                                     className="group relative overflow-hidden glass-hover rounded-xl p-4 sm:p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95"
                                 >
                                     <div className={`absolute inset-0 bg-gradient-to-br ${action.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
@@ -257,6 +296,106 @@ const DashboardPage = () => {
                     </div>
                 </div>
 
+                {/* Client Insights Summary */}
+                {clientAnalytics && (
+                    <div className="card-glass rounded-2xl p-4 sm:p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-base sm:text-lg font-semibold text-text-primary flex items-center gap-2">
+                                <Users className="w-5 h-5 text-accent" />
+                                Client Insights
+                            </h2>
+                            <button
+                                onClick={() => navigate('/workspace/clients')}
+                                className="text-sm font-medium text-primary hover:text-primary-600 flex items-center gap-1 hover:gap-2 transition-all"
+                            >
+                                View all
+                                <ChevronRight size={16} />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                            {/* Total Clients */}
+                            <div className="glass-light rounded-xl p-3 sm:p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Users size={16} className="text-primary" />
+                                    <span className="text-xs text-text-tertiary">Total</span>
+                                </div>
+                                <div className="text-xl sm:text-2xl font-bold text-text-primary">
+                                    {clientAnalytics.summary.total_clients}
+                                </div>
+                            </div>
+
+                            {/* Active Clients */}
+                            <div className="glass-light rounded-xl p-3 sm:p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <TrendingUp size={16} className="text-success" />
+                                    <span className="text-xs text-text-tertiary">Active</span>
+                                </div>
+                                <div className="text-xl sm:text-2xl font-bold text-text-primary">
+                                    {clientAnalytics.summary.active_clients}
+                                </div>
+                            </div>
+
+                            {/* New This Period */}
+                            <div className="glass-light rounded-xl p-3 sm:p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <UserPlus size={16} className="text-accent" />
+                                    <span className="text-xs text-text-tertiary">New</span>
+                                </div>
+                                <div className="text-xl sm:text-2xl font-bold text-text-primary">
+                                    {clientAnalytics.summary.new_clients_period}
+                                </div>
+                            </div>
+
+                            {/* Growth Rate */}
+                            <div className="glass-light rounded-xl p-3 sm:p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Calendar size={16} className="text-warning" />
+                                    <span className="text-xs text-text-tertiary">Growth</span>
+                                </div>
+                                <div className="text-xl sm:text-2xl font-bold text-text-primary">
+                                    {clientAnalytics.summary.growth_rate_percent.toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Recent Clients Quick View */}
+                        {recentClients.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-border/50">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Clock size={14} className="text-text-tertiary" />
+                                    <span className="text-xs font-medium text-text-tertiary uppercase">Recently Added</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {recentClients.slice(0, 5).map((client) => (
+                                        <button
+                                            key={client.client_id}
+                                            onClick={() => navigate(`/workspace/clients/${client.client_id}`)}
+                                            className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-light hover:bg-surface-hover transition-all group"
+                                        >
+                                            {client.avatar_url ? (
+                                                <img
+                                                    src={client.avatar_url}
+                                                    alt={client.full_name}
+                                                    className="w-5 h-5 rounded-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-[10px] font-semibold text-primary">
+                                                    {client.initials || client.full_name.charAt(0)}
+                                                </div>
+                                            )}
+                                            <span className="text-sm text-text-primary group-hover:text-primary transition-colors">
+                                                {client.full_name}
+                                            </span>
+                                            <StatusBadge status={client.status} size="sm" />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Main Content Grid */}
                 <div className="grid lg:grid-cols-3 gap-6 sm:gap-8">
                     {/* Recent Galleries */}
@@ -267,7 +406,10 @@ const DashboardPage = () => {
                                     <Camera className="w-5 h-5 text-accent" />
                                     Recent Galleries
                                 </h2>
-                                <button className="text-sm font-medium text-primary hover:text-primary-600 flex items-center gap-1 hover:gap-2 transition-all">
+                                <button
+                                    onClick={() => navigate('/workspace/galleries')}
+                                    className="text-sm font-medium text-primary hover:text-primary-600 flex items-center gap-1 hover:gap-2 transition-all"
+                                >
                                     View all
                                     <ChevronRight size={16} />
                                 </button>
@@ -275,81 +417,101 @@ const DashboardPage = () => {
                         </div>
 
                         <div className="divide-y divide-border/50">
-                            {mockRecentGalleries.map((gallery) => (
-                                <div
-                                    key={gallery.id}
-                                    className="group p-3 sm:p-4 hover:bg-surface-hover/50 transition-colors cursor-pointer"
-                                >
-                                    <div className="flex items-center gap-3 sm:gap-4">
-                                        {/* Cover Image */}
-                                        <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
-                                            <img
-                                                src={gallery.coverUrl}
-                                                alt={gallery.name}
-                                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                            />
-                                            <div
-                                                className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
-                                            />
-                                        </div>
+                            {recentGalleries.length === 0 ? (
+                                <div className="p-8 text-center text-text-secondary">
+                                    <p>No galleries found. Create your first gallery!</p>
+                                </div>
+                            ) : (
+                                recentGalleries.map((gallery) => (
+                                    <div
+                                        key={gallery.gallery_id}
+                                        onClick={() => navigate(`/workspace/galleries/${gallery.gallery_id}`)}
+                                        className="group p-3 sm:p-4 hover:bg-surface-hover/50 transition-colors cursor-pointer"
+                                    >
+                                        <div className="flex items-center gap-3 sm:gap-4">
+                                            {/* Cover Image */}
+                                            <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden flex-shrink-0 shadow-md group-hover:shadow-lg transition-shadow bg-surface-hover">
+                                                {gallery.cover_image_url ? (
+                                                    <img
+                                                        src={gallery.cover_image_url}
+                                                        alt={gallery.title}
+                                                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-text-tertiary">
+                                                        <Image size={24} />
+                                                    </div>
+                                                )}
+                                                <div
+                                                    className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
+                                                />
+                                            </div>
 
-                                        {/* Info */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-start justify-between gap-2 mb-1">
-                                                <h3 className="font-semibold text-text-primary truncate text-sm sm:text-base group-hover:text-primary transition-colors">
-                                                    {gallery.name}
-                                                </h3>
-                                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${gallery.status === 'published'
+                                            {/* Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                    <h3 className="font-semibold text-text-primary truncate text-sm sm:text-base group-hover:text-primary transition-colors">
+                                                        {gallery.title}
+                                                    </h3>
+                                                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${gallery.status === 'published'
                                                         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                                                         : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                                                    }`}>
-                                                    {gallery.status}
-                                                </span>
-                                            </div>
-
-                                            <p className="text-xs sm:text-sm text-text-secondary truncate mb-2">
-                                                {gallery.client}
-                                            </p>
-
-                                            <div className="flex items-center gap-3 sm:gap-4 text-xs text-text-tertiary">
-                                                <span className="flex items-center gap-1">
-                                                    <Image size={14} />
-                                                    {gallery.photoCount}
-                                                </span>
-                                                <span className="flex items-center gap-1">
-                                                    <Eye size={14} />
-                                                    {gallery.views}
-                                                </span>
-                                                {gallery.likes > 0 && (
-                                                    <span className="flex items-center gap-1">
-                                                        <Heart size={14} />
-                                                        {gallery.likes}
+                                                        }`}>
+                                                        {gallery.status}
                                                     </span>
-                                                )}
-                                                <span className="flex items-center gap-1 ml-auto">
-                                                    <Clock size={14} />
-                                                    {gallery.createdAt}
-                                                </span>
-                                            </div>
-                                        </div>
+                                                </div>
 
-                                        {/* Actions */}
-                                        <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors" aria-label="Edit">
-                                                <Edit size={18} />
-                                            </button>
-                                            <button className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors" aria-label="Share">
-                                                <Share2 size={18} />
-                                            </button>
-                                            {gallery.status === 'published' && (
-                                                <button className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors" aria-label="View">
-                                                    <ExternalLink size={18} />
+                                                <p className="text-xs sm:text-sm text-text-secondary truncate mb-2">
+                                                    {gallery.client_name || 'No Client'}
+                                                </p>
+
+                                                <div className="flex items-center gap-3 sm:gap-4 text-xs text-text-tertiary">
+                                                    <span className="flex items-center gap-1">
+                                                        <Image size={14} />
+                                                        {gallery.photo_count}
+                                                    </span>
+                                                    {/* Views and Likes - Placeholder until we track them */}
+                                                    {/* <span className="flex items-center gap-1">
+                                                        <Eye size={14} />
+                                                        0
+                                                    </span> */}
+                                                    <span className="flex items-center gap-1 ml-auto">
+                                                        <Clock size={14} />
+                                                        {formatDistanceToNow(new Date(gallery.created_at), { addSuffix: true })}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        navigate(`/workspace/galleries/${gallery.gallery_id}`);
+                                                    }}
+                                                    className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors"
+                                                    aria-label="Edit"
+                                                >
+                                                    <Edit size={18} />
                                                 </button>
-                                            )}
+                                                {gallery.status === 'published' && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            // Open published link
+                                                            window.open(`/g/${gallery.gallery_id}`, '_blank');
+                                                        }}
+                                                        className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors"
+                                                        aria-label="View"
+                                                    >
+                                                        <ExternalLink size={18} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     </div>
 
@@ -376,12 +538,12 @@ const DashboardPage = () => {
                                                 className="w-10 h-10 rounded-full ring-2 ring-white/50 dark:ring-white/10"
                                             />
                                             <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow-sm ${activity.type === 'download'
-                                                    ? 'bg-violet-500'
-                                                    : activity.type === 'view'
-                                                        ? 'bg-blue-500'
-                                                        : activity.type === 'comment'
-                                                            ? 'bg-emerald-500'
-                                                            : 'bg-pink-500'
+                                                ? 'bg-violet-500'
+                                                : activity.type === 'view'
+                                                    ? 'bg-blue-500'
+                                                    : activity.type === 'comment'
+                                                        ? 'bg-emerald-500'
+                                                        : 'bg-pink-500'
                                                 }`}>
                                                 {activity.type === 'download' && <Download size={12} className="text-white" />}
                                                 {activity.type === 'view' && <Eye size={12} className="text-white" />}
@@ -416,6 +578,11 @@ const DashboardPage = () => {
                     </div>
                 </div>
             </main>
+
+            <DashboardUploadModal
+                isOpen={isUploadModalOpen}
+                onClose={() => setIsUploadModalOpen(false)}
+            />
         </div>
     );
 };

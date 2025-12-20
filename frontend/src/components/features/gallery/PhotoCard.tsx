@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, Lock, Play, Check, CheckSquare, MoreVertical, Download, Trash2 } from 'lucide-react';
+import { Heart, Lock, Play, Check, CheckSquare, MoreVertical, Download, Trash2, Image } from 'lucide-react';
 
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -16,12 +16,16 @@ export interface PhotoCardProps {
   index: number;
   isSelected?: boolean;
   selectable?: boolean;
+  /** Whether this photo is the current cover */
+  isCover?: boolean;
   onSelect?: (assetId: string) => void;
   onClick?: (asset: GalleryAssetItem, index: number) => void;
   onFavorite?: (assetId: string, favorite: boolean) => void;
   onSelection?: (assetId: string, selected: boolean) => void;
   onDownload?: (assetId: string) => void;
   onDelete?: (assetId: string) => void;
+  /** Callback to set this photo as the gallery/sub-gallery cover */
+  onSetCover?: (assetId: string) => void;
   showActions?: boolean;
   className?: string;
 }
@@ -31,13 +35,14 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   index,
   isSelected = false,
   selectable = false,
+  isCover = false,
   onSelect,
   onClick,
   onFavorite,
   onSelection,
-
   onDownload,
   onDelete,
+  onSetCover,
   showActions = true,
   className = '',
 }) => {
@@ -123,6 +128,10 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     onDelete?.(asset.asset_id);
   }, [onDelete, asset.asset_id]);
 
+  const handleSetCover = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSetCover?.(asset.asset_id);
+  }, [onSetCover, asset.asset_id]);
 
 
   // Use signed URL if available, fallback to cached thumbnail_url
@@ -196,6 +205,17 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
 
       {/* Badges */}
       <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+        {/* Cover Badge */}
+        {isCover && (
+          <div
+            className="p-1 rounded-full bg-primary/90 backdrop-blur-sm"
+            aria-label="Cover Photo"
+            title="Gallery Cover"
+          >
+            <Image size={14} className="text-white" />
+          </div>
+        )}
+
         {/* Favorite Badge */}
         {asset.is_favorited && (
           <div
@@ -291,6 +311,25 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
                   size={16}
                   className={asset.is_selected ? 'fill-primary text-primary' : ''}
                 />
+              </button>
+            )}
+
+            {/* Set as Cover */}
+            {onSetCover && !isCover && (
+              <button
+                className="
+                  p-1.5 rounded-full touch-target
+                  bg-white/20 hover:bg-primary/70
+                  text-white
+                  transition-colors
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white
+                "
+                onClick={handleSetCover}
+                onContextMenu={(e) => e.stopPropagation()}
+                aria-label="Set as gallery cover"
+                title="Set as Cover"
+              >
+                <Image size={16} />
               </button>
             )}
 

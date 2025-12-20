@@ -315,7 +315,7 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string,
     subGalleryId: string,
-    data: { name?: string; sort_order?: number; visible?: boolean }
+    data: { name?: string; sort_order?: number; visible?: boolean; cover_asset_id?: string }
   ): Promise<void> {
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/sub-galleries/${subGalleryId}`;
     const response = await apiClient.patch<{ message: string }>(endpoint, data);

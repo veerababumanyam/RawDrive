@@ -5,12 +5,19 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Heart, CheckSquare, Info, Trash2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Heart, CheckSquare, Info, Trash2, Image } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
 import { AppButton } from '../../ui/AppButton';
 import type { GalleryAssetItem } from '../../../types/gallery';
+import { TagInput } from './TagInput';
+import { CommentSection } from './CommentSection';
+import { FaceOverlay } from './FaceOverlay';
+import { peopleService, type FaceDetection, type Person } from '../../../services/metadataService';
+import { Users, Sparkles } from 'lucide-react';
+import { faceDetectionService } from '../../../services/faceDetectionService';
+
 
 export interface LightboxProps {
   /** Whether the lightbox is open */
@@ -33,10 +40,19 @@ export interface LightboxProps {
   onDownload?: (assetId: string) => void;
   /** Callback when delete is requested */
   onDelete?: (assetId: string) => void;
+  /** Callback to set current asset as gallery cover */
+  onSetCover?: (assetId: string) => void;
   /** Whether EXIF data should be visible */
   exifVisible?: boolean;
   /** Gallery download policy */
   downloadPolicy?: 'view_only' | 'web_only' | 'watermarked_only' | 'original_allowed';
+  /** Access Settings (download permissions etc) */
+  settings?: {
+    allowOriginalDownload?: boolean;
+    exifVisible?: boolean;
+  };
+  /** ID of the gallery the assets belong to */
+  galleryId: string;
 }
 
 export const Lightbox: React.FC<LightboxProps> = ({
@@ -50,8 +66,10 @@ export const Lightbox: React.FC<LightboxProps> = ({
   onSelect,
   onDownload,
   onDelete,
+  onSetCover,
   exifVisible = false,
   downloadPolicy = 'view_only',
+  galleryId,
 }) => {
   const { workspace } = useAuth();
   const [zoom, setZoom] = useState(1);
@@ -59,7 +77,11 @@ export const Lightbox: React.FC<LightboxProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [showMetadata, setShowMetadata] = useState(false);
+  const [activeTab, setActiveTab] = useState<'info' | 'tags' | 'comments' | 'people'>('info');
   const [rotation, setRotation] = useState(0);
+  const [faces, setFaces] = useState<FaceDetection[]>([]);
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -108,6 +130,154 @@ export const Lightbox: React.FC<LightboxProps> = ({
       setRotation(0);
     }
   }, [isOpen, currentAsset?.asset_id]);
+
+  // Fetch faces when People tab is active
+  useEffect(() => {
+    if (isOpen && currentAsset && workspace?.workspace_id && activeTab === 'people') {
+      const fetchFaces = async () => {
+        try {
+          const assetFaces = await peopleService.getAssetFaces(workspace.workspace_id, currentAsset.asset_id);
+          setFaces(assetFaces);
+        } catch (error) {
+          console.error('Failed to fetch faces:', error);
+        }
+      };
+      fetchFaces();
+    }
+  }, [isOpen, currentAsset?.asset_id, workspace?.workspace_id, activeTab]);
+
+  // Face Tagging Handlers
+  const handleTagFace = async (faceId: string, personId: string) => {
+    if (!workspace?.workspace_id) return;
+    try {
+      await peopleService.tagFace(workspace.workspace_id, faceId, personId);
+      // Refresh faces
+      const updatedFaces = await peopleService.getAssetFaces(workspace.workspace_id, currentAsset!.asset_id);
+      setFaces(updatedFaces);
+    } catch (error) {
+      console.error('Failed to tag face:', error);
+    }
+  };
+
+  const handleUntagFace = async (faceId: string) => {
+    if (!workspace?.workspace_id) return;
+    try {
+      await peopleService.untagFace(workspace.workspace_id, faceId);
+      const updatedFaces = await peopleService.getAssetFaces(workspace.workspace_id, currentAsset!.asset_id);
+      setFaces(updatedFaces);
+    } catch (error) {
+      console.error('Failed to untag face:', error);
+    }
+  };
+
+  const handleDeleteFace = async (faceId: string) => {
+    if (!workspace?.workspace_id) return;
+    try {
+      await peopleService.deleteFaceDetection(workspace.workspace_id, faceId);
+      setFaces(prev => prev.filter(f => f.face_id !== faceId));
+    } catch (error) {
+      console.error('Failed to delete face:', error);
+    }
+  };
+
+  const handleCreateFace = async (bbox: { x: number; y: number; width: number; height: number }) => {
+    if (!workspace?.workspace_id || !currentAsset) return;
+    try {
+      // bbox is relative to the rendered image size if we are drawing on the overlay which matches image size.
+      // But API might expect absolute pixels relative to ORIGINAL image.
+      // We need to scale the bbox if the rendered image is scaled down.
+      // Currently, FaceOverlay is put on top of the image.
+      // The image is rendered with `maxWidth: 100%`, `height: auto` etc.
+      // To get accurate coordinates, we must map screen pixels to original image pixels.
+
+      const imgElement = imageRef.current;
+      if (!imgElement) return;
+
+      const renderedWidth = imgElement.clientWidth;
+      const renderedHeight = imgElement.clientHeight;
+      const naturalWidth = imgElement.naturalWidth;
+      const naturalHeight = imgElement.naturalHeight;
+
+      const scaleX = naturalWidth / renderedWidth;
+      const scaleY = naturalHeight / renderedHeight;
+
+      const absoluteBbox = {
+        x: Math.round(bbox.x * scaleX),
+        y: Math.round(bbox.y * scaleY),
+        width: Math.round(bbox.width * scaleX),
+        height: Math.round(bbox.height * scaleY),
+      };
+
+      await peopleService.createFaceDetection(workspace.workspace_id, {
+        asset_id: currentAsset.asset_id,
+        bbox: absoluteBbox,
+      });
+
+      const updatedFaces = await peopleService.getAssetFaces(workspace.workspace_id, currentAsset.asset_id);
+      setFaces(updatedFaces);
+    } catch (error) {
+      console.error('Failed to create face:', error);
+    }
+  };
+
+  const handleCreatePerson = async (name: string): Promise<Person> => {
+    if (!workspace?.workspace_id) throw new Error('No workspace');
+    return peopleService.createPerson(workspace.workspace_id, name);
+  };
+
+  const handleAutoDetect = async () => {
+    if (!currentAsset || !imageRef.current || !workspace?.workspace_id) return;
+
+    // Show some loading indicator if we had one, or toast
+    // For now we'll rely on the UI button state or just do it
+
+    try {
+      // 1. Run detection
+      // Note: We need to use the actual image element that has the source loaded
+      const detections = await faceDetectionService.detectFaces(imageRef.current);
+
+      // 2. Process results
+      let addedCount = 0;
+      for (const det of detections) {
+        // Map back to natural dimensions if face-api ran on scaled image? 
+        // face-api runs on the element provided. If it's an <img>, it usually respects the rendered size 
+        // OR the natural size depending on how it's called. 
+        // detectAllFaces(input) - if input is classification, it uses the tensor.
+        // If input is HTMLImageElement, it might use natural size.
+        // Let's assume natural size for accuracy.
+
+        // Wait, face-api results are relative to the input image dimensions.
+        // If we passed the <img> tag, are they scaled?
+        // Usually face-api returns coordinates relative to natural size of image.
+
+        // Let's assume natural coordinates for now.
+        const bbox = {
+          x: Math.round(det.box.x),
+          y: Math.round(det.box.y),
+          width: Math.round(det.box.width),
+          height: Math.round(det.box.height)
+        };
+
+        // Create face in backend
+        await peopleService.createFaceDetection(workspace.workspace_id, {
+          asset_id: currentAsset.asset_id,
+          bbox: bbox,
+          confidence: det.score
+        });
+        addedCount++;
+      }
+
+      if (addedCount > 0) {
+        // Refresh
+        const updatedFaces = await peopleService.getAssetFaces(workspace.workspace_id, currentAsset.asset_id);
+        setFaces(updatedFaces);
+      }
+
+    } catch (error) {
+      console.error("Auto detection failed", error);
+    }
+  };
+
 
   // Keyboard navigation
   useEffect(() => {
@@ -191,11 +361,11 @@ export const Lightbox: React.FC<LightboxProps> = ({
 
   // Pan handling
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (zoom > 1) {
+    if (zoom > 1 && !isDrawingMode) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     }
-  }, [zoom, pan]);
+  }, [zoom, pan, isDrawingMode]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isPanning && zoom > 1) {
@@ -366,18 +536,71 @@ export const Lightbox: React.FC<LightboxProps> = ({
             </AppButton>
           </div>
         ) : (
-          <img
-            ref={imageRef}
-            src={previewUrl}
-            alt={currentAsset.asset.filename || `Photo ${currentIndex + 1}`}
-            className="max-w-full max-h-full object-contain select-none"
+          <div
             style={{
               transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px) rotate(${rotation}deg)`,
               transition: isPanning ? 'none' : 'transform 0.2s ease-out',
+              position: 'relative',
+              width: 'auto',
+              height: 'auto',
+              maxWidth: '100%',
+              maxHeight: '100%',
             }}
-            draggable={false}
-            id="lightbox-image"
-          />
+          >
+            <img
+              ref={imageRef}
+              src={previewUrl}
+              alt={currentAsset.asset.filename || `Photo ${currentIndex + 1}`}
+              className="block select-none"
+              style={{
+                width: 'auto',
+                height: 'auto',
+                maxWidth: '100%',
+                maxHeight: '100%',
+              }}
+              draggable={false}
+              id="lightbox-image"
+            />
+            {activeTab === 'people' && (
+              <FaceOverlay
+                faces={faces.map(face => {
+                  // Map absolute coordinates back to rendered coordinates if needed
+                  // If FaceOverlay and Img are both children of the transformed div, they share the coordinate system
+                  // BUT the image might be displayed smaller than natural size due to max-width/height.
+                  // Img tag handles this reflow. The Overlay `inset-0` matches the Img element size.
+                  // BUT `face.bbox` is in original pixels (assumed).
+                  // We need to scale the face boxes down to match the rendered image size.
+                  // OR we can rely on FaceBox to do scaling if we pass dimensions.
+
+                  // Let's compute scale here and pass scaled faces to overlay?
+                  // Or pass scale factor to Overlay.
+                  // Simpler: Map here.
+                  const img = imageRef.current;
+                  if (!img) return face;
+
+                  const scaleX = img.clientWidth / img.naturalWidth;
+                  const scaleY = img.clientHeight / img.naturalHeight;
+
+                  return {
+                    ...face,
+                    bbox: {
+                      x: face.bbox.x * scaleX,
+                      y: face.bbox.y * scaleY,
+                      width: face.bbox.width * scaleX,
+                      height: face.bbox.height * scaleY,
+                    }
+                  };
+                })}
+                onTagFace={handleTagFace}
+                onCreateFace={handleCreateFace}
+                onDeleteFace={handleDeleteFace}
+                onUntagFace={handleUntagFace}
+                onCreatePerson={handleCreatePerson}
+                isDrawingMode={isDrawingMode}
+                onDrawingComplete={() => setIsDrawingMode(false)}
+              />
+            )}
+          </div>
         )}
       </div>
 
@@ -480,6 +703,18 @@ export const Lightbox: React.FC<LightboxProps> = ({
             >
               <Info size={20} />
             </AppButton>
+            {onSetCover && (
+              <AppButton
+                variant="ghost"
+                size="icon"
+                onClick={() => onSetCover(currentAsset.asset_id)}
+                className="text-white hover:bg-white/20 border-white/20"
+                aria-label="Set as Gallery Cover"
+                title="Set as Gallery Cover"
+              >
+                <Image size={20} />
+              </AppButton>
+            )}
             {canDownload && onDownload && (
               <AppButton
                 variant="ghost"
@@ -510,57 +745,188 @@ export const Lightbox: React.FC<LightboxProps> = ({
       </div>
 
       {/* Metadata Panel */}
-      {showMetadata && (
-        <div className="absolute top-16 right-4 w-80 bg-black/90 backdrop-blur-sm border border-white/20 rounded-lg p-4 text-white text-sm max-h-[calc(100vh-200px)] overflow-y-auto">
-          <h3 className="font-semibold mb-3">Photo Information</h3>
-          <dl className="space-y-2">
-            <div>
-              <dt className="text-white/60">Filename</dt>
-              <dd className="font-mono text-xs break-all">{currentAsset.asset.filename || 'Unknown'}</dd>
+      {
+        showMetadata && (
+          <div className="absolute top-16 right-4 w-80 bg-black/90 backdrop-blur-sm border border-white/20 rounded-lg flex flex-col max-h-[calc(100vh-200px)] overflow-hidden">
+            {/* Tabs */}
+            <div className="flex border-b border-white/20">
+              <button
+                onClick={() => setActiveTab('info')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'info'
+                  ? 'text-white border-b-2 border-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                Info
+              </button>
+              <button
+                onClick={() => setActiveTab('tags')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'tags'
+                  ? 'text-white border-b-2 border-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                Tags
+              </button>
+              <button
+                onClick={() => setActiveTab('comments')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'comments'
+                  ? 'text-white border-b-2 border-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                Comments
+              </button>
+              <button
+                onClick={() => setActiveTab('people')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'people'
+                  ? 'text-white border-b-2 border-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                People
+              </button>
             </div>
-            {currentAsset.asset.width && currentAsset.asset.height && (
-              <div>
-                <dt className="text-white/60">Dimensions</dt>
-                <dd>
-                  {currentAsset.asset.width} × {currentAsset.asset.height} pixels
-                </dd>
-              </div>
-            )}
-            {currentAsset.asset.file_size && (
-              <div>
-                <dt className="text-white/60">File Size</dt>
-                <dd>{formatFileSize(currentAsset.asset.file_size)}</dd>
-              </div>
-            )}
-            {currentAsset.asset.mime_type && (
-              <div>
-                <dt className="text-white/60">Type</dt>
-                <dd>{currentAsset.asset.mime_type}</dd>
-              </div>
-            )}
-            {currentAsset.asset.created_at && (
-              <div>
-                <dt className="text-white/60">Uploaded</dt>
-                <dd>{formatDate(currentAsset.asset.created_at)}</dd>
-              </div>
-            )}
-            {exifVisible && currentAsset.asset.exif && (
-              <div className="mt-4 pt-4 border-t border-white/20">
-                <h4 className="font-semibold mb-2">EXIF Data</h4>
-                <dl className="space-y-1 text-xs">
-                  {Object.entries(currentAsset.asset.exif).map(([key, value]) => (
-                    <div key={key}>
-                      <dt className="text-white/60 capitalize">{key.replace(/_/g, ' ')}</dt>
-                      <dd className="font-mono">{String(value)}</dd>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {activeTab === 'info' && (
+                <>
+                  <h3 className="font-semibold mb-3 text-white text-sm">Photo Information</h3>
+                  <dl className="space-y-2 text-sm">
+                    <div>
+                      <dt className="text-white/60">Filename</dt>
+                      <dd className="font-mono text-xs break-all text-white">{currentAsset.asset.filename || 'Unknown'}</dd>
                     </div>
-                  ))}
-                </dl>
-              </div>
-            )}
-          </dl>
-        </div>
-      )}
-    </div>
+                    {currentAsset.asset.width && currentAsset.asset.height && (
+                      <div>
+                        <dt className="text-white/60">Dimensions</dt>
+                        <dd className="text-white">
+                          {currentAsset.asset.width} × {currentAsset.asset.height} pixels
+                        </dd>
+                      </div>
+                    )}
+                    {currentAsset.asset.file_size && (
+                      <div>
+                        <dt className="text-white/60">File Size</dt>
+                        <dd className="text-white">{formatFileSize(currentAsset.asset.file_size)}</dd>
+                      </div>
+                    )}
+                    {currentAsset.asset.mime_type && (
+                      <div>
+                        <dt className="text-white/60">Type</dt>
+                        <dd className="text-white">{currentAsset.asset.mime_type}</dd>
+                      </div>
+                    )}
+                    {currentAsset.asset.created_at && (
+                      <div>
+                        <dt className="text-white/60">Uploaded</dt>
+                        <dd className="text-white">{formatDate(currentAsset.asset.created_at)}</dd>
+                      </div>
+                    )}
+                    {exifVisible && currentAsset.asset.exif && (
+                      <div className="mt-4 pt-4 border-t border-white/20">
+                        <h4 className="font-semibold mb-2 text-white">EXIF Data</h4>
+                        <dl className="space-y-1 text-xs">
+                          {Object.entries(currentAsset.asset.exif).map(([key, value]) => (
+                            <div key={key}>
+                              <dt className="text-white/60 capitalize">{key.replace(/_/g, ' ')}</dt>
+                              <dd className="font-mono text-white">{String(value)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    )}
+                  </dl>
+                </>
+              )}
+
+              {activeTab === 'tags' && (
+                <div className="text-white">
+                  <TagInput assetId={currentAsset.asset_id} className="text-white" />
+                </div>
+              )}
+
+              {activeTab === 'comments' && (
+                <div className="text-white">
+                  <CommentSection
+                    galleryId={galleryId}
+                    assetId={currentAsset.asset_id}
+                    className="text-white h-full"
+                  />
+                </div>
+              )}
+
+              {activeTab === 'people' && (
+                <div className="text-white h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-sm">People & Faces</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAutoDetect}
+                        className="text-xs px-2 py-1 rounded border border-white/20 hover:bg-white/10 flex items-center gap-1"
+                        title="Auto-detect faces"
+                      >
+                        <Sparkles size={12} />
+                        <span>Auto</span>
+                      </button>
+                      <button
+                        onClick={() => setIsDrawingMode(!isDrawingMode)}
+                        className={`text-xs px-2 py-1 rounded border transition-colors ${isDrawingMode
+                          ? 'bg-blue-500 border-blue-500 text-white'
+                          : 'border-white/20 hover:bg-white/10'
+                          }`}
+                      >
+                        {isDrawingMode ? 'Done' : 'Add'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {faces.length === 0 ? (
+                    <div className="text-white/60 text-sm text-center py-8">
+                      <Users className="mx-auto mb-2 opacity-50" size={24} />
+                      <p>No people detected</p>
+                      <button
+                        onClick={() => setIsDrawingMode(true)}
+                        className="text-primary hover:underline mt-2"
+                      >
+                        Manually add a face
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 overflow-y-auto">
+                      {faces.map(face => (
+                        <div key={face.face_id} className="flex items-center gap-2 p-2 rounded bg-white/5 border border-white/10">
+                          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                            <Users size={14} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium truncate">
+                              {face.person_name || <span className="text-white/50 italic">Unknown</span>}
+                            </div>
+                            {face.confidence && (
+                              <div className="text-xs text-white/40">
+                                {Math.round(face.confidence * 100)}% confidence
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleDeleteFace(face.face_id)}
+                            className="p-1 hover:bg-red-500/20 text-white/40 hover:text-red-400 rounded"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 
   return createPortal(lightbox, document.body);

@@ -23,6 +23,9 @@ export type { GalleryStatsProps } from './GalleryStats';
 export { GalleryToolbar } from './GalleryToolbar';
 export type { GalleryToolbarProps, ViewMode, FilterType } from './GalleryToolbar';
 
+export { GalleryActionBar } from './GalleryActionBar';
+export type { GalleryActionBarProps } from './GalleryActionBar';
+
 export { SubGalleryTabs } from './SubGalleryTabs';
 export type { SubGalleryTabsProps } from './SubGalleryTabs';
 
@@ -34,6 +37,9 @@ export type { PhotoGridProps } from './PhotoGrid';
 
 export { PhotoListView } from './PhotoListView';
 export type { PhotoListViewProps } from './PhotoListView';
+
+export { PhotoSectionHeader } from './PhotoSectionHeader';
+export type { PhotoSectionHeaderProps, SectionType } from './PhotoSectionHeader';
 
 export { GalleryUpload } from './GalleryUpload';
 export type { GalleryUploadProps } from './GalleryUpload';
@@ -67,3 +73,9 @@ export type { FilterBarProps } from './FilterBar';
 
 export { SubGallerySelector } from './SubGallerySelector';
 export type { SubGallerySelectorProps } from './SubGallerySelector';
+
+export { TagInput } from './TagInput';
+
+export { CommentSection } from './CommentSection';
+
+export { SearchModal } from './SearchModal';

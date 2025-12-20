@@ -32,12 +32,16 @@ export interface PhotoGridProps {
   assets: GalleryAssetItem[];
   selectedAssetIds?: Set<string>;
   selectable?: boolean;
+  /** Current cover asset ID (to show badge) */
+  coverAssetId?: string | null;
   onAssetSelect?: (assetId: string) => void;
   onAssetClick?: (asset: GalleryAssetItem, index: number) => void;
   onAssetFavorite?: (assetId: string, favorite: boolean) => void;
   onAssetSelection?: (assetId: string, selected: boolean) => void;
   onAssetDownload?: (assetId: string) => void;
   onAssetDelete?: (assetId: string) => void;
+  /** Callback to set a photo as cover */
+  onSetCover?: (assetId: string) => void;
   onSortOrderChange?: (assetIds: string[]) => void;
   onMoveToSubGallery?: (assetId: string, subGalleryId: string | null) => void;
   sortable?: boolean;
@@ -57,12 +61,14 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
   assets,
   selectedAssetIds = new Set(),
   selectable = false,
+  coverAssetId,
   onAssetSelect,
   onAssetClick,
   onAssetFavorite,
   onAssetSelection,
   onAssetDownload,
   onAssetDelete,
+  onSetCover,
   onSortOrderChange,
   onMoveToSubGallery,
   sortable = false,
@@ -270,12 +276,14 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
             index={index}
             isSelected={selectedAssetIds.has(asset.asset_id)}
             selectable={selectable}
+            isCover={coverAssetId === asset.asset_id}
             onSelect={onAssetSelect}
             onClick={onAssetClick}
             onFavorite={onAssetFavorite}
             onSelection={onAssetSelection}
             onDownload={onAssetDownload}
             onDelete={onAssetDelete}
+            onSetCover={onSetCover}
             observerRef={index >= 20 ? observerRef : undefined}
             sortable={sortable}
           />
@@ -313,12 +321,14 @@ interface SortablePhotoCardProps {
   index: number;
   isSelected: boolean;
   selectable: boolean;
+  isCover?: boolean;
   onSelect?: (assetId: string) => void;
   onClick?: (asset: GalleryAssetItem, index: number) => void;
   onFavorite?: (assetId: string, favorite: boolean) => void;
   onSelection?: (assetId: string, selected: boolean) => void;
   onDownload?: (assetId: string) => void;
   onDelete?: (assetId: string) => void;
+  onSetCover?: (assetId: string) => void;
   observerRef?: (node: HTMLDivElement | null) => void;
   sortable: boolean;
 }
@@ -328,12 +338,14 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
   index,
   isSelected,
   selectable,
+  isCover,
   onSelect,
   onClick,
   onFavorite,
   onSelection,
   onDownload,
   onDelete,
+  onSetCover,
   observerRef,
 }) => {
   const {
@@ -368,12 +380,14 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
         index={index}
         isSelected={isSelected}
         selectable={selectable}
+        isCover={isCover}
         onSelect={onSelect}
         onClick={onClick}
         onFavorite={onFavorite}
         onSelection={onSelection}
         onDownload={onDownload}
         onDelete={onDelete}
+        onSetCover={onSetCover}
         showActions={true}
       />
     </div>
@@ -386,12 +400,14 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
   index,
   isSelected,
   selectable,
+  isCover,
   onSelect,
   onClick,
   onFavorite,
   onSelection,
   onDownload,
   onDelete,
+  onSetCover,
   observerRef,
 }) => {
   return (
@@ -404,12 +420,14 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
         index={index}
         isSelected={isSelected}
         selectable={selectable}
+        isCover={isCover}
         onSelect={onSelect}
         onClick={onClick}
         onFavorite={onFavorite}
         onSelection={onSelection}
         onDownload={onDownload}
         onDelete={onDelete}
+        onSetCover={onSetCover}
         showActions={true}
       />
     </div>

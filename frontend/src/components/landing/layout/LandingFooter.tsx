@@ -285,28 +285,69 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
             {/* Phone */}
             <div>
               <h3 className="text-white font-semibold mb-4">Phone</h3>
-              <a
-                href="tel:+491785220533"
-                className="
-                  flex items-center gap-2 text-slate-400 hover:text-white text-sm
-                  transition-colors duration-200
-                  focus-visible:outline-none focus-visible:text-white
-                "
-              >
-                <Phone size={16} aria-hidden="true" />
-                +49 178 5220533
-              </a>
+              {/* India primary - stacked vertically */}
+              <div className="flex flex-col gap-2">
+                <a
+                  href="tel:+919701087446"
+                  aria-label="Call India office"
+                  className="
+                    flex items-center gap-2 text-slate-400 hover:text-white text-sm
+                    transition-colors duration-200
+                    focus-visible:outline-none focus-visible:text-white
+                  "
+                >
+                  <Phone size={16} aria-hidden="true" />
+                  +91 97010 87446
+                </a>
+
+                <a
+                  href="tel:+491785220533"
+                  aria-label="Call Germany office"
+                  className="
+                    flex items-center gap-2 text-slate-400 hover:text-white text-sm
+                    transition-colors duration-200
+                    focus-visible:outline-none focus-visible:text-white
+                  "
+                >
+                  <Phone size={16} aria-hidden="true" />
+                  +49 178 5220533
+                </a>
+              </div>
             </div>
 
             {/* Address */}
             <div>
               <h3 className="text-white font-semibold mb-4">Address</h3>
-              <div className="flex items-start gap-2 text-slate-400 text-sm">
-                <MapPin size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
-                <span>
-                  HeiricBrauns Strasse 17,<br />
-                  Essen, Germany 45355
-                </span>
+              <div className="space-y-3 text-slate-400 text-sm">
+                {/* India primary address with CTA */}
+                <a
+                  href="https://www.google.com/maps/search/?api=1&query=54-05-10+Revenue+Ward+No+28+Addepalli+Colony+Rajahmundry+Andhra+Pradesh+India"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open India address in maps"
+                  className="flex items-start gap-2 hover:text-white"
+                >
+                  <MapPin size={16} className="mt-0.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                  <span>
+                    54-05-10 Revenue Ward No 28<br />
+                    Addepalli Colony, Rajahmundry, Andhra Pradesh, India
+                  </span>
+                </a>
+
+                {/* Germany address with CTA */}
+                <a
+                  href="https://www.google.com/maps/search/?api=1&query=HeiricBrauns+Strasse+17+Essen+Germany+45355"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open Germany address in maps"
+                  className="flex items-start gap-2 hover:text-white"
+                >
+                  <MapPin size={16} className="mt-0.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                  <span>
+                    HeiricBrauns Strasse 17,<br />
+                    Essen, Germany 45355
+                  </span>
+                </a>
               </div>
             </div>
           </div>

@@ -358,6 +358,7 @@ async def update_sub_gallery(
             name=request.name,
             sort_order=request.sort_order,
             visible=request.visible,
+            cover_asset_id=request.cover_asset_id,
         )
         return result
     except SubGalleryNotFoundError as e:

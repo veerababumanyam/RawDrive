@@ -399,6 +399,7 @@ class UpdateSubGalleryRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     sort_order: Optional[int] = None
     visible: Optional[bool] = None
+    cover_asset_id: Optional[UUID] = Field(None, description="Cover image asset ID")
 
 
 class UpdateSubGalleriesSortOrderRequest(BaseModel):

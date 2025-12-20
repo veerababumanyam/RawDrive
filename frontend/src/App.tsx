@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
-import { AuthProvider, SearchProvider } from './contexts';
+import { AuthProvider } from './contexts';
 import { ToastProvider } from './components/ui';
 import { routes } from './router';
 import ErrorBoundary from './components/error/ErrorBoundary';
@@ -25,9 +25,7 @@ const App: React.FC = () => {
       <HelmetProvider>
         <AuthProvider>
           <ToastProvider position="bottom-center">
-            <SearchProvider>
-              <RouterProvider router={router} />
-            </SearchProvider>
+            <RouterProvider router={router} />
           </ToastProvider>
         </AuthProvider>
       </HelmetProvider>

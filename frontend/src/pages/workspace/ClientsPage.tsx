@@ -1,0 +1,959 @@
+import React, { useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  Plus,
+  Search,
+  Filter,
+  Grid,
+  List,
+  MoreVertical,
+  Mail,
+  Phone,
+  Edit,
+  Trash2,
+  ChevronDown,
+  Loader2,
+  UserPlus,
+  Building2,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Upload,
+  Tag,
+} from 'lucide-react';
+import { staggerContainer, staggerItem } from '../../components/landing/animations/presets';
+import { useAuth } from '../../contexts/AuthContext';
+import { AppButton } from '../../components/ui/AppButton';
+import { AppBadge, StatusBadge } from '../../components/ui/AppBadge';
+import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmationDialog';
+import { useToast } from '../../components/ui/Toast';
+import { clientService } from '../../services/clientService';
+import { ClientExportDialog, ClientImportDialog } from '../../components/features/clients';
+import type {
+  ClientListItem,
+  ClientListMeta,
+  ClientStatus,
+  ClientTag,
+} from '../../types/client';
+
+/* =============================================================================
+   ClientsPage Component
+
+   Client listing page with search, filter, tags, and view toggle.
+   ============================================================================= */
+
+type ViewMode = 'grid' | 'list';
+type SortOption = 'full_name' | 'created_at' | 'updated_at';
+
+const ClientsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { workspace } = useAuth();
+  const { addToast } = useToast();
+
+  // View and filter state
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('created_at');
+  const [filterStatus, setFilterStatus] = useState<ClientStatus | 'all'>('all');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showTagFilter, setShowTagFilter] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+
+  // Data state
+  const [clients, setClients] = useState<ClientListItem[]>([]);
+  const [meta, setMeta] = useState<ClientListMeta | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [availableTags, setAvailableTags] = useState<ClientTag[]>([]);
+
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<ClientListItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Export/Import dialog state
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+
+  // Fetch clients
+  const fetchClients = useCallback(async () => {
+    if (!workspace?.workspace_id) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await clientService.listClients(workspace.workspace_id, {
+        page,
+        limit,
+        status: filterStatus === 'all' ? undefined : filterStatus,
+        search: searchQuery || undefined,
+        tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
+        sort_by: sortBy,
+        sort_order: 'desc',
+      });
+
+      setClients(response.clients);
+      setMeta(response.meta);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch clients'));
+    } finally {
+      setLoading(false);
+    }
+  }, [workspace?.workspace_id, page, limit, filterStatus, searchQuery, selectedTagIds, sortBy]);
+
+  // Fetch tags
+  const fetchTags = useCallback(async () => {
+    if (!workspace?.workspace_id) return;
+
+    try {
+      const tags = await clientService.getWorkspaceTags(workspace.workspace_id);
+      setAvailableTags(tags);
+    } catch (err) {
+      console.error('Failed to fetch tags:', err);
+    }
+  }, [workspace?.workspace_id]);
+
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
+
+  useEffect(() => {
+    fetchTags();
+  }, [fetchTags]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filterStatus, searchQuery, selectedTagIds]);
+
+  // Handlers
+  const handleCreateClient = () => {
+    navigate('/workspace/clients/new');
+  };
+
+  const handleClientClick = (clientId: string) => {
+    navigate(`/workspace/clients/${clientId}`);
+  };
+
+  const handleClientEdit = (clientId: string) => {
+    navigate(`/workspace/clients/${clientId}/edit`);
+  };
+
+  const handleDeleteClick = useCallback((client: ClientListItem) => {
+    setClientToDelete(client);
+    setDeleteDialogOpen(true);
+    setActiveMenu(null);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!clientToDelete || !workspace?.workspace_id) return;
+
+    setIsDeleting(true);
+    try {
+      await clientService.deleteClient(workspace.workspace_id, clientToDelete.client_id);
+
+      addToast({
+        variant: 'success',
+        message: `"${clientToDelete.full_name}" has been deleted`,
+      });
+
+      setDeleteDialogOpen(false);
+      setClientToDelete(null);
+      fetchClients();
+    } catch (err) {
+      addToast({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'Failed to delete client',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [clientToDelete, workspace?.workspace_id, addToast, fetchClients]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteDialogOpen(false);
+    setClientToDelete(null);
+  }, []);
+
+  const handleExport = () => {
+    setExportDialogOpen(true);
+  };
+
+  const handleExportComplete = () => {
+    setExportDialogOpen(false);
+    addToast({
+      variant: 'success',
+      message: 'Clients exported successfully',
+    });
+  };
+
+  const handleImport = () => {
+    setImportDialogOpen(true);
+  };
+
+  const handleImportComplete = () => {
+    setImportDialogOpen(false);
+    fetchClients();
+    addToast({
+      variant: 'success',
+      message: 'Clients imported successfully',
+    });
+  };
+
+  const handleTagToggle = (tagId: string) => {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
+
+  const clearTagFilters = () => {
+    setSelectedTagIds([]);
+    setShowTagFilter(false);
+  };
+
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  // Client Avatar component
+  const ClientAvatar: React.FC<{ client: ClientListItem; size?: 'sm' | 'md' | 'lg' }> = ({
+    client,
+    size = 'md',
+  }) => {
+    const sizeClasses = {
+      sm: 'w-8 h-8 text-xs',
+      md: 'w-10 h-10 text-sm',
+      lg: 'w-12 h-12 text-base',
+    };
+
+    if (client.avatar_url) {
+      return (
+        <img
+          src={client.avatar_url}
+          alt={client.full_name}
+          className={`${sizeClasses[size]} rounded-full object-cover ring-2 ring-white/20`}
+        />
+      );
+    }
+
+    return (
+      <div
+        className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center font-semibold text-primary ring-2 ring-white/10`}
+      >
+        {client.initials || client.full_name.charAt(0).toUpperCase()}
+      </div>
+    );
+  };
+
+  return (
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainer}
+      className="space-y-6"
+    >
+      {/* Page Header */}
+      <motion.div
+        variants={staggerItem}
+        className="card-glass rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+      >
+        <div>
+          <h1 className="text-2xl font-bold text-gradient">Clients</h1>
+          <p className="text-text-secondary mt-1">
+            {loading ? (
+              'Loading...'
+            ) : error ? (
+              'Error loading clients'
+            ) : (
+              <>
+                {clients.length} {clients.length === 1 ? 'client' : 'clients'}
+                {meta && ` of ${meta.total}`}
+              </>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <AppButton
+            onClick={handleExport}
+            variant="outline"
+            leftIcon={<Download size={18} />}
+            className="hidden sm:flex"
+          >
+            Export
+          </AppButton>
+          <AppButton
+            onClick={handleImport}
+            variant="outline"
+            leftIcon={<Upload size={18} />}
+            className="hidden sm:flex"
+          >
+            Import
+          </AppButton>
+          <AppButton
+            onClick={handleCreateClient}
+            variant="primary"
+            leftIcon={<Plus size={20} />}
+            shine
+            className="hover:-translate-y-0.5 active:scale-95 transition-all"
+          >
+            New Client
+          </AppButton>
+        </div>
+      </motion.div>
+
+      {/* Search and Filters */}
+      <motion.div
+        variants={staggerItem}
+        className="card-glass rounded-2xl p-4 flex flex-col sm:flex-row gap-4"
+      >
+        {/* Search */}
+        <div className="relative flex-1">
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search clients..."
+            className="
+              w-full pl-10 pr-4 py-2.5
+              glass-light border border-white/20 dark:border-white/10
+              rounded-xl text-text-primary placeholder:text-text-tertiary
+              focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
+              hover:border-white/30 dark:hover:border-white/20
+              transition-all duration-200
+              min-h-[44px]
+            "
+          />
+        </div>
+
+        {/* Filter Controls */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Status Filter */}
+          <div className="relative">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="
+                flex items-center gap-2
+                px-4 py-2.5
+                glass-light border border-white/20 dark:border-white/10
+                rounded-xl text-text-secondary hover:text-text-primary hover:border-white/30
+                hover:shadow-md
+                transition-all duration-200
+                min-h-[44px]
+              "
+            >
+              <Filter size={18} />
+              <span className="hidden sm:inline">Status</span>
+              {filterStatus !== 'all' && (
+                <span className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent animate-pulse" />
+              )}
+            </button>
+            {showFilters && (
+              <div className="absolute top-full mt-2 right-0 w-48 card-glass rounded-xl shadow-xl z-10 overflow-hidden">
+                <div className="p-2">
+                  <p className="px-3 py-2 text-xs font-semibold text-text-tertiary uppercase">
+                    Status
+                  </p>
+                  {(['all', 'active', 'inactive'] as const).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => {
+                        setFilterStatus(status);
+                        setShowFilters(false);
+                      }}
+                      className={`
+                        w-full flex items-center justify-between
+                        px-3 py-2 rounded-lg text-sm transition-all duration-200
+                        ${filterStatus === status ? 'bg-gradient-to-r from-primary/10 to-accent/10 text-primary dark:text-primary-300' : 'hover:bg-surface-hover/50 text-text-secondary'}
+                      `}
+                    >
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                      {filterStatus === status && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-primary to-accent" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tag Filter */}
+          <div className="relative">
+            <button
+              onClick={() => setShowTagFilter(!showTagFilter)}
+              className="
+                flex items-center gap-2
+                px-4 py-2.5
+                glass-light border border-white/20 dark:border-white/10
+                rounded-xl text-text-secondary hover:text-text-primary hover:border-white/30
+                hover:shadow-md
+                transition-all duration-200
+                min-h-[44px]
+              "
+            >
+              <Tag size={18} />
+              <span className="hidden sm:inline">Tags</span>
+              {selectedTagIds.length > 0 && (
+                <AppBadge variant="primary" size="sm">
+                  {selectedTagIds.length}
+                </AppBadge>
+              )}
+            </button>
+            {showTagFilter && (
+              <div className="absolute top-full mt-2 right-0 w-64 card-glass rounded-xl shadow-xl z-10 overflow-hidden">
+                <div className="p-2">
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <p className="text-xs font-semibold text-text-tertiary uppercase">Tags</p>
+                    {selectedTagIds.length > 0 && (
+                      <button
+                        onClick={clearTagFilters}
+                        className="text-xs text-primary hover:text-primary-600"
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  {availableTags.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-text-tertiary">No tags available</p>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {availableTags.map((tag) => (
+                        <button
+                          key={tag.tag_id}
+                          onClick={() => handleTagToggle(tag.tag_id)}
+                          className={`
+                            w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all
+                            ${selectedTagIds.includes(tag.tag_id) ? 'bg-primary/10 text-primary' : 'hover:bg-surface-hover/50 text-text-secondary'}
+                          `}
+                        >
+                          <span
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: tag.color || '#6B7280' }}
+                          />
+                          {tag.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sort */}
+          <div className="relative">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="
+                appearance-none
+                px-4 py-2.5 pr-10
+                glass-light border border-white/20 dark:border-white/10
+                rounded-xl text-text-secondary
+                focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
+                hover:border-white/30 hover:shadow-md
+                cursor-pointer transition-all duration-200
+                min-h-[44px]
+              "
+            >
+              <option value="created_at">Newest</option>
+              <option value="full_name">Name</option>
+              <option value="updated_at">Recently Updated</option>
+            </select>
+            <ChevronDown
+              size={16}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none"
+            />
+          </div>
+
+          {/* View Toggle */}
+          <div className="hidden sm:flex items-center glass-light border border-white/20 dark:border-white/10 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`
+                p-2.5
+                ${viewMode === 'grid' ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg' : 'text-text-tertiary hover:bg-surface-hover/50 hover:text-text-primary'}
+                transition-all duration-200
+                min-w-[44px] min-h-[44px] flex items-center justify-center
+              `}
+              aria-label="Grid view"
+            >
+              <Grid size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`
+                p-2.5
+                ${viewMode === 'list' ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg' : 'text-text-tertiary hover:bg-surface-hover/50 hover:text-text-primary'}
+                transition-all duration-200
+                min-w-[44px] min-h-[44px] flex items-center justify-center
+              `}
+              aria-label="List view"
+            >
+              <List size={18} />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Active Tag Filters */}
+      {selectedTagIds.length > 0 && (
+        <motion.div variants={staggerItem} className="flex flex-wrap gap-2">
+          {selectedTagIds.map((tagId) => {
+            const tag = availableTags.find((t) => t.tag_id === tagId);
+            if (!tag) return null;
+            return (
+              <AppBadge
+                key={tagId}
+                variant="primary"
+                removable
+                onRemove={() => handleTagToggle(tagId)}
+                icon={
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: tag.color || '#6B7280' }}
+                  />
+                }
+              >
+                {tag.name}
+              </AppBadge>
+            );
+          })}
+          <button
+            onClick={clearTagFilters}
+            className="text-sm text-text-tertiary hover:text-text-primary transition-colors"
+          >
+            Clear all
+          </button>
+        </motion.div>
+      )}
+
+      {/* Client Grid/List */}
+      {loading ? (
+        <motion.div variants={staggerItem} className="flex items-center justify-center py-16">
+          <Loader2 size={32} className="text-primary animate-spin" />
+        </motion.div>
+      ) : error ? (
+        <motion.div variants={staggerItem} className="text-center py-16">
+          <p className="text-error mb-4">{error.message}</p>
+          <AppButton onClick={fetchClients} variant="outline">
+            Try Again
+          </AppButton>
+        </motion.div>
+      ) : clients.length === 0 ? (
+        <motion.div variants={staggerItem}>
+          <ClientEmptyState
+            hasFilters={!!searchQuery || filterStatus !== 'all' || selectedTagIds.length > 0}
+            onCreateClient={handleCreateClient}
+          />
+        </motion.div>
+      ) : viewMode === 'grid' ? (
+        <motion.div
+          variants={staggerItem}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+        >
+          {clients.map((client) => (
+            <ClientCard
+              key={client.client_id}
+              client={client}
+              onClick={() => handleClientClick(client.client_id)}
+              onEdit={() => handleClientEdit(client.client_id)}
+              onDelete={() => handleDeleteClick(client)}
+            />
+          ))}
+        </motion.div>
+      ) : (
+        <motion.div variants={staggerItem} className="card-glass rounded-2xl overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-surface-hover/50 border-b border-white/10 dark:border-white/5">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                  Client
+                </th>
+                <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                  Organization
+                </th>
+                <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                  Contact
+                </th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                  Galleries
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                  Status
+                </th>
+                <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                  Created
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-text-tertiary uppercase">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {clients.map((client) => (
+                <tr
+                  key={client.client_id}
+                  className="group hover:bg-surface-hover/50 transition-all duration-200 cursor-pointer"
+                  onClick={() => handleClientClick(client.client_id)}
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <ClientAvatar client={client} />
+                      <div className="min-w-0">
+                        <span className="font-medium text-text-primary truncate block group-hover:text-primary transition-colors">
+                          {client.full_name}
+                        </span>
+                        {client.tags.length > 0 && (
+                          <div className="flex gap-1 mt-1">
+                            {client.tags.slice(0, 2).map((tag) => (
+                              <span
+                                key={tag.tag_id}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-surface-hover/50"
+                              >
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full"
+                                  style={{ backgroundColor: tag.color || '#6B7280' }}
+                                />
+                                {tag.name}
+                              </span>
+                            ))}
+                            {client.tags.length > 2 && (
+                              <span className="text-[10px] text-text-tertiary">
+                                +{client.tags.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="hidden md:table-cell px-4 py-3 text-sm text-text-secondary truncate">
+                    {client.organization || '-'}
+                  </td>
+                  <td className="hidden lg:table-cell px-4 py-3">
+                    <div className="space-y-1">
+                      {client.primary_email && (
+                        <div className="flex items-center gap-1.5 text-sm text-text-secondary">
+                          <Mail size={12} className="text-text-tertiary" />
+                          <span className="truncate max-w-[180px]">{client.primary_email}</span>
+                        </div>
+                      )}
+                      {client.primary_phone && (
+                        <div className="flex items-center gap-1.5 text-sm text-text-secondary">
+                          <Phone size={12} className="text-text-tertiary" />
+                          <span>{client.primary_phone}</span>
+                        </div>
+                      )}
+                      {!client.primary_email && !client.primary_phone && (
+                        <span className="text-sm text-text-tertiary">-</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-sm text-text-secondary">
+                    {client.linked_galleries_count}
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={client.status} size="sm" />
+                  </td>
+                  <td className="hidden md:table-cell px-4 py-3 text-sm text-text-tertiary">
+                    {formatDate(client.created_at)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClientEdit(client.client_id);
+                        }}
+                        className="p-2 rounded-lg hover:bg-primary/10 text-text-tertiary hover:text-primary transition-all duration-200 hover:scale-110"
+                        aria-label="Edit client"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <div className="relative">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenu(activeMenu === client.client_id ? null : client.client_id);
+                          }}
+                          className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-all duration-200 hover:scale-110"
+                          aria-label="More options"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                        {activeMenu === client.client_id && (
+                          <div className="absolute right-0 top-full mt-1 w-40 card-glass rounded-xl shadow-xl z-10 overflow-hidden">
+                            <button
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-error hover:bg-error/10 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteClick(client);
+                              }}
+                            >
+                              <Trash2 size={14} />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </motion.div>
+      )}
+
+      {/* Pagination */}
+      {meta && meta.total_pages > 1 && (
+        <motion.div
+          variants={staggerItem}
+          className="flex items-center justify-between card-glass rounded-xl px-4 py-3"
+        >
+          <p className="text-sm text-text-tertiary">
+            Showing {(page - 1) * limit + 1} to {Math.min(page * limit, meta.total)} of{' '}
+            {meta.total} clients
+          </p>
+          <div className="flex items-center gap-2">
+            <AppButton
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              leftIcon={<ChevronLeft size={16} />}
+            >
+              Previous
+            </AppButton>
+            <span className="px-3 py-1 text-sm text-text-secondary">
+              Page {page} of {meta.total_pages}
+            </span>
+            <AppButton
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(meta.total_pages, p + 1))}
+              disabled={page === meta.total_pages}
+              rightIcon={<ChevronRight size={16} />}
+            >
+              Next
+            </AppButton>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        deleteType="hard"
+        entityType="client"
+        entityName={clientToDelete?.full_name || ''}
+        isLoading={isDeleting}
+      />
+
+      {/* Export Dialog */}
+      {workspace?.workspace_id && (
+        <ClientExportDialog
+          isOpen={exportDialogOpen}
+          onClose={() => setExportDialogOpen(false)}
+          workspaceId={workspace.workspace_id}
+          onExportComplete={handleExportComplete}
+        />
+      )}
+
+      {/* Import Dialog */}
+      {workspace?.workspace_id && (
+        <ClientImportDialog
+          isOpen={importDialogOpen}
+          onClose={() => setImportDialogOpen(false)}
+          workspaceId={workspace.workspace_id}
+          onImported={handleImportComplete}
+        />
+      )}
+    </motion.div>
+  );
+};
+
+/* =============================================================================
+   Client Card Component
+   ============================================================================= */
+
+interface ClientCardProps {
+  client: ClientListItem;
+  onClick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+const ClientCard: React.FC<ClientCardProps> = ({ client, onClick, onEdit, onDelete }) => {
+  const [showMenu, setShowMenu] = useState(false);
+
+  return (
+    <motion.div
+      className="card-glass rounded-2xl p-4 hover:shadow-lg hover:ring-1 hover:ring-primary/20 transition-all duration-200 cursor-pointer group"
+      onClick={onClick}
+      whileHover={{ y: -2 }}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          {client.avatar_url ? (
+            <img
+              src={client.avatar_url}
+              alt={client.full_name}
+              className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20 group-hover:ring-primary/30 transition-all"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-lg font-semibold text-primary ring-2 ring-white/10 group-hover:ring-primary/30 transition-all">
+              {client.initials || client.full_name.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0">
+            <h3 className="font-semibold text-text-primary truncate group-hover:text-primary transition-colors">
+              {client.full_name}
+            </h3>
+            {client.organization && (
+              <p className="text-sm text-text-tertiary truncate flex items-center gap-1">
+                <Building2 size={12} />
+                {client.organization}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-all"
+          >
+            <MoreVertical size={16} />
+          </button>
+          {showMenu && (
+            <div className="absolute right-0 top-full mt-1 w-36 card-glass rounded-xl shadow-xl z-10 overflow-hidden">
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-surface-hover/50 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+              >
+                <Edit size={14} />
+                Edit
+              </button>
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+              >
+                <Trash2 size={14} />
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Contact Info */}
+      <div className="space-y-1.5 mb-3">
+        {client.primary_email && (
+          <div className="flex items-center gap-2 text-sm text-text-secondary">
+            <Mail size={14} className="text-text-tertiary flex-shrink-0" />
+            <span className="truncate">{client.primary_email}</span>
+          </div>
+        )}
+        {client.primary_phone && (
+          <div className="flex items-center gap-2 text-sm text-text-secondary">
+            <Phone size={14} className="text-text-tertiary flex-shrink-0" />
+            <span>{client.primary_phone}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-3 border-t border-white/10">
+        <div className="flex items-center gap-1.5 text-sm text-text-tertiary">
+          <Users size={14} />
+          {client.linked_galleries_count} galleries
+        </div>
+        <StatusBadge status={client.status} size="sm" />
+      </div>
+
+      {/* Tags */}
+      {client.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-3">
+          {client.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag.tag_id}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full bg-surface-hover/50"
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: tag.color || '#6B7280' }}
+              />
+              {tag.name}
+            </span>
+          ))}
+          {client.tags.length > 3 && (
+            <span className="text-[10px] text-text-tertiary">+{client.tags.length - 3}</span>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+/* =============================================================================
+   Empty State Component
+   ============================================================================= */
+
+interface ClientEmptyStateProps {
+  hasFilters: boolean;
+  onCreateClient: () => void;
+}
+
+const ClientEmptyState: React.FC<ClientEmptyStateProps> = ({ hasFilters, onCreateClient }) => {
+  return (
+    <div className="card-glass rounded-2xl p-12 text-center">
+      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+        <UserPlus size={32} className="text-primary" />
+      </div>
+      <h3 className="text-xl font-semibold text-text-primary mb-2">
+        {hasFilters ? 'No clients found' : 'No clients yet'}
+      </h3>
+      <p className="text-text-secondary mb-6 max-w-md mx-auto">
+        {hasFilters
+          ? 'Try adjusting your search or filter criteria to find what you\'re looking for.'
+          : 'Start building your client relationships by adding your first client.'}
+      </p>
+      {!hasFilters && (
+        <AppButton onClick={onCreateClient} variant="primary" leftIcon={<Plus size={20} />} shine>
+          Add Your First Client
+        </AppButton>
+      )}
+    </div>
+  );
+};
+
+export default ClientsPage;

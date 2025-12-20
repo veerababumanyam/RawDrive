@@ -46,6 +46,11 @@ const GalleryCreatePage = lazy(() => import('../pages/workspace/GalleryCreatePag
 const GalleryDetailPage = lazy(() => import('../pages/workspace/GalleryDetailPage'));
 const RecycleBinPage = lazy(() => import('../pages/workspace/RecycleBinPage'));
 
+// Client CRM pages
+const ClientsPage = lazy(() => import('../pages/workspace/ClientsPage'));
+const ClientDetailPage = lazy(() => import('../pages/workspace/ClientDetailPage'));
+const ClientFormPage = lazy(() => import('../pages/workspace/ClientFormPage'));
+
 // Wrapper for lazy loaded components
 const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
   component: Component,
@@ -169,7 +174,19 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'clients',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
+        element: <CriticalLazyPage component={ClientsPage} />,
+      },
+      {
+        path: 'clients/new',
+        element: <CriticalLazyPage component={ClientFormPage} />,
+      },
+      {
+        path: 'clients/:clientId',
+        element: <CriticalLazyPage component={ClientDetailPage} />,
+      },
+      {
+        path: 'clients/:clientId/edit',
+        element: <CriticalLazyPage component={ClientFormPage} />,
       },
       {
         path: 'shared',
@@ -225,11 +242,18 @@ export const fallbackRoute: RouteObject = {
 };
 
 // All routes combined
+import { RootLayout } from '../components/layout/RootLayout';
+
 export const routes: RouteObject[] = [
-  ...publicRoutes,
-  ...authRoutes,
-  ...workspaceRoutes,
-  fallbackRoute,
+  {
+    element: <RootLayout />,
+    children: [
+      ...publicRoutes,
+      ...authRoutes,
+      ...workspaceRoutes,
+      fallbackRoute,
+    ],
+  },
 ];
 
 export default routes;

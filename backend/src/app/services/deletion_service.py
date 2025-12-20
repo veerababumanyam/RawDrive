@@ -397,6 +397,290 @@ class DeletionService:
         return results
 
     # ---------------------------------------------------------------------------
+    # Mark for permanent deletion (fast, synchronous part)
+    # ---------------------------------------------------------------------------
+
+    async def mark_gallery_for_permanent_deletion(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+    ) -> dict:
+        """Mark a gallery as permanent_deleting (fast operation for API response).
+
+        Returns gallery info needed for background deletion.
+        Raises validation errors if item cannot be deleted.
+        """
+        pool = await get_postgres_pool()
+
+        async with pool.acquire() as conn:
+            # Verify and lock the gallery
+            gallery = await conn.fetchrow(
+                """
+                SELECT gallery_id, workspace_id, title, deleted, delete_status
+                FROM galleries
+                WHERE gallery_id = $1
+                FOR UPDATE
+                """,
+                gallery_id,
+            )
+
+            if not gallery:
+                raise EntityNotFoundError("gallery", gallery_id)
+
+            if gallery["workspace_id"] != workspace_id:
+                raise WorkspaceAccessError()
+
+            if not gallery["deleted"]:
+                raise NotDeletedError("gallery", gallery_id)
+
+            if gallery["delete_status"] == "permanent_deleting":
+                raise DeletionInProgressError("gallery", gallery_id)
+
+            # Mark as permanent_deleting to prevent concurrent operations
+            await conn.execute(
+                """
+                UPDATE galleries
+                SET delete_status = 'permanent_deleting'
+                WHERE gallery_id = $1
+                """,
+                gallery_id,
+            )
+
+        return {"gallery_id": gallery_id, "title": gallery["title"]}
+
+    async def mark_photo_for_permanent_deletion(
+        self,
+        workspace_id: UUID,
+        asset_id: UUID,
+    ) -> dict:
+        """Mark a photo as permanent_deleting (fast operation for API response).
+
+        Returns photo info needed for background deletion.
+        Raises validation errors if item cannot be deleted.
+        """
+        pool = await get_postgres_pool()
+
+        async with pool.acquire() as conn:
+            # Verify and lock the photo
+            photo = await conn.fetchrow(
+                """
+                SELECT asset_id, workspace_id, deleted, delete_status,
+                       original_object_key, original_bytes
+                FROM assets
+                WHERE asset_id = $1
+                FOR UPDATE
+                """,
+                asset_id,
+            )
+
+            if not photo:
+                raise EntityNotFoundError("photo", asset_id)
+
+            if photo["workspace_id"] != workspace_id:
+                raise WorkspaceAccessError()
+
+            if not photo["deleted"]:
+                raise NotDeletedError("photo", asset_id)
+
+            if photo["delete_status"] == "permanent_deleting":
+                raise DeletionInProgressError("photo", asset_id)
+
+            # Mark as permanent_deleting
+            await conn.execute(
+                """
+                UPDATE assets
+                SET delete_status = 'permanent_deleting'
+                WHERE asset_id = $1
+                """,
+                asset_id,
+            )
+
+        return {
+            "asset_id": asset_id,
+            "original_object_key": photo["original_object_key"],
+            "original_bytes": photo["original_bytes"],
+        }
+
+    # ---------------------------------------------------------------------------
+    # Background permanent deletion (slow, async part)
+    # ---------------------------------------------------------------------------
+
+    async def perform_gallery_permanent_delete_background(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        user_id: Optional[UUID],
+        gallery_title: str,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> None:
+        """Perform the actual R2 cleanup and database deletion (background task).
+
+        This should be called as a background task after mark_gallery_for_permanent_deletion.
+        """
+        from app.services.r2_cleanup_service import get_r2_cleanup_service
+
+        pool = await get_postgres_pool()
+        r2_cleanup = get_r2_cleanup_service()
+
+        try:
+            r2_result = await r2_cleanup.delete_gallery_files(workspace_id, gallery_id)
+
+            if not r2_result.success:
+                await self._mark_gallery_delete_failed(
+                    gallery_id,
+                    f"R2 cleanup failed: {len(r2_result.keys_failed)} keys failed",
+                )
+                await self._audit_service.log_error(
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    entity_id=gallery_id,
+                    entity_type=EntityType.GALLERY,
+                    action=DeletionAction.PERMANENT_DELETE,
+                    error_message="R2 cleanup failed",
+                    r2_keys_failed=r2_result.keys_failed[:100],
+                    metadata={"errors": r2_result.errors},
+                )
+                return
+
+            # Delete database records
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        "DELETE FROM gallery_assets WHERE workspace_id = $1 AND gallery_id = $2",
+                        workspace_id, gallery_id,
+                    )
+                    await conn.execute(
+                        "DELETE FROM sub_galleries WHERE workspace_id = $1 AND gallery_id = $2",
+                        workspace_id, gallery_id,
+                    )
+                    await conn.execute(
+                        "DELETE FROM client_interactions WHERE workspace_id = $1 AND gallery_id = $2",
+                        workspace_id, gallery_id,
+                    )
+                    await conn.execute(
+                        "DELETE FROM galleries WHERE workspace_id = $1 AND gallery_id = $2",
+                        workspace_id, gallery_id,
+                    )
+
+            await self._audit_service.log_permanent_delete(
+                workspace_id=workspace_id,
+                user_id=user_id,
+                entity_id=gallery_id,
+                entity_type=EntityType.GALLERY,
+                r2_keys_deleted=r2_result.keys_deleted,
+                storage_freed=r2_result.total_bytes_freed,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                metadata={"title": gallery_title},
+            )
+
+            logger.info(
+                f"Background: Permanently deleted gallery {gallery_id}: "
+                f"{len(r2_result.keys_deleted)} files, "
+                f"{r2_result.total_bytes_freed / 1024 / 1024:.2f} MB freed"
+            )
+
+        except Exception as e:
+            logger.exception(f"Background deletion failed for gallery {gallery_id}: {e}")
+            await self._mark_gallery_delete_failed(gallery_id, str(e))
+            await self._audit_service.log_error(
+                workspace_id=workspace_id,
+                user_id=user_id,
+                entity_id=gallery_id,
+                entity_type=EntityType.GALLERY,
+                action=DeletionAction.PERMANENT_DELETE,
+                error_message=str(e),
+            )
+
+    async def perform_photo_permanent_delete_background(
+        self,
+        workspace_id: UUID,
+        asset_id: UUID,
+        user_id: Optional[UUID],
+        original_object_key: str,
+        original_bytes: int,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> None:
+        """Perform the actual R2 cleanup and database deletion (background task).
+
+        This should be called as a background task after mark_photo_for_permanent_deletion.
+        """
+        from app.services.r2_cleanup_service import get_r2_cleanup_service
+
+        pool = await get_postgres_pool()
+        r2_cleanup = get_r2_cleanup_service()
+
+        try:
+            r2_result = await r2_cleanup.delete_photo_files(workspace_id, asset_id)
+
+            if not r2_result.success:
+                await self._mark_photo_delete_failed(
+                    asset_id,
+                    f"R2 cleanup failed: {len(r2_result.keys_failed)} keys failed",
+                )
+                await self._audit_service.log_error(
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    entity_id=asset_id,
+                    entity_type=EntityType.PHOTO,
+                    action=DeletionAction.PERMANENT_DELETE,
+                    error_message="R2 cleanup failed",
+                    r2_keys_failed=r2_result.keys_failed,
+                )
+                return
+
+            # Delete database records
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(
+                        "DELETE FROM gallery_assets WHERE workspace_id = $1 AND asset_id = $2",
+                        workspace_id, asset_id,
+                    )
+                    await conn.execute(
+                        "DELETE FROM client_interactions WHERE workspace_id = $1 AND asset_id = $2",
+                        workspace_id, asset_id,
+                    )
+                    await conn.execute(
+                        "DELETE FROM assets WHERE workspace_id = $1 AND asset_id = $2",
+                        workspace_id, asset_id,
+                    )
+
+            await self._audit_service.log_permanent_delete(
+                workspace_id=workspace_id,
+                user_id=user_id,
+                entity_id=asset_id,
+                entity_type=EntityType.PHOTO,
+                r2_keys_deleted=r2_result.keys_deleted,
+                storage_freed=r2_result.total_bytes_freed,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                metadata={
+                    "original_object_key": original_object_key,
+                    "original_bytes": original_bytes,
+                },
+            )
+
+            logger.info(
+                f"Background: Permanently deleted photo {asset_id}: "
+                f"{len(r2_result.keys_deleted)} files, "
+                f"{r2_result.total_bytes_freed / 1024 / 1024:.2f} MB freed"
+            )
+
+        except Exception as e:
+            logger.exception(f"Background deletion failed for photo {asset_id}: {e}")
+            await self._mark_photo_delete_failed(asset_id, str(e))
+            await self._audit_service.log_error(
+                workspace_id=workspace_id,
+                user_id=user_id,
+                entity_id=asset_id,
+                entity_type=EntityType.PHOTO,
+                action=DeletionAction.PERMANENT_DELETE,
+                error_message=str(e),
+            )
+
+    # ---------------------------------------------------------------------------
     # Permanent delete gallery
     # ---------------------------------------------------------------------------
 

@@ -158,18 +158,21 @@ const RecycleBinItemCard: React.FC<RecycleBinItemCardProps> = ({
   };
 
   const getWarningLevel = () => {
+    if (item.deleteStatus === 'delete_failed') return 'failed';
     if (item.daysUntilPermanentDelete <= 3) return 'critical';
     if (item.daysUntilPermanentDelete <= 7) return 'warning';
     return 'normal';
   };
 
   const warningLevel = getWarningLevel();
+  const hasFailed = item.deleteStatus === 'delete_failed';
 
   return (
     <AppCard
       className={`
         relative overflow-hidden transition-all
         ${isSelected ? 'ring-2 ring-primary' : ''}
+        ${hasFailed ? 'ring-2 ring-error/50 bg-error/5' : ''}
       `}
       hoverable
     >
@@ -253,24 +256,36 @@ const RecycleBinItemCard: React.FC<RecycleBinItemCardProps> = ({
           </div>
         </div>
 
-        {/* Days remaining indicator */}
+        {/* Status indicator */}
         <div
           className={`
             flex items-center gap-1.5 text-xs
-            ${warningLevel === 'critical'
-              ? 'text-error'
-              : warningLevel === 'warning'
-                ? 'text-warning'
-                : 'text-text-tertiary'
+            ${warningLevel === 'failed'
+              ? 'text-error font-medium'
+              : warningLevel === 'critical'
+                ? 'text-error'
+                : warningLevel === 'warning'
+                  ? 'text-warning'
+                  : 'text-text-tertiary'
             }
           `}
         >
-          {warningLevel === 'critical' ? (
-            <AlertTriangle size={14} />
+          {warningLevel === 'failed' ? (
+            <>
+              <AlertTriangle size={14} />
+              <span>Deletion failed - tap to retry</span>
+            </>
+          ) : warningLevel === 'critical' ? (
+            <>
+              <AlertTriangle size={14} />
+              <span>{getDaysLabel()}</span>
+            </>
           ) : (
-            <Clock size={14} />
+            <>
+              <Clock size={14} />
+              <span>{getDaysLabel()}</span>
+            </>
           )}
-          <span>{getDaysLabel()}</span>
         </div>
 
         {/* Actions */}
@@ -293,7 +308,7 @@ const RecycleBinItemCard: React.FC<RecycleBinItemCardProps> = ({
             onClick={() => onPermanentDelete(item)}
             isLoading={isDeleting}
             disabled={isRestoring}
-            aria-label="Delete forever"
+            aria-label={hasFailed ? "Retry delete" : "Delete forever"}
           >
             <Trash2 size={14} />
           </AppButton>
@@ -481,6 +496,18 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
   // Permanent delete handler
   const handlePermanentDelete = useCallback(
     async (item: RecycleBinItem) => {
+      // Close dialog first for immediate feedback
+      setDeleteDialogItem(null);
+
+      // Optimistic removal - remove from UI immediately
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+      setTotal((prev) => prev - 1);
+
       setDeletingIds((prev) => new Set(prev).add(item.id));
 
       try {
@@ -494,17 +521,13 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
           variant: 'success',
           message: `${item.type === 'gallery' ? 'Gallery' : 'Photo'} permanently deleted`,
         });
-
-        // Remove from list
-        setItems((prev) => prev.filter((i) => i.id !== item.id));
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(item.id);
-          return next;
-        });
-        setTotal((prev) => prev - 1);
-        setDeleteDialogItem(null);
       } catch (err) {
+        // Restore item on error (optimistic rollback)
+        setItems((prev) => [...prev, item].sort((a, b) =>
+          new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()
+        ));
+        setTotal((prev) => prev + 1);
+
         addToast({
           variant: 'error',
           message: err instanceof Error ? err.message : 'Failed to delete item',
@@ -574,6 +597,18 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
 
     if (selectedItems.length === 0) return;
 
+    // Close dialog immediately
+    setShowBulkDeleteDialog(false);
+
+    // Store items for potential rollback
+    const itemsToDelete = [...selectedItems];
+    const idsToDelete = new Set(selectedItems.map((item) => item.id));
+
+    // Optimistic removal - remove from UI immediately
+    setItems((prev) => prev.filter((i) => !idsToDelete.has(i.id)));
+    setTotal((prev) => prev - selectedItems.length);
+    setSelectedIds(new Set());
+
     const ids = selectedItems.map((item) => item.id);
     ids.forEach((id) => {
       setDeletingIds((prev) => new Set(prev).add(id));
@@ -593,17 +628,21 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
       }
 
       if (response.failure_count > 0) {
+        // Some items failed - refetch to get correct state
         addToast({
           variant: 'warning',
-          message: `Failed to delete ${response.failure_count} item${response.failure_count !== 1 ? 's' : ''}`,
+          message: `Failed to delete ${response.failure_count} item${response.failure_count !== 1 ? 's' : ''}. They will reappear if deletion failed.`,
         });
+        // Refetch to show failed items
+        fetchItems(true);
       }
-
-      // Refetch to update list
-      fetchItems(true);
-      setSelectedIds(new Set());
-      setShowBulkDeleteDialog(false);
     } catch (err) {
+      // Restore all items on error (optimistic rollback)
+      setItems((prev) => [...prev, ...itemsToDelete].sort((a, b) =>
+        new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()
+      ));
+      setTotal((prev) => prev + itemsToDelete.length);
+
       addToast({
         variant: 'error',
         message: err instanceof Error ? err.message : 'Failed to delete items',
