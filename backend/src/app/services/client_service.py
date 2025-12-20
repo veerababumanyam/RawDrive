@@ -41,8 +41,63 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Security-Critical Constants (DO NOT MODIFY without security review)
+# ---------------------------------------------------------------------------
+
+# Allowed sort columns for list_clients - maps API field to SQL column
+# WARNING: These are interpolated into SQL. Never add user input here.
+SORT_COLUMN_MAP: dict[str, str] = {
+    "created_at": "c.created_at",
+    "full_name": "c.full_name",
+    "status": "c.status",
+    "updated_at": "c.updated_at",
+}
+
+# Allowed fields for update_client - these are directly used in SQL
+# WARNING: Security-critical. Never add user input here.
+ALLOWED_UPDATE_FIELDS: frozenset[str] = frozenset({
+    "full_name",
+    "first_name",
+    "last_name",
+    "nickname",
+    "avatar_asset_id",
+    "avatar_crop_data",
+    "job_title",
+    "organization",
+    "status",
+    "language",
+    "timezone",
+    "date_of_birth",
+    "anniversary_date",
+    "internal_notes",
+    "referred_by_client_id",
+    "portal_access_enabled",
+})
+
+# Maximum field lengths (matching database constraints)
+MAX_FIELD_LENGTHS: dict[str, int] = {
+    "full_name": 255,
+    "first_name": 100,
+    "last_name": 100,
+    "nickname": 100,
+    "job_title": 150,
+    "organization": 255,
+    "internal_notes": 10000,
+}
+
+
+# ---------------------------------------------------------------------------
 # Helper Functions
 # ---------------------------------------------------------------------------
+
+
+def _escape_like_pattern(value: str) -> str:
+    """Escape special characters in LIKE patterns to prevent pattern injection.
+
+    LIKE patterns use % and _ as wildcards. This function escapes them
+    so user input is treated literally.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _compute_initials(first_name: str, last_name: Optional[str]) -> str:
@@ -160,6 +215,25 @@ class ClientService:
             raise ClientValidationError("Full name is required", "full_name")
         if not first_name or not first_name.strip():
             raise ClientValidationError("First name is required", "first_name")
+
+        # Validate field lengths
+        fields_to_validate = {
+            "full_name": full_name,
+            "first_name": first_name,
+            "last_name": last_name,
+            "nickname": nickname,
+            "job_title": job_title,
+            "organization": organization,
+            "internal_notes": internal_notes,
+        }
+        for field_name, field_value in fields_to_validate.items():
+            if field_value and field_name in MAX_FIELD_LENGTHS:
+                max_len = MAX_FIELD_LENGTHS[field_name]
+                if len(field_value) > max_len:
+                    raise ClientValidationError(
+                        f"{field_name.replace('_', ' ').title()} is too long (max {max_len} characters)",
+                        field_name,
+                    )
 
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
@@ -516,18 +590,16 @@ class ClientService:
                         OR c.organization ILIKE ${param_idx}
                     )
                 """)
-                params.append(f"%{search}%")
+                escaped_search = _escape_like_pattern(search)
+                params.append(f"%{escaped_search}%")
                 param_idx += 1
 
             where_sql = " AND ".join(where_clauses)
 
-            # Validate sort column
-            valid_sorts = {"created_at", "full_name", "status", "updated_at"}
-            if sort not in valid_sorts:
-                sort = "created_at"
-
+            # Use column mapping for sort (security-critical)
+            sort_column = SORT_COLUMN_MAP.get(sort, SORT_COLUMN_MAP["created_at"])
             sort_dir = "DESC" if sort_order.lower() == "desc" else "ASC"
-            order_sql = f"ORDER BY c.{sort} {sort_dir}"
+            order_sql = f"ORDER BY {sort_column} {sort_dir}"
 
             # Get total count
             total = await conn.fetchval(
@@ -618,7 +690,8 @@ class ClientService:
 
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            search_pattern = f"%{query.strip()}%"
+            escaped_query = _escape_like_pattern(query.strip())
+            search_pattern = f"%{escaped_query}%"
 
             clients = await conn.fetch(
                 """
@@ -703,25 +776,9 @@ class ClientService:
             params: list[Any] = []
             param_idx = 1
 
-            allowed_fields = {
-                "full_name",
-                "first_name",
-                "last_name",
-                "nickname",
-                "avatar_asset_id",
-                "avatar_crop_data",
-                "job_title",
-                "organization",
-                "status",
-                "language",
-                "timezone",
-                "date_of_birth",
-                "anniversary_date",
-                "internal_notes",
-                "referred_by_client_id",
-                "portal_access_enabled",
-                "portal_user_id",
-            }
+            # Use module-level constant for security (see ALLOWED_UPDATE_FIELDS)
+            # Note: portal_user_id is handled separately below
+            allowed_fields = ALLOWED_UPDATE_FIELDS | {"portal_user_id"}
 
             for field, value in updates.items():
                 if field not in allowed_fields:
@@ -732,6 +789,15 @@ class ClientService:
                     raise ClientValidationError("Full name cannot be empty", "full_name")
                 if field == "first_name" and (not value or not str(value).strip()):
                     raise ClientValidationError("First name cannot be empty", "first_name")
+
+                # Validate field lengths
+                if field in MAX_FIELD_LENGTHS and isinstance(value, str):
+                    max_len = MAX_FIELD_LENGTHS[field]
+                    if len(value) > max_len:
+                        raise ClientValidationError(
+                            f"{field.replace('_', ' ').title()} is too long (max {max_len} characters)",
+                            field,
+                        )
 
                 # Validate status
                 if field == "status" and value not in ("active", "inactive"):
@@ -1173,21 +1239,18 @@ class ClientService:
             if missing_tags:
                 raise TagNotFoundError(list(missing_tags)[0])
 
-            # Add tags (ignore duplicates)
+            # Add tags (ON CONFLICT handles duplicates - no exception will be raised)
             for tag_id in tag_ids:
-                try:
-                    await conn.execute(
-                        """
-                        INSERT INTO client_tag_assignments (workspace_id, client_id, tag_id)
-                        VALUES ($1, $2, $3)
-                        ON CONFLICT (workspace_id, client_id, tag_id) DO NOTHING
-                        """,
-                        workspace_id,
-                        client_id,
-                        tag_id,
-                    )
-                except Exception:
-                    pass  # Ignore duplicate assignment
+                await conn.execute(
+                    """
+                    INSERT INTO client_tag_assignments (workspace_id, client_id, tag_id)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (workspace_id, client_id, tag_id) DO NOTHING
+                    """,
+                    workspace_id,
+                    client_id,
+                    tag_id,
+                )
 
             return [
                 {

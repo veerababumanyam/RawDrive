@@ -18,6 +18,7 @@ from uuid import UUID
 from app.db.postgres import get_postgres_pool
 from app.services.client_exceptions import (
     ClientNotFoundError,
+    ClientValidationError,
     GalleryAlreadyLinkedError,
     GalleryLinkNotFoundError,
     GalleryNotFoundForLinkError,
@@ -76,7 +77,10 @@ class GalleryLinkService:
             GalleryAlreadyLinkedError: If link already exists
         """
         if role not in VALID_GALLERY_ROLES:
-            role = "primary"
+            raise ClientValidationError(
+                f"Invalid gallery role: '{role}'. Must be one of: {', '.join(sorted(VALID_GALLERY_ROLES))}",
+                "role",
+            )
 
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
@@ -441,10 +445,14 @@ class GalleryLinkService:
             Updated link details
 
         Raises:
+            ClientValidationError: If role is invalid
             GalleryLinkNotFoundError: If link doesn't exist
         """
         if new_role not in VALID_GALLERY_ROLES:
-            new_role = "primary"
+            raise ClientValidationError(
+                f"Invalid gallery role: '{new_role}'. Must be one of: {', '.join(sorted(VALID_GALLERY_ROLES))}",
+                "role",
+            )
 
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:

@@ -36,154 +36,33 @@ This implementation plan breaks down the Client CRM Module into discrete, action
 
 - [ ] 1.4 Create client_tags and client_tag_assignments tables migration
   - Create `client_tags` table with workspace-scoped tags
-  - Create `client_tag_assignments` table for many-to-many relationship
-  - Add indexes and unique constraints
-  - _Requirements: 5_
-
-- [ ] 1.5 Create client_gallery_links table migration
-  - Create `client_gallery_links` table
-  - Add foreign key to galleries table
-  - Add indexes and unique constraint
-  - _Requirements: 9_
-
-- [ ] 1.6 Create client_activities table migration
-  - Create `client_activities` table with activity_type enum
-  - Add indexes on workspace_client_time and workspace_type_time
-  - _Requirements: 19_
-
-- [ ] 1.7 Create client_communications table migration
-  - Create `client_communications` table
-  - Add indexes on workspace_client_time and follow_up
-  - _Requirements: 20_
-
-- [ ] 1.8 Create client_preferences table migration
-  - Create `client_preferences` table
-  - Add unique constraint on workspace_id + client_id
-  - _Requirements: 24_
-
-- [ ] 1.9 Create client_smart_lists table migration
-  - Create `client_smart_lists` table with jsonb filter_criteria
-  - Add GIN index on filter_criteria
-  - _Requirements: 22_
-
-- [ ] 1.10 Run migrations and verify schema
-  - Execute all migrations in order
-  - Verify all tables, indexes, and constraints created
-  - Test rollback functionality
-
-- [ ] 2. Backend: Core Client Service
-  - Implement ClientService with CRUD operations
-  - Add workspace scoping and validation
-  - _Requirements: 1, 10, 12, 17, 18_
-
-- [ ] 2.1 Implement ClientService.createClient
-  - Validate required fields (full_name, first_name)
-  - Generate client_id and set workspace_id
-  - Set default values (status=active, created_at)
-  - Return created client with computed fields
-  - _Requirements: 1.1, 1.4, 12.6_
-
-- [ ] 2.2 Implement ClientService.getClient
-  - Query client by workspace_id and client_id
-  - Include computed fields (initials, age, avatar_url, counts)
-  - Return 404 if not found
-  - _Requirements: 11.1, 11.2_
-
-- [ ] 2.3 Implement ClientService.listClients
-  - Support pagination (page, limit)
-  - Support sorting (name, created_at)
-  - Support filtering (status, tags)
-  - Return clients with meta (total, page, limit)
-  - _Requirements: 10.1, 10.3, 10.4, 10.5_
-
-- [ ] 2.4 Implement ClientService.searchClients
-  - Full-text search on full_name, email, phone, organization
-  - Use GIN index for performance
-  - Return matching clients
-  - _Requirements: 10.2, 17.2_
-
-- [ ] 2.5 Implement ClientService.updateClient
-  - Validate updates
-  - Update only provided fields
-  - Update updated_at timestamp
-  - Return updated client
-  - _Requirements: 1.5, 12_
-
-- [ ] 2.6 Implement ClientService.deleteClient
-  - Check for active proofing sessions
-  - Delete client and all related records (contacts, addresses, tags)
-  - Unlink galleries but preserve gallery data
-  - Log deletion event
-  - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
-
-
-- [ ] 3. Backend: Contact Service
-  - Implement ContactService for managing contact methods
-  - Add validation for email, phone, website, social formats
-  - _Requirements: 2, 3, 12_
-
-- [ ] 3.1 Implement ContactService.addContact
-  - Validate contact format based on type
-  - Check for duplicates
-  - Handle primary contact logic
-  - _Requirements: 2.1, 2.2, 2.3, 12.1, 12.2, 12.3_
-
-- [ ] 3.2 Implement ContactService.updateContact
-  - Validate updates
-  - Handle primary contact changes
-  - _Requirements: 2.4_
-
-- [ ] 3.3 Implement ContactService.deleteContact
-  - Prevent deletion of last contact method
-  - _Requirements: 2.7, 12.6_
-
-- [ ] 3.4 Implement ContactService.setPrimaryContact
-  - Ensure only one primary per type
-  - _Requirements: 2.4_
-
-- [ ] 4. Backend: Address Service
-  - Implement AddressService for managing addresses
-  - Add timezone mapping based on location
-  - _Requirements: 4_
-
-- [ ] 4.1 Implement AddressService.addAddress
-  - Validate address fields
-  - Map timezone from city/country
-  - _Requirements: 4.1, 4.2, 4.4, 12.5_
-
-- [ ] 4.2 Implement AddressService.updateAddress
-  - Update address fields
-  - Re-map timezone if location changed
-  - _Requirements: 4.1, 4.2_
-
-- [ ] 4.3 Implement AddressService.deleteAddress
-  - Delete address record
-  - _Requirements: 4_
-
-- [ ] 5. Backend: Avatar Management
-  - Implement avatar upload, crop, and gallery photo selection
-  - Generate optimized thumbnails
-  - _Requirements: 1A_
-
-- [ ] 5.1 Implement ClientService.uploadAvatar
-  - Validate file format (JPEG, PNG, WebP)
-  - Validate file size (max 5MB)
-  - Validate minimum dimensions (200x200)
-  - Upload to storage service
-  - Generate thumbnails (64x64, 128x128, 256x256)
-  - Store avatar_asset_id and crop_data
-  - _Requirements: 1A.1, 1A.2, 1A.3, 1A.4, 1A.8_
-
-- [ ] 5.2 Implement ClientService.selectGalleryPhotoAsAvatar
-  - Validate asset belongs to linked gallery
-  - Apply crop data
-  - Generate thumbnails
-  - Store avatar_asset_id and crop_data
-  - _Requirements: 1A.5, 1A.6_
-
-- [ ] 5.3 Implement avatar display with initials fallback
-  - Display avatar if avatar_asset_id exists
-  - Display initials badge if no avatar
+  ...existing code...
+  ...existing code...
+   [x] 29.1 Create ClientExportDialog component
+   [x] 29.2 Create ClientImportDialog component
+   [x] 30. Frontend: Analytics Dashboard
+   [x] 30.1 Create ClientAnalyticsDashboard component
+   [x] 30.2 Add exportable reports
+   [x] 31. Frontend: Navigation and Dashboard Integration
+   [x] 31.1 Add Clients menu item to sidebar
+   [x] 31.2 Add client count to dashboard
+   [x] 32. Frontend: Mobile Responsiveness
+   [x] 32.1 Make client list mobile-responsive
+   [x] 32.2 Make client detail mobile-responsive
+   [x] 32.3 Make forms mobile-responsive
+   [x] 32.4 Add touch gesture support
+   [x] 33. Checkpoint - Frontend Complete
+   [x] 34. Testing: Unit Tests
+   [x] 34.1 Write ClientService unit tests
+   [x] 34.2 Write ContactService unit tests
+   [x] 34.3 Write GalleryLinkService unit tests
+   [x] 34.4 Write ActivityService unit tests
+   [x] 34.5 Write DuplicateDetectionService unit tests
+   [x]* 35. Testing: Property-Based Tests
+   [x]* 35.1 Write property test for workspace isolation
+   [x]* 35.2 Write property test for client creation uniqueness
+   [x]* 35.3 Write property test for primary contact uniqueness
+   [x]* 35.4 Write property test for gallery link uniqueness
   - Use consistent color scheme for initials
   - _Requirements: 1A.7, 10.7_
 
