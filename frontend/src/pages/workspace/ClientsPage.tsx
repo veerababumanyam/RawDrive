@@ -38,6 +38,7 @@ import type {
   ClientStatus,
   ClientTag,
 } from '../../types/client';
+import { useClientAvatars } from '../../hooks/useClientAvatars';
 
 /* =============================================================================
    ClientsPage Component
@@ -83,10 +84,6 @@ const ClientsPage: React.FC = () => {
   // Export/Import dialog state
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-
-  // Avatar blob URLs - keyed by client_id
-  const [avatarBlobUrls, setAvatarBlobUrls] = useState<Record<string, string>>({});
-  const avatarBlobUrlsRef = useRef<Record<string, string>>({});
 
   // Fetch clients
   const fetchClients = useCallback(async () => {
@@ -135,69 +132,8 @@ const ClientsPage: React.FC = () => {
     fetchTags();
   }, [fetchTags]);
 
-  // Sync avatar blob URLs ref and cleanup on unmount
-  useEffect(() => {
-    avatarBlobUrlsRef.current = avatarBlobUrls;
-    return () => {
-      // Cleanup all blob URLs on unmount
-      Object.values(avatarBlobUrlsRef.current).forEach((url) => {
-        URL.revokeObjectURL(url);
-      });
-    };
-  }, [avatarBlobUrls]);
-
-  // Fetch avatar blob URLs for clients that have avatars
-  useEffect(() => {
-    if (!workspace?.workspace_id || clients.length === 0) return;
-
-    const fetchAvatarBlobUrls = async () => {
-      // Get current client IDs
-      const currentClientIds = new Set(clients.map((c) => c.client_id));
-
-      // Revoke and remove blob URLs for clients no longer in the list
-      const oldBlobUrls = { ...avatarBlobUrlsRef.current };
-      Object.keys(oldBlobUrls).forEach((clientId) => {
-        if (!currentClientIds.has(clientId)) {
-          URL.revokeObjectURL(oldBlobUrls[clientId]);
-          delete oldBlobUrls[clientId];
-        }
-      });
-
-      // Find clients that need avatar blob URLs fetched
-      const clientsWithAvatars = clients.filter((c) => c.avatar_url && !oldBlobUrls[c.client_id]);
-
-      if (clientsWithAvatars.length === 0) {
-        // Still update state if we removed any old blob URLs
-        if (Object.keys(oldBlobUrls).length !== Object.keys(avatarBlobUrlsRef.current).length) {
-          setAvatarBlobUrls(oldBlobUrls);
-        }
-        return;
-      }
-
-      const newBlobUrls: Record<string, string> = { ...oldBlobUrls };
-
-      await Promise.all(
-        clientsWithAvatars.map(async (client) => {
-          try {
-            const blobUrl = await clientService.getAvatarBlobUrl(
-              workspace.workspace_id,
-              client.client_id,
-              256
-            );
-            if (blobUrl) {
-              newBlobUrls[client.client_id] = blobUrl;
-            }
-          } catch (err) {
-            console.error(`Failed to fetch avatar for client ${client.client_id}:`, err);
-          }
-        })
-      );
-
-      setAvatarBlobUrls(newBlobUrls);
-    };
-
-    fetchAvatarBlobUrls();
-  }, [workspace?.workspace_id, clients]);
+  // Use the new hook to manage avatar blob URLs
+  const { avatarBlobUrls } = useClientAvatars(workspace?.workspace_id, clients, 256);
 
   // Reset page when filters change
   useEffect(() => {

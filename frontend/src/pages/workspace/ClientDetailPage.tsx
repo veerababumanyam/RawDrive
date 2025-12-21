@@ -32,6 +32,7 @@ import { AppBadge, StatusBadge } from '../../components/ui/AppBadge';
 import { useToast } from '../../components/ui/Toast';
 import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmationDialog';
 import { clientService } from '../../services/clientService';
+import { useClientAvatar } from '../../hooks/useClientAvatar';
 import type {
   ClientDetail,
   ClientActivity,
@@ -58,18 +59,14 @@ const ClientDetailPage: React.FC = () => {
   const [galleries, setGalleries] = useState<GalleryLinkDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const [avatarBlobUrl, setAvatarBlobUrl] = useState<string | null>(null);
-  const avatarBlobUrlRef = React.useRef<string | null>(null);
 
-  // Update ref when state changes and cleanup on unmount
-  useEffect(() => {
-    avatarBlobUrlRef.current = avatarBlobUrl;
-    return () => {
-      if (avatarBlobUrlRef.current) {
-        URL.revokeObjectURL(avatarBlobUrlRef.current);
-      }
-    };
-  }, [avatarBlobUrl]);
+  // Use the new hook for avatar management
+  const { avatarBlobUrl } = useClientAvatar({
+    workspaceId: workspace?.workspace_id,
+    clientId,
+    avatarUrl: client?.avatar_url,
+    size: 256
+  });
 
   // UI state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -92,24 +89,6 @@ const ClientDetailPage: React.FC = () => {
     try {
       const clientData = await clientService.getClient(workspace.workspace_id, clientId);
       setClient(clientData);
-
-      // Fetch avatar as blob URL if client has an avatar
-      if (clientData.avatar_url) {
-        const blobUrl = await clientService.getAvatarBlobUrl(workspace.workspace_id, clientId, 256);
-        if (blobUrl) {
-          // Revoke previous blob URL to prevent memory leaks
-          if (avatarBlobUrlRef.current) {
-            URL.revokeObjectURL(avatarBlobUrlRef.current);
-          }
-          setAvatarBlobUrl(blobUrl);
-        }
-      } else {
-        // Clear avatar if client no longer has one
-        if (avatarBlobUrlRef.current) {
-          URL.revokeObjectURL(avatarBlobUrlRef.current);
-        }
-        setAvatarBlobUrl(null);
-      }
 
       // Fetch related data in parallel
       const [activitiesData, communicationsData, galleriesData] = await Promise.all([

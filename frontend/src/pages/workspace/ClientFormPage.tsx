@@ -39,6 +39,7 @@ import type {
   ContactType,
   AddressType,
 } from '../../types/client';
+import { useClientAvatar } from '../../hooks/useClientAvatar';
 
 /* =============================================================================
    ClientFormPage Component
@@ -102,38 +103,23 @@ const ClientFormPage: React.FC = () => {
   const [availableTags, setAvailableTags] = useState<ClientTag[]>([]);
 
   // Avatar state
-  const [avatarBlobUrl, setAvatarBlobUrl] = useState<string | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [showCropModal, setShowCropModal] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const avatarBlobUrlRef = useRef<string | null>(null);
 
-  // Update ref when state changes and cleanup on unmount
-  useEffect(() => {
-    avatarBlobUrlRef.current = avatarBlobUrl;
-    return () => {
-      if (avatarBlobUrlRef.current) {
-        URL.revokeObjectURL(avatarBlobUrlRef.current);
-      }
-    };
-  }, [avatarBlobUrl]);
+  // Use the new hook for avatar management
+  const {
+    avatarBlobUrl,
+    refreshAvatar
+  } = useClientAvatar({
+    workspaceId: workspace?.workspace_id,
+    clientId,
+    avatarUrl: client?.avatar_url,
+    size: 256
+  });
 
-  // Fetch avatar as blob URL (since API requires auth headers)
-  const fetchAvatarBlobUrl = useCallback(async (workspaceId: string, clientIdToFetch: string) => {
-    try {
-      const blobUrl = await clientService.getAvatarBlobUrl(workspaceId, clientIdToFetch, 256);
-      if (blobUrl) {
-        // Revoke previous blob URL to prevent memory leaks
-        if (avatarBlobUrlRef.current) {
-          URL.revokeObjectURL(avatarBlobUrlRef.current);
-        }
-        setAvatarBlobUrl(blobUrl);
-      }
-    } catch (err) {
-      console.error('Failed to fetch avatar:', err);
-    }
-  }, []);
+  // Fetch client data for edit mode
 
   // Fetch client data for edit mode
   const fetchClient = useCallback(async () => {
@@ -161,10 +147,7 @@ const ClientFormPage: React.FC = () => {
       setAddresses(clientData.addresses);
       setClientTags(clientData.tags);
 
-      // Fetch avatar as blob URL if client has an avatar
-      if (clientData.avatar_url) {
-        fetchAvatarBlobUrl(workspace.workspace_id, clientId);
-      }
+      setClientTags(clientData.tags);
     } catch (err) {
       addToast({
         variant: 'error',
@@ -173,7 +156,7 @@ const ClientFormPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [workspace?.workspace_id, clientId, addToast, fetchAvatarBlobUrl]);
+  }, [workspace?.workspace_id, clientId, addToast]);
 
   // Fetch available tags
   const fetchTags = useCallback(async () => {
@@ -233,29 +216,15 @@ const ClientFormPage: React.FC = () => {
 
     setSaving(true);
     try {
-      // Sanitize payload: remove empty strings for optional fields
-      // This prevents 422 errors where backend expects UUID/Date but gets ""
-      const sanitizePayload = (data: CreateClientRequest) => {
-        const cleaned = { ...data };
-        Object.keys(cleaned).forEach((key) => {
-          const k = key as keyof CreateClientRequest;
-          if (cleaned[k] === '') {
-            // @ts-ignore - dynamic assignment
-            cleaned[k] = undefined;
-          }
-        });
-        return cleaned;
-      };
+      // payload sanitization is now handled by the service
 
-      const payload = sanitizePayload(formData);
-
-      console.log('Creating/updating client with payload:', payload);
+      console.log('Creating/updating client with payload:', formData);
 
       if (isEditMode && clientId) {
-        await clientService.updateClient(workspace.workspace_id, clientId, payload);
+        await clientService.updateClient(workspace.workspace_id, clientId, formData);
         addToast({ variant: 'success', message: 'Client updated successfully' });
       } else {
-        const response = await clientService.createClient(workspace.workspace_id, payload);
+        const response = await clientService.createClient(workspace.workspace_id, formData);
         addToast({ variant: 'success', message: 'Client created successfully' });
         navigate(`/workspace/clients/${response.client_id}`);
         return;
@@ -436,8 +405,8 @@ const ClientFormPage: React.FC = () => {
         cropData
       );
 
-      // Fetch the newly uploaded avatar as blob URL
-      await fetchAvatarBlobUrl(workspace.workspace_id, clientId);
+      // Refresh the avatar
+      await refreshAvatar();
 
       setAvatarPreview(null);
       setShowCropModal(false);
@@ -462,12 +431,13 @@ const ClientFormPage: React.FC = () => {
     if (isEditMode && workspace?.workspace_id && clientId) {
       try {
         await clientService.deleteAvatar(workspace.workspace_id, clientId);
-        // Revoke blob URL to prevent memory leaks
-        if (avatarBlobUrlRef.current) {
-          URL.revokeObjectURL(avatarBlobUrlRef.current);
-        }
-        setAvatarBlobUrl(null);
+        // We don't need to manually revoke blob URL, the hook handles it when we trigger refresh or update state
+        // But since we modified server state, we should refresh the avatar (which will clear it since URL is gone)
+
+        // Optimistically clear it
         setAvatarPreview(null);
+        await refreshAvatar();
+
         addToast({ variant: 'success', message: 'Photo removed' });
       } catch (err) {
         addToast({
