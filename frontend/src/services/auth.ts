@@ -122,6 +122,22 @@ export function isAuthenticated(): boolean {
 }
 
 /**
+ * Check if access token is still valid (not expired)
+ * Use this to decide whether to make API calls that require auth
+ */
+export function hasValidAccessToken(): boolean {
+  const tokens = getStoredTokens();
+  if (!tokens || !tokens.accessToken) return false;
+
+  // Check if access token is expired (with 60s buffer)
+  if (tokens.expiresAt && Date.now() > tokens.expiresAt - 60000) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Login with email and password
  */
 export async function login(credentials: LoginCredentials): Promise<{

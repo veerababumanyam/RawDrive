@@ -17,6 +17,8 @@ import {
   getStoredUser,
   getStoredWorkspace,
   isAuthenticated as checkAuth,
+  hasValidAccessToken,
+  clearStoredTokens,
   getGoogleOAuthUrl,
 } from '../services/auth';
 
@@ -60,12 +62,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const storedUser = getStoredUser();
           const storedWorkspace = getStoredWorkspace();
 
+          // If access token is expired, don't make API calls - just clear stale state
+          // This prevents unnecessary 401 errors on public pages
+          if (!hasValidAccessToken()) {
+            // Token expired - clear everything and don't attempt API calls
+            clearStoredTokens();
+            setUser(null);
+            setWorkspace(null);
+            setIsAuthenticated(false);
+            setIsLoading(false);
+            return;
+          }
+
           if (storedUser) {
             setUser(storedUser);
             setWorkspace(storedWorkspace);
             setIsAuthenticated(true);
 
-            // Refresh user data and workspace in background
+            // Refresh user data and workspace in background (only if we have valid token)
             getCurrentUser()
               .then(async (freshUser) => {
                 if (freshUser) {
@@ -81,7 +95,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 } else {
                   // API returned null - tokens are likely invalid, clear auth state
                   console.warn('Session invalid, clearing auth state');
-                  const { clearStoredTokens } = await import('../services/auth');
                   clearStoredTokens();
                   setUser(null);
                   setWorkspace(null);
@@ -91,9 +104,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               .catch((error) => {
                 // Failed to validate session - clear tokens to prevent retry loop
                 console.error('Failed to validate session, clearing auth state:', error);
-                import('../services/auth').then(({ clearStoredTokens }) => {
-                  clearStoredTokens();
-                });
+                clearStoredTokens();
                 setUser(null);
                 setWorkspace(null);
                 setIsAuthenticated(false);
@@ -107,13 +118,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 setIsAuthenticated(true);
               } else {
                 // Couldn't get user, clear tokens
-                const { clearStoredTokens } = await import('../services/auth');
                 clearStoredTokens();
               }
             } catch (error) {
               // Failed, clear tokens
               console.error('Failed to fetch user, clearing tokens:', error);
-              const { clearStoredTokens } = await import('../services/auth');
               clearStoredTokens();
             }
           }
@@ -121,10 +130,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } catch (error) {
         console.error('Auth initialization error:', error);
         // Clear any stale tokens on error
-        try {
-          const { clearStoredTokens } = await import('../services/auth');
-          clearStoredTokens();
-        } catch { }
+        clearStoredTokens();
       } finally {
         setIsLoading(false);
       }
