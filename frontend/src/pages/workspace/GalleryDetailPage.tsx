@@ -537,6 +537,12 @@ const GalleryDetailPage: React.FC = () => {
           await refetchGallery();
           addToast({ message: 'Gallery title updated', variant: 'success' });
         }}
+        onMetadataUpdate={async (updates) => {
+          if (!workspace?.workspace_id || !galleryId) return;
+          await galleryService.updateGallery(workspace.workspace_id, galleryId, updates);
+          await refetchGallery();
+          addToast({ message: 'Gallery details updated', variant: 'success' });
+        }}
       />
 
       {/* Sub-Gallery Tabs */}

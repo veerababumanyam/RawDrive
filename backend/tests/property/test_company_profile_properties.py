@@ -7,6 +7,12 @@ Properties covered:
 3.3 - Custom Links Array Storage
 4.1 - Visibility Configuration Updates
 4.2 - Consistent Visibility Filtering
+5.1 - Workspace Isolation Enforcement
+5.2 - Timestamp Update on Field Changes
+5.3 - Slug Uniqueness Constraint
+9 - Studio Defaults Application
+10 - Public Profile URL Generation
+17 - Conditional Branding Display
 """
 
 import pytest
@@ -275,6 +281,167 @@ def test_property_5_3_slug_uniqueness(slugs):
             
     # Verify set contains unique items only
     assert len(existing_slugs) == len(set(slugs))
+
+
+# ---------------------------------------------------------------------------
+# Property 9: Studio Defaults Application
+# ---------------------------------------------------------------------------
+
+@given(
+    name=st.text(min_size=1, max_size=255),
+    slug=valid_slugs,
+    email=valid_emails,
+    brand_color=st.one_of(st.none(), hex_colors),
+    brand_font=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
+    logo_url=st.one_of(st.none(), st.text(min_size=1)),
+    visibility_map=st.dictionaries(
+        st.sampled_from(["name", "logo_url", "brand_color", "brand_font", "email", "phone", "website"]),
+        st.booleans()
+    )
+)
+@settings(max_examples=50)
+def test_property_9_studio_defaults_application(
+    name, slug, email, brand_color, brand_font, logo_url, visibility_map
+):
+    """
+    Property 9: Studio Defaults Application.
+    For any studio defaults application to a gallery, the gallery branding should be 
+    populated with visible profile fields while maintaining compatibility.
+    Validates: Requirements 3.2
+    
+    Feature: company-profile-branding, Property 9: Studio Defaults Application
+    """
+    # Create a mock company profile
+    company_profile = {
+        "name": name,
+        "slug": slug,
+        "email": email,
+        "brand_color": brand_color,
+        "brand_font": brand_font,
+        "logo_url": logo_url,
+        "phone": None,
+        "website": None
+    }
+    
+    # Apply visibility filtering (simulating VisibilityFilterService)
+    visible_profile = filter_visible(company_profile, visibility_map)
+    
+    # Simulate applying studio defaults to gallery
+    gallery_branding = {}
+    
+    # Only visible fields should be applied to gallery
+    if "name" in visible_profile:
+        gallery_branding["company_name"] = visible_profile["name"]
+    if "logo_url" in visible_profile and visible_profile["logo_url"]:
+        gallery_branding["logo_url"] = visible_profile["logo_url"]
+    if "brand_color" in visible_profile and visible_profile["brand_color"]:
+        gallery_branding["brand_color"] = visible_profile["brand_color"]
+    if "brand_font" in visible_profile and visible_profile["brand_font"]:
+        gallery_branding["brand_font"] = visible_profile["brand_font"]
+    
+    # Property assertions:
+    # 1. Gallery branding should only contain fields that are visible in the profile
+    for field in ["name", "logo_url", "brand_color", "brand_font"]:
+        is_visible = visibility_map.get(field, True)  # Default to visible
+        has_value = company_profile.get(field) is not None
+        
+        if is_visible and has_value:
+            # If field is visible and has a value, it should be in gallery branding
+            if field == "name":
+                assert "company_name" in gallery_branding
+                assert gallery_branding["company_name"] == company_profile["name"]
+            elif field in gallery_branding:
+                assert gallery_branding[field] == company_profile[field]
+        else:
+            # If field is not visible or has no value, it should not be in gallery branding
+            if field == "name":
+                if not is_visible or not has_value:
+                    assert "company_name" not in gallery_branding
+            else:
+                if not is_visible or not has_value:
+                    assert field not in gallery_branding
+    
+    # 2. Gallery branding should be a subset of visible profile fields
+    for key in gallery_branding:
+        # Map gallery branding keys back to profile keys
+        profile_key = "name" if key == "company_name" else key
+        assert profile_key in visible_profile or company_profile.get(profile_key) is not None
+
+
+# ---------------------------------------------------------------------------
+# Property 17: Conditional Branding Display
+# ---------------------------------------------------------------------------
+
+@given(
+    name=st.text(min_size=1, max_size=255),
+    logo_url=st.one_of(st.none(), st.text(min_size=1)),
+    name_visible=st.booleans(),
+    logo_visible=st.booleans()
+)
+@settings(max_examples=50)
+def test_property_17_conditional_branding_display(name, logo_url, name_visible, logo_visible):
+    """
+    Property 17: Conditional Branding Display.
+    For any gallery header rendering, visible company logo and name should be 
+    displayed when available.
+    Validates: Requirements 8.1
+    
+    Feature: company-profile-branding, Property 17: Conditional Branding Display
+    """
+    # Create a mock company profile with visibility settings
+    company_profile = {
+        "name": name,
+        "logo_url": logo_url,
+        "email": "test@example.com",
+        "slug": "test-studio"
+    }
+    
+    visibility_config = {
+        "name": name_visible,
+        "logo_url": logo_visible
+    }
+    
+    # Apply visibility filtering
+    visible_profile = filter_visible(company_profile, visibility_config)
+    
+    # Simulate gallery header rendering
+    gallery_header = {}
+    
+    # Only display fields that are both visible AND have values
+    if "name" in visible_profile and visible_profile["name"]:
+        gallery_header["company_name"] = visible_profile["name"]
+    
+    if "logo_url" in visible_profile and visible_profile["logo_url"]:
+        gallery_header["logo_url"] = visible_profile["logo_url"]
+    
+    # Property assertions:
+    # 1. If name is visible and has a value, it should be in the header
+    if name_visible and name:
+        assert "company_name" in gallery_header
+        assert gallery_header["company_name"] == name
+    else:
+        assert "company_name" not in gallery_header
+    
+    # 2. If logo is visible and has a value, it should be in the header
+    if logo_visible and logo_url:
+        assert "logo_url" in gallery_header
+        assert gallery_header["logo_url"] == logo_url
+    else:
+        assert "logo_url" not in gallery_header
+    
+    # 3. Header should never contain fields that are not visible
+    for key in gallery_header:
+        if key == "company_name":
+            assert name_visible, "Name should not be in header if not visible"
+            assert name, "Name should not be in header if empty"
+        elif key == "logo_url":
+            assert logo_visible, "Logo should not be in header if not visible"
+            assert logo_url, "Logo should not be in header if empty"
+    
+    # 4. Header should be a subset of visible profile
+    for key in gallery_header:
+        profile_key = "name" if key == "company_name" else key
+        assert profile_key in visible_profile, f"{profile_key} should be in visible profile"
 
 
 # ---------------------------------------------------------------------------

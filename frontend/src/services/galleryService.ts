@@ -16,6 +16,7 @@ import type {
   UploadCommitResponse,
   CheckDuplicateRequest,
   CheckDuplicateResponse,
+  PublicGalleryAsset,
 } from '../types/gallery';
 
 export class GalleryService {
@@ -27,8 +28,11 @@ export class GalleryService {
     options?: {
       page?: number;
       limit?: number;
-      sort?: 'created_at' | 'title' | 'status';
+      sort?: 'created_at' | 'title' | 'status' | 'shoot_date';
       status?: 'draft' | 'published' | 'archived';
+      search?: string;
+      startDate?: string; // YYYY-MM-DD
+      endDate?: string;   // YYYY-MM-DD
     }
   ): Promise<GalleryListResponse> {
     const params = new URLSearchParams();
@@ -36,6 +40,9 @@ export class GalleryService {
     if (options?.limit) params.append('limit', options.limit.toString());
     if (options?.sort) params.append('sort', options.sort);
     if (options?.status) params.append('status', options.status);
+    if (options?.search) params.append('search', options.search);
+    if (options?.startDate) params.append('start_date', options.startDate);
+    if (options?.endDate) params.append('end_date', options.endDate);
 
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries${query ? `?${query}` : ''}`;
@@ -364,6 +371,18 @@ export class GalleryService {
     if (response.error) {
       throw new Error(response.error.message || 'Failed to update sort order');
     }
+  }
+
+  /**
+   * Get public gallery assets
+   */
+  async getPublicGalleryAssets(galleryId: string): Promise<PublicGalleryAsset[]> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}/assets`;
+    const response = await apiClient.get<{ data: PublicGalleryAsset[] }>(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to fetch public gallery assets');
+    }
+    return response.data!.data;
   }
 
   /**

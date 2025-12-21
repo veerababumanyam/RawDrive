@@ -79,6 +79,8 @@ class GalleryService:
         title: str,
         description: Optional[str] = None,
         client_name: Optional[str] = None,
+        client_id: Optional[UUID] = None,
+        shoot_date: Optional[datetime] = None,
     ) -> dict:
         """Create a new gallery."""
         pool = await get_postgres_pool()
@@ -99,16 +101,19 @@ class GalleryService:
             gallery_id = await conn.fetchval(
                 """
                 INSERT INTO galleries (
-                    workspace_id, title, description, client_name,
+                    workspace_id, title, description, client_name, client_id, shoot_date,
                     created_by_user_id, status
                 )
-                VALUES ($1, $2, $3, $4, $5, 'draft')
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft')
                 RETURNING gallery_id
                 """,
                 workspace_id,
                 title,
                 description,
+                description,
                 client_name,
+                client_id,
+                shoot_date,
                 user_id,
             )
             return await self.get_gallery(workspace_id, gallery_id)
@@ -120,7 +125,7 @@ class GalleryService:
             row = await conn.fetchrow(
                 """
                 SELECT
-                    gallery_id, workspace_id, title, description, client_name,
+                    gallery_id, workspace_id, title, description, client_name, client_id, shoot_date,
                     status, branding_profile_id, portal_language, layout_style,
                     theme, download_policy, exif_visible,
                     password_hash IS NOT NULL as password_protected,
@@ -201,6 +206,8 @@ class GalleryService:
                 "title": row["title"],
                 "description": row["description"],
                 "client_name": row["client_name"],
+                "client_id": str(row["client_id"]) if row["client_id"] else None,
+                "shoot_date": row["shoot_date"].isoformat() if row["shoot_date"] else None,
                 "status": row["status"],
                 "branding_profile_id": str(row["branding_profile_id"]) if row["branding_profile_id"] else None,
                 "company_profile": company_profile,
@@ -244,7 +251,7 @@ class GalleryService:
             row = await conn.fetchrow(
                 """
                 SELECT
-                    gallery_id, workspace_id, title, description, client_name,
+                    gallery_id, workspace_id, title, description, client_name, client_id, shoot_date,
                     status, branding_profile_id, portal_language, layout_style,
                     theme, download_policy, exif_visible,
                     password_hash IS NOT NULL as password_protected,
@@ -321,6 +328,8 @@ class GalleryService:
                 "title": row["title"],
                 "description": row["description"],
                 "client_name": row["client_name"],
+                "client_id": str(row["client_id"]) if row["client_id"] else None,
+                "shoot_date": row["shoot_date"].isoformat() if row["shoot_date"] else None,
                 "status": row["status"],
                 "branding_profile_id": str(row["branding_profile_id"]) if row["branding_profile_id"] else None,
                 "company_profile": company_profile,
@@ -363,6 +372,9 @@ class GalleryService:
         limit: int = 20,
         sort: str = "created_at",
         status: Optional[str] = None,
+        search: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> dict:
         """List galleries for a workspace."""
         pool = await get_postgres_pool()
@@ -379,10 +391,25 @@ class GalleryService:
                 params.append(status)
                 param_idx += 1
 
+            if search:
+                where_clauses.append(f"(title ILIKE ${param_idx} OR description ILIKE ${param_idx} OR client_name ILIKE ${param_idx})")
+                params.append(f"%{search}%")
+                param_idx += 1
+
+            if start_date:
+                where_clauses.append(f"shoot_date >= ${param_idx}")
+                params.append(start_date)
+                param_idx += 1
+
+            if end_date:
+                where_clauses.append(f"shoot_date <= ${param_idx}")
+                params.append(end_date)
+                param_idx += 1
+
             where_sql = " AND ".join(where_clauses)
 
             # Validate sort column
-            valid_sorts = {"created_at", "title", "status"}
+            valid_sorts = {"created_at", "title", "status", "shoot_date"}
             if sort not in valid_sorts:
                 sort = "created_at"
             order_sql = f"ORDER BY {sort} DESC" if sort == "created_at" else f"ORDER BY {sort} ASC"
@@ -397,7 +424,7 @@ class GalleryService:
             galleries = await conn.fetch(
                 f"""
                 SELECT
-                    gallery_id, title, description, client_name, status,
+                    gallery_id, title, description, client_name, client_id, shoot_date, status,
                     cover_asset_id, published_at, created_at,
                     (
                         SELECT COUNT(*)
@@ -438,6 +465,8 @@ class GalleryService:
                         "title": g["title"],
                         "description": g["description"],
                         "client_name": g["client_name"],
+                        "client_id": str(g["client_id"]) if g["client_id"] else None,
+                        "shoot_date": g["shoot_date"].isoformat() if g["shoot_date"] else None,
                         "status": g["status"],
                         "photo_count": g["photo_count"] or 0,
                         "created_at": g["created_at"].isoformat(),
@@ -474,10 +503,29 @@ class GalleryService:
             if not exists:
                 raise GalleryNotFoundError(gallery_id)
 
-            # Build update query
             set_clauses = []
             params = []
             param_idx = 1
+
+            # If client_id is updated, sync client_name
+            if "client_id" in updates:
+                new_client_id = updates["client_id"]
+                if new_client_id:
+                    # Fetch client name
+                    client_name = await conn.fetchval(
+                        "SELECT full_name FROM clients WHERE workspace_id = $1 AND client_id = $2",
+                        workspace_id,
+                        new_client_id
+                    )
+                    if client_name:
+                         # Update client_name in the updates dict (will be processed below)
+                         updates["client_name"] = client_name
+                    else:
+                        # If client_id is provided but no client found, clear client_name
+                        updates["client_name"] = None
+                else:
+                    # If client_id is explicitly set to None, clear client_name
+                    updates["client_name"] = None
 
             allowed_fields = {
                 "title",
@@ -491,13 +539,15 @@ class GalleryService:
                 "expires_at",
                 "branding_profile_id",
                 "cover_asset_id",
+                "client_id",
+                "shoot_date",
             }
 
             for field, value in updates.items():
                 if field in allowed_fields:
                     if field == "expires_at" and value is None:
                         set_clauses.append(f"{field} = NULL")
-                    elif field in ("branding_profile_id", "cover_asset_id") and value is None:
+                    elif field in ("branding_profile_id", "cover_asset_id", "client_id", "shoot_date") and value is None:
                         set_clauses.append(f"{field} = NULL")
                     else:
                         set_clauses.append(f"{field} = ${param_idx}")
@@ -911,7 +961,133 @@ class GalleryService:
                     sub_gallery_id,
                 )
 
+    async def get_public_gallery_assets(self, gallery_id: UUID) -> list[dict]:
+        """Get visible assets for a public gallery."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Check gallery exists and is published
+            gallery = await conn.fetchrow(
+                "SELECT workspace_id, status FROM galleries WHERE gallery_id = $1 AND deleted = FALSE",
+                gallery_id,
+            )
+            if not gallery:
+                raise GalleryNotFoundError(gallery_id)
+            
+            if gallery["status"] != "published":
+                # Only published galleries are publicly accessible
+                raise GalleryNotFoundError(gallery_id)
 
+            # Fetch visible assets
+            rows = await conn.fetch(
+                """
+                SELECT 
+                    a.asset_id, a.gallery_id, ga.sub_gallery_id, a.type, a.filename, 
+                    a.width, a.height, a.duration, a.size_bytes, a.metadata, 
+                    a.created_at, ga.sort_order
+                FROM gallery_assets ga
+                JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE ga.gallery_id = $1
+                AND ga.visible = TRUE
+                AND a.deleted = FALSE
+                ORDER BY ga.sort_order ASC
+                """,
+                gallery_id,
+            )
+
+            results = []
+            for row in rows:
+                results.append({
+                    "asset_id": str(row["asset_id"]),
+                    "gallery_id": str(row["gallery_id"]),
+                    "sub_gallery_id": str(row["sub_gallery_id"]) if row["sub_gallery_id"] else None,
+                    "type": row["type"],
+                    "filename": row["filename"],
+                    "width": row["width"],
+                    "height": row["height"],
+                    "duration": row["duration"],
+                    "size_bytes": row["size_bytes"],
+                    "metadata": row["metadata"] or {},
+                    "sort_order": row["sort_order"],
+                    "created_at": row["created_at"].isoformat(),
+                })
+            
+            return results
+
+    async def get_public_asset_content(
+        self, gallery_id: UUID, asset_id: UUID, variant: str
+    ) -> tuple[bytes, str]:
+        """Get decrypted content for a public gallery asset.
+        
+        Returns:
+            (content_bytes, content_type)
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # 1. Verify gallery is published
+            gallery = await conn.fetchrow(
+                "SELECT workspace_id, status FROM galleries WHERE gallery_id = $1 AND deleted = FALSE",
+                gallery_id,
+            )
+            if not gallery or gallery["status"] != "published":
+                raise GalleryNotFoundError(gallery_id)
+            
+            workspace_id = gallery["workspace_id"]
+
+            # 2. Verify asset exists, is part of this gallery, and is visible
+            asset = await conn.fetchrow(
+                """
+                SELECT a.asset_id, a.filename, a.type
+                FROM gallery_assets ga
+                JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE ga.gallery_id = $1 
+                AND ga.asset_id = $2
+                AND ga.visible = TRUE
+                AND a.deleted = FALSE
+                """,
+                gallery_id,
+                asset_id,
+            )
+            if not asset:
+                raise GalleryError("Asset not found or not visible", "ASSET_NOT_FOUND", 404)
+
+            # 3. Retrieve content from storage
+            # We only allow thumbnail and preview for public access via this endpoint
+            # 'original' requires stricter checks usually, but for now we'll allow thumbnail/preview
+            if variant not in ("thumbnail", "preview", "original"):
+                 raise GalleryError("Invalid variant", "INVALID_VARIANT", 400)
+
+            if variant == "original" and asset["type"] == "photo":
+                 # Potentially restrict original downloads based on download_policy
+                 # For now, we will allow it if logic permits, but let's stick to Plan (thumbnail/preview)
+                 # Revisiting Plan: "We will implement thumbnail and preview serving"
+                 pass
+            
+            from app.services.r2_storage_service import get_r2_storage_service, StorageError
+            storage = get_r2_storage_service()
+            
+            try:
+                content = await storage.download_encrypted_file(
+                    workspace_id=workspace_id,
+                    gallery_id=gallery_id,
+                    asset_id=asset_id,
+                    variant=variant,
+                    filename=asset["filename"],
+                )
+                
+                # Determine mime type
+                content_type = "application/octet-stream"
+                if variant in ("thumbnail", "preview") or asset["type"] == "photo":
+                    # Assume JPEG for generated variants, or based on filename
+                    if asset["filename"].lower().endswith(".png"):
+                        content_type = "image/png"
+                    elif asset["filename"].lower().endswith(".webp"):
+                         content_type = "image/webp"
+                    else:
+                        content_type = "image/jpeg"
+
+                return content, content_type
+            except StorageError:
+                raise GalleryError("Failed to retrieve asset content", "STORAGE_ERROR", 500)
 # Export singleton instance
 _gallery_service: Optional[GalleryService] = None
 

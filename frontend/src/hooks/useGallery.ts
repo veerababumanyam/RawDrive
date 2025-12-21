@@ -130,8 +130,11 @@ interface UseGalleryListOptions {
   workspaceId: string;
   page?: number;
   limit?: number;
-  sort?: 'created_at' | 'title' | 'status';
+  sort?: 'created_at' | 'title' | 'status' | 'shoot_date';
   status?: 'draft' | 'published' | 'archived';
+  search?: string;
+  startDate?: string;
+  endDate?: string;
   autoFetch?: boolean;
 }
 
@@ -150,6 +153,9 @@ export const useGalleryList = ({
   limit = 20,
   sort = 'created_at',
   status,
+  search,
+  startDate,
+  endDate,
   autoFetch = true,
 }: UseGalleryListOptions): UseGalleryListReturn => {
   const [galleries, setGalleries] = useState<GalleryListResponse['data']>([]);
@@ -166,6 +172,9 @@ export const useGalleryList = ({
         limit,
         sort,
         status,
+        search,
+        startDate,
+        endDate,
       });
       setGalleries(response.data);
       setMeta(response.meta);
@@ -176,7 +185,7 @@ export const useGalleryList = ({
     } finally {
       setLoading(false);
     }
-  }, [workspaceId, page, limit, sort, status]);
+  }, [workspaceId, page, limit, sort, status, search, startDate, endDate]);
 
   useEffect(() => {
     if (autoFetch) {

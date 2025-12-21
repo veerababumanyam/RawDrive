@@ -198,7 +198,7 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
           </span>
           <span className="flex items-center gap-1">
             <Clock size={12} />
-            {formatDate(gallery.created_at)}
+            {formatDate(gallery.shoot_date || gallery.created_at)}
           </span>
         </div>
       </div>

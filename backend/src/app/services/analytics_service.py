@@ -148,12 +148,12 @@ class AnalyticsService:
                 """,
                 workspace_id,
             )
-            clients_by_status = {row["status"]: row["count"] for row in status_counts}
+            clients_by_status = {row["status"] or "unknown": row["count"] for row in status_counts}
 
             # Clients with galleries
             clients_with_galleries = await conn.fetchval(
                 """
-                SELECT COUNT(DISTINCT client_id)
+                SELECT COUNT(DISTINCT cgl.client_id)
                 FROM client_gallery_links cgl
                 JOIN galleries g ON cgl.gallery_id = g.gallery_id
                 WHERE cgl.workspace_id = $1 AND g.deleted = FALSE
@@ -256,7 +256,7 @@ class AnalyticsService:
                 start_date,
                 end_date,
             )
-            activities_by_type = {row["activity_type"]: row["count"] for row in activity_counts}
+            activities_by_type = {row["activity_type"] or "unknown": row["count"] for row in activity_counts}
 
             # Communication counts by type
             comm_counts = await conn.fetch(
@@ -273,7 +273,7 @@ class AnalyticsService:
             )
             communications_by_type = {}
             for row in comm_counts:
-                key = f"{row['communication_type']}_{row['direction']}"
+                key = f"{row['communication_type'] or 'unknown'}_{row['direction'] or 'unknown'}"
                 communications_by_type[key] = row["count"]
 
             # Total communications

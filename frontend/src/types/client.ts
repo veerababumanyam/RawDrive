@@ -282,6 +282,7 @@ export interface ClientSearchResult {
   first_name: string;
   last_name?: string;
   avatar_url?: string;
+  avatar_asset_id?: string;
   organization?: string;
   primary_email?: string;
   primary_phone?: string;

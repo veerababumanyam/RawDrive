@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: rawdrive-backend
-Version: 0.1.3
+Version: 0.1.4
 Summary: RawDrive FastAPI backend for authentication, RBAC, and workspace services
 Author-email: RawDrive <engineering@rawdrive.in>
 License: MIT
@@ -38,4 +38,4 @@ Requires-Dist: asyncpg-stubs>=0.29; extra == "dev"
 
 # RawDrive Backend
 
-FastAPI-based backend for RawDrive authentication, RBAC, workspace management, and platform services. This directory uses a `src/` layout. Install dependencies with `pip install -e .[dev]` from this folder. See `.kiro/specs/auth-infrastructure` for the implementation plan.
+FastAPI-based backend for RawDrive authentication, RBAC, workspace management, and platform services. This directory uses a `src/` layout. Development is done via Docker containers. See `.kiro/specs/auth-infrastructure` for the implementation plan.

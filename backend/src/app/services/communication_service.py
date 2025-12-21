@@ -839,8 +839,8 @@ class CommunicationService:
                 "total_communications": totals["total"] or 0,
                 "last_contact_date": totals["last_contact"].isoformat() if totals["last_contact"] else None,
                 "pending_follow_ups": totals["pending_follow_ups"] or 0,
-                "by_type": {t["communication_type"]: t["count"] for t in type_counts},
-                "by_direction": {d["direction"]: d["count"] for d in direction_counts},
+                "by_type": {t["communication_type"] or "unknown": t["count"] for t in type_counts},
+                "by_direction": {d["direction"] or "unknown": d["count"] for d in direction_counts},
             }
 
     # =========================================================================

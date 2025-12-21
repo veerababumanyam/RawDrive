@@ -850,6 +850,15 @@ class ClientService:
                 *params,
             )
 
+            # If full_name was updated, sync to galleries
+            if "full_name" in updates:
+                await conn.execute(
+                    "UPDATE galleries SET client_name = $1 WHERE workspace_id = $2 AND client_id = $3",
+                    updates["full_name"],
+                    workspace_id,
+                    client_id,
+                )
+
             logger.info(
                 "Client updated",
                 extra={
@@ -939,6 +948,14 @@ class ClientService:
                     workspace_id,
                     client_id,
                 )
+
+                # Nullify client in galleries before removing links
+                await conn.execute(
+                    "UPDATE galleries SET client_id = NULL, client_name = NULL WHERE workspace_id = $1 AND client_id = $2",
+                    workspace_id,
+                    client_id,
+                )
+
                 await conn.execute(
                     "DELETE FROM client_gallery_links WHERE workspace_id = $1 AND client_id = $2",
                     workspace_id,

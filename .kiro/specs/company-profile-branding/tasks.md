@@ -189,11 +189,11 @@ The plan is organized into three phases:
   - Add bulk operations for gallery branding updates
   - _Requirements: 3.2, 3.4, 3.6, 8.1, 8.6_
 
-- [ ] 12.1 Write property test for studio defaults application
+- [x] 12.1 Write property test for studio defaults application
   - **Property 9: Studio Defaults Application**
   - **Validates: Requirements 3.2**
 
-- [ ] 12.2 Write property test for conditional branding display
+- [x] 12.2 Write property test for conditional branding display
   - **Property 17: Conditional Branding Display**
   - **Validates: Requirements 8.1**
 
@@ -207,7 +207,7 @@ The plan is organized into three phases:
   - Add keyboard navigation for all profile interactions
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1_
 
-- [ ] 13.1 Write unit tests for CompanyProfile form component
+- [-] 13.1 Write unit tests for CompanyProfile form component
   - Test form validation and submission
   - Test visibility toggle functionality
   - Test accessibility compliance

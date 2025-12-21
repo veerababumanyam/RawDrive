@@ -360,6 +360,8 @@ class CreateGalleryRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=255, description="Gallery title")
     description: Optional[str] = Field(None, max_length=1000, description="Gallery description")
     client_name: Optional[str] = Field(None, max_length=255, description="Client name")
+    client_id: Optional[UUID] = Field(None, description="Client ID")
+    shoot_date: Optional[datetime] = Field(None, description="Shoot date")
 
 
 class UpdateGalleryRequest(BaseModel):
@@ -378,6 +380,8 @@ class UpdateGalleryRequest(BaseModel):
     expires_at: Optional[datetime] = None
     branding_profile_id: Optional[UUID] = None
     cover_asset_id: Optional[UUID] = None
+    client_id: Optional[UUID] = None
+    shoot_date: Optional[datetime] = None
 
 
 class PublishGalleryRequest(BaseModel):
@@ -448,6 +452,8 @@ class GalleryDetailResponse(BaseModel):
     created_at: str
     description: Optional[str] = None
     client_name: Optional[str] = None
+    client_id: Optional[UUID] = None
+    shoot_date: Optional[str] = None
     branding_profile_id: Optional[UUID] = None
     company_profile: Optional[CompanyProfileResponse] = None
     portal_language: Optional[str] = None
@@ -474,6 +480,8 @@ class GalleryListItemResponse(BaseModel):
     created_at: str
     description: Optional[str] = None
     client_name: Optional[str] = None
+    client_id: Optional[UUID] = None
+    shoot_date: Optional[str] = None
     cover_image_url: Optional[str] = None
     published_at: Optional[str] = None
 

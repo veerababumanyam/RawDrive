@@ -21,6 +21,8 @@ export interface GalleryEntity {
   title: string;
   description?: string;
   client_name?: string;
+  client_id?: string;
+  shoot_date?: string;
   status: GalleryStatus;
   branding_profile_id?: string;
   company_profile?: CompanyProfile;
@@ -61,6 +63,8 @@ export interface GalleryListItem {
   created_at: string;
   description?: string;
   client_name?: string;
+  client_id?: string;
+  shoot_date?: string;
   cover_image_url?: string;  // Legacy - will be replaced with signed URL
   cover_asset_id?: string;   // Asset ID for fetching signed URL
   published_at?: string;
@@ -108,6 +112,8 @@ export interface GalleryDetailData {
   created_at: string;
   description?: string;
   client_name?: string;
+  client_id?: string;
+  shoot_date?: string;
   branding_profile_id?: string;
   company_profile?: CompanyProfile;
   portal_language?: string;
@@ -134,6 +140,22 @@ export interface SignedUrlResponse {
   url: string;
   expires_at: number;
   ttl: number;
+}
+
+// Public Gallery Asset (API Response)
+export interface PublicGalleryAsset {
+  asset_id: string;
+  gallery_id: string;
+  sub_gallery_id?: string;
+  type: 'photo' | 'video';
+  filename: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  size_bytes: number;
+  metadata?: Record<string, any>;
+  sort_order: number;
+  created_at: string;
 }
 
 // Asset Info (nested in GalleryAssetItem)
@@ -209,6 +231,8 @@ export interface GalleryCreateRequest {
   title: string;
   description?: string;
   client_name?: string;
+  client_id?: string;
+  shoot_date?: string;
 }
 
 // Gallery Update Request
@@ -216,6 +240,8 @@ export interface GalleryUpdateRequest {
   title?: string;
   description?: string;
   client_name?: string;
+  client_id?: string | null;
+  shoot_date?: string | null;
   layout_style?: LayoutStyle;
   theme?: ThemeMode;
   download_policy?: DownloadPolicy;

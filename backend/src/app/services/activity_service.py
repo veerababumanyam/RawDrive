@@ -467,7 +467,7 @@ class ActivityService:
             return {
                 "total_activities": total or 0,
                 "last_activity_at": last_activity,
-                "by_type": {c["activity_type"]: c["count"] for c in counts},
+                "by_type": {c["activity_type"] or "unknown": c["count"] for c in counts},
             }
 
     async def delete_activity(

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -33,7 +33,7 @@ import type { GalleryStatus, GalleryListItem } from '../../types/gallery';
    ============================================================================= */
 
 type ViewMode = 'grid' | 'list';
-type SortOption = 'created_at' | 'title' | 'status';
+type SortOption = 'created_at' | 'title' | 'status' | 'shoot_date';
 type FilterStatus = 'all' | GalleryStatus;
 
 const GalleriesPage: React.FC = () => {
@@ -42,6 +42,9 @@ const GalleriesPage: React.FC = () => {
   const { addToast } = useToast();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('created_at');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -53,7 +56,15 @@ const GalleriesPage: React.FC = () => {
   const [galleryToDelete, setGalleryToDelete] = useState<GalleryListItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fetch galleries
+  // Debounce search
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch galleries with server-side search and filtering
   const {
     galleries,
     meta,
@@ -66,21 +77,11 @@ const GalleriesPage: React.FC = () => {
     limit: 50,
     sort: sortBy,
     status: filterStatus === 'all' ? undefined : filterStatus,
+    search: debouncedSearch || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
     autoFetch: !!workspace?.workspace_id,
   });
-
-  // Client-side filtering by search query
-  const filteredGalleries = useMemo(() => {
-    if (!searchQuery.trim()) return galleries;
-
-    const query = searchQuery.toLowerCase();
-    return galleries.filter((gallery) => {
-      const matchesTitle = gallery.title.toLowerCase().includes(query);
-      const matchesClient = gallery.client_name?.toLowerCase().includes(query);
-      const matchesDescription = gallery.description?.toLowerCase().includes(query);
-      return matchesTitle || matchesClient || matchesDescription;
-    });
-  }, [galleries, searchQuery]);
 
   const handleCreateGallery = () => {
     navigate('/workspace/galleries/new');
@@ -173,7 +174,7 @@ const GalleriesPage: React.FC = () => {
               'Error loading galleries'
             ) : (
               <>
-                {filteredGalleries.length} {filteredGalleries.length === 1 ? 'gallery' : 'galleries'}
+                {galleries.length} {galleries.length === 1 ? 'gallery' : 'galleries'}
                 {meta && ` of ${meta.total}`}
               </>
             )}
@@ -267,6 +268,53 @@ const GalleriesPage: React.FC = () => {
             )}
           </div>
 
+          {/* Date Range Filter */}
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="
+                px-3 py-2.5
+                glass-light border border-white/20 dark:border-white/10
+                rounded-xl text-text-secondary text-sm
+                focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
+                hover:border-white/30
+                transition-all duration-200
+                min-h-[44px]
+              "
+              placeholder="Start Date"
+            />
+            <span className="text-text-tertiary">-</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="
+                px-3 py-2.5
+                glass-light border border-white/20 dark:border-white/10
+                rounded-xl text-text-secondary text-sm
+                focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
+                hover:border-white/30
+                transition-all duration-200
+                min-h-[44px]
+              "
+              placeholder="End Date"
+            />
+            {(startDate || endDate) && (
+              <button
+                onClick={() => {
+                  setStartDate('');
+                  setEndDate('');
+                }}
+                className="text-text-tertiary hover:text-text-primary p-2"
+                title="Clear dates"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
+
           {/* Sort */}
           <div className="relative">
             <select
@@ -286,6 +334,7 @@ const GalleriesPage: React.FC = () => {
               <option value="created_at">Newest</option>
               <option value="title">Name</option>
               <option value="status">Status</option>
+              <option value="shoot_date">Shoot Date</option>
             </select>
             <ChevronDown
               size={16}
@@ -335,7 +384,7 @@ const GalleriesPage: React.FC = () => {
             Try Again
           </AppButton>
         </motion.div>
-      ) : filteredGalleries.length === 0 ? (
+      ) : galleries.length === 0 ? (
         <motion.div variants={staggerItem}>
           <GalleryEmptyState
             hasFilters={!!searchQuery || filterStatus !== 'all'}
@@ -347,7 +396,7 @@ const GalleriesPage: React.FC = () => {
           variants={staggerItem}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
         >
-          {filteredGalleries.map((gallery) => (
+          {galleries.map((gallery) => (
             <GalleryCard
               key={gallery.gallery_id}
               gallery={gallery}
@@ -379,7 +428,7 @@ const GalleriesPage: React.FC = () => {
                   Status
                 </th>
                 <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
-                  Created
+                  Date
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-text-tertiary uppercase">
                   Actions
@@ -387,7 +436,7 @@ const GalleriesPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filteredGalleries.map((gallery) => {
+              {galleries.map((gallery) => {
                 const formatDate = (dateString: string): string => {
                   const date = new Date(dateString);
                   return date.toLocaleDateString('en-US', {
@@ -434,7 +483,7 @@ const GalleriesPage: React.FC = () => {
                       <GalleryStatusBadge status={gallery.status} size="sm" />
                     </td>
                     <td className="hidden md:table-cell px-4 py-3 text-sm text-text-tertiary">
-                      {formatDate(gallery.created_at)}
+                      {formatDate(gallery.shoot_date || gallery.created_at)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">

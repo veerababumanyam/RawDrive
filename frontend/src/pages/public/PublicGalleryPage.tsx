@@ -2,24 +2,30 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { galleryService } from '../../services/galleryService';
-import { GalleryDetailData } from '../../types/gallery';
+import { GalleryDetailData, PublicGalleryAsset } from '../../types/gallery';
 import { AppButton } from '../../components/ui/AppButton';
-import { Download } from 'lucide-react';
+import { Download, Grid } from 'lucide-react';
 
 const PublicGalleryPage: React.FC = () => {
     // Note: Parameter name must match route definition
     const { galleryId } = useParams<{ galleryId: string }>();
     const [gallery, setGallery] = useState<GalleryDetailData | null>(null);
+    const [assets, setAssets] = useState<PublicGalleryAsset[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchGallery = async () => {
+        const fetchGalleryData = async () => {
             if (!galleryId) return;
             setIsLoading(true);
             try {
-                const data = await galleryService.getPublicGallery(galleryId);
-                setGallery(data);
+                // Fetch gallery details
+                const galleryData = await galleryService.getPublicGallery(galleryId);
+                setGallery(galleryData);
+
+                // Fetch assets
+                const assetsData = await galleryService.getPublicGalleryAssets(galleryId);
+                setAssets(assetsData);
             } catch (err: any) {
                 console.error(err);
                 if (err.message && err.message.includes('404')) {
@@ -31,7 +37,7 @@ const PublicGalleryPage: React.FC = () => {
                 setIsLoading(false);
             }
         };
-        fetchGallery();
+        fetchGalleryData();
     }, [galleryId]);
 
     if (isLoading) {
@@ -56,6 +62,11 @@ const PublicGalleryPage: React.FC = () => {
 
     const { company_profile } = gallery;
     const activeColor = company_profile?.brand_color || '#2563EB';
+
+    // Construct cover URL
+    const coverUrl = gallery.cover_asset_id
+        ? `/api/v1/public/galleries/${gallery.gallery_id}/assets/${gallery.cover_asset_id}/preview`
+        : null;
 
     return (
         <div className="min-h-screen flex flex-col bg-white dark:bg-gray-950" style={{ '--primary-color': activeColor } as React.CSSProperties}>
@@ -88,26 +99,29 @@ const PublicGalleryPage: React.FC = () => {
 
             {/* Hero / Cover */}
             <div className="relative h-[40vh] md:h-[50vh] bg-gray-100 dark:bg-gray-900 overflow-hidden">
-                {gallery.cover_asset_id ? (
-                    /* Ideally fetch signed URL for cover */
-                    <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                        {/* Placeholder until we have public signed URLs */}
-                        <img src="/placeholder-cover.jpg" alt="Cover" className="w-full h-full object-cover opacity-80"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                {coverUrl ? (
+                    <div className="absolute inset-0">
+                        <img
+                            src={coverUrl}
+                            alt="Cover"
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                        <div className="absolute inset-0 bg-black/30"></div>
                     </div>
                 ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-black"></div>
                 )}
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4 text-center">
-                    <div className="max-w-2xl">
-                        <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 drop-shadow-lg">{gallery.title}</h2>
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end justify-center pb-12 p-4 text-center">
+                    <div className="max-w-3xl">
+                        <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 drop-shadow-lg font-heading">{gallery.title}</h2>
                         {gallery.description && (
-                            <p className="text-white/90 text-lg md:text-xl drop-shadow-md">{gallery.description}</p>
+                            <p className="text-white/90 text-lg md:text-xl drop-shadow-md max-w-2xl mx-auto">{gallery.description}</p>
                         )}
-                        <div className="mt-6 flex flex-wrap justify-center gap-4 text-white/80 text-sm">
-                            <span>{new Date(gallery.created_at).toLocaleDateString()}</span>
-                            <span>&bull;</span>
-                            <span>{gallery.stats.total_photos} Photos</span>
+                        <div className="mt-6 flex flex-wrap justify-center gap-4 text-white/80 text-sm font-medium">
+                            <span className="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">{new Date(gallery.created_at).toLocaleDateString()}</span>
+                            <span className="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">{gallery.stats.total_photos} Photos</span>
                         </div>
                     </div>
                 </div>
@@ -117,32 +131,44 @@ const PublicGalleryPage: React.FC = () => {
             <main className="flex-1 max-w-7xl mx-auto px-4 md:px-6 py-12 w-full">
 
                 {gallery.status !== 'published' && (
-                    <div className="mb-8 p-4 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg text-center">
+                    <div className="mb-8 p-4 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg text-center border border-yellow-200 dark:border-yellow-800">
                         This gallery is currently <strong>{gallery.status}</strong>. Only you can see this.
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Placeholder for PhotoGrid - Needs Public Assets API */}
-                    {[1, 2, 3, 4, 5, 6].map(i => (
-                        <div key={i} className="aspect-[3/2] bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse"></div>
-                    ))}
-                </div>
-                <div className="text-center mt-12 text-gray-500">
-                    <p>Gallery assets loading is being implemented.</p>
-                </div>
+                {assets.length === 0 ? (
+                    <div className="text-center py-20 text-gray-500">
+                        <Grid className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                        <p>No photos in this gallery yet.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {assets.map(asset => (
+                            <div key={asset.asset_id} className="aspect-[3/2] bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden group relative break-inside-avoid">
+                                <img
+                                    src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${asset.asset_id}/thumbnail`}
+                                    alt={asset.filename}
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                    loading="lazy"
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300"></div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </main>
 
             {/* Footer */}
             <footer className="bg-gray-50 dark:bg-black py-12 border-t border-gray-100 dark:border-gray-800">
-                <div className="max-w-7xl mx-auto px-4 text-center space-y-4">
-                    {company_profile?.logo_url && (
-                        <img src={company_profile.logo_url} alt="Logo" className="h-8 mx-auto grayscale hover:grayscale-0 transition-all opacity-70 hover:opacity-100" />
-                    )}
+                <div className="max-w-7xl mx-auto px-4 text-center space-y-6">
+                    {company_profile?.logo_url ? (
+                        <img src={company_profile.logo_url} alt="Logo" className="h-10 mx-auto grayscale hover:grayscale-0 transition-all opacity-70 hover:opacity-100" />
+                    ) : null}
+
                     <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{company_profile?.name || 'Studio Name'}</p>
+                        <p className="font-medium text-lg text-gray-900 dark:text-white mb-2">{company_profile?.name || 'Studio Name'}</p>
                         {company_profile?.website && (
-                            <a href={company_profile.website} target="_blank" rel="noreferrer" className="text-primary hover:underline text-sm">
+                            <a href={company_profile.website} target="_blank" rel="noreferrer" className="text-primary hover:underline transition-colors">
                                 {company_profile.website.replace(/^https?:\/\//, '')}
                             </a>
                         )}

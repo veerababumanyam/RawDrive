@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 from uuid import UUID
+from datetime import date
 
 from fastapi import APIRouter, Path, Query, status
 
@@ -61,6 +62,9 @@ async def list_galleries(
     limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
     sort: Annotated[str, Query(description="Sort field")] = "created_at",
     status_filter: Annotated[str | None, Query(alias="status", description="Filter by status")] = None,
+    search: Annotated[str | None, Query(description="Search query")] = None,
+    start_date: Annotated[date | None, Query(description="Filter by shoot date start")] = None,
+    end_date: Annotated[date | None, Query(description="Filter by shoot date end")] = None,
 ) -> GalleryListResponse:
     """List all galleries in a workspace."""
     # workspace_access validates access, workspace_id comes from path
@@ -72,6 +76,9 @@ async def list_galleries(
             limit=limit,
             sort=sort,
             status=status_filter,
+            search=search,
+            start_date=start_date,
+            end_date=end_date,
         )
         return GalleryListResponse(**result)
     except GalleryError as e:
@@ -111,6 +118,8 @@ async def create_gallery(
             title=request.title,
             description=request.description,
             client_name=request.client_name,
+            client_id=request.client_id,
+            shoot_date=request.shoot_date,
         )
         return GalleryDetailResponse(**result)
     except GalleryError as e:
