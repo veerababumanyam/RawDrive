@@ -15,6 +15,7 @@ from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import jwt
 
 from app.db.postgres import get_postgres_pool
 from app.services.rbac_service import RBACService
@@ -85,7 +86,7 @@ async def get_current_user(
     # Decode and validate token
     try:
         payload = decode_token(token)
-    except ValueError as e:
+    except (ValueError, jwt.exceptions.ExpiredSignatureError, jwt.exceptions.InvalidTokenError) as e:
         logger.warning("Token validation failed", extra={"error": str(e)})
         raise AuthError("Invalid or expired token")
 
