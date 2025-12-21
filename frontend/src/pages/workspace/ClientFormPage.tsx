@@ -216,15 +216,64 @@ const ClientFormPage: React.FC = () => {
 
     setSaving(true);
     try {
-      // payload sanitization is now handled by the service
-
-      console.log('Creating/updating client with payload:', formData);
-
       if (isEditMode && clientId) {
-        await clientService.updateClient(workspace.workspace_id, clientId, formData);
+        // Build UpdateClientRequest - only include fields that have values
+        // and exclude referred_by_client_id which is not part of UpdateClientRequest
+        const updatePayload: Record<string, unknown> = {};
+
+        // Only include non-empty string fields
+        if (formData.full_name?.trim()) updatePayload.full_name = formData.full_name.trim();
+        if (formData.first_name?.trim()) updatePayload.first_name = formData.first_name.trim();
+        if (formData.last_name?.trim()) updatePayload.last_name = formData.last_name.trim();
+        else if (formData.last_name === '') updatePayload.last_name = null; // Allow clearing
+        if (formData.nickname?.trim()) updatePayload.nickname = formData.nickname.trim();
+        else if (formData.nickname === '') updatePayload.nickname = null;
+        if (formData.job_title?.trim()) updatePayload.job_title = formData.job_title.trim();
+        else if (formData.job_title === '') updatePayload.job_title = null;
+        if (formData.organization?.trim()) updatePayload.organization = formData.organization.trim();
+        else if (formData.organization === '') updatePayload.organization = null;
+        if (formData.language?.trim()) updatePayload.language = formData.language.trim();
+        else if (formData.language === '') updatePayload.language = null;
+        if (formData.timezone?.trim()) updatePayload.timezone = formData.timezone.trim();
+        else if (formData.timezone === '') updatePayload.timezone = null;
+        if (formData.internal_notes?.trim()) updatePayload.internal_notes = formData.internal_notes.trim();
+        else if (formData.internal_notes === '') updatePayload.internal_notes = null;
+
+        // Handle date fields - convert empty strings to null
+        if (formData.date_of_birth && formData.date_of_birth.trim()) {
+          updatePayload.date_of_birth = formData.date_of_birth;
+        } else {
+          updatePayload.date_of_birth = null;
+        }
+        if (formData.anniversary_date && formData.anniversary_date.trim()) {
+          updatePayload.anniversary_date = formData.anniversary_date;
+        } else {
+          updatePayload.anniversary_date = null;
+        }
+
+        console.log('Updating client with payload:', updatePayload);
+        await clientService.updateClient(workspace.workspace_id, clientId, updatePayload);
         addToast({ variant: 'success', message: 'Client updated successfully' });
       } else {
-        const response = await clientService.createClient(workspace.workspace_id, formData);
+        // Build CreateClientRequest - sanitize empty strings
+        const createPayload: Record<string, unknown> = {
+          full_name: formData.full_name.trim(),
+          first_name: formData.first_name.trim(),
+        };
+
+        if (formData.last_name?.trim()) createPayload.last_name = formData.last_name.trim();
+        if (formData.nickname?.trim()) createPayload.nickname = formData.nickname.trim();
+        if (formData.job_title?.trim()) createPayload.job_title = formData.job_title.trim();
+        if (formData.organization?.trim()) createPayload.organization = formData.organization.trim();
+        if (formData.language?.trim()) createPayload.language = formData.language.trim();
+        if (formData.timezone?.trim()) createPayload.timezone = formData.timezone.trim();
+        if (formData.internal_notes?.trim()) createPayload.internal_notes = formData.internal_notes.trim();
+        if (formData.date_of_birth?.trim()) createPayload.date_of_birth = formData.date_of_birth;
+        if (formData.anniversary_date?.trim()) createPayload.anniversary_date = formData.anniversary_date;
+        if (formData.referred_by_client_id?.trim()) createPayload.referred_by_client_id = formData.referred_by_client_id;
+
+        console.log('Creating client with payload:', createPayload);
+        const response = await clientService.createClient(workspace.workspace_id, createPayload as CreateClientRequest);
         addToast({ variant: 'success', message: 'Client created successfully' });
         navigate(`/workspace/clients/${response.client_id}`);
         return;
