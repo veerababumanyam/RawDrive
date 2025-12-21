@@ -273,7 +273,7 @@ const ClientFormPage: React.FC = () => {
         if (formData.referred_by_client_id?.trim()) createPayload.referred_by_client_id = formData.referred_by_client_id;
 
         console.log('Creating client with payload:', createPayload);
-        const response = await clientService.createClient(workspace.workspace_id, createPayload as CreateClientRequest);
+        const response = await clientService.createClient(workspace.workspace_id, createPayload as unknown as CreateClientRequest);
         addToast({ variant: 'success', message: 'Client created successfully' });
         navigate(`/workspace/clients/${response.client_id}`);
         return;
