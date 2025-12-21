@@ -1,0 +1,123 @@
+{
+    "appName": "RawDrive",
+    "welcome": "RawDrive కి స్వాగతం",
+    "selectLanguage": "భాష ఎంచుకోండి",
+    "languageUpdated": "భాష {{language}} కు మార్చబడింది",
+    "nav": {
+        "dashboard": "డాష్‌బోర్డ్",
+        "galleries": "గ్యాలరీలు",
+        "libraries": "లైబ్రరీలు",
+        "clients": "క్లయింట్లు",
+        "shared": "షేర్ చేసినవి",
+        "recent": "ఇటీవలి",
+        "favorites": "ఇష్టమైనవి",
+        "trash": "ట్రాష్",
+        "settings": "సెట్టింగ్స్",
+        "companyProfile": "కంపెనీ ప్రొఫైల్",
+        "help": "సహాయం & మద్దతు",
+        "search": "శోధించు",
+        "newGallery": "కొత్త గ్యాలరీ"
+    },
+    "actions": {
+        "save": "సేవ్ చేయి",
+        "cancel": "రద్దు చేయి",
+        "delete": "తొలగించు",
+        "edit": "సవరించు",
+        "create": "సృష్టించు",
+        "back": "వెనుకకు",
+        "next": "తదుపరి",
+        "previous": "మునుపటి",
+        "close": "మూసివేయి",
+        "confirm": "నిర్ధారించు",
+        "search": "శోధించు",
+        "filter": "ఫిల్టర్",
+        "sort": "క్రమబద్ధీకరించు",
+        "upload": "అప్‌లోడ్ చేయి",
+        "download": "డౌన్‌లోడ్ చేయి",
+        "share": "షేర్ చేయి",
+        "retry": "మళ్ళీ ప్రయత్నించు",
+        "submit": "సమర్పించు",
+        "viewAll": "అన్నీ చూడు",
+        "showMore": "మరింత చూపించు",
+        "showLess": "తక్కువ చూపించు",
+        "selectAll": "అన్నీ ఎంచుకో",
+        "deselectAll": "అన్నీ ఎంపిక తొలగించు"
+    },
+    "status": {
+        "loading": "లోడ్ అవుతోంది...",
+        "error": "లోపం",
+        "success": "విజయవంతం",
+        "warning": "హెచ్చరిక",
+        "info": "సమాచారం",
+        "active": "యాక్టివ్",
+        "inactive": "ఇన్‌యాక్టివ్",
+        "pending": "పెండింగ్",
+        "completed": "పూర్తయింది",
+        "failed": "విఫలమైంది"
+    },
+    "errors": {
+        "generic": "ఏదో తప్పు జరిగింది. దయచేసి మళ్ళీ ప్రయత్నించండి.",
+        "notFound": "కనుగొనబడలేదు",
+        "unauthorized": "అనధికారం",
+        "forbidden": "నిషేధించబడింది",
+        "serverError": "సర్వర్ లోపం",
+        "networkError": "నెట్‌వర్క్ లోపం"
+    },
+    "confirmation": {
+        "yes": "అవును",
+        "no": "కాదు",
+        "ok": "సరే",
+        "areYouSure": "మీకు ఖచ్చితంగా తెలుసా?",
+        "cannotUndo": "ఈ చర్యను రద్దు చేయలేము."
+    },
+    "user": {
+        "profile": "ప్రొఫైల్",
+        "logout": "లాగ్ అవుట్",
+        "login": "లాగిన్",
+        "register": "నమోదు"
+    },
+    "storage": {
+        "title": "స్టోరేజ్",
+        "upgrade": "అప్‌గ్రేడ్"
+    },
+    "plan": {
+        "free": "ఫ్రీ ప్లాన్",
+        "pro": "ప్రో ప్లాన్",
+        "enterprise": "ఎంటర్‌ప్రైజ్ ప్లాన్"
+    },
+    "time": {
+        "justNow": "ఇప్పుడే",
+        "minutesAgo_one": "{{count}} నిమిషం క్రితం",
+        "minutesAgo_other": "{{count}} నిమిషాల క్రితం",
+        "hoursAgo_one": "{{count}} గంట క్రితం",
+        "hoursAgo_other": "{{count}} గంటల క్రితం",
+        "daysAgo_one": "{{count}} రోజు క్రితం",
+        "daysAgo_other": "{{count}} రోజుల క్రితం",
+        "createdAt": "సృష్టించిన తేదీ",
+        "updatedAt": "నవీకరించిన తేదీ"
+    },
+    "labels": {
+        "name": "పేరు",
+        "description": "వివరణ",
+        "date": "తేదీ",
+        "time": "సమయం",
+        "language": "భాష",
+        "currency": "కరెన్సీ",
+        "timezone": "టైమ్ జోన్",
+        "country": "దేశం"
+    },
+    "legal": {
+        "privacyPolicy": "గోప్యతా విధానం",
+        "termsOfService": "సేవా నిబంధనలు",
+        "copyright": "© {{year}} RawDrive. అన్ని హక్కులు రిజర్వ్ చేయబడ్డాయి."
+    },
+    "links": {
+        "home": "హోమ్",
+        "about": "మా గురించి",
+        "contact": "సంప్రదించండి",
+        "help": "సహాయం",
+        "documentation": "డాక్యుమెంటేషన్",
+        "contactSupport": "సహాయాన్ని సంప్రదించండి",
+        "goHome": "హోమ్‌కు వెళ్ళండి"
+    }
+}

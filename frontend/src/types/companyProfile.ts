@@ -21,7 +21,10 @@ export interface CompanyVisibilityConfig {
     phone: boolean;
     website: boolean;
     address: boolean;
-    socials: boolean;
+    socials_instagram: boolean;
+    socials_facebook: boolean;
+    socials_twitter: boolean;
+    socials_linkedin: boolean;
     custom_links: boolean;
 }
 

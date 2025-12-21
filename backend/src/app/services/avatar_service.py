@@ -308,8 +308,32 @@ class AvatarService:
                 # Generate avatar asset ID
                 avatar_asset_id = uuid4()
 
-                # Store in database (storage integration would go here)
-                # For now, we store the asset reference and crop data
+                # Store thumbnails in avatar_images table
+                await conn.execute(
+                    """
+                    INSERT INTO avatar_images (
+                        avatar_id, workspace_id, client_id,
+                        image_64, image_128, image_256,
+                        content_type
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, 'image/webp')
+                    ON CONFLICT (workspace_id, client_id)
+                    DO UPDATE SET
+                        avatar_id = EXCLUDED.avatar_id,
+                        image_64 = EXCLUDED.image_64,
+                        image_128 = EXCLUDED.image_128,
+                        image_256 = EXCLUDED.image_256,
+                        updated_at = NOW()
+                    """,
+                    avatar_asset_id,
+                    workspace_id,
+                    client_id,
+                    thumbnails.get("64"),
+                    thumbnails.get("128"),
+                    thumbnails.get("256"),
+                )
+
+                # Update client with avatar reference
                 await conn.execute(
                     """
                     UPDATE clients
@@ -605,6 +629,45 @@ class AvatarService:
                     "initials": initials,
                     "has_avatar": False,
                 }
+
+    async def get_avatar_image(
+        self,
+        workspace_id: UUID,
+        client_id: UUID,
+        size: int = 256,
+    ) -> Optional[bytes]:
+        """Get the avatar image bytes for a client.
+
+        Args:
+            workspace_id: Workspace for tenant isolation
+            client_id: Client to get avatar for
+            size: Requested thumbnail size (64, 128, or 256)
+
+        Returns:
+            Image bytes (WebP format) or None if no avatar
+        """
+        # Validate size
+        if size not in AVATAR_THUMBNAIL_SIZES:
+            size = 256  # Default to largest
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Get the avatar image data
+            column = f"image_{size}"
+            row = await conn.fetchrow(
+                f"""
+                SELECT {column} as image_data
+                FROM avatar_images
+                WHERE workspace_id = $1 AND client_id = $2
+                """,
+                workspace_id,
+                client_id,
+            )
+
+            if row and row["image_data"]:
+                return bytes(row["image_data"])
+
+            return None
 
 
 # ---------------------------------------------------------------------------

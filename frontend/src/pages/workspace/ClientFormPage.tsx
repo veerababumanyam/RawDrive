@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -16,12 +16,17 @@ import {
   Plus,
   Trash2,
   Loader2,
+  Camera,
+  Upload,
+  X,
 } from 'lucide-react';
 import { staggerContainer, staggerItem } from '../../components/landing/animations/presets';
 import { useAuth } from '../../contexts/AuthContext';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppBadge } from '../../components/ui/AppBadge';
 import { useToast } from '../../components/ui/Toast';
+import { DatePicker } from '../../components/ui/DatePicker';
+import { AvatarCropModal, CropData } from '../../components/ui/AvatarCropModal';
 import { clientService } from '../../services/clientService';
 import type {
   CreateClientRequest,
@@ -96,6 +101,40 @@ const ClientFormPage: React.FC = () => {
   const [clientTags, setClientTags] = useState<ClientTag[]>([]);
   const [availableTags, setAvailableTags] = useState<ClientTag[]>([]);
 
+  // Avatar state
+  const [avatarBlobUrl, setAvatarBlobUrl] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const avatarBlobUrlRef = useRef<string | null>(null);
+
+  // Update ref when state changes and cleanup on unmount
+  useEffect(() => {
+    avatarBlobUrlRef.current = avatarBlobUrl;
+    return () => {
+      if (avatarBlobUrlRef.current) {
+        URL.revokeObjectURL(avatarBlobUrlRef.current);
+      }
+    };
+  }, [avatarBlobUrl]);
+
+  // Fetch avatar as blob URL (since API requires auth headers)
+  const fetchAvatarBlobUrl = useCallback(async (workspaceId: string, clientIdToFetch: string) => {
+    try {
+      const blobUrl = await clientService.getAvatarBlobUrl(workspaceId, clientIdToFetch, 256);
+      if (blobUrl) {
+        // Revoke previous blob URL to prevent memory leaks
+        if (avatarBlobUrlRef.current) {
+          URL.revokeObjectURL(avatarBlobUrlRef.current);
+        }
+        setAvatarBlobUrl(blobUrl);
+      }
+    } catch (err) {
+      console.error('Failed to fetch avatar:', err);
+    }
+  }, []);
+
   // Fetch client data for edit mode
   const fetchClient = useCallback(async () => {
     if (!workspace?.workspace_id || !clientId) return;
@@ -121,6 +160,11 @@ const ClientFormPage: React.FC = () => {
       setContacts(clientData.contacts);
       setAddresses(clientData.addresses);
       setClientTags(clientData.tags);
+
+      // Fetch avatar as blob URL if client has an avatar
+      if (clientData.avatar_url) {
+        fetchAvatarBlobUrl(workspace.workspace_id, clientId);
+      }
     } catch (err) {
       addToast({
         variant: 'error',
@@ -129,7 +173,7 @@ const ClientFormPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [workspace?.workspace_id, clientId, addToast]);
+  }, [workspace?.workspace_id, clientId, addToast, fetchAvatarBlobUrl]);
 
   // Fetch available tags
   const fetchTags = useCallback(async () => {
@@ -341,6 +385,108 @@ const ClientFormPage: React.FC = () => {
     }
   };
 
+  // Avatar handlers
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      addToast({ variant: 'error', message: 'Please select a JPEG, PNG, or WebP image' });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      addToast({ variant: 'error', message: 'Image must be less than 5MB' });
+      return;
+    }
+
+    // Show preview for crop modal
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setAvatarPreview(e.target?.result as string);
+      setShowCropModal(true);
+    };
+    reader.readAsDataURL(file);
+
+    // Reset file input
+    if (avatarInputRef.current) {
+      avatarInputRef.current.value = '';
+    }
+  };
+
+  // Handle crop completion
+  const handleCropComplete = async (croppedBlob: Blob, cropData: CropData) => {
+    if (!isEditMode || !workspace?.workspace_id || !clientId) {
+      setShowCropModal(false);
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      // Convert blob to File
+      const croppedFile = new File([croppedBlob], 'avatar.webp', { type: 'image/webp' });
+
+      await clientService.uploadAvatar(
+        workspace.workspace_id,
+        clientId,
+        croppedFile,
+        cropData
+      );
+
+      // Fetch the newly uploaded avatar as blob URL
+      await fetchAvatarBlobUrl(workspace.workspace_id, clientId);
+
+      setAvatarPreview(null);
+      setShowCropModal(false);
+      addToast({ variant: 'success', message: 'Photo uploaded successfully' });
+    } catch (err) {
+      addToast({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'Failed to upload photo',
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  // Handle crop cancel
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    setAvatarPreview(null);
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (isEditMode && workspace?.workspace_id && clientId) {
+      try {
+        await clientService.deleteAvatar(workspace.workspace_id, clientId);
+        // Revoke blob URL to prevent memory leaks
+        if (avatarBlobUrlRef.current) {
+          URL.revokeObjectURL(avatarBlobUrlRef.current);
+        }
+        setAvatarBlobUrl(null);
+        setAvatarPreview(null);
+        addToast({ variant: 'success', message: 'Photo removed' });
+      } catch (err) {
+        addToast({
+          variant: 'error',
+          message: err instanceof Error ? err.message : 'Failed to remove photo',
+        });
+      }
+    } else {
+      setAvatarPreview(null);
+    }
+  };
+
+  // Get initials for avatar placeholder
+  const getInitials = () => {
+    const first = formData.first_name?.charAt(0) || '';
+    const last = formData.last_name?.charAt(0) || '';
+    return (first + last).toUpperCase() || '?';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -399,6 +545,95 @@ const ClientFormPage: React.FC = () => {
             <h2 className="text-xl font-semibold text-text-primary">Personal Information</h2>
           </div>
           <div className="space-y-6">
+            {/* Client Photo */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+              <div className="relative group">
+                {/* Avatar Display */}
+                <div className="w-28 h-28 rounded-2xl overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center border-2 border-border">
+                  {avatarBlobUrl ? (
+                    <img
+                      src={avatarBlobUrl}
+                      alt={formData.first_name || 'Client'}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-3xl font-bold text-primary/60">
+                      {getInitials()}
+                    </span>
+                  )}
+                  {isUploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <Loader2 size={28} className="text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Overlay on Hover (Edit Mode) */}
+                {isEditMode && avatarBlobUrl && !isUploadingAvatar && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    className="absolute -top-2 -right-2 p-1.5 rounded-full bg-error text-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Remove photo"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1">
+                <h3 className="font-medium text-text-primary mb-2">Client Photo</h3>
+                <p className="text-sm text-text-tertiary mb-3">
+                  {isEditMode
+                    ? 'Upload a photo for this client. JPEG, PNG, or WebP up to 5MB.'
+                    : 'Photo can be added after creating the client.'
+                  }
+                </p>
+                {isEditMode && (
+                  <div className="flex gap-2">
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleAvatarSelect}
+                      className="hidden"
+                      id="avatar-upload"
+                      aria-label="Upload client photo"
+                    />
+                    <AppButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => avatarInputRef.current?.click()}
+                      leftIcon={<Upload size={16} />}
+                      disabled={isUploadingAvatar}
+                    >
+                      {avatarBlobUrl ? 'Change Photo' : 'Upload Photo'}
+                    </AppButton>
+                    {avatarBlobUrl && (
+                      <AppButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveAvatar}
+                        className="text-error hover:bg-error/10"
+                        disabled={isUploadingAvatar}
+                      >
+                        Remove
+                      </AppButton>
+                    )}
+                  </div>
+                )}
+                {!isEditMode && (
+                  <div className="flex items-center gap-2 text-text-tertiary">
+                    <Camera size={16} />
+                    <span className="text-sm">Available after saving</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <hr className="border-border/50" />
+
             {/* Name */}
             <div>
               <h3 className="font-medium text-text-primary mb-4">Name</h3>
@@ -495,30 +730,21 @@ const ClientFormPage: React.FC = () => {
                 <h3 className="font-medium text-text-primary">Important Dates</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                    Date of Birth
-                  </label>
-                  <input
-                    type="date"
-                    name="date_of_birth"
-                    value={formData.date_of_birth || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                    Anniversary Date
-                  </label>
-                  <input
-                    type="date"
-                    name="anniversary_date"
-                    value={formData.anniversary_date || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-                  />
-                </div>
+                <DatePicker
+                  label="Date of Birth"
+                  name="date_of_birth"
+                  value={formData.date_of_birth || ''}
+                  onChange={(date) => setFormData((prev) => ({ ...prev, date_of_birth: date }))}
+                  placeholder="Select date"
+                  maxDate={new Date()}
+                />
+                <DatePicker
+                  label="Anniversary Date"
+                  name="anniversary_date"
+                  value={formData.anniversary_date || ''}
+                  onChange={(date) => setFormData((prev) => ({ ...prev, anniversary_date: date }))}
+                  placeholder="Select date"
+                />
               </div>
             </div>
 
@@ -669,6 +895,15 @@ const ClientFormPage: React.FC = () => {
           </div>
         </section>
       </motion.div>
+
+      {/* Avatar Crop Modal */}
+      <AvatarCropModal
+        isOpen={showCropModal}
+        imageSrc={avatarPreview || ''}
+        onCropComplete={handleCropComplete}
+        onCancel={handleCropCancel}
+        isLoading={isUploadingAvatar}
+      />
     </motion.div>
   );
 };

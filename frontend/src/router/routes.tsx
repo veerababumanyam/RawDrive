@@ -55,6 +55,7 @@ const ClientsPage = lazy(() => import('../pages/workspace/ClientsPage'));
 const ClientDetailPage = lazy(() => import('../pages/workspace/ClientDetailPage'));
 const ClientFormPage = lazy(() => import('../pages/workspace/ClientFormPage'));
 const CompanyProfilePage = lazy(() => import('../pages/workspace/settings/CompanyProfilePage'));
+const GeneralSettingsPage = lazy(() => import('../pages/workspace/settings/GeneralSettingsPage'));
 
 // Wrapper for lazy loaded components
 const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
@@ -217,7 +218,7 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'settings',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
+        element: <CriticalLazyPage component={GeneralSettingsPage} />,
       },
       {
         path: 'settings/profile',

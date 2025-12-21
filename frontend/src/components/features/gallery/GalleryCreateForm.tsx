@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { AppInput } from '../../ui/AppInput';
 import { AppButton } from '../../ui/AppButton';
+import { ClientCombobox } from '../clients';
 import type { GalleryCreateRequest } from '../../../types/gallery';
 
 export interface GalleryCreateFormProps {
@@ -29,6 +30,7 @@ export const GalleryCreateForm: React.FC<GalleryCreateFormProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [clientName, setClientName] = useState('');
+  const [clientId, setClientId] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -71,11 +73,13 @@ export const GalleryCreateForm: React.FC<GalleryCreateFormProps> = ({
     setErrors((prev) => ({ ...prev, description: error }));
   };
 
-  const handleClientNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setClientName(value);
-    const error = validateClientName(value);
-    setErrors((prev) => ({ ...prev, client_name: error }));
+  const handleClientChange = (id: string | null, name?: string) => {
+    setClientId(id);
+    if (name !== undefined) {
+      setClientName(name);
+      const error = validateClientName(name);
+      setErrors((prev) => ({ ...prev, client_name: error }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -103,6 +107,7 @@ export const GalleryCreateForm: React.FC<GalleryCreateFormProps> = ({
         title: title.trim(),
         description: description.trim() || undefined,
         client_name: clientName.trim() || undefined,
+        client_id: clientId || undefined,
       });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Failed to create gallery');
@@ -160,19 +165,15 @@ export const GalleryCreateForm: React.FC<GalleryCreateFormProps> = ({
       </div>
 
       {/* Client Name - Optional */}
-      <div>
-        <AppInput
+      <div className="relative z-10">
+        <ClientCombobox
           label="Client Name"
-          value={clientName}
-          onChange={handleClientNameChange}
-          placeholder="e.g., Sarah & Mike Johnson"
+          value={clientId || undefined}
+          onChange={handleClientChange}
+          placeholder="Search for a client or create new..."
           error={errors.client_name}
-          inputSize="lg"
-          aria-describedby={errors.client_name ? 'client-name-error' : undefined}
+          helperText="Optional: Link this gallery to a specific client"
         />
-        <p className="text-text-tertiary text-xs mt-1">
-          Optional: Name of the client for this gallery
-        </p>
       </div>
 
       {/* Submit Error */}

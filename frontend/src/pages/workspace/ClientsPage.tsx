@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import {
   Plus,
@@ -51,6 +52,7 @@ const ClientsPage: React.FC = () => {
   const navigate = useNavigate();
   const { workspace } = useAuth();
   const { addToast } = useToast();
+  const { t } = useTranslation(['common']);
 
   // View and filter state
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -81,6 +83,10 @@ const ClientsPage: React.FC = () => {
   // Export/Import dialog state
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+
+  // Avatar blob URLs - keyed by client_id
+  const [avatarBlobUrls, setAvatarBlobUrls] = useState<Record<string, string>>({});
+  const avatarBlobUrlsRef = useRef<Record<string, string>>({});
 
   // Fetch clients
   const fetchClients = useCallback(async () => {
@@ -128,6 +134,70 @@ const ClientsPage: React.FC = () => {
   useEffect(() => {
     fetchTags();
   }, [fetchTags]);
+
+  // Sync avatar blob URLs ref and cleanup on unmount
+  useEffect(() => {
+    avatarBlobUrlsRef.current = avatarBlobUrls;
+    return () => {
+      // Cleanup all blob URLs on unmount
+      Object.values(avatarBlobUrlsRef.current).forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+    };
+  }, [avatarBlobUrls]);
+
+  // Fetch avatar blob URLs for clients that have avatars
+  useEffect(() => {
+    if (!workspace?.workspace_id || clients.length === 0) return;
+
+    const fetchAvatarBlobUrls = async () => {
+      // Get current client IDs
+      const currentClientIds = new Set(clients.map((c) => c.client_id));
+
+      // Revoke and remove blob URLs for clients no longer in the list
+      const oldBlobUrls = { ...avatarBlobUrlsRef.current };
+      Object.keys(oldBlobUrls).forEach((clientId) => {
+        if (!currentClientIds.has(clientId)) {
+          URL.revokeObjectURL(oldBlobUrls[clientId]);
+          delete oldBlobUrls[clientId];
+        }
+      });
+
+      // Find clients that need avatar blob URLs fetched
+      const clientsWithAvatars = clients.filter((c) => c.avatar_url && !oldBlobUrls[c.client_id]);
+
+      if (clientsWithAvatars.length === 0) {
+        // Still update state if we removed any old blob URLs
+        if (Object.keys(oldBlobUrls).length !== Object.keys(avatarBlobUrlsRef.current).length) {
+          setAvatarBlobUrls(oldBlobUrls);
+        }
+        return;
+      }
+
+      const newBlobUrls: Record<string, string> = { ...oldBlobUrls };
+
+      await Promise.all(
+        clientsWithAvatars.map(async (client) => {
+          try {
+            const blobUrl = await clientService.getAvatarBlobUrl(
+              workspace.workspace_id,
+              client.client_id,
+              256
+            );
+            if (blobUrl) {
+              newBlobUrls[client.client_id] = blobUrl;
+            }
+          } catch (err) {
+            console.error(`Failed to fetch avatar for client ${client.client_id}:`, err);
+          }
+        })
+      );
+
+      setAvatarBlobUrls(newBlobUrls);
+    };
+
+    fetchAvatarBlobUrls();
+  }, [workspace?.workspace_id, clients]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -228,7 +298,7 @@ const ClientsPage: React.FC = () => {
     });
   };
 
-  // Client Avatar component
+  // Client Avatar component - uses blob URLs for authenticated image fetching
   const ClientAvatar: React.FC<{ client: ClientListItem; size?: 'sm' | 'md' | 'lg' }> = ({
     client,
     size = 'md',
@@ -239,10 +309,12 @@ const ClientsPage: React.FC = () => {
       lg: 'w-12 h-12 text-base',
     };
 
-    if (client.avatar_url) {
+    const avatarBlobUrl = avatarBlobUrls[client.client_id];
+
+    if (avatarBlobUrl) {
       return (
         <img
-          src={client.avatar_url}
+          src={avatarBlobUrl}
           alt={client.full_name}
           className={`${sizeClasses[size]} rounded-full object-cover ring-2 ring-white/20`}
         />
@@ -271,16 +343,16 @@ const ClientsPage: React.FC = () => {
         className="card-glass rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-gradient">Clients</h1>
+          <h1 className="text-2xl font-bold text-gradient">{t('nav.clients')}</h1>
           <p className="text-text-secondary mt-1">
             {loading ? (
-              'Loading...'
+              t('status.loading')
             ) : error ? (
-              'Error loading clients'
+              t('errors.generic')
             ) : (
               <>
-                {clients.length} {clients.length === 1 ? 'client' : 'clients'}
-                {meta && ` of ${meta.total}`}
+                {clients.length} {clients.length === 1 ? t('labels.client_one', { defaultValue: 'client' }) : t('labels.client_other', { defaultValue: 'clients' })}
+                {meta && ` ${t('labels.of', { defaultValue: 'of' })} ${meta.total}`}
               </>
             )}
           </p>
@@ -309,7 +381,7 @@ const ClientsPage: React.FC = () => {
             shine
             className="hover:-translate-y-0.5 active:scale-95 transition-all"
           >
-            New Client
+            {t('actions.create')} {t('labels.client_one', { defaultValue: 'Client' })}
           </AppButton>
         </div>
       </motion.div>
@@ -329,7 +401,7 @@ const ClientsPage: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search clients..."
+            placeholder={t('actions.search') + ' ' + t('nav.clients').toLowerCase() + '...'}
             className="
               w-full pl-10 pr-4 py-2.5
               glass-light border border-white/20 dark:border-white/10
@@ -554,7 +626,7 @@ const ClientsPage: React.FC = () => {
         <motion.div variants={staggerItem} className="text-center py-16">
           <p className="text-error mb-4">{error.message}</p>
           <AppButton onClick={fetchClients} variant="outline">
-            Try Again
+            {t('actions.retry')}
           </AppButton>
         </motion.div>
       ) : clients.length === 0 ? (
@@ -573,6 +645,7 @@ const ClientsPage: React.FC = () => {
             <ClientCard
               key={client.client_id}
               client={client}
+              avatarBlobUrl={avatarBlobUrls[client.client_id]}
               onClick={() => handleClientClick(client.client_id)}
               onEdit={() => handleClientEdit(client.client_id)}
               onDelete={() => handleDeleteClick(client)}
@@ -799,12 +872,13 @@ const ClientsPage: React.FC = () => {
 
 interface ClientCardProps {
   client: ClientListItem;
+  avatarBlobUrl?: string;
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-const ClientCard: React.FC<ClientCardProps> = ({ client, onClick, onEdit, onDelete }) => {
+const ClientCard: React.FC<ClientCardProps> = ({ client, avatarBlobUrl, onClick, onEdit, onDelete }) => {
   const [showMenu, setShowMenu] = useState(false);
 
   return (
@@ -815,9 +889,9 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onClick, onEdit, onDele
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          {client.avatar_url ? (
+          {avatarBlobUrl ? (
             <img
-              src={client.avatar_url}
+              src={avatarBlobUrl}
               alt={client.full_name}
               className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20 group-hover:ring-primary/30 transition-all"
             />

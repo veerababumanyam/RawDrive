@@ -22,3 +22,7 @@ export { ClientImportDialog } from './ClientImportDialog';
 
 // Analytics
 export { ClientAnalyticsDashboard } from './ClientAnalyticsDashboard';
+
+// Components
+export { ClientCombobox } from './ClientCombobox';
+export { QuickClientCreateModal } from './QuickClientCreateModal';

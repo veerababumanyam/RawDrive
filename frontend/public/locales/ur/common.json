@@ -1,0 +1,123 @@
+{
+    "appName": "RawDrive",
+    "welcome": "اردو میں خوش آمدید RawDrive",
+    "selectLanguage": "زبان منتخب کریں",
+    "languageUpdated": "زبان {{language}} میں تبدیل ہو گئی",
+    "nav": {
+        "dashboard": "ڈیش بورڈ",
+        "galleries": "گیلریاں",
+        "libraries": "لائبریریاں",
+        "clients": "کلائنٹس",
+        "shared": "شیئر کردہ",
+        "recent": "حالیہ",
+        "favorites": "پسندیدہ",
+        "trash": "کوڑا دان",
+        "settings": "ترتیبات",
+        "companyProfile": "کمپنی پروفائل",
+        "help": "مدد اور معاونت",
+        "search": "تلاش",
+        "newGallery": "نئی گیلری"
+    },
+    "actions": {
+        "save": "محفوظ کریں",
+        "cancel": "منسوخ کریں",
+        "delete": "حذف کریں",
+        "edit": "ترمیم کریں",
+        "create": "بنائیں",
+        "back": "واپس",
+        "next": "اگلا",
+        "previous": "پچھلا",
+        "close": "بند کریں",
+        "confirm": "تصدیق کریں",
+        "search": "تلاش",
+        "filter": "فلٹر",
+        "sort": "ترتیب دیں",
+        "upload": "اپ لوڈ کریں",
+        "download": "ڈاؤن لوڈ کریں",
+        "share": "شیئر کریں",
+        "retry": "دوبارہ کوشش کریں",
+        "submit": "جمع کرائیں",
+        "viewAll": "سب دیکھیں",
+        "showMore": "مزید دکھائیں",
+        "showLess": "کم دکھائیں",
+        "selectAll": "سب منتخب کریں",
+        "deselectAll": "سب غیر منتخب کریں"
+    },
+    "status": {
+        "loading": "لوڈ ہو رہا ہے...",
+        "error": "خرابی",
+        "success": "کامیاب",
+        "warning": "انتباہ",
+        "info": "معلومات",
+        "active": "فعال",
+        "inactive": "غیر فعال",
+        "pending": "زیر التواء",
+        "completed": "مکمل",
+        "failed": "ناکام"
+    },
+    "errors": {
+        "generic": "کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔",
+        "notFound": "نہیں ملا",
+        "unauthorized": "غیر مجاز",
+        "forbidden": "ممنوع",
+        "serverError": "سرور کی خرابی",
+        "networkError": "نیٹ ورک کی خرابی"
+    },
+    "confirmation": {
+        "yes": "ہاں",
+        "no": "نہیں",
+        "ok": "ٹھیک ہے",
+        "areYouSure": "کیا آپ کو یقین ہے؟",
+        "cannotUndo": "یہ عمل واپس نہیں کیا جا سکتا۔"
+    },
+    "user": {
+        "profile": "پروفائل",
+        "logout": "لاگ آؤٹ",
+        "login": "لاگ ان",
+        "register": "رجسٹر کریں"
+    },
+    "storage": {
+        "title": "اسٹوریج",
+        "upgrade": "اپ گریڈ"
+    },
+    "plan": {
+        "free": "مفت پلان",
+        "pro": "پرو پلان",
+        "enterprise": "انٹرپرائز پلان"
+    },
+    "time": {
+        "justNow": "ابھی",
+        "minutesAgo_one": "{{count}} منٹ پہلے",
+        "minutesAgo_other": "{{count}} منٹ پہلے",
+        "hoursAgo_one": "{{count}} گھنٹہ پہلے",
+        "hoursAgo_other": "{{count}} گھنٹے پہلے",
+        "daysAgo_one": "{{count}} دن پہلے",
+        "daysAgo_other": "{{count}} دن پہلے",
+        "createdAt": "بنایا گیا",
+        "updatedAt": "اپ ڈیٹ کیا گیا"
+    },
+    "labels": {
+        "name": "نام",
+        "description": "تفصیل",
+        "date": "تاریخ",
+        "time": "وقت",
+        "language": "زبان",
+        "currency": "کرنسی",
+        "timezone": "ٹائم زون",
+        "country": "ملک"
+    },
+    "legal": {
+        "privacyPolicy": "رازداری کی پالیسی",
+        "termsOfService": "سروس کی شرائط",
+        "copyright": "© {{year}} RawDrive. جملہ حقوق محفوظ ہیں۔"
+    },
+    "links": {
+        "home": "ہوم",
+        "about": "ہمارے بارے میں",
+        "contact": "رابطہ",
+        "help": "مدد",
+        "documentation": "دستاویزات",
+        "contactSupport": "معاونت سے رابطہ کریں",
+        "goHome": "ہوم پر جائیں"
+    }
+}

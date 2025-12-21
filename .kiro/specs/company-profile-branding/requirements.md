@@ -33,9 +33,9 @@ The CompanyProfile system serves as the central branding authority across all cl
 6. WHEN a user updates any profile field, THE System SHALL update the updated_at timestamp
 7. THE System SHALL consolidate existing branding_profiles functionality into the enhanced CompanyProfile system
 
-### Requirement 2: Visibility Control System
+### Requirement 2: Enhanced Visibility Control System
 
-**User Story:** As a business owner, I want to control which profile information is publicly visible, so that I can maintain privacy while sharing appropriate business details.
+**User Story:** As a business owner, I want granular control over which profile information is publicly visible including per-platform social media toggles, so that I can maintain privacy while sharing appropriate business details.
 
 #### Acceptance Criteria
 
@@ -44,6 +44,11 @@ The CompanyProfile system serves as the central branding authority across all cl
 3. WHEN visibility is disabled for a field, THE System SHALL exclude it from all public surfaces
 4. THE System SHALL provide default visibility settings for new profiles (all fields visible except private data)
 5. WHEN exporting data (vCard, schema), THE System SHALL respect visibility settings
+6. WHEN a user toggles social media visibility, THE System SHALL store per-platform boolean flags (socialVisibility.instagram, socialVisibility.facebook, etc.)
+7. WHEN rendering social media icons, THE System SHALL only display platforms with visibility enabled
+8. THE System SHALL provide individual visibility toggles for each supported social platform (Instagram, Facebook, WhatsApp, TikTok, LinkedIn, YouTube)
+9. WHEN a social platform is hidden, THE System SHALL omit it completely from public rendering (no placeholders or empty schema entries)
+10. WHEN changing themes, THE System SHALL preserve all visibility settings without override
 
 ### Requirement 3: Enhanced Studio Defaults Integration
 
@@ -145,3 +150,84 @@ The CompanyProfile system serves as the central branding authority across all cl
 3. WHEN loading logos, THE System SHALL optimize images for fast delivery (<500ms)
 4. THE System SHALL support dark mode theming across all profile surfaces
 5. THE System SHALL be fully keyboard navigable and screen reader compatible
+
+
+### Requirement 11: Live Multi-Device Public Profile Preview
+
+**User Story:** As a photographer, I want to see a live preview of my automatically-generated public profile across different devices while editing, so that I can ensure my branding looks perfect on all screen sizes before it goes live.
+
+#### Acceptance Criteria
+
+1. WHEN editing company profile, THE System SHALL display a live preview frame showing the automatically-generated public profile
+2. THE System SHALL support three device preview modes: Phone (narrow), Tablet (medium), Desktop (full width)
+3. WHEN switching device modes, THE System SHALL instantly resize the preview frame to the corresponding breakpoint
+4. WHEN toggling field visibility, THE System SHALL update the public profile preview in real time
+5. WHEN changing theme or theme options, THE System SHALL update the public profile preview immediately
+6. WHEN editing profile data (name, tagline, logo, links), THE System SHALL reflect changes in the public profile preview instantly
+7. THE System SHALL render the preview using the same components as the actual public profile URL (/p/{slug})
+8. THE System SHALL make the preview read-only to prevent accidental edits
+9. THE System SHALL preserve current theme and visibility state when switching device modes
+10. THE System SHALL accurately reflect final public profile layout and responsiveness in all device modes
+11. THE System SHALL automatically apply all changes to the live public profile when saved
+
+### Requirement 12: Modern Theming System for Automatic Public Profile
+
+**User Story:** As a photographer, I want to choose from modern, premium themes and customize them to match my brand, so that my automatically-generated public profile stands out and reflects my unique style.
+
+#### Acceptance Criteria
+
+1. THE System SHALL provide multiple pre-built modern themes featuring gradients, layered colors, and glassmorphism for the public profile
+2. WHEN a user selects a theme, THE System SHALL apply it immediately to the live preview and automatically to the public profile (/p/{slug})
+3. THE System SHALL support both light and dark theme variants where appropriate
+4. WHEN customizing a theme, THE System SHALL allow users to set primary, secondary, and accent colors that automatically apply to the public profile
+5. WHEN customizing a theme, THE System SHALL allow users to adjust background gradients, patterns, and intensity for the public profile
+6. WHEN customizing a theme, THE System SHALL allow users to configure layout options (compact vs. spacious, card vs. full-bleed hero) for the public profile
+7. THE System SHALL save theme customizations per photographer account and automatically apply them to their public profile
+8. THE System SHALL apply customizations only to that photographer's public profile URL
+9. WHEN users pick colors, THE System SHALL enforce automatic contrast checks for WCAG 2.1 AA compliance on the public profile
+10. WHEN color combinations fail readability standards, THE System SHALL show warnings and offer adjusted suggestions
+11. THE System SHALL ensure all themes remain responsive and accessible on the public profile regardless of customization choices
+12. THE System SHALL maintain focus states and ARIA attributes across all theme variations on the public profile
+13. THE System SHALL provide a color palette builder with primary, secondary, accent, and neutral color slots
+14. WHEN uploading a logo, THE System SHALL extract dominant colors and suggest a palette
+15. THE System SHALL provide color harmony suggestions (complementary, analogous, triadic schemes)
+16. THE System SHALL allow saving multiple color palettes and switching between them
+17. THE System SHALL provide color palette export in common formats (CSS variables, JSON)
+
+### Requirement 13: Typography and Custom Font Management for Public Profile
+
+**User Story:** As a photographer, I want to select professional fonts or upload my own brand fonts, so that my automatically-generated public profile typography matches my brand identity perfectly.
+
+#### Acceptance Criteria
+
+1. THE System SHALL provide a curated list of high-quality web fonts for heading, body, and optional accent/navigation roles on the public profile
+2. WHEN a user selects fonts, THE System SHALL apply them immediately to the live preview and automatically to the public profile
+3. THE System SHALL allow users to upload custom brand fonts (.woff2, .ttf formats) for use on their public profile
+4. WHEN uploading custom fonts, THE System SHALL validate file type, size, and basic security constraints
+5. THE System SHALL generate @font-face configuration scoped to that photographer's public profile only
+6. THE System SHALL allow users to map uploaded fonts to roles (heading/body) via dropdowns
+7. WHEN custom fonts are applied, THE System SHALL show the effect instantly in the preview and automatically on the public profile
+8. THE System SHALL define sensible fallback fonts for all custom fonts on the public profile
+9. THE System SHALL ensure font loading does not cause significant performance degradation on the public profile
+10. THE System SHALL prevent layout shift on first paint when loading custom fonts on the public profile
+11. THE System SHALL limit custom font file sizes to prevent performance issues on the public profile
+12. THE System SHALL sanitize uploaded font files to prevent security vulnerabilities
+
+### Requirement 14: Unified Profile Editor with Automatic Public Profile Updates
+
+**User Story:** As a photographer, I want all profile editing features (visibility, preview, theming, fonts) in one cohesive interface that automatically updates my public profile, so that I can efficiently create my perfect public presence without switching between multiple screens.
+
+#### Acceptance Criteria
+
+1. THE System SHALL combine per-field visibility toggles, live preview, theme selection, and font management in one unified editor screen
+2. WHEN making any change, THE System SHALL persist it to the photographer's account and automatically update the public profile
+3. THE System SHALL provide "Undo" functionality for recent changes
+4. THE System SHALL provide "Reset to defaults" options for visibility, theme, and font settings
+5. THE System SHALL ensure all changes affect only the public profile presentation layer
+6. WHEN visibility is toggled off, THE System SHALL keep private data stored but hidden from the public profile
+7. THE System SHALL provide clear visual feedback for all user actions
+8. THE System SHALL maintain consistent UI patterns across all editor sections
+9. THE System SHALL ensure the editor is fully keyboard navigable
+10. THE System SHALL provide tooltips and help text for complex features
+11. THE System SHALL automatically create a public profile at /p/{slug} when a company profile is first created
+12. THE System SHALL automatically update the public profile in real-time as changes are made in the editor

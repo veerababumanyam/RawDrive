@@ -1,0 +1,39 @@
+{
+    "title": "डैशबोर्ड",
+    "welcome": "वापसी पर स्वागत है, {{name}}!",
+    "welcomeGeneric": "वापसी पर स्वागत है! यहाँ आपका अवलोकन है",
+    "stats": {
+        "totalGalleries": "गैलरी",
+        "totalPhotos": "फ़ोटो",
+        "totalClients": "क्लाइंट",
+        "storageUsed": "उपयोग की गई स्टोरेज",
+        "views": "व्यूज़",
+        "downloads": "डाउनलोड्स"
+    },
+    "sections": {
+        "recentGalleries": "हाल की गैलरी",
+        "recentActivity": "हाल की गतिविधि",
+        "quickActions": "त्वरित क्रियाएं",
+        "upcomingEvents": "आगामी इवेंट्स",
+        "clientInsights": "क्लाइंट अंतर्दृष्टि"
+    },
+    "activity": {
+        "galleryCreated": "\"{{name}}\" गैलरी बनाई",
+        "photosUploaded": "\"{{gallery}}\" में {{count}} फ़ोटो अपलोड की",
+        "galleryShared": "\"{{name}}\" गैलरी शेयर की",
+        "clientAdded": "नया क्लाइंट \"{{name}}\" जोड़ा",
+        "galleryViewed": "\"{{name}}\" देखी गई",
+        "photoDownloaded": "\"{{gallery}}\" से फ़ोटो डाउनलोड की"
+    },
+    "quickActions": {
+        "newGallery": "नई गैलरी",
+        "uploadPhotos": "फ़ोटो अपलोड करें",
+        "addClient": "क्लाइंट जोड़ें",
+        "viewAnalytics": "एनालिटिक्स देखें"
+    },
+    "empty": {
+        "noGalleries": "अभी तक कोई गैलरी नहीं",
+        "noActivity": "कोई हाल की गतिविधि नहीं",
+        "getStarted": "अपनी पहली गैलरी बनाकर शुरू करें"
+    }
+}

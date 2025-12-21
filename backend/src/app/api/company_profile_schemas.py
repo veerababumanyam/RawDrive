@@ -14,13 +14,24 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, validator
 # ---------------------------------------------------------------------------
 
 class CompanyAddress(BaseModel):
-    """Structured address."""
-    line1: str = Field(..., max_length=255)
+    """Structured address.
+
+    All fields are optional to allow partial address entry.
+    The frontend may send empty strings which are treated as None.
+    """
+    line1: Optional[str] = Field(None, max_length=255)
     line2: Optional[str] = Field(None, max_length=255)
-    city: str = Field(..., max_length=100)
-    state: str = Field(..., max_length=100)
-    postal_code: str = Field(..., max_length=20)
-    country: str = Field(..., max_length=100)
+    city: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    postal_code: Optional[str] = Field(None, max_length=20)
+    country: Optional[str] = Field(None, max_length=100)
+
+    @validator('line1', 'line2', 'city', 'state', 'postal_code', 'country', pre=True)
+    def empty_string_to_none(cls, v):
+        """Convert empty strings to None."""
+        if v == '':
+            return None
+        return v
 
 class CustomLink(BaseModel):
     """Custom navigation link."""
@@ -50,7 +61,10 @@ class CompanyVisibilityConfig(BaseModel):
     phone: bool = True
     website: bool = True
     address: bool = True
-    socials: bool = True
+    socials_instagram: bool = True
+    socials_facebook: bool = True
+    socials_twitter: bool = True
+    socials_linkedin: bool = True
     custom_links: bool = True
 
 

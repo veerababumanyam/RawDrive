@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
     Plus,
     Image,
@@ -22,7 +23,7 @@ import {
     TrendingUp,
     Calendar,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import dashboardService, { DashboardStats } from '../../services/dashboardService';
 import galleryService from '../../services/galleryService';
@@ -85,15 +86,12 @@ const mockActivity = [
     },
 ];
 
-const quickActions = [
-    { label: 'New Gallery', icon: Plus, gradient: 'from-violet-500 to-purple-600', path: '/workspace/galleries/new' },
-    { label: 'Upload', icon: Upload, gradient: 'from-blue-500 to-cyan-500', path: '/workspace/upload' },
-    { label: 'Clients', icon: Users, gradient: 'from-emerald-500 to-teal-500', path: '/workspace/clients' },
-    { label: 'Libraries', icon: FolderOpen, gradient: 'from-amber-500 to-orange-500', path: '/workspace/libraries' },
-];
+// Quick actions are defined inside the component to use translations
+// See quickActionsData within DashboardPage component
 
 const DashboardPage = () => {
     const navigate = useNavigate();
+    const { t } = useTranslation(['dashboard', 'common']);
     const { workspace } = useAuth();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [recentGalleries, setRecentGalleries] = useState<GalleryListItem[]>([]);
@@ -101,6 +99,14 @@ const DashboardPage = () => {
     const [clientAnalytics, setClientAnalytics] = useState<ClientAnalyticsResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
+    // Quick actions with translated labels
+    const quickActionsData = useMemo(() => [
+        { label: t('quickActions.newGallery'), icon: Plus, gradient: 'from-violet-500 to-purple-600', path: '/workspace/galleries/new' },
+        { label: t('quickActions.uploadPhotos'), icon: Upload, gradient: 'from-blue-500 to-cyan-500', path: '/workspace/upload' },
+        { label: t('common:nav.clients'), icon: Users, gradient: 'from-emerald-500 to-teal-500', path: '/workspace/clients' },
+        { label: t('common:nav.libraries'), icon: FolderOpen, gradient: 'from-amber-500 to-orange-500', path: '/workspace/libraries' },
+    ], [t]);
 
 
     useEffect(() => {
@@ -147,16 +153,16 @@ const DashboardPage = () => {
     const statsConfig = [
         {
             id: 'galleries',
-            label: 'Galleries',
+            label: t('stats.totalGalleries'),
             value: stats?.galleries || 0,
-            change: '+0', // Placeholder for now
+            change: '+0',
             trend: 'neutral',
             icon: LayoutGrid,
             gradient: 'from-violet-500 to-purple-600',
         },
         {
             id: 'photos',
-            label: 'Photos',
+            label: t('stats.totalPhotos'),
             value: stats?.photos || 0,
             change: '+0',
             trend: 'neutral',
@@ -165,7 +171,7 @@ const DashboardPage = () => {
         },
         {
             id: 'clients',
-            label: 'Clients',
+            label: t('stats.totalClients'),
             value: stats?.clients || 0,
             change: '+0',
             trend: 'neutral',
@@ -174,7 +180,7 @@ const DashboardPage = () => {
         },
         {
             id: 'views',
-            label: 'Views',
+            label: t('stats.views'),
             value: stats?.views || 0,
             change: '+0%',
             trend: 'neutral',
@@ -199,10 +205,10 @@ const DashboardPage = () => {
                     <div className="flex items-center justify-between h-16">
                         <div className="flex-1 min-w-0">
                             <h1 className="text-xl sm:text-2xl font-bold text-gradient">
-                                Dashboard
+                                {t('title')}
                             </h1>
                             <p className="text-sm text-text-secondary hidden sm:block mt-0.5">
-                                Welcome back! Here's your overview
+                                {t('welcomeGeneric')}
                             </p>
                         </div>
                         <button
@@ -210,8 +216,8 @@ const DashboardPage = () => {
                             className="btn-shine flex items-center gap-2 px-4 sm:px-6 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-medium rounded-xl shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30 hover:-translate-y-0.5 active:scale-95"
                         >
                             <Plus size={20} />
-                            <span className="hidden sm:inline">New Gallery</span>
-                            <span className="sm:hidden">New</span>
+                            <span className="hidden sm:inline">{t('common:nav.newGallery')}</span>
+                            <span className="sm:hidden">{t('common:actions.create')}</span>
                         </button>
                     </div>
                 </div>
@@ -267,16 +273,16 @@ const DashboardPage = () => {
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-base sm:text-lg font-semibold text-text-primary flex items-center gap-2">
                             <Zap className="w-5 h-5 text-accent" />
-                            Quick Actions
+                            {t('sections.quickActions')}
                         </h2>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {quickActions.map((action) => {
+                        {quickActionsData.map((action) => {
                             const Icon = action.icon;
                             return (
                                 <button
-                                    key={action.label}
+                                    key={action.path}
                                     onClick={() => handleQuickAction(action.path)}
                                     className="group relative overflow-hidden glass-hover rounded-xl p-4 sm:p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95"
                                 >
@@ -302,13 +308,13 @@ const DashboardPage = () => {
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-base sm:text-lg font-semibold text-text-primary flex items-center gap-2">
                                 <Users className="w-5 h-5 text-accent" />
-                                Client Insights
+                                {t('sections.clientInsights', { defaultValue: 'Client Insights' })}
                             </h2>
                             <button
                                 onClick={() => navigate('/workspace/clients')}
                                 className="text-sm font-medium text-primary hover:text-primary-600 flex items-center gap-1 hover:gap-2 transition-all"
                             >
-                                View all
+                                {t('common:actions.viewAll')}
                                 <ChevronRight size={16} />
                             </button>
                         </div>
@@ -404,7 +410,7 @@ const DashboardPage = () => {
                             <div className="flex items-center justify-between">
                                 <h2 className="text-base sm:text-lg font-semibold text-text-primary flex items-center gap-2">
                                     <Camera className="w-5 h-5 text-accent" />
-                                    Recent Galleries
+                                    {t('sections.recentGalleries')}
                                 </h2>
                                 <button
                                     onClick={() => navigate('/workspace/galleries')}
@@ -419,7 +425,7 @@ const DashboardPage = () => {
                         <div className="divide-y divide-border/50">
                             {recentGalleries.length === 0 ? (
                                 <div className="p-8 text-center text-text-secondary">
-                                    <p>No galleries found. Create your first gallery!</p>
+                                    <p>{t('empty.noGalleries')}</p>
                                 </div>
                             ) : (
                                 recentGalleries.map((gallery) => (
@@ -520,7 +526,7 @@ const DashboardPage = () => {
                         <div className="p-4 sm:p-6 border-b border-border/50">
                             <h2 className="text-base sm:text-lg font-semibold text-text-primary flex items-center gap-2">
                                 <Activity className="w-5 h-5 text-accent" />
-                                Activity
+                                {t('sections.recentActivity')}
                             </h2>
                         </div>
 
@@ -571,7 +577,7 @@ const DashboardPage = () => {
 
                         <div className="p-4 border-t border-border/50">
                             <button className="w-full text-sm font-medium text-primary hover:text-primary-600 flex items-center justify-center gap-1 hover:gap-2 transition-all">
-                                View all activity
+                                {t('common:actions.viewAll')} {t('sections.recentActivity').toLowerCase()}
                                 <ArrowRight size={16} />
                             </button>
                         </div>

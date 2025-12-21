@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, File, Path, Query, UploadFile, status
+from fastapi import APIRouter, File, Path, Query, Response, UploadFile, status
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
 from app.api.client_schemas import (
@@ -1506,7 +1506,7 @@ async def upload_avatar(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     client_id: Annotated[UUID, Path(..., description="Client ID")],
-    file: Annotated[UploadFile, File(description="Avatar image file")],
+    file: UploadFile = File(..., description="Avatar image file"),
     crop_x: Annotated[float | None, Query(ge=0, le=100, description="Crop X offset %")] = None,
     crop_y: Annotated[float | None, Query(ge=0, le=100, description="Crop Y offset %")] = None,
     crop_scale: Annotated[float | None, Query(ge=0.1, le=10.0, description="Crop scale")] = None,
@@ -1687,6 +1687,50 @@ async def get_avatar_info(
     except Exception as e:
         logger.exception("Failed to get avatar info")
         raise InternalError("Failed to get avatar info")
+
+
+@router.get(
+    "/{client_id}/avatar/{size}",
+    status_code=status.HTTP_200_OK,
+    summary="Get avatar image",
+    responses={
+        200: {"content": {"image/webp": {}}},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Avatar not found"},
+    },
+)
+async def get_avatar_image(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    client_id: Annotated[UUID, Path(..., description="Client ID")],
+    size: Annotated[int, Path(..., description="Thumbnail size (64, 128, or 256)")],
+) -> Response:
+    """Get avatar image bytes for display."""
+    service = get_avatar_service()
+    try:
+        image_data = await service.get_avatar_image(
+            workspace_id=workspace_id,
+            client_id=client_id,
+            size=size,
+        )
+        if image_data is None:
+            raise NotFoundError("Avatar", str(client_id))
+
+        return Response(
+            content=image_data,
+            media_type="image/webp",
+            headers={
+                "Cache-Control": "public, max-age=3600",  # Cache for 1 hour
+            },
+        )
+    except ClientNotFoundError as e:
+        raise NotFoundError("Client", str(client_id))
+    except ClientError as e:
+        raise AppError(message=str(e), code=e.code, status_code=e.status_code)
+    except Exception as e:
+        logger.exception("Failed to get avatar image")
+        raise InternalError("Failed to get avatar image")
 
 
 # ---------------------------------------------------------------------------

@@ -26,6 +26,8 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.company_profile import router as company_profile_router
 from app.api.v1.company_profile import public_router as public_profile_router
 from app.api.v1.public_galleries import router as public_galleries_router
+from app.api.v1.profile_editor import router as profile_editor_router
+from app.api.v1.profile_editor import public_router as themes_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -108,4 +110,14 @@ router.include_router(
     public_galleries_router,
     prefix="/api/v1/public/galleries",
     tags=["public-galleries"],
+)
+router.include_router(
+    profile_editor_router,
+    prefix="/api/v1/workspaces/{workspace_id}/profile-editor",
+    tags=["profile-editor"],
+)
+router.include_router(
+    themes_router,
+    prefix="/api/v1/themes",
+    tags=["themes"],
 )

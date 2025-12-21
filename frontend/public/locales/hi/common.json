@@ -1,0 +1,126 @@
+{
+    "appName": "RawDrive",
+    "welcome": "RawDrive में आपका स्वागत है",
+    "selectLanguage": "भाषा चुनें",
+    "languageUpdated": "भाषा {{language}} में अपडेट हो गई",
+    "nav": {
+        "dashboard": "डैशबोर्ड",
+        "galleries": "गैलरी",
+        "libraries": "लाइब्रेरी",
+        "clients": "क्लाइंट",
+        "shared": "शेयर किया गया",
+        "recent": "हाल का",
+        "favorites": "पसंदीदा",
+        "trash": "ट्रैश",
+        "settings": "सेटिंग्स",
+        "companyProfile": "कंपनी प्रोफ़ाइल",
+        "help": "सहायता और समर्थन",
+        "search": "खोजें",
+        "newGallery": "नई गैलरी"
+    },
+    "actions": {
+        "save": "सेव करें",
+        "cancel": "रद्द करें",
+        "delete": "हटाएं",
+        "edit": "संपादित करें",
+        "create": "बनाएं",
+        "back": "पीछे",
+        "next": "अगला",
+        "previous": "पिछला",
+        "close": "बंद करें",
+        "confirm": "पुष्टि करें",
+        "search": "खोजें",
+        "filter": "फ़िल्टर",
+        "sort": "क्रमबद्ध करें",
+        "upload": "अपलोड करें",
+        "download": "डाउनलोड करें",
+        "share": "शेयर करें",
+        "retry": "पुनः प्रयास करें",
+        "submit": "जमा करें",
+        "viewAll": "सभी देखें",
+        "showMore": "और दिखाएं",
+        "showLess": "कम दिखाएं",
+        "selectAll": "सभी चुनें",
+        "deselectAll": "सभी अचयनित करें"
+    },
+    "status": {
+        "loading": "लोड हो रहा है...",
+        "error": "त्रुटि",
+        "success": "सफल",
+        "warning": "चेतावनी",
+        "info": "जानकारी",
+        "active": "सक्रिय",
+        "inactive": "निष्क्रिय",
+        "pending": "लंबित",
+        "completed": "पूर्ण",
+        "failed": "विफल"
+    },
+    "errors": {
+        "generic": "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
+        "notFound": "नहीं मिला",
+        "unauthorized": "अनधिकृत",
+        "forbidden": "निषिद्ध",
+        "serverError": "सर्वर त्रुटि",
+        "networkError": "नेटवर्क त्रुटि"
+    },
+    "confirmation": {
+        "yes": "हां",
+        "no": "नहीं",
+        "ok": "ठीक है",
+        "areYouSure": "क्या आप निश्चित हैं?",
+        "cannotUndo": "यह क्रिया पूर्ववत नहीं की जा सकती।"
+    },
+    "user": {
+        "profile": "प्रोफ़ाइल",
+        "logout": "लॉग आउट",
+        "login": "लॉगिन",
+        "register": "पंजीकरण"
+    },
+    "storage": {
+        "title": "स्टोरेज",
+        "upgrade": "अपग्रेड करें"
+    },
+    "plan": {
+        "free": "फ्री प्लान",
+        "pro": "प्रो प्लान",
+        "enterprise": "एंटरप्राइज प्लान"
+    },
+    "time": {
+        "justNow": "अभी-अभी",
+        "minutesAgo_one": "{{count}} मिनट पहले",
+        "minutesAgo_other": "{{count}} मिनट पहले",
+        "hoursAgo_one": "{{count}} घंटा पहले",
+        "hoursAgo_other": "{{count}} घंटे पहले",
+        "daysAgo_one": "{{count}} दिन पहले",
+        "daysAgo_other": "{{count}} दिन पहले",
+        "createdAt": "बनाया गया",
+        "updatedAt": "अपडेट किया गया"
+    },
+    "labels": {
+        "name": "नाम",
+        "description": "विवरण",
+        "date": "दिनांक",
+        "time": "समय",
+        "language": "भाषा",
+        "currency": "मुद्रा",
+        "timezone": "समय क्षेत्र",
+        "country": "देश",
+        "client_one": "क्लाइंट",
+        "client_other": "क्लाइंट्स",
+        "of": "में से"
+    },
+    "legal": {
+        "privacyPolicy": "गोपनीयता नीति",
+        "termsOfService": "सेवा की शर्तें",
+        "copyright": "© {{year}} RawDrive. सर्वाधिकार सुरक्षित।"
+    },
+    "links": {
+        "home": "होम",
+        "about": "हमारे बारे में",
+        "contact": "संपर्क करें",
+        "help": "सहायता",
+        "documentation": "दस्तावेज़ीकरण",
+        "contactSupport": "सहायता से संपर्क करें",
+        "goHome": "होम पर जाएं"
+    }
+}

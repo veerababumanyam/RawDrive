@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Home,
   FolderOpen,
@@ -60,6 +61,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
   const { sidebarCollapsed, toggleCollapse } = useAppShell();
   const { logout } = useAuth();
   const { openGlobalSearch } = useSearch();
@@ -77,24 +79,24 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   }, []);
 
   const mainNavItems = React.useMemo(() => [
-    { id: 'dashboard', label: 'Dashboard', icon: <Home size={20} />, path: '/workspace' },
-    { id: 'galleries', label: 'Galleries', icon: <LayoutGrid size={20} />, path: '/workspace/galleries' },
-    { id: 'libraries', label: 'Libraries', icon: <FolderOpen size={20} />, path: '/workspace/libraries' },
-    { id: 'clients', label: 'Clients', icon: <Users size={20} />, path: '/workspace/clients' },
-    { id: 'shared', label: 'Shared', icon: <Share2 size={20} />, path: '/workspace/shared' },
-  ], []);
+    { id: 'dashboard', label: t('nav.dashboard'), icon: <Home size={20} />, path: '/workspace' },
+    { id: 'galleries', label: t('nav.galleries'), icon: <LayoutGrid size={20} />, path: '/workspace/galleries' },
+    { id: 'libraries', label: t('nav.libraries'), icon: <FolderOpen size={20} />, path: '/workspace/libraries' },
+    { id: 'clients', label: t('nav.clients'), icon: <Users size={20} />, path: '/workspace/clients' },
+    { id: 'shared', label: t('nav.shared'), icon: <Share2 size={20} />, path: '/workspace/shared' },
+  ], [t]);
 
   const quickAccessItems = React.useMemo(() => [
-    { id: 'recent', label: 'Recent', icon: <Clock size={20} />, path: '/workspace/recent' },
-    { id: 'favorites', label: 'Favorites', icon: <Star size={20} />, path: '/workspace/favorites' },
-    { id: 'trash', label: 'Trash', icon: <Trash2 size={20} />, path: '/workspace/trash' },
-  ], []);
+    { id: 'recent', label: t('nav.recent'), icon: <Clock size={20} />, path: '/workspace/recent' },
+    { id: 'favorites', label: t('nav.favorites'), icon: <Star size={20} />, path: '/workspace/favorites' },
+    { id: 'trash', label: t('nav.trash'), icon: <Trash2 size={20} />, path: '/workspace/trash' },
+  ], [t]);
 
   const bottomNavItems = React.useMemo(() => [
-    { id: 'settings', label: 'Settings', icon: <Settings size={20} />, path: '/workspace/settings' },
-    { id: 'profile', label: 'Company Profile', icon: <Building2 size={20} />, path: '/workspace/settings/profile' },
-    { id: 'help', label: 'Help & Support', icon: <HelpCircle size={20} />, path: '/workspace/help' },
-  ], []);
+    { id: 'settings', label: t('nav.settings'), icon: <Settings size={20} />, path: '/workspace/settings' },
+    { id: 'profile', label: t('nav.companyProfile'), icon: <Building2 size={20} />, path: '/workspace/settings/profile' },
+    { id: 'help', label: t('nav.help'), icon: <HelpCircle size={20} />, path: '/workspace/help' },
+  ], [t]);
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -154,10 +156,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             onClick={() => navigate('/workspace/galleries/new')}
             fullWidth
             leftIcon={<Plus size={20} />}
-            title={sidebarCollapsed ? 'New Gallery' : undefined}
+            title={sidebarCollapsed ? t('nav.newGallery') : undefined}
             shine
           >
-            {!sidebarCollapsed && 'New Gallery'}
+            {!sidebarCollapsed && t('nav.newGallery')}
           </AppButton>
         </div>
 
@@ -165,7 +167,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
         <div className="px-2 mb-2">
           <SidebarItem
             id="search"
-            label="Search"
+            label={t('nav.search')}
             icon={<Search size={20} />}
             onClick={openGlobalSearch}
             className="text-text-secondary hover:text-primary"
@@ -229,7 +231,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
         {!sidebarCollapsed && (
           <div className="mb-4 p-3 rounded-xl bg-surface-hover/50">
             <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
-              <span className="font-medium">Storage</span>
+              <span className="font-medium">{t('storage.title')}</span>
               <span>
                 {formatStorage(storageUsed)} / {formatStorage(storageLimit)}
               </span>
@@ -255,7 +257,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 className="mt-3"
                 shine
               >
-                Upgrade
+                {t('storage.upgrade')}
               </AppButton>
             )}
           </div>
@@ -268,10 +270,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
           onClick={handleLogout}
           fullWidth
           leftIcon={<LogOut size={20} />}
-          title={sidebarCollapsed ? 'Log Out' : undefined}
+          title={sidebarCollapsed ? t('user.logout') : undefined}
           className="hover:!text-error hover:!bg-error/5"
         >
-          {!sidebarCollapsed && 'Log Out'}
+          {!sidebarCollapsed && t('user.logout')}
         </AppButton>
       </SidebarFooter>
     </Sidebar>

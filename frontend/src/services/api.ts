@@ -179,8 +179,10 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
 
     // Add auth header if available
+    // Don't set Content-Type for FormData - browser will set it with boundary
+    const isFormData = options.body instanceof FormData;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...this.getAuthHeader(),
       ...(options.headers as Record<string, string>),
     };
@@ -249,8 +251,10 @@ class ApiClient {
       }
 
       if (!response.ok) {
-        // Only log actual errors to console, skip 404s which are often expected/handled
-        if (response.status !== 404) {
+        // Only log actual errors to console, skip 404s and 409s which are often expected/handled
+        // 404: Resource not found (often checked before creating)
+        // 409: Conflict (used in create-or-update patterns)
+        if (response.status !== 404 && response.status !== 409) {
           console.error('API error response:', {
             status: response.status,
             statusText: response.statusText,
@@ -326,6 +330,66 @@ class ApiClient {
       method: 'DELETE',
       body: data ? JSON.stringify(data) : undefined,
     });
+  }
+
+  async upload<T>(endpoint: string, formData: FormData): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type - browser will set it with boundary for FormData
+    });
+  }
+
+  /**
+   * Fetch raw response for binary data (images, files, etc.)
+   * Returns the raw Response object for handling blobs
+   */
+  async fetchRaw(endpoint: string): Promise<Response> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers: Record<string, string> = {
+      ...this.getAuthHeader(),
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+    try {
+      let response = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      // Handle 401 - try token refresh
+      if (response.status === 401) {
+        const newToken = await this.handleTokenRefresh();
+
+        if (newToken) {
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(() => retryController.abort(), TIMEOUT_MS);
+
+          try {
+            response = await fetch(url, {
+              method: 'GET',
+              headers: {
+                ...headers,
+                Authorization: `Bearer ${newToken}`,
+              },
+              signal: retryController.signal,
+            });
+          } finally {
+            clearTimeout(retryTimeoutId);
+          }
+        }
+      }
+
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
   }
 }
 

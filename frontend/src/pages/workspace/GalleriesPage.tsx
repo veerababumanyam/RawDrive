@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import {
   Plus,
@@ -27,6 +28,48 @@ import { galleryService } from '../../services/galleryService';
 import type { GalleryStatus, GalleryListItem } from '../../types/gallery';
 
 /* =============================================================================
+   GalleryListThumbnail Component
+   
+   Handles fetching signed URL for gallery cover in list view.
+   ============================================================================= */
+interface GalleryListThumbnailProps {
+  gallery: GalleryListItem;
+  workspaceId: string;
+}
+
+const GalleryListThumbnail: React.FC<GalleryListThumbnailProps> = ({ gallery, workspaceId }) => {
+  const [coverUrl, setCoverUrl] = React.useState<string | null>(null);
+  const [error, setError] = React.useState(false);
+
+  React.useEffect(() => {
+    if (gallery.cover_asset_id && workspaceId && !coverUrl && !error) {
+      galleryService
+        .getSignedUrl(workspaceId, gallery.cover_asset_id, 'thumbnail')
+        .then((url) => setCoverUrl(url))
+        .catch(() => setError(true));
+    }
+  }, [gallery.cover_asset_id, workspaceId, coverUrl, error]);
+
+  if (coverUrl && !error) {
+    return (
+      <img
+        src={coverUrl}
+        alt={gallery.title}
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        loading="lazy"
+        onError={() => setError(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <Image size={16} className="text-text-tertiary" />
+    </div>
+  );
+};
+
+/* =============================================================================
    GalleriesPage Component
 
    Gallery listing page with search, filter, and view toggle.
@@ -40,6 +83,7 @@ const GalleriesPage: React.FC = () => {
   const navigate = useNavigate();
   const { workspace } = useAuth();
   const { addToast } = useToast();
+  const { t } = useTranslation(['gallery', 'common']);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -166,16 +210,16 @@ const GalleriesPage: React.FC = () => {
       {/* Page Header - Enhanced with glass effect */}
       <motion.div variants={staggerItem} className="card-glass rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gradient">Galleries</h1>
+          <h1 className="text-2xl font-bold text-gradient">{t('common:nav.galleries')}</h1>
           <p className="text-text-secondary mt-1">
             {loading ? (
-              'Loading...'
+              t('common:status.loading')
             ) : error ? (
-              'Error loading galleries'
+              t('list.errorLoading')
             ) : (
               <>
-                {galleries.length} {galleries.length === 1 ? 'gallery' : 'galleries'}
-                {meta && ` of ${meta.total}`}
+                {galleries.length} {galleries.length === 1 ? t('list.galleryCount_one') : t('list.galleryCount_other')}
+                {meta && ` ${t('list.of')} ${meta.total}`}
               </>
             )}
           </p>
@@ -187,7 +231,7 @@ const GalleriesPage: React.FC = () => {
           shine
           className="w-full sm:w-auto hover:-translate-y-0.5 active:scale-95 transition-all"
         >
-          New Gallery
+          {t('common:nav.newGallery')}
         </AppButton>
       </motion.div>
 
@@ -203,7 +247,7 @@ const GalleriesPage: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search galleries..."
+            placeholder={t('list.searchPlaceholder')}
             className="
                 w-full pl-10 pr-4 py-2.5
                 glass-light border border-white/20 dark:border-white/10
@@ -233,7 +277,7 @@ const GalleriesPage: React.FC = () => {
                 "
             >
               <Filter size={18} />
-              <span className="hidden sm:inline">Filter</span>
+              <span className="hidden sm:inline">{t('common:actions.filter')}</span>
               {filterStatus !== 'all' && (
                 <span className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent animate-pulse" />
               )}
@@ -381,7 +425,7 @@ const GalleriesPage: React.FC = () => {
         <motion.div variants={staggerItem} className="text-center py-16">
           <p className="text-error mb-4">{error.message}</p>
           <AppButton onClick={refetch} variant="outline">
-            Try Again
+            {t('common:actions.retry')}
           </AppButton>
         </motion.div>
       ) : galleries.length === 0 ? (
@@ -455,18 +499,10 @@ const GalleriesPage: React.FC = () => {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-surface-hover/50 ring-1 ring-white/10 group-hover:ring-primary/30 transition-all duration-200">
-                          {gallery.cover_image_url ? (
-                            <img
-                              src={gallery.cover_image_url}
-                              alt={gallery.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Image size={16} className="text-text-tertiary" />
-                            </div>
-                          )}
+                          <GalleryListThumbnail
+                            gallery={gallery}
+                            workspaceId={workspace?.workspace_id || ''}
+                          />
                         </div>
                         <span className="font-medium text-text-primary truncate group-hover:text-primary transition-colors">
                           {gallery.title}

@@ -207,7 +207,7 @@ The plan is organized into three phases:
   - Add keyboard navigation for all profile interactions
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1_
 
-- [-] 13.1 Write unit tests for CompanyProfile form component
+- [x] 13.1 Write unit tests for CompanyProfile form component
   - Test form validation and submission
   - Test visibility toggle functionality
   - Test accessibility compliance

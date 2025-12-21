@@ -59,6 +59,12 @@ export type {
   RangeSliderProps,
 } from './FormControls';
 
+export { DatePicker } from './DatePicker';
+export type { default as DatePickerProps } from './DatePicker';
+
+export { AvatarCropModal } from './AvatarCropModal';
+export type { CropData } from './AvatarCropModal';
+
 // Feedback Components
 export { ToastProvider, useToast, useToastActions } from './Toast';
 export type { ToastData, ToastVariant, ToastPosition, ToastProviderProps } from './Toast';

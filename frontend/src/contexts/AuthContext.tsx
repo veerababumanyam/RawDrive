@@ -78,20 +78,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                       setWorkspace(workspace);
                     }
                   }
+                } else {
+                  // API returned null - tokens are likely invalid, clear auth state
+                  console.warn('Session invalid, clearing auth state');
+                  const { clearStoredTokens } = await import('../services/auth');
+                  clearStoredTokens();
+                  setUser(null);
+                  setWorkspace(null);
+                  setIsAuthenticated(false);
                 }
               })
-              .catch(console.error);
+              .catch((error) => {
+                // Failed to validate session - clear tokens to prevent retry loop
+                console.error('Failed to validate session, clearing auth state:', error);
+                import('../services/auth').then(({ clearStoredTokens }) => {
+                  clearStoredTokens();
+                });
+                setUser(null);
+                setWorkspace(null);
+                setIsAuthenticated(false);
+              });
           } else {
             // Have tokens but no user - try to fetch
-            const freshUser = await getCurrentUser();
-            if (freshUser) {
-              setUser(freshUser);
-              setIsAuthenticated(true);
+            try {
+              const freshUser = await getCurrentUser();
+              if (freshUser) {
+                setUser(freshUser);
+                setIsAuthenticated(true);
+              } else {
+                // Couldn't get user, clear tokens
+                const { clearStoredTokens } = await import('../services/auth');
+                clearStoredTokens();
+              }
+            } catch (error) {
+              // Failed, clear tokens
+              console.error('Failed to fetch user, clearing tokens:', error);
+              const { clearStoredTokens } = await import('../services/auth');
+              clearStoredTokens();
             }
           }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
+        // Clear any stale tokens on error
+        try {
+          const { clearStoredTokens } = await import('../services/auth');
+          clearStoredTokens();
+        } catch { }
       } finally {
         setIsLoading(false);
       }

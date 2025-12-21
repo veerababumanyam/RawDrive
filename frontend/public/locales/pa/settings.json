@@ -1,0 +1,59 @@
+{
+    "title": "सेटिंग्स",
+    "saved": "सेटिंग्स सफलतापूर्वक सहेजी गईं",
+    "language": {
+        "title": "भाषा और क्षेत्र",
+        "description": "इंटरफ़ेस के लिए अपनी पसंदीदा भाषा चुनें",
+        "selectLanguage": "भाषा चुनें",
+        "updated": "भाषा {{language}} में अपडेट हो गई"
+    },
+    "appearance": {
+        "title": "दिखावट",
+        "description": "रूप और अनुभव को अनुकूलित करें",
+        "theme": "थीम",
+        "lightTheme": "हल्का",
+        "darkTheme": "गहरा",
+        "systemTheme": "सिस्टम"
+    },
+    "account": {
+        "title": "खाता",
+        "description": "अपनी खाता सेटिंग्स प्रबंधित करें",
+        "displayName": "प्रदर्शन नाम",
+        "email": "ईमेल",
+        "changePassword": "पासवर्ड बदलें",
+        "deleteAccount": "खाता हटाएं",
+        "deleteWarning": "यह क्रिया स्थायी है और पूर्ववत नहीं की जा सकती।"
+    },
+    "notifications": {
+        "title": "सूचनाएं",
+        "description": "कॉन्फ़िगर करें कि आप सूचनाएं कैसे प्राप्त करते हैं",
+        "email": "ईमेल सूचनाएं",
+        "push": "पुश सूचनाएं",
+        "galleryViews": "गैलरी व्यू अलर्ट",
+        "downloads": "डाउनलोड सूचनाएं",
+        "comments": "नई टिप्पणियां"
+    },
+    "privacy": {
+        "title": "गोपनीयता",
+        "description": "अपनी गोपनीयता सेटिंग्स नियंत्रित करें",
+        "publicProfile": "सार्वजनिक प्रोफ़ाइल",
+        "showEmail": "सार्वजनिक प्रोफ़ाइल पर ईमेल दिखाएं",
+        "analytics": "उपयोग विश्लेषण"
+    },
+    "billing": {
+        "title": "बिलिंग",
+        "description": "अपनी सदस्यता और भुगतान प्रबंधित करें",
+        "currentPlan": "वर्तमान प्लान",
+        "upgrade": "प्लान अपग्रेड करें",
+        "manageBilling": "बिलिंग प्रबंधित करें",
+        "invoices": "इनवॉइस"
+    },
+    "sessions": {
+        "title": "सत्र",
+        "description": "अपने सक्रिय सत्र प्रबंधित करें",
+        "currentSession": "वर्तमान सत्र",
+        "otherSessions": "अन्य सत्र",
+        "terminateAll": "सभी अन्य सत्रों से साइन आउट करें",
+        "terminate": "साइन आउट"
+    }
+}

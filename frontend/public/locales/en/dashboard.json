@@ -1,0 +1,39 @@
+{
+    "title": "Dashboard",
+    "welcome": "Welcome back, {{name}}!",
+    "welcomeGeneric": "Welcome back!",
+    "stats": {
+        "totalGalleries": "Total Galleries",
+        "totalPhotos": "Total Photos",
+        "totalClients": "Total Clients",
+        "storageUsed": "Storage Used",
+        "views": "Total Views",
+        "downloads": "Total Downloads"
+    },
+    "sections": {
+        "recentGalleries": "Recent Galleries",
+        "recentActivity": "Recent Activity",
+        "quickActions": "Quick Actions",
+        "upcomingEvents": "Upcoming Events",
+        "clientInsights": "Client Insights"
+    },
+    "activity": {
+        "galleryCreated": "Created gallery \"{{name}}\"",
+        "photosUploaded": "Uploaded {{count}} photos to \"{{gallery}}\"",
+        "galleryShared": "Shared gallery \"{{name}}\"",
+        "clientAdded": "Added new client \"{{name}}\"",
+        "galleryViewed": "\"{{name}}\" was viewed",
+        "photoDownloaded": "Photo downloaded from \"{{gallery}}\""
+    },
+    "quickActions": {
+        "newGallery": "New Gallery",
+        "uploadPhotos": "Upload Photos",
+        "addClient": "Add Client",
+        "viewAnalytics": "View Analytics"
+    },
+    "empty": {
+        "noGalleries": "No galleries yet",
+        "noActivity": "No recent activity",
+        "getStarted": "Get started by creating your first gallery"
+    }
+}

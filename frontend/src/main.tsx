@@ -4,6 +4,9 @@ import App from './App';
 import './index.css';
 import './styles/landing.css';
 
+// Initialize i18n before rendering
+import './i18n/config';
+
 /* =============================================================================
    Application Entry Point
 
@@ -12,6 +15,12 @@ import './styles/landing.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <React.Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <App />
+    </React.Suspense>
   </React.StrictMode>
 );

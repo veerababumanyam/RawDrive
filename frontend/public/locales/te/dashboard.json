@@ -1,0 +1,39 @@
+{
+    "title": "డాష్‌బోర్డ్",
+    "welcome": "తిరిగి స్వాగతం, {{name}}!",
+    "welcomeGeneric": "తిరిగి స్వాగతం! ఇదిగో మీ అవలోకనం",
+    "stats": {
+        "totalGalleries": "గ్యాలరీలు",
+        "totalPhotos": "ఫోటోలు",
+        "totalClients": "క్లయింట్లు",
+        "storageUsed": "ఉపయోగించిన స్టోరేజ్",
+        "views": "వ్యూస్",
+        "downloads": "డౌన్‌లోడ్లు"
+    },
+    "sections": {
+        "recentGalleries": "ఇటీవలి గ్యాలరీలు",
+        "recentActivity": "ఇటీవలి కార్యకలాపం",
+        "quickActions": "త్వరిత చర్యలు",
+        "upcomingEvents": "రాబోయే ఈవెంట్లు",
+        "clientInsights": "క్లయింట్ అంతర్దృష్టులు"
+    },
+    "activity": {
+        "galleryCreated": "\"{{name}}\" గ్యాలరీ సృష్టించారు",
+        "photosUploaded": "\"{{gallery}}\"లో {{count}} ఫోటోలు అప్‌లోడ్ చేశారు",
+        "galleryShared": "\"{{name}}\" గ్యాలరీ షేర్ చేశారు",
+        "clientAdded": "కొత్త క్లయింట్ \"{{name}}\" జోడించారు",
+        "galleryViewed": "\"{{name}}\" చూశారు",
+        "photoDownloaded": "\"{{gallery}}\" నుండి ఫోటో డౌన్‌లోడ్ చేశారు"
+    },
+    "quickActions": {
+        "newGallery": "కొత్త గ్యాలరీ",
+        "uploadPhotos": "ఫోటోలు అప్‌లోడ్ చేయండి",
+        "addClient": "క్లయింట్ జోడించండి",
+        "viewAnalytics": "అనలిటిక్స్ చూడండి"
+    },
+    "empty": {
+        "noGalleries": "ఇంకా గ్యాలరీలు లేవు",
+        "noActivity": "ఇటీవలి కార్యకలాపం లేదు",
+        "getStarted": "మీ మొదటి గ్యాలరీ సృష్టించడం ద్వారా ప్రారంభించండి"
+    }
+}

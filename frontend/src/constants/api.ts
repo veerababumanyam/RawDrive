@@ -22,6 +22,7 @@ export const PUBLIC_PATHS = {
     galleries: (galleryId: string) => `${API_BASE}/public/galleries/${galleryId}`,
     vcard: (slug: string) => `${API_BASE}/public/profiles/${slug}/vcard`,
     qrCode: (slug: string) => `${API_BASE}/public/profiles/${slug}/qr-code`,
+    logo: (slug: string, size: number = 256) => `${API_BASE}/public/profiles/${slug}/logo/${size}`,
 } as const;
 
 // Auth paths

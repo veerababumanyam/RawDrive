@@ -13,9 +13,10 @@ import { AppErrorFallback } from './components/error/ErrorFallbacks';
    Root application component that sets up routing and providers.
    ============================================================================= */
 
-// Create browser router with v7 future flags
+// Create browser router with v7 future flags for smooth migration
 const router = createBrowserRouter(routes, {
   future: {
+    v7_relativeSplatPath: true,
   },
 });
 
@@ -25,7 +26,7 @@ const App: React.FC = () => {
       <HelmetProvider>
         <AuthProvider>
           <ToastProvider position="bottom-center">
-            <RouterProvider router={router} />
+            <RouterProvider router={router} future={{ v7_startTransition: true }} />
           </ToastProvider>
         </AuthProvider>
       </HelmetProvider>

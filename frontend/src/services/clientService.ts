@@ -668,7 +668,7 @@ export class ClientService {
     cropData?: { crop_x?: number; crop_y?: number; crop_scale?: number }
   ): Promise<AvatarUploadResponse> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', file, file.name);
 
     if (cropData) {
       if (cropData.crop_x !== undefined) formData.append('crop_x', String(cropData.crop_x));
@@ -676,13 +676,9 @@ export class ClientService {
       if (cropData.crop_scale !== undefined) formData.append('crop_scale', String(cropData.crop_scale));
     }
 
-    const response = await apiClient.request<AvatarUploadResponse>(
+    const response = await apiClient.upload<AvatarUploadResponse>(
       `${this.getBaseUrl(workspaceId)}/${clientId}/avatar`,
-      {
-        method: 'POST',
-        body: formData,
-        headers: {}, // Let browser set Content-Type for FormData
-      }
+      formData
     );
 
     if (response.error) {
@@ -743,6 +739,33 @@ export class ClientService {
 
     if (response.error) {
       throw new Error(response.error.message || 'Failed to delete avatar');
+    }
+  }
+
+  /**
+   * Fetch avatar image as blob URL (with authentication)
+   * Adds cache-busting parameter to ensure fresh images after updates
+   */
+  async getAvatarBlobUrl(
+    workspaceId: string,
+    clientId: string,
+    size: number = 256
+  ): Promise<string | null> {
+    try {
+      // Add cache-busting timestamp to ensure we get the latest avatar
+      const cacheBuster = Date.now();
+      const response = await apiClient.fetchRaw(
+        `${this.getBaseUrl(workspaceId)}/${clientId}/avatar/${size}?_t=${cacheBuster}`
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch {
+      return null;
     }
   }
 

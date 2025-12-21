@@ -1,0 +1,59 @@
+{
+    "title": "Settings",
+    "saved": "Settings saved successfully",
+    "language": {
+        "title": "Language & Region",
+        "description": "Choose your preferred language for the interface",
+        "selectLanguage": "Select Language",
+        "updated": "Language updated to {{language}}"
+    },
+    "appearance": {
+        "title": "Appearance",
+        "description": "Customize the look and feel",
+        "theme": "Theme",
+        "lightTheme": "Light",
+        "darkTheme": "Dark",
+        "systemTheme": "System"
+    },
+    "account": {
+        "title": "Account",
+        "description": "Manage your account settings",
+        "displayName": "Display Name",
+        "email": "Email",
+        "changePassword": "Change Password",
+        "deleteAccount": "Delete Account",
+        "deleteWarning": "This action is permanent and cannot be undone."
+    },
+    "notifications": {
+        "title": "Notifications",
+        "description": "Configure how you receive notifications",
+        "email": "Email Notifications",
+        "push": "Push Notifications",
+        "galleryViews": "Gallery view alerts",
+        "downloads": "Download notifications",
+        "comments": "New comments"
+    },
+    "privacy": {
+        "title": "Privacy",
+        "description": "Control your privacy settings",
+        "publicProfile": "Public Profile",
+        "showEmail": "Show email on public profile",
+        "analytics": "Usage Analytics"
+    },
+    "billing": {
+        "title": "Billing",
+        "description": "Manage your subscription and payments",
+        "currentPlan": "Current Plan",
+        "upgrade": "Upgrade Plan",
+        "manageBilling": "Manage Billing",
+        "invoices": "Invoices"
+    },
+    "sessions": {
+        "title": "Sessions",
+        "description": "Manage your active sessions",
+        "currentSession": "Current Session",
+        "otherSessions": "Other Sessions",
+        "terminateAll": "Sign out all other sessions",
+        "terminate": "Sign out"
+    }
+}

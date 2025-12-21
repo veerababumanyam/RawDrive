@@ -1,0 +1,123 @@
+{
+    "appName": "RawDrive",
+    "welcome": "RawDrive க்கு வரவேற்கிறோம்",
+    "selectLanguage": "மொழியைத் தேர்ந்தெடுக்கவும்",
+    "languageUpdated": "மொழி {{language}} ஆக மாற்றப்பட்டது",
+    "nav": {
+        "dashboard": "டாஷ்போர்டு",
+        "galleries": "கேலரிகள்",
+        "libraries": "நூலகங்கள்",
+        "clients": "வாடிக்கையாளர்கள்",
+        "shared": "பகிரப்பட்டவை",
+        "recent": "சமீபத்திய",
+        "favorites": "பிடித்தவை",
+        "trash": "குப்பை",
+        "settings": "அமைப்புகள்",
+        "companyProfile": "நிறுவன விவரம்",
+        "help": "உதவி & ஆதரவு",
+        "search": "தேடு",
+        "newGallery": "புதிய கேலரி"
+    },
+    "actions": {
+        "save": "சேமி",
+        "cancel": "ரத்துசெய்",
+        "delete": "நீக்கு",
+        "edit": "திருத்து",
+        "create": "உருவாக்கு",
+        "back": "பின்செல்",
+        "next": "அடுத்து",
+        "previous": "முந்தைய",
+        "close": "மூடு",
+        "confirm": "உறுதிப்படுத்து",
+        "search": "தேடு",
+        "filter": "வடிகட்டு",
+        "sort": "வரிசைப்படுத்து",
+        "upload": "பதிவேற்று",
+        "download": "பதிவிறக்கு",
+        "share": "பகிர்",
+        "retry": "மீண்டும் முயற்சி",
+        "submit": "சமர்ப்பி",
+        "viewAll": "அனைத்தையும் காண்க",
+        "showMore": "மேலும் காட்டு",
+        "showLess": "குறைவாக காட்டு",
+        "selectAll": "அனைத்தையும் தேர்ந்தெடு",
+        "deselectAll": "அனைத்தையும் தேர்வுநீக்கு"
+    },
+    "status": {
+        "loading": "ஏற்றுகிறது...",
+        "error": "பிழை",
+        "success": "வெற்றி",
+        "warning": "எச்சரிக்கை",
+        "info": "தகவல்",
+        "active": "செயலில்",
+        "inactive": "செயலற்றது",
+        "pending": "நிலுவையில்",
+        "completed": "முடிந்தது",
+        "failed": "தோல்வி"
+    },
+    "errors": {
+        "generic": "ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.",
+        "notFound": "கிடைக்கவில்லை",
+        "unauthorized": "அங்கீகாரமில்லை",
+        "forbidden": "தடைசெய்யப்பட்டது",
+        "serverError": "சர்வர் பிழை",
+        "networkError": "நெட்வொர்க் பிழை"
+    },
+    "confirmation": {
+        "yes": "ஆம்",
+        "no": "இல்லை",
+        "ok": "சரி",
+        "areYouSure": "நீங்கள் உறுதியாக இருக்கிறீர்களா?",
+        "cannotUndo": "இந்த செயலை மீட்க முடியாது."
+    },
+    "user": {
+        "profile": "சுயவிவரம்",
+        "logout": "வெளியேறு",
+        "login": "உள்நுழை",
+        "register": "பதிவுசெய்"
+    },
+    "storage": {
+        "title": "சேமிப்பிடம்",
+        "upgrade": "மேம்படுத்து"
+    },
+    "plan": {
+        "free": "இலவச திட்டம்",
+        "pro": "ப்ரோ திட்டம்",
+        "enterprise": "எண்டர்பிரைஸ் திட்டம்"
+    },
+    "time": {
+        "justNow": "இப்போது",
+        "minutesAgo_one": "{{count}} நிமிடம் முன்",
+        "minutesAgo_other": "{{count}} நிமிடங்கள் முன்",
+        "hoursAgo_one": "{{count}} மணி நேரம் முன்",
+        "hoursAgo_other": "{{count}} மணி நேரங்கள் முன்",
+        "daysAgo_one": "{{count}} நாள் முன்",
+        "daysAgo_other": "{{count}} நாட்கள் முன்",
+        "createdAt": "உருவாக்கப்பட்டது",
+        "updatedAt": "புதுப்பிக்கப்பட்டது"
+    },
+    "labels": {
+        "name": "பெயர்",
+        "description": "விளக்கம்",
+        "date": "தேதி",
+        "time": "நேரம்",
+        "language": "மொழி",
+        "currency": "நாணயம்",
+        "timezone": "நேர மண்டலம்",
+        "country": "நாடு"
+    },
+    "legal": {
+        "privacyPolicy": "தனியுரிமைக் கொள்கை",
+        "termsOfService": "சேவை விதிமுறைகள்",
+        "copyright": "© {{year}} RawDrive. அனைத்து உரிமைகளும் பாதுகாக்கப்பட்டவை."
+    },
+    "links": {
+        "home": "முகப்பு",
+        "about": "எங்களைப் பற்றி",
+        "contact": "தொடர்புக்கு",
+        "help": "உதவி",
+        "documentation": "ஆவணங்கள்",
+        "contactSupport": "ஆதரவை தொடர்புகொள்ளுங்கள்",
+        "goHome": "முகப்புக்கு செல்"
+    }
+}

@@ -153,28 +153,28 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
             {onEdit && (
               <button
                 onClick={handleEdit}
-                className="p-1.5 rounded-full bg-white/90 hover:bg-white text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/20"
+                className="p-2 rounded-lg bg-black/50 backdrop-blur-sm text-white hover:bg-primary hover:text-white shadow-lg ring-1 ring-white/20 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 aria-label="Edit gallery"
               >
-                <Edit size={14} />
+                <Edit size={15} />
               </button>
             )}
             {onShare && (
               <button
                 onClick={handleShare}
-                className="p-1.5 rounded-full bg-white/90 hover:bg-white text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/20"
+                className="p-2 rounded-lg bg-black/50 backdrop-blur-sm text-white hover:bg-cyan-500 hover:text-white shadow-lg ring-1 ring-white/20 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
                 aria-label="Share gallery"
               >
-                <Share2 size={14} />
+                <Share2 size={15} />
               </button>
             )}
             {onDelete && (
               <button
                 onClick={handleDelete}
-                className="p-1.5 rounded-full bg-white/90 hover:bg-error/90 text-text-primary hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/20"
+                className="p-2 rounded-lg bg-black/50 backdrop-blur-sm text-white hover:bg-error hover:text-white shadow-lg ring-1 ring-white/20 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error"
                 aria-label="Delete gallery"
               >
-                <Trash2 size={14} />
+                <Trash2 size={15} />
               </button>
             )}
           </div>

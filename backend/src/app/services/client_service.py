@@ -122,14 +122,24 @@ def _compute_age(date_of_birth: Optional[date]) -> Optional[int]:
 
 def _format_client_row(row: dict, stats: Optional[dict] = None) -> dict:
     """Format a client database row to API response format."""
+    workspace_id = str(row["workspace_id"])
+    client_id = str(row["client_id"])
+    avatar_asset_id = row.get("avatar_asset_id")
+
+    # Build avatar_url if client has an avatar
+    avatar_url = None
+    if avatar_asset_id:
+        avatar_url = f"/api/v1/workspaces/{workspace_id}/clients/{client_id}/avatar/256"
+
     result = {
-        "client_id": str(row["client_id"]),
-        "workspace_id": str(row["workspace_id"]),
+        "client_id": client_id,
+        "workspace_id": workspace_id,
         "full_name": row["full_name"],
         "first_name": row["first_name"],
         "last_name": row["last_name"],
         "nickname": row["nickname"],
-        "avatar_asset_id": str(row["avatar_asset_id"]) if row["avatar_asset_id"] else None,
+        "avatar_asset_id": str(avatar_asset_id) if avatar_asset_id else None,
+        "avatar_url": avatar_url,
         "avatar_crop_data": row["avatar_crop_data"],
         "job_title": row["job_title"],
         "organization": row["organization"],

@@ -1,0 +1,81 @@
+{
+    "title": "Galleries",
+    "create": "Create Gallery",
+    "createNew": "New Gallery",
+    "list": {
+        "galleryCount_one": "gallery",
+        "galleryCount_other": "galleries",
+        "of": "of",
+        "searchPlaceholder": "Search galleries...",
+        "errorLoading": "Error loading galleries"
+    },
+    "empty": "No galleries yet",
+    "emptyDescription": "Create your first gallery to start organizing your photos.",
+    "form": {
+        "name": "Gallery Name",
+        "namePlaceholder": "Enter gallery name",
+        "description": "Description",
+        "descriptionPlaceholder": "Enter description (optional)",
+        "client": "Client",
+        "clientPlaceholder": "Select or create a client",
+        "eventDate": "Event Date",
+        "creating": "Creating gallery..."
+    },
+    "detail": {
+        "photos": "Photos",
+        "photos_one": "{{count}} Photo",
+        "photos_other": "{{count}} Photos",
+        "subGalleries": "Sub-galleries",
+        "subGalleries_one": "{{count}} Sub-gallery",
+        "subGalleries_other": "{{count}} Sub-galleries",
+        "views": "Views",
+        "downloads": "Downloads",
+        "lastUpdated": "Last updated {{date}}"
+    },
+    "actions": {
+        "edit": "Edit Gallery",
+        "delete": "Delete Gallery",
+        "share": "Share Gallery",
+        "copyLink": "Copy Link",
+        "linkCopied": "Link copied to clipboard",
+        "download": "Download All",
+        "upload": "Upload Photos",
+        "setCover": "Set as Cover",
+        "removeCover": "Remove Cover",
+        "addSubGallery": "Add Sub-gallery",
+        "movePhotos": "Move Photos",
+        "selectPhotos": "Select Photos"
+    },
+    "share": {
+        "title": "Share Gallery",
+        "public": "Public Link",
+        "private": "Private (Password Protected)",
+        "password": "Password",
+        "passwordPlaceholder": "Enter password",
+        "expiresAt": "Link Expires",
+        "never": "Never",
+        "generateLink": "Generate Link",
+        "shareWith": "Share with specific people"
+    },
+    "delete": {
+        "title": "Delete Gallery",
+        "confirm": "Are you sure you want to delete \"{{name}}\"?",
+        "warning": "This will move the gallery and all its photos to trash.",
+        "deleting": "Deleting..."
+    },
+    "upload": {
+        "title": "Upload Photos",
+        "dragDrop": "Drag and drop photos here",
+        "or": "or",
+        "browse": "Browse Files",
+        "uploading": "Uploading {{current}} of {{total}}...",
+        "complete": "Upload complete",
+        "failed": "Some uploads failed"
+    },
+    "filters": {
+        "all": "All Galleries",
+        "recent": "Recent",
+        "shared": "Shared",
+        "draft": "Drafts"
+    }
+}

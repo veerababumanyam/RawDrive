@@ -58,6 +58,18 @@ const ClientDetailPage: React.FC = () => {
   const [galleries, setGalleries] = useState<GalleryLinkDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [avatarBlobUrl, setAvatarBlobUrl] = useState<string | null>(null);
+  const avatarBlobUrlRef = React.useRef<string | null>(null);
+
+  // Update ref when state changes and cleanup on unmount
+  useEffect(() => {
+    avatarBlobUrlRef.current = avatarBlobUrl;
+    return () => {
+      if (avatarBlobUrlRef.current) {
+        URL.revokeObjectURL(avatarBlobUrlRef.current);
+      }
+    };
+  }, [avatarBlobUrl]);
 
   // UI state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -80,6 +92,24 @@ const ClientDetailPage: React.FC = () => {
     try {
       const clientData = await clientService.getClient(workspace.workspace_id, clientId);
       setClient(clientData);
+
+      // Fetch avatar as blob URL if client has an avatar
+      if (clientData.avatar_url) {
+        const blobUrl = await clientService.getAvatarBlobUrl(workspace.workspace_id, clientId, 256);
+        if (blobUrl) {
+          // Revoke previous blob URL to prevent memory leaks
+          if (avatarBlobUrlRef.current) {
+            URL.revokeObjectURL(avatarBlobUrlRef.current);
+          }
+          setAvatarBlobUrl(blobUrl);
+        }
+      } else {
+        // Clear avatar if client no longer has one
+        if (avatarBlobUrlRef.current) {
+          URL.revokeObjectURL(avatarBlobUrlRef.current);
+        }
+        setAvatarBlobUrl(null);
+      }
 
       // Fetch related data in parallel
       const [activitiesData, communicationsData, galleriesData] = await Promise.all([
@@ -251,9 +281,9 @@ const ClientDetailPage: React.FC = () => {
             <div className="flex flex-col items-center text-center">
               {/* Avatar */}
               <div className="relative mb-4">
-                {client.avatar_url ? (
+                {avatarBlobUrl ? (
                   <img
-                    src={client.avatar_url}
+                    src={avatarBlobUrl}
                     alt={client.full_name}
                     className="w-24 h-24 rounded-full object-cover ring-4 ring-primary/20"
                   />
