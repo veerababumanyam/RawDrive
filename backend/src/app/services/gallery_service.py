@@ -110,7 +110,6 @@ class GalleryService:
                 workspace_id,
                 title,
                 description,
-                description,
                 client_name,
                 client_id,
                 shoot_date,
