@@ -1,9 +1,28 @@
+/**
+ * Public Profile View Component
+ *
+ * Displays a public company profile page at /p/{slug}.
+ * Uses the shared ProfileCard component for visual parity with the editor preview.
+ *
+ * Key features:
+ * - Theme data extraction and transformation from API response
+ * - Dynamic font loading for theme typography
+ * - SEO metadata via react-helmet
+ * - Action buttons: vCard download, QR code, share
+ */
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { PublicCompanyProfile } from '../../../types/companyProfile';
 import { companyProfileService } from '../../../services/companyProfileService';
-import { ProfileCard, ThemeColors, ThemeTypography, ThemeLayout } from './ProfileCard';
+import { fontService } from '../../../services/fontService';
+import { ProfileCard } from './ProfileCard';
 import { AppButton } from '../../ui/AppButton';
+import {
+    transformThemeForProfileCard,
+    extractFontsToLoad,
+    type BackendThemeData,
+} from '../../../utils/themeTransformer';
 
 interface Props {
     slug: string;
@@ -13,15 +32,18 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
     const [profile, setProfile] = useState<PublicCompanyProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [fontsLoaded, setFontsLoaded] = useState(false);
 
+    // Fetch profile data
     useEffect(() => {
         const fetchProfile = async () => {
             setIsLoading(true);
+            setFontsLoaded(false);
             try {
                 const data = await companyProfileService.getPublicProfile(slug);
                 setProfile(data);
             } catch (err: any) {
-                console.error(err);
+                console.error('Failed to fetch profile:', err);
                 if (err.response?.status === 404) {
                     setError("Profile not found");
                 } else {
@@ -34,6 +56,52 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
         if (slug) fetchProfile();
     }, [slug]);
 
+    // Load theme fonts dynamically
+    useEffect(() => {
+        if (!profile?.theme) {
+            setFontsLoaded(true);
+            return;
+        }
+
+        const loadFonts = async () => {
+            // Extract font families from theme
+            const fontsToLoad = extractFontsToLoad({
+                apiTheme: profile.theme as BackendThemeData,
+            });
+
+            if (fontsToLoad.length === 0) {
+                setFontsLoaded(true);
+                return;
+            }
+
+            // Load all fonts in parallel
+            const loadPromises = fontsToLoad.map(async (fontFamily) => {
+                if (!fontService.isFontLoaded(fontFamily)) {
+                    try {
+                        await fontService.loadFont(fontFamily);
+                    } catch (err) {
+                        console.warn(`Failed to load font: ${fontFamily}`, err);
+                    }
+                }
+            });
+
+            await Promise.allSettled(loadPromises);
+            setFontsLoaded(true);
+        };
+
+        loadFonts();
+    }, [profile?.theme]);
+
+    // Transform theme data using the shared transformer
+    const themeProps = useMemo(() => {
+        if (!profile?.theme) return {};
+
+        return transformThemeForProfileCard({
+            apiTheme: profile.theme as BackendThemeData,
+        });
+    }, [profile?.theme]);
+
+    // Action handlers
     const handleDownloadVCard = () => {
         window.open(companyProfileService.getVCardUrl(slug), '_blank');
     };
@@ -48,52 +116,39 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
         document.body.removeChild(link);
     };
 
-    const handleShare = () => {
+    const handleShare = async () => {
+        const shareData = {
+            title: profile?.name || 'Company Profile',
+            url: window.location.href,
+        };
+
         if (navigator.share) {
-            navigator.share({
-                title: profile?.name || 'Company Profile',
-                url: window.location.href,
-            });
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                // User cancelled or share failed - fall back to clipboard
+                await navigator.clipboard.writeText(window.location.href);
+            }
         } else {
-            navigator.clipboard.writeText(window.location.href);
+            await navigator.clipboard.writeText(window.location.href);
         }
     };
 
-    // Extract theme data from profile
-    const themeColors: ThemeColors | undefined = useMemo(() => {
-        if (!profile?.theme?.base_colors) return undefined;
-        return {
-            primary: profile.theme.base_colors.primary,
-            secondary: profile.theme.base_colors.secondary,
-            accent: profile.theme.base_colors.accent,
-        };
-    }, [profile?.theme?.base_colors]);
-
-    const themeTypography: ThemeTypography | undefined = useMemo(() => {
-        if (!profile?.theme?.typography) return undefined;
-        return {
-            headingFont: profile.theme.typography.headingFont,
-            bodyFont: profile.theme.typography.bodyFont,
-        };
-    }, [profile?.theme?.typography]);
-
-    const themeLayout: ThemeLayout | undefined = useMemo(() => {
-        if (!profile?.theme?.layout) return undefined;
-        return {
-            spacing: profile.theme.layout.spacing,
-            heroStyle: profile.theme.layout.heroStyle,
-            sectionLayout: profile.theme.layout.sectionLayout,
-        };
-    }, [profile?.theme?.layout]);
-
-    // Determine background color based on theme
+    // Determine background styling
     const bgStyle = useMemo(() => {
-        if (profile?.theme?.base_colors?.background) {
-            return { backgroundColor: profile.theme.base_colors.background };
+        // Priority 1: Theme gradient
+        if (themeProps.backgroundGradient) {
+            return { background: themeProps.backgroundGradient };
         }
-        return {};
-    }, [profile?.theme?.base_colors?.background]);
+        // Priority 2: Theme background color
+        if (themeProps.backgroundColor) {
+            return { backgroundColor: themeProps.backgroundColor };
+        }
+        // Priority 3: Default gradient
+        return { background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' };
+    }, [themeProps.backgroundGradient, themeProps.backgroundColor]);
 
+    // Loading state
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -102,6 +157,7 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
         );
     }
 
+    // Error state
     if (error || !profile) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
@@ -121,19 +177,27 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
             <Helmet>
                 <title>{displayName} | Profile</title>
                 <meta name="description" content={profile.tagline || `${displayName} business profile`} />
-                {profile.seo_schema && <script type="application/ld+json">{JSON.stringify(profile.seo_schema)}</script>}
+                {/* Preconnect to Google Fonts for faster font loading */}
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+                {profile.seo_schema && (
+                    <script type="application/ld+json">
+                        {JSON.stringify(profile.seo_schema)}
+                    </script>
+                )}
             </Helmet>
 
             {/* Mobile-first full-height layout */}
             <div
                 className="min-h-screen flex flex-col items-center p-4 sm:py-12 sm:px-6 lg:px-8"
-                style={{
-                    backgroundColor: bgStyle.backgroundColor || undefined,
-                    ...(!bgStyle.backgroundColor && { background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' })
-                }}
+                style={bgStyle}
             >
                 {/* Main Card - Mobile: full width, Desktop: max-width */}
-                <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-800 transition-all hover:shadow-2xl">
+                <div
+                    className={`w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-800 transition-all hover:shadow-2xl ${
+                        !fontsLoaded ? 'opacity-95' : 'opacity-100'
+                    }`}
+                >
                     <ProfileCard
                         profile={{
                             name: profile.name,
@@ -152,9 +216,9 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
                         showActions={true}
                         slug={slug}
                         compact={false}
-                        themeColors={themeColors}
-                        themeTypography={themeTypography}
-                        themeLayout={themeLayout}
+                        themeColors={themeProps.themeColors}
+                        themeTypography={themeProps.themeTypography}
+                        themeLayout={themeProps.themeLayout}
                         onDownloadVCard={handleDownloadVCard}
                         onDownloadQr={handleDownloadQr}
                         onShare={handleShare}

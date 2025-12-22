@@ -8,6 +8,7 @@ import {
     Twitter,
     Instagram,
     Facebook,
+    Youtube,
     Link as LinkIcon,
     Plus,
     Trash2,
@@ -24,7 +25,12 @@ import {
     Pencil,
     X,
     Copy,
-    Palette
+    Palette,
+    MapPin,
+    Navigation,
+    Music2,
+    Paintbrush,
+    Dribbble,
 } from 'lucide-react';
 
 import { AppInput } from '../../ui/AppInput';
@@ -42,6 +48,7 @@ import { UndoRedoControls } from './UndoRedoControls';
 import { useThemeUndoRedo } from '../../../hooks/useThemeUndoRedo';
 import { themeService } from '../../../services/themeService';
 import type { Theme, ThemeCustomization as ThemeCustomizationType } from '../../../types/profileEditor';
+import { validateCoordinates } from '../../../utils/themeTransformer';
 
 /**
  * Sanitizes the profile data before submission.
@@ -59,8 +66,17 @@ const sanitizeProfileData = (data: CreateCompanyProfileRequest): CreateCompanyPr
         const hasAddressData = addr.line1?.trim() || addr.line2?.trim() ||
             addr.city?.trim() || addr.state?.trim() ||
             addr.postal_code?.trim() || addr.country?.trim();
-        if (!hasAddressData) {
+        const hasCoordinates = addr.latitude !== undefined && addr.longitude !== undefined;
+        if (!hasAddressData && !hasCoordinates) {
             sanitized.address_structured = undefined;
+        } else if (sanitized.address_structured) {
+            // Remove empty/invalid coordinate values
+            if (addr.latitude === undefined || addr.latitude === null || isNaN(addr.latitude)) {
+                delete sanitized.address_structured.latitude;
+            }
+            if (addr.longitude === undefined || addr.longitude === null || isNaN(addr.longitude)) {
+                delete sanitized.address_structured.longitude;
+            }
         }
     }
 
@@ -151,13 +167,21 @@ const DEFAULT_PROFILE: CreateCompanyProfileRequest = {
         city: '',
         state: '',
         postal_code: '',
-        country: ''
+        country: '',
+        latitude: undefined,
+        longitude: undefined,
     },
     socials: {
         facebook: '',
         instagram: '',
         twitter: '',
-        linkedin: ''
+        linkedin: '',
+        youtube: '',
+        tiktok: '',
+        whatsapp: '',
+        pinterest: '',
+        behance: '',
+        dribbble: '',
     },
     custom_links: [],
     company_visibility: {
@@ -172,6 +196,12 @@ const DEFAULT_PROFILE: CreateCompanyProfileRequest = {
         socials_facebook: true,
         socials_twitter: true,
         socials_linkedin: true,
+        socials_youtube: true,
+        socials_tiktok: true,
+        socials_whatsapp: true,
+        socials_pinterest: true,
+        socials_behance: true,
+        socials_dribbble: true,
         custom_links: true,
         secondary_email_1: true,
         secondary_email_2: true,
@@ -1224,6 +1254,118 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                         <AppInput label="Postal Code" {...register('address_structured.postal_code')} placeholder="10001" />
                         <AppInput label="Country" {...register('address_structured.country')} placeholder="USA" />
                     </div>
+
+                    {/* GPS Coordinates Section */}
+                    <div className="border-t border-border pt-4 mt-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <MapPin size={16} className="text-text-secondary" />
+                            <h4 className="text-sm font-medium text-text-primary">GPS Coordinates</h4>
+                            <span className="text-xs text-text-tertiary">(optional)</span>
+                        </div>
+                        <p className="text-xs text-text-tertiary mb-3">
+                            For precise map navigation. Coordinates take priority over text address when visitors click your location.
+                        </p>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Controller
+                                name="address_structured.latitude"
+                                control={control}
+                                rules={{
+                                    validate: (value) => {
+                                        if (value === undefined || value === null) return true;
+                                        const num = typeof value === 'string' ? parseFloat(value) : value;
+                                        if (isNaN(num)) return 'Invalid number';
+                                        const result = validateCoordinates(num, undefined);
+                                        return result.valid || result.errors[0];
+                                    }
+                                }}
+                                render={({ field: { onChange, value, ...rest }, fieldState: { error } }) => (
+                                    <AppInput
+                                        label="Latitude"
+                                        placeholder="e.g. 40.7128"
+                                        leftIcon={<Navigation size={14} />}
+                                        helperText="-90 to 90"
+                                        error={error?.message}
+                                        value={value ?? ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === '') {
+                                                onChange(undefined);
+                                            } else {
+                                                const num = parseFloat(val);
+                                                onChange(isNaN(num) ? val : num);
+                                            }
+                                        }}
+                                        {...rest}
+                                    />
+                                )}
+                            />
+                            <Controller
+                                name="address_structured.longitude"
+                                control={control}
+                                rules={{
+                                    validate: (value) => {
+                                        if (value === undefined || value === null) return true;
+                                        const num = typeof value === 'string' ? parseFloat(value) : value;
+                                        if (isNaN(num)) return 'Invalid number';
+                                        const result = validateCoordinates(undefined, num);
+                                        return result.valid || result.errors[0];
+                                    }
+                                }}
+                                render={({ field: { onChange, value, ...rest }, fieldState: { error } }) => (
+                                    <AppInput
+                                        label="Longitude"
+                                        placeholder="e.g. -74.0060"
+                                        leftIcon={<Navigation size={14} className="rotate-90" />}
+                                        helperText="-180 to 180"
+                                        error={error?.message}
+                                        value={value ?? ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === '') {
+                                                onChange(undefined);
+                                            } else {
+                                                const num = parseFloat(val);
+                                                onChange(isNaN(num) ? val : num);
+                                            }
+                                        }}
+                                        {...rest}
+                                    />
+                                )}
+                            />
+                        </div>
+                        <AppButton
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="mt-2"
+                            leftIcon={<Navigation size={14} />}
+                            onClick={async () => {
+                                if (!navigator.geolocation) {
+                                    toast.error('Geolocation is not supported by your browser');
+                                    return;
+                                }
+                                navigator.geolocation.getCurrentPosition(
+                                    (position) => {
+                                        const lat = parseFloat(position.coords.latitude.toFixed(6));
+                                        const lng = parseFloat(position.coords.longitude.toFixed(6));
+                                        setValue('address_structured.latitude', lat);
+                                        setValue('address_structured.longitude', lng);
+                                        toast.success('Location detected successfully');
+                                    },
+                                    (error) => {
+                                        let message = 'Unable to get your location';
+                                        if (error.code === error.PERMISSION_DENIED) {
+                                            message = 'Location access was denied. Please enable location in your browser settings.';
+                                        }
+                                        toast.error(message);
+                                    },
+                                    { enableHighAccuracy: true, timeout: 10000 }
+                                );
+                            }}
+                        >
+                            Get Current Location
+                        </AppButton>
+                    </div>
                 </Card.Content>
             </Card>
 
@@ -1234,56 +1376,144 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                     <Card.Description>Connect your audiences across platforms.</Card.Description>
                 </Card.Header>
                 <Card.Content className="space-y-4">
-                    <div className="flex gap-2">
-                        <div className="flex-1">
-                            <AppInput
-                                label="Instagram"
-                                leftIcon={<Instagram size={16} />}
-                                {...register('socials.instagram')}
-                                placeholder="username or URL"
-                            />
+                    {/* Primary Platforms */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <AppInput
+                                    label="Instagram"
+                                    leftIcon={<Instagram size={16} />}
+                                    {...register('socials.instagram')}
+                                    placeholder="username or URL"
+                                />
+                            </div>
+                            <div className="mt-8">
+                                {renderVisibilityToggle('socials_instagram', 'Instagram')}
+                            </div>
                         </div>
-                        <div className="mt-8">
-                            {renderVisibilityToggle('socials_instagram', 'Instagram')}
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <AppInput
+                                    label="Facebook"
+                                    leftIcon={<Facebook size={16} />}
+                                    {...register('socials.facebook')}
+                                    placeholder="username or URL"
+                                />
+                            </div>
+                            <div className="mt-8">
+                                {renderVisibilityToggle('socials_facebook', 'Facebook')}
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <AppInput
+                                    label="Twitter / X"
+                                    leftIcon={<Twitter size={16} />}
+                                    {...register('socials.twitter')}
+                                    placeholder="username or URL"
+                                />
+                            </div>
+                            <div className="mt-8">
+                                {renderVisibilityToggle('socials_twitter', 'Twitter/X')}
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <AppInput
+                                    label="LinkedIn"
+                                    leftIcon={<Linkedin size={16} />}
+                                    {...register('socials.linkedin')}
+                                    placeholder="username or URL"
+                                />
+                            </div>
+                            <div className="mt-8">
+                                {renderVisibilityToggle('socials_linkedin', 'LinkedIn')}
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <AppInput
+                                    label="YouTube"
+                                    leftIcon={<Youtube size={16} />}
+                                    {...register('socials.youtube')}
+                                    placeholder="channel URL"
+                                />
+                            </div>
+                            <div className="mt-8">
+                                {renderVisibilityToggle('socials_youtube', 'YouTube')}
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <AppInput
+                                    label="TikTok"
+                                    leftIcon={<Music2 size={16} />}
+                                    {...register('socials.tiktok')}
+                                    placeholder="@username or URL"
+                                />
+                            </div>
+                            <div className="mt-8">
+                                {renderVisibilityToggle('socials_tiktok', 'TikTok')}
+                            </div>
                         </div>
                     </div>
-                    <div className="flex gap-2">
-                        <div className="flex-1">
-                            <AppInput
-                                label="Facebook"
-                                leftIcon={<Facebook size={16} />}
-                                {...register('socials.facebook')}
-                                placeholder="username or URL"
-                            />
-                        </div>
-                        <div className="mt-8">
-                            {renderVisibilityToggle('socials_facebook', 'Facebook')}
-                        </div>
-                    </div>
-                    <div className="flex gap-2">
-                        <div className="flex-1">
-                            <AppInput
-                                label="Twitter / X"
-                                leftIcon={<Twitter size={16} />}
-                                {...register('socials.twitter')}
-                                placeholder="username or URL"
-                            />
-                        </div>
-                        <div className="mt-8">
-                            {renderVisibilityToggle('socials_twitter', 'Twitter/X')}
-                        </div>
-                    </div>
-                    <div className="flex gap-2">
-                        <div className="flex-1">
-                            <AppInput
-                                label="LinkedIn"
-                                leftIcon={<Linkedin size={16} />}
-                                {...register('socials.linkedin')}
-                                placeholder="username or URL"
-                            />
-                        </div>
-                        <div className="mt-8">
-                            {renderVisibilityToggle('socials_linkedin', 'LinkedIn')}
+
+                    {/* Divider */}
+                    <div className="border-t border-border pt-4 mt-4">
+                        <h4 className="text-sm font-medium text-text-secondary mb-4">Messaging & Creative Platforms</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <AppInput
+                                        label="WhatsApp"
+                                        leftIcon={<Phone size={16} />}
+                                        {...register('socials.whatsapp')}
+                                        placeholder="phone number or wa.me link"
+                                    />
+                                </div>
+                                <div className="mt-8">
+                                    {renderVisibilityToggle('socials_whatsapp', 'WhatsApp')}
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <AppInput
+                                        label="Pinterest"
+                                        leftIcon={<Globe size={16} />}
+                                        {...register('socials.pinterest')}
+                                        placeholder="username or URL"
+                                    />
+                                </div>
+                                <div className="mt-8">
+                                    {renderVisibilityToggle('socials_pinterest', 'Pinterest')}
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <AppInput
+                                        label="Behance"
+                                        leftIcon={<Paintbrush size={16} />}
+                                        {...register('socials.behance')}
+                                        placeholder="username or URL"
+                                    />
+                                </div>
+                                <div className="mt-8">
+                                    {renderVisibilityToggle('socials_behance', 'Behance')}
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <AppInput
+                                        label="Dribbble"
+                                        leftIcon={<Dribbble size={16} />}
+                                        {...register('socials.dribbble')}
+                                        placeholder="username or URL"
+                                    />
+                                </div>
+                                <div className="mt-8">
+                                    {renderVisibilityToggle('socials_dribbble', 'Dribbble')}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </Card.Content>

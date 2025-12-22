@@ -5,6 +5,10 @@ export interface CompanyAddress {
     state: string;
     postal_code: string;
     country: string;
+    /** GPS latitude for precise location mapping (-90 to 90) */
+    latitude?: number;
+    /** GPS longitude for precise location mapping (-180 to 180) */
+    longitude?: number;
 }
 
 export interface CustomLink {
@@ -34,6 +38,12 @@ export interface CompanyVisibilityConfig {
     socials_facebook: boolean;
     socials_twitter: boolean;
     socials_linkedin: boolean;
+    socials_youtube: boolean;
+    socials_tiktok: boolean;
+    socials_whatsapp: boolean;
+    socials_pinterest: boolean;
+    socials_behance: boolean;
+    socials_dribbble: boolean;
     custom_links: boolean;
     // Secondary contacts visibility
     secondary_email_1: boolean;

@@ -18,11 +18,17 @@ import {
     Facebook,
     Twitter,
     Linkedin,
-    Download,
+    Youtube,
+    UserPlus,
     QrCode,
     Share2,
     ExternalLink,
+    Music2,
+    MessageCircle,
+    Paintbrush,
+    Dribbble,
 } from 'lucide-react';
+import { generateMapUrl, type AddressWithCoordinates } from '../../../utils/themeTransformer';
 
 import type { CompanyProfile, CompanyVisibilityConfig } from '../../../types/companyProfile';
 
@@ -225,28 +231,31 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 )}
             </div>
 
-            {/* Actions */}
+            {/* Actions - Consistent icon buttons */}
             {showActions && (
                 <div className={`${sizes.padding} pb-6 flex ${sizes.gap} justify-center`}>
                     <button
                         onClick={onDownloadVCard}
-                        className={`flex-1 flex items-center justify-center ${sizes.gap} text-white ${compact ? 'py-2 text-xs' : 'py-3 text-sm'} px-4 rounded-xl font-medium transition-colors`}
+                        className={`${compact ? 'p-2' : 'p-3'} rounded-xl text-white transition-colors hover:opacity-90`}
                         style={{ backgroundColor: primaryColor }}
+                        title="Save Contact"
+                        aria-label="Save contact to your device"
                     >
-                        <Download size={sizes.icon - 2} />
-                        <span>Save Contact</span>
+                        <UserPlus size={sizes.icon} />
                     </button>
                     <button
                         onClick={onDownloadQr}
                         className={`${compact ? 'p-2' : 'p-3'} border border-gray-200 dark:border-gray-700 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors`}
-                        title="QR Code"
+                        title="Download QR Code"
+                        aria-label="Download QR code"
                     >
                         <QrCode size={sizes.icon} />
                     </button>
                     <button
                         onClick={onShare}
                         className={`${compact ? 'p-2' : 'p-3'} border border-gray-200 dark:border-gray-700 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors`}
-                        title="Share"
+                        title="Share Profile"
+                        aria-label="Share this profile"
                     >
                         <Share2 size={sizes.icon} />
                     </button>
@@ -381,26 +390,56 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                     </a>
                 )}
 
-                {/* Address */}
+                {/* Address - Uses coordinates when available, falls back to text address */}
                 {isVisible('address') && hasAddress && profile.address_structured && (() => {
-                    const addressParts = [
-                        profile.address_structured.line1,
-                        profile.address_structured.line2,
-                        profile.address_structured.city,
-                        profile.address_structured.state,
-                        profile.address_structured.postal_code,
-                        profile.address_structured.country,
-                    ].filter(Boolean);
-                    const fullAddress = addressParts.join(', ');
-                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+                    // Generate map URL - prioritizes coordinates over text address
+                    const mapsUrl = generateMapUrl(profile.address_structured as AddressWithCoordinates);
 
+                    // Content to display (never show raw coordinates, only human-readable address)
+                    const addressContent = (
+                        <div className="flex-1 min-w-0">
+                            <div className={`${sizes.label} text-gray-500 uppercase font-semibold`}>Location</div>
+                            <div className={`${sizes.value} font-medium`}>
+                                {profile.address_structured.line1}
+                                {profile.address_structured.city && (
+                                    <>
+                                        <br />
+                                        {profile.address_structured.city}
+                                        {profile.address_structured.state && `, ${profile.address_structured.state}`}
+                                        {profile.address_structured.postal_code && ` ${profile.address_structured.postal_code}`}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    );
+
+                    // Wrap in link if we have a valid map URL
+                    if (mapsUrl) {
+                        return (
+                            <a
+                                href={mapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`flex items-start ${sizes.gap} text-gray-700 dark:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer`}
+                                aria-label="Open location in Google Maps"
+                            >
+                                <div
+                                    className={`${sizes.iconBg} rounded-lg flex-shrink-0`}
+                                    style={{
+                                        backgroundColor: hexToRgba(accentColor, 0.1),
+                                        color: accentColor,
+                                    }}
+                                >
+                                    <MapPin size={sizes.icon} />
+                                </div>
+                                {addressContent}
+                            </a>
+                        );
+                    }
+
+                    // No valid map URL - show address without link
                     return (
-                        <a
-                            href={mapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={`flex items-start ${sizes.gap} text-gray-700 dark:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer`}
-                        >
+                        <div className={`flex items-start ${sizes.gap} text-gray-700 dark:text-gray-300 p-2`}>
                             <div
                                 className={`${sizes.iconBg} rounded-lg flex-shrink-0`}
                                 style={{
@@ -410,21 +449,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                             >
                                 <MapPin size={sizes.icon} />
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <div className={`${sizes.label} text-gray-500 uppercase font-semibold`}>Location</div>
-                                <div className={`${sizes.value} font-medium`}>
-                                    {profile.address_structured.line1}
-                                    {profile.address_structured.city && (
-                                        <>
-                                            <br />
-                                            {profile.address_structured.city}
-                                            {profile.address_structured.state && `, ${profile.address_structured.state}`}
-                                            {profile.address_structured.postal_code && ` ${profile.address_structured.postal_code}`}
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        </a>
+                            {addressContent}
+                        </div>
                     );
                 })()}
             </div>
@@ -436,14 +462,31 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                     {visibleSocials.length > 0 && (
                         <div className={`flex flex-wrap ${sizes.gap} justify-center`}>
                             {visibleSocials.map(([platform, url]) => {
-                                const IconComponent = platform === 'instagram' ? Instagram :
+                                // Map platform to icon component
+                                const IconComponent =
+                                    platform === 'instagram' ? Instagram :
                                     platform === 'facebook' ? Facebook :
-                                        platform === 'twitter' ? Twitter :
-                                            platform === 'linkedin' ? Linkedin : Globe;
-                                const colorClass = platform === 'instagram' ? 'text-pink-600' :
+                                    platform === 'twitter' ? Twitter :
+                                    platform === 'linkedin' ? Linkedin :
+                                    platform === 'youtube' ? Youtube :
+                                    platform === 'tiktok' ? Music2 :
+                                    platform === 'whatsapp' ? MessageCircle :
+                                    platform === 'pinterest' ? Globe :
+                                    platform === 'behance' ? Paintbrush :
+                                    platform === 'dribbble' ? Dribbble : Globe;
+
+                                // Map platform to brand color
+                                const colorClass =
+                                    platform === 'instagram' ? 'text-pink-600' :
                                     platform === 'facebook' ? 'text-blue-600' :
-                                        platform === 'twitter' ? 'text-sky-500' :
-                                            platform === 'linkedin' ? 'text-blue-700' : 'text-gray-600';
+                                    platform === 'twitter' ? 'text-sky-500' :
+                                    platform === 'linkedin' ? 'text-blue-700' :
+                                    platform === 'youtube' ? 'text-red-600' :
+                                    platform === 'tiktok' ? 'text-gray-900 dark:text-white' :
+                                    platform === 'whatsapp' ? 'text-green-500' :
+                                    platform === 'pinterest' ? 'text-red-500' :
+                                    platform === 'behance' ? 'text-blue-500' :
+                                    platform === 'dribbble' ? 'text-pink-500' : 'text-gray-600';
 
                                 return (
                                     <a
@@ -451,6 +494,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                                         href={url}
                                         target="_blank"
                                         rel="noopener noreferrer"
+                                        title={platform.charAt(0).toUpperCase() + platform.slice(1)}
+                                        aria-label={`Visit ${platform}`}
                                         className={`${compact ? 'p-2' : 'p-3'} bg-white dark:bg-gray-800 shadow-sm hover:shadow-md rounded-full ${colorClass} transition-all hover:-translate-y-1`}
                                     >
                                         <IconComponent size={compact ? 18 : 24} />

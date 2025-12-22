@@ -498,6 +498,986 @@ export const PREBUILT_THEMES: Theme[] = [
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 7. GRADIENT THEME - Ocean Breeze
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-ocean-breeze',
+    name: 'Ocean Breeze',
+    category: 'gradient',
+    description: 'Calming ocean-inspired gradient with teal and blue tones. Evokes tranquility and professionalism.',
+    preview_image_url: '/themes/previews/ocean-breeze.webp',
+    base_colors: {
+      primary: '#0891B2',
+      secondary: '#06B6D4',
+      accent: '#22D3EE',
+      neutral: ['#F0FDFA', '#CCFBF1', '#99F6E4', '#5EEAD4', '#2DD4BF', '#14B8A6', '#0D9488', '#0F766E', '#115E59', '#134E4A'],
+      gradients: [
+        {
+          name: 'Ocean Wave',
+          type: 'linear',
+          direction: '135deg',
+          stops: ['#0891B2', '#06B6D4', '#22D3EE'],
+        },
+      ],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Outfit',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'Inter',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'normal',
+      hero_style: 'full-bleed',
+      section_layout: 'single-column',
+    },
+    is_premium: false,
+    is_popular: true,
+    usage_count: 720,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'ocean-breeze-light',
+        name: 'Light',
+        colors: {
+          background: '#F0FDFA',
+          surface: '#FFFFFF',
+          text_primary: '#134E4A',
+          text_secondary: '#0F766E',
+        },
+      },
+      {
+        variant_id: 'ocean-breeze-dark',
+        name: 'Dark',
+        colors: {
+          background: '#042F2E',
+          surface: '#134E4A',
+          text_primary: '#F0FDFA',
+          text_secondary: '#5EEAD4',
+          glass: 'rgba(8, 145, 178, 0.1)',
+          glass_border: 'rgba(34, 211, 238, 0.2)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 8. GRADIENT THEME - Lavender Haze
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-lavender-haze',
+    name: 'Lavender Haze',
+    category: 'gradient',
+    description: 'Soft purple gradient with dreamy, ethereal vibes. Perfect for creative and artistic profiles.',
+    preview_image_url: '/themes/previews/lavender-haze.webp',
+    base_colors: {
+      primary: '#A855F7',
+      secondary: '#C084FC',
+      accent: '#E879F9',
+      neutral: ['#FAF5FF', '#F3E8FF', '#E9D5FF', '#D8B4FE', '#C084FC', '#A855F7', '#9333EA', '#7C3AED', '#6D28D9', '#4C1D95'],
+      gradients: [
+        {
+          name: 'Lavender Dream',
+          type: 'linear',
+          direction: '135deg',
+          stops: ['#A855F7', '#C084FC', '#E879F9'],
+        },
+      ],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Quicksand',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'Nunito',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'spacious',
+      hero_style: 'card',
+      section_layout: 'single-column',
+    },
+    is_premium: false,
+    is_popular: false,
+    usage_count: 380,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'lavender-haze-light',
+        name: 'Light',
+        colors: {
+          background: '#FAF5FF',
+          surface: '#FFFFFF',
+          text_primary: '#4C1D95',
+          text_secondary: '#7C3AED',
+        },
+      },
+      {
+        variant_id: 'lavender-haze-dark',
+        name: 'Dark',
+        colors: {
+          background: '#1E1B4B',
+          surface: '#312E81',
+          text_primary: '#FAF5FF',
+          text_secondary: '#C084FC',
+          glass: 'rgba(168, 85, 247, 0.1)',
+          glass_border: 'rgba(232, 121, 249, 0.2)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 9. GRADIENT THEME - Sunset Glow
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-sunset-glow',
+    name: 'Sunset Glow',
+    category: 'gradient',
+    description: 'Warm sunset gradient transitioning from coral to gold. Energetic and inviting.',
+    preview_image_url: '/themes/previews/sunset-glow.webp',
+    base_colors: {
+      primary: '#F97316',
+      secondary: '#FB923C',
+      accent: '#FBBF24',
+      neutral: ['#FFFBEB', '#FEF3C7', '#FDE68A', '#FCD34D', '#FBBF24', '#F59E0B', '#D97706', '#B45309', '#92400E', '#78350F'],
+      gradients: [
+        {
+          name: 'Sunset Blaze',
+          type: 'linear',
+          direction: '135deg',
+          stops: ['#F97316', '#FB923C', '#FBBF24'],
+        },
+      ],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Rubik',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'Open Sans',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'normal',
+      hero_style: 'full-bleed',
+      section_layout: 'single-column',
+    },
+    is_premium: false,
+    is_popular: true,
+    usage_count: 650,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'sunset-glow-light',
+        name: 'Light',
+        colors: {
+          background: '#FFFBEB',
+          surface: '#FFFFFF',
+          text_primary: '#78350F',
+          text_secondary: '#92400E',
+        },
+      },
+      {
+        variant_id: 'sunset-glow-dark',
+        name: 'Dark',
+        colors: {
+          background: '#451A03',
+          surface: '#78350F',
+          text_primary: '#FFFBEB',
+          text_secondary: '#FDE68A',
+          glass: 'rgba(249, 115, 22, 0.1)',
+          glass_border: 'rgba(251, 191, 36, 0.2)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 10. GRADIENT THEME - Forest Mist
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-forest-mist',
+    name: 'Forest Mist',
+    category: 'gradient',
+    description: 'Natural green gradient inspired by forest landscapes. Calming and organic.',
+    preview_image_url: '/themes/previews/forest-mist.webp',
+    base_colors: {
+      primary: '#059669',
+      secondary: '#10B981',
+      accent: '#34D399',
+      neutral: ['#ECFDF5', '#D1FAE5', '#A7F3D0', '#6EE7B7', '#34D399', '#10B981', '#059669', '#047857', '#065F46', '#064E3B'],
+      gradients: [
+        {
+          name: 'Forest Canopy',
+          type: 'linear',
+          direction: '180deg',
+          stops: ['#059669', '#10B981', '#34D399'],
+        },
+      ],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Josefin Sans',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'Lato',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'spacious',
+      hero_style: 'card',
+      section_layout: 'single-column',
+    },
+    is_premium: false,
+    is_popular: false,
+    usage_count: 290,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'forest-mist-light',
+        name: 'Light',
+        colors: {
+          background: '#ECFDF5',
+          surface: '#FFFFFF',
+          text_primary: '#064E3B',
+          text_secondary: '#047857',
+        },
+      },
+      {
+        variant_id: 'forest-mist-dark',
+        name: 'Dark',
+        colors: {
+          background: '#022C22',
+          surface: '#064E3B',
+          text_primary: '#ECFDF5',
+          text_secondary: '#6EE7B7',
+          glass: 'rgba(5, 150, 105, 0.1)',
+          glass_border: 'rgba(52, 211, 153, 0.2)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 11. DARK THEME - Midnight Noir
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-midnight-noir',
+    name: 'Midnight Noir',
+    category: 'dark',
+    description: 'Deep dark theme with subtle blue undertones. Perfect for dramatic, cinematic portfolios.',
+    preview_image_url: '/themes/previews/midnight-noir.webp',
+    base_colors: {
+      primary: '#3B82F6',
+      secondary: '#60A5FA',
+      accent: '#93C5FD',
+      neutral: ['#0F172A', '#1E293B', '#334155', '#475569', '#64748B', '#94A3B8', '#CBD5E1', '#E2E8F0', '#F1F5F9', '#F8FAFC'],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Bebas Neue',
+        source: 'web',
+        fallback: ['Impact', 'sans-serif'],
+        weights: [400],
+      },
+      body_font: {
+        family: 'Roboto',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'normal',
+      hero_style: 'full-bleed',
+      section_layout: 'single-column',
+    },
+    is_premium: false,
+    is_popular: true,
+    usage_count: 890,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'midnight-noir-dark',
+        name: 'Dark',
+        colors: {
+          background: '#0F172A',
+          surface: '#1E293B',
+          text_primary: '#F8FAFC',
+          text_secondary: '#94A3B8',
+          glass: 'rgba(59, 130, 246, 0.1)',
+          glass_border: 'rgba(147, 197, 253, 0.15)',
+        },
+      },
+      {
+        variant_id: 'midnight-noir-light',
+        name: 'Light',
+        colors: {
+          background: '#F8FAFC',
+          surface: '#FFFFFF',
+          text_primary: '#0F172A',
+          text_secondary: '#475569',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 12. DARK THEME - Carbon Pro
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-carbon-pro',
+    name: 'Carbon Pro',
+    category: 'dark',
+    description: 'Sleek carbon-inspired dark theme. High contrast for maximum readability and impact.',
+    preview_image_url: '/themes/previews/carbon-pro.webp',
+    base_colors: {
+      primary: '#FFFFFF',
+      secondary: '#A1A1AA',
+      accent: '#F4F4F5',
+      neutral: ['#09090B', '#18181B', '#27272A', '#3F3F46', '#52525B', '#71717A', '#A1A1AA', '#D4D4D8', '#E4E4E7', '#FAFAFA'],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'JetBrains Mono',
+        source: 'web',
+        fallback: ['monospace'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'IBM Plex Sans',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'compact',
+      hero_style: 'card',
+      section_layout: 'single-column',
+    },
+    is_premium: true,
+    is_popular: false,
+    usage_count: 450,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'carbon-pro-dark',
+        name: 'Dark',
+        colors: {
+          background: '#09090B',
+          surface: '#18181B',
+          text_primary: '#FAFAFA',
+          text_secondary: '#A1A1AA',
+          glass: 'rgba(255, 255, 255, 0.05)',
+          glass_border: 'rgba(255, 255, 255, 0.1)',
+        },
+      },
+      {
+        variant_id: 'carbon-pro-light',
+        name: 'Light',
+        colors: {
+          background: '#FAFAFA',
+          surface: '#FFFFFF',
+          text_primary: '#09090B',
+          text_secondary: '#52525B',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 13. NATURE THEME - Earth Tones
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-earth-tones',
+    name: 'Earth Tones',
+    category: 'nature',
+    description: 'Warm, grounded color palette inspired by natural earth. Authentic and approachable.',
+    preview_image_url: '/themes/previews/earth-tones.webp',
+    base_colors: {
+      primary: '#92400E',
+      secondary: '#B45309',
+      accent: '#D97706',
+      neutral: ['#FFFBEB', '#FEF3C7', '#FDE68A', '#FCD34D', '#FBBF24', '#F59E0B', '#D97706', '#B45309', '#92400E', '#78350F'],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Bitter',
+        source: 'web',
+        fallback: ['Georgia', 'serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'Source Sans 3',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'spacious',
+      hero_style: 'card',
+      section_layout: 'single-column',
+    },
+    is_premium: false,
+    is_popular: false,
+    usage_count: 210,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'earth-tones-light',
+        name: 'Light',
+        colors: {
+          background: '#FFFBEB',
+          surface: '#FFFFFF',
+          text_primary: '#78350F',
+          text_secondary: '#92400E',
+        },
+      },
+      {
+        variant_id: 'earth-tones-dark',
+        name: 'Dark',
+        colors: {
+          background: '#451A03',
+          surface: '#78350F',
+          text_primary: '#FFFBEB',
+          text_secondary: '#FCD34D',
+          glass: 'rgba(146, 64, 14, 0.1)',
+          glass_border: 'rgba(217, 119, 6, 0.2)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 14. ELEGANT THEME - Rose Gold
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-rose-gold',
+    name: 'Rose Gold',
+    category: 'elegant',
+    description: 'Sophisticated rose gold accents with blush tones. Luxurious and feminine.',
+    preview_image_url: '/themes/previews/rose-gold.webp',
+    base_colors: {
+      primary: '#BE185D',
+      secondary: '#DB2777',
+      accent: '#F472B6',
+      neutral: ['#FDF2F8', '#FCE7F3', '#FBCFE8', '#F9A8D4', '#F472B6', '#EC4899', '#DB2777', '#BE185D', '#9D174D', '#831843'],
+      gradients: [
+        {
+          name: 'Rose Shimmer',
+          type: 'linear',
+          direction: '135deg',
+          stops: ['#BE185D', '#DB2777', '#F472B6'],
+        },
+      ],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Cormorant Garamond',
+        source: 'web',
+        fallback: ['Georgia', 'serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'Lora',
+        source: 'web',
+        fallback: ['Georgia', 'serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'spacious',
+      hero_style: 'card',
+      section_layout: 'single-column',
+    },
+    is_premium: true,
+    is_popular: true,
+    usage_count: 560,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'rose-gold-light',
+        name: 'Light',
+        colors: {
+          background: '#FDF2F8',
+          surface: '#FFFFFF',
+          text_primary: '#831843',
+          text_secondary: '#9D174D',
+        },
+      },
+      {
+        variant_id: 'rose-gold-dark',
+        name: 'Dark',
+        colors: {
+          background: '#500724',
+          surface: '#831843',
+          text_primary: '#FDF2F8',
+          text_secondary: '#F9A8D4',
+          glass: 'rgba(190, 24, 93, 0.1)',
+          glass_border: 'rgba(244, 114, 182, 0.2)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 15. BOLD THEME - Electric Pop
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-electric-pop',
+    name: 'Electric Pop',
+    category: 'bold',
+    description: 'High-energy electric colors that demand attention. For those who want to stand out.',
+    preview_image_url: '/themes/previews/electric-pop.webp',
+    base_colors: {
+      primary: '#7C3AED',
+      secondary: '#8B5CF6',
+      accent: '#A78BFA',
+      neutral: ['#F5F3FF', '#EDE9FE', '#DDD6FE', '#C4B5FD', '#A78BFA', '#8B5CF6', '#7C3AED', '#6D28D9', '#5B21B6', '#4C1D95'],
+      gradients: [
+        {
+          name: 'Electric Surge',
+          type: 'linear',
+          direction: '45deg',
+          stops: ['#7C3AED', '#EC4899', '#F59E0B'],
+        },
+      ],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Archivo Black',
+        source: 'web',
+        fallback: ['Impact', 'sans-serif'],
+        weights: [400],
+      },
+      body_font: {
+        family: 'Barlow',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500, 600],
+      },
+    },
+    layout_config: {
+      spacing: 'normal',
+      hero_style: 'full-bleed',
+      section_layout: 'single-column',
+    },
+    is_premium: false,
+    is_popular: false,
+    usage_count: 340,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'electric-pop-light',
+        name: 'Light',
+        colors: {
+          background: '#F5F3FF',
+          surface: '#FFFFFF',
+          text_primary: '#4C1D95',
+          text_secondary: '#6D28D9',
+        },
+      },
+      {
+        variant_id: 'electric-pop-dark',
+        name: 'Dark',
+        colors: {
+          background: '#1E1B4B',
+          surface: '#312E81',
+          text_primary: '#F5F3FF',
+          text_secondary: '#A78BFA',
+          glass: 'rgba(124, 58, 237, 0.15)',
+          glass_border: 'rgba(167, 139, 250, 0.25)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 16. MINIMAL THEME - Paper White
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-paper-white',
+    name: 'Paper White',
+    category: 'minimal',
+    description: 'Ultra-clean white design with subtle shadows. Maximum focus on content.',
+    preview_image_url: '/themes/previews/paper-white.webp',
+    base_colors: {
+      primary: '#374151',
+      secondary: '#6B7280',
+      accent: '#111827',
+      neutral: ['#FFFFFF', '#F9FAFB', '#F3F4F6', '#E5E7EB', '#D1D5DB', '#9CA3AF', '#6B7280', '#4B5563', '#374151', '#1F2937'],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Libre Baskerville',
+        source: 'web',
+        fallback: ['Georgia', 'serif'],
+        weights: [400, 700],
+      },
+      body_font: {
+        family: 'Source Serif 4',
+        source: 'web',
+        fallback: ['Georgia', 'serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'spacious',
+      hero_style: 'card',
+      section_layout: 'single-column',
+    },
+    is_premium: false,
+    is_popular: false,
+    usage_count: 180,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'paper-white-light',
+        name: 'Light',
+        colors: {
+          background: '#FFFFFF',
+          surface: '#F9FAFB',
+          text_primary: '#1F2937',
+          text_secondary: '#4B5563',
+        },
+      },
+      {
+        variant_id: 'paper-white-dark',
+        name: 'Dark',
+        colors: {
+          background: '#111827',
+          surface: '#1F2937',
+          text_primary: '#F9FAFB',
+          text_secondary: '#9CA3AF',
+          glass: 'rgba(255, 255, 255, 0.03)',
+          glass_border: 'rgba(255, 255, 255, 0.08)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 17. MODERN THEME - Slate Pro
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-slate-pro',
+    name: 'Slate Pro',
+    category: 'modern',
+    description: 'Professional slate gray palette. Clean and corporate-friendly.',
+    preview_image_url: '/themes/previews/slate-pro.webp',
+    base_colors: {
+      primary: '#475569',
+      secondary: '#64748B',
+      accent: '#0EA5E9',
+      neutral: ['#F8FAFC', '#F1F5F9', '#E2E8F0', '#CBD5E1', '#94A3B8', '#64748B', '#475569', '#334155', '#1E293B', '#0F172A'],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Figtree',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'Inter',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'normal',
+      hero_style: 'card',
+      section_layout: 'two-column',
+    },
+    is_premium: false,
+    is_popular: false,
+    usage_count: 420,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'slate-pro-light',
+        name: 'Light',
+        colors: {
+          background: '#F8FAFC',
+          surface: '#FFFFFF',
+          text_primary: '#0F172A',
+          text_secondary: '#475569',
+        },
+      },
+      {
+        variant_id: 'slate-pro-dark',
+        name: 'Dark',
+        colors: {
+          background: '#0F172A',
+          surface: '#1E293B',
+          text_primary: '#F8FAFC',
+          text_secondary: '#94A3B8',
+          glass: 'rgba(14, 165, 233, 0.1)',
+          glass_border: 'rgba(14, 165, 233, 0.2)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 18. CREATIVE THEME - Cosmic Purple
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-cosmic-purple',
+    name: 'Cosmic Purple',
+    category: 'creative',
+    description: 'Deep cosmic purples with stellar accents. For creative visionaries.',
+    preview_image_url: '/themes/previews/cosmic-purple.webp',
+    base_colors: {
+      primary: '#6D28D9',
+      secondary: '#7C3AED',
+      accent: '#C084FC',
+      neutral: ['#FAF5FF', '#F3E8FF', '#E9D5FF', '#D8B4FE', '#C084FC', '#A855F7', '#9333EA', '#7C3AED', '#6D28D9', '#5B21B6'],
+      gradients: [
+        {
+          name: 'Nebula',
+          type: 'linear',
+          direction: '135deg',
+          stops: ['#6D28D9', '#9333EA', '#EC4899'],
+        },
+      ],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Orbitron',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'Exo 2',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'normal',
+      hero_style: 'full-bleed',
+      section_layout: 'single-column',
+    },
+    is_premium: true,
+    is_popular: false,
+    usage_count: 280,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'cosmic-purple-light',
+        name: 'Light',
+        colors: {
+          background: '#FAF5FF',
+          surface: '#FFFFFF',
+          text_primary: '#5B21B6',
+          text_secondary: '#7C3AED',
+        },
+      },
+      {
+        variant_id: 'cosmic-purple-dark',
+        name: 'Dark',
+        colors: {
+          background: '#1E1B4B',
+          surface: '#312E81',
+          text_primary: '#FAF5FF',
+          text_secondary: '#C084FC',
+          glass: 'rgba(109, 40, 217, 0.15)',
+          glass_border: 'rgba(192, 132, 252, 0.25)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 19. ELEGANT THEME - Champagne
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-champagne',
+    name: 'Champagne',
+    category: 'elegant',
+    description: 'Luxurious champagne and cream tones. Celebratory and refined.',
+    preview_image_url: '/themes/previews/champagne.webp',
+    base_colors: {
+      primary: '#A16207',
+      secondary: '#CA8A04',
+      accent: '#EAB308',
+      neutral: ['#FEFCE8', '#FEF9C3', '#FEF08A', '#FDE047', '#FACC15', '#EAB308', '#CA8A04', '#A16207', '#854D0E', '#713F12'],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Cinzel',
+        source: 'web',
+        fallback: ['Georgia', 'serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'EB Garamond',
+        source: 'web',
+        fallback: ['Georgia', 'serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'spacious',
+      hero_style: 'card',
+      section_layout: 'single-column',
+    },
+    is_premium: true,
+    is_popular: false,
+    usage_count: 190,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'champagne-light',
+        name: 'Light',
+        colors: {
+          background: '#FEFCE8',
+          surface: '#FFFFFF',
+          text_primary: '#713F12',
+          text_secondary: '#854D0E',
+        },
+      },
+      {
+        variant_id: 'champagne-dark',
+        name: 'Dark',
+        colors: {
+          background: '#422006',
+          surface: '#713F12',
+          text_primary: '#FEFCE8',
+          text_secondary: '#FDE047',
+          glass: 'rgba(161, 98, 7, 0.1)',
+          glass_border: 'rgba(234, 179, 8, 0.2)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 20. NATURE THEME - Sky Blue
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    theme_id: 'theme-sky-blue',
+    name: 'Sky Blue',
+    category: 'nature',
+    description: 'Clear sky blues evoking openness and trust. Fresh and optimistic.',
+    preview_image_url: '/themes/previews/sky-blue.webp',
+    base_colors: {
+      primary: '#0284C7',
+      secondary: '#0EA5E9',
+      accent: '#38BDF8',
+      neutral: ['#F0F9FF', '#E0F2FE', '#BAE6FD', '#7DD3FC', '#38BDF8', '#0EA5E9', '#0284C7', '#0369A1', '#075985', '#0C4A6E'],
+    },
+    default_typography: {
+      heading_font: {
+        family: 'Montserrat',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500, 600, 700],
+      },
+      body_font: {
+        family: 'Hind',
+        source: 'web',
+        fallback: ['system-ui', 'sans-serif'],
+        weights: [400, 500],
+      },
+    },
+    layout_config: {
+      spacing: 'normal',
+      hero_style: 'card',
+      section_layout: 'single-column',
+    },
+    is_premium: false,
+    is_popular: false,
+    usage_count: 360,
+    supports_dark_mode: true,
+    variants: [
+      {
+        variant_id: 'sky-blue-light',
+        name: 'Light',
+        colors: {
+          background: '#F0F9FF',
+          surface: '#FFFFFF',
+          text_primary: '#0C4A6E',
+          text_secondary: '#075985',
+        },
+      },
+      {
+        variant_id: 'sky-blue-dark',
+        name: 'Dark',
+        colors: {
+          background: '#082F49',
+          surface: '#0C4A6E',
+          text_primary: '#F0F9FF',
+          text_secondary: '#7DD3FC',
+          glass: 'rgba(2, 132, 199, 0.1)',
+          glass_border: 'rgba(56, 189, 248, 0.2)',
+        },
+      },
+    ],
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
 ];
 
 // =============================================================================
@@ -583,6 +1563,9 @@ export function getThemeCategoryCounts(): Record<ThemeCategory, number> {
     elegant: 0,
     modern: 0,
     creative: 0,
+    gradient: 0,
+    dark: 0,
+    nature: 0,
   };
 
   for (const theme of PREBUILT_THEMES) {
@@ -627,5 +1610,20 @@ export const THEME_CATEGORY_INFO: Record<
     label: 'Creative',
     description: 'Artistic and expressive visual styles',
     icon: 'palette',
+  },
+  gradient: {
+    label: 'Gradient',
+    description: 'Smooth color transitions and flowing backgrounds',
+    icon: 'rainbow',
+  },
+  dark: {
+    label: 'Dark',
+    description: 'Dramatic dark themes for striking visuals',
+    icon: 'moon',
+  },
+  nature: {
+    label: 'Nature',
+    description: 'Earth-inspired colors and organic aesthetics',
+    icon: 'leaf',
   },
 };

@@ -25,6 +25,8 @@ import {
   Sun,
   Moon,
   X,
+  Rainbow,
+  Leaf,
 } from 'lucide-react';
 
 import { AppButton } from '../../ui/AppButton';
@@ -70,6 +72,9 @@ const CATEGORY_ICONS: Record<ThemeCategory, React.ReactNode> = {
   elegant: <Sparkles className="w-4 h-4" />,
   modern: <Triangle className="w-4 h-4" />,
   creative: <Palette className="w-4 h-4" />,
+  gradient: <Rainbow className="w-4 h-4" />,
+  dark: <Moon className="w-4 h-4" />,
+  nature: <Leaf className="w-4 h-4" />,
 };
 
 // =============================================================================

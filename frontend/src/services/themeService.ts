@@ -120,6 +120,9 @@ class ThemeService {
       elegant: 0,
       modern: 0,
       creative: 0,
+      gradient: 0,
+      dark: 0,
+      nature: 0,
     };
 
     for (const theme of PREBUILT_THEMES) {

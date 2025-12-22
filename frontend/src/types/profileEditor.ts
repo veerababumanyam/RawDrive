@@ -87,7 +87,7 @@ export interface ThemeVariant {
 /**
  * Theme category for organizing themes
  */
-export type ThemeCategory = 'minimal' | 'bold' | 'elegant' | 'modern' | 'creative';
+export type ThemeCategory = 'minimal' | 'bold' | 'elegant' | 'modern' | 'creative' | 'gradient' | 'dark' | 'nature';
 
 /**
  * Theme entity - pre-built design template
