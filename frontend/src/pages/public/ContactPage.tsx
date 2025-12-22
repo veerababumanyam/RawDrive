@@ -72,11 +72,11 @@ const ContactPage: React.FC = () => {
   const structuredDataProps = {
     organization: {
       name: 'RawDrive',
-      url: 'https://rawdrive.in',
-      logo: 'https://rawdrive.in/logo.png',
+      url: 'https://rawdrive.ai',
+      logo: 'https://rawdrive.ai/logo.png',
       contactPoint: {
         contactType: 'customer support',
-        email: 'support@rawdrive.in',
+        email: 'support@rawdrive.ai',
         telephone: '+91-XXXXXXXXXX', // Replace with actual number
       },
     },
@@ -162,7 +162,7 @@ const ContactPage: React.FC = () => {
                           <div>
                             <p className="text-red-400 font-medium mb-1">Failed to Send Message</p>
                             <p className="text-slate-300 text-sm">
-                              Please try again or contact us directly at support@rawdrive.in
+                              Please try again or contact us directly at support@rawdrive.ai
                             </p>
                           </div>
                         </div>
@@ -296,10 +296,10 @@ const ContactPage: React.FC = () => {
                               Get in touch with our support team for quick assistance.
                             </p>
                             <a
-                              href="mailto:support@rawdrive.in"
+                              href="mailto:support@rawdrive.ai"
                               className="text-cyan-400 hover:text-cyan-300 transition-colors"
                             >
-                              support@rawdrive.in
+                              support@rawdrive.ai
                             </a>
                           </div>
                         </div>

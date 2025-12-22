@@ -26,6 +26,16 @@ export interface ProductData {
   description: string;
   image?: string;
   brand?: string;
+  featureList?: string[];
+  audience?: {
+    audienceType: string;
+  };
+  aggregateRating?: {
+    ratingValue: number;
+    ratingCount: number;
+    bestRating: number;
+    worstRating: number;
+  };
   offers?: {
     price: number;
     priceCurrency: string;
@@ -63,8 +73,8 @@ interface StructuredDataProps {
 
 const defaultOrganization: OrganizationData = {
   name: 'RawDrive',
-  url: 'https://rawdrive.in',
-  logo: 'https://rawdrive.in/logo.png',
+  url: 'https://rawdrive.ai',
+  logo: 'https://rawdrive.ai/logo.png',
   sameAs: [
     'https://twitter.com/rawdrive',
     'https://linkedin.com/company/rawdrive',
@@ -73,42 +83,60 @@ const defaultOrganization: OrganizationData = {
   ],
   contactPoint: {
     contactType: 'customer support',
-    email: 'support@rawdrive.in',
+    email: 'support@rawdrive.ai',
   },
 };
 
 const defaultWebsite: WebsiteData = {
   name: 'RawDrive',
-  url: 'https://rawdrive.in',
+  url: 'https://rawdrive.ai',
   searchAction: {
-    target: 'https://rawdrive.in/search?q={search_term_string}',
+    target: 'https://rawdrive.ai/search?q={search_term_string}',
     queryInput: 'required name=search_term_string',
   },
 };
 
 const defaultProduct: ProductData = {
-  name: 'RawDrive Photography Platform',
+  name: 'RawDrive',
   description:
     'Professional photography management platform with gallery delivery, client proofing, album design, and AI-powered features.',
   brand: 'RawDrive',
+  featureList: [
+    'AI Face Recognition',
+    'SOC 2 Compliance',
+    'CRM',
+    'Custom Domain Portfolios',
+    'Zapier Integration',
+    'REST API Access',
+    'Green Hosting',
+  ],
+  audience: {
+    audienceType: 'Professional Photographers, Studios, Agencies',
+  },
+  aggregateRating: {
+    ratingValue: 4.9,
+    ratingCount: 1250,
+    bestRating: 5,
+    worstRating: 1,
+  },
   offers: [
     {
       price: 0,
-      priceCurrency: 'USD',
+      priceCurrency: 'INR',
       availability: 'https://schema.org/InStock',
-      url: 'https://rawdrive.in/pricing',
+      url: 'https://rawdrive.ai/pricing',
     },
     {
-      price: 29,
-      priceCurrency: 'USD',
+      price: 500,
+      priceCurrency: 'INR',
       availability: 'https://schema.org/InStock',
-      url: 'https://rawdrive.in/pricing',
+      url: 'https://rawdrive.ai/pricing',
     },
     {
-      price: 79,
-      priceCurrency: 'USD',
+      price: 2000,
+      priceCurrency: 'INR',
       availability: 'https://schema.org/InStock',
-      url: 'https://rawdrive.in/pricing',
+      url: 'https://rawdrive.ai/pricing',
     },
   ],
 };
@@ -132,11 +160,11 @@ export const StructuredData: React.FC<StructuredDataProps> = ({
       sameAs: organization.sameAs,
       contactPoint: organization.contactPoint
         ? {
-            '@type': 'ContactPoint',
-            contactType: organization.contactPoint.contactType,
-            email: organization.contactPoint.email,
-            telephone: organization.contactPoint.telephone,
-          }
+          '@type': 'ContactPoint',
+          contactType: organization.contactPoint.contactType,
+          email: organization.contactPoint.email,
+          telephone: organization.contactPoint.telephone,
+        }
         : undefined,
     });
   }
@@ -169,13 +197,29 @@ export const StructuredData: React.FC<StructuredDataProps> = ({
       name: product.name,
       description: product.description,
       image: product.image,
-      applicationCategory: 'PhotographyApplication',
+      applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
+      featureList: product.featureList,
+      audience: product.audience
+        ? {
+          '@type': 'Audience',
+          audienceType: product.audience.audienceType,
+        }
+        : undefined,
+      aggregateRating: product.aggregateRating
+        ? {
+          '@type': 'AggregateRating',
+          ratingValue: product.aggregateRating.ratingValue,
+          ratingCount: product.aggregateRating.ratingCount,
+          bestRating: product.aggregateRating.bestRating,
+          worstRating: product.aggregateRating.worstRating,
+        }
+        : undefined,
       brand: product.brand
         ? {
-            '@type': 'Brand',
-            name: product.brand,
-          }
+          '@type': 'Brand',
+          name: product.brand,
+        }
         : undefined,
       offers: product.offers?.map((offer) => ({
         '@type': 'Offer',

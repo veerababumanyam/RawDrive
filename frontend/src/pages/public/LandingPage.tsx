@@ -1,21 +1,50 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import {
   LandingLayout,
   LandingHeader,
   LandingFooter,
   HeroSection,
-  ProblemSolutionSection,
-  FeaturesSection,
-  TestimonialsSection,
-  UseCasesSection,
-  HowItWorksSection,
-  PricingSection,
-  FAQSection,
-  CTASection,
+  SocialProofBar,
   SEOHead,
   StructuredData,
 } from '../../components/landing';
 import { seoContent } from '../../data/landing-content';
+
+/* =============================================================================
+   Lazy-loaded Below-Fold Sections
+
+   These components are loaded asynchronously to improve initial page load time.
+   The hero section and social proof bar are loaded eagerly as they are above-the-fold.
+   ============================================================================= */
+
+// Below-fold sections - lazy loaded for better initial load performance
+const WorkflowTabs = lazy(() => import('../../components/landing/sections/WorkflowTabs'));
+const AutomationSection = lazy(() => import('../../components/landing/sections/AutomationSection'));
+const SecuritySection = lazy(() => import('../../components/landing/sections/SecuritySection'));
+const TestimonialsSection = lazy(() => import('../../components/landing/sections/TestimonialsSection'));
+const ComparisonSection = lazy(() => import('../../components/landing/sections/ComparisonSection'));
+const PricingSection = lazy(() => import('../../components/landing/sections/PricingSection'));
+const FAQSection = lazy(() => import('../../components/landing/sections/FAQSection'));
+const CTASection = lazy(() => import('../../components/landing/sections/CTASection'));
+
+// Feature components - lazy loaded as they are modal/popup based
+const ROICalculatorModal = lazy(() => import('../../components/landing/features/ROICalculatorModal'));
+const ExitIntentPopup = lazy(() => import('../../components/landing/features/ExitIntentPopup'));
+
+/* =============================================================================
+   Loading Skeleton Component
+
+   Minimal loading placeholder for lazy-loaded sections.
+   Uses CSS animation for better perceived performance.
+   ============================================================================= */
+
+const SectionSkeleton: React.FC<{ height?: string }> = ({ height = '400px' }) => (
+  <div
+    className="w-full animate-pulse bg-gradient-to-r from-slate-900/50 via-slate-800/50 to-slate-900/50"
+    style={{ height }}
+    aria-hidden="true"
+  />
+);
 
 /* =============================================================================
    LandingPage Component
@@ -28,8 +57,8 @@ const LandingPage: React.FC = () => {
   const structuredDataProps = {
     organization: {
       name: 'RawDrive',
-      url: 'https://rawdrive.in',
-      logo: 'https://rawdrive.in/logo.png',
+      url: 'https://rawdrive.ai',
+      logo: 'https://rawdrive.ai/logo.png',
       sameAs: [
         'https://twitter.com/rawdrive',
         'https://linkedin.com/company/rawdrive',
@@ -37,7 +66,7 @@ const LandingPage: React.FC = () => {
       ],
       contactPoint: {
         contactType: 'customer support',
-        email: 'support@rawdrive.in',
+        email: 'support@rawdrive.ai',
       },
     },
     product: {
@@ -50,25 +79,19 @@ const LandingPage: React.FC = () => {
           price: 0,
           priceCurrency: 'INR',
           availability: 'https://schema.org/InStock',
-          url: 'https://rawdrive.in/pricing',
-        },
-        {
-          price: 100,
-          priceCurrency: 'INR',
-          availability: 'https://schema.org/InStock',
-          url: 'https://rawdrive.in/pricing',
+          url: 'https://rawdrive.ai/pricing',
         },
         {
           price: 500,
           priceCurrency: 'INR',
           availability: 'https://schema.org/InStock',
-          url: 'https://rawdrive.in/pricing',
+          url: 'https://rawdrive.ai/pricing',
         },
         {
           price: 2000,
           priceCurrency: 'INR',
           availability: 'https://schema.org/InStock',
-          url: 'https://rawdrive.in/pricing',
+          url: 'https://rawdrive.ai/pricing',
         },
       ],
     },
@@ -107,35 +130,61 @@ const LandingPage: React.FC = () => {
 
         {/* Main Content */}
         <main id="main-content" role="main">
-          {/* Hero Section - Value Proposition & Primary CTA */}
+          {/* Hero Section - Value Proposition & Primary CTA (Above-the-fold, eager load) */}
           <HeroSection />
 
-          {/* Problem/Solution - Emotional Hook (PAS Framework) */}
-          <ProblemSolutionSection id="problem-solution" />
+          {/* Social Proof - Trust Signals (Above-the-fold, eager load) */}
+          <SocialProofBar />
 
-          <div className="landing-light">
-            {/* Feature Showcase - Core Value Demonstration */}
-            <FeaturesSection id="features" />
+          {/* Below-the-fold sections - lazy loaded for better performance */}
+          <Suspense fallback={<SectionSkeleton height="600px" />}>
+            {/* Workflow Demonstration - Interactive Storytelling */}
+            <WorkflowTabs />
+          </Suspense>
 
-            {/* Use Cases - Specific Applications */}
-            <UseCasesSection id="use-cases" />
+          <Suspense fallback={<SectionSkeleton height="500px" />}>
+            {/* Automation & Integration - Tech Savvy Features */}
+            <AutomationSection />
+          </Suspense>
 
-            {/* How it Works - Reduce Friction */}
-            <HowItWorksSection id="how-it-works" />
+          <Suspense fallback={<SectionSkeleton height="400px" />}>
+            {/* Security - Enterprise Grade Trust */}
+            <SecuritySection />
+          </Suspense>
 
-            {/* Social Proof (Testimonials) - Build Trust */}
+          <Suspense fallback={<SectionSkeleton height="500px" />}>
+            {/* Testimonials - Social Proof */}
             <TestimonialsSection id="testimonials" />
+          </Suspense>
 
+          <Suspense fallback={<SectionSkeleton height="600px" />}>
+            {/* Competitor Comparison - Differentiation */}
+            <ComparisonSection />
+          </Suspense>
+
+          <Suspense fallback={<SectionSkeleton height="700px" />}>
             {/* Pricing - Conversion Point */}
             <PricingSection id="pricing" />
+          </Suspense>
 
+          <Suspense fallback={<SectionSkeleton height="500px" />}>
             {/* FAQ - Objection Handling */}
             <FAQSection id="faq" />
+          </Suspense>
 
+          <Suspense fallback={<SectionSkeleton height="300px" />}>
             {/* Final CTA - Last Chance Conversion */}
             <CTASection />
-          </div>
+          </Suspense>
         </main>
+
+        {/* Features & Modals - lazy loaded as they are triggered by user interaction */}
+        <Suspense fallback={null}>
+          <ROICalculatorModal />
+        </Suspense>
+        <Suspense fallback={null}>
+          <ExitIntentPopup />
+        </Suspense>
 
         {/* Footer */}
         <LandingFooter />
@@ -145,3 +194,4 @@ const LandingPage: React.FC = () => {
 };
 
 export default LandingPage;
+

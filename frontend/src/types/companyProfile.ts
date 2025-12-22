@@ -13,6 +13,15 @@ export interface CustomLink {
     logo_url?: string;
 }
 
+/**
+ * Secondary contact (email or phone) with optional label.
+ * Used for additional contact information beyond primary email/phone.
+ */
+export interface SecondaryContact {
+    value: string;
+    label?: string;
+}
+
 export interface CompanyVisibilityConfig {
     name: boolean;
     tagline: boolean;
@@ -26,6 +35,14 @@ export interface CompanyVisibilityConfig {
     socials_twitter: boolean;
     socials_linkedin: boolean;
     custom_links: boolean;
+    // Secondary contacts visibility
+    secondary_email_1: boolean;
+    secondary_email_2: boolean;
+    secondary_phone_1: boolean;
+    secondary_phone_2: boolean;
+    // Public profile button visibility
+    qr_code: boolean;
+    vcard: boolean;
 }
 
 export interface CompanyProfile {
@@ -41,6 +58,9 @@ export interface CompanyProfile {
     email: string;
     phone?: string;
     website?: string;
+    // Secondary contacts (max 2 each)
+    secondary_emails: SecondaryContact[];
+    secondary_phones: SecondaryContact[];
     address_structured?: CompanyAddress | null;
     socials: Record<string, string>;
     custom_links: CustomLink[];
@@ -60,6 +80,9 @@ export interface CreateCompanyProfileRequest {
     email: string;
     phone?: string;
     website?: string;
+    // Secondary contacts (max 2 each)
+    secondary_emails?: SecondaryContact[];
+    secondary_phones?: SecondaryContact[];
     address_structured?: CompanyAddress;
     socials?: Record<string, string>;
     custom_links?: CustomLink[];

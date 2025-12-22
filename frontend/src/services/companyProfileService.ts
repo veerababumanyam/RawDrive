@@ -8,6 +8,7 @@ import {
 import { WORKSPACE_PATHS, PUBLIC_PATHS } from '../constants/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL || 'https://rawdrive.ai';
 
 export interface LogoCropData {
     crop_x: number;
@@ -154,6 +155,33 @@ class CompanyProfileService {
      */
     getPublicLogoUrl(slug: string, size: number = 256): string {
         return `${API_BASE_URL}${PUBLIC_PATHS.logo(slug, size)}`;
+    }
+
+    /**
+     * Get the public profile URL for a given slug
+     */
+    getPublicProfileUrl(slug: string): string {
+        const baseUrl = PUBLIC_URL.replace(/\/$/, ''); // Remove trailing slash
+        return `${baseUrl}/p/${slug}`;
+    }
+
+    /**
+     * Get the public URL base domain (e.g., "rawdrive.ai")
+     */
+    getPublicUrlDomain(): string {
+        try {
+            const url = new URL(PUBLIC_URL);
+            return url.host;
+        } catch {
+            return 'rawdrive.ai';
+        }
+    }
+
+    /**
+     * Get the public URL path prefix (e.g., "rawdrive.ai/p/")
+     */
+    getPublicUrlPrefix(): string {
+        return `${this.getPublicUrlDomain()}/p/`;
     }
 }
 

@@ -24,6 +24,7 @@ from .visibility_service import (
     PROFILE_FIELDS,
     SOCIAL_PLATFORMS,
 )
+from .company_profile_service import CompanyProfileService
 
 logger = logging.getLogger(__name__)
 
@@ -738,7 +739,7 @@ class ProfileEditorService:
         return {
             "success": True,
             "published_at": now.isoformat(),
-            "public_url": f"https://lumina.co/p/{profile['slug']}",
+            "public_url": CompanyProfileService.generate_public_url(profile['slug']),
             "version_id": str(version_id) if version_id else None
         }
 

@@ -19,6 +19,7 @@ from app.api.company_profile_schemas import (
 from app.services.vcard_service import VCardService
 from app.services.qr_service import QRCodeService
 from app.services.seo_service import SEOSchemaService
+from app.services.company_profile_service import CompanyProfileService
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -96,7 +97,8 @@ def test_property_13_qr_code_generation(slug):
     Property 13: QR Code Generation.
     Service should produce non-empty bytes that resemble PNG header.
     """
-    url = f"https://lumina.co/p/{slug}"
+    # Use the generate_public_url method to get the correct URL
+    url = CompanyProfileService.generate_public_url(slug)
     qr_bytes = QRCodeService.generate_qr_code(url)
     
     # PNG signature: \x89PNG\r\n\x1a\n

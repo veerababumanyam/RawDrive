@@ -35,10 +35,12 @@ def get_client_ip(request: Request) -> str:
 
 
 # Route patterns and their rate limit types
+# Order matters: more specific routes should come first
 RATE_LIMIT_ROUTES = {
     "/api/v1/auth/": RateLimitType.AUTH,
     "/api/v1/upload": RateLimitType.UPLOAD,
     "/api/v1/search": RateLimitType.SEARCH,
+    "/api/v1/public/profiles/": RateLimitType.PUBLIC,  # Public profile endpoints
     "/api/": RateLimitType.API,
 }
 

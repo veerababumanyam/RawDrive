@@ -409,7 +409,7 @@ export class ErrorMessageMapper {
           label: 'Contact Support',
           action: () => {
             // Open support email or chat
-            window.open('mailto:support@rawdrive.in', '_blank');
+            window.open('mailto:support@rawdrive.ai', '_blank');
           }
         };
       case 'wait':

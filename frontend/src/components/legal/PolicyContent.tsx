@@ -63,7 +63,7 @@ const PolicyContent: React.FC<Props> = ({ sections }) => (
       </p>
       <div className="flex flex-col sm:flex-row gap-4">
         <a
-          href="mailto:support@rawdrive.in"
+          href="mailto:support@rawdrive.ai"
           aria-label="Email RawDrive Support"
           className="landing-btn landing-btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-lg"
         >

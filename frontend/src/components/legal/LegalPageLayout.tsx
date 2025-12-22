@@ -22,8 +22,8 @@ const LegalPageLayout: React.FC<Props> = ({ policy, children }) => {
   const structuredDataProps = {
     organization: {
       name: 'RawDrive',
-      url: 'https://rawdrive.in',
-      logo: 'https://rawdrive.in/logo.png',
+      url: 'https://rawdrive.ai',
+      logo: 'https://rawdrive.ai/logo.png',
       sameAs: [
         'https://twitter.com/rawdrive',
         'https://linkedin.com/company/rawdrive',
@@ -31,7 +31,7 @@ const LegalPageLayout: React.FC<Props> = ({ policy, children }) => {
       ],
       contactPoint: {
         contactType: 'customer support',
-        email: 'support@rawdrive.in',
+        email: 'support@rawdrive.ai',
       },
     },
   };

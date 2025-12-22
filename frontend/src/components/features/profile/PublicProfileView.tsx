@@ -101,6 +101,8 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
                             email: profile.email,
                             phone: profile.phone,
                             website: profile.website,
+                            secondary_emails: profile.secondary_emails,
+                            secondary_phones: profile.secondary_phones,
                             address_structured: profile.address_structured,
                             socials: profile.socials,
                             custom_links: profile.custom_links,

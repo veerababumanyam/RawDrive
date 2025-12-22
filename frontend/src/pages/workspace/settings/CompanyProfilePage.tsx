@@ -1,19 +1,23 @@
 import React, { useState, useCallback } from 'react';
-import { CompanyProfileForm } from '../../../components/features/settings/CompanyProfileForm';
+import { CompanyProfileForm, type ProfileFormChangeData } from '../../../components/features/settings/CompanyProfileForm';
 import { CompanyProfilePreview } from '../../../components/features/settings/CompanyProfilePreview';
-import type { CreateCompanyProfileRequest, CompanyProfile, CompanyVisibilityConfig } from '../../../types/companyProfile';
+import type { CompanyProfile, CompanyVisibilityConfig } from '../../../types/companyProfile';
+import type { Theme, ThemeCustomization } from '../../../types/profileEditor';
 
-// Extended type to include preview logo URL from form
-type ProfileFormData = CreateCompanyProfileRequest & { _previewLogoUrl?: string };
+// Extended profile type for preview with theme data
+interface PreviewProfile extends Partial<CompanyProfile> {
+    _theme?: Theme | null;
+    _themeCustomization?: Partial<ThemeCustomization> | null;
+}
 
 const CompanyProfilePage: React.FC = () => {
-    const [previewProfile, setPreviewProfile] = useState<Partial<CompanyProfile> | null>(null);
+    const [previewProfile, setPreviewProfile] = useState<PreviewProfile | null>(null);
     const [visibility, setVisibility] = useState<Partial<CompanyVisibilityConfig>>({});
 
-    const handleProfileChange = useCallback((data: ProfileFormData) => {
+    const handleProfileChange = useCallback((data: ProfileFormChangeData) => {
         // Convert CreateCompanyProfileRequest to Partial<CompanyProfile> for preview
         // Use _previewLogoUrl (blob URL from form) for immediate preview, fallback to stored logo_url
-        const profile: Partial<CompanyProfile> = {
+        const profile: PreviewProfile = {
             name: data.name,
             tagline: data.tagline,
             slug: data.slug,
@@ -25,6 +29,9 @@ const CompanyProfilePage: React.FC = () => {
             address_structured: data.address_structured,
             socials: data.socials || {},
             custom_links: data.custom_links || [],
+            // Include theme data for preview
+            _theme: data._theme,
+            _themeCustomization: data._themeCustomization,
         };
         setPreviewProfile(profile);
         setVisibility(data.company_visibility || {});

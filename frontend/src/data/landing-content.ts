@@ -442,7 +442,7 @@ export const footerContent: FooterSection[] = [
       { label: 'Help Center', href: '/help' },
       { label: 'Documentation', href: '/docs' },
       { label: 'API Reference', href: '/api-docs', external: true },
-      { label: 'Status', href: 'https://status.rawdrive.in', external: true },
+      { label: 'Status', href: 'https://status.rawdrive.ai', external: true },
       { label: 'Community', href: '/community' },
     ],
   },

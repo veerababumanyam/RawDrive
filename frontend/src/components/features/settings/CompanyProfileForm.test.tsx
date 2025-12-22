@@ -25,6 +25,8 @@ const createMockProfile = (overrides: Partial<CompanyProfile> = {}): CompanyProf
     email: 'test@studio.com',
     socials: {},
     custom_links: [],
+    secondary_emails: [],
+    secondary_phones: [],
     company_visibility: {},
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -39,6 +41,10 @@ vi.mock('../../../services/companyProfileService', () => ({
         updateProfile: vi.fn(),
         getVCardUrl: vi.fn((slug: string) => `/api/v1/public/profiles/${slug}/vcard`),
         getQrCodeUrl: vi.fn((slug: string) => `/api/v1/public/profiles/${slug}/qr-code`),
+        getPublicUrlPrefix: vi.fn(() => 'https://rawdrive.ai/p/'),
+        getPublicUrlDomain: vi.fn(() => 'https://rawdrive.ai'),
+        checkSlugAvailability: vi.fn(() => Promise.resolve({ available: true })),
+        getLogoBlobUrl: vi.fn(() => Promise.resolve(null)),
     },
 }));
 

@@ -56,7 +56,7 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
   twitterHandle = DEFAULT_TWITTER_HANDLE,
 }) => {
   const fullTitle = title ? `${title} | ${siteName}` : DEFAULT_TITLE;
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rawdrive.in';
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rawdrive.ai';
   const fullCanonicalUrl = canonicalUrl
     ? `${baseUrl}${canonicalUrl}`
     : typeof window !== 'undefined'

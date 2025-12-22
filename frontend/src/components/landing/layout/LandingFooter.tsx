@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Twitter, Linkedin, Instagram, Github, Mail, Phone, MapPin } from 'lucide-react';
+import { Twitter, Linkedin, Instagram, Github, Mail, Phone, MapPin, CreditCard, Banknote, Smartphone, Shield, Zap } from 'lucide-react';
 
 /* =============================================================================
    LandingFooter Component
@@ -61,7 +61,7 @@ const defaultSections: FooterSection[] = [
       { label: 'Help Center', href: '/help' },
       { label: 'Documentation', href: '/docs' },
       { label: 'API Reference', href: '/api-docs', external: true },
-      { label: 'Status', href: 'https://status.rawdrive.in', external: true },
+      { label: 'Status', href: 'https://status.rawdrive.ai', external: true },
       { label: 'Community', href: '/community' },
     ],
   },
@@ -258,7 +258,7 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
               <h3 className="text-white font-semibold mb-4">Contact Us</h3>
               <div className="space-y-3">
                 <a
-                  href="mailto:info@rawdrive.in"
+                  href="mailto:info@rawdrive.ai"
                   className="
                     flex items-center gap-2 text-slate-400 hover:text-white text-sm
                     transition-colors duration-200
@@ -266,10 +266,10 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                   "
                 >
                   <Mail size={16} aria-hidden="true" />
-                  info@rawdrive.in
+                  info@rawdrive.ai
                 </a>
                 <a
-                  href="mailto:contactus@rawdrive.in"
+                  href="mailto:contactus@rawdrive.ai"
                   className="
                     flex items-center gap-2 text-slate-400 hover:text-white text-sm
                     transition-colors duration-200
@@ -277,7 +277,7 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                   "
                 >
                   <Mail size={16} aria-hidden="true" />
-                  contactus@rawdrive.in
+                  contactus@rawdrive.ai
                 </a>
               </div>
             </div>
@@ -353,6 +353,55 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
           </div>
         </div>
 
+        {/* India-Optimized & Payment Section */}
+        <div className="py-8 border-t border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* India Optimization Badges */}
+            <div>
+              <h3 className="text-white font-semibold mb-4">Optimized for India</h3>
+              <div className="flex flex-wrap gap-3">
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">
+                  <Zap size={16} aria-hidden="true" />
+                  Fast Indian CDN
+                </span>
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm">
+                  <Shield size={16} aria-hidden="true" />
+                  RBI Compliant
+                </span>
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
+                  <CreditCard size={16} aria-hidden="true" />
+                  Secure Payments
+                </span>
+              </div>
+            </div>
+
+            {/* Payment Methods */}
+            <div>
+              <h3 className="text-white font-semibold mb-4">Payment Methods</h3>
+              <div className="flex flex-wrap gap-3">
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 text-sm">
+                  <Smartphone size={16} aria-hidden="true" />
+                  UPI
+                </span>
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 text-sm">
+                  <CreditCard size={16} aria-hidden="true" />
+                  Cards
+                </span>
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 text-sm">
+                  <Banknote size={16} aria-hidden="true" />
+                  Netbanking
+                </span>
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 text-sm">
+                  Wallets
+                </span>
+              </div>
+              <p className="text-slate-500 text-xs mt-3">
+                All transactions are secured and processed via Razorpay
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Bottom Bar */}
         <div className="py-6 border-t border-white/10">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -361,7 +410,7 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
             </p>
             <div className="flex items-center gap-6">
               <a
-                href="mailto:info@rawdrive.in"
+                href="mailto:info@rawdrive.ai"
                 className="
                   inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm
                   transition-colors duration-200
@@ -369,7 +418,7 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                 "
               >
                 <Mail size={16} aria-hidden="true" />
-                info@rawdrive.in
+                info@rawdrive.ai
               </a>
             </div>
           </div>

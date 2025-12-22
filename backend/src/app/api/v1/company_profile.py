@@ -80,24 +80,32 @@ async def get_public_profile(
 async def get_profile_vcard(
     slug: Annotated[str, Path(..., description="Profile slug")],
 ):
-    """Download profile vCard."""
+    """Download profile vCard with embedded logo (if available)."""
     service = get_company_profile_service()
     try:
-        # Get full profile (filtered by public visible inside vcard service anyway, but service.get_public_profile already filters?
-        # VCardService takes CompanyProfileResponse. 
-        # service.get_public_profile returns FILTERED dict.
-        # We should probably get the profile data.
-        # But get_public_profile applies visibility. VCardService ALSO applies visibility if we tell it to.
-        # Since we are public endpoint, we must use filtered data.
+        # Get public profile data
         data = await service.get_public_profile(slug)
         profile_obj = CompanyProfileResponse(**data)
-        
-        vcard_content = VCardService.generate_vcard(profile_obj, include_private=False)
+
+        # Try to fetch logo for embedding in vCard
+        logo_bytes = None
+        try:
+            logo_bytes = await service.get_logo_image_by_slug(slug, 256)
+        except Exception as e:
+            logger.debug(f"No logo available for vCard: {e}")
+
+        # Generate vCard with logo if available
+        vcard_content = VCardService.generate_vcard(
+            profile_obj,
+            include_private=False,
+            logo_bytes=logo_bytes,
+            logo_mime_type="image/webp",
+        )
         filename = VCardService.get_filename(data["name"])
-        
+
         return Response(
-            content=vcard_content,
-            media_type="text/vcard",
+            content=vcard_content.encode('utf-8'),
+            media_type=VCardService.get_content_type(),
             headers={"Content-Disposition": f'attachment; filename="{filename}"'}
         )
     except CompanyProfileError as e:

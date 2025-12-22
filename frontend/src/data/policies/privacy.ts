@@ -9,7 +9,7 @@ const privacy: PolicyDocument = {
     {
       id: 'introduction',
       heading: 'Introduction',
-      content: `<p>This Privacy Policy describes how <strong>SWAZ CONSULTANTS</strong> and its affiliates (collectively "SWAZ CONSULTANTS, we, our, us") collect, use, share, protect or otherwise process your information/personal data through our website <strong>www.rawdrive.in</strong> (hereinafter referred to as Platform).</p>
+      content: `<p>This Privacy Policy describes how <strong>SWAZ CONSULTANTS</strong> and its affiliates (collectively "SWAZ CONSULTANTS, we, our, us") collect, use, share, protect or otherwise process your information/personal data through our website <strong>www.rawdrive.ai</strong> (hereinafter referred to as Platform).</p>
       <p>Please note that you may be able to browse certain sections of the Platform without registering with us. We do not offer any product/service under this Platform outside India and your personal data will primarily be stored and processed in India.</p>
       <p>By visiting this Platform, providing your information or availing any product/service offered on the Platform, you expressly agree to be bound by the terms and conditions of this Privacy Policy, the Terms of Use and the applicable service/product terms and conditions, and agree to be governed by the laws of India including but not limited to the laws applicable to data protection and privacy.</p>
       <p><strong>If you do not agree please do not use or access our Platform.</strong></p>`,

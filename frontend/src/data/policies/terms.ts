@@ -14,7 +14,7 @@ const terms: PolicyDocument = {
     {
       id: 'publication',
       heading: '2. Publication',
-      content: `<p>This document is published in accordance with the provisions of Rule 3 (1) of the Information Technology (Intermediaries guidelines) Rules, 2011 that require publishing the rules and regulations, privacy policy and Terms of Use for access or usage of domain name www.rawdrive.in ('Website'), including the related mobile site and mobile application (hereinafter referred to as 'Platform').</p>`,
+      content: `<p>This document is published in accordance with the provisions of Rule 3 (1) of the Information Technology (Intermediaries guidelines) Rules, 2011 that require publishing the rules and regulations, privacy policy and Terms of Use for access or usage of domain name www.rawdrive.ai ('Website'), including the related mobile site and mobile application (hereinafter referred to as 'Platform').</p>`,
     },
     {
       id: 'platform-owner',

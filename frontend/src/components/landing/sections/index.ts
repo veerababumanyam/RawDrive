@@ -12,3 +12,11 @@ export { UseCasesSection, default as UseCasesSectionDefault } from './UseCasesSe
 export { HowItWorksSection, default as HowItWorksSectionDefault } from './HowItWorksSection';
 export { FAQSection, default as FAQSectionDefault } from './FAQSection';
 export { CTASection, default as CTASectionDefault } from './CTASection';
+
+// New Redesign Sections
+export { SocialProofBar, default as SocialProofBarDefault } from './SocialProofBar';
+export { WorkflowTabs, default as WorkflowTabsDefault } from './WorkflowTabs';
+export { AutomationSection, default as AutomationSectionDefault } from './AutomationSection';
+export { SecuritySection, default as SecuritySectionDefault } from './SecuritySection';
+export { ComparisonSection, default as ComparisonSectionDefault } from './ComparisonSection';
+

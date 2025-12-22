@@ -3,9 +3,10 @@
  *
  * Displays a live preview of the public company profile as users edit it.
  * Uses the same ProfileCard component as PublicProfileView for exact visual parity.
+ * Supports theme customization for real-time theme preview.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Smartphone,
   Tablet,
@@ -16,7 +17,10 @@ import {
 
 import { AppButton } from '../../ui/AppButton';
 import { ProfileCard } from '../profile/ProfileCard';
+import { fontService } from '../../../services/fontService';
+import { companyProfileService } from '../../../services/companyProfileService';
 import type { CompanyProfile, CompanyVisibilityConfig } from '../../../types/companyProfile';
+import type { Theme, ThemeCustomization } from '../../../types/profileEditor';
 
 // =============================================================================
 // Types
@@ -24,8 +28,14 @@ import type { CompanyProfile, CompanyVisibilityConfig } from '../../../types/com
 
 type DeviceMode = 'phone' | 'tablet' | 'desktop';
 
+// Extended profile type with theme data
+interface PreviewProfile extends Partial<CompanyProfile> {
+  _theme?: Theme | null;
+  _themeCustomization?: Partial<ThemeCustomization> | null;
+}
+
 interface CompanyProfilePreviewProps {
-  profile: Partial<CompanyProfile> | null;
+  profile: PreviewProfile | null;
   visibility?: Partial<CompanyVisibilityConfig>;
 }
 
@@ -342,6 +352,69 @@ export const CompanyProfilePreview: React.FC<CompanyProfilePreviewProps> = ({
 
   const dimensions = DEVICE_DIMENSIONS[deviceMode];
 
+  // Load fonts dynamically when theme typography changes
+  useEffect(() => {
+    const theme = profile?._theme;
+    const customization = profile?._themeCustomization;
+
+    if (!theme) return;
+
+    const fontsToLoad: string[] = [];
+
+    // Get heading font
+    const headingFontFamily = customization?.custom_typography?.heading_font?.family
+      || theme.default_typography?.heading_font?.family;
+    if (headingFontFamily) {
+      fontsToLoad.push(headingFontFamily);
+    }
+
+    // Get body font
+    const bodyFontFamily = customization?.custom_typography?.body_font?.family
+      || theme.default_typography?.body_font?.family;
+    if (bodyFontFamily) {
+      fontsToLoad.push(bodyFontFamily);
+    }
+
+    // Load all unique fonts
+    const uniqueFonts = [...new Set(fontsToLoad)];
+    for (const fontFamily of uniqueFonts) {
+      if (!fontService.isFontLoaded(fontFamily)) {
+        fontService.loadFont(fontFamily).catch(console.error);
+      }
+    }
+  }, [profile?._theme, profile?._themeCustomization?.custom_typography]);
+
+  // Generate CSS variables from theme and customization
+  const themeStyles = useMemo(() => {
+    const theme = profile?._theme;
+    const customization = profile?._themeCustomization;
+
+    if (!theme) return {};
+
+    // Get effective colors (customization overrides theme defaults)
+    const colors = customization?.custom_colors || theme.base_colors;
+    const typography = customization?.custom_typography || theme.default_typography;
+
+    return {
+      '--theme-primary': colors?.primary || '#2563EB',
+      '--theme-secondary': colors?.secondary || '#64748B',
+      '--theme-accent': colors?.accent || '#06B6D4',
+      '--theme-font-heading': typography?.heading_font?.family
+        ? `"${typography.heading_font.family}", ${typography.heading_font.fallback?.join(', ') || 'sans-serif'}`
+        : '"Inter", sans-serif',
+      '--theme-font-body': typography?.body_font?.family
+        ? `"${typography.body_font.family}", ${typography.body_font.fallback?.join(', ') || 'sans-serif'}`
+        : '"Inter", sans-serif',
+    } as React.CSSProperties;
+  }, [profile?._theme, profile?._themeCustomization]);
+
+  // Generate QR code URL if slug exists
+  // NOTE: This hook must be called before any early returns to follow Rules of Hooks
+  const qrCodeUrl = useMemo(() => {
+    if (!profile?.slug) return undefined;
+    return companyProfileService.getQrCodeUrl(profile.slug);
+  }, [profile?.slug]);
+
   if (!profile) {
     return (
       <div className="h-full flex flex-col">
@@ -356,14 +429,44 @@ export const CompanyProfilePreview: React.FC<CompanyProfilePreviewProps> = ({
   }
 
   // Render the ProfileCard inside the device frame - fills entire height
+  // Apply theme CSS variables for real-time theme preview
   const renderProfileContent = () => (
-    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-950">
-      <div className="flex-1 flex flex-col m-2 bg-white dark:bg-gray-900 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
+    <div
+      className="h-full flex flex-col bg-gray-50 dark:bg-gray-950 overflow-y-auto"
+      style={themeStyles}
+    >
+      <div
+        className="flex-1 flex flex-col m-2 bg-white dark:bg-gray-900 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800"
+      >
         <ProfileCard
           profile={profile}
           visibility={visibility}
           showActions={false}
-          compact={true}
+          slug={profile?.slug}
+          compact={deviceMode === 'phone'}
+          qrCodeUrl={qrCodeUrl}
+          themeColors={profile?._theme ? {
+            primary: (profile._themeCustomization?.custom_colors?.primary || profile._theme.base_colors.primary),
+            secondary: (profile._themeCustomization?.custom_colors?.secondary || profile._theme.base_colors.secondary),
+            accent: (profile._themeCustomization?.custom_colors?.accent || profile._theme.base_colors.accent),
+          } : undefined}
+          themeTypography={profile?._theme ? {
+            headingFont: profile._themeCustomization?.custom_typography?.heading_font?.family
+              ? `"${profile._themeCustomization.custom_typography.heading_font.family}", ${profile._themeCustomization.custom_typography.heading_font.fallback?.join(', ') || 'sans-serif'}`
+              : profile._theme.default_typography?.heading_font?.family
+                ? `"${profile._theme.default_typography.heading_font.family}", ${profile._theme.default_typography.heading_font.fallback?.join(', ') || 'sans-serif'}`
+                : undefined,
+            bodyFont: profile._themeCustomization?.custom_typography?.body_font?.family
+              ? `"${profile._themeCustomization.custom_typography.body_font.family}", ${profile._themeCustomization.custom_typography.body_font.fallback?.join(', ') || 'sans-serif'}`
+              : profile._theme.default_typography?.body_font?.family
+                ? `"${profile._theme.default_typography.body_font.family}", ${profile._theme.default_typography.body_font.fallback?.join(', ') || 'sans-serif'}`
+                : undefined,
+          } : undefined}
+          themeLayout={profile?._theme ? {
+            spacing: profile._themeCustomization?.custom_layout?.spacing || profile._theme.layout_config?.spacing,
+            heroStyle: profile._themeCustomization?.custom_layout?.hero_style || profile._theme.layout_config?.hero_style,
+            sectionLayout: profile._themeCustomization?.custom_layout?.section_layout || profile._theme.layout_config?.section_layout,
+          } : undefined}
         />
       </div>
     </div>

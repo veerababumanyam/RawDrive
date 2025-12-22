@@ -111,7 +111,7 @@ const GUIDE_FAQS: FAQItem[] = [
   {
     question: 'How do I contact support?',
     answer:
-      'Email us at info@rawdrive.in or contactus@rawdrive.in, or reach out via in-app chat. Priority support is available on paid plans.',
+      'Email us at info@rawdrive.ai or contactus@rawdrive.ai, or reach out via in-app chat. Priority support is available on paid plans.',
     category: 'support',
   },
   {
@@ -190,12 +190,33 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
     setOpenIndex(openIndex === index ? null : index);
   };
 
+  // Generate schema.org FAQPage structured data
+  const faqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: sourceFaqs.map((faq) => ({
+      '@type': 'Question',
+      name: faq.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: faq.answer,
+      },
+    })),
+  };
+
   return (
     <section
       id={id}
       className={`py-20 lg:py-32 ${className}`}
       aria-labelledby="faq-heading"
+      itemScope
+      itemType="https://schema.org/FAQPage"
     >
+      {/* JSON-LD Structured Data for SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto">
           {title?.trim() ? (
@@ -339,10 +360,23 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
 
                 return (
                   <FadeIn key={`${faq.question}-${index}`} direction="up" delay={index * 0.03}>
-                    <GlassCard variant="sm" padding="none" className="overflow-hidden mb-3">
+                    <GlassCard
+                      variant="sm"
+                      padding="none"
+                      className="overflow-hidden mb-3"
+                      itemScope
+                      itemProp="mainEntity"
+                      itemType="https://schema.org/Question"
+                    >
                       <button
                         type="button"
                         onClick={() => toggleFAQ(index)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleFAQ(index);
+                          }
+                        }}
                         className="
                           w-full px-6 py-5 text-left
                           flex items-start justify-between gap-4
@@ -356,7 +390,7 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
                           <span className={`mt-0.5 inline-flex w-8 h-8 rounded-lg items-center justify-center ${isOpen ? 'bg-primary-500/15 text-primary-300' : 'bg-white/5 text-slate-400'}`}>
                             <CategoryIcon className="w-4 h-4" aria-hidden="true" />
                           </span>
-                          <span className="text-lg font-medium text-white pr-4">{faq.question}</span>
+                          <span className="text-lg font-medium text-white pr-4" itemProp="name">{faq.question}</span>
                         </div>
                         <motion.span
                           animate={{ rotate: isOpen ? 180 : 0 }}
@@ -375,9 +409,12 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             transition={{ duration: 0.22, ease: 'easeInOut' }}
+                            itemScope
+                            itemProp="acceptedAnswer"
+                            itemType="https://schema.org/Answer"
                           >
                             <div className="px-6 pb-5 text-slate-400 leading-relaxed border-t border-white/10 pt-4">
-                              {faq.answer}
+                              <span itemProp="text">{faq.answer}</span>
                               {normalized !== 'all' && (
                                 <div className="mt-4 flex items-center gap-2">
                                   <span className="text-xs text-slate-500">Category:</span>
@@ -409,7 +446,7 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <a
-                  href="mailto:info@rawdrive.in"
+                  href="mailto:info@rawdrive.ai"
                   className="
                     inline-flex items-center justify-center gap-2
                     px-6 py-3 rounded-xl

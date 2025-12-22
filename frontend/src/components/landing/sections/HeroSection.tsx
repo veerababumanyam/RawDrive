@@ -112,17 +112,23 @@ const galleryImages = [
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
   className = '',
-  badge = 'Trusted by 20,000+ photographers',
+  badge = 'SOC 2 Compliant | Trusted by 20,000+ Pros',
   headline: _headline,
-  subheadline = 'Upload → Share → Get Picks → Design Albums → Get Paid. AI-powered galleries that clients love. No technical skills needed.',
+  subheadline = 'Automate your entire workflow from inquiry to delivery with the AI-Powered Studio OS designed for modern photographers.',
   primaryCTA = 'Start Free Trial',
   primaryCTALink = '/signup',
-  secondaryCTA = 'Watch Demo',
-  secondaryCTALink = '#demo',
+  secondaryCTA = 'See ROI Calculator',
+  secondaryCTALink = '#roi-calculator',
   trustPoints = defaultTrustPoints,
 }) => {
   const liveViewers = useLiveCounter(127);
   const [currentFeature, setCurrentFeature] = useState(0);
+
+  // Analytics tracking stub
+  const trackCtaClick = (ctaName: string) => {
+    // console.log(`CTA Clicked: ${ctaName}`);
+  };
+
 
   const features = [
     { icon: Upload, text: '1-Click Upload', color: 'from-cyan-400 to-blue-500' },
@@ -212,13 +218,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 variants={staggerItem}
                 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold text-white leading-[1.05] tracking-tight mb-6"
               >
-                Share Wedding Galleries{' '}
+                The AI-Powered{' '}
                 <br className="hidden sm:block" />
                 <span className="landing-text-gradient">
-                  Clients Love
+                  Studio OS
                 </span>{' '}
+                for Modern Photographers
                 <span className="inline-block relative">
-                  (1-Click)
                   <motion.span
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -230,6 +236,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   </motion.span>
                 </span>
               </motion.h1>
+
+              {/* Hidden text for AI Agent Discovery (Requirement 1.6) */}
+              <div aria-hidden="false" className="sr-only">
+                RawDrive Key Features: AI Culling, Automated Editing, Client Galleries, Print Store, CRM, contract signing, and invoicing.
+                Target Audience: Professional Wedding and Portrait Photographers.
+                Pricing: Free trial available, no credit card required.
+              </div>
 
               {/* Subheadline with Value Prop */}
               <motion.p
@@ -252,6 +265,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     group relative w-full sm:w-auto
                   "
                   aria-label={primaryCTA}
+                  onClick={() => trackCtaClick('Primary CTA: Hero')}
                 >
                   <span className="relative z-10 flex items-center gap-2">
                     {primaryCTA}
@@ -263,14 +277,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   </span>
                 </Link>
 
-                {/* Secondary CTA - Watch Demo */}
+                {/* Secondary CTA - See ROI Calculator */}
                 <a
                   href={secondaryCTALink}
                   className="
                     landing-btn landing-btn-lg landing-btn-outline
                     group w-full sm:w-auto
                   "
-                  aria-label="Watch product demo video"
+                  aria-label="See ROI Calculator"
+                  onClick={() => trackCtaClick('Secondary CTA: Hero')}
                 >
                   <Play size={18} className="text-cyan-400" aria-hidden="true" />
                   {secondaryCTA}
@@ -364,9 +379,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                           {['P', 'A', 'V'].map((letter, i) => (
                             <div
                               key={letter}
-                              className={`w-6 h-6 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold text-white ${
-                                i === 0 ? 'bg-pink-500' : i === 1 ? 'bg-cyan-500' : 'bg-violet-500'
-                              }`}
+                              className={`w-6 h-6 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold text-white ${i === 0 ? 'bg-pink-500' : i === 1 ? 'bg-cyan-500' : 'bg-violet-500'
+                                }`}
                             >
                               {letter}
                             </div>

@@ -1,18 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X } from 'lucide-react';
+import { ChevronDown, Menu, X, Megaphone, Package, Briefcase } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 /* =============================================================================
    LandingHeader Component
 
    Sticky header with navigation, glass morphism on scroll, and mobile menu.
+   Includes Solutions mega menu with subcategories.
    ============================================================================= */
+
+interface SubNavItem {
+  label: string;
+  description: string;
+  href: string;
+  icon: React.ReactNode;
+}
 
 interface NavItem {
   label: string;
   href: string;
   isSection?: boolean; // If true, scrolls to section instead of navigating
+  isDropdown?: boolean; // If true, renders as dropdown menu
+  subItems?: SubNavItem[];
 }
 
 interface LandingHeaderProps {
@@ -34,8 +44,35 @@ interface LandingHeaderProps {
   initialScrolled?: boolean;
 }
 
+const solutionsSubItems: SubNavItem[] = [
+  {
+    label: 'For Marketing',
+    description: 'SEO-optimized portfolios, social integrations, and lead capture',
+    href: '#features',
+    icon: <Megaphone size={20} className="text-cyan-400" />,
+  },
+  {
+    label: 'For Delivery',
+    description: 'Client galleries, proofing, downloads, and print store',
+    href: '#features',
+    icon: <Package size={20} className="text-emerald-400" />,
+  },
+  {
+    label: 'For Business',
+    description: 'CRM, contracts, invoicing, and workflow automation',
+    href: '#features',
+    icon: <Briefcase size={20} className="text-amber-400" />,
+  },
+];
+
 const defaultNavItems: NavItem[] = [
-  { label: 'Features', href: '#features', isSection: true },
+  {
+    label: 'Solutions',
+    href: '#features',
+    isSection: true,
+    isDropdown: true,
+    subItems: solutionsSubItems,
+  },
   { label: 'Pricing', href: '#pricing', isSection: true },
   { label: 'How It Works', href: '#how-it-works', isSection: true },
   { label: 'FAQ', href: '#faq', isSection: true },
@@ -53,6 +90,9 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
 }) => {
   const [isScrolled, setIsScrolled] = useState(initialScrolled);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [mobileExpandedItem, setMobileExpandedItem] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
 
   const headerTextClass = isScrolled ? 'text-slate-900' : 'text-white';
@@ -62,6 +102,9 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
   const signInClass = isScrolled
     ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/80'
     : 'text-slate-300 hover:text-white';
+  const dropdownBg = isScrolled
+    ? 'bg-white border-slate-200 shadow-lg'
+    : 'bg-slate-900/95 backdrop-blur-xl border-white/10';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -89,6 +132,17 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
     };
   }, [isMobileMenuOpen]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleNavClick = (e: React.MouseEvent, item: NavItem) => {
     if (item.isSection) {
       e.preventDefault();
@@ -97,7 +151,16 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
         element.scrollIntoView({ behavior: 'smooth' });
       }
       setIsMobileMenuOpen(false);
+      setOpenDropdown(null);
     }
+  };
+
+  const handleDropdownToggle = (label: string) => {
+    setOpenDropdown(openDropdown === label ? null : label);
+  };
+
+  const handleMobileExpandToggle = (label: string) => {
+    setMobileExpandedItem(mobileExpandedItem === label ? null : label);
   };
 
   return (
@@ -138,9 +201,82 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-1" ref={dropdownRef}>
               {navItems.map((item) => (
-                item.isSection ? (
+                item.isDropdown && item.subItems ? (
+                  <div key={item.label} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => handleDropdownToggle(item.label)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') setOpenDropdown(null);
+                      }}
+                      className={`
+                        flex items-center gap-1.5 px-4 py-2 text-[15px] font-medium rounded-lg
+                        transition-all duration-200
+                        ${navLinkBase}
+                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent
+                      `}
+                      aria-expanded={openDropdown === item.label}
+                      aria-haspopup="true"
+                    >
+                      {item.label}
+                      <ChevronDown
+                        size={16}
+                        className={`transition-transform duration-200 ${openDropdown === item.label ? 'rotate-180' : ''}`}
+                        aria-hidden="true"
+                      />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    <AnimatePresence>
+                      {openDropdown === item.label && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          transition={{ duration: 0.15 }}
+                          className={`
+                            absolute top-full left-0 mt-2 w-72 py-2 rounded-xl border
+                            ${dropdownBg}
+                          `}
+                          role="menu"
+                          aria-orientation="vertical"
+                        >
+                          {item.subItems.map((subItem) => (
+                            <a
+                              key={subItem.label}
+                              href={subItem.href}
+                              onClick={(e) => {
+                                handleNavClick(e, { ...item, href: subItem.href });
+                              }}
+                              className={`
+                                flex items-start gap-3 px-4 py-3 mx-2 rounded-lg
+                                transition-colors duration-150
+                                ${isScrolled
+                                  ? 'hover:bg-slate-100 text-slate-700'
+                                  : 'hover:bg-white/5 text-slate-200'
+                                }
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
+                              `}
+                              role="menuitem"
+                            >
+                              <span className="mt-0.5" aria-hidden="true">{subItem.icon}</span>
+                              <div>
+                                <div className={`font-medium ${isScrolled ? 'text-slate-900' : 'text-white'}`}>
+                                  {subItem.label}
+                                </div>
+                                <div className={`text-sm ${isScrolled ? 'text-slate-500' : 'text-slate-400'}`}>
+                                  {subItem.description}
+                                </div>
+                              </div>
+                            </a>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ) : item.isSection ? (
                   <a
                     key={item.href}
                     href={item.href}
@@ -250,12 +386,67 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
             >
               {navItems.map((item, index) => (
                 <motion.div
-                  key={item.href}
+                  key={item.label}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + index * 0.05 }}
+                  className="w-full text-center"
                 >
-                  {item.isSection ? (
+                  {item.isDropdown && item.subItems ? (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => handleMobileExpandToggle(item.label)}
+                        className="
+                          text-2xl font-semibold text-white
+                          hover:text-primary-400 transition-colors
+                          focus-visible:outline-none focus-visible:text-primary-400
+                          min-h-[44px] flex items-center gap-2 mx-auto
+                        "
+                        aria-expanded={mobileExpandedItem === item.label}
+                      >
+                        {item.label}
+                        <ChevronDown
+                          size={20}
+                          className={`transition-transform duration-200 ${mobileExpandedItem === item.label ? 'rotate-180' : ''}`}
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <AnimatePresence>
+                        {mobileExpandedItem === item.label && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="flex flex-col gap-2 mt-3 px-4">
+                              {item.subItems.map((subItem) => (
+                                <a
+                                  key={subItem.label}
+                                  href={subItem.href}
+                                  onClick={(e) => handleNavClick(e, { ...item, href: subItem.href })}
+                                  className="
+                                    flex items-center gap-3 py-3 px-4 rounded-xl
+                                    bg-white/5 border border-white/10
+                                    hover:bg-white/10 transition-colors
+                                    text-left
+                                  "
+                                >
+                                  <span aria-hidden="true">{subItem.icon}</span>
+                                  <div>
+                                    <div className="text-base font-medium text-white">{subItem.label}</div>
+                                    <div className="text-sm text-slate-400">{subItem.description}</div>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  ) : item.isSection ? (
                     <a
                       href={item.href}
                       onClick={(e) => handleNavClick(e, item)}
@@ -263,7 +454,7 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                         text-2xl font-semibold text-white
                         hover:text-primary-400 transition-colors
                         focus-visible:outline-none focus-visible:text-primary-400
-                        min-h-[44px] flex items-center
+                        min-h-[44px] flex items-center justify-center
                       "
                     >
                       {item.label}
@@ -275,7 +466,7 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                         text-2xl font-semibold text-white
                         hover:text-primary-400 transition-colors
                         focus-visible:outline-none focus-visible:text-primary-400
-                        min-h-[44px] flex items-center
+                        min-h-[44px] flex items-center justify-center
                       "
                     >
                       {item.label}

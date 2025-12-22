@@ -21,6 +21,7 @@ from app.api.company_profile_schemas import (
     CompanyAddress
 )
 from app.services.visibility_service import VisibilityFilterService
+from app.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -441,11 +442,14 @@ class CompanyProfileService:
     @staticmethod
     def generate_public_url(slug: str) -> str:
         """Generate public profile URL for a slug.
-        
-        TODO: Use configured base URL from settings (Requirement 4.1).
-        Currently hardcoded to lumina.co per spec.
+
+        Uses the PUBLIC_URL environment variable from settings.
+        Defaults to https://rawdrive.ai if not configured.
         """
-        return f"https://lumina.co/p/{slug}"
+        settings = get_settings()
+        # Ensure base URL doesn't have trailing slash
+        base_url = settings.public_url.rstrip('/')
+        return f"{base_url}/p/{slug}"
             
     async def get_public_profile(self, slug: str) -> dict:
         """Get public view of a profile by slug."""

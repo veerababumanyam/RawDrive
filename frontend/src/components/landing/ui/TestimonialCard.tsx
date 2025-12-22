@@ -39,6 +39,8 @@ export const TestimonialCard: React.FC<TestimonialCardProps> = ({
       variant="md"
       padding="lg"
       className={`h-full flex flex-col ${className}`}
+      itemScope
+      itemType="https://schema.org/Review"
     >
       {/* Quote Icon */}
       <div className="mb-4">
@@ -49,18 +51,27 @@ export const TestimonialCard: React.FC<TestimonialCardProps> = ({
         />
       </div>
 
-      {/* Quote Text */}
+      {/* Quote Text with schema.org reviewBody */}
       <blockquote className="flex-grow">
-        <p className="text-lg text-white leading-relaxed italic mb-6">
+        <p
+          className="text-lg text-white leading-relaxed italic mb-6"
+          itemProp="reviewBody"
+        >
           "{quote}"
         </p>
       </blockquote>
 
-      {/* Rating */}
+      {/* Rating with schema.org reviewRating */}
       <div
         className="flex items-center gap-1 mb-4"
         aria-label={`Rating: ${normalizedRating} out of 5 stars`}
+        itemProp="reviewRating"
+        itemScope
+        itemType="https://schema.org/Rating"
       >
+        <meta itemProp="ratingValue" content={String(normalizedRating)} />
+        <meta itemProp="bestRating" content="5" />
+        <meta itemProp="worstRating" content="1" />
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
@@ -75,14 +86,20 @@ export const TestimonialCard: React.FC<TestimonialCardProps> = ({
         ))}
       </div>
 
-      {/* Author */}
-      <div className="flex items-center gap-3 pt-4 border-t border-white/10">
+      {/* Author with schema.org author */}
+      <div
+        className="flex items-center gap-3 pt-4 border-t border-white/10"
+        itemProp="author"
+        itemScope
+        itemType="https://schema.org/Person"
+      >
         {/* Avatar */}
         {author.avatar ? (
           <img
             src={author.avatar}
             alt={`${author.name}'s profile`}
             className="w-12 h-12 rounded-full object-cover border-2 border-white/10"
+            itemProp="image"
           />
         ) : (
           <div className="
@@ -97,10 +114,10 @@ export const TestimonialCard: React.FC<TestimonialCardProps> = ({
 
         {/* Info */}
         <div>
-          <cite className="text-white font-semibold not-italic block">
+          <cite className="text-white font-semibold not-italic block" itemProp="name">
             {author.name}
           </cite>
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-slate-400" itemProp="jobTitle">
             {author.title}
           </span>
         </div>

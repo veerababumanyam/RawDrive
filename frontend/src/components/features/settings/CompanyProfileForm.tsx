@@ -22,7 +22,9 @@ import {
     Loader2,
     Camera,
     Pencil,
-    X
+    X,
+    Copy,
+    Palette
 } from 'lucide-react';
 
 import { AppInput } from '../../ui/AppInput';
@@ -34,6 +36,12 @@ import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '../../ui
 import { useAuth } from '../../../contexts/AuthContext';
 import { companyProfileService, LogoCropData } from '../../../services/companyProfileService';
 import { CreateCompanyProfileRequest, CompanyVisibilityConfig } from '../../../types/companyProfile';
+import { ThemeSelector } from './ThemeSelector';
+import { ThemeCustomization } from './ThemeCustomization';
+import { UndoRedoControls } from './UndoRedoControls';
+import { useThemeUndoRedo } from '../../../hooks/useThemeUndoRedo';
+import { themeService } from '../../../services/themeService';
+import type { Theme, ThemeCustomization as ThemeCustomizationType } from '../../../types/profileEditor';
 
 /**
  * Sanitizes the profile data before submission.
@@ -86,6 +94,25 @@ const sanitizeProfileData = (data: CreateCompanyProfileRequest): CreateCompanyPr
     if (!sanitized.brand_color?.trim()) sanitized.brand_color = undefined;
     if (!sanitized.brand_font?.trim()) sanitized.brand_font = undefined;
 
+    // Filter out empty secondary contacts
+    if (sanitized.secondary_emails) {
+        sanitized.secondary_emails = sanitized.secondary_emails.filter(
+            contact => contact.value?.trim()
+        );
+        if (sanitized.secondary_emails.length === 0) {
+            sanitized.secondary_emails = undefined;
+        }
+    }
+
+    if (sanitized.secondary_phones) {
+        sanitized.secondary_phones = sanitized.secondary_phones.filter(
+            contact => contact.value?.trim()
+        );
+        if (sanitized.secondary_phones.length === 0) {
+            sanitized.secondary_phones = undefined;
+        }
+    }
+
     return sanitized;
 };
 
@@ -106,6 +133,9 @@ const generateSlugFromName = (name: string): string => {
         .replace(/^-|-$/g, '');        // Trim hyphens from ends
 };
 
+// Get the public URL prefix from the service
+const PUBLIC_URL_PREFIX = companyProfileService.getPublicUrlPrefix();
+
 const DEFAULT_PROFILE: CreateCompanyProfileRequest = {
     name: '',
     slug: '',
@@ -114,6 +144,8 @@ const DEFAULT_PROFILE: CreateCompanyProfileRequest = {
     tagline: '',
     phone: '',
     website: '',
+    secondary_emails: [],
+    secondary_phones: [],
     address_structured: {
         line1: '',
         city: '',
@@ -140,12 +172,25 @@ const DEFAULT_PROFILE: CreateCompanyProfileRequest = {
         socials_facebook: true,
         socials_twitter: true,
         socials_linkedin: true,
-        custom_links: true
+        custom_links: true,
+        secondary_email_1: true,
+        secondary_email_2: true,
+        secondary_phone_1: true,
+        secondary_phone_2: true,
+        qr_code: true,
+        vcard: true
     }
 };
 
+// Extended type for profile change callback including theme data
+export interface ProfileFormChangeData extends CreateCompanyProfileRequest {
+    _previewLogoUrl?: string;
+    _theme?: Theme | null;
+    _themeCustomization?: Partial<ThemeCustomizationType> | null;
+}
+
 interface CompanyProfileFormProps {
-    onProfileChange?: (profile: CreateCompanyProfileRequest & { _previewLogoUrl?: string }) => void;
+    onProfileChange?: (profile: ProfileFormChangeData) => void;
 }
 
 export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfileChange }) => {
@@ -159,9 +204,28 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
         defaultValues: DEFAULT_PROFILE
     });
 
-    const { fields: linkFields, append, remove } = useFieldArray({
+    const { fields: linkFields, append: appendLink, remove: removeLink } = useFieldArray({
         control,
         name: "custom_links"
+    });
+
+    // Secondary contacts field arrays
+    const {
+        fields: secondaryEmailFields,
+        append: appendSecondaryEmail,
+        remove: removeSecondaryEmail
+    } = useFieldArray({
+        control,
+        name: "secondary_emails"
+    });
+
+    const {
+        fields: secondaryPhoneFields,
+        append: appendSecondaryPhone,
+        remove: removeSecondaryPhone
+    } = useFieldArray({
+        control,
+        name: "secondary_phones"
     });
 
     // Logo upload state
@@ -192,6 +256,22 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
     const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
     const [pendingSaveData, setPendingSaveData] = useState<CreateCompanyProfileRequest | null>(null);
 
+    // Theme state
+    const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
+    const [themeCustomization, setThemeCustomization] = useState<Partial<ThemeCustomizationType> | null>(null);
+    const [copiedUrl, setCopiedUrl] = useState(false);
+
+    // Theme undo/redo hook
+    const themeUndoRedo = useThemeUndoRedo(themeCustomization, {
+        onChange: (newCustomization) => {
+            // Auto-save theme customization
+            if (newCustomization) {
+                setThemeCustomization(newCustomization);
+            }
+        },
+        autoSaveDebounce: 1500,
+    });
+
     // Watch all form values for live preview
     const watchedValues = watch();
 
@@ -202,20 +282,31 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
     }, [workspace?.workspace_id]);
 
     // Notify parent of profile changes for live preview
+    // Use themeUndoRedo.state for immediate preview updates (not debounced themeCustomization)
+    const currentThemeState = themeUndoRedo.state;
     useEffect(() => {
         if (onProfileChange && !isFetching) {
             // Use JSON comparison to avoid infinite loops from object reference changes
-            const valuesJson = JSON.stringify(watchedValues);
+            // Include theme data in comparison - use currentThemeState for live preview
+            const dataToCompare = {
+                ...watchedValues,
+                _theme: selectedTheme?.theme_id,
+                _themeCustomization: currentThemeState,
+            };
+            const valuesJson = JSON.stringify(dataToCompare);
             if (valuesJson !== prevWatchedValuesRef.current) {
                 prevWatchedValuesRef.current = valuesJson;
-                // Include blob URL for live preview - this allows immediate display after upload
+                // Include blob URL and theme data for live preview
+                // Use currentThemeState (immediate) instead of themeCustomization (debounced)
                 onProfileChange({
                     ...watchedValues,
                     _previewLogoUrl: logoBlobUrl || undefined,
+                    _theme: selectedTheme,
+                    _themeCustomization: currentThemeState,
                 });
             }
         }
-    }, [watchedValues, onProfileChange, isFetching, logoBlobUrl]);
+    }, [watchedValues, onProfileChange, isFetching, logoBlobUrl, selectedTheme, currentThemeState]);
 
     const loadProfile = async (id: string) => {
         setIsFetching(true);
@@ -475,16 +566,37 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
         setIsLoading(true);
 
         try {
+            let profileId: string | undefined;
+
             if (profileExists) {
                 // Profile already exists, update it directly
-                await companyProfileService.updateProfile(workspace.workspace_id, data);
+                const result = await companyProfileService.updateProfile(workspace.workspace_id, data);
+                profileId = result?.profile_id;
                 toast.success("Company profile settings saved.", { title: "Profile updated" });
             } else {
                 // No profile yet, create a new one
-                await companyProfileService.createProfile(workspace.workspace_id, data);
+                const result = await companyProfileService.createProfile(workspace.workspace_id, data);
+                profileId = result?.profile_id;
                 setProfileExists(true); // Mark as existing for future saves
                 toast.success("Company profile has been set up successfully.", { title: "Profile created" });
             }
+
+            // Save theme selection if a theme is selected
+            if (selectedTheme && profileId) {
+                try {
+                    await themeService.saveThemeSelection(
+                        workspace.workspace_id,
+                        profileId,
+                        selectedTheme.theme_id,
+                        themeCustomization || undefined
+                    );
+                } catch (themeError) {
+                    console.error('Failed to save theme selection:', themeError);
+                    // Don't fail the whole save if theme save fails
+                    toast.error("Theme changes may not have been saved.", { title: "Warning" });
+                }
+            }
+
             // Update original slug reference after successful save
             // This ensures future saves with the same slug don't trigger validation
             originalSlugRef.current = data.slug;
@@ -532,6 +644,54 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
         }
     };
 
+    // Copy public URL to clipboard
+    const handleCopyPublicUrl = useCallback(async () => {
+        const slug = watch('slug');
+        if (slug) {
+            const publicUrl = `${PUBLIC_URL_PREFIX}${slug}`;
+            try {
+                await navigator.clipboard.writeText(publicUrl);
+                setCopiedUrl(true);
+                toast.success('Public URL copied to clipboard!');
+                setTimeout(() => setCopiedUrl(false), 2000);
+            } catch {
+                toast.error('Failed to copy URL');
+            }
+        }
+    }, [watch, toast]);
+
+    // Handle theme selection
+    const handleThemeSelect = useCallback((theme: Theme) => {
+        setSelectedTheme(theme);
+        // Initialize customization from theme defaults
+        setThemeCustomization({
+            theme_id: theme.theme_id,
+            custom_colors: theme.base_colors,
+            custom_typography: theme.default_typography,
+            custom_layout: theme.layout_config,
+            is_preset: false,
+        });
+    }, []);
+
+    // Handle theme customization changes
+    const handleThemeCustomizationChange = useCallback((changes: Partial<ThemeCustomizationType>) => {
+        themeUndoRedo.update(changes);
+    }, [themeUndoRedo]);
+
+    // Reset theme to defaults
+    const handleThemeReset = useCallback(() => {
+        if (selectedTheme) {
+            setThemeCustomization({
+                theme_id: selectedTheme.theme_id,
+                custom_colors: selectedTheme.base_colors,
+                custom_typography: selectedTheme.default_typography,
+                custom_layout: selectedTheme.layout_config,
+                is_preset: false,
+            });
+            themeUndoRedo.reset();
+        }
+    }, [selectedTheme, themeUndoRedo]);
+
     if (isFetching) {
         return <div className="p-8 text-center text-text-secondary">Loading profile settings...</div>;
     }
@@ -564,15 +724,21 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                     <h2 className="text-2xl font-bold text-text-primary">Company Profile</h2>
                     <p className="text-text-secondary">Manage your public brand presence and contact information.</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex items-center gap-3">
                     {watch('slug') && (
                         <>
-                            <AppButton variant="outline" size="sm" type="button" onClick={handleDownloadVCard} leftIcon={<Download size={14} />}>
-                                vCard
-                            </AppButton>
-                            <AppButton variant="outline" size="sm" type="button" onClick={handleDownloadQRCode} leftIcon={<QrCode size={14} />}>
-                                QR Code
-                            </AppButton>
+                            <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1">
+                                <AppButton variant="ghost" size="sm" type="button" onClick={handleDownloadVCard} leftIcon={<Download size={14} />}>
+                                    vCard
+                                </AppButton>
+                                {renderVisibilityToggle('vcard', 'vCard on public page')}
+                            </div>
+                            <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1">
+                                <AppButton variant="ghost" size="sm" type="button" onClick={handleDownloadQRCode} leftIcon={<QrCode size={14} />}>
+                                    QR
+                                </AppButton>
+                                {renderVisibilityToggle('qr_code', 'QR Code on public page')}
+                            </div>
                         </>
                     )}
                     <AppButton type="submit" variant="primary" isLoading={isLoading} leftIcon={<Save size={18} />}>
@@ -581,61 +747,103 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                 </div>
             </div>
 
-            {/* Logo Upload */}
+            {/* Logo & QR Code */}
             <Card>
                 <Card.Header action={renderVisibilityToggle('logo_url', 'Logo')}>
-                    <Card.Title>Company Logo</Card.Title>
-                    <Card.Description>Upload your company logo for public display.</Card.Description>
+                    <Card.Title>Company Logo & QR Code</Card.Title>
+                    <Card.Description>Your logo and QR code for easy sharing.</Card.Description>
                 </Card.Header>
                 <Card.Content>
-                    <div className="flex items-start gap-6">
+                    <div className="flex flex-wrap items-start gap-6">
                         {/* Logo Preview */}
-                        <div
-                            className={`
-                                relative w-32 h-32 rounded-lg border-2 border-dashed
-                                flex items-center justify-center cursor-pointer
-                                transition-all overflow-hidden
-                                ${isDraggingLogo ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}
-                                ${isUploadingLogo ? 'opacity-50' : ''}
-                            `}
-                            onClick={() => logoInputRef.current?.click()}
-                            onDragOver={(e) => { e.preventDefault(); setIsDraggingLogo(true); }}
-                            onDragLeave={() => setIsDraggingLogo(false)}
-                            onDrop={handleLogoDrop}
-                        >
-                            {logoBlobUrl ? (
-                                <>
-                                    <img
-                                        src={logoBlobUrl}
-                                        alt="Company logo"
-                                        className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <Camera className="w-6 h-6 text-white" />
+                        <div className="flex flex-col items-center gap-2">
+                            <div
+                                className={`
+                                    relative w-32 h-32 rounded-lg border-2 border-dashed
+                                    flex items-center justify-center cursor-pointer
+                                    transition-all overflow-hidden
+                                    ${isDraggingLogo ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}
+                                    ${isUploadingLogo ? 'opacity-50' : ''}
+                                `}
+                                onClick={() => logoInputRef.current?.click()}
+                                onDragOver={(e) => { e.preventDefault(); setIsDraggingLogo(true); }}
+                                onDragLeave={() => setIsDraggingLogo(false)}
+                                onDrop={handleLogoDrop}
+                            >
+                                {logoBlobUrl ? (
+                                    <>
+                                        <img
+                                            src={logoBlobUrl}
+                                            alt="Company logo"
+                                            className="w-full h-full object-cover"
+                                        />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <Camera className="w-6 h-6 text-white" />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-center p-4">
+                                        <Upload className="w-8 h-8 mx-auto mb-2 text-text-tertiary" />
+                                        <span className="text-xs text-text-tertiary">Drop or click</span>
                                     </div>
-                                </>
-                            ) : (
-                                <div className="text-center p-4">
-                                    <Upload className="w-8 h-8 mx-auto mb-2 text-text-tertiary" />
-                                    <span className="text-xs text-text-tertiary">Drop or click</span>
-                                </div>
-                            )}
-                            {isUploadingLogo && (
-                                <div className="absolute inset-0 bg-surface/80 flex items-center justify-center">
-                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                </div>
-                            )}
+                                )}
+                                {isUploadingLogo && (
+                                    <div className="absolute inset-0 bg-surface/80 flex items-center justify-center">
+                                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                    </div>
+                                )}
+                            </div>
+                            <input
+                                ref={logoInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/gif"
+                                onChange={handleLogoInputChange}
+                                className="hidden"
+                            />
+                            <span className="text-xs text-text-tertiary">Logo</span>
                         </div>
-                        <input
-                            ref={logoInputRef}
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            onChange={handleLogoInputChange}
-                            className="hidden"
-                        />
-                        <div className="flex-1 text-sm text-text-secondary">
-                            <p className="mb-2">Recommended: Square image, at least 512x512 pixels.</p>
-                            <p>Supported formats: JPEG, PNG, WebP, GIF (max 5MB)</p>
+
+                        {/* QR Code Preview */}
+                        {watch('slug') && (
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="relative w-32 h-32 rounded-lg border border-border bg-white flex items-center justify-center overflow-hidden">
+                                    <img
+                                        src={companyProfileService.getQrCodeUrl(watch('slug'))}
+                                        alt="Profile QR Code"
+                                        className="w-28 h-28 object-contain"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-xs text-text-tertiary">QR Code</span>
+                                    {renderVisibilityToggle('qr_code', 'QR Code')}
+                                </div>
+                                <AppButton
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleDownloadQRCode}
+                                    leftIcon={<Download size={12} />}
+                                    className="text-xs"
+                                >
+                                    Download
+                                </AppButton>
+                            </div>
+                        )}
+
+                        {/* Instructions */}
+                        <div className="flex-1 min-w-[200px] text-sm text-text-secondary space-y-3">
+                            <div>
+                                <p className="font-medium text-text-primary mb-1">Logo</p>
+                                <p>Recommended: Square, at least 512x512px</p>
+                                <p className="text-xs text-text-tertiary">JPEG, PNG, WebP, GIF (max 5MB)</p>
+                            </div>
+                            {watch('slug') && (
+                                <div>
+                                    <p className="font-medium text-text-primary mb-1">QR Code</p>
+                                    <p>Scan to visit your public profile</p>
+                                    <p className="text-xs text-text-tertiary">Toggle visibility for public page</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </Card.Content>
@@ -691,20 +899,36 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                         <div className="flex gap-2">
                             <div className="flex-1">
                                 <div className="space-y-1">
-                                    <label className="text-sm font-medium text-text-primary">Public Slug</label>
+                                    <label className="text-sm font-medium text-text-primary" id="slug-label">
+                                        Public Slug
+                                    </label>
                                     {profileExists && !isEditingSlug ? (
                                         // Display mode - show current slug with edit button
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-surface-hover rounded-lg border border-border">
-                                                <span className="text-text-secondary text-sm">lumina.co/p/</span>
+                                        <div className="flex items-center gap-2 min-h-[48px]">
+                                            <div
+                                                className="flex-1 flex items-center gap-2 px-4 py-3 bg-surface-hover rounded-lg border border-border min-h-[48px]"
+                                                aria-labelledby="slug-label"
+                                            >
+                                                <span className="text-text-secondary text-sm">{PUBLIC_URL_PREFIX}</span>
                                                 <span className="text-text-primary font-medium">{currentSlug}</span>
                                             </div>
                                             <AppButton
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon"
+                                                onClick={handleCopyPublicUrl}
+                                                title="Copy public URL to clipboard"
+                                                aria-label="Copy public URL"
+                                            >
+                                                {copiedUrl ? <CheckCircle2 size={16} className="text-success" /> : <Copy size={16} />}
+                                            </AppButton>
+                                            <AppButton
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
                                                 onClick={handleStartEditingSlug}
-                                                title="Edit slug"
+                                                title="Edit your public URL slug. Changing this will change your public profile URL."
+                                                aria-label="Edit public slug"
                                             >
                                                 <Pencil size={16} />
                                             </AppButton>
@@ -712,26 +936,28 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                     ) : isEditingSlug ? (
                                         // Edit mode - show input with confirm/cancel
                                         <div className="space-y-2">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 min-h-[48px]">
                                                 <div className="flex-1 relative">
                                                     <AppInput
                                                         value={tempSlug}
                                                         onChange={(e) => setTempSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                                                         placeholder="e.g. acme-photo"
-                                                        leftAddon="lumina.co/p/"
+                                                        leftAddon={PUBLIC_URL_PREFIX}
                                                         error={slugValidation.status === 'taken' ? slugValidation.message : undefined}
+                                                        aria-labelledby="slug-label"
+                                                        aria-describedby="slug-requirements"
                                                     />
                                                     {/* Validation indicator */}
                                                     {tempSlug && tempSlug.length >= 3 && (
-                                                        <div className="absolute right-3 top-3">
+                                                        <div className="absolute right-3 top-3" role="status" aria-live="polite">
                                                             {slugValidation.status === 'checking' && (
-                                                                <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+                                                                <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" aria-label="Checking availability" />
                                                             )}
                                                             {slugValidation.status === 'available' && (
-                                                                <CheckCircle2 className="w-4 h-4 text-success" />
+                                                                <CheckCircle2 className="w-4 h-4 text-success" aria-label="Slug is available" />
                                                             )}
                                                             {slugValidation.status === 'taken' && (
-                                                                <XCircle className="w-4 h-4 text-error" />
+                                                                <XCircle className="w-4 h-4 text-error" aria-label="Slug is already taken" />
                                                             )}
                                                         </div>
                                                     )}
@@ -742,7 +968,8 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                                     size="icon"
                                                     onClick={handleConfirmSlugEdit}
                                                     disabled={slugValidation.status === 'taken' || slugValidation.status === 'checking' || tempSlug.length < 3}
-                                                    title="Confirm"
+                                                    title="Confirm slug change"
+                                                    aria-label="Confirm slug change"
                                                 >
                                                     <CheckCircle2 size={16} />
                                                 </AppButton>
@@ -751,18 +978,19 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={handleCancelSlugEdit}
-                                                    title="Cancel"
+                                                    title="Cancel editing"
+                                                    aria-label="Cancel editing"
                                                 >
                                                     <X size={16} />
                                                 </AppButton>
                                             </div>
-                                            <p className="text-xs text-text-tertiary">
-                                                Only lowercase letters, numbers, and hyphens allowed. Min 3 characters.
+                                            <p id="slug-requirements" className="text-xs text-text-tertiary">
+                                                Only lowercase letters, numbers, and hyphens allowed. Minimum 3 characters.
                                             </p>
                                         </div>
                                     ) : (
-                                        // Create mode - show regular input
-                                        <div className="relative">
+                                        // Create mode - show regular input with min height for consistency
+                                        <div className="relative min-h-[48px]">
                                             <AppInput
                                                 {...register('slug', {
                                                     required: "Slug is required",
@@ -774,20 +1002,22 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                                 })}
                                                 error={errors.slug?.message || (slugValidation.status === 'taken' ? slugValidation.message : undefined)}
                                                 placeholder="e.g. acme-photo"
-                                                helperText={`Public URL: lumina.co/p/${watch('slug') || '...'}`}
-                                                leftAddon="lumina.co/p/"
+                                                helperText={`Your public profile will be at: ${PUBLIC_URL_PREFIX}${watch('slug') || '...'}`}
+                                                leftAddon={PUBLIC_URL_PREFIX}
+                                                aria-labelledby="slug-label"
+                                                aria-describedby="slug-helper"
                                             />
                                             {/* Slug validation indicator */}
                                             {currentSlug && currentSlug.length >= 3 && (
-                                                <div className="absolute right-3 top-3">
+                                                <div className="absolute right-3 top-3" role="status" aria-live="polite">
                                                     {slugValidation.status === 'checking' && (
-                                                        <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+                                                        <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" aria-label="Checking availability" />
                                                     )}
                                                     {slugValidation.status === 'available' && (
-                                                        <CheckCircle2 className="w-4 h-4 text-success" />
+                                                        <CheckCircle2 className="w-4 h-4 text-success" aria-label="Slug is available" />
                                                     )}
                                                     {slugValidation.status === 'taken' && (
-                                                        <XCircle className="w-4 h-4 text-error" />
+                                                        <XCircle className="w-4 h-4 text-error" aria-label="Slug is already taken" />
                                                     )}
                                                 </div>
                                             )}
@@ -841,6 +1071,138 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                 {renderVisibilityToggle('phone', 'Phone')}
                             </div>
                         </div>
+                    </div>
+                </Card.Content>
+            </Card>
+
+            {/* Secondary Contacts */}
+            <Card>
+                <Card.Header>
+                    <Card.Title>Secondary Contacts</Card.Title>
+                    <Card.Description>Additional email addresses and phone numbers (up to 2 each).</Card.Description>
+                </Card.Header>
+                <Card.Content className="space-y-6">
+                    {/* Secondary Emails */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-medium text-text-primary">Secondary Emails</h4>
+                            {secondaryEmailFields.length < 2 && (
+                                <AppButton
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    leftIcon={<Plus size={14} />}
+                                    onClick={() => appendSecondaryEmail({ value: '', label: '' })}
+                                >
+                                    Add Email
+                                </AppButton>
+                            )}
+                        </div>
+                        {secondaryEmailFields.length === 0 ? (
+                            <p className="text-sm text-text-tertiary italic">No secondary emails added.</p>
+                        ) : (
+                            secondaryEmailFields.map((field, index) => (
+                                <div key={field.id} className="flex gap-3 items-end">
+                                    <div className="w-40">
+                                        <AppInput
+                                            label={index === 0 ? "Label" : undefined}
+                                            placeholder="e.g. Support"
+                                            {...register(`secondary_emails.${index}.label` as const)}
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label={index === 0 ? "Email Address" : undefined}
+                                            placeholder="support@example.com"
+                                            leftIcon={<Mail size={14} />}
+                                            {...register(`secondary_emails.${index}.value` as const, {
+                                                pattern: {
+                                                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                                                    message: "Invalid email format"
+                                                }
+                                            })}
+                                            error={errors.secondary_emails?.[index]?.value?.message}
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        {renderVisibilityToggle(
+                                            `secondary_email_${index + 1}` as keyof CompanyVisibilityConfig,
+                                            `Secondary Email ${index + 1}`
+                                        )}
+                                        <AppButton
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-error hover:bg-error/10 hover:text-error"
+                                            onClick={() => removeSecondaryEmail(index)}
+                                            title="Remove email"
+                                        >
+                                            <Trash2 size={16} />
+                                        </AppButton>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="border-t border-border" />
+
+                    {/* Secondary Phones */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-medium text-text-primary">Secondary Phones</h4>
+                            {secondaryPhoneFields.length < 2 && (
+                                <AppButton
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    leftIcon={<Plus size={14} />}
+                                    onClick={() => appendSecondaryPhone({ value: '', label: '' })}
+                                >
+                                    Add Phone
+                                </AppButton>
+                            )}
+                        </div>
+                        {secondaryPhoneFields.length === 0 ? (
+                            <p className="text-sm text-text-tertiary italic">No secondary phones added.</p>
+                        ) : (
+                            secondaryPhoneFields.map((field, index) => (
+                                <div key={field.id} className="flex gap-3 items-end">
+                                    <div className="w-40">
+                                        <AppInput
+                                            label={index === 0 ? "Label" : undefined}
+                                            placeholder="e.g. Mobile"
+                                            {...register(`secondary_phones.${index}.label` as const)}
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <AppInput
+                                            label={index === 0 ? "Phone Number" : undefined}
+                                            placeholder="+1 (555) 000-0000"
+                                            leftIcon={<Phone size={14} />}
+                                            {...register(`secondary_phones.${index}.value` as const)}
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        {renderVisibilityToggle(
+                                            `secondary_phone_${index + 1}` as keyof CompanyVisibilityConfig,
+                                            `Secondary Phone ${index + 1}`
+                                        )}
+                                        <AppButton
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-error hover:bg-error/10 hover:text-error"
+                                            onClick={() => removeSecondaryPhone(index)}
+                                            title="Remove phone"
+                                        >
+                                            <Trash2 size={16} />
+                                        </AppButton>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </Card.Content>
             </Card>
@@ -956,7 +1318,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                 variant="ghost"
                                 size="icon"
                                 className="text-error hover:bg-error/10 hover:text-error"
-                                onClick={() => remove(index)}
+                                onClick={() => removeLink(index)}
                             >
                                 <Trash2 size={18} />
                             </AppButton>
@@ -968,10 +1330,69 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                         variant="outline"
                         size="sm"
                         leftIcon={<Plus size={16} />}
-                        onClick={() => append({ label: '', url: '' })}
+                        onClick={() => appendLink({ label: '', url: '' })}
                     >
                         Add Link
                     </AppButton>
+                </Card.Content>
+            </Card>
+
+            {/* Public Profile Theme */}
+            <Card>
+                <Card.Header>
+                    <Card.Title className="flex items-center gap-2">
+                        <Palette size={20} className="text-primary" />
+                        Public Profile Theme
+                    </Card.Title>
+                    <Card.Description>
+                        Customize the look and feel of your public profile page.
+                    </Card.Description>
+                </Card.Header>
+                <Card.Content className="space-y-6">
+                    {/* Theme Selector */}
+                    <div>
+                        <h4 className="text-sm font-medium text-text-primary mb-4">Choose a Theme</h4>
+                        <ThemeSelector
+                            selectedThemeId={selectedTheme?.theme_id}
+                            onSelect={handleThemeSelect}
+                        />
+                    </div>
+
+                    {/* Theme Customization - only show when theme is selected */}
+                    {selectedTheme && themeCustomization && (
+                        <div className="border-t border-border pt-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-sm font-medium text-text-primary">Customize Theme</h4>
+                                <UndoRedoControls
+                                    canUndo={themeUndoRedo.canUndo}
+                                    canRedo={themeUndoRedo.canRedo}
+                                    onUndo={themeUndoRedo.undo}
+                                    onRedo={themeUndoRedo.redo}
+                                    onReset={handleThemeReset}
+                                    undoCount={themeUndoRedo.undoCount}
+                                    redoCount={themeUndoRedo.redoCount}
+                                    isDirty={themeUndoRedo.isDirty}
+                                    isSavePending={themeUndoRedo.isSavePending}
+                                    lastSaveTime={themeUndoRedo.lastSaveTime}
+                                    compact
+                                />
+                            </div>
+                            <ThemeCustomization
+                                theme={selectedTheme}
+                                customization={themeCustomization}
+                                onChange={handleThemeCustomizationChange}
+                                onReset={handleThemeReset}
+                            />
+                        </div>
+                    )}
+
+                    {/* No theme selected message */}
+                    {!selectedTheme && (
+                        <div className="text-center py-8 text-text-tertiary">
+                            <Palette size={32} className="mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">Select a theme above to start customizing your public profile appearance.</p>
+                        </div>
+                    )}
                 </Card.Content>
             </Card>
 

@@ -273,3 +273,139 @@ The Public Profile Editor provides photographers with a powerful, unified interf
 8. THE System SHALL allow disabling analytics per photographer preference
 9. THE System SHALL provide insights on most popular themes and customizations
 10. THE System SHALL track time spent on public profile pages
+
+### Requirement 15: Public Slug Editor UX Improvements
+
+**User Story:** As a photographer, I want an intuitive and user-friendly interface for editing my public slug, so that I can easily customize my profile URL without confusion.
+
+#### Acceptance Criteria
+
+1. THE System SHALL provide adequate space and clear visual hierarchy for the public slug input field
+2. THE System SHALL follow standard UI/UX patterns for inline editing with clear edit/confirm/cancel actions
+3. THE System SHALL display the full public URL preview (e.g., "rawdrive.ai/p/your-slug") prominently
+4. THE System SHALL provide real-time validation feedback with clear success/error states
+5. THE System SHALL prevent accidental slug changes with confirmation dialogs for existing profiles
+6. THE System SHALL auto-generate slugs from company name for new profiles only
+7. THE System SHALL display helpful tooltips and guidance for slug format requirements
+8. THE System SHALL maintain consistent spacing and alignment with other form fields
+9. THE System SHALL support keyboard navigation and accessibility standards
+10. THE System SHALL provide clear visual distinction between editable and read-only states
+
+### Requirement 16: QR Code Correct URL Redirection
+
+**User Story:** As a photographer, I want my QR code to redirect to my public profile on rawdrive.ai, so that people can easily access my profile by scanning the code.
+
+#### Acceptance Criteria
+
+1. WHEN a QR code is generated, THE System SHALL encode the correct public profile URL (https://rawdrive.ai/p/{slug})
+2. WHEN a QR code is scanned, THE System SHALL redirect to the photographer's public profile page
+3. THE System SHALL NOT redirect to unknown or incorrect websites
+4. THE System SHALL validate the QR code URL before generation
+5. THE System SHALL include the full domain (rawdrive.ai) in the QR code, not relative paths
+6. THE System SHALL test QR code generation with multiple QR code readers to ensure compatibility
+7. THE System SHALL provide a preview of the QR code destination URL in the editor
+8. THE System SHALL log QR code scans for analytics purposes
+9. THE System SHALL handle URL encoding correctly for special characters in slugs
+10. THE System SHALL support HTTPS protocol for secure connections
+
+### Requirement 17: vCard Accurate Contact Export
+
+**User Story:** As a photographer, I want my vCard to export accurate and complete contact information, so that clients can save my details correctly to their contacts.
+
+#### Acceptance Criteria
+
+1. WHEN a vCard is generated, THE System SHALL include all visible contact fields (name, email, phone, website, address)
+2. WHEN a vCard is downloaded, THE System SHALL format data according to vCard 3.0 or 4.0 specifications
+3. THE System SHALL include the company logo as a PHOTO field in the vCard
+4. THE System SHALL include social media URLs in the vCard URL fields
+5. THE System SHALL format phone numbers according to international standards (E.164 format)
+6. THE System SHALL include structured address data (street, city, state, postal code, country)
+7. THE System SHALL include the public profile URL as a URL field
+8. THE System SHALL respect visibility settings and only include visible fields
+9. THE System SHALL test vCard compatibility with major contact apps (iOS Contacts, Android Contacts, Outlook)
+10. THE System SHALL provide proper character encoding (UTF-8) for international characters
+
+### Requirement 18: Public URL Copy and Share Functionality
+
+**User Story:** As a photographer, I want to easily copy and share my public profile URL, so that I can distribute my profile link across various platforms.
+
+#### Acceptance Criteria
+
+1. THE System SHALL provide a "Copy URL" button next to the public slug field
+2. WHEN the copy button is clicked, THE System SHALL copy the full public URL to the clipboard
+3. THE System SHALL display a success toast notification after copying
+4. THE System SHALL provide a "Share" button with native share functionality (Web Share API)
+5. WHEN the share button is clicked on supported devices, THE System SHALL open the native share dialog
+6. THE System SHALL provide fallback share options (email, social media) for unsupported browsers
+7. THE System SHALL include the public URL in the vCard and QR code download options
+8. THE System SHALL display the public URL prominently in the profile editor
+9. THE System SHALL allow copying the URL from the public profile page itself
+10. THE System SHALL track URL copy and share actions for analytics
+
+### Requirement 19: QR Code and vCard Visibility on Public Profile
+
+**User Story:** As a photographer, I want QR code and vCard download options visible on my public profile, so that visitors can easily save my contact information.
+
+#### Acceptance Criteria
+
+1. THE System SHALL display a "Save Contact" button on the public profile page
+2. WHEN the "Save Contact" button is clicked, THE System SHALL download the vCard file
+3. THE System SHALL display a "QR Code" button on the public profile page
+4. WHEN the "QR Code" button is clicked, THE System SHALL display or download the QR code
+5. THE System SHALL provide visibility toggles for vCard and QR code buttons in the editor
+6. WHEN visibility is disabled, THE System SHALL hide the respective buttons on the public profile
+7. THE System SHALL style the buttons consistently with the profile theme
+8. THE System SHALL position the buttons prominently but not intrusively
+9. THE System SHALL provide mobile-optimized button sizes and touch targets
+10. THE System SHALL track button clicks for analytics purposes
+
+### Requirement 20: Secondary Contact Information with Visibility Controls
+
+**User Story:** As a photographer, I want to add secondary email and phone numbers with individual visibility controls, so that I can provide alternative contact methods while maintaining privacy.
+
+#### Acceptance Criteria
+
+1. THE System SHALL allow adding multiple email addresses (primary and secondary)
+2. THE System SHALL allow adding multiple phone numbers (primary and secondary)
+3. THE System SHALL provide individual visibility toggles for each email address
+4. THE System SHALL provide individual visibility toggles for each phone number
+5. THE System SHALL label primary and secondary contacts clearly in the UI
+6. THE System SHALL validate all email addresses for correct format
+7. THE System SHALL validate all phone numbers for correct format
+8. THE System SHALL include visible secondary contacts in vCard exports
+9. THE System SHALL display secondary contacts on the public profile when visible
+10. THE System SHALL maintain consistent styling for primary and secondary contacts
+
+### Requirement 21: Theme Preview and Selection in Profile Editor
+
+**User Story:** As a photographer, I want to see and change themes directly in the profile editor with immediate preview, so that I can customize my profile appearance efficiently.
+
+#### Acceptance Criteria
+
+1. THE System SHALL display a theme selector in the profile editor
+2. THE System SHALL show theme previews with thumbnail images
+3. WHEN a theme is selected, THE System SHALL apply it immediately to the live preview
+4. THE System SHALL display the currently active theme with a visual indicator
+5. THE System SHALL organize themes by categories (Minimal, Bold, Elegant, Modern, Creative)
+6. THE System SHALL allow filtering themes by style and color scheme
+7. THE System SHALL provide a "Preview" button to see the theme on the actual public profile
+8. THE System SHALL save theme selection automatically without requiring form submission
+9. THE System SHALL show theme customization options (colors, fonts) after selection
+10. THE System SHALL provide a "Reset to Default" option for theme customizations
+
+### Requirement 22: Logical and User-Friendly Theme Management
+
+**User Story:** As a photographer, I want an intuitive theme management interface, so that I can easily customize my profile appearance without technical knowledge.
+
+#### Acceptance Criteria
+
+1. THE System SHALL organize theme controls in a logical hierarchy (Theme Selection → Customization → Preview)
+2. THE System SHALL provide clear labels and descriptions for all theme options
+3. THE System SHALL use visual controls (color pickers, font selectors) instead of text inputs where appropriate
+4. THE System SHALL show real-time preview of theme changes as they are made
+5. THE System SHALL provide undo/redo functionality for theme changes
+6. THE System SHALL save theme changes automatically with visual confirmation
+7. THE System SHALL provide preset color palettes for quick customization
+8. THE System SHALL suggest complementary colors based on brand color selection
+9. THE System SHALL validate theme customizations for accessibility (contrast ratios)
+10. THE System SHALL provide a "Tour" or "Help" feature for first-time theme customization

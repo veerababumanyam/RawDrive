@@ -11,7 +11,13 @@ export * from './sections';
 // UI Components
 export * from './ui';
 
+// Feature Components
+export * from './features';
+
 // Animation Components
+export * from './animations';
+
+// SEO Components
 export * from './animations';
 
 // SEO Components
