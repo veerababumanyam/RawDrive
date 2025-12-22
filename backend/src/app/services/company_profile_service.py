@@ -470,7 +470,7 @@ class CompanyProfileService:
                        t.name as theme_name,
                        t.category as theme_category,
                        t.base_colors as theme_base_colors,
-                       t.dark_colors as theme_dark_colors,
+                       t.variants as theme_variants,
                        t.default_typography as theme_typography,
                        t.layout_config as theme_layout
                 FROM company_profiles cp
@@ -490,9 +490,9 @@ class CompanyProfileService:
                 theme_base_colors = row.get("theme_base_colors")
                 if isinstance(theme_base_colors, str):
                     theme_base_colors = json.loads(theme_base_colors)
-                theme_dark_colors = row.get("theme_dark_colors")
-                if isinstance(theme_dark_colors, str):
-                    theme_dark_colors = json.loads(theme_dark_colors)
+                theme_variants = row.get("theme_variants")
+                if isinstance(theme_variants, str):
+                    theme_variants = json.loads(theme_variants)
                 theme_typography = row.get("theme_typography")
                 if isinstance(theme_typography, str):
                     theme_typography = json.loads(theme_typography)
@@ -505,7 +505,7 @@ class CompanyProfileService:
                     "name": row.get("theme_name"),
                     "category": row.get("theme_category"),
                     "base_colors": theme_base_colors,
-                    "dark_colors": theme_dark_colors,
+                    "variants": theme_variants,
                     "typography": theme_typography,
                     "layout": theme_layout,
                 }
