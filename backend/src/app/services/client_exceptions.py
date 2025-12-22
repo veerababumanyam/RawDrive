@@ -312,7 +312,7 @@ class AvatarUploadError(ClientError):
 class AvatarFileTooLargeError(ClientError):
     """Avatar file exceeds size limit."""
 
-    def __init__(self, max_size_mb: int = 5) -> None:
+    def __init__(self, max_size_mb: int = 50) -> None:
         super().__init__(
             message=f"Avatar file exceeds {max_size_mb}MB limit",
             code="AVATAR_FILE_TOO_LARGE",

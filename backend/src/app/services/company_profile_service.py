@@ -46,7 +46,7 @@ class LogoUploadError(CompanyProfileError):
         super().__init__(message, "LOGO_UPLOAD_ERROR", 400)
 
 # Logo constraints
-MAX_LOGO_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
+MAX_LOGO_SIZE_BYTES = 50 * 1024 * 1024  # 50MB - generous limit for high-res logos
 VALID_LOGO_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 LOGO_THUMBNAIL_SIZES = [64, 128, 256, 512]  # Generate multiple sizes
 LOGO_WEBP_QUALITY = 90

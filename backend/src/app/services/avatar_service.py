@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Avatar file constraints
-MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
-MAX_AVATAR_SIZE_MB = 5
+MAX_AVATAR_SIZE_BYTES = 50 * 1024 * 1024  # 50MB - generous limit for high-res photos
+MAX_AVATAR_SIZE_MB = 50
 MIN_AVATAR_DIMENSION = 200  # 200x200 minimum
 MAX_AVATAR_DIMENSION = 4096  # Reasonable upper limit
 
