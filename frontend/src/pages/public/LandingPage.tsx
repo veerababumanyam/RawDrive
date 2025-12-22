@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import {
   LandingLayout,
   LandingHeader,
@@ -53,6 +53,9 @@ const SectionSkeleton: React.FC<{ height?: string }> = ({ height = '400px' }) =>
    ============================================================================= */
 
 const LandingPage: React.FC = () => {
+  // Modal state for ROI Calculator
+  const [isROIModalOpen, setIsROIModalOpen] = useState(false);
+
   // Structured data for the landing page
   const structuredDataProps = {
     organization: {
@@ -180,7 +183,7 @@ const LandingPage: React.FC = () => {
 
         {/* Features & Modals - lazy loaded as they are triggered by user interaction */}
         <Suspense fallback={null}>
-          <ROICalculatorModal />
+          <ROICalculatorModal isOpen={isROIModalOpen} onClose={() => setIsROIModalOpen(false)} />
         </Suspense>
         <Suspense fallback={null}>
           <ExitIntentPopup />

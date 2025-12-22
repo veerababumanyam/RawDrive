@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calculator, ArrowRight, DollarSign, Clock } from 'lucide-react';
+import { X, Calculator, ArrowRight, Clock } from 'lucide-react';
 import { AppButton } from '../ui/AppButton';
-import { AppCard } from '../ui/AppCard';
 
 /* =============================================================================
    ROICalculatorModal Component
@@ -21,7 +20,7 @@ export const ROICalculatorModal: React.FC<ROICalculatorModalProps> = ({
 }) => {
     const [eventsPerMonth, setEventsPerMonth] = useState(4);
     const [photosPerEvent, setPhotosPerEvent] = useState(500);
-    const [cullingTimePerPhoto, setCullingTimePerPhoto] = useState(10); // seconds
+    const [cullingTimePerPhoto] = useState(10); // seconds
     const [hourlyRate, setHourlyRate] = useState(2500); // INR
 
     // Calculations

@@ -125,8 +125,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [currentFeature, setCurrentFeature] = useState(0);
 
   // Analytics tracking stub
-  const trackCtaClick = (ctaName: string) => {
-    // console.log(`CTA Clicked: ${ctaName}`);
+  const trackCtaClick = (_ctaName: string) => {
+    // console.log(`CTA Clicked: ${_ctaName}`);
   };
 
 

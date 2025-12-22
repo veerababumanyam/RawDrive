@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Check, X, CheckCircle, HelpCircle } from 'lucide-react';
+import { X, CheckCircle } from 'lucide-react';
 import { AppBadge } from '../ui/AppBadge';
 
 /* =============================================================================

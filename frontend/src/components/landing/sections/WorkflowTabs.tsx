@@ -121,8 +121,8 @@ export const WorkflowTabs: React.FC = () => {
     const currentTab = TABS.find(t => t.id === activeTab) || TABS[0];
 
     // Analytics stub
-    const trackTabUnmount = (tabId: TabId, duration: number) => {
-        // console.log(`Tab ${tabId} viewed for ${duration}ms`);
+    const trackTabUnmount = (_tabId: TabId, _duration: number) => {
+        // console.log(`Tab ${_tabId} viewed for ${_duration}ms`);
     };
 
     const handleTabChange = (newTabId: TabId) => {
