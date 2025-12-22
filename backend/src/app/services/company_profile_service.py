@@ -456,7 +456,7 @@ class CompanyProfileService:
         # Try cache first
         redis = await get_redis_client()
         cache_key = f"public_profile:{slug}"
-        
+
         cached = await redis.get(cache_key)
         if cached:
             return json.loads(cached)
@@ -466,9 +466,16 @@ class CompanyProfileService:
             row = await conn.fetchrow(
                 """
                 SELECT cp.*,
-                       CASE WHEN cli.logo_id IS NOT NULL THEN true ELSE false END as has_logo_data
+                       CASE WHEN cli.logo_id IS NOT NULL THEN true ELSE false END as has_logo_data,
+                       t.name as theme_name,
+                       t.category as theme_category,
+                       t.base_colors as theme_base_colors,
+                       t.dark_colors as theme_dark_colors,
+                       t.default_typography as theme_typography,
+                       t.layout_config as theme_layout
                 FROM company_profiles cp
                 LEFT JOIN company_logo_images cli ON cp.profile_id = cli.profile_id
+                LEFT JOIN themes t ON cp.theme_id = t.theme_id
                 WHERE cp.slug = $1
                 """,
                 slug
@@ -478,16 +485,41 @@ class CompanyProfileService:
 
             data = self._map_row(row)
 
+            # Add theme details if a theme is selected
+            if row.get("theme_id"):
+                theme_base_colors = row.get("theme_base_colors")
+                if isinstance(theme_base_colors, str):
+                    theme_base_colors = json.loads(theme_base_colors)
+                theme_dark_colors = row.get("theme_dark_colors")
+                if isinstance(theme_dark_colors, str):
+                    theme_dark_colors = json.loads(theme_dark_colors)
+                theme_typography = row.get("theme_typography")
+                if isinstance(theme_typography, str):
+                    theme_typography = json.loads(theme_typography)
+                theme_layout = row.get("theme_layout")
+                if isinstance(theme_layout, str):
+                    theme_layout = json.loads(theme_layout)
+
+                data["theme"] = {
+                    "theme_id": str(row["theme_id"]),
+                    "name": row.get("theme_name"),
+                    "category": row.get("theme_category"),
+                    "base_colors": theme_base_colors,
+                    "dark_colors": theme_dark_colors,
+                    "typography": theme_typography,
+                    "layout": theme_layout,
+                }
+
             # Apply visibility filter for public view
             # asyncpg returns JSONB as dict, not string
             visibility = row["company_visibility"]
             if isinstance(visibility, str):
                 visibility = json.loads(visibility)
             filtered = VisibilityFilterService.filter_visible(data, visibility)
-            
+
             # Cache result (1 hour TTL)
             await redis.set(cache_key, json.dumps(filtered, default=str), ex=3600)
-            
+
             return filtered
 
     async def update_profile(
@@ -615,6 +647,17 @@ class CompanyProfileService:
         custom_links = json.loads(row["custom_links"]) if isinstance(row["custom_links"], str) else row["custom_links"]
         company_visibility = json.loads(row["company_visibility"]) if isinstance(row["company_visibility"], str) else row["company_visibility"]
 
+        # Parse theme-related JSONB fields
+        color_palette = row.get("color_palette")
+        if isinstance(color_palette, str):
+            color_palette = json.loads(color_palette)
+        typography_config = row.get("typography_config")
+        if isinstance(typography_config, str):
+            typography_config = json.loads(typography_config)
+        layout_preferences = row.get("layout_preferences")
+        if isinstance(layout_preferences, str):
+            layout_preferences = json.loads(layout_preferences)
+
         # Compute logo_url dynamically based on whether logo data exists in company_logo_images
         # This mirrors how client avatars work - only show URL if actual data exists
         slug = row["slug"]
@@ -640,6 +683,11 @@ class CompanyProfileService:
             "socials": socials,
             "custom_links": custom_links,
             "company_visibility": company_visibility,
+            "theme_id": str(row["theme_id"]) if row.get("theme_id") else None,
+            "theme_customization_id": str(row["theme_customization_id"]) if row.get("theme_customization_id") else None,
+            "color_palette": color_palette if color_palette else None,
+            "typography_config": typography_config if typography_config else None,
+            "layout_preferences": layout_preferences if layout_preferences else None,
             "created_at": row["created_at"],
             "updated_at": row["updated_at"]
         }

@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { PublicCompanyProfile } from '../../../types/companyProfile';
 import { companyProfileService } from '../../../services/companyProfileService';
-import { ProfileCard } from './ProfileCard';
+import { ProfileCard, ThemeColors, ThemeTypography, ThemeLayout } from './ProfileCard';
 import { AppButton } from '../../ui/AppButton';
 
 interface Props {
@@ -59,6 +59,41 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
         }
     };
 
+    // Extract theme data from profile
+    const themeColors: ThemeColors | undefined = useMemo(() => {
+        if (!profile?.theme?.base_colors) return undefined;
+        return {
+            primary: profile.theme.base_colors.primary,
+            secondary: profile.theme.base_colors.secondary,
+            accent: profile.theme.base_colors.accent,
+        };
+    }, [profile?.theme?.base_colors]);
+
+    const themeTypography: ThemeTypography | undefined = useMemo(() => {
+        if (!profile?.theme?.typography) return undefined;
+        return {
+            headingFont: profile.theme.typography.headingFont,
+            bodyFont: profile.theme.typography.bodyFont,
+        };
+    }, [profile?.theme?.typography]);
+
+    const themeLayout: ThemeLayout | undefined = useMemo(() => {
+        if (!profile?.theme?.layout) return undefined;
+        return {
+            spacing: profile.theme.layout.spacing,
+            heroStyle: profile.theme.layout.heroStyle,
+            sectionLayout: profile.theme.layout.sectionLayout,
+        };
+    }, [profile?.theme?.layout]);
+
+    // Determine background color based on theme
+    const bgStyle = useMemo(() => {
+        if (profile?.theme?.base_colors?.background) {
+            return { backgroundColor: profile.theme.base_colors.background };
+        }
+        return {};
+    }, [profile?.theme?.base_colors?.background]);
+
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -90,7 +125,13 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
             </Helmet>
 
             {/* Mobile-first full-height layout */}
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center p-4 sm:py-12 sm:px-6 lg:px-8">
+            <div
+                className="min-h-screen flex flex-col items-center p-4 sm:py-12 sm:px-6 lg:px-8"
+                style={{
+                    backgroundColor: bgStyle.backgroundColor || undefined,
+                    ...(!bgStyle.backgroundColor && { background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' })
+                }}
+            >
                 {/* Main Card - Mobile: full width, Desktop: max-width */}
                 <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-800 transition-all hover:shadow-2xl">
                     <ProfileCard
@@ -111,6 +152,9 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
                         showActions={true}
                         slug={slug}
                         compact={false}
+                        themeColors={themeColors}
+                        themeTypography={themeTypography}
+                        themeLayout={themeLayout}
                         onDownloadVCard={handleDownloadVCard}
                         onDownloadQr={handleDownloadQr}
                         onShare={handleShare}

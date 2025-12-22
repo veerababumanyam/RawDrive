@@ -538,18 +538,15 @@ class ThemeService {
    */
   async saveThemeSelection(
     workspaceId: string,
-    profileId: string,
+    _profileId: string,
     themeId: string,
-    customization?: Partial<ThemeCustomization>
+    _customization?: Partial<ThemeCustomization>
   ): Promise<ApiResponse<{ theme_id: string; customization_id?: string }>> {
     try {
-      const response = await apiClient.patch<{ theme_id: string; customization_id?: string }>(
-        `/v1/workspaces/${workspaceId}/profile-editor/theme`,
-        {
-          profile_id: profileId,
-          theme_id: themeId,
-          customization,
-        }
+      // Call the apply theme endpoint - theme_id is passed as query param
+      const response = await apiClient.post<{ theme_id: string; customization_id?: string }>(
+        `/api/v1/workspaces/${workspaceId}/profile-editor/theme/apply?theme_id=${themeId}`,
+        {}
       );
       return response;
     } catch (error) {

@@ -91,7 +91,41 @@ export interface CreateCompanyProfileRequest {
 
 export interface UpdateCompanyProfileRequest extends Partial<CreateCompanyProfileRequest> { }
 
-// For public profile response which is a filtered dict + seo_schema
+// Theme data returned with public profile
+export interface PublicProfileTheme {
+    theme_id: string;
+    name?: string;
+    category?: string;
+    base_colors?: {
+        primary?: string;
+        secondary?: string;
+        accent?: string;
+        background?: string;
+        surface?: string;
+        text?: string;
+    };
+    dark_colors?: {
+        primary?: string;
+        secondary?: string;
+        accent?: string;
+        background?: string;
+        surface?: string;
+        text?: string;
+    };
+    typography?: {
+        headingFont?: string;
+        bodyFont?: string;
+    };
+    layout?: {
+        spacing?: 'compact' | 'normal' | 'spacious';
+        heroStyle?: 'card' | 'full-bleed';
+        sectionLayout?: 'single-column' | 'two-column';
+    };
+}
+
+// For public profile response which is a filtered dict + seo_schema + theme
 export interface PublicCompanyProfile extends Partial<CompanyProfile> {
     seo_schema?: Record<string, any>;
+    theme?: PublicProfileTheme;
+    theme_id?: string;
 }
