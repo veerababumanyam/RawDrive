@@ -382,33 +382,51 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 )}
 
                 {/* Address */}
-                {isVisible('address') && hasAddress && profile.address_structured && (
-                    <div className={`flex items-start ${sizes.gap} text-gray-700 dark:text-gray-300 p-2 rounded-xl`}>
-                        <div
-                            className={`${sizes.iconBg} rounded-lg flex-shrink-0`}
-                            style={{
-                                backgroundColor: hexToRgba(accentColor, 0.1),
-                                color: accentColor,
-                            }}
+                {isVisible('address') && hasAddress && profile.address_structured && (() => {
+                    const addressParts = [
+                        profile.address_structured.line1,
+                        profile.address_structured.line2,
+                        profile.address_structured.city,
+                        profile.address_structured.state,
+                        profile.address_structured.postal_code,
+                        profile.address_structured.country,
+                    ].filter(Boolean);
+                    const fullAddress = addressParts.join(', ');
+                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+
+                    return (
+                        <a
+                            href={mapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`flex items-start ${sizes.gap} text-gray-700 dark:text-gray-300 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer`}
                         >
-                            <MapPin size={sizes.icon} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className={`${sizes.label} text-gray-500 uppercase font-semibold`}>Location</div>
-                            <div className={`${sizes.value} font-medium`}>
-                                {profile.address_structured.line1}
-                                {profile.address_structured.city && (
-                                    <>
-                                        <br />
-                                        {profile.address_structured.city}
-                                        {profile.address_structured.state && `, ${profile.address_structured.state}`}
-                                        {profile.address_structured.postal_code && ` ${profile.address_structured.postal_code}`}
-                                    </>
-                                )}
+                            <div
+                                className={`${sizes.iconBg} rounded-lg flex-shrink-0`}
+                                style={{
+                                    backgroundColor: hexToRgba(accentColor, 0.1),
+                                    color: accentColor,
+                                }}
+                            >
+                                <MapPin size={sizes.icon} />
                             </div>
-                        </div>
-                    </div>
-                )}
+                            <div className="flex-1 min-w-0">
+                                <div className={`${sizes.label} text-gray-500 uppercase font-semibold`}>Location</div>
+                                <div className={`${sizes.value} font-medium`}>
+                                    {profile.address_structured.line1}
+                                    {profile.address_structured.city && (
+                                        <>
+                                            <br />
+                                            {profile.address_structured.city}
+                                            {profile.address_structured.state && `, ${profile.address_structured.state}`}
+                                            {profile.address_structured.postal_code && ` ${profile.address_structured.postal_code}`}
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </a>
+                    );
+                })()}
             </div>
 
             {/* Links & Socials */}
