@@ -477,9 +477,12 @@ class CompanyProfileService:
                 raise CompanyProfileError(f"Profile {slug} not found", "NOT_FOUND", 404)
 
             data = self._map_row(row)
-            
+
             # Apply visibility filter for public view
-            visibility = json.loads(row["company_visibility"])
+            # asyncpg returns JSONB as dict, not string
+            visibility = row["company_visibility"]
+            if isinstance(visibility, str):
+                visibility = json.loads(visibility)
             filtered = VisibilityFilterService.filter_visible(data, visibility)
             
             # Cache result (1 hour TTL)
