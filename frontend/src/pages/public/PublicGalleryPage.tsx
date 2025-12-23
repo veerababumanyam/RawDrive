@@ -1,18 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { galleryService } from '../../services/galleryService';
 import { GalleryDetailData, PublicGalleryAsset } from '../../types/gallery';
 import { AppButton } from '../../components/ui/AppButton';
-import { Download, Grid } from 'lucide-react';
+import { Download, Grid, Lock as LockIcon } from 'lucide-react';
+import { ClientEmailModal } from '../../components/features/gallery/ClientEmailModal';
+
+const VISITOR_STORAGE_KEY_PREFIX = 'visitor_registered_';
 
 const PublicGalleryPage: React.FC = () => {
     // Note: Parameter name must match route definition
     const { galleryId } = useParams<{ galleryId: string }>();
+    const navigate = useNavigate();
     const [gallery, setGallery] = useState<GalleryDetailData | null>(null);
     const [assets, setAssets] = useState<PublicGalleryAsset[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Visitor Registration State
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [isRegistering, setIsRegistering] = useState(false);
+    const [isVisitorAuthenticated, setIsVisitorAuthenticated] = useState(false);
 
     useEffect(() => {
         const fetchGalleryData = async () => {
@@ -23,9 +32,19 @@ const PublicGalleryPage: React.FC = () => {
                 const galleryData = await galleryService.getPublicGallery(galleryId);
                 setGallery(galleryData);
 
-                // Fetch assets
-                const assetsData = await galleryService.getPublicGalleryAssets(galleryId);
-                setAssets(assetsData);
+                // Check registration requirement
+                const isRegistered = localStorage.getItem(`${VISITOR_STORAGE_KEY_PREFIX}${galleryId}`);
+
+                if (galleryData.email_registration_required && !isRegistered) {
+                    setShowEmailModal(true);
+                } else {
+                    setIsVisitorAuthenticated(true);
+                    // Fetch assets only if authorized or not required
+                    // Optimistically we can fetch, but maybe save bandwidth?
+                    // Let's fetch assets if auth not required or already auth'd
+                    const assetsData = await galleryService.getPublicGalleryAssets(galleryId);
+                    setAssets(assetsData);
+                }
             } catch (err: any) {
                 console.error(err);
                 if (err.message && err.message.includes('404')) {
@@ -39,6 +58,26 @@ const PublicGalleryPage: React.FC = () => {
         };
         fetchGalleryData();
     }, [galleryId]);
+
+    const handleVisitorSubmit = async (data: { email: string; first_name: string; last_name: string; phone: string }) => {
+        if (!galleryId) return;
+        setIsRegistering(true);
+        try {
+            await galleryService.registerVisitor(galleryId, data);
+            localStorage.setItem(`${VISITOR_STORAGE_KEY_PREFIX}${galleryId}`, 'true');
+            setShowEmailModal(false);
+            setIsVisitorAuthenticated(true);
+
+            // Load assets now
+            const assetsData = await galleryService.getPublicGalleryAssets(galleryId);
+            setAssets(assetsData);
+        } catch (error) {
+            console.error(error);
+            // In a real app, show toast error
+        } finally {
+            setIsRegistering(false);
+        }
+    };
 
     if (isLoading) {
         return (
@@ -74,6 +113,13 @@ const PublicGalleryPage: React.FC = () => {
                 <title>{gallery.title} {company_profile?.name ? `| ${company_profile.name}` : ''}</title>
             </Helmet>
 
+            <ClientEmailModal
+                isOpen={showEmailModal}
+                onClose={() => navigate('/')} // Redirect home if they reject/close? Actually modal forces choice.
+                onSubmit={handleVisitorSubmit}
+                isLoading={isRegistering}
+            />
+
             {/* Sticky Header */}
             <header className="sticky top-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 transition-all">
                 <div className="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between">
@@ -88,7 +134,7 @@ const PublicGalleryPage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {gallery.download_policy !== 'view_only' && (
+                        {gallery.download_policy !== 'view_only' && isVisitorAuthenticated && (
                             <AppButton variant="outline" leftIcon={<Download size={16} />} size="sm">
                                 Download
                             </AppButton>
@@ -121,7 +167,7 @@ const PublicGalleryPage: React.FC = () => {
                         )}
                         <div className="mt-6 flex flex-wrap justify-center gap-4 text-white/80 text-sm font-medium">
                             <span className="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">{new Date(gallery.created_at).toLocaleDateString()}</span>
-                            <span className="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">{gallery.stats.total_photos} Photos</span>
+                            {!showEmailModal && <span className="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">{gallery.stats.total_photos} Photos</span>}
                         </div>
                     </div>
                 </div>
@@ -136,25 +182,42 @@ const PublicGalleryPage: React.FC = () => {
                     </div>
                 )}
 
-                {assets.length === 0 ? (
-                    <div className="text-center py-20 text-gray-500">
-                        <Grid className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                        <p>No photos in this gallery yet.</p>
+                {/* Privacy Gate */}
+                {showEmailModal ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
+                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
+                            <LockIcon className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                            Restricted Access
+                        </h3>
+                        <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                            Please complete the registration form to view and download photos from this gallery.
+                        </p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {assets.map(asset => (
-                            <div key={asset.asset_id} className="aspect-[3/2] bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden group relative break-inside-avoid">
-                                <img
-                                    src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${asset.asset_id}/thumbnail`}
-                                    alt={asset.filename}
-                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                    loading="lazy"
-                                />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300"></div>
+                    <>
+                        {assets.length === 0 ? (
+                            <div className="text-center py-20 text-gray-500">
+                                <Grid className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                                <p>No photos in this gallery yet.</p>
                             </div>
-                        ))}
-                    </div>
+                        ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                {assets.map(asset => (
+                                    <div key={asset.asset_id} className="aspect-[3/2] bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden group relative break-inside-avoid">
+                                        <img
+                                            src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${asset.asset_id}/thumbnail`}
+                                            alt={asset.filename}
+                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                            loading="lazy"
+                                        />
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300"></div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </>
                 )}
             </main>
 

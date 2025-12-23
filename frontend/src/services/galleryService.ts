@@ -503,6 +503,27 @@ export class GalleryService {
       throw new Error(response.error.message || 'Failed to update sub-galleries sort order');
     }
   }
+  /**
+   * Register visitor
+   */
+  async registerVisitor(
+    galleryId: string,
+    data: {
+      email: string;
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+      address?: string;
+      metadata?: Record<string, any>;
+    }
+  ): Promise<{ visitor_id: string; email: string }> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}/register`;
+    const response = await apiClient.post<{ visitor_id: string; email: string }>(endpoint, data);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to register visitor');
+    }
+    return response.data!;
+  }
 }
 
 // Export singleton instance

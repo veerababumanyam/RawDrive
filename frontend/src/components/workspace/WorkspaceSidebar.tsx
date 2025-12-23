@@ -9,7 +9,6 @@ import {
   Settings,
   HelpCircle,
   Crown,
-  Plus,
   LayoutGrid,
   Clock,
   Star,
@@ -17,7 +16,6 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeft,
-  Search,
   Building2,
 } from 'lucide-react';
 import {
@@ -30,7 +28,6 @@ import {
 } from '../layout/Sidebar';
 import { useAppShell } from '../layout/AppShell';
 import { useAuth } from '../../contexts/AuthContext';
-import { useSearch } from '../../contexts/SearchContext';
 import { AppButton } from '../ui/AppButton';
 
 /* =============================================================================
@@ -64,7 +61,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const { t } = useTranslation('common');
   const { sidebarCollapsed, toggleCollapse } = useAppShell();
   const { logout } = useAuth();
-  const { openGlobalSearch } = useSearch();
 
   const currentPath = location.pathname;
 
@@ -83,6 +79,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     { id: 'galleries', label: t('nav.galleries'), icon: <LayoutGrid size={20} />, path: '/workspace/galleries' },
     { id: 'libraries', label: t('nav.libraries'), icon: <FolderOpen size={20} />, path: '/workspace/libraries' },
     { id: 'clients', label: t('nav.clients'), icon: <Users size={20} />, path: '/workspace/clients' },
+    { id: 'visitors', label: t('nav.visitors'), icon: <Users size={20} />, path: '/workspace/visitors' },
     { id: 'shared', label: t('nav.shared'), icon: <Share2 size={20} />, path: '/workspace/shared' },
   ], [t]);
 
@@ -146,32 +143,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               {sidebarCollapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
             </button>
           </div>
-        </div>
-
-        {/* New Gallery Button */}
-        <div className="px-3 mb-2">
-          <AppButton
-            variant="accent"
-            size={sidebarCollapsed ? 'icon' : 'md'}
-            onClick={() => navigate('/workspace/galleries/new')}
-            fullWidth
-            leftIcon={<Plus size={20} />}
-            title={sidebarCollapsed ? t('nav.newGallery') : undefined}
-            shine
-          >
-            {!sidebarCollapsed && t('nav.newGallery')}
-          </AppButton>
-        </div>
-
-        {/* Search Item */}
-        <div className="px-2 mb-2">
-          <SidebarItem
-            id="search"
-            label={t('nav.search')}
-            icon={<Search size={20} />}
-            onClick={openGlobalSearch}
-            className="text-text-secondary hover:text-primary"
-          />
         </div>
 
         {/* Main Nav */}

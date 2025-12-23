@@ -54,6 +54,7 @@ const RecycleBinPage = lazy(() => import('../pages/workspace/RecycleBinPage'));
 const ClientsPage = lazy(() => import('../pages/workspace/ClientsPage'));
 const ClientDetailPage = lazy(() => import('../pages/workspace/ClientDetailPage'));
 const ClientFormPage = lazy(() => import('../pages/workspace/ClientFormPage'));
+const VisitorsPage = lazy(() => import('../pages/workspace/VisitorsPage'));
 const CompanyProfilePage = lazy(() => import('../pages/workspace/settings/CompanyProfilePage'));
 const GeneralSettingsPage = lazy(() => import('../pages/workspace/settings/GeneralSettingsPage'));
 
@@ -199,6 +200,10 @@ export const workspaceRoutes: RouteObject[] = [
       {
         path: 'clients/:clientId/edit',
         element: <CriticalLazyPage component={ClientFormPage} />,
+      },
+      {
+        path: 'visitors',
+        element: <LazyPage component={VisitorsPage} />,
       },
       {
         path: 'shared',

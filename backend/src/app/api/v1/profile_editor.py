@@ -55,14 +55,14 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Workspace-scoped router (requires authentication)
+# NOTE: prefix is set in __init__.py where this router is mounted
 router = APIRouter(
-    prefix="/profile-editor",
     tags=["Profile Editor"],
 )
 
 # Public themes router (no authentication required for browsing)
+# NOTE: prefix is set in __init__.py where this router is mounted
 public_router = APIRouter(
-    prefix="/themes",
     tags=["Themes"],
 )
 

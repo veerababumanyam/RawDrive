@@ -4,15 +4,52 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Path, status
+from fastapi import APIRouter, Path, status, Body
 
-from app.api.schemas import GalleryDetailResponse, ErrorResponse
+from app.api.schemas import GalleryDetailResponse, ErrorResponse, VisitorRegisterRequest
 from app.services.gallery_service import get_gallery_service, GalleryNotFoundError
+from app.services.visitor_service import get_visitor_service
 from app.api.exceptions import AppError, NotFoundError, InternalError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+@router.post(
+    "/{gallery_id}/register",
+    status_code=status.HTTP_201_CREATED,
+    summary="Register visitor",
+)
+async def register_visitor(
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    request: VisitorRegisterRequest = Body(...),
+):
+    """Register visitor to access gallery."""
+    # 1. Get gallery to verify existence and workspace
+    gallery_service = get_gallery_service()
+    try:
+        gallery = await gallery_service.get_public_gallery(gallery_id)
+        workspace_id = UUID(gallery["workspace_id"])
+    except GalleryNotFoundError:
+         raise NotFoundError("Gallery", str(gallery_id))
+
+    # 2. Register visitor
+    visitor_service = get_visitor_service()
+    try:
+        result = await visitor_service.register_visitor(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            email=request.email,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            phone=request.phone,
+            address=request.address,
+            metadata=request.metadata,
+        )
+        return result
+    except Exception as e:
+        logger.exception("Failed to register visitor")
+        raise InternalError("Failed to register visitor")
 
 @router.get(
     "/{gallery_id}",

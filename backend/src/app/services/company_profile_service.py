@@ -645,7 +645,22 @@ class CompanyProfileService:
         address_data = json.loads(row["address_structured"]) if isinstance(row["address_structured"], str) else row["address_structured"]
         socials = json.loads(row["socials"]) if isinstance(row["socials"], str) else row["socials"]
         custom_links = json.loads(row["custom_links"]) if isinstance(row["custom_links"], str) else row["custom_links"]
-        company_visibility = json.loads(row["company_visibility"]) if isinstance(row["company_visibility"], str) else row["company_visibility"]
+        company_visibility = row["company_visibility"]
+        if isinstance(company_visibility, str):
+            company_visibility = json.loads(company_visibility)
+        elif isinstance(company_visibility, list):
+            # Handle corrupted data where migration might have converted object to array
+            # or appended to existing array instead of merging
+            merged_visibility = {}
+            for item in company_visibility:
+                if isinstance(item, str):
+                    try:
+                        item = json.loads(item)
+                    except Exception:
+                        continue
+                if isinstance(item, dict):
+                    merged_visibility.update(item)
+            company_visibility = merged_visibility
 
         # Parse theme-related JSONB fields
         color_palette = row.get("color_palette")

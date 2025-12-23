@@ -31,6 +31,23 @@ class LoginRequest(BaseModel):
     workspace_id: Optional[UUID] = Field(None, description="Optional workspace to login to")
 
 
+class ClientInteractionRequest(BaseModel):
+    """Request to log a client interaction."""
+    type: str = Field(..., description="Interaction type (favorite, select, comment)")
+    asset_id: UUID = Field(..., description="Asset ID")
+    payload: Optional[dict] = Field(None, description="Interaction payload (e.g. comment text)")
+
+
+class VisitorRegisterRequest(BaseModel):
+    """Request to register a visitor."""
+    email: str = Field(..., description="Visitor email")
+    first_name: Optional[str] = Field(None, description="First name")
+    last_name: Optional[str] = Field(None, description="Last name")
+    phone: Optional[str] = Field(None, description="Phone number")
+    address: Optional[str] = Field(None, description="Address")
+    metadata: Optional[dict] = Field({}, description="Additional metadata")
+    
+
 class RefreshTokenRequest(BaseModel):
     """Token refresh request."""
 

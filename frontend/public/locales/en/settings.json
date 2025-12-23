@@ -1,5 +1,6 @@
 {
     "title": "Settings",
+    "description": "Manage your account preferences and settings",
     "saved": "Settings saved successfully",
     "language": {
         "title": "Language & Region",
@@ -28,17 +29,23 @@
         "title": "Notifications",
         "description": "Configure how you receive notifications",
         "email": "Email Notifications",
+        "emailDescription": "Receive important updates via email",
         "push": "Push Notifications",
         "galleryViews": "Gallery view alerts",
+        "galleryViewsDescription": "Get notified when someone views your gallery",
         "downloads": "Download notifications",
-        "comments": "New comments"
+        "downloadsDescription": "Get notified when photos are downloaded",
+        "comments": "New comments",
+        "commentsDescription": "Get notified about new comments"
     },
     "privacy": {
         "title": "Privacy",
         "description": "Control your privacy settings",
         "publicProfile": "Public Profile",
+        "publicProfileDescription": "Allow others to view your public profile",
         "showEmail": "Show email on public profile",
-        "analytics": "Usage Analytics"
+        "analytics": "Usage Analytics",
+        "analyticsDescription": "Help improve RawDrive with anonymous usage data"
     },
     "billing": {
         "title": "Billing",
