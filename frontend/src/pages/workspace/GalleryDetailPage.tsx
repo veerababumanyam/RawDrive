@@ -23,6 +23,7 @@ import {
   Lightbox,
   BulkActionBar,
   GallerySettingsPanel,
+  PeoplePanel,
 } from '../../components/features/gallery';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppCard } from '../../components/ui/AppCard';
@@ -60,6 +61,7 @@ const GalleryDetailPage: React.FC = () => {
   const [renameSubGallery, setRenameSubGallery] = useState<{ id: string; name: string } | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showPeoplePanel, setShowPeoplePanel] = useState(false);
 
   // Register search handler
   const { registerHandler, unregisterHandler } = useSearch();
@@ -579,7 +581,7 @@ const GalleryDetailPage: React.FC = () => {
         isPublished={gallery.status === 'published'}
         hasPhotos={(gallery.stats?.total_items || 0) > 0}
         onViewAsClient={() => window.open(`/g/${gallery.gallery_id}`, '_blank')}
-        onFindPeople={() => addToast({ message: 'Find People - Coming soon', variant: 'info' })}
+        onFindPeople={() => setShowPeoplePanel(true)}
         onAIStory={() => addToast({ message: 'AI Story - Coming soon', variant: 'info' })}
         onShare={() => addToast({ message: 'Share - Coming soon', variant: 'info' })}
         onSettings={() => setShowSettings(true)}
@@ -951,6 +953,19 @@ const GalleryDetailPage: React.FC = () => {
           photoCount={gallery.stats.total_photos}
           retentionDays={30}
           isLoading={isDeleting}
+        />
+
+        {/* People Panel */}
+        <PeoplePanel
+          galleryId={gallery.gallery_id}
+          isOpen={showPeoplePanel}
+          onClose={() => setShowPeoplePanel(false)}
+          onFilterByPerson={(groupId) => {
+            // TODO: Implement filtering by person
+            if (groupId) {
+              addToast({ message: `Filtering by person - Coming soon`, variant: 'info' });
+            }
+          }}
         />
       </div>
       {/* End Photo Section */}

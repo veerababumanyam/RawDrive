@@ -28,6 +28,8 @@ from app.api.v1.company_profile import public_router as public_profile_router
 from app.api.v1.public_galleries import router as public_galleries_router
 from app.api.v1.profile_editor import router as profile_editor_router
 from app.api.v1.profile_editor import public_router as themes_router
+from app.api.v1.faces import router as faces_router
+from app.api.v1.face_groups import router as face_groups_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -120,4 +122,14 @@ router.include_router(
     themes_router,
     prefix="/api/v1/themes",
     tags=["themes"],
+)
+router.include_router(
+    faces_router,
+    prefix="/api/v1",
+    tags=["faces"],
+)
+router.include_router(
+    face_groups_router,
+    prefix="/api/v1",
+    tags=["face-groups"],
 )

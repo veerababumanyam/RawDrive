@@ -243,6 +243,58 @@ class R2StorageService:
             logger.error(f"R2 client error: {e}")
             raise StorageError(f"Storage error: {e}", "STORAGE_ERROR") from e
 
+    async def download_by_object_key(self, object_key: str) -> bytes:
+        """Download encrypted file from R2 by raw object key.
+
+        This method is useful when you have the full object key from the database.
+        The object key should NOT include .enc extension - it will be added automatically.
+
+        Args:
+            object_key: Full object key path (without .enc extension)
+
+        Returns:
+            Encrypted file bytes
+
+        Raises:
+            StorageError: If download fails or file not found
+        """
+        # Add .enc extension if not present (encrypted files have .enc suffix)
+        if not object_key.endswith(".enc"):
+            # Get base name without extension and add .enc
+            if "." in object_key.rsplit("/", 1)[-1]:
+                base = object_key.rsplit(".", 1)[0]
+                key_with_enc = f"{base}.enc"
+            else:
+                key_with_enc = f"{object_key}.enc"
+        else:
+            key_with_enc = object_key
+
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                self.executor,
+                lambda: self.s3_client.get_object(Bucket=self.bucket_name, Key=key_with_enc),
+            )
+            encrypted_data = await loop.run_in_executor(
+                self.executor,
+                lambda: response["Body"].read(),
+            )
+
+            logger.debug(f"Downloaded encrypted file from R2: {key_with_enc}")
+            return encrypted_data
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
+            if error_code == "NoSuchKey":
+                raise StorageError(
+                    f"File not found: {key_with_enc}",
+                    "FILE_NOT_FOUND",
+                ) from e
+            logger.error(f"Failed to download from R2: {e}")
+            raise StorageError(f"Download failed: {e}", "DOWNLOAD_FAILED") from e
+        except BotoCoreError as e:
+            logger.error(f"R2 client error: {e}")
+            raise StorageError(f"Storage error: {e}", "STORAGE_ERROR") from e
+
     async def delete_file(
         self,
         workspace_id: UUID,

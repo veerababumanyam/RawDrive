@@ -91,6 +91,14 @@ def get_default_user_message(code: FaceDetectionErrorCode) -> str:
             "Face embedding has incorrect dimensions. Please reprocess the photo.",
         FaceDetectionErrorCode.EMBEDDING_NOT_NORMALIZED:
             "Face embedding is not properly normalized. Please reprocess the photo.",
+            
+        # Feature toggle errors
+        FaceDetectionErrorCode.DETECTION_DISABLED:
+            "Face detection is disabled for this workspace. Please contact your administrator.",
+            
+        # Resource not found errors
+        FaceDetectionErrorCode.PHOTO_NOT_FOUND:
+            "The photo could not be found. It may have been deleted.",
     }
 
     return messages.get(code, "An unexpected error occurred. Please try again.")
@@ -138,6 +146,12 @@ def get_default_http_status(code: FaceDetectionErrorCode) -> int:
         FaceDetectionErrorCode.PROVIDER_INVALID_RESPONSE: 500,
         FaceDetectionErrorCode.DETECTION_FAILED: 500,
         FaceDetectionErrorCode.INVALID_CONFIGURATION: 500,
+        
+        # 403 - Detection disabled
+        FaceDetectionErrorCode.DETECTION_DISABLED: 403,
+        
+        # 404 - Photo not found
+        FaceDetectionErrorCode.PHOTO_NOT_FOUND: 404,
     }
 
     return status_map.get(code, 500)
@@ -467,24 +481,43 @@ class FaceGroupNotFoundError(FaceDetectionError):
 class InvalidMergeOperationError(FaceDetectionError):
     """Face group merge operation is invalid."""
 
-    def __init__(self, reason: str) -> None:
+    def __init__(
+        self, 
+        reason: str,
+        source_group_id: Optional[UUID | str] = None,
+        target_group_id: Optional[UUID | str] = None,
+    ) -> None:
+        details: dict[str, Any] = {"reason": reason}
+        if source_group_id:
+            details["source_group_id"] = str(source_group_id)
+        if target_group_id:
+            details["target_group_id"] = str(target_group_id)
+            
         super().__init__(
             code=FaceDetectionErrorCode.INVALID_MERGE_OPERATION,
             message=f"Invalid merge operation: {reason}",
             user_message=f"Cannot merge face groups: {reason}",
-            details={"reason": reason},
+            details=details,
         )
 
 
 class InvalidSplitOperationError(FaceDetectionError):
     """Face group split operation is invalid."""
 
-    def __init__(self, reason: str) -> None:
+    def __init__(
+        self, 
+        reason: str,
+        group_id: Optional[UUID | str] = None,
+    ) -> None:
+        details: dict[str, Any] = {"reason": reason}
+        if group_id:
+            details["group_id"] = str(group_id)
+            
         super().__init__(
             code=FaceDetectionErrorCode.INVALID_SPLIT_OPERATION,
             message=f"Invalid split operation: {reason}",
             user_message=f"Cannot split face group: {reason}",
-            details={"reason": reason},
+            details=details,
         )
 
 
@@ -598,4 +631,39 @@ class EmbeddingNotNormalizedError(FaceDetectionError):
             code=FaceDetectionErrorCode.EMBEDDING_NOT_NORMALIZED,
             message=f"Embedding not normalized: L2 norm = {l2_norm:.6f}, expected 1.0",
             details={"l2_norm": l2_norm},
+        )
+
+
+# =============================================================================
+# FEATURE TOGGLE ERRORS
+# =============================================================================
+
+
+class DetectionDisabledError(FaceDetectionError):
+    """Face detection is disabled for this workspace."""
+
+    def __init__(
+        self, 
+        workspace_id: UUID | str,
+    ) -> None:
+        super().__init__(
+            code=FaceDetectionErrorCode.DETECTION_DISABLED,
+            message=f"Face detection is disabled for workspace {workspace_id}",
+            details={"workspace_id": str(workspace_id)},
+        )
+
+
+# =============================================================================
+# RESOURCE NOT FOUND ERRORS
+# =============================================================================
+
+
+class PhotoNotFoundError(FaceDetectionError):
+    """Photo does not exist in the workspace."""
+
+    def __init__(self, photo_id: UUID | str) -> None:
+        super().__init__(
+            code=FaceDetectionErrorCode.PHOTO_NOT_FOUND,
+            message=f"Photo {photo_id} not found",
+            details={"photo_id": str(photo_id)},
         )

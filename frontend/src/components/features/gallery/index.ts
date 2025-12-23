@@ -79,3 +79,5 @@ export { TagInput } from './TagInput';
 export { CommentSection } from './CommentSection';
 
 export { SearchModal } from './SearchModal';
+
+export { PeoplePanel } from './PeoplePanel';

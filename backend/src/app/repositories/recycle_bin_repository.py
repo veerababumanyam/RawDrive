@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Optional
 from uuid import UUID
 
-from app.database import get_postgres_pool
+from app.db.postgres import get_postgres_pool
 
 
 class RecycleBinRepository:

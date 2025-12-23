@@ -63,6 +63,12 @@ class FaceDetectionErrorCode(str, Enum):
     # Embedding errors - vector operation issues
     EMBEDDING_DIMENSION_MISMATCH = "EMBEDDING_DIMENSION_MISMATCH"
     EMBEDDING_NOT_NORMALIZED = "EMBEDDING_NOT_NORMALIZED"
+    
+    # Feature toggle errors
+    DETECTION_DISABLED = "DETECTION_DISABLED"
+    
+    # Resource not found errors
+    PHOTO_NOT_FOUND = "PHOTO_NOT_FOUND"
 
 
 class FaceDetectionJobStatus(str, Enum):

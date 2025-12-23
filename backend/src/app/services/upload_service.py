@@ -499,6 +499,21 @@ class UploadService:
                     )
                 except Exception as e:
                     logger.error(f"Failed to enqueue asset processing job: {e}")
+                
+                # Queue face detection job for photos
+                try:
+                    await task_queue.enqueue(
+                        task_type="face_detection",
+                        payload={
+                            "photo_id": str(asset_id),
+                            "workspace_id": str(workspace_id),
+                            "priority": 0,
+                        },
+                        priority=TaskPriority.NORMAL,
+                        max_retries=3,
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to enqueue face detection job: {e}")
 
             # Update upload session with asset_id and state
             await conn.execute(

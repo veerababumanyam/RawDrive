@@ -98,6 +98,9 @@ def upgrade() -> None:
             -- Timestamp when job was created/queued
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             
+            -- Timestamp for scheduled retry (NULL = process immediately)
+            scheduled_at TIMESTAMPTZ,
+            
             -- Constraints
             CONSTRAINT face_detection_jobs_status_valid CHECK (
                 status IN ('pending', 'processing', 'completed', 'failed')
