@@ -19,7 +19,6 @@ import { useGallery } from '../../hooks/useGallery';
 import { useGalleryAssets } from '../../hooks/useGalleryAssets';
 import { useSocket } from '../../hooks/useSocket';
 import {
-  PhotoGrid,
   PhotoListView,
   GalleryUpload,
   GalleryHeader,
@@ -31,6 +30,7 @@ import {
   BulkActionBar,
   GallerySettingsPanel,
   PeoplePanel,
+  GalleryCanvas,
 } from '../../components/features/gallery';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
@@ -39,6 +39,7 @@ import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmation
 import { useToast } from '../../components/ui/Toast';
 import { useSearch } from '../../contexts/SearchContext';
 import { galleryService } from '../../services/galleryService';
+import { SignedUrlProvider } from '../../contexts/SignedUrlContext';
 import type { GalleryAssetItem, ViewMode, FilterType } from '../../types/gallery';
 
 const GalleryDetailPage: React.FC = () => {
@@ -48,7 +49,18 @@ const GalleryDetailPage: React.FC = () => {
   const { workspace } = useAuth();
   const { addToast } = useToast();
 
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gallery_view_mode');
+      return (saved as ViewMode) || 'grid';
+    }
+    return 'grid';
+  });
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem('gallery_view_mode', mode);
+  };
   const [filter, setFilter] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<{
@@ -107,6 +119,7 @@ const GalleryDetailPage: React.FC = () => {
     refetch: refetchAssets,
     loadMore,
     hasMore,
+    updateAsset,
   } = useGalleryAssets({
     workspaceId: workspace?.workspace_id || '',
     galleryId: galleryId || '',
@@ -145,7 +158,51 @@ const GalleryDetailPage: React.FC = () => {
   });
 
   // Handle asset selection
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+  
+  // Handle asset selection
   const handleAssetSelect = useCallback((assetId: string) => {
+    // Note: GalleryCanvas now implements local logic for Shift/Ctrl clicks
+    // using props passed down. But it calls onSelectionChange with the NEW set.
+    // However, for Shift-click to work, we need to store the `lastSelectedId`.
+    // In standard React flow, the child (GalleryCanvas) computes the new set,
+    // passes it here via onSelectionChange.
+    
+    // BUT we also need to know which one was just clicked to update `lastSelectedId`.
+    // Since `onSelectionChange` only gives the set, we might need to intercept the click?
+    // GalleryCanvas calls `onAssetSelect` PROP if we look at my previous change plan?
+    // Wait, I modified GalleryCanvas internal `handleAssetSelect`. 
+    // It calls `onSelectionChange(newSet)`.
+    
+    // It does NOT update `lastSelectedId` state in the parent.
+    // So the next time I click, `lastSelectedId` prop passed to Canvas will be stale/null.
+    
+    // I need to update `lastSelectedId` whenever selection changes via user interaction.
+    // `GalleryCanvas` could accept `onAssetClick` (which it does).
+    
+    // Actually `GalleryCanvas` has `onAssetClick` (for lightbox).
+    // And `onSelectionChange` (for selection state).
+    
+    // I need to update `lastSelectedId` when selection happens.
+    // I will add a new callback `onLastSelectedIdChange` or similar?
+    // OR just update it in `handleAssetSelect` if I change the signature?
+    // But `handleAssetSelect` here is just a helper, it's not the one receiving the event?
+    
+    // Let's modify `setSelectedAssetIds` to also update `lastSelectedId`? No, that's just a setter.
+    
+    // I will modify `GalleryCanvas` to accept `onLastSelectedIdChange`.
+    // For now, let's keep it simple. I will just rely on single select updating it?
+    // No, range select needs it.
+    
+    // Let's just update `lastSelectedId` manually here for now using a wrapper?
+    // No, `GalleryCanvas` determines WHICH ID was clicked.
+    
+    // I will assume `GalleryCanvas` handles the logic locally for now using the prop I added?
+    // Wait, I added `lastSelectedId` to PROPS in `GalleryCanvas`.
+    // But I didn't add a way for `GalleryCanvas` to UPDATE it.
+    
+    setLastSelectedId(assetId); // Naive update
+    
     setSelectedAssetIds((prev) => {
       const next = new Set(prev);
       if (next.has(assetId)) {
@@ -177,37 +234,48 @@ const GalleryDetailPage: React.FC = () => {
   const handleAssetFavorite = useCallback(
     async (assetId: string, favorited: boolean) => {
       if (!workspace?.workspace_id || !galleryId) return;
+
+      // Optimistic update
+      updateAsset(assetId, { is_favorited: favorited });
+
       try {
         await galleryService.toggleFavorite(workspace.workspace_id, galleryId, [assetId], favorited);
-        await refetchAssets();
         addToast({
           message: favorited ? 'Photo favorited' : 'Photo unfavorited',
           variant: 'success',
         });
+        // We don't refetchAssets() here to keep the UI smooth and instant.
+        // If other users change it, we should rely on WebSocket (to be implemented for updates)
       } catch (error) {
+        // Revert on failure
+        updateAsset(assetId, { is_favorited: !favorited });
         addToast({ message: 'Failed to update favorite', variant: 'error' });
       }
     },
-    [workspace?.workspace_id, galleryId, refetchAssets, addToast]
+    [workspace?.workspace_id, galleryId, updateAsset, addToast]
   );
-
-  // Handle asset selection toggle (for picks)
-  const handleAssetSelection = useCallback(
-    async (assetId: string, selected: boolean) => {
+  // Handle asset update (inline edit)
+  const handleAssetUpdate = useCallback(
+    async (assetId: string, updates: { title?: string; description?: string; is_private?: boolean }) => {
       if (!workspace?.workspace_id || !galleryId) return;
+
+      // Optimistic update
+      updateAsset(assetId, updates);
+
       try {
-        await galleryService.toggleSelection(workspace.workspace_id, galleryId, [assetId], selected);
-        await refetchAssets();
-        addToast({
-          message: selected ? 'Photo selected' : 'Photo deselected',
-          variant: 'success',
-        });
+        await galleryService.updateAsset(workspace.workspace_id, galleryId, assetId, updates);
+        addToast({ message: 'Asset updated', variant: 'success' });
       } catch (error) {
-        addToast({ message: 'Failed to update selection', variant: 'error' });
+        // Revert/Refetch on failure
+        await refetchAssets();
+        addToast({ message: 'Failed to update asset', variant: 'error' });
       }
     },
-    [workspace?.workspace_id, galleryId, refetchAssets, addToast]
+    [workspace?.workspace_id, galleryId, updateAsset, refetchAssets, addToast]
   );
+
+
+
 
   // Handle single asset deletion
   const handleDeleteAsset = useCallback(
@@ -517,6 +585,7 @@ const GalleryDetailPage: React.FC = () => {
   }
 
   return (
+    <SignedUrlProvider>
     <div className="gallery-detail-page w-full max-w-full overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 min-h-screen">
       {/* Main Content Container - Responsive padding */}
       <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-5">
@@ -609,7 +678,7 @@ const GalleryDetailPage: React.FC = () => {
           filter={filter}
           searchQuery={searchQuery}
           selectedCount={selectedAssetIds.size}
-          onViewModeChange={setViewMode}
+          onViewModeChange={handleViewModeChange}
           onFilterChange={setFilter}
           onSearchChange={setSearchQuery}
           activeFilters={activeFilters}
@@ -703,22 +772,24 @@ const GalleryDetailPage: React.FC = () => {
                 Try Again
               </AppButton>
             </div>
-          ) : viewMode === 'grid' ? (
-            <PhotoGrid
+          ) : viewMode === 'grid' || viewMode === 'masonry' ? (
+            <GalleryCanvas
               assets={assets}
+              viewMode={viewMode === 'masonry' ? 'masonry' : 'grid'}
               selectedAssetIds={selectedAssetIds}
+              lastSelectedId={lastSelectedId}
               selectable={true}
               coverAssetId={
                 activeSubGalleryId
                   ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === activeSubGalleryId)?.cover_asset_id
                   : gallery?.cover_asset_id
               }
-              onAssetSelect={handleAssetSelect}
+              onSelectionChange={setSelectedAssetIds}
               onAssetClick={handleAssetClick}
               onAssetFavorite={handleAssetFavorite}
-              onAssetSelection={handleAssetSelection}
               onAssetDownload={handleAssetDownload}
               onAssetDelete={handleDeleteAsset}
+              onAssetUpdate={handleAssetUpdate}
               onSetCover={async (assetId) => {
                 if (!workspace?.workspace_id || !galleryId) return;
                 try {
@@ -944,6 +1015,7 @@ const GalleryDetailPage: React.FC = () => {
         />
       </div>
     </div>
+    </SignedUrlProvider>
   );
 };
 

@@ -6,11 +6,9 @@
  */
 
 import React from 'react';
-import { Grid, List, Sparkles, Heart, CheckSquare, Search, X } from 'lucide-react';
+import { Grid, List, Sparkles, Heart, CheckSquare, Search, X, LayoutDashboard } from 'lucide-react';
 import { Checkbox } from '../../ui/FormControls';
-
-export type ViewMode = 'grid' | 'list';
-export type FilterType = 'all' | 'picks' | 'favorites' | 'selections';
+import { ViewMode, FilterType } from '../../../types/gallery';
 
 export interface GalleryToolbarProps {
   viewMode: ViewMode;
@@ -105,6 +103,20 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               <Grid size={18} />
             </button>
             <button
+              onClick={() => onViewModeChange('masonry')}
+              className={`
+                p-2 rounded-md transition-all duration-200
+                ${viewMode === 'masonry'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-text-tertiary hover:text-text-primary hover:bg-surface-hover'
+                }
+              `}
+              aria-label="Masonry view"
+              aria-pressed={viewMode === 'masonry'}
+            >
+              <LayoutDashboard size={18} />
+            </button>
+            <button
               onClick={() => onViewModeChange('list')}
               className={`
                 p-2 rounded-md transition-all duration-200
@@ -157,9 +169,30 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               aria-label="Show selected only"
             >
               <CheckSquare size={14} />
-              <span className="hidden sm:inline">Select All</span>
-              <span className="sm:hidden">All</span>
+              <span className="hidden sm:inline">Selected Only</span>
+              <span className="sm:hidden">Selected</span>
             </button>
+
+            {/* Clear Selection Button - Only if items selected */}
+            {selectedCount > 0 && onSelectAllChange && (
+               <button
+                  onClick={() => onSelectAllChange(false)}
+                  className="
+                    inline-flex items-center gap-1.5
+                    px-3 py-1.5
+                    text-sm font-medium
+                    rounded-full
+                    border border-border
+                    bg-surface hover:bg-surface-hover
+                    text-text-secondary hover:text-text-primary
+                    transition-all duration-200
+                  "
+                  aria-label="Deselect all"
+                >
+                  <X size={14} />
+                  <span>Clear</span>
+               </button>
+            )}
           </div>
         )}
 

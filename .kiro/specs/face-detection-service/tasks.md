@@ -214,7 +214,7 @@ This implementation plan breaks down the Face Detection and Identification servi
   - [x] Ensure workspace isolation is enforced
   - [x] Ask the user if questions arise
 
-- [ ] 10. Face Cluster Service
+- [x] 10. Face Cluster Service
   - [x] 10.1 Create FaceClusterService
     - Create `backend/src/services/faceClusterService.ts`
     - Implement `assignToCluster()` with similarity matching
@@ -257,7 +257,7 @@ This implementation plan breaks down the Face Detection and Identification servi
     - Test that specified faces move to new cluster
     - **Validates: Requirements 2.8**
 
-- [ ] 11. Face Detection Service
+- [x] 11. Face Detection Service
   - [x] 11.1 Create FaceDetectionService
     - Create `backend/src/services/faceDetectionService.ts`
     - Implement `detectFaces()` orchestration with provider manager
@@ -286,7 +286,7 @@ This implementation plan breaks down the Face Detection and Identification servi
     - Test that completed detection stores all required fields
     - **Validates: Requirements 1.4**
 
-- [ ] 12. Face Thumbnail Service
+- [x] 12. Face Thumbnail Service
   - [x] 12.1 Create FaceThumbnailService
     - Create `backend/src/services/faceThumbnailService.ts`
     - Implement `generateThumbnail()` with face cropping
@@ -304,7 +304,7 @@ This implementation plan breaks down the Face Detection and Identification servi
   - Ensure detection pipeline works end-to-end
   - Ask the user if questions arise
 
-- [ ] 14. Background Job Worker
+- [x] 14. Background Job Worker
   - [x] 14.1 Create FaceDetectionWorker
     - Create `backend/src/workers/faceDetectionWorker.ts`
     - Implement job processing with BullMQ
@@ -333,7 +333,7 @@ This implementation plan breaks down the Face Detection and Identification servi
     - Test that disabled workspaces don't create jobs
     - **Validates: Requirements 14.2**
 
-- [ ] 15. API Routes and Controllers
+- [x] 15. API Routes and Controllers
   - [x] 15.1 Create face API routes
     - Create `backend/src/routes/v1/faces.ts`
     - Implement GET /galleries/{id}/faces
@@ -370,7 +370,7 @@ This implementation plan breaks down the Face Detection and Identification servi
     - Implement workspace authorization
     - _Requirements: 7.9_
 
-- [ ] 16. Face Group Filtering and Organization
+- [x] 16. Face Group Filtering and Organization
   - [x] 16.1 Implement face group filtering in gallery
     - Add face group filter to gallery photo queries
     - Support AND/OR logic for multiple groups

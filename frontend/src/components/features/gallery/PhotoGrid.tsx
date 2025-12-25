@@ -5,7 +5,7 @@
  * Supports drag-drop reordering via @dnd-kit
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -26,35 +26,45 @@ import { CSS } from '@dnd-kit/utilities';
 import { signedUrlService } from '../../../services/signedUrlService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { PhotoCard } from './PhotoCard';
-import type { GalleryAssetItem } from '../../../types/gallery';
+import { GalleryAssetItem } from '../../../types/gallery';
+import { ResponsiveColumns } from '../../../types/canvas';
 
 export interface PhotoGridProps {
   assets: GalleryAssetItem[];
   selectedAssetIds?: Set<string>;
   selectable?: boolean;
-  /** Current cover asset ID (to show badge) */
   coverAssetId?: string | null;
   onAssetSelect?: (assetId: string) => void;
-  onAssetClick?: (asset: GalleryAssetItem, index: number) => void;
+  onAssetClick?: (asset: GalleryAssetItem, index: number, e?: React.MouseEvent) => void;
   onAssetFavorite?: (assetId: string, favorite: boolean) => void;
   onAssetSelection?: (assetId: string, selected: boolean) => void;
   onAssetDownload?: (assetId: string) => void;
   onAssetDelete?: (assetId: string) => void;
-  /** Callback to set a photo as cover */
   onSetCover?: (assetId: string) => void;
   onSortOrderChange?: (assetIds: string[]) => void;
   onMoveToSubGallery?: (assetId: string, subGalleryId: string | null) => void;
   sortable?: boolean;
   isLoading?: boolean;
   className?: string;
+  columns?: ResponsiveColumns;
+  gap?: 'sm' | 'md' | 'lg';
 }
 
-const getColumnClasses = (columns: number | { sm?: number; md?: number; lg?: number }) => {
-  if (typeof columns === 'number') {
-    return `grid-cols-${columns}`;
+const getColumnClasses = (columns?: ResponsiveColumns) => {
+  const { sm = 2, md = 3, lg = 4, xl = 5 } = columns || {};
+  // Tailwind classes must be complete strings for regex purgers usually, but strict mapping helps.
+  // Using dynamic classes might be an issue if they are not safelisted, 
+  // but assuming standard grid-cols-* are available.
+  return `grid-cols-${sm} md:grid-cols-${md} lg:grid-cols-${lg} 2xl:grid-cols-${xl}`;
+};
+
+const getGapClass = (gap?: 'sm' | 'md' | 'lg') => {
+  switch (gap) {
+    case 'sm': return 'gap-1';
+    case 'md': return 'gap-2';
+    case 'lg': return 'gap-4';
+    default: return 'gap-2';
   }
-  const { sm = 2, md = 3, lg = 4 } = columns;
-  return `grid-cols-${sm} md:grid-cols-${md} lg:grid-cols-${lg}`;
 };
 
 export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
@@ -74,6 +84,8 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
   sortable = false,
   isLoading = false,
   className = '',
+  columns,
+  gap,
 }) => {
   const { workspace } = useAuth();
   const [visibleAssets, setVisibleAssets] = useState<Set<string>>(new Set());
@@ -224,19 +236,70 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
     []
   );
 
-  // Responsive columns
-  const columns = useMemo(() => {
-    if (typeof window === 'undefined') return { sm: 2, md: 3, lg: 4 };
-    const width = window.innerWidth;
-    if (width < 640) return { sm: 2 };
-    if (width < 1024) return { sm: 2, md: 3 };
-    return { sm: 2, md: 3, lg: 4 };
-  }, []);
+  // Responsive columns hook to track current column count for keyboard navigation
+  const [currentColCount, setCurrentColCount] = useState(2);
+  
+  useEffect(() => {
+    const update = () => {
+      // Using window check for safety
+      if (typeof window === 'undefined') return;
+      const width = window.innerWidth;
+      const { sm = 2, md = 3, lg = 4, xl = 5 } = columns || {};
+      
+      if (width < 640) setCurrentColCount(sm);
+      else if (width < 1024) setCurrentColCount(md);
+      else if (width < 1536) setCurrentColCount(lg);
+      else setCurrentColCount(xl);
+    };
+    
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [columns]);
+
+  // Keyboard navigation handler
+  const handleKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
+    // Only handle arrow keys
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+
+    e.preventDefault();
+    let nextIndex = index;
+    const total = items.length;
+
+    switch (e.key) {
+      case 'ArrowRight':
+        nextIndex = index + 1;
+        break;
+      case 'ArrowLeft':
+        nextIndex = index - 1;
+        break;
+      case 'ArrowDown':
+        nextIndex = index + currentColCount;
+        break;
+      case 'ArrowUp':
+        nextIndex = index - currentColCount;
+        break;
+    }
+
+    if (nextIndex >= 0 && nextIndex < total) {
+      // Find element by data-index
+      const wrapper = document.querySelector(`[data-photo-index="${nextIndex}"]`) as HTMLElement;
+      if (wrapper) {
+        // Find the actual focusable card inside the wrapper to maintain proper focus state
+        const focusableInfo = wrapper.querySelector('[tabindex="0"]') as HTMLElement;
+        if (focusableInfo) {
+          focusableInfo.focus();
+        } else {
+          wrapper.focus();
+        }
+      }
+    }
+  }, [items.length, currentColCount]);
 
   // Loading skeleton
   if (isLoading) {
     return (
-      <div className={`grid ${getColumnClasses(columns)} gap-2 ${className}`}>
+      <div className={`grid ${getColumnClasses(columns)} ${getGapClass(gap)} ${className}`}>
         {Array.from({ length: 12 }).map((_, i) => (
           <div
             key={i}
@@ -261,7 +324,7 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
 
   const gridContent = (
     <div
-      className={`grid ${getColumnClasses(columns)} gap-2 ${className}`}
+      className={`grid ${getColumnClasses(columns)} ${getGapClass(gap)} ${className}`}
       role="grid"
       aria-label="Photo gallery"
       onContextMenu={(e) => e.preventDefault()}
@@ -286,6 +349,10 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
             onSetCover={onSetCover}
             observerRef={index >= 20 ? observerRef : undefined}
             sortable={sortable}
+            // New Props
+            aspectRatio="square"
+            data-photo-index={index}
+            onKeyDown={(e) => handleKeyDown(e, index)}
           />
         );
       })}
@@ -323,7 +390,7 @@ interface SortablePhotoCardProps {
   selectable: boolean;
   isCover?: boolean;
   onSelect?: (assetId: string) => void;
-  onClick?: (asset: GalleryAssetItem, index: number) => void;
+  onClick?: (asset: GalleryAssetItem, index: number, e?: React.MouseEvent) => void;
   onFavorite?: (assetId: string, favorite: boolean) => void;
   onSelection?: (assetId: string, selected: boolean) => void;
   onDownload?: (assetId: string) => void;
@@ -331,6 +398,9 @@ interface SortablePhotoCardProps {
   onSetCover?: (assetId: string) => void;
   observerRef?: (node: HTMLDivElement | null) => void;
   sortable: boolean;
+  aspectRatio?: 'square' | 'auto';
+  'data-photo-index'?: number;
+  onKeyDown?: (e: React.KeyboardEvent, index: number) => void;
 }
 
 const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
@@ -347,6 +417,9 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
   onDelete,
   onSetCover,
   observerRef,
+  aspectRatio,
+  'data-photo-index': dataIndex,
+  onKeyDown,
 }) => {
   const {
     attributes,
@@ -371,6 +444,8 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
       }}
       style={style}
       data-asset-id={asset.asset_id}
+      data-photo-index={dataIndex}
+      onKeyDown={(e) => onKeyDown?.(e, index)}
       {...attributes}
       {...listeners}
       className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
@@ -389,6 +464,7 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
         onDelete={onDelete}
         onSetCover={onSetCover}
         showActions={true}
+        aspectRatio={aspectRatio}
       />
     </div>
   );
@@ -409,11 +485,16 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
   onDelete,
   onSetCover,
   observerRef,
+  aspectRatio,
+  'data-photo-index': dataIndex,
+  onKeyDown,
 }) => {
   return (
     <div
       ref={observerRef}
       data-asset-id={asset.asset_id}
+      data-photo-index={dataIndex}
+      onKeyDown={(e) => onKeyDown?.(e, index)}
     >
       <PhotoCard
         asset={asset}
@@ -429,6 +510,7 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
         onDelete={onDelete}
         onSetCover={onSetCover}
         showActions={true}
+        aspectRatio={aspectRatio}
       />
     </div>
   );

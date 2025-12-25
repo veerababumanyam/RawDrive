@@ -1,17 +1,19 @@
 /**
  * GalleryHeader Component
  * Clean, professional header matching modern gallery management UIs
- * Layout: Back link -> Logo/Title/Description -> Metadata (author, date) -> Status badge
+ * Layout: Back link -> Cover Photo + Logo/Title/Description -> Metadata (author, date) -> Status badge
  * Mobile-first responsive design
  */
 
-import React, { useState, useRef } from 'react';
-import { ArrowLeft, Edit2, Check, X, User, Calendar } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ArrowLeft, Edit2, Check, X, User, Calendar, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AppButton } from '../../ui/AppButton';
 import { GalleryStatusBadge } from './GalleryStatusBadge';
 import { AppInput } from '../../ui/AppInput';
 import { clientService } from '../../../services/clientService';
+import { galleryService } from '../../../services/galleryService';
+import { useAuth } from '../../../contexts/AuthContext';
 import type { GalleryDetailData } from '../../../types/gallery';
 import type { ClientSearchResult } from '../../../types/client';
 
@@ -28,6 +30,32 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
   onMetadataUpdate,
 }) => {
   const navigate = useNavigate();
+  const { workspace } = useAuth();
+
+  // Cover Photo State
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [coverImageError, setCoverImageError] = useState(false);
+
+  // Fetch signed URL for cover image
+  useEffect(() => {
+    if (gallery.cover_asset_id && workspace?.workspace_id && !coverImageUrl && !coverImageError) {
+      galleryService
+        .getSignedUrl(workspace.workspace_id, gallery.cover_asset_id, 'thumbnail')
+        .then((url) => {
+          setCoverImageUrl(url);
+        })
+        .catch((error) => {
+          console.error('Failed to fetch cover image URL:', error);
+          setCoverImageError(true);
+        });
+    }
+  }, [gallery.cover_asset_id, workspace?.workspace_id, coverImageUrl, coverImageError]);
+
+  // Reset cover image state when gallery changes
+  useEffect(() => {
+    setCoverImageUrl(null);
+    setCoverImageError(false);
+  }, [gallery.gallery_id]);
 
   // Title Edit State
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -165,10 +193,26 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
         <span>Back to All Galleries</span>
       </button>
 
-      {/* Main Header Row - Title, Description, Metadata, Status */}
+      {/* Main Header Row - Cover Photo, Title, Description, Metadata, Status */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        {/* Left Section: Title + Description */}
+        {/* Left Section: Cover Photo + Title + Description */}
         <div className="flex items-start gap-4 min-w-0 flex-1">
+          {/* Cover Photo Thumbnail */}
+          <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-surface-hover border border-border/50 shadow-sm">
+            {coverImageUrl && !coverImageError ? (
+              <img
+                src={coverImageUrl}
+                alt={`${gallery.title} cover`}
+                className="w-full h-full object-cover"
+                onError={() => setCoverImageError(true)}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-surface-hover to-surface">
+                <ImageIcon size={24} className="text-text-tertiary" />
+              </div>
+            )}
+          </div>
+
           {/* Title and Description */}
           <div className="flex-1 min-w-0 space-y-1">
             {/* Title - Inline editable */}

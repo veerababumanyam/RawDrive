@@ -10,7 +10,7 @@ export type GalleryStatus = 'draft' | 'published' | 'archived';
 export type LayoutStyle = 'tabs' | 'continuous';
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type DownloadPolicy = 'view_only' | 'web_only' | 'watermarked_only' | 'original_allowed';
-export type ViewMode = 'grid' | 'list';
+export type ViewMode = 'grid' | 'masonry' | 'list';
 export type FilterType = 'all' | 'picks' | 'favorites' | 'selections';
 export type BulkAction = 'move' | 'delete' | 'download';
 
@@ -212,6 +212,9 @@ export interface GalleryAssetItem {
   is_favorited: boolean;
   is_selected: boolean;
   favorites_count: number;
+  title?: string;
+  description?: string;
+  tags?: string[];
   asset: AssetInfo;
 }
 

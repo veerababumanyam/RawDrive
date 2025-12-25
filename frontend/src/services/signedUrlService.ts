@@ -92,22 +92,25 @@ class SignedUrlService {
     assetIds: string[],
     variant: 'thumbnail' | 'preview' | 'original' = 'thumbnail'
   ): Promise<Map<string, string>> {
-    // For now, fetch individually
-    // TODO: Implement batch endpoint if needed
-    const urls = new Map<string, string>();
+     const urls = new Map<string, string>();
+     
+     // Deduplicate IDs
+     const uniqueIds = Array.from(new Set(assetIds));
+     
+     // Execute requests in parallel (simulating batch for now until backend endpoint exists)
+     // TODO: Replace with real batch endpoint when available
+     await Promise.all(
+       uniqueIds.map(async (assetId) => {
+         try {
+           const url = await this.getSignedUrl(workspaceId, assetId, variant);
+           urls.set(assetId, url);
+         } catch (error) {
+           console.error(`Failed to get signed URL for asset ${assetId}:`, error);
+         }
+       })
+     );
 
-    await Promise.all(
-      assetIds.map(async (assetId) => {
-        try {
-          const url = await this.getSignedUrl(workspaceId, assetId, variant);
-          urls.set(assetId, url);
-        } catch (error) {
-          console.error(`Failed to get signed URL for asset ${assetId}:`, error);
-        }
-      })
-    );
-
-    return urls;
+     return urls;
   }
 
   /**

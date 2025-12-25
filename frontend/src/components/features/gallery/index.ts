@@ -21,7 +21,7 @@ export { GalleryStats } from './GalleryStats';
 export type { GalleryStatsProps } from './GalleryStats';
 
 export { GalleryToolbar } from './GalleryToolbar';
-export type { GalleryToolbarProps, ViewMode, FilterType } from './GalleryToolbar';
+export type { GalleryToolbarProps } from './GalleryToolbar';
 
 export { GalleryActionBar } from './GalleryActionBar';
 export type { GalleryActionBarProps } from './GalleryActionBar';
@@ -81,3 +81,5 @@ export { CommentSection } from './CommentSection';
 export { SearchModal } from './SearchModal';
 
 export { PeoplePanel } from './PeoplePanel';
+export { GalleryCanvas } from './GalleryCanvas';
+export type { GalleryCanvasProps } from './GalleryCanvas';

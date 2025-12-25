@@ -28,6 +28,7 @@ interface UseGalleryAssetsReturn {
   refetch: () => Promise<void>;
   loadMore: () => Promise<void>;
   hasMore: boolean;
+  updateAsset: (assetId: string, changes: Partial<GalleryAssetItem>) => void;
 }
 
 export const useGalleryAssets = ({
@@ -103,6 +104,14 @@ export const useGalleryAssets = ({
     }
   }, [meta?.hasMore, loading, currentPage, fetchAssets]);
 
+  const updateAsset = useCallback((assetId: string, changes: Partial<GalleryAssetItem>) => {
+    setAssets((prev) =>
+      prev.map((item) =>
+        item.asset_id === assetId ? { ...item, ...changes } : item
+      )
+    );
+  }, []);
+
   return {
     assets,
     meta,
@@ -111,5 +120,6 @@ export const useGalleryAssets = ({
     refetch,
     loadMore,
     hasMore: meta?.hasMore || false,
+    updateAsset,
   };
 };

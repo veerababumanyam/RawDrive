@@ -453,6 +453,27 @@ export class GalleryService {
   }
 
   /**
+   * Update generic asset details (title, description, etc)
+   */
+  async updateAsset(
+    workspaceId: string,
+    galleryId: string,
+    assetId: string,
+    data: {
+      title?: string;
+      description?: string;
+      tags?: string[];
+      is_private?: boolean;
+    }
+  ): Promise<void> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets/${assetId}`;
+    const response = await apiClient.patch<{ message: string }>(endpoint, data);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to update asset');
+    }
+  }
+
+  /**
    * Toggle favorite status for gallery assets
    */
   async toggleFavorite(

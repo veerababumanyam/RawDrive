@@ -11,21 +11,16 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Heart,
   Lock,
   Play,
-  CheckSquare,
-  Download,
-  Trash2,
   Image,
-  Maximize2,
-  Share2,
-  Edit3,
 } from 'lucide-react';
 
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { GalleryAssetItem } from '../../../types/gallery';
+import { HoverOverlay } from './HoverOverlay';
+import { InlineEditForm } from './InlineEditForm';
 
 export interface PhotoCardProps {
   asset: GalleryAssetItem;
@@ -35,15 +30,18 @@ export interface PhotoCardProps {
   /** Whether this photo is the current cover */
   isCover?: boolean;
   onSelect?: (assetId: string) => void;
-  onClick?: (asset: GalleryAssetItem, index: number) => void;
+  onClick?: (asset: GalleryAssetItem, index: number, e: React.MouseEvent) => void;
   onFavorite?: (assetId: string, favorite: boolean) => void;
   onSelection?: (assetId: string, selected: boolean) => void;
   onDownload?: (assetId: string) => void;
   onDelete?: (assetId: string) => void;
   /** Callback to set this photo as the gallery/sub-gallery cover */
   onSetCover?: (assetId: string) => void;
+  onUpdateAsset?: (assetId: string, data: { title: string; description: string; is_private: boolean }) => void;
   showActions?: boolean;
   className?: string;
+  /** Aspect ratio mode: 'square' forces 1:1, 'auto' uses image dimensions */
+  aspectRatio?: 'square' | 'auto';
 }
 
 export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
@@ -59,11 +57,14 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   onDownload,
   onDelete,
   onSetCover,
+  onUpdateAsset,
   showActions = true,
   className = '',
+  aspectRatio: aspectRatioMode = 'auto',
 }) => {
   const { workspace } = useAuth();
   const [isHovered, setIsHovered] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [imageError, setImageError] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -106,7 +107,9 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
 
   // Calculate aspect ratio from asset dimensions
   const aspectRatio =
-    asset.asset.width && asset.asset.height
+    aspectRatioMode === 'square'
+      ? '1 / 1'
+      : asset.asset.width && asset.asset.height
       ? `${asset.asset.width} / ${asset.asset.height}`
       : '4 / 3';
 
@@ -115,7 +118,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
       e.stopPropagation();
       onSelect?.(asset.asset_id);
     } else {
-      onClick?.(asset, index);
+      onClick?.(asset, index, e);
     }
   }, [selectable, onSelect, onClick, asset, index]);
 
@@ -150,6 +153,17 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   }, [onSetCover, asset.asset_id]);
 
 
+  const handleEdit = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(true);
+    // Hide hover overlay while editing? Overlay hides itself if we aren't hovering, but edit form is on top.
+  }, []);
+
+  const handleSaveEdit = (data: { title: string; description: string; is_private: boolean }) => {
+    onUpdateAsset?.(asset.asset_id, data);
+    setIsEditing(false);
+  };
+
   // Use signed URL if available, fallback to cached thumbnail_url
   const displayUrl = thumbnailUrl || asset.asset.thumbnail_url || undefined;
 
@@ -176,12 +190,27 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onClick?.(asset, index);
+          // For keyboard, we don't have a click event easily, but we can pass synthetic one if needed
+          // Or just pass undefined as 3rd arg if allow. But type says MouseEvent.
+          // Let's coerce or just mock it.
+          // Actually, let's keep it robust.
+          const syntheticEvent = { stopPropagation: () => {}, preventDefault: () => {}, ctrlKey: false, metaKey: false } as unknown as React.MouseEvent;
+          onClick?.(asset, index, syntheticEvent);
         }
       }}
       aria-selected={isSelected}
       aria-label={`Photo ${index + 1}: ${asset.asset.filename || 'Untitled'}`}
     >
+      {isEditing && (
+        <InlineEditForm
+          initialTitle={asset.title || asset.asset.filename || ''}
+          initialDescription={asset.description || ''}
+          initialIsPrivate={asset.is_private}
+          onSave={handleSaveEdit}
+          onCancel={() => setIsEditing(false)}
+        />
+      )}
+
       {/* Thumbnail Image */}
       {displayUrl && !imageError ? (
         <img
@@ -210,7 +239,12 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           ) : asset.asset.status === 'failed' ? (
             <div className="text-error text-xs font-medium">Upload Failed</div>
           ) : urlLoading ? (
-            <div className="w-12 h-12 border-2 border-border border-t-primary rounded-full animate-spin" />
+            // Skeleton Loader
+            <div className="w-full h-full absolute inset-0 bg-surface-hover animate-pulse flex items-center justify-center">
+               <div className="w-8 h-8 opacity-20 text-text-tertiary">
+                 <Image size={32} />
+               </div>
+            </div>
           ) : (
             <div className="text-text-tertiary text-sm">
               {urlError ? 'Failed to load' : 'No image'}
@@ -260,153 +294,27 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         )}
       </div>
 
-      {/* Top-Right Controls - Favorite & Select (Always visible when active, hover for others) */}
-      <div className="absolute top-3 right-3 flex flex-col gap-2 z-30">
-        {/* Favorite Button - Always visible when favorited, otherwise on hover */}
-        {showActions && onFavorite && (
-          <button
-            className={`
-              photo-card-top-btn btn-favorite
-              ${asset.is_favorited ? 'active always-visible' : ''}
-              ${!asset.is_favorited && !isHovered ? 'opacity-0' : 'opacity-100'}
-              transition-opacity duration-200
-            `}
-            onClick={handleFavorite}
-            onContextMenu={(e) => e.stopPropagation()}
-            aria-label={asset.is_favorited ? 'Remove from favorites' : 'Add to favorites'}
-            title={asset.is_favorited ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <span className="photo-card-tooltip">{asset.is_favorited ? 'Unfavorite' : 'Favorite'}</span>
-            <Heart size={20} />
-          </button>
-        )}
-
-        {/* Selection Toggle Button - Always visible when selected, otherwise on hover */}
-        {showActions && (selectable || onSelection) && (
-          <button
-            className={`
-              photo-card-top-btn btn-select
-              ${isSelected || asset.is_selected ? 'active always-visible' : ''}
-              ${!(isSelected || asset.is_selected) && !isHovered ? 'opacity-0' : 'opacity-100'}
-              transition-opacity duration-200
-            `}
-            onClick={selectable ? handleSelect : handleSelectionToggle}
-            onContextMenu={(e) => e.stopPropagation()}
-            aria-label={isSelected || asset.is_selected ? 'Deselect photo' : 'Select photo'}
-            title={isSelected || asset.is_selected ? 'Deselect photo' : 'Select photo'}
-          >
-            <span className="photo-card-tooltip">{isSelected || asset.is_selected ? 'Deselect' : 'Select'}</span>
-            <CheckSquare size={20} />
-          </button>
-        )}
-      </div>
-
-      {/* Security Overlay - Prevents direct interaction with image */}
-      <div
-        className="absolute inset-0 z-20"
-        onContextMenu={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
+      {/* Hover Overlay Component - Handles all actions */}
+      <HoverOverlay
+        asset={asset}
+        index={index}
+        isHovered={isHovered}
+        isSelected={isSelected}
+        isCover={isCover}
+        selectable={selectable}
+        showActions={showActions}
+        onSelect={handleSelect}
+        onSelectionToggle={handleSelectionToggle}
+        onFavorite={handleFavorite}
+        onClick={(e) => {
+           e.stopPropagation();
+           onClick?.(asset, index, e);
         }}
-        draggable={false}
+        onDownload={handleDownload}
+        onDelete={handleDelete}
+        onSetCover={handleSetCover}
+        onEdit={handleEdit}
       />
-
-      {/* Bottom Action Bar - Floating Glassmorphism Container */}
-      {showActions && isHovered && (
-        <div className="photo-card-action-bar" onClick={(e) => e.stopPropagation()}>
-          {/* View / Fullscreen Button - Primary Blue */}
-          <button
-            className="photo-card-action-btn btn-view"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick?.(asset, index);
-            }}
-            onContextMenu={(e) => e.stopPropagation()}
-            aria-label="View Full Screen"
-            title="View Full Screen"
-          >
-            <span className="photo-card-tooltip">View</span>
-            <Maximize2 size={20} />
-          </button>
-
-          {/* Download Button */}
-          {onDownload && (
-            <button
-              className="photo-card-action-btn"
-              onClick={handleDownload}
-              onContextMenu={(e) => e.stopPropagation()}
-              aria-label="Download Photo"
-              title="Download Photo"
-            >
-              <span className="photo-card-tooltip">Download</span>
-              <Download size={20} />
-            </button>
-          )}
-
-          {/* Share Button */}
-          <button
-            className="photo-card-action-btn"
-            onClick={(e) => e.stopPropagation()}
-            onContextMenu={(e) => e.stopPropagation()}
-            aria-label="Share Photo"
-            title="Share Photo"
-          >
-            <span className="photo-card-tooltip">Share</span>
-            <Share2 size={20} />
-          </button>
-
-          {/* Lock / Private Button */}
-          <button
-            className={`photo-card-action-btn btn-lock ${asset.is_private ? 'active' : ''}`}
-            onClick={(e) => e.stopPropagation()}
-            onContextMenu={(e) => e.stopPropagation()}
-            aria-label={asset.is_private ? 'Unlock Photo' : 'Lock Photo'}
-            title={asset.is_private ? 'Unlock Photo' : 'Lock Photo'}
-          >
-            <span className="photo-card-tooltip">{asset.is_private ? 'Unlock' : 'Lock'}</span>
-            <Lock size={20} />
-          </button>
-
-          {/* Set as Cover / Edit Button */}
-          {onSetCover && !isCover ? (
-            <button
-              className="photo-card-action-btn"
-              onClick={handleSetCover}
-              onContextMenu={(e) => e.stopPropagation()}
-              aria-label="Set as Cover"
-              title="Set as Cover"
-            >
-              <span className="photo-card-tooltip">Set Cover</span>
-              <Image size={20} />
-            </button>
-          ) : (
-            <button
-              className="photo-card-action-btn"
-              onClick={(e) => e.stopPropagation()}
-              onContextMenu={(e) => e.stopPropagation()}
-              aria-label="Edit Info"
-              title="Edit Info"
-            >
-              <span className="photo-card-tooltip">Edit</span>
-              <Edit3 size={20} />
-            </button>
-          )}
-
-          {/* Delete Button */}
-          {onDelete && (
-            <button
-              className="photo-card-action-btn btn-delete"
-              onClick={handleDelete}
-              onContextMenu={(e) => e.stopPropagation()}
-              aria-label="Delete Photo"
-              title="Delete Photo"
-            >
-              <span className="photo-card-tooltip">Delete</span>
-              <Trash2 size={20} />
-            </button>
-          )}
-        </div>
-      )}
 
     </div>
   );

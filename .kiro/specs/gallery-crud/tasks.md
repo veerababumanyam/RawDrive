@@ -534,36 +534,31 @@
     - Show estimated storage usage and quota warnings
     - _Requirements: 5.63, 5.64, 5.65, 5.66, 5.67**
 
-- [ ] 12. Implement Secure Photo Grid (rework)
-  - [ ] 12.1 Update PhotoCard component
-    - Update `frontend/src/components/features/gallery/PhotoCard.tsx`
-    - Use signed URLs for thumbnails
-    - Handle URL expiry and refresh
-    - Display thumbnail with preserved aspect ratio
-    - Show badges: FAVORITE (heart), PRIVATE (lock), video duration
-    - Implement hover actions (favorite toggle, selection checkbox, more options)
+- [x] 12. Implement Secure Photo Grid (rework) ✅ IMPLEMENTED IN GALLERY-CANVAS
+  - [x] 12.1 Update PhotoCard component ✅
+    - ✅ Updated `frontend/src/components/features/gallery/PhotoCard.tsx`
+    - ✅ Uses signed URLs for thumbnails (via useSignedUrl hook)
+    - ✅ Handles URL expiry and refresh
+    - ✅ Display thumbnail with preserved aspect ratio
+    - ✅ Show badges: FAVORITE (heart), PRIVATE (lock), video duration
+    - ✅ Implement hover actions (favorite toggle, selection checkbox, more options)
     - _Requirements: 6.1, 6.3, 6.4, 6.5, 6.6, 5.14_
-  - [ ] 12.2 Write property test for photo aspect ratio preservation
-    - **Property 12: Photo Aspect Ratio Preservation**
-    - **Validates: Requirements 6.1**
-  - [ ] 12.3 Write property test for lazy loading images
-    - **Property 13: Lazy Loading Images**
-    - **Validates: Requirements 6.2**
-  - [ ] 12.4 Write property test for favorite badge rendering
-    - **Property 14: Favorite Badge Rendering**
-    - **Validates: Requirements 6.3**
-  - [ ] 12.5 Write property test for private badge rendering
-    - **Property 15: Private Badge Rendering**
-    - **Validates: Requirements 6.4**
-  - [ ] 12.6 Write property test for video badge rendering
-    - **Property 16: Video Badge Rendering**
-    - **Validates: Requirements 6.5**
-  - [ ] 12.7 Update PhotoGrid component
-    - Update `frontend/src/components/features/gallery/PhotoGrid.tsx`
-    - Use react-masonry-css for masonry layout
-    - Implement lazy loading with Intersection Observer
-    - Support photo selection mode
-    - Batch signed URL requests for performance
+  - [x] 12.2 Write property test for photo aspect ratio preservation ✅
+    - ✅ Property tested in gallery-canvas PhotoGrid.test.tsx
+  - [x] 12.3 Write property test for lazy loading images ✅
+    - ✅ Property 13: Lazy Loading Images tested
+  - [x] 12.4 Write property test for favorite badge rendering ✅
+    - ✅ Tested in HoverOverlay.test.tsx
+  - [x] 12.5 Write property test for private badge rendering ✅
+    - ✅ Tested in PhotoCard.test.tsx
+  - [x] 12.6 Write property test for video badge rendering ✅
+    - ✅ Tested in PhotoCard component
+  - [x] 12.7 Update PhotoGrid component ✅
+    - ✅ Updated `frontend/src/components/features/gallery/PhotoGrid.tsx`
+    - ✅ Masonry layout via MasonryLayout.tsx
+    - ✅ Lazy loading with Intersection Observer
+    - ✅ Photo selection mode
+    - ✅ Batch signed URL requests via SignedUrlContext
     - _Requirements: 6.1, 6.2, 6.7_
 
 - [x] 13. Implement Secure Lightbox (new) ✅ COMPLETE
