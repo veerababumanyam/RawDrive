@@ -333,7 +333,7 @@ const PhotoListRow: React.FC<PhotoListRowProps> = ({
             }}
             className={`
               p-1 rounded transition-colors
-              ${isFavorite ? 'text-red-500' : 'text-text-tertiary hover:text-red-500'}
+              ${isFavorite ? 'text-error' : 'text-text-tertiary hover:text-error'}
             `}
             aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
@@ -367,7 +367,7 @@ const PhotoListRow: React.FC<PhotoListRowProps> = ({
           {onDelete && (
             <button
               onClick={() => onDelete(asset.asset_id)}
-              className="p-1.5 rounded text-text-tertiary hover:text-red-500 hover:bg-surface-hover transition-colors"
+              className="p-1.5 rounded text-text-tertiary hover:text-error hover:bg-surface-hover transition-colors"
               aria-label="Delete"
             >
               <Trash2 size={16} />

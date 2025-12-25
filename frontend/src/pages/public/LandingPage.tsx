@@ -109,6 +109,9 @@ const LandingPage: React.FC = () => {
         keywords={seoContent.landing.keywords}
         canonicalUrl="/"
         ogType="website"
+        aiContentSummary="Professional photography management SaaS for gallery delivery, client proofing, and business automation with AI-powered culling and tagging"
+        aiTargetAudience="Professional wedding photographers, portrait photographers, event photographers, photography studios"
+        aiPricingModel="Freemium with paid tiers: Free (10GB), Starter ₹100/mo, Professional ₹500/mo, Business ₹2000/mo, Enterprise custom"
       />
 
       {/* Structured Data */}

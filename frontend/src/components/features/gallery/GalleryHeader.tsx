@@ -1,7 +1,8 @@
 /**
  * GalleryHeader Component
- * Displays gallery title, client name, creation date, and status badge
- * Clean, professional layout matching modern gallery management UIs
+ * Clean, professional header matching modern gallery management UIs
+ * Layout: Back link -> Logo/Title/Description -> Metadata (author, date) -> Status badge
+ * Mobile-first responsive design
  */
 
 import React, { useState, useRef } from 'react';
@@ -32,20 +33,21 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(gallery.title);
 
-  // Metadata Edit State
+  // Description Edit State
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState(gallery.description || '');
 
+  // Client Edit State
   const [isEditingClient, setIsEditingClient] = useState(false);
   const [clientSearchQuery, setClientSearchQuery] = useState(gallery.client_name || '');
   const [clientSearchResults, setClientSearchResults] = useState<ClientSearchResult[]>([]);
   const [showClientResults, setShowClientResults] = useState(false);
 
+  // Date Edit State
   const [isEditingDate, setIsEditingDate] = useState(false);
   const [editedDate, setEditedDate] = useState(gallery.shoot_date ? gallery.shoot_date.split('T')[0] : '');
 
   const [isSaving, setIsSaving] = useState(false);
-  // use ReturnType<typeof setTimeout> for environment agnostic timeout handle
   const clientSearchDebounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const formatDate = (dateString: string): string => {
@@ -103,16 +105,8 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
     }
     setIsSaving(true);
     try {
-      // Send as ISO string
       const isoDate = editedDate ? new Date(editedDate).toISOString() : undefined;
-      // If we clear the date (empty string), send generic handling if backend accepts null?
-      // Since schema accepts Optional[str], if we want to clear it, we might need to send null or handle empty string.
-      // Based on my service update, it accepts None. But JSON serializer needs explicit null.
-      // The prop type expects string. Let's assume sending empty string or undefined clears it?
-      // Actually backend service checks `if value is None`. Pydantic optional.
-      // If I want to clear, I should probably send empty string if I can't send null.
-      // But my type definition says optional string.
-      await onMetadataUpdate?.({ shoot_date: isoDate }); // Handles valid date. Clearing handling might need more logic
+      await onMetadataUpdate?.({ shoot_date: isoDate });
       setIsEditingDate(false);
     } catch (error) {
       console.error('Failed to update date:', error);
@@ -161,163 +155,179 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
   };
 
   return (
-    <div className="gallery-header">
-      {/* Back Navigation */}
+    <div className="gallery-header space-y-4">
+      {/* Back Navigation - Clean and minimal */}
       <button
         onClick={() => navigate('/workspace/galleries')}
-        className="inline-flex items-center gap-1.5 text-sm text-text-tertiary hover:text-primary transition-colors mb-4 group"
+        className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary-hover transition-colors group"
       >
         <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
         <span>Back to All Galleries</span>
       </button>
 
-      {/* Main Header Content */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div className="flex-1 min-w-0 space-y-3">
-          {/* Title */}
-          {isEditingTitle ? (
-            <div className="flex items-center gap-2">
-              <AppInput
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                onBlur={handleTitleSave}
-                onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
-                inputSize="lg"
-                className="flex-1 text-2xl font-bold"
-                autoFocus
-                disabled={isSaving}
-                maxLength={255}
-              />
-              <AppButton variant="ghost" size="icon" onClick={handleTitleSave} disabled={isSaving} className="text-success"><Check size={20} /></AppButton>
-              <AppButton variant="ghost" size="icon" onClick={() => { setEditedTitle(gallery.title); setIsEditingTitle(false); }} disabled={isSaving} className="text-error"><X size={20} /></AppButton>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 group">
-              <h1 className="text-2xl sm:text-3xl font-bold text-text-primary truncate">{gallery.title}</h1>
-              {onTitleUpdate && (
-                <button onClick={() => { setIsEditingTitle(true); setEditedTitle(gallery.title); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-surface-hover transition-all text-text-tertiary hover:text-primary">
-                  <Edit2 size={16} />
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Description */}
-          {isEditingDescription ? (
-            <div className="flex items-center gap-2">
-              <AppInput
-                value={editedDescription}
-                onChange={(e) => setEditedDescription(e.target.value)}
-                onBlur={handleDescriptionSave}
-                onKeyDown={(e) => e.key === 'Enter' && handleDescriptionSave()}
-                className="flex-1"
-                placeholder="Add a description..."
-                autoFocus
-                disabled={isSaving}
-              />
-              <AppButton variant="ghost" size="icon" onClick={handleDescriptionSave} disabled={isSaving} className="text-success"><Check size={18} /></AppButton>
-              <AppButton variant="ghost" size="icon" onClick={() => { setEditedDescription(gallery.description || ''); setIsEditingDescription(false); }} disabled={isSaving} className="text-error"><X size={18} /></AppButton>
-            </div>
-          ) : (
-            <div className="group flex items-center gap-2 min-h-[1.5rem]" onClick={() => { setIsEditingDescription(true); setEditedDescription(gallery.description || ''); }}>
-              <p className={`text-sm ${gallery.description ? 'text-text-secondary' : 'text-text-tertiary italic'} cursor-pointer hover:text-text-primary transition-colors`}>
-                {gallery.description || 'Add description...'}
-              </p>
-              {onMetadataUpdate && (
-                <Edit2 size={12} className="opacity-0 group-hover:opacity-100 text-text-tertiary" />
-              )}
-            </div>
-          )}
-
-          {/* Meta Line: Client and Date */}
-          <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">
-            {/* Client Picker */}
-            <div className="relative group flex items-center gap-2">
-              <User size={14} className="text-text-tertiary" />
-              {isEditingClient ? (
-                <div className="relative">
-                  <AppInput
-                    value={clientSearchQuery}
-                    onChange={(e) => handleClientSearch(e.target.value)}
-                    placeholder="Search client..."
-                    className="w-48 h-8 text-sm"
-                    autoFocus
-                    onBlur={() => setTimeout(() => setIsEditingClient(false), 200)} // Delay to allow click
-                  />
-                  {showClientResults && clientSearchResults.length > 0 && (
-                    <div className="absolute top-full left-0 mt-1 w-64 bg-surface border border-border rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-                      {clientSearchResults.map(client => (
-                        <div
-                          key={client.client_id}
-                          className="px-3 py-2 hover:bg-surface-hover cursor-pointer text-sm flex items-center gap-3"
-                          onClick={() => selectClient(client)}
-                        >
-                          {/* Avatar */}
-                          <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-hover flex-shrink-0 flex items-center justify-center border border-border">
-                            {client.avatar_asset_id ? (
-                              <img
-                                src={`/api/v1/assets/${client.avatar_asset_id}/thumbnail`}
-                                alt={client.full_name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <User size={14} className="text-text-tertiary" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="font-medium text-text-primary">{client.full_name}</div>
-                            <div className="text-xs text-text-tertiary">{client.primary_email}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <span
-                  className="font-medium cursor-pointer hover:text-primary transition-colors flex items-center gap-1"
-                  onClick={() => { setIsEditingClient(true); setClientSearchQuery(gallery.client_name || ''); setClientSearchResults([]); }}
-                >
-                  {gallery.client_name || 'Assign Client'}
-                </span>
-              )}
-            </div>
-
-            <span className="text-text-tertiary">•</span>
-
-            {/* Shoot Date Picker */}
-            <div className="group flex items-center gap-2">
-              <Calendar size={14} className="text-text-tertiary" />
-              {isEditingDate ? (
+      {/* Main Header Row - Title, Description, Metadata, Status */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        {/* Left Section: Title + Description */}
+        <div className="flex items-start gap-4 min-w-0 flex-1">
+          {/* Title and Description */}
+          <div className="flex-1 min-w-0 space-y-1">
+            {/* Title - Inline editable */}
+            {isEditingTitle ? (
+              <div className="flex items-center gap-2">
                 <AppInput
-                  type="date"
-                  value={editedDate}
-                  onChange={(e) => { setEditedDate(e.target.value); }}
-                  onBlur={handleDateSave}
-                  className="w-auto h-8 text-sm"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  onBlur={handleTitleSave}
+                  onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
+                  inputSize="lg"
+                  className="flex-1 text-xl font-medium"
                   autoFocus
+                  disabled={isSaving}
+                  maxLength={255}
                 />
-              ) : (
-                <span
-                  className="cursor-pointer hover:text-primary transition-colors flex items-center gap-1"
-                  onClick={() => { setIsEditingDate(true); setEditedDate(gallery.shoot_date ? gallery.shoot_date.split('T')[0] : (gallery.created_at ? gallery.created_at.split('T')[0] : '')); }}
-                >
-                  {gallery.shoot_date ? formatDate(gallery.shoot_date) : (gallery.created_at ? formatDate(gallery.created_at) : 'Set Date')}
-                </span>
-              )}
-            </div>
+                <AppButton variant="ghost" size="icon" onClick={handleTitleSave} disabled={isSaving} className="text-success h-8 w-8">
+                  <Check size={16} />
+                </AppButton>
+                <AppButton variant="ghost" size="icon" onClick={() => { setEditedTitle(gallery.title); setIsEditingTitle(false); }} disabled={isSaving} className="text-error h-8 w-8">
+                  <X size={16} />
+                </AppButton>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <h1 className="text-lg sm:text-xl font-medium text-text-secondary truncate">
+                  {gallery.title}
+                </h1>
+                {onTitleUpdate && (
+                  <button
+                    onClick={() => { setIsEditingTitle(true); setEditedTitle(gallery.title); }}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-surface-hover transition-all text-text-tertiary hover:text-primary"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Description - Inline editable (optional) */}
+            {(gallery.description || onMetadataUpdate) && (
+              <>
+                {isEditingDescription ? (
+                  <div className="flex items-center gap-2">
+                    <AppInput
+                      value={editedDescription}
+                      onChange={(e) => setEditedDescription(e.target.value)}
+                      onBlur={handleDescriptionSave}
+                      onKeyDown={(e) => e.key === 'Enter' && handleDescriptionSave()}
+                      className="flex-1 text-sm"
+                      placeholder="Add a description..."
+                      autoFocus
+                      disabled={isSaving}
+                    />
+                    <AppButton variant="ghost" size="icon" onClick={handleDescriptionSave} disabled={isSaving} className="text-success h-7 w-7">
+                      <Check size={14} />
+                    </AppButton>
+                    <AppButton variant="ghost" size="icon" onClick={() => { setEditedDescription(gallery.description || ''); setIsEditingDescription(false); }} disabled={isSaving} className="text-error h-7 w-7">
+                      <X size={14} />
+                    </AppButton>
+                  </div>
+                ) : (
+                  <div
+                    className="group flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => { if (onMetadataUpdate) { setIsEditingDescription(true); setEditedDescription(gallery.description || ''); }}}
+                  >
+                    <p className={`text-sm ${gallery.description ? 'text-text-tertiary' : 'text-text-tertiary/70 italic'} hover:text-text-secondary transition-colors`}>
+                      {gallery.description || (onMetadataUpdate ? 'Add description...' : '')}
+                    </p>
+                    {onMetadataUpdate && (
+                      <Edit2 size={10} className="opacity-0 group-hover:opacity-100 text-text-tertiary transition-opacity" />
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 
-        {/* Status Badge */}
-        <div className="hidden sm:block flex-shrink-0">
+        {/* Right Section: Metadata + Status Badge */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 lg:flex-shrink-0">
+          {/* Author/Client */}
+          <div className="relative group flex items-center gap-1.5 text-sm text-text-secondary">
+            {isEditingClient ? (
+              <div className="relative">
+                <AppInput
+                  value={clientSearchQuery}
+                  onChange={(e) => handleClientSearch(e.target.value)}
+                  placeholder="Search client..."
+                  className="w-40 h-8 text-sm"
+                  autoFocus
+                  onBlur={() => setTimeout(() => setIsEditingClient(false), 200)}
+                />
+                {showClientResults && clientSearchResults.length > 0 && (
+                  <div className="absolute top-full left-0 mt-1 w-56 bg-surface border border-border rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                    {clientSearchResults.map(client => (
+                      <div
+                        key={client.client_id}
+                        className="px-3 py-2 hover:bg-surface-hover cursor-pointer text-sm flex items-center gap-2.5"
+                        onClick={() => selectClient(client)}
+                      >
+                        <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-hover flex-shrink-0 flex items-center justify-center border border-border">
+                          {client.avatar_asset_id ? (
+                            <img
+                              src={`/api/v1/assets/${client.avatar_asset_id}/thumbnail`}
+                              alt={client.full_name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <User size={12} className="text-text-tertiary" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-text-primary truncate">{client.full_name}</div>
+                          <div className="text-xs text-text-tertiary truncate">{client.primary_email}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span
+                className="cursor-pointer hover:text-primary transition-colors"
+                onClick={() => { if (onMetadataUpdate) { setIsEditingClient(true); setClientSearchQuery(gallery.client_name || ''); setClientSearchResults([]); }}}
+              >
+                {gallery.client_name || 'Assign Client'}
+              </span>
+            )}
+          </div>
+
+          {/* Separator */}
+          <span className="text-text-tertiary/50 hidden sm:inline">•</span>
+
+          {/* Date */}
+          <div className="group flex items-center gap-1.5 text-sm text-text-secondary">
+            <Calendar size={14} className="text-text-tertiary" />
+            {isEditingDate ? (
+              <AppInput
+                type="date"
+                value={editedDate}
+                onChange={(e) => setEditedDate(e.target.value)}
+                onBlur={handleDateSave}
+                className="w-auto h-8 text-sm"
+                autoFocus
+              />
+            ) : (
+              <span
+                className="cursor-pointer hover:text-primary transition-colors"
+                onClick={() => { if (onMetadataUpdate) { setIsEditingDate(true); setEditedDate(gallery.shoot_date ? gallery.shoot_date.split('T')[0] : (gallery.created_at ? gallery.created_at.split('T')[0] : '')); }}}
+              >
+                {gallery.shoot_date ? formatDate(gallery.shoot_date) : (gallery.created_at ? formatDate(gallery.created_at) : 'Set Date')}
+              </span>
+            )}
+          </div>
+
+          {/* Status Badge */}
           <GalleryStatusBadge status={gallery.status} size="md" />
         </div>
-      </div>
-
-      {/* Mobile Status Badge */}
-      <div className="sm:hidden mt-3">
-        <GalleryStatusBadge status={gallery.status} size="sm" />
       </div>
     </div>
   );

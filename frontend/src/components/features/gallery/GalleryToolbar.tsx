@@ -1,13 +1,13 @@
 /**
  * GalleryToolbar Component
- * Unified toolbar combining view toggles, filters, and selection controls
- * Clean, professional layout matching modern gallery UIs
+ * Toolbar matching screenshot layout exactly
+ * Grid/List toggle | Filter pills (Picks, Favorites, Select All) | Search input
+ * Mobile-first responsive design
  */
 
 import React from 'react';
 import { Grid, List, Sparkles, Heart, CheckSquare, Search, X } from 'lucide-react';
 import { Checkbox } from '../../ui/FormControls';
-import { AppButton } from '../../ui/AppButton';
 
 export type ViewMode = 'grid' | 'list';
 export type FilterType = 'all' | 'picks' | 'favorites' | 'selections';
@@ -19,12 +19,6 @@ export interface GalleryToolbarProps {
   onFilterChange: (filter: FilterType) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onViewAsClient?: () => void;
-  onFindPeople?: () => void;
-  onAIStory?: () => void;
-  onShare?: () => void;
-  onSettings?: () => void;
-  onUpload?: () => void;
   selectAll?: boolean;
   onSelectAllChange?: (selected: boolean) => void;
   selectedCount?: number;
@@ -38,6 +32,36 @@ export interface GalleryToolbarProps {
   onFiltersChange?: (filters: { picks?: boolean; favorites?: boolean; selections?: boolean }) => void;
   className?: string;
 }
+
+// Filter pill button styles
+const getFilterPillClasses = (isActive: boolean, variant: 'default' | 'favorites' = 'default') => {
+  const baseClasses = `
+    inline-flex items-center gap-1.5
+    px-3 py-1.5
+    text-sm font-medium
+    rounded-full
+    border
+    transition-all duration-200
+    whitespace-nowrap
+    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1
+  `;
+
+  if (isActive) {
+    if (variant === 'favorites') {
+      return `${baseClasses} bg-pink-500 border-pink-500 text-white focus-visible:ring-pink-500`;
+    }
+    return `${baseClasses} bg-primary border-primary text-white focus-visible:ring-primary`;
+  }
+
+  // Inactive state
+  return `${baseClasses}
+    bg-transparent
+    border-border
+    text-text-secondary
+    hover:border-primary/50 hover:text-primary hover:bg-primary/5
+    focus-visible:ring-primary/50
+  `;
+};
 
 export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
   viewMode,
@@ -61,19 +85,11 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
   };
 
   return (
-    <div
-      className={`
-        gallery-toolbar
-        bg-surface/90 backdrop-blur-sm
-        border border-border rounded-xl
-        p-3 sm:p-4
-        ${className}
-      `}
-    >
+    <div className={`gallery-toolbar ${className}`}>
       <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-        {/* View Mode Toggle */}
+        {/* View Mode Toggle - Grid/List buttons with active highlight */}
         <div className="flex items-center">
-          <div className="inline-flex items-center p-1 bg-surface-hover/50 rounded-lg border border-border/50">
+          <div className="inline-flex items-center p-0.5 bg-surface-hover/50 rounded-lg border border-border/50">
             <button
               onClick={() => onViewModeChange('grid')}
               className={`
@@ -105,70 +121,53 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
           </div>
         </div>
 
-        {/* Separator */}
-        <div className="hidden sm:block w-px h-6 bg-border" />
+        {/* Separator - visible on larger screens */}
+        <div className="hidden sm:block w-px h-6 bg-border/50" />
 
-        {/* Filter Toggle Buttons */}
+        {/* Filter Pills - Matching screenshot exactly */}
         {onFiltersChange && (
           <div className="flex items-center gap-2">
-            {/* Picks Filter */}
-            <AppButton
-              variant={activeFilters.picks ? 'primary' : 'outline'}
-              size="sm"
-              leftIcon={<Sparkles size={14} />}
+            {/* Picks Filter - Star icon */}
+            <button
               onClick={() => handleFilterToggle('picks')}
-              className={`
-                gallery-filter-btn
-                ${activeFilters.picks ? '' : 'border-border/70 text-text-secondary hover:text-text-primary'}
-              `}
+              className={getFilterPillClasses(!!activeFilters.picks)}
+              aria-pressed={!!activeFilters.picks}
+              aria-label="Show picks only"
             >
-              Picks
-            </AppButton>
+              <Sparkles size={14} />
+              <span>Picks</span>
+            </button>
 
-            {/* Favorites Filter */}
-            <AppButton
-              variant={activeFilters.favorites ? 'primary' : 'outline'}
-              size="sm"
-              leftIcon={
-                <Heart
-                  size={14}
-                  className={activeFilters.favorites ? 'fill-current' : ''}
-                />
-              }
+            {/* Favorites Filter - Heart icon */}
+            <button
               onClick={() => handleFilterToggle('favorites')}
-              className={`
-                gallery-filter-btn
-                ${activeFilters.favorites
-                  ? 'bg-pink-500 hover:bg-pink-600 border-pink-500'
-                  : 'border-border/70 text-text-secondary hover:text-text-primary hover:border-pink-300 hover:text-pink-500'
-                }
-              `}
+              className={getFilterPillClasses(!!activeFilters.favorites, 'favorites')}
+              aria-pressed={!!activeFilters.favorites}
+              aria-label="Show favorites only"
             >
-              Favorites
-            </AppButton>
+              <Heart size={14} className={activeFilters.favorites ? 'fill-current' : ''} />
+              <span>Favorites</span>
+            </button>
 
-            {/* Selections Filter */}
-            <AppButton
-              variant={activeFilters.selections ? 'primary' : 'outline'}
-              size="sm"
-              leftIcon={<CheckSquare size={14} />}
+            {/* Select All Filter - Check icon */}
+            <button
               onClick={() => handleFilterToggle('selections')}
-              className={`
-                gallery-filter-btn
-                ${activeFilters.selections ? '' : 'border-border/70 text-text-secondary hover:text-text-primary'}
-              `}
+              className={getFilterPillClasses(!!activeFilters.selections)}
+              aria-pressed={!!activeFilters.selections}
+              aria-label="Show selected only"
             >
+              <CheckSquare size={14} />
               <span className="hidden sm:inline">Select All</span>
               <span className="sm:hidden">All</span>
-            </AppButton>
+            </button>
           </div>
         )}
 
-        {/* Spacer */}
+        {/* Spacer - pushes remaining items to right */}
         <div className="flex-1" />
 
-        {/* Search Input */}
-        <div className="relative w-full sm:w-auto sm:min-w-[200px] lg:min-w-[260px]">
+        {/* Search Input - Clean minimal design */}
+        <div className="relative w-full sm:w-auto sm:min-w-[180px] lg:min-w-[220px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
           <input
             type="text"
@@ -178,19 +177,21 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
             className="
               w-full pl-9 pr-8 py-2
               text-sm
-              bg-surface-hover/30 hover:bg-surface-hover/50 focus:bg-surface
-              border border-border/50 focus:border-primary/50
+              bg-surface
+              border border-border
               rounded-lg
               placeholder:text-text-tertiary
               transition-all duration-200
-              focus:outline-none focus:ring-2 focus:ring-primary/20
+              focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20
+              hover:border-border-hover
             "
+            aria-label="Filter items"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => onSearchChange('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-surface-active"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-surface-hover transition-colors"
               aria-label="Clear search"
             >
               <X size={14} className="text-text-tertiary" />
@@ -199,24 +200,22 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
         </div>
 
         {/* Separator */}
-        <div className="hidden sm:block w-px h-6 bg-border" />
+        <div className="hidden sm:block w-px h-6 bg-border/50" />
 
-        {/* Select All */}
+        {/* Select All Checkbox */}
         {onSelectAllChange && (
-          <label className="flex items-center gap-2 cursor-pointer select-none">
+          <label className="flex items-center gap-2 cursor-pointer select-none whitespace-nowrap">
             <Checkbox
               checked={selectAll}
               onChange={(e) => onSelectAllChange(e.target.checked)}
             />
-            <span className="text-sm text-text-secondary whitespace-nowrap">
-              Select All
-            </span>
+            <span className="text-sm text-text-secondary">Select All</span>
           </label>
         )}
 
         {/* Selected Count Badge */}
         {selectedCount > 0 && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium whitespace-nowrap">
             <span>{selectedCount}</span>
             <span className="hidden sm:inline">selected</span>
           </div>

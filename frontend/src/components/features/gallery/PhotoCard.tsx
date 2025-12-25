@@ -2,10 +2,26 @@
  * PhotoCard Component
  * Individual photo card for gallery display with signed URL support
  * Property 12: Photo Aspect Ratio Preservation
+ *
+ * Modern 2025 Glassmorphism Design:
+ * - Top-right: Favorite and Select buttons (glass circles)
+ * - Bottom: Floating action bar with View, Download, Share, Lock, Edit, Delete
+ * - Smooth hover transitions and micro-interactions
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Heart, Lock, Play, Check, CheckSquare, MoreVertical, Download, Trash2, Image } from 'lucide-react';
+import {
+  Heart,
+  Lock,
+  Play,
+  CheckSquare,
+  Download,
+  Trash2,
+  Image,
+  Maximize2,
+  Share2,
+  Edit3,
+} from 'lucide-react';
 
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -192,7 +208,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
               <div className="text-text-secondary text-xs font-medium">Processing...</div>
             </>
           ) : asset.asset.status === 'failed' ? (
-            <div className="text-red-500 text-xs font-medium">Upload Failed</div>
+            <div className="text-error text-xs font-medium">Upload Failed</div>
           ) : urlLoading ? (
             <div className="w-12 h-12 border-2 border-border border-t-primary rounded-full animate-spin" />
           ) : (
@@ -203,52 +219,85 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         </div>
       )}
 
-      {/* Badges */}
-      <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+      {/* Status Badges - Top Left (Cover, Private, Video) */}
+      <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
         {/* Cover Badge */}
         {isCover && (
           <div
-            className="p-1 rounded-full bg-primary/90 backdrop-blur-sm"
+            className="px-2 py-1 rounded-full bg-primary/90 backdrop-blur-sm flex items-center gap-1"
             aria-label="Cover Photo"
             title="Gallery Cover"
           >
-            <Image size={14} className="text-white" />
-          </div>
-        )}
-
-        {/* Favorite Badge */}
-        {asset.is_favorited && (
-          <div
-            className="p-1 rounded-full bg-black/50 backdrop-blur-sm"
-            aria-label="Favorited"
-          >
-            <Heart size={14} className="text-red-500 fill-red-500" />
+            <Image size={12} className="text-white" />
+            <span className="text-[10px] font-semibold text-white uppercase tracking-wide">Cover</span>
           </div>
         )}
 
         {/* Private Badge */}
         {asset.is_private && (
           <div
-            className="p-1 rounded-full bg-black/50 backdrop-blur-sm"
+            className="p-1.5 rounded-full bg-warning/90 backdrop-blur-sm"
             aria-label="Private"
+            title="Private Photo"
           >
-            <Lock size={14} className="text-text-inverse" />
+            <Lock size={14} className="text-white" />
           </div>
         )}
 
         {/* Video Badge */}
         {asset.asset.type === 'video' && (
           <div
-            className="px-1.5 py-0.5 rounded bg-black/50 backdrop-blur-sm flex items-center gap-1"
+            className="px-2 py-1 rounded-full bg-neutral-900/60 backdrop-blur-sm flex items-center gap-1"
             aria-label="Video"
           >
-            <Play size={12} className="text-text-inverse fill-text-inverse" />
+            <Play size={12} className="text-white fill-white" />
             {asset.asset.duration_ms && (
-              <span className="text-xs text-text-inverse">
+              <span className="text-xs font-medium text-white">
                 {Math.floor(asset.asset.duration_ms / 1000)}s
               </span>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Top-Right Controls - Favorite & Select (Always visible when active, hover for others) */}
+      <div className="absolute top-3 right-3 flex flex-col gap-2 z-30">
+        {/* Favorite Button - Always visible when favorited, otherwise on hover */}
+        {showActions && onFavorite && (
+          <button
+            className={`
+              photo-card-top-btn btn-favorite
+              ${asset.is_favorited ? 'active always-visible' : ''}
+              ${!asset.is_favorited && !isHovered ? 'opacity-0' : 'opacity-100'}
+              transition-opacity duration-200
+            `}
+            onClick={handleFavorite}
+            onContextMenu={(e) => e.stopPropagation()}
+            aria-label={asset.is_favorited ? 'Remove from favorites' : 'Add to favorites'}
+            title={asset.is_favorited ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <span className="photo-card-tooltip">{asset.is_favorited ? 'Unfavorite' : 'Favorite'}</span>
+            <Heart size={20} />
+          </button>
+        )}
+
+        {/* Selection Toggle Button - Always visible when selected, otherwise on hover */}
+        {showActions && (selectable || onSelection) && (
+          <button
+            className={`
+              photo-card-top-btn btn-select
+              ${isSelected || asset.is_selected ? 'active always-visible' : ''}
+              ${!(isSelected || asset.is_selected) && !isHovered ? 'opacity-0' : 'opacity-100'}
+              transition-opacity duration-200
+            `}
+            onClick={selectable ? handleSelect : handleSelectionToggle}
+            onContextMenu={(e) => e.stopPropagation()}
+            aria-label={isSelected || asset.is_selected ? 'Deselect photo' : 'Select photo'}
+            title={isSelected || asset.is_selected ? 'Deselect photo' : 'Select photo'}
+          >
+            <span className="photo-card-tooltip">{isSelected || asset.is_selected ? 'Deselect' : 'Select'}</span>
+            <CheckSquare size={20} />
+          </button>
         )}
       </div>
 
@@ -262,161 +311,103 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         draggable={false}
       />
 
-      {/* Hover Overlay with Actions */}
+      {/* Bottom Action Bar - Floating Glassmorphism Container */}
       {showActions && isHovered && (
-        <div
-          className="
-            absolute inset-0 z-30
-            bg-gradient-to-t from-black/70 via-black/20 to-transparent
-            flex flex-col justify-end p-3
-            transition-opacity duration-200
-            pointer-events-none
-          "
-        >
-          <div className="flex items-center gap-2 pointer-events-auto">
-            {/* Favorite Toggle */}
-            <button
-              className="
-                p-1.5 rounded-full touch-target
-                bg-white/20 hover:bg-white/30
-                text-white
-                transition-colors
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white
-              "
-              onClick={handleFavorite}
-              onContextMenu={(e) => e.stopPropagation()}
-              aria-label={asset.is_favorited ? 'Remove from favorites' : 'Add to favorites'}
-            >
-              <Heart
-                size={16}
-                className={asset.is_favorited ? 'fill-red-500 text-red-500' : ''}
-              />
-            </button>
-
-            {/* Selection Toggle */}
-            {showActions && onSelection && (
-              <button
-                className="
-                  p-1.5 rounded-full touch-target
-                  bg-white/20 hover:bg-white/30
-                  text-white
-                  transition-colors
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white
-                "
-                onClick={handleSelectionToggle}
-                onContextMenu={(e) => e.stopPropagation()}
-                aria-label={asset.is_selected ? 'Deselect photo' : 'Select photo as pick'}
-              >
-                <CheckSquare
-                  size={16}
-                  className={asset.is_selected ? 'fill-primary text-primary' : ''}
-                />
-              </button>
-            )}
-
-            {/* Set as Cover */}
-            {onSetCover && !isCover && (
-              <button
-                className="
-                  p-1.5 rounded-full touch-target
-                  bg-white/20 hover:bg-primary/70
-                  text-white
-                  transition-colors
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white
-                "
-                onClick={handleSetCover}
-                onContextMenu={(e) => e.stopPropagation()}
-                aria-label="Set as gallery cover"
-                title="Set as Cover"
-              >
-                <Image size={16} />
-              </button>
-            )}
-
-            {/* Download */}
-            {onDownload && (
-              <button
-                className="
-                  p-1.5 rounded-full touch-target
-                  bg-white/20 hover:bg-white/30
-                  text-white
-                  transition-colors
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white
-                "
-                onClick={handleDownload}
-                onContextMenu={(e) => e.stopPropagation()}
-                aria-label="Download"
-              >
-                <Download size={16} />
-              </button>
-            )}
-
-            {/* Delete */}
-            {onDelete && (
-              <button
-                className="
-                  p-1.5 rounded-full touch-target
-                  bg-white/20 hover:bg-white/30
-                  text-white hover:text-red-400
-                  transition-colors
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white
-                "
-                onClick={handleDelete}
-                onContextMenu={(e) => e.stopPropagation()}
-                aria-label="Delete photo"
-              >
-                <Trash2 size={16} />
-              </button>
-            )}
-
-            {/* More Options */}
-            <button
-              className="
-                p-1.5 rounded-full touch-target
-                bg-white/20 hover:bg-white/30
-                text-white
-                transition-colors
-                ml-auto
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white
-              "
-              onContextMenu={(e) => e.stopPropagation()}
-              aria-label="More options"
-            >
-              <MoreVertical size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Selection Checkbox (outside overlay for easy access) */}
-      {selectable && (
-        <div
-          className={`
-            absolute top-2 left-2 z-30
-            transition-opacity duration-150
-            ${isSelected || isHovered ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
-          `}
-          onClick={handleSelect}
-          onContextMenu={(e) => e.stopPropagation()}
-        >
-          <div
-            className={`
-              w-6 h-6 rounded-full
-              flex items-center justify-center
-              transition-all duration-150 touch-target
-              ${isSelected
-                ? 'bg-primary text-white'
-                : 'bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm'
-              }
-            `}
-            role="checkbox"
-            aria-checked={isSelected}
-            aria-label={isSelected ? 'Deselect photo' : 'Select photo'}
+        <div className="photo-card-action-bar" onClick={(e) => e.stopPropagation()}>
+          {/* View / Fullscreen Button - Primary Blue */}
+          <button
+            className="photo-card-action-btn btn-view"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick?.(asset, index);
+            }}
+            onContextMenu={(e) => e.stopPropagation()}
+            aria-label="View Full Screen"
+            title="View Full Screen"
           >
-            {isSelected && <Check size={14} strokeWidth={3} />}
-          </div>
+            <span className="photo-card-tooltip">View</span>
+            <Maximize2 size={20} />
+          </button>
+
+          {/* Download Button */}
+          {onDownload && (
+            <button
+              className="photo-card-action-btn"
+              onClick={handleDownload}
+              onContextMenu={(e) => e.stopPropagation()}
+              aria-label="Download Photo"
+              title="Download Photo"
+            >
+              <span className="photo-card-tooltip">Download</span>
+              <Download size={20} />
+            </button>
+          )}
+
+          {/* Share Button */}
+          <button
+            className="photo-card-action-btn"
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.stopPropagation()}
+            aria-label="Share Photo"
+            title="Share Photo"
+          >
+            <span className="photo-card-tooltip">Share</span>
+            <Share2 size={20} />
+          </button>
+
+          {/* Lock / Private Button */}
+          <button
+            className={`photo-card-action-btn btn-lock ${asset.is_private ? 'active' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.stopPropagation()}
+            aria-label={asset.is_private ? 'Unlock Photo' : 'Lock Photo'}
+            title={asset.is_private ? 'Unlock Photo' : 'Lock Photo'}
+          >
+            <span className="photo-card-tooltip">{asset.is_private ? 'Unlock' : 'Lock'}</span>
+            <Lock size={20} />
+          </button>
+
+          {/* Set as Cover / Edit Button */}
+          {onSetCover && !isCover ? (
+            <button
+              className="photo-card-action-btn"
+              onClick={handleSetCover}
+              onContextMenu={(e) => e.stopPropagation()}
+              aria-label="Set as Cover"
+              title="Set as Cover"
+            >
+              <span className="photo-card-tooltip">Set Cover</span>
+              <Image size={20} />
+            </button>
+          ) : (
+            <button
+              className="photo-card-action-btn"
+              onClick={(e) => e.stopPropagation()}
+              onContextMenu={(e) => e.stopPropagation()}
+              aria-label="Edit Info"
+              title="Edit Info"
+            >
+              <span className="photo-card-tooltip">Edit</span>
+              <Edit3 size={20} />
+            </button>
+          )}
+
+          {/* Delete Button */}
+          {onDelete && (
+            <button
+              className="photo-card-action-btn btn-delete"
+              onClick={handleDelete}
+              onContextMenu={(e) => e.stopPropagation()}
+              aria-label="Delete Photo"
+              title="Delete Photo"
+            >
+              <span className="photo-card-tooltip">Delete</span>
+              <Trash2 size={20} />
+            </button>
+          )}
         </div>
       )}
+
     </div>
   );
 };

@@ -101,15 +101,15 @@ async def list_gallery_faces(
     workspace_id = workspace_access["workspace_id"]
     offset = (page - 1) * limit
     
-    # Get faces by gallery (we need to join through photos)
-    # For now, return all faces in workspace - gallery filtering to be added
-    faces = await face_repo.find_by_workspace(
+    # Get faces by gallery
+    faces = await face_repo.find_by_gallery_id(
         workspace_id=workspace_id,
+        gallery_id=gallery_id,
         limit=limit,
         offset=offset,
     )
     
-    total = len(faces)  # TODO: Get actual count
+    total = await face_repo.count_by_gallery_id(workspace_id, gallery_id)
     total_pages = (total + limit - 1) // limit
     
     return FaceListResponse(
@@ -119,6 +119,35 @@ async def list_gallery_faces(
             limit=limit,
             total=total,
             total_pages=total_pages,
+        ),
+    )
+
+
+@router.get(
+    "/photos/{photo_id}/faces",
+    response_model=FaceListResponse,
+    summary="List faces in a photo",
+    description="Returns all detected faces in a specific photo.",
+)
+async def list_photo_faces(
+    photo_id: Annotated[UUID, Path(..., description="Photo (Asset) ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    face_repo: FaceRepoDep,
+):
+    """List all faces in a photo."""
+    workspace_id = workspace_access["workspace_id"]
+    
+    faces = await face_repo.find_by_photo_id(photo_id, workspace_id)
+    total = len(faces)
+    
+    return FaceListResponse(
+        data=[FaceResponse(**f, id=f["id"]) for f in faces],
+        meta=FaceListMeta(
+            page=1,
+            limit=total if total > 0 else 1, # Avoid limit=0
+            total=total,
+            total_pages=1,
         ),
     )
 

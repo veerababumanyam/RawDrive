@@ -819,7 +819,7 @@ def test_property_11_environment_variable_fallback(
     if env_value is not None:
         with patch.dict(os.environ, {env_key: env_value}):
             import asyncio
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 config_service.get_face_detection_setting(key, default_value)
             )
             
@@ -833,7 +833,7 @@ def test_property_11_environment_variable_fallback(
             os.environ.pop(env_key, None)
             
             import asyncio
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 config_service.get_face_detection_setting(key, default_value)
             )
             
@@ -875,15 +875,14 @@ def test_property_11_threshold_settings_fallback(
     
     with patch.dict(os.environ, env_vars):
         import asyncio
-        loop = asyncio.get_event_loop()
         
         # Get similarity threshold
-        result_similarity = loop.run_until_complete(
+        result_similarity = asyncio.run(
             config_service.get_similarity_threshold()
         )
         
         # Get min confidence
-        result_confidence = loop.run_until_complete(
+        result_confidence = asyncio.run(
             config_service.get_min_confidence_threshold()
         )
         
@@ -927,11 +926,10 @@ def test_property_11_provider_credentials_fallback_to_env(provider_name: str):
             os.environ.pop(var, None)
         
         import asyncio
-        loop = asyncio.get_event_loop()
         
         # Property: Without env vars, should raise ProviderNotConfiguredError
         try:
-            loop.run_until_complete(
+            asyncio.run(
                 config_service.get_provider_credentials(provider_name)
             )
             # If we get here without exception, the test should fail
@@ -1263,7 +1261,7 @@ def test_property_19_circuit_opens_after_threshold_failures(
             assert "circuit breaker" in e.message.lower() or "open" in e.message.lower(), \
                 "Error message should mention circuit breaker"
     
-    asyncio.get_event_loop().run_until_complete(run_test())
+    asyncio.run(run_test())
 
 
 @given(
@@ -1336,7 +1334,7 @@ def test_property_19_circuit_closes_after_successful_recovery(
             assert breaker.state == CircuitState.CLOSED, \
                 f"Circuit should be CLOSED after {half_open_requests} successes"
     
-    asyncio.get_event_loop().run_until_complete(run_test())
+    asyncio.run(run_test())
 
 
 @given(
@@ -1401,7 +1399,7 @@ def test_property_19_half_open_failure_reopens_circuit(
             assert breaker.state == CircuitState.OPEN, \
                 "Circuit must reopen after failure in half-open state"
     
-    asyncio.get_event_loop().run_until_complete(run_test())
+    asyncio.run(run_test())
 
 
 @given(
@@ -1468,7 +1466,7 @@ def test_property_19_success_resets_failure_count(
         # Property: Circuit should be open after threshold failures
         assert breaker.state == CircuitState.OPEN
     
-    asyncio.get_event_loop().run_until_complete(run_test())
+    asyncio.run(run_test())
 
 
 @given(
@@ -1516,7 +1514,7 @@ def test_property_19_is_open_check_for_provider_selection(
         assert breaker.is_open(), "Open circuit should report is_open=True"
         assert not breaker.is_healthy(), "Open circuit should report is_healthy=False"
     
-    asyncio.get_event_loop().run_until_complete(run_test())
+    asyncio.run(run_test())
 
 
 # =============================================================================
@@ -1654,7 +1652,7 @@ def test_retry_exhaustion_raises_last_error(max_retries: int):
         assert attempt_count == max_retries + 1, \
             f"Expected {max_retries + 1} attempts, got {attempt_count}"
     
-    asyncio.get_event_loop().run_until_complete(run_test())
+    asyncio.run(run_test())
 
 
 @given(
@@ -1819,7 +1817,7 @@ def test_property_4_provider_failover_behavior(
                 assert len(e.details.get("provider_errors", [])) == 2, \
                     "Error should contain both provider failures"
     
-    asyncio.get_event_loop().run_until_complete(run_test())
+    asyncio.run(run_test())
 
 
 @given(
@@ -1911,7 +1909,7 @@ def test_property_4_failover_preserves_result(
         assert result[0].bounding_box.x == expected[0].bounding_box.x, \
             "Bounding box should match successful provider"
     
-    asyncio.get_event_loop().run_until_complete(run_test())
+    asyncio.run(run_test())
 
 
 @given(
@@ -1993,7 +1991,7 @@ def test_property_4_failover_respects_priority(
         assert call_order == provider_priority, \
             f"Expected call order {provider_priority}, got {call_order}"
     
-    asyncio.get_event_loop().run_until_complete(run_test())
+    asyncio.run(run_test())
 
 
 # =============================================================================

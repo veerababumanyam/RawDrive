@@ -220,16 +220,118 @@ export const WorkflowTabs: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Right Content - Mockup */}
+                        {/* Right Content - Rich Animated Mockup */}
                         <div className="relative">
                             <div className="absolute inset-0 bg-gradient-to-tr from-primary-500/20 to-accent-500/20 rounded-2xl blur-2xl transform rotate-3" />
-                            <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-neutral-900/50 shadow-2xl aspect-[4/3] flex items-center justify-center">
-                                {/* Placeholder for image - using AppCard or similar to show intent */}
-                                <div className="text-center p-8">
-                                    <div className="w-20 h-20 mx-auto rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                        {currentTab.icon}
+                            <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 shadow-2xl aspect-[4/3]">
+                                {/* Browser Frame */}
+                                <div className="bg-slate-800/80 border-b border-white/10 px-4 py-3 flex items-center gap-2">
+                                    <div className="flex gap-1.5">
+                                        <span className="w-3 h-3 rounded-full bg-red-400/80" />
+                                        <span className="w-3 h-3 rounded-full bg-yellow-400/80" />
+                                        <span className="w-3 h-3 rounded-full bg-green-400/80" />
                                     </div>
-                                    <p className="text-neutral-500 text-sm">Interactive Preview of {currentTab.label}</p>
+                                    <div className="flex-1 mx-4">
+                                        <div className="bg-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-400 flex items-center gap-2">
+                                            <span className="text-green-400">🔒</span>
+                                            <span>rawdrive.ai/studio/{currentTab.id}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* Mockup Content */}
+                                <div className="p-6 relative min-h-[280px]">
+                                    {/* Animated gradient background */}
+                                    <div className={`absolute inset-0 opacity-30 ${
+                                        activeTab === 'attract' ? 'bg-gradient-to-br from-blue-500/30 via-purple-500/20 to-pink-500/30' :
+                                        activeTab === 'manage' ? 'bg-gradient-to-br from-green-500/30 via-teal-500/20 to-cyan-500/30' :
+                                        'bg-gradient-to-br from-orange-500/30 via-amber-500/20 to-yellow-500/30'
+                                    }`} />
+                                    
+                                    {/* Floating Cards Animation */}
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.2 }}
+                                        className="relative z-10 grid grid-cols-2 gap-4"
+                                    >
+                                        {/* Card 1 */}
+                                        <motion.div 
+                                            animate={{ y: [0, -5, 0] }}
+                                            transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                                            className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10"
+                                        >
+                                            <div className={`w-10 h-10 rounded-lg ${
+                                                activeTab === 'attract' ? 'bg-blue-500/20' :
+                                                activeTab === 'manage' ? 'bg-green-500/20' :
+                                                'bg-orange-500/20'
+                                            } flex items-center justify-center mb-3`}>
+                                                {currentTab.features[0]?.icon}
+                                            </div>
+                                            <div className="h-2 bg-white/20 rounded mb-2 w-3/4" />
+                                            <div className="h-2 bg-white/10 rounded w-1/2" />
+                                        </motion.div>
+                                        
+                                        {/* Card 2 */}
+                                        <motion.div 
+                                            animate={{ y: [0, -8, 0] }}
+                                            transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut", delay: 0.5 }}
+                                            className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10"
+                                        >
+                                            <div className={`w-10 h-10 rounded-lg ${
+                                                activeTab === 'attract' ? 'bg-purple-500/20' :
+                                                activeTab === 'manage' ? 'bg-teal-500/20' :
+                                                'bg-amber-500/20'
+                                            } flex items-center justify-center mb-3`}>
+                                                {currentTab.features[1]?.icon}
+                                            </div>
+                                            <div className="h-2 bg-white/20 rounded mb-2 w-2/3" />
+                                            <div className="h-2 bg-white/10 rounded w-3/4" />
+                                        </motion.div>
+                                        
+                                        {/* Card 3 - Full Width */}
+                                        <motion.div 
+                                            animate={{ y: [0, -6, 0] }}
+                                            transition={{ repeat: Infinity, duration: 4, ease: "easeInOut", delay: 1 }}
+                                            className="col-span-2 bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10"
+                                        >
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <div className={`w-10 h-10 rounded-lg ${
+                                                    activeTab === 'attract' ? 'bg-pink-500/20' :
+                                                    activeTab === 'manage' ? 'bg-cyan-500/20' :
+                                                    'bg-yellow-500/20'
+                                                } flex items-center justify-center`}>
+                                                    {currentTab.features[2]?.icon}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="h-2 bg-white/20 rounded mb-1.5 w-1/3" />
+                                                    <div className="h-1.5 bg-white/10 rounded w-1/2" />
+                                                </div>
+                                            </div>
+                                            {/* Progress/Stats Bar */}
+                                            <div className="flex gap-2">
+                                                <div className={`h-1.5 rounded-full flex-1 ${
+                                                    activeTab === 'attract' ? 'bg-gradient-to-r from-blue-500 to-purple-500' :
+                                                    activeTab === 'manage' ? 'bg-gradient-to-r from-green-500 to-teal-500' :
+                                                    'bg-gradient-to-r from-orange-500 to-amber-500'
+                                                }`} style={{ width: '75%' }} />
+                                                <div className="h-1.5 bg-white/10 rounded-full flex-1" />
+                                            </div>
+                                        </motion.div>
+                                    </motion.div>
+                                    
+                                    {/* Floating particles */}
+                                    <div className="absolute top-4 right-4">
+                                        <motion.div
+                                            animate={{ rotate: 360 }}
+                                            transition={{ repeat: Infinity, duration: 20, ease: "linear" }}
+                                            className={`w-16 h-16 rounded-full border-2 border-dashed ${
+                                                activeTab === 'attract' ? 'border-blue-500/20' :
+                                                activeTab === 'manage' ? 'border-green-500/20' :
+                                                'border-orange-500/20'
+                                            }`}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>

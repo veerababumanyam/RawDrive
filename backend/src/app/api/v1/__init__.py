@@ -133,3 +133,6 @@ router.include_router(
     prefix="/api/v1",
     tags=["face-groups"],
 )
+
+from app.api.v1.admin_ai_providers import router as admin_ai_providers_router
+router.include_router(admin_ai_providers_router)

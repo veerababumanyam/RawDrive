@@ -278,6 +278,7 @@ export interface UploadSessionResponse {
 export interface UploadCommitRequest {
   sha256: string;
   etag?: string;
+  client_metadata?: Record<string, any>;
 }
 
 // Upload Commit Response

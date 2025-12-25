@@ -283,6 +283,7 @@ class UploadService:
         upload_id: UUID,
         file_data: Optional[bytes] = None,
         sha256: Optional[str] = None,
+        client_metadata: Optional[dict] = None,
     ) -> dict:
         """Process proxy upload: verify, encrypt, store, and create asset.
 
@@ -295,6 +296,7 @@ class UploadService:
             upload_id: Upload session UUID
             file_data: Uploaded file bytes (optional if already committed)
             sha256: SHA256 checksum (optional)
+            client_metadata: Optional client-side metadata
 
         Returns:
             Dictionary with asset_id and status
@@ -508,6 +510,7 @@ class UploadService:
                             "photo_id": str(asset_id),
                             "workspace_id": str(workspace_id),
                             "priority": 0,
+                            "client_metadata": client_metadata,
                         },
                         priority=TaskPriority.NORMAL,
                         max_retries=3,

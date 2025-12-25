@@ -102,6 +102,44 @@ export const GalleryUpload: React.FC<GalleryUploadProps> = ({
 
   // Handle files selected from dropzone
   const handleFilesSelected = useCallback(async (selectedFiles: File[]) => {
+    // Phase 1: Client-Side Face Detection (Feedback Only)
+    // We run this asynchronously so it doesn't block the UI immediately,
+    // but practical usage might want to wait or show a "Scanning..." state.
+    // For now, we'll log detections to console and potentially show a toast/badge later.
+    try {
+      const { frontendFaceService } = await import('../../../services/FrontendFaceService');
+
+      // Process first 3 images to avoid freezing browser on bulk upload
+      const filesToScan = selectedFiles.slice(0, 3).filter(f => f.type.startsWith('image/'));
+
+      if (filesToScan.length > 0) {
+        console.log(`[Face Detection] Scanning ${filesToScan.length} images on client...`);
+
+        await Promise.all(filesToScan.map(async (file) => {
+          const img = new Image();
+          img.src = URL.createObjectURL(file);
+          await img.decode();
+
+          const detections = await frontendFaceService.detectFaces(img);
+          console.log(`[Face Detection] File: ${file.name}, Faces Found: ${detections.length}`);
+
+          (file as any).clientMetadata = {
+            face_count: detections.length,
+            faces: detections.map(d => ({
+              score: d.score,
+              box: d.box
+            })),
+            detected_at: new Date().toISOString()
+          };
+
+          // Cleanup
+          URL.revokeObjectURL(img.src);
+        }));
+      }
+    } catch (e) {
+      console.warn('[Face Detection] Client-side detection skipped/failed:', e);
+    }
+
     await addFiles(selectedFiles);
   }, [addFiles]);
 

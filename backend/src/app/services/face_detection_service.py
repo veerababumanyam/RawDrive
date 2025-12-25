@@ -229,11 +229,18 @@ class FaceDetectionService:
             
             # Filter and store faces
             stored_faces = []
-            provider_manager = await self._get_provider_manager()
-            provider = await provider_manager.select_provider()
-            provider_name = provider.name
+            # Filter and store faces
+            stored_faces = []
             
             for result in detection_results:
+                # Use provider from result metadata if available, otherwise unknown
+                # The local provider puts this in raw_provider_response
+                provider_name = "unknown"
+                if result.raw_provider_response and "provider" in result.raw_provider_response:
+                    provider_name = result.raw_provider_response["provider"]
+                elif hasattr(result, "provider"):  # If we add this field to FaceDetectionResult later
+                    provider_name = result.provider
+
                 # Skip very low confidence detections
                 if result.confidence < min_confidence:
                     logger.debug(

@@ -162,7 +162,7 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
             {onShare && (
               <button
                 onClick={handleShare}
-                className="p-2 rounded-lg bg-black/50 backdrop-blur-sm text-white hover:bg-cyan-500 hover:text-white shadow-lg ring-1 ring-white/20 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                className="p-2 rounded-lg bg-black/50 backdrop-blur-sm text-white hover:bg-accent hover:text-white shadow-lg ring-1 ring-white/20 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 aria-label="Share gallery"
               >
                 <Share2 size={15} />

@@ -427,74 +427,78 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Item count summary */}
-      <div className="card-glass rounded-xl px-4 py-3">
+      <div className="glass-card rounded-xl px-4 py-3">
         <p className="text-sm text-text-secondary">
           {loading ? 'Loading...' : (
             <>
-              {total} item{total !== 1 ? 's' : ''} · Items are permanently deleted after {retentionDays} days
+              <span className="font-semibold text-text-primary">{total}</span> item{total !== 1 ? 's' : ''} · Items are permanently deleted after {retentionDays} days
             </>
           )}
         </p>
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-4">
-        {/* Search */}
-        <div className="flex-1 min-w-[200px] max-w-md">
-          <AppInput
-            placeholder="Search deleted items..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            leftIcon={<Search size={16} />}
-          />
-        </div>
-
-        {/* Filter */}
-        <div className="flex items-center gap-2">
-          <Filter size={16} className="text-text-tertiary" />
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            {(['all', 'gallery', 'photo'] as FilterType[]).map((type) => (
-              <button
-                key={type}
-                onClick={() => setFilter(type)}
-                className={`
-                  px-3 py-1.5 text-sm font-medium
-                  transition-colors
-                  ${filter === type
-                    ? 'bg-primary text-white'
-                    : 'bg-surface text-text-secondary hover:bg-surface-hover'
-                  }
-                `}
-              >
-                {type === 'all' ? 'All' : type === 'gallery' ? 'Galleries' : 'Photos'}
-              </button>
-            ))}
+      <div className="glass-card rounded-xl p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Search */}
+          <div className="flex-1 min-w-[200px] max-w-md">
+            <AppInput
+              placeholder="Search deleted items..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              leftIcon={<Search size={16} />}
+            />
           </div>
-        </div>
 
-        {/* Select all button */}
-        {filteredItems.length > 0 && (
-          <AppButton
-            variant="ghost"
-            size="sm"
-            onClick={handleSelectAll}
-            leftIcon={
-              selectedIds.size === filteredItems.length ? (
-                <CheckSquare size={16} />
-              ) : (
-                <Square size={16} />
-              )
-            }
-          >
-            {selectedIds.size === filteredItems.length ? 'Deselect all' : 'Select all'}
-          </AppButton>
-        )}
+          {/* Filter */}
+          <div className="flex items-center gap-2">
+            <div className="icon-container icon-container-sm icon-container-accent rounded-lg">
+              <Filter size={14} />
+            </div>
+            <div className="flex rounded-xl overflow-hidden shadow-sm border border-border/50">
+              {(['all', 'gallery', 'photo'] as FilterType[]).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setFilter(type)}
+                  className={`
+                    px-4 py-2 text-sm font-medium
+                    transition-all duration-200
+                    ${filter === type
+                      ? 'bg-gradient-to-r from-primary to-accent text-white shadow-md'
+                      : 'bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                    }
+                  `}
+                >
+                  {type === 'all' ? 'All' : type === 'gallery' ? 'Galleries' : 'Photos'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Select all button */}
+          {filteredItems.length > 0 && (
+            <AppButton
+              variant="ghost"
+              size="sm"
+              onClick={handleSelectAll}
+              leftIcon={
+                selectedIds.size === filteredItems.length ? (
+                  <CheckSquare size={16} />
+                ) : (
+                  <Square size={16} />
+                )
+              }
+            >
+              {selectedIds.size === filteredItems.length ? 'Deselect all' : 'Select all'}
+            </AppButton>
+          )}
+        </div>
       </div>
 
       {/* Error state */}
       {error && (
-        <div className="p-4 rounded-lg bg-error/10 border border-error/20 text-error">
-          {error}
+        <div className="glass-card p-4 rounded-xl border-2 border-error/30 bg-error/5">
+          <p className="text-error font-medium">{error}</p>
         </div>
       )}
 
@@ -504,7 +508,7 @@ export const RecycleBinView: React.FC<RecycleBinViewProps> = ({
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="aspect-[4/3] bg-background-alt rounded-card animate-pulse"
+              className="glass-card aspect-[4/3] rounded-2xl animate-pulse"
             />
           ))}
         </div>

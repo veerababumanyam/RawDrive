@@ -32,6 +32,12 @@ interface SEOHeadProps {
   siteName?: string;
   /** Twitter handle */
   twitterHandle?: string;
+  /** AI Agent Discovery - content summary */
+  aiContentSummary?: string;
+  /** AI Agent Discovery - target audience */
+  aiTargetAudience?: string;
+  /** AI Agent Discovery - pricing model */
+  aiPricingModel?: string;
 }
 
 const DEFAULT_TITLE = 'RawDrive - Professional Photography Management';
@@ -54,6 +60,9 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
   locale = 'en_US',
   siteName = DEFAULT_SITE_NAME,
   twitterHandle = DEFAULT_TWITTER_HANDLE,
+  aiContentSummary,
+  aiTargetAudience,
+  aiPricingModel,
 }) => {
   const fullTitle = title ? `${title} | ${siteName}` : DEFAULT_TITLE;
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rawdrive.ai';
@@ -96,6 +105,11 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
       {/* Additional Meta */}
       <meta name="author" content="Swaz Solutions" />
       <meta name="application-name" content={siteName} />
+
+      {/* AI Agent Discovery Meta Tags (GEO/AEO Optimization) */}
+      {aiContentSummary && <meta name="ai-content-summary" content={aiContentSummary} />}
+      {aiTargetAudience && <meta name="ai-target-audience" content={aiTargetAudience} />}
+      {aiPricingModel && <meta name="ai-pricing-model" content={aiPricingModel} />}
 
       {/* Structured Data */}
       {structuredData && (

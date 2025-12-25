@@ -117,8 +117,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
           {/* Collapse Toggle Button */}
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} mb-3`}>
             {!sidebarCollapsed && (
-              <div className="flex items-center gap-3 p-2 rounded-xl bg-surface-hover/50 flex-1 mr-2">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-sm">
+              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-hover/50 backdrop-blur-sm border border-border/30 flex-1 mr-2 transition-all duration-200 hover:shadow-sm">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-md shadow-primary/20">
                   <span className="text-white font-bold text-sm">
                     {workspaceName.charAt(0).toUpperCase()}
                   </span>
@@ -136,7 +136,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             )}
             <button
               onClick={toggleCollapse}
-              className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center flex-shrink-0"
+              className="sidebar-collapse-btn p-2.5 rounded-xl hover:bg-surface-hover/80 hover:backdrop-blur-sm text-text-secondary hover:text-text-primary hover:shadow-sm transition-all duration-200 min-w-[42px] min-h-[42px] flex items-center justify-center flex-shrink-0 border border-transparent hover:border-border/50"
               aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
@@ -198,23 +198,20 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 
       {/* Footer */}
       <SidebarFooter>
-        {/* Storage Usage */}
+        {/* Storage Usage - Glassmorphism style */}
         {!sidebarCollapsed && (
-          <div className="mb-4 p-3 rounded-xl bg-surface-hover/50">
+          <div className="mb-4 p-3 rounded-xl bg-surface-hover/50 backdrop-blur-sm border border-border/30">
             <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
-              <span className="font-medium">{t('storage.title')}</span>
-              <span>
+              <span className="font-semibold">{t('storage.title')}</span>
+              <span className="font-medium">
                 {formatStorage(storageUsed)} / {formatStorage(storageLimit)}
               </span>
             </div>
-            <div className="h-2 bg-background rounded-full overflow-hidden">
+            <div className="sidebar-storage-bar">
               <div
-                className={`h-full rounded-full transition-all duration-300 ${storagePercent > 90
-                  ? 'bg-error'
-                  : storagePercent > 70
-                    ? 'bg-warning'
-                    : 'bg-gradient-to-r from-primary to-accent'
-                  }`}
+                className={`sidebar-storage-fill ${
+                  storagePercent > 90 ? 'danger' : storagePercent > 70 ? 'warning' : ''
+                }`}
                 style={{ width: `${storagePercent}%` }}
               />
             </div>

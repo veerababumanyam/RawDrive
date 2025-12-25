@@ -540,6 +540,7 @@ class CommitUploadRequest(BaseModel):
 
     sha256: str = Field(..., min_length=64, max_length=64, description="SHA256 checksum for verification")
     etag: Optional[str] = Field(None, description="ETag from storage (optional)")
+    client_metadata: Optional[dict] = Field(None, description="Client-side metadata (e.g. face detection results)")
 
 
 # ---------------------------------------------------------------------------

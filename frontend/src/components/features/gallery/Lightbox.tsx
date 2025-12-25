@@ -674,7 +674,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
                 variant="ghost"
                 size="icon"
                 onClick={() => onFavorite(currentAsset.asset_id, !isFavorite)}
-                className={`${isFavorite ? 'text-red-500' : 'text-white'} hover:bg-white/20 border-white/20`}
+                className={`${isFavorite ? 'text-error' : 'text-white'} hover:bg-white/20 border-white/20`}
                 aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
               >
                 <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
@@ -734,7 +734,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
                   onClose();
                   onDelete(currentAsset.asset_id);
                 }}
-                className="text-white hover:bg-red-500/20 hover:text-red-400 border-white/20"
+                className="text-white hover:bg-error/20 hover:text-error border-white/20"
                 aria-label="Delete"
               >
                 <Trash2 size={20} />
@@ -873,7 +873,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
                       <button
                         onClick={() => setIsDrawingMode(!isDrawingMode)}
                         className={`text-xs px-2 py-1 rounded border transition-colors ${isDrawingMode
-                          ? 'bg-blue-500 border-blue-500 text-white'
+                          ? 'bg-primary border-primary text-white'
                           : 'border-white/20 hover:bg-white/10'
                           }`}
                       >
@@ -912,7 +912,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
                           </div>
                           <button
                             onClick={() => handleDeleteFace(face.face_id)}
-                            className="p-1 hover:bg-red-500/20 text-white/40 hover:text-red-400 rounded"
+                            className="p-1 hover:bg-error/20 text-white/40 hover:text-error rounded"
                           >
                             <Trash2 size={14} />
                           </button>

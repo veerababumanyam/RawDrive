@@ -438,7 +438,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
       {/* Favorite indicator */}
       {photo.metadata?.isFavorite && (
         <div className="absolute top-2 right-2">
-          <Heart size={16} className="text-red-500 fill-red-500" />
+          <Heart size={16} className="text-error fill-error" />
         </div>
       )}
     </div>

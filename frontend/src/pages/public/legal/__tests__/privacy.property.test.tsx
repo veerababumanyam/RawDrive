@@ -1,14 +1,18 @@
+import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import PrivacyPage from '../privacy';
 
 describe('Privacy Page - Property Test: Compliance with Indian Law', () => {
   const renderAndExtractText = (): string => {
     const { container } = render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
+      <HelmetProvider>
+        <BrowserRouter>
+          <PrivacyPage />
+        </BrowserRouter>
+      </HelmetProvider>
     );
     return (container.textContent || '').toLowerCase();
   };

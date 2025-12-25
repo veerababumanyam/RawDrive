@@ -108,9 +108,8 @@ services:
       DB_POOL_MAX_LIFETIME_SEC: ${DB_POOL_MAX_LIFETIME_SEC:-1800}
       # Public URL for profile pages (QR codes, public URLs)
       PUBLIC_URL: ${PUBLIC_URL:-https://rawdrive.ai}
-      # Removed redundant overrides that break env_file loading:
-      # GOOGLE_*, ALLOWED_CORS_ORIGINS, LOG_LEVEL, R2_*, ENCRYPTION_MASTER_KEY, SIGNED_URL_SECRET
-      # These are now loaded correctly from ../../.env via env_file directive
+      # Disable embedded face detection worker (now separate service)
+      DISABLE_FACE_WORKER: "true"
     ports:
       # Bind to localhost only - accessible via nginx reverse proxy, not directly from internet
       - "127.0.0.1:8000:8000"
@@ -125,6 +124,41 @@ services:
       - ../../backend:/app
       - ../../backend/secrets/jwtEd25519.key:/run/secrets/jwt_private_key:ro
       - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+
+  face-worker:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile.worker
+    container_name: rawdrive-face-worker
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Database connection (same as backend)
+      DATABASE_URL: postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: ${APP_ENV:-development}
+      # Worker-specific settings
+      DB_POOL_MIN_SIZE: 1
+      DB_POOL_MAX_SIZE: 5
+    # Health check endpoint on port 8001
+    expose:
+      - "8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../../backend:/app
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   one-api:
     image: justsong/one-api:latest

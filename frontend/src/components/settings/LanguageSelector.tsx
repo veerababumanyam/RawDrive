@@ -95,19 +95,22 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
                 onClick={() => setIsOpen(!isOpen)}
                 disabled={isUpdating}
                 className={`
-          w-full flex items-center justify-between
-          px-4 py-3 rounded-xl
-          bg-surface border border-border
-          hover:border-primary/50 hover:bg-surface-hover
-          focus:outline-none focus:ring-2 focus:ring-primary/30
-          transition-all duration-200
-          ${isUpdating ? 'opacity-50 cursor-wait' : 'cursor-pointer'}
-        `}
+                    w-full flex items-center justify-between
+                    px-4 py-3 rounded-xl
+                    glass-list-item
+                    border border-border/50
+                    hover:border-primary/30 hover:shadow-md
+                    focus:outline-none focus:ring-2 focus:ring-primary/30
+                    transition-all duration-200
+                    ${isUpdating ? 'opacity-50 cursor-wait' : 'cursor-pointer'}
+                `}
                 aria-haspopup="listbox"
                 aria-expanded={isOpen}
             >
                 <div className="flex items-center gap-3">
-                    <Globe size={20} className="text-text-tertiary" />
+                    <div className="icon-container icon-container-sm icon-container-primary rounded-lg">
+                        <Globe size={16} />
+                    </div>
                     <div className="text-left">
                         <div className="font-medium text-text-primary">
                             {currentLanguage.nativeName}
@@ -119,8 +122,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
                 </div>
                 <ChevronDown
                     size={18}
-                    className={`text-text-tertiary transition-transform duration-200 ${isOpen ? 'rotate-180' : ''
-                        }`}
+                    className={`text-text-tertiary transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 />
             </button>
 
@@ -165,12 +167,14 @@ const LanguageDropdown: React.FC<LanguageDropdownProps> = React.memo(({
         <div
             data-language-dropdown
             className="
-        absolute z-50 mt-2 w-full min-w-[280px]
-        max-h-[400px] overflow-y-auto
-        bg-surface border border-border rounded-xl
-        shadow-xl shadow-black/10
-        animate-in fade-in slide-in-from-top-2 duration-200
-      "
+                absolute z-50 mt-2 w-full min-w-[280px]
+                max-h-[400px] overflow-y-auto
+                bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl
+                border border-white/30 dark:border-slate-700/50 rounded-xl
+                shadow-[0_8px_32px_rgba(0,0,0,0.12),0_4px_12px_rgba(37,99,235,0.08)]
+                dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]
+                animate-in fade-in slide-in-from-top-2 duration-200
+            "
             role="listbox"
         >
             {SUPPORTED_LANGUAGES.map((lang) => (
@@ -179,14 +183,14 @@ const LanguageDropdown: React.FC<LanguageDropdownProps> = React.memo(({
                     onClick={() => onSelect(lang.code)}
                     disabled={isUpdating}
                     className={`
-            w-full flex items-center justify-between
-            px-4 py-3
-            hover:bg-surface-hover
-            transition-colors duration-150
-            ${currentLang === lang.code ? 'bg-primary/5' : ''}
-            ${isUpdating ? 'cursor-wait' : 'cursor-pointer'}
-            first:rounded-t-xl last:rounded-b-xl
-          `}
+                        w-full flex items-center justify-between
+                        px-4 py-3
+                        hover:bg-primary/5 dark:hover:bg-primary/10
+                        transition-all duration-200
+                        ${currentLang === lang.code ? 'bg-gradient-to-r from-primary/10 to-accent/5' : ''}
+                        ${isUpdating ? 'cursor-wait' : 'cursor-pointer'}
+                        first:rounded-t-xl last:rounded-b-xl
+                    `}
                     role="option"
                     aria-selected={currentLang === lang.code}
                     dir={lang.dir}
@@ -202,7 +206,9 @@ const LanguageDropdown: React.FC<LanguageDropdownProps> = React.memo(({
                         </div>
                     </div>
                     {currentLang === lang.code && (
-                        <Check size={18} className="text-primary flex-shrink-0" />
+                        <div className="flex items-center gap-1.5">
+                            <Check size={18} className="text-primary flex-shrink-0" />
+                        </div>
                     )}
                 </button>
             ))}

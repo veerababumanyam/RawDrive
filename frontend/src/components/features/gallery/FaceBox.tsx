@@ -76,7 +76,7 @@ export const FaceBox: React.FC<FaceBoxProps> = ({
                             e.stopPropagation();
                             onDelete();
                         }}
-                        className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white shadow-sm hover:bg-red-600 z-30 transition-transform hover:scale-110"
+                        className="absolute -top-3 -right-3 w-6 h-6 bg-error rounded-full flex items-center justify-center text-white shadow-sm hover:bg-error/90 z-30 transition-transform hover:scale-110"
                         title="Delete face detection"
                     >
                         <X size={12} />

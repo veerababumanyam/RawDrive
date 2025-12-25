@@ -1,11 +1,10 @@
 /**
  * GalleryStatusBadge Component
- * Displays gallery status with distinct visual styles
- * Property 3: Status Badge Visual Distinction
+ * Displays gallery status with clean, minimal styling
+ * Matches screenshot: green "Published" text
  */
 
 import React from 'react';
-import { AppBadge } from '../../ui/AppBadge';
 import type { GalleryStatus } from '../../../types/gallery';
 
 export interface GalleryStatusBadgeProps {
@@ -13,28 +12,33 @@ export interface GalleryStatusBadgeProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const statusConfig: Record<GalleryStatus, { variant: 'default' | 'success' | 'warning' | 'error'; label: string }> = {
+const statusConfig: Record<GalleryStatus, { color: string; label: string }> = {
   draft: {
-    variant: 'default',
+    color: 'text-text-tertiary',
     label: 'Draft',
   },
   published: {
-    variant: 'success',
+    color: 'text-green-500',
     label: 'Published',
   },
   archived: {
-    variant: 'warning',
+    color: 'text-amber-500',
     label: 'Archived',
   },
+};
+
+const sizeClasses = {
+  sm: 'text-xs',
+  md: 'text-sm',
+  lg: 'text-base',
 };
 
 export const GalleryStatusBadge: React.FC<GalleryStatusBadgeProps> = ({ status, size = 'sm' }) => {
   const config = statusConfig[status];
 
   return (
-    <AppBadge variant={config.variant} size={size} pill>
+    <span className={`font-medium ${config.color} ${sizeClasses[size]}`}>
       {config.label}
-    </AppBadge>
+    </span>
   );
 };
-

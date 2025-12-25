@@ -26,16 +26,18 @@ const getMessage = (filter: FilterType): string => {
 
 export const EmptyState: React.FC<EmptyStateProps> = ({ filter }) => {
     return (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 rounded-full bg-background-alt flex items-center justify-center mb-4">
-                <Trash2 size={32} className="text-text-tertiary" />
+        <div className="glass-card rounded-2xl p-8 sm:p-12">
+            <div className="flex flex-col items-center justify-center text-center">
+                <div className="empty-state-icon mb-6">
+                    <Trash2 size={32} />
+                </div>
+                <h3 className="text-lg font-semibold text-text-primary mb-2">
+                    {getMessage(filter)}
+                </h3>
+                <p className="text-sm text-text-secondary max-w-sm">
+                    Deleted items will appear here for {RECYCLE_BIN_CONSTANTS.DEFAULT_RETENTION_DAYS} days before being permanently removed.
+                </p>
             </div>
-            <h3 className="text-lg font-medium text-text-primary mb-2">
-                {getMessage(filter)}
-            </h3>
-            <p className="text-sm text-text-secondary max-w-sm">
-                Deleted items will appear here for {RECYCLE_BIN_CONSTANTS.DEFAULT_RETENTION_DAYS} days before being permanently removed.
-            </p>
         </div>
     );
 };

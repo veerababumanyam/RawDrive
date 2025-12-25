@@ -33,6 +33,7 @@ from app.services.ai.providers.types import (
 )
 from app.services.ai.providers.cloud_vision_provider import CloudVisionProvider
 from app.services.ai.providers.gemini_provider import GeminiProvider
+from app.services.ai.providers.local_provider import LocalProvider
 
 
 logger = logging.getLogger(__name__)
@@ -142,6 +143,18 @@ class ProviderManager:
             )
         )
         
+        # Initialize Local provider (last resort fallback - no API required)
+        local_provider = LocalProvider(self._config_service)
+        self._providers["local"] = local_provider
+        self._circuit_breakers["local"] = CircuitBreaker(
+            CircuitBreakerConfig(
+                failure_threshold=self.DEFAULT_FAILURE_THRESHOLD,
+                recovery_time_ms=self.DEFAULT_RECOVERY_TIME_MS,
+                half_open_requests=self.DEFAULT_HALF_OPEN_REQUESTS,
+                name="local",
+            )
+        )
+        
         logger.info(
             "AI providers initialized",
             extra={"providers": list(self._providers.keys())},
@@ -225,10 +238,12 @@ class ProviderManager:
                 )
         
         # Default provider configuration
-        # Cloud Vision is primary (priority 1), Gemini is fallback (priority 2)
+        # Cloud Vision is primary (priority 1), Gemini is fallback (priority 2),
+        # Local is last resort (priority 3) - no API required
         return [
             {"provider_name": "cloud_vision", "priority": 1},
             {"provider_name": "gemini", "priority": 2},
+            {"provider_name": "local", "priority": 3},
         ]
 
     # =========================================================================

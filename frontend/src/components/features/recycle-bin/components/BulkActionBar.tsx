@@ -29,23 +29,25 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
     return (
         <div
             className="
-        fixed bottom-6 left-1/2 -translate-x-1/2
-        flex items-center gap-4
-        px-6 py-3
-        bg-surface/95 backdrop-blur-md
-        border border-border
-        rounded-full shadow-lg
-        animate-slide-in-bottom
-        z-50
-      "
+                fixed bottom-6 left-1/2 -translate-x-1/2
+                flex items-center gap-4
+                px-6 py-3
+                bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl
+                border border-white/30 dark:border-slate-700/50
+                rounded-full
+                shadow-[0_8px_32px_rgba(0,0,0,0.12),0_4px_12px_rgba(37,99,235,0.08)]
+                dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]
+                animate-slide-in-bottom
+                z-50
+            "
             role="toolbar"
             aria-label="Bulk actions"
         >
-            <span className="text-sm font-medium text-text-primary">
+            <span className="text-sm font-semibold text-gradient">
                 {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
             </span>
 
-            <div className="h-6 w-px bg-border" />
+            <div className="h-6 w-px bg-gradient-to-b from-transparent via-border to-transparent" />
 
             <AppButton
                 variant="secondary"
@@ -65,12 +67,12 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
                 onClick={onPermanentDelete}
                 isLoading={isDeleting}
                 disabled={isRestoring}
-                className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                className="bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm hover:shadow-md transition-shadow"
             >
                 Delete Forever
             </AppButton>
 
-            <div className="h-6 w-px bg-border" />
+            <div className="h-6 w-px bg-gradient-to-b from-transparent via-border to-transparent" />
 
             <AppButton
                 variant="ghost"

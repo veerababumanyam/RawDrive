@@ -139,6 +139,7 @@ async def commit_upload(
     file: Optional[UploadFile] = File(None),
     sha256: str = Form(..., min_length=64, max_length=64, description="SHA256 checksum for verification"),
     etag: Optional[str] = Form(None, description="ETag from storage (optional)"),
+    client_metadata: Optional[str] = Form(None, description="JSON string of client metadata"),  # FastAPI Form doesn't support dict directly easily without parsing
 ) -> UploadCommitResponse:
     """Commit upload: verify checksum, process, encrypt, and store.
 
@@ -147,6 +148,15 @@ async def commit_upload(
     2. If not, and file provided, commits it (legacy/fallback).
     """
     upload_service = get_upload_service()
+
+    # Parse metadata if provided
+    metadata_dict = None
+    if client_metadata:
+        import json
+        try:
+            metadata_dict = json.loads(client_metadata)
+        except Exception:
+            pass
 
     try:
         # Read file data if provided
@@ -158,6 +168,7 @@ async def commit_upload(
             upload_id=upload_id,
             file_data=file_data,
             sha256=sha256,
+            client_metadata=metadata_dict,
         )
 
         return UploadCommitResponse(**result)

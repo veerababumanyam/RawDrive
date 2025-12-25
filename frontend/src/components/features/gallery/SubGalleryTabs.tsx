@@ -1,10 +1,9 @@
 /**
  * SubGalleryTabs Component
- * Tab navigation for sub-galleries with "Root Gallery" first
- * Property 8: Sub-Gallery Tab Rendering
- * Supports drag-drop from PhotoGrid to move photos to sub-galleries
- * Supports drag-drop reordering of tabs themselves
- * Supports context menu for rename, delete, visibility toggle
+ * Tab navigation for sub-galleries with pill/chip design
+ * Matches screenshot: Root Gallery (filled blue), other tabs (outlined), + New Sub-Gallery
+ * Supports drag-drop and context menus
+ * Mobile-first responsive design
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -27,7 +26,6 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { AppButton } from '../../ui/AppButton';
 import { ContextMenu, type ContextMenuItem } from '../../ui/ContextMenu';
 import type { SubGalleryItem } from '../../../types/gallery';
 
@@ -36,12 +34,12 @@ export interface SubGalleryTabsProps {
   activeSubGalleryId: string | null; // null = Root Gallery
   onTabSelect: (subGalleryId: string | null) => void;
   onCreateSubGallery?: () => void;
-  onSortOrderChange?: (subGalleryIds: string[]) => void; // New order of sub-gallery IDs
+  onSortOrderChange?: (subGalleryIds: string[]) => void;
   onRename?: (subGalleryId: string, currentName: string) => void;
   onDelete?: (subGalleryId: string) => void;
   onToggleVisibility?: (subGalleryId: string, visible: boolean) => void;
-  droppable?: boolean; // Enable drop zones for drag-to-tab
-  sortable?: boolean; // Enable drag-drop reordering of tabs
+  droppable?: boolean;
+  sortable?: boolean;
   isLoading?: boolean;
 }
 
@@ -80,7 +78,7 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Require 8px movement before drag starts
+        distance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -97,7 +95,6 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
         return;
       }
 
-      // Only handle reordering if both are sub-gallery IDs (not root gallery)
       if (
         typeof active.id === 'string' &&
         typeof over.id === 'string' &&
@@ -111,7 +108,6 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
         if (oldIndex !== -1 && newIndex !== -1) {
           const newItems = arrayMove(items, oldIndex, newIndex);
           setItems(newItems);
-          // Call parent callback with new order
           onSortOrderChange(newItems.map((item) => item.sub_gallery_id));
         }
       }
@@ -179,6 +175,34 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
     [items, onRename, onDelete, onToggleVisibility]
   );
 
+  // Tab button styles - matching screenshot exactly
+  const getTabClasses = (isActive: boolean, isOver: boolean = false) => {
+    const baseClasses = `
+      inline-flex items-center gap-1.5
+      px-4 py-2
+      text-sm font-medium
+      rounded-full
+      transition-all duration-200
+      whitespace-nowrap
+      select-none
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2
+    `;
+
+    if (isActive) {
+      // Active tab - filled blue pill
+      return `${baseClasses} bg-primary text-white shadow-sm`;
+    }
+
+    // Inactive tab - outlined with dotted border (matching screenshot)
+    return `${baseClasses}
+      bg-transparent
+      text-text-secondary
+      border border-dashed border-border
+      hover:border-primary/50 hover:text-primary hover:bg-primary/5
+      ${isOver && droppable ? 'ring-2 ring-primary ring-offset-2 bg-primary/10' : ''}
+    `;
+  };
+
   // Sortable tab component
   const SortableTab: React.FC<{
     subGallery: SubGalleryItem;
@@ -212,6 +236,7 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
     };
 
     const hasContextMenu = onRename || onDelete || onToggleVisibility;
+    const isActive = activeSubGalleryId === subGallery.sub_gallery_id;
 
     return (
       <div
@@ -232,115 +257,69 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
           }
         }}
         className={`
-          flex-shrink-0 px-4 py-2 rounded-lg font-medium text-sm transition-colors
-          flex items-center gap-2 relative group select-none
-          ${activeSubGalleryId === subGallery.sub_gallery_id
-            ? 'bg-primary text-white'
-            : 'bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary'
-          }
-          ${isOver && droppable ? 'ring-2 ring-primary ring-offset-2 bg-primary/20' : ''}
+          ${getTabClasses(isActive, isOver)}
           ${isDragging ? 'cursor-grabbing' : sortable ? 'cursor-grab' : 'cursor-pointer'}
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2
+          group relative
         `}
-        aria-selected={activeSubGalleryId === subGallery.sub_gallery_id}
+        aria-selected={isActive}
         aria-label={subGallery.name}
       >
         {sortable && (
           <span
             {...attributes}
             {...listeners}
-            className="touch-target"
+            className="touch-target flex-shrink-0"
             aria-label="Drag to reorder"
             onClick={(e) => e.stopPropagation()}
           >
-            <GripVertical size={14} className="opacity-50" />
+            <GripVertical size={12} className="opacity-40 group-hover:opacity-70" />
           </span>
         )}
-        <span className="flex-1">{subGallery.name}</span>
+        <span>{subGallery.name}</span>
         {!subGallery.visible && (
-          <EyeOff size={14} className="opacity-50" aria-label="Hidden" />
+          <EyeOff size={12} className="opacity-50 flex-shrink-0" aria-label="Hidden" />
         )}
         {hasContextMenu && (
           <button
             type="button"
-            className="
-              p-0.5 rounded
+            className={`
+              p-0.5 rounded-full flex-shrink-0
               opacity-0 group-hover:opacity-100
-              hover:bg-white/20 dark:hover:bg-black/20
+              ${isActive ? 'hover:bg-white/20' : 'hover:bg-black/10'}
               transition-opacity
-              touch-target
-            "
+            `}
             onClick={(e) => {
               e.stopPropagation();
-              handleContextMenu(e as any, subGallery.sub_gallery_id);
+              handleContextMenu(e as unknown as React.MouseEvent, subGallery.sub_gallery_id);
             }}
             aria-label="More options"
           >
-            <MoreVertical size={14} />
+            <MoreVertical size={12} />
           </button>
         )}
       </div>
     );
   };
 
-  // Droppable wrapper component for tabs
+  // Droppable wrapper for tabs
   const DroppableTab: React.FC<{
     id: string;
-    subGalleryId: string | null;
     children: React.ReactNode;
-    className: string;
+    isActive: boolean;
     onClick: () => void;
-    onContextMenu?: (e: React.MouseEvent) => void;
-    ariaSelected: boolean;
     ariaLabel: string;
-    hasNestedButton?: boolean;
-  }> = ({ id, children, className, onClick, onContextMenu, ariaSelected, ariaLabel, hasNestedButton = false }) => {
+  }> = ({ id, children, isActive, onClick, ariaLabel }) => {
     const { setNodeRef, isOver } = useDroppable({
       id,
       disabled: !droppable,
     });
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        onClick();
-      }
-    };
-
-    // Use div with role="tab" when there are nested buttons to avoid invalid HTML
-    if (hasNestedButton) {
-      return (
-        <div
-          ref={setNodeRef}
-          role="tab"
-          tabIndex={0}
-          onClick={onClick}
-          onKeyDown={handleKeyDown}
-          onContextMenu={onContextMenu}
-          className={`
-            ${className}
-            ${isOver && droppable ? 'ring-2 ring-primary ring-offset-2 bg-primary/20' : ''}
-            cursor-pointer select-none
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2
-          `}
-          aria-selected={ariaSelected}
-          aria-label={ariaLabel}
-        >
-          {children}
-        </div>
-      );
-    }
-
     return (
       <button
         ref={setNodeRef}
         onClick={onClick}
-        onContextMenu={onContextMenu}
-        className={`
-          ${className}
-          ${isOver && droppable ? 'ring-2 ring-primary ring-offset-2 bg-primary/20' : ''}
-        `}
-        aria-pressed={ariaSelected}
+        className={getTabClasses(isActive, isOver)}
+        aria-pressed={isActive}
         aria-label={ariaLabel}
       >
         {children}
@@ -349,26 +328,22 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
   };
 
   const tabContent = (
-    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+    <div
+      className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-border/50 scrollbar-track-transparent"
+      role="tablist"
+      aria-label="Gallery sections"
+    >
       {/* Root Gallery Tab - Always First (not sortable) */}
       <DroppableTab
         id="sub-gallery-root"
-        subGalleryId={null}
-        className={`
-          flex-shrink-0 px-4 py-2 rounded-lg font-medium text-sm transition-colors
-          ${activeSubGalleryId === null
-            ? 'bg-primary text-white'
-            : 'bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary'
-          }
-        `}
+        isActive={activeSubGalleryId === null}
         onClick={() => onTabSelect(null)}
-        ariaSelected={activeSubGalleryId === null}
         ariaLabel="Root Gallery"
       >
         Root Gallery
       </DroppableTab>
 
-      {/* Sub-Gallery Tabs - Sortable if enabled */}
+      {/* Sub-Gallery Tabs */}
       {sortable ? (
         <SortableContext
           items={items.map((item) => `sub-gallery-${item.sub_gallery_id}`)}
@@ -381,69 +356,75 @@ export const SubGalleryTabs: React.FC<SubGalleryTabsProps> = ({
       ) : (
         items.map((subGallery) => {
           const hasContextMenu = onRename || onDelete || onToggleVisibility;
+          const isActive = activeSubGalleryId === subGallery.sub_gallery_id;
           return (
-            <DroppableTab
+            <div
               key={subGallery.sub_gallery_id}
-              id={`sub-gallery-${subGallery.sub_gallery_id}`}
-              subGalleryId={subGallery.sub_gallery_id}
-              className={`
-                flex-shrink-0 px-4 py-2 rounded-lg font-medium text-sm transition-colors
-                flex items-center gap-2 relative group
-                ${activeSubGalleryId === subGallery.sub_gallery_id
-                  ? 'bg-primary text-white'
-                  : 'bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary'
-                }
-              `}
+              role="tab"
+              tabIndex={0}
               onClick={() => onTabSelect(subGallery.sub_gallery_id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onTabSelect(subGallery.sub_gallery_id);
+                }
+              }}
               onContextMenu={(e) => {
                 if (hasContextMenu) {
                   handleContextMenu(e, subGallery.sub_gallery_id);
                 }
               }}
-              ariaSelected={activeSubGalleryId === subGallery.sub_gallery_id}
-              ariaLabel={subGallery.name}
-              hasNestedButton={!!hasContextMenu}
+              className={`${getTabClasses(isActive)} cursor-pointer group relative`}
+              aria-selected={isActive}
+              aria-label={subGallery.name}
             >
-              <span className="flex-1">{subGallery.name}</span>
+              <span>{subGallery.name}</span>
               {!subGallery.visible && (
-                <EyeOff size={14} className="opacity-50" aria-label="Hidden" />
+                <EyeOff size={12} className="opacity-50 flex-shrink-0" aria-label="Hidden" />
               )}
               {hasContextMenu && (
                 <button
                   type="button"
-                  className="
-                    p-0.5 rounded
+                  className={`
+                    p-0.5 rounded-full flex-shrink-0
                     opacity-0 group-hover:opacity-100
-                    hover:bg-white/20 dark:hover:bg-black/20
+                    ${isActive ? 'hover:bg-white/20' : 'hover:bg-black/10'}
                     transition-opacity
-                    touch-target
-                  "
+                  `}
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleContextMenu(e as any, subGallery.sub_gallery_id);
+                    handleContextMenu(e as unknown as React.MouseEvent, subGallery.sub_gallery_id);
                   }}
                   aria-label="More options"
                 >
-                  <MoreVertical size={14} />
+                  <MoreVertical size={12} />
                 </button>
               )}
-            </DroppableTab>
+            </div>
           );
         })
       )}
 
-      {/* Create Sub-Gallery Button */}
+      {/* Create Sub-Gallery Button - matches screenshot + icon */}
       {onCreateSubGallery && (
-        <AppButton
-          variant="ghost"
-          size="sm"
-          leftIcon={<Plus size={16} />}
+        <button
           onClick={onCreateSubGallery}
           disabled={isLoading}
-          className="flex-shrink-0"
+          className="
+            inline-flex items-center gap-1.5
+            px-3 py-2
+            text-sm font-medium text-text-tertiary
+            hover:text-primary
+            transition-colors
+            whitespace-nowrap
+            disabled:opacity-50
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50
+          "
+          aria-label="Create new sub-gallery"
         >
-          New Sub-Gallery
-        </AppButton>
+          <Plus size={16} />
+          <span>New Sub-Gallery</span>
+        </button>
       )}
     </div>
   );

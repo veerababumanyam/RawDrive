@@ -66,13 +66,13 @@ class FaceRepository:
         """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            import json
-            
             # Convert embedding to pgvector format if provided
             embedding_str = None
             if embedding:
                 embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
             
+            # Note: asyncpg with jsonb codec handles dict->jsonb conversion automatically
+            # Pass dicts directly, not JSON strings
             row = await conn.fetchrow(
                 """
                 INSERT INTO faces (
@@ -86,12 +86,12 @@ class FaceRepository:
                 workspace_id,
                 photo_id,
                 face_group_id,
-                json.dumps(bounding_box),
+                bounding_box,  # Pass dict directly
                 confidence,
                 embedding_str,
                 provider,
-                json.dumps(detection_metadata or {}),
-                json.dumps(thumbnail_urls or {}),
+                detection_metadata or {},  # Pass dict directly
+                thumbnail_urls or {},  # Pass dict directly
             )
             
             result = self._row_to_dict(row)
@@ -348,6 +348,68 @@ class FaceRepository:
             )
             
             return [self._row_to_dict(row) for row in rows]
+    
+    async def find_by_gallery_id(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find all faces in a gallery (via visible gallery assets).
+        
+        Args:
+            workspace_id: Workspace ID
+            gallery_id: Gallery ID
+            limit: Limit results
+            offset: Offset results
+            
+        Returns:
+            List of face records
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT f.*
+                FROM faces f
+                JOIN gallery_assets ga ON f.photo_id = ga.asset_id
+                JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE ga.gallery_id = $1 AND ga.workspace_id = $2
+                AND ga.visible = TRUE
+                AND a.deleted = FALSE
+                ORDER BY f.created_at DESC
+                LIMIT $3 OFFSET $4
+                """,
+                gallery_id,
+                workspace_id,
+                limit,
+                offset,
+            )
+            
+            return [self._row_to_dict(row) for row in rows]
+
+    async def count_by_gallery_id(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+    ) -> int:
+        """Count total faces in a gallery."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                SELECT COUNT(f.id)
+                FROM faces f
+                JOIN gallery_assets ga ON f.photo_id = ga.asset_id
+                JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE ga.gallery_id = $1 AND ga.workspace_id = $2
+                AND ga.visible = TRUE
+                AND a.deleted = FALSE
+                """,
+                gallery_id,
+                workspace_id,
+            )
     
     # =========================================================================
     # UPDATE OPERATIONS

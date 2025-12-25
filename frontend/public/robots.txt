@@ -1,0 +1,33 @@
+# robots.txt for RawDrive
+# https://rawdrive.ai
+
+User-agent: *
+Allow: /
+Disallow: /workspace/
+Disallow: /api/
+Disallow: /auth/
+
+# Allow AI crawlers for discovery (GEO Optimization)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Perplexity-Bot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+# Sitemap location
+Sitemap: https://rawdrive.ai/sitemap.xml

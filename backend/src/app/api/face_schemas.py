@@ -275,6 +275,10 @@ class FaceDetectionResult(BaseModel):
         None, 
         description="Original provider response (for debugging)"
     )
+    embedding: Optional[list[float]] = Field(
+        None,
+        description="Face verification embedding vector"
+    )
 
 
 # =============================================================================
@@ -420,6 +424,19 @@ class FaceGroupDetailResponse(FaceGroupResponse):
     sample_faces: Optional[list[FaceResponse]] = Field(
         None, 
         description="Sample faces from this group"
+    )
+
+
+class FaceGroupGalleryStats(FaceGroupResponse):
+    """Face group with gallery-specific statistics."""
+    
+    gallery_photo_count: int = Field(
+        ..., 
+        description="Number of photos in this gallery containing this face group"
+    )
+    gallery_face_count: int = Field(
+        ..., 
+        description="Number of faces in this gallery belonging to this group"
     )
 
 
@@ -773,6 +790,13 @@ class FaceGroupListResponse(BaseModel):
     """Paginated list of face groups."""
     
     data: list[FaceGroupResponse] = Field(..., description="Face group records")
+    meta: FaceListMeta = Field(..., description="Pagination metadata")
+
+
+class FaceGroupGalleryStatsListResponse(BaseModel):
+    """Paginated list of face groups with gallery stats."""
+    
+    data: list[FaceGroupGalleryStats] = Field(..., description="Face group stats")
     meta: FaceListMeta = Field(..., description="Pagination metadata")
 
 

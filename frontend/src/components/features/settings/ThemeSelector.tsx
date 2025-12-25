@@ -142,11 +142,11 @@ const ThemeCard = React.memo<ThemeCardProps>(({
       onClick={onSelect}
       disabled={disabled}
       className={`
-        relative group w-full text-left rounded-xl overflow-hidden
-        transition-all duration-200 ease-out
+        relative group w-full text-left rounded-2xl overflow-hidden
+        transition-all duration-300 ease-out
         ${isSelected
-          ? 'ring-2 ring-primary ring-offset-2 shadow-lg scale-[1.02]'
-          : 'border border-border hover:border-primary/50 hover:shadow-md'
+          ? 'ring-2 ring-primary ring-offset-2 shadow-lg shadow-primary/10 scale-[1.02]'
+          : 'glass-card-hover hover:shadow-lg hover:-translate-y-0.5'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       `}
@@ -324,14 +324,14 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
             placeholder="Search themes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-border bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="w-full pl-9 pr-8 py-2.5 text-sm rounded-xl border border-border/50 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary shadow-sm transition-all"
             aria-label="Search themes"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={clearSearch}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-surface-hover"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-surface-hover transition-colors"
               aria-label="Clear search"
             >
               <X className="w-3.5 h-3.5 text-text-tertiary" />
@@ -340,14 +340,14 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
         </div>
 
         {/* Preview variant toggle */}
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-surface-hover">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-hover/80 backdrop-blur-sm shadow-sm border border-border/30">
           <button
             type="button"
             onClick={() => setPreviewVariant('light')}
             className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all
+              flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
               ${previewVariant === 'light'
-                ? 'bg-white shadow-sm text-text-primary'
+                ? 'bg-white shadow-md text-text-primary'
                 : 'text-text-tertiary hover:text-text-secondary'
               }
             `}
@@ -360,9 +360,9 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
             type="button"
             onClick={() => setPreviewVariant('dark')}
             className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all
+              flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
               ${previewVariant === 'dark'
-                ? 'bg-gray-800 shadow-sm text-white'
+                ? 'bg-gray-800 shadow-md text-white'
                 : 'text-text-tertiary hover:text-text-secondary'
               }
             `}
@@ -384,10 +384,10 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
             aria-selected={activeCategory === key}
             onClick={() => setActiveCategory(key)}
             className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all
+              flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200
               ${activeCategory === key
-                ? 'bg-primary text-white shadow-sm'
-                : 'bg-surface-hover text-text-secondary hover:bg-surface hover:text-text-primary'
+                ? 'bg-gradient-to-r from-primary to-accent text-white shadow-md'
+                : 'bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border border-border/30 text-text-secondary hover:bg-surface hover:text-text-primary hover:shadow-sm'
               }
             `}
           >
@@ -422,9 +422,11 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
 
       {/* Empty state */}
       {filteredThemes.length === 0 && (
-        <div className="py-12 text-center">
-          <Palette className="w-12 h-12 mx-auto text-text-tertiary opacity-50 mb-3" />
-          <p className="text-text-secondary font-medium">No themes found</p>
+        <div className="glass-card rounded-2xl py-12 text-center">
+          <div className="empty-state-icon mx-auto mb-4">
+            <Palette className="w-8 h-8" />
+          </div>
+          <p className="text-text-primary font-semibold">No themes found</p>
           <p className="text-sm text-text-tertiary mt-1">
             {searchQuery
               ? 'Try a different search term'
@@ -435,7 +437,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
               variant="ghost"
               size="sm"
               onClick={clearSearch}
-              className="mt-3"
+              className="mt-4"
             >
               Clear search
             </AppButton>
@@ -445,9 +447,11 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
 
       {/* Selection summary */}
       {selectedThemeId && (
-        <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20">
-          <div className="flex items-center gap-2">
-            <Check className="w-4 h-4 text-primary" />
+        <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/20 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="icon-container icon-container-sm icon-container-primary rounded-lg">
+              <Check className="w-4 h-4" />
+            </div>
             <span className="text-sm text-text-primary">
               <strong>
                 {PREBUILT_THEMES.find((t) => t.theme_id === selectedThemeId)?.name}
@@ -455,7 +459,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
               theme selected
             </span>
           </div>
-          <span className="text-xs text-text-tertiary">Changes preview in real-time</span>
+          <span className="text-xs text-text-tertiary bg-white/50 dark:bg-slate-800/50 px-2 py-1 rounded-full">Changes preview in real-time</span>
         </div>
       )}
     </div>

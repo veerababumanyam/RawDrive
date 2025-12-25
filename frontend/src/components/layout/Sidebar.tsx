@@ -294,6 +294,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
   };
 
   const baseStyles = `
+    sidebar-item
     group
     relative
     flex items-center
@@ -308,30 +309,45 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
     focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
   `;
 
-  // Modern active state with gradient option
+  // Modern active state with gradient and glassmorphism
   const getActiveStyles = () => {
     if (gradientActive) {
       return `
-        bg-gradient-to-r from-primary-500/10 to-accent-500/10
-        text-primary-600 dark:text-primary-400
-        border border-primary-200/50 dark:border-primary-800/50
+        sidebar-item-active-gradient
+        bg-gradient-to-r from-primary/15 to-accent/15
+        text-primary
+        border border-primary/20
         shadow-sm
+        backdrop-blur-sm
       `;
     }
-    return 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 shadow-sm';
+    return `
+      sidebar-item-active
+      bg-primary/10
+      text-primary
+      shadow-sm
+      border border-primary/20
+    `;
   };
 
-  // Modern hover state with optional glow
+  // Modern hover state with glassmorphism effect
   const getHoverStyles = () => {
     if (glowHover) {
       return `
-        hover:bg-surface-hover
+        hover:bg-surface-hover/80
+        hover:backdrop-blur-sm
         hover:text-text-primary
         hover:shadow-md
-        hover:shadow-primary-500/10
+        hover:shadow-primary/10
+        hover:border hover:border-border/50
       `;
     }
-    return 'hover:bg-surface-hover hover:text-text-primary';
+    return `
+      hover:bg-surface-hover/80
+      hover:backdrop-blur-sm
+      hover:text-text-primary
+      hover:shadow-sm
+    `;
   };
 
   const stateStyles = disabled
@@ -347,11 +363,12 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
       {icon && (
         <span
           className={`
+            sidebar-item-icon
             flex-shrink-0
             ${collapsed ? '' : 'mr-3'}
             transition-all duration-200
             ${isActive
-              ? 'text-primary-600 dark:text-primary-400'
+              ? 'text-primary scale-110'
               : 'text-text-tertiary group-hover:text-accent group-hover:scale-110'
             }
           `}
@@ -376,10 +393,10 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
           )}
         </>
       )}
-      {/* Subtle glow indicator for active state */}
-      {isActive && gradientActive && (
+      {/* Active indicator bar on left */}
+      {isActive && (
         <span
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-gradient-to-b from-primary to-accent"
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-gradient-to-b from-primary to-accent shadow-sm shadow-primary/30"
           aria-hidden="true"
         />
       )}
@@ -399,6 +416,12 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
       >
         {content}
       </Component>
+      {/* Tooltip for collapsed sidebar */}
+      {collapsed && (
+        <span className="sidebar-tooltip">
+          {label}
+        </span>
+      )}
       {hasNestedItems && expanded && !collapsed && (
         <div className="ml-6 mt-1 space-y-1 border-l border-border/50 pl-3">
           {children}

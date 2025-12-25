@@ -292,6 +292,74 @@ class FaceGroupRepository:
             
             return results
     
+    async def find_by_gallery_id_with_stats(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find face groups appearing in a gallery with localized stats.
+        
+        Args:
+            workspace_id: Workspace ID
+            gallery_id: Gallery ID
+            limit: Limit results
+            offset: Offset results
+            
+        Returns:
+            List of face group dicts with added 'gallery_photo_count' and 'gallery_face_count'
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    fg.*,
+                    COUNT(DISTINCT f.photo_id) as gallery_photo_count,
+                    COUNT(f.id) as gallery_face_count
+                FROM face_groups fg
+                JOIN faces f ON fg.id = f.face_group_id
+                JOIN gallery_assets ga ON f.photo_id = ga.asset_id
+                JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE ga.gallery_id = $1 AND ga.workspace_id = $2
+                AND ga.visible = TRUE
+                AND a.deleted = FALSE
+                GROUP BY fg.id
+                ORDER BY gallery_photo_count DESC, fg.updated_at DESC
+                LIMIT $3 OFFSET $4
+                """,
+                gallery_id,
+                workspace_id,
+                limit,
+                offset,
+            )
+            
+            return [self._row_to_dict(row) for row in rows]
+
+    async def count_by_gallery_id(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+    ) -> int:
+        """Count unique face groups appearing in a gallery."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                SELECT COUNT(DISTINCT fg.id)
+                FROM face_groups fg
+                JOIN faces f ON fg.id = f.face_group_id
+                JOIN gallery_assets ga ON f.photo_id = ga.asset_id
+                JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE ga.gallery_id = $1 AND ga.workspace_id = $2
+                AND ga.visible = TRUE
+                AND a.deleted = FALSE
+                """,
+                gallery_id,
+                workspace_id,
+            )
+    
     # =========================================================================
     # UPDATE OPERATIONS
     # =========================================================================
@@ -472,8 +540,7 @@ class FaceGroupRepository:
     ) -> bool:
         """Delete a face group.
         
-        Note: This does NOT delete the faces in the group. Faces will have
-        their face_group_id set to NULL by the database FK constraint.
+        Faces assigned to the group will be ungrouped (face_group_id = NULL).
         
         Args:
             group_id: Face group ID to delete
@@ -484,14 +551,26 @@ class FaceGroupRepository:
         """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            result = await conn.execute(
-                """
-                DELETE FROM face_groups
-                WHERE id = $1 AND workspace_id = $2
-                """,
-                group_id,
-                workspace_id,
-            )
+            async with conn.transaction():
+                # Explicitly ungroup faces to ensure preservation
+                await conn.execute(
+                    """
+                    UPDATE faces 
+                    SET face_group_id = NULL, updated_at = NOW() 
+                    WHERE face_group_id = $1 AND workspace_id = $2
+                    """,
+                    group_id,
+                    workspace_id,
+                )
+                
+                result = await conn.execute(
+                    """
+                    DELETE FROM face_groups
+                    WHERE id = $1 AND workspace_id = $2
+                    """,
+                    group_id,
+                    workspace_id,
+                )
             
             deleted = result and int(result.split()[-1]) > 0
             

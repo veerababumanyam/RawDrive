@@ -250,6 +250,9 @@ export class GalleryService {
     if (data.etag) {
       formData.append('etag', data.etag);
     }
+    if (data.client_metadata) {
+      formData.append('client_metadata', JSON.stringify(data.client_metadata));
+    }
 
     // Override Content-Type for multipart/form-data
     const tokens = await import('./tokenStorage').then(m => m.getStoredTokens());

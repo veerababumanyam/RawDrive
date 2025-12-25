@@ -1,26 +1,29 @@
+import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import PrivacyPage from '../privacy';
+
+// Helper to wrap component with all required providers
+const renderWithProviders = (ui: React.ReactElement) => {
+  return render(
+    <HelmetProvider>
+      <BrowserRouter>{ui}</BrowserRouter>
+    </HelmetProvider>
+  );
+};
 
 describe('PrivacyPage', () => {
   it('should render the Privacy Policy page correctly', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
-    // Check for page title
-    expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
+    // Check for page title - appears multiple times (title, h1, navigation)
+    expect(screen.getAllByText(/Privacy Policy/i).length).toBeGreaterThan(0);
   });
 
   it('should display all required sections', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for key sections from the requirements by checking headings
     const headings = document.querySelectorAll('h2');
@@ -39,11 +42,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should display version and last updated date', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     expect(screen.getByText(/Version:/i)).toBeInTheDocument();
     expect(screen.getByText(/1\.0\.0/)).toBeInTheDocument();
@@ -51,11 +50,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should maintain consistent styling with landing page', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for consistent layout classes
     expect(document.querySelector('.min-h-screen')).toBeInTheDocument();
@@ -65,11 +60,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should display data collection practices', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for data collection information
     expect(screen.getByText(/personal data\/information provided to us/i)).toBeInTheDocument();
@@ -77,11 +68,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should display data usage purposes', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for usage purposes
     expect(screen.getByText(/Enhance customer experience/i)).toBeInTheDocument();
@@ -89,11 +76,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should display data retention policy', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for retention policy
     expect(screen.getByText(/retain your personal data information for a period/i)).toBeInTheDocument();
@@ -101,22 +84,14 @@ describe('PrivacyPage', () => {
   });
 
   it('should display user rights information', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for user rights
     expect(screen.getByText(/access, rectify, and update your personal data/i)).toBeInTheDocument();
   });
 
   it('should display SWAZ CONSULTANTS as platform owner', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for platform owner - use getAllByText since it appears multiple times
     const swazElements = screen.getAllByText(/SWAZ CONSULTANTS/i);
@@ -125,11 +100,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should display Information Technology Act compliance', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for IT Act compliance
     expect(screen.getByText(/laws of India/i)).toBeInTheDocument();
@@ -137,11 +108,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should display security measures', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for security information
     expect(screen.getByText(/reasonable security practices and procedures/i)).toBeInTheDocument();
@@ -149,11 +116,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should display consent withdrawal information', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for consent withdrawal - use getAllByText since it appears multiple times
     const withdrawalElements = screen.getAllByText(/Withdrawal of Consent/i);
@@ -162,11 +125,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should display grievance officer contact information', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for grievance officer - use getAllByText since it appears multiple times
     const grievanceElements = screen.getAllByText(/Grievance Officer/i);
@@ -176,11 +135,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should have proper semantic HTML structure', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for semantic HTML elements
     expect(document.querySelector('header')).toBeInTheDocument();
@@ -190,22 +145,14 @@ describe('PrivacyPage', () => {
   });
 
   it('should display copyright information in footer', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for copyright
     expect(screen.getByText(/RawDrive\. All rights reserved\./i)).toBeInTheDocument();
   });
 
   it('should display third-party data sharing information', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for third-party sharing
     expect(screen.getByText(/share your personal data internally/i)).toBeInTheDocument();
@@ -213,11 +160,7 @@ describe('PrivacyPage', () => {
   });
 
   it('should display data protection notice', () => {
-    render(
-      <BrowserRouter>
-        <PrivacyPage />
-      </BrowserRouter>
-    );
+    renderWithProviders(<PrivacyPage />);
 
     // Check for important security notice
     expect(screen.getByText(/Important Security Notice/i)).toBeInTheDocument();

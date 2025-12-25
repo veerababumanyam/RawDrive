@@ -589,53 +589,53 @@ const ClientsPage: React.FC = () => {
           ))}
         </motion.div>
       ) : (
-        <motion.div variants={staggerItem} className="card-glass rounded-2xl overflow-hidden">
+        <motion.div variants={staggerItem} className="card-glass rounded-2xl overflow-hidden backdrop-blur-sm">
           <table className="w-full">
-            <thead className="bg-surface-hover/50 border-b border-white/10 dark:border-white/5">
+            <thead className="bg-surface-hover/30 backdrop-blur-sm border-b border-border/30">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                <th className="px-4 py-4 text-left text-xs font-semibold text-text-tertiary uppercase tracking-wider">
                   Client
                 </th>
-                <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                <th className="hidden md:table-cell px-4 py-4 text-left text-xs font-semibold text-text-tertiary uppercase tracking-wider">
                   Organization
                 </th>
-                <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                <th className="hidden lg:table-cell px-4 py-4 text-left text-xs font-semibold text-text-tertiary uppercase tracking-wider">
                   Contact
                 </th>
-                <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                <th className="hidden sm:table-cell px-4 py-4 text-left text-xs font-semibold text-text-tertiary uppercase tracking-wider">
                   Galleries
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                <th className="px-4 py-4 text-left text-xs font-semibold text-text-tertiary uppercase tracking-wider">
                   Status
                 </th>
-                <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-text-tertiary uppercase">
+                <th className="hidden md:table-cell px-4 py-4 text-left text-xs font-semibold text-text-tertiary uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-text-tertiary uppercase">
+                <th className="px-4 py-4 text-right text-xs font-semibold text-text-tertiary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-border/20">
               {clients.map((client) => (
                 <tr
                   key={client.client_id}
-                  className="group hover:bg-surface-hover/50 transition-all duration-200 cursor-pointer"
+                  className="group hover:bg-gradient-to-r hover:from-primary/5 hover:to-accent/5 transition-all duration-300 cursor-pointer"
                   onClick={() => handleClientClick(client.client_id)}
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
                       <ClientAvatar client={client} />
                       <div className="min-w-0">
-                        <span className="font-medium text-text-primary truncate block group-hover:text-primary transition-colors">
+                        <span className="font-medium text-text-primary truncate block group-hover:text-primary transition-colors duration-200">
                           {client.full_name}
                         </span>
                         {client.tags.length > 0 && (
-                          <div className="flex gap-1 mt-1">
+                          <div className="flex gap-1 mt-1.5">
                             {client.tags.slice(0, 2).map((tag) => (
                               <span
                                 key={tag.tag_id}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-full bg-surface-hover/50"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-md bg-surface-hover/70 border border-border/30"
                               >
                                 <span
                                   className="w-1.5 h-1.5 rounded-full"
@@ -645,7 +645,7 @@ const ClientsPage: React.FC = () => {
                               </span>
                             ))}
                             {client.tags.length > 2 && (
-                              <span className="text-[10px] text-text-tertiary">
+                              <span className="text-[10px] text-text-tertiary px-1">
                                 +{client.tags.length - 2}
                               </span>
                             )}
@@ -654,20 +654,24 @@ const ClientsPage: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="hidden md:table-cell px-4 py-3 text-sm text-text-secondary truncate">
+                  <td className="hidden md:table-cell px-4 py-4 text-sm text-text-secondary truncate">
                     {client.organization || '-'}
                   </td>
-                  <td className="hidden lg:table-cell px-4 py-3">
-                    <div className="space-y-1">
+                  <td className="hidden lg:table-cell px-4 py-4">
+                    <div className="space-y-1.5">
                       {client.primary_email && (
-                        <div className="flex items-center gap-1.5 text-sm text-text-secondary">
-                          <Mail size={12} className="text-text-tertiary" />
+                        <div className="flex items-center gap-2 text-sm text-text-secondary">
+                          <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Mail size={10} className="text-primary" />
+                          </div>
                           <span className="truncate max-w-[180px]">{client.primary_email}</span>
                         </div>
                       )}
                       {client.primary_phone && (
-                        <div className="flex items-center gap-1.5 text-sm text-text-secondary">
-                          <Phone size={12} className="text-text-tertiary" />
+                        <div className="flex items-center gap-2 text-sm text-text-secondary">
+                          <div className="w-5 h-5 rounded bg-success/10 flex items-center justify-center flex-shrink-0">
+                            <Phone size={10} className="text-success" />
+                          </div>
                           <span>{client.primary_phone}</span>
                         </div>
                       )}
@@ -676,24 +680,30 @@ const ClientsPage: React.FC = () => {
                       )}
                     </div>
                   </td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-sm text-text-secondary">
-                    {client.linked_galleries_count}
+                  <td className="hidden sm:table-cell px-4 py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded bg-accent/10 flex items-center justify-center">
+                        <Users size={10} className="text-accent" />
+                      </div>
+                      <span className="text-sm text-text-secondary">{client.linked_galleries_count}</span>
+                    </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4">
                     <StatusBadge status={client.status} size="sm" />
                   </td>
-                  <td className="hidden md:table-cell px-4 py-3 text-sm text-text-tertiary">
+                  <td className="hidden md:table-cell px-4 py-4 text-sm text-text-tertiary">
                     {formatDate(client.created_at)}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                  <td className="px-4 py-4">
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleClientEdit(client.client_id);
                         }}
-                        className="p-2 rounded-lg hover:bg-primary/10 text-text-tertiary hover:text-primary transition-all duration-200 hover:scale-110"
+                        className="p-2.5 rounded-xl hover:bg-primary/10 text-text-tertiary hover:text-primary transition-all duration-200 hover:scale-110 hover:shadow-sm"
                         aria-label="Edit client"
+                        title="Edit client"
                       >
                         <Edit size={16} />
                       </button>
@@ -703,21 +713,23 @@ const ClientsPage: React.FC = () => {
                             e.stopPropagation();
                             setActiveMenu(activeMenu === client.client_id ? null : client.client_id);
                           }}
-                          className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-all duration-200 hover:scale-110"
+                          className="p-2.5 rounded-xl hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-all duration-200 hover:scale-110 hover:shadow-sm"
                           aria-label="More options"
+                          title="More options"
                         >
                           <MoreVertical size={16} />
                         </button>
                         {activeMenu === client.client_id && (
-                          <div className="absolute right-0 top-full mt-1 w-40 card-glass rounded-xl shadow-xl z-10 overflow-hidden">
+                          <div className="absolute right-0 top-full mt-2 w-44 bg-surface/95 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/20 z-50 overflow-hidden border border-border/50">
                             <button
-                              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-error hover:bg-error/10 transition-colors"
+                              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-error hover:bg-error/10 transition-all duration-200"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteClick(client);
                               }}
+                              title="Delete client"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={16} />
                               Delete
                             </button>
                           </div>
@@ -816,120 +828,146 @@ interface ClientCardProps {
 
 const ClientCard: React.FC<ClientCardProps> = ({ client, avatarBlobUrl, onClick, onEdit, onDelete }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   return (
     <motion.div
-      className="card-glass rounded-2xl p-4 hover:shadow-lg hover:ring-1 hover:ring-primary/20 transition-all duration-200 cursor-pointer group"
+      className="client-card card-glass rounded-2xl p-4 hover:shadow-xl hover:shadow-primary/5 hover:ring-1 hover:ring-primary/20 transition-all duration-300 cursor-pointer group relative overflow-hidden"
       onClick={onClick}
-      whileHover={{ y: -2 }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
+      whileHover={{ y: -4, scale: 1.01 }}
+      transition={{ duration: 0.2 }}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          {avatarBlobUrl ? (
-            <img
-              src={avatarBlobUrl}
-              alt={client.full_name}
-              className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20 group-hover:ring-primary/30 transition-all"
-            />
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-lg font-semibold text-primary ring-2 ring-white/10 group-hover:ring-primary/30 transition-all">
-              {client.initials || client.full_name.charAt(0).toUpperCase()}
+      {/* Hover gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+      <div className="relative z-10">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            {avatarBlobUrl ? (
+              <img
+                src={avatarBlobUrl}
+                alt={client.full_name}
+                className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20 group-hover:ring-primary/40 group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-300"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-lg font-semibold text-primary ring-2 ring-white/10 group-hover:ring-primary/40 group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-300">
+                {client.initials || client.full_name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h3 className="font-semibold text-text-primary truncate group-hover:text-primary transition-colors duration-200">
+                {client.full_name}
+              </h3>
+              {client.organization && (
+                <p className="text-sm text-text-tertiary truncate flex items-center gap-1">
+                  <Building2 size={12} />
+                  {client.organization}
+                </p>
+              )}
             </div>
-          )}
-          <div className="min-w-0">
-            <h3 className="font-semibold text-text-primary truncate group-hover:text-primary transition-colors">
-              {client.full_name}
-            </h3>
-            {client.organization && (
-              <p className="text-sm text-text-tertiary truncate flex items-center gap-1">
-                <Building2 size={12} />
-                {client.organization}
-              </p>
+          </div>
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(!showMenu);
+              }}
+              className={`
+                client-card-menu-btn p-2 rounded-xl
+                ${showMenu ? 'bg-surface-hover text-text-primary' : 'text-text-tertiary'}
+                hover:bg-surface-hover/80 hover:text-text-primary hover:shadow-sm
+                transition-all duration-200
+                ${isHovered ? 'opacity-100' : 'opacity-0'}
+              `}
+              aria-label="More options"
+              title="More options"
+            >
+              <MoreVertical size={16} />
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-2 w-40 bg-surface/95 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/20 z-50 overflow-hidden border border-border/50">
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-secondary hover:bg-primary/10 hover:text-primary transition-all duration-200"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  title="Edit client"
+                >
+                  <Edit size={16} />
+                  Edit
+                </button>
+                <div className="h-px bg-border/50" />
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-error hover:bg-error/10 transition-all duration-200"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  title="Delete client"
+                >
+                  <Trash2 size={16} />
+                  Delete
+                </button>
+              </div>
             )}
           </div>
         </div>
-        <div className="relative">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu(!showMenu);
-            }}
-            className="p-1.5 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-all"
-          >
-            <MoreVertical size={16} />
-          </button>
-          {showMenu && (
-            <div className="absolute right-0 top-full mt-1 w-36 card-glass rounded-xl shadow-xl z-10 overflow-hidden">
-              <button
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-surface-hover/50 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-              >
-                <Edit size={14} />
-                Edit
-              </button>
-              <button
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-              >
-                <Trash2 size={14} />
-                Delete
-              </button>
+
+        {/* Contact Info */}
+        <div className="space-y-2 mb-3">
+          {client.primary_email && (
+            <div className="flex items-center gap-2 text-sm text-text-secondary group-hover:text-text-primary transition-colors duration-200">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Mail size={14} className="text-primary" />
+              </div>
+              <span className="truncate">{client.primary_email}</span>
+            </div>
+          )}
+          {client.primary_phone && (
+            <div className="flex items-center gap-2 text-sm text-text-secondary group-hover:text-text-primary transition-colors duration-200">
+              <div className="w-7 h-7 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0">
+                <Phone size={14} className="text-success" />
+              </div>
+              <span>{client.primary_phone}</span>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Contact Info */}
-      <div className="space-y-1.5 mb-3">
-        {client.primary_email && (
-          <div className="flex items-center gap-2 text-sm text-text-secondary">
-            <Mail size={14} className="text-text-tertiary flex-shrink-0" />
-            <span className="truncate">{client.primary_email}</span>
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-3 border-t border-border/30">
+          <div className="flex items-center gap-2 text-sm text-text-tertiary">
+            <div className="w-6 h-6 rounded-md bg-accent/10 flex items-center justify-center">
+              <Users size={12} className="text-accent" />
+            </div>
+            <span>{client.linked_galleries_count} galleries</span>
           </div>
-        )}
-        {client.primary_phone && (
-          <div className="flex items-center gap-2 text-sm text-text-secondary">
-            <Phone size={14} className="text-text-tertiary flex-shrink-0" />
-            <span>{client.primary_phone}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-3 border-t border-white/10">
-        <div className="flex items-center gap-1.5 text-sm text-text-tertiary">
-          <Users size={14} />
-          {client.linked_galleries_count} galleries
+          <StatusBadge status={client.status} size="sm" />
         </div>
-        <StatusBadge status={client.status} size="sm" />
-      </div>
 
-      {/* Tags */}
-      {client.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-3">
-          {client.tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag.tag_id}
-              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full bg-surface-hover/50"
-            >
+        {/* Tags */}
+        {client.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {client.tags.slice(0, 3).map((tag) => (
               <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: tag.color || '#6B7280' }}
-              />
-              {tag.name}
-            </span>
-          ))}
-          {client.tags.length > 3 && (
-            <span className="text-[10px] text-text-tertiary">+{client.tags.length - 3}</span>
-          )}
-        </div>
-      )}
+                key={tag.tag_id}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-lg bg-surface-hover/70 backdrop-blur-sm border border-border/30 hover:border-border/50 transition-colors"
+              >
+                <span
+                  className="w-2 h-2 rounded-full shadow-sm"
+                  style={{ backgroundColor: tag.color || '#6B7280' }}
+                />
+                {tag.name}
+              </span>
+            ))}
+            {client.tags.length > 3 && (
+              <span className="text-[11px] text-text-tertiary px-2 py-1">+{client.tags.length - 3}</span>
+            )}
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 };

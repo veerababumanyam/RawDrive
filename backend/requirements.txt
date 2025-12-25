@@ -26,6 +26,10 @@ pg8000==1.31.5
 # AI Providers for face detection
 google-generativeai>=0.8.0
 
+# Local face detection (no API required fallback)
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+
 # Dev and testing
 pytest==8.3.3
 pytest-asyncio==0.23.8

@@ -357,7 +357,7 @@ export const PricingSection: React.FC<PricingSectionProps> = ({
           whileInView="visible"
           viewport={{ once: true, margin: '-50px' }}
           variants={staggerContainer}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 items-stretch"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 items-stretch"
         >
           {pricingTiers.map((tier) => (
             <motion.div

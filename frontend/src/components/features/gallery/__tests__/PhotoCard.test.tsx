@@ -19,7 +19,7 @@ vi.mock('../../../../contexts/AuthContext', () => ({
     }),
 }));
 
-// Mock Lucide icons
+// Mock Lucide icons - include all icons used by PhotoCard
 vi.mock('lucide-react', () => ({
     Heart: () => <div data-testid="heart-icon" />,
     Lock: () => <div data-testid="lock-icon" />,
@@ -30,6 +30,13 @@ vi.mock('lucide-react', () => ({
     Download: () => <div data-testid="download-icon" />,
     Trash2: () => <div data-testid="trash-icon" />,
     Image: () => <div data-testid="image-icon" />,
+    ImageIcon: () => <div data-testid="image-icon" />,
+    Maximize2: () => <div data-testid="maximize-icon" />,
+    Star: () => <div data-testid="star-icon" />,
+    Eye: () => <div data-testid="eye-icon" />,
+    EyeOff: () => <div data-testid="eye-off-icon" />,
+    Share2: () => <div data-testid="share-icon" />,
+    Edit3: () => <div data-testid="edit-icon" />,
 }));
 
 const mockAsset: GalleryAssetItem = {
@@ -61,7 +68,8 @@ describe('PhotoCard', () => {
     });
 
     it('shows actions on hover', () => {
-        render(<PhotoCard asset={mockAsset} index={0} showActions={true} />);
+        const handleFavorite = vi.fn();
+        render(<PhotoCard asset={mockAsset} index={0} showActions={true} onFavorite={handleFavorite} />);
         const card = screen.getByRole('gridcell');
 
         // Simulate hover

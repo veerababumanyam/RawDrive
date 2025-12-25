@@ -1,0 +1,67 @@
+# syntax=docker/dockerfile:1
+
+# =============================================================================
+# RawDrive Face Detection Worker Dockerfile
+# Dedicated microservice for face detection processing
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Base stage with Python and system dependencies
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim-bookworm AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system deps for asyncpg and OpenCV
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       build-essential \
+       libpq-dev \
+       curl \
+       ca-certificates \
+       # OpenCV dependencies
+       libgl1-mesa-glx \
+       libglib2.0-0 \
+       libsm6 \
+       libxext6 \
+       libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# -----------------------------------------------------------------------------
+# Dependencies stage - install Python packages
+# -----------------------------------------------------------------------------
+FROM base AS deps
+
+# Install worker-specific dependencies
+COPY requirements-worker.txt ./
+RUN pip install --upgrade pip \
+    && pip install -r requirements-worker.txt
+
+# -----------------------------------------------------------------------------
+# Production stage
+# -----------------------------------------------------------------------------
+FROM deps AS production
+
+# Copy only the required application code
+COPY src ./src
+COPY migrations ./migrations
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
+# Health check endpoint port
+EXPOSE 8001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Run the face detection worker
+CMD ["python", "-m", "app.face_worker_main"]

@@ -26,6 +26,7 @@ export interface UploadFile {
   error?: string;
   retryCount?: number;
   thumbnail?: string; // Local preview URL
+  clientMetadata?: Record<string, any>;
 }
 
 export interface UploadProgress {
@@ -252,6 +253,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           totalBytes: file.size,
           retryCount: 0,
           thumbnail,
+          clientMetadata: (file as any).clientMetadata,
         };
         processedFiles.push(uploadFile);
       }
@@ -416,7 +418,11 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         const commitResult = await galleryService.commitUpload(
           workspaceId,
           session.upload_id,
-          { sha256, etag }
+          {
+            sha256,
+            etag,
+            client_metadata: uploadFile.clientMetadata
+          }
         );
 
         // Update to completed

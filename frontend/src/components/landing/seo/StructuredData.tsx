@@ -69,6 +69,35 @@ interface StructuredDataProps {
   faq?: FAQItem[];
   /** Website data */
   website?: WebsiteData;
+  /** Breadcrumb items */
+  breadcrumbs?: BreadcrumbItem[];
+  /** HowTo steps */
+  howTo?: HowToData;
+  /** Speakable selectors */
+  speakable?: SpeakableData;
+}
+
+// Breadcrumb Schema
+export interface BreadcrumbItem {
+  name: string;
+  url: string;
+}
+
+// HowTo Schema
+export interface HowToData {
+  name: string;
+  description: string;
+  totalTime?: string; // ISO 8601 duration e.g. "PT5M"
+  steps: Array<{
+    name: string;
+    text: string;
+    image?: string;
+  }>;
+}
+
+// Speakable Schema
+export interface SpeakableData {
+  cssSelectors: string[];
 }
 
 const defaultOrganization: OrganizationData = {
@@ -146,6 +175,9 @@ export const StructuredData: React.FC<StructuredDataProps> = ({
   product = defaultProduct,
   faq,
   website = defaultWebsite,
+  breadcrumbs,
+  howTo,
+  speakable,
 }) => {
   const schemas: object[] = [];
 
@@ -244,6 +276,50 @@ export const StructuredData: React.FC<StructuredDataProps> = ({
           text: item.answer,
         },
       })),
+    });
+  }
+
+  // BreadcrumbList Schema (AEO optimization)
+  if (breadcrumbs && breadcrumbs.length > 0) {
+    schemas.push({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: breadcrumbs.map((item, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: item.name,
+        item: item.url,
+      })),
+    });
+  }
+
+  // HowTo Schema (AEO for process queries)
+  if (howTo) {
+    schemas.push({
+      '@context': 'https://schema.org',
+      '@type': 'HowTo',
+      name: howTo.name,
+      description: howTo.description,
+      totalTime: howTo.totalTime,
+      step: howTo.steps.map((step, index) => ({
+        '@type': 'HowToStep',
+        position: index + 1,
+        name: step.name,
+        text: step.text,
+        image: step.image,
+      })),
+    });
+  }
+
+  // Speakable Schema (Voice search optimization)
+  if (speakable && speakable.cssSelectors.length > 0) {
+    schemas.push({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      speakable: {
+        '@type': 'SpeakableSpecification',
+        cssSelector: speakable.cssSelectors,
+      },
     });
   }
 

@@ -15,7 +15,6 @@ import {
     Square,
 } from 'lucide-react';
 import { AppButton } from '../../../ui/AppButton';
-import { AppCard } from '../../../ui/AppCard';
 import type { RecycleBinItem } from '../../../../types/recycleBin';
 import { buildAssetUrl, formatDaysRemaining, getWarningLevel } from '../utils';
 
@@ -46,41 +45,42 @@ const RecycleBinItemCardComponent: React.FC<RecycleBinItemCardProps> = ({
     const imageUrl = buildAssetUrl(item.thumbnailUrl);
 
     return (
-        <AppCard
+        <div
             className={`
-        relative overflow-hidden transition-all
-        ${isSelected ? 'ring-2 ring-primary' : ''}
-        ${hasFailed ? 'ring-2 ring-error/50 bg-error/5' : ''}
-      `}
-            hoverable
+                group glass-card glass-card-hover rounded-2xl overflow-hidden transition-all duration-300
+                ${isSelected ? 'ring-2 ring-primary shadow-lg shadow-primary/10' : ''}
+                ${hasFailed ? 'ring-2 ring-error/50 bg-error/5' : ''}
+            `}
         >
             {/* Selection checkbox */}
             <button
                 onClick={() => onSelect(item.id)}
                 className="
-          absolute top-3 left-3 z-10
-          p-1 rounded
-          bg-surface/80 backdrop-blur-sm
-          hover:bg-surface
-          transition-colors
-        "
+                    absolute top-3 left-3 z-10
+                    p-1.5 rounded-lg
+                    bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm
+                    shadow-md hover:shadow-lg
+                    hover:bg-white dark:hover:bg-slate-800
+                    transition-all duration-200
+                    border border-white/50 dark:border-slate-700/50
+                "
                 aria-label={isSelected ? 'Deselect item' : 'Select item'}
             >
                 {isSelected ? (
                     <CheckSquare size={20} className="text-primary" />
                 ) : (
-                    <Square size={20} className="text-text-tertiary" />
+                    <Square size={20} className="text-text-tertiary group-hover:text-text-secondary" />
                 )}
             </button>
 
             {/* Thumbnail / Icon - clickable for photos */}
             <div
                 className={`
-          aspect-[4/3] bg-background-alt
-          flex items-center justify-center
-          border-b border-border
-          ${item.type === 'photo' && item.thumbnailUrl ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''}
-        `}
+                    relative aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900
+                    flex items-center justify-center
+                    overflow-hidden
+                    ${item.type === 'photo' && item.thumbnailUrl ? 'cursor-pointer' : ''}
+                `}
                 onClick={() => {
                     if (item.type === 'photo' && item.thumbnailUrl && onImageClick) {
                         onImageClick(item);
@@ -97,26 +97,34 @@ const RecycleBinItemCardComponent: React.FC<RecycleBinItemCardProps> = ({
                 }}
             >
                 {imageUrl ? (
-                    <img
-                        src={imageUrl}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                    />
+                    <>
+                        <img
+                            src={imageUrl}
+                            alt={item.name}
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                        {/* Hover overlay for photos */}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                    </>
                 ) : item.type === 'gallery' ? (
-                    <FolderOpen size={48} className="text-text-tertiary" />
+                    <div className="icon-container icon-container-lg icon-container-accent rounded-xl">
+                        <FolderOpen size={28} />
+                    </div>
                 ) : (
-                    <ImageIcon size={48} className="text-text-tertiary" />
+                    <div className="icon-container icon-container-lg icon-container-primary rounded-xl">
+                        <ImageIcon size={28} />
+                    </div>
                 )}
             </div>
 
             {/* Content */}
-            <div className="p-4 space-y-3">
+            <div className="p-4 space-y-3 border-t border-border/30">
                 <div>
-                    <h3 className="font-medium text-text-primary truncate" title={item.name}>
+                    <h3 className="font-semibold text-text-primary truncate group-hover:text-primary transition-colors" title={item.name}>
                         {item.name}
                     </h3>
                     <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-text-tertiary capitalize">
+                        <span className="text-xs font-medium text-text-tertiary capitalize bg-surface-hover px-2 py-0.5 rounded-full">
                             {item.type}
                         </span>
                         {item.type === 'gallery' && item.photoCount !== undefined && (
@@ -133,16 +141,16 @@ const RecycleBinItemCardComponent: React.FC<RecycleBinItemCardProps> = ({
                 {/* Status indicator */}
                 <div
                     className={`
-            flex items-center gap-1.5 text-xs
-            ${warningLevel === 'failed'
-                            ? 'text-error font-medium'
+                        flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg
+                        ${warningLevel === 'failed'
+                            ? 'text-error font-medium bg-error/10 border border-error/20'
                             : warningLevel === 'critical'
-                                ? 'text-error'
+                                ? 'text-error bg-error/10 border border-error/20'
                                 : warningLevel === 'warning'
-                                    ? 'text-warning'
-                                    : 'text-text-tertiary'
+                                    ? 'text-warning bg-warning/10 border border-warning/20'
+                                    : 'text-text-tertiary bg-surface-hover'
                         }
-          `}
+                    `}
                 >
                     {warningLevel === 'failed' ? (
                         <>
@@ -178,7 +186,7 @@ const RecycleBinItemCardComponent: React.FC<RecycleBinItemCardProps> = ({
                     <AppButton
                         variant="destructive"
                         size="sm"
-                        className="bg-red-600 hover:bg-red-700 text-white border-red-600 px-3"
+                        className="bg-red-600 hover:bg-red-700 text-white border-red-600 px-3 shadow-sm hover:shadow-md transition-shadow"
                         onClick={() => onPermanentDelete(item)}
                         isLoading={isDeleting}
                         disabled={isRestoring}
@@ -188,7 +196,7 @@ const RecycleBinItemCardComponent: React.FC<RecycleBinItemCardProps> = ({
                     </AppButton>
                 </div>
             </div>
-        </AppCard>
+        </div>
     );
 };
 

@@ -11,6 +11,7 @@ This design document outlines the technical architecture for RawDrive's public-f
 3. **Performance-Driven**: Lighthouse 90+ score through code-splitting, lazy loading, and optimized assets
 4. **Accessibility-First**: WCAG 2.1 AA compliance built into every component
 5. **SEO-Optimized**: Semantic HTML, structured data, and proper meta tags
+6. **Multi-Search Discovery**: Optimized for SEO, AEO (Answer Engines), GEO (Generative AI), and AI Agent crawlers
 
 ## Architecture
 
@@ -30,6 +31,7 @@ This design document outlines the technical architecture for RawDrive's public-f
 │  │  /faq                 │    │  /workspace/settings          │  │
 │  │  /signin              │    │                               │  │
 │  │  /signup              │    │                               │  │
+│  │  /legal               │    │                               │  │
 │  └──────────────────────┘    └──────────────────────────────┘  │
 │           │                              │                       │
 │           ▼                              ▼                       │
@@ -229,8 +231,208 @@ interface SEOData {
     organization: object;
     product: object;
     faq?: object;
+    breadcrumb?: object;
+    howTo?: object;
+    video?: object;
+    speakable?: object;
   };
 }
+```
+
+## Multi-Search Discovery Strategy (2025)
+
+Modern search discovery extends beyond traditional SEO. This section defines strategies for visibility across multiple search paradigms.
+
+### SEO (Search Engine Optimization)
+
+Traditional search engine optimization ensures discoverability on Google, Bing, and other search engines.
+
+**Implementation Requirements:**
+- Semantic HTML5 markup with proper heading hierarchy (single H1)
+- Optimized meta titles (50-60 characters) and descriptions (150-160 characters)
+- XML sitemap at `/sitemap.xml` with all public routes
+- `robots.txt` allowing AI crawlers (GPTBot, ClaudeBot, etc.)
+- Canonical URLs on all pages
+- Mobile-first responsive design
+- Core Web Vitals: LCP < 2.5s, FID < 100ms, CLS < 0.1
+
+### AEO (Answer Engine Optimization)
+
+Optimize content to be extracted for featured snippets, voice search, and answer boxes.
+
+**Implementation Requirements:**
+- Concise answer paragraphs (40-60 words) for key questions
+- FAQ schema on FAQ sections with direct Q&A format
+- HowTo schema on process workflows (How It Works page)
+- Clear heading-to-content structure for snippet extraction
+- Speakable schema for voice assistant readability
+- Question keywords naturally embedded in headings
+
+**AEO Content Patterns:**
+```html
+<!-- Snippet-optimized answer format -->
+<section>
+  <h2>What is RawDrive?</h2>
+  <p>RawDrive is an AI-powered photography management platform that helps 
+  professional photographers automate gallery delivery, client proofing, 
+  and business workflows. It includes CRM, contracts, invoicing, and 
+  AI-powered culling and tagging features.</p>
+</section>
+```
+
+### GEO (Generative Engine Optimization)
+
+Optimize for AI-generated search results (Google SGE, ChatGPT, Perplexity).
+
+**Implementation Requirements:**
+- Comprehensive, factual content that AI can cite with confidence
+- Clear product differentiators for comparative queries
+- Statistic-rich content with sources (e.g., "Used by 20,000+ photographers")
+- E-E-A-T signals: Experience, Expertise, Authoritativeness, Trustworthiness
+- Brand mentions and testimonials as citation sources
+- API documentation and technical specs for developer queries
+
+**GEO Content Patterns:**
+```html
+<!-- AI-citable factual content -->
+<div aria-hidden="false" class="sr-only">
+  RawDrive Key Features: AI Culling, Automated Editing, Client Galleries, 
+  Print Store, CRM, contract signing, and invoicing.
+  Target Audience: Professional Wedding and Portrait Photographers.
+  Pricing: Free tier available, Pro plan ₹500/month, Business ₹2000/month.
+  Founded: 2024 by Swaz Solutions. Headquarters: Rajahmundry, India.
+</div>
+```
+
+### AI Agent Discoverability
+
+Enable AI assistants (ChatGPT, Claude, Gemini) to accurately understand and recommend RawDrive.
+
+**Implementation Requirements:**
+- Hidden semantic blocks with structured product information
+- Clear product category and competitor positioning
+- Use cases and ideal customer profiles in crawlable content
+- Pricing transparency for comparison queries
+- Support for AI crawler user agents in robots.txt
+
+**Meta Tags for AI Agents:**
+```html
+<meta name="ai-content-summary" content="Professional photography management SaaS for gallery delivery, client proofing, and business automation">
+<meta name="ai-target-audience" content="Professional wedding photographers, portrait photographers, photography studios">
+<meta name="ai-pricing-model" content="Freemium with paid tiers starting at ₹500/month">
+<meta name="ai-competitors" content="Pic-Time, Pixieset, Shootproof, CloudSpot">
+```
+
+### Enhanced Structured Data Schemas
+
+```typescript
+// BreadcrumbList Schema - for navigation paths
+interface BreadcrumbSchema {
+  '@context': 'https://schema.org';
+  '@type': 'BreadcrumbList';
+  itemListElement: Array<{
+    '@type': 'ListItem';
+    position: number;
+    name: string;
+    item: string;
+  }>;
+}
+
+// HowTo Schema - for process workflows
+interface HowToSchema {
+  '@context': 'https://schema.org';
+  '@type': 'HowTo';
+  name: string;
+  description: string;
+  step: Array<{
+    '@type': 'HowToStep';
+    name: string;
+    text: string;
+    image?: string;
+  }>;
+  totalTime?: string; // ISO 8601 duration
+}
+
+// VideoObject Schema - for demo videos
+interface VideoSchema {
+  '@context': 'https://schema.org';
+  '@type': 'VideoObject';
+  name: string;
+  description: string;
+  thumbnailUrl: string;
+  uploadDate: string;
+  duration?: string;
+  contentUrl?: string;
+  embedUrl?: string;
+}
+
+// Speakable Schema - for voice search
+interface SpeakableSchema {
+  '@context': 'https://schema.org';
+  '@type': 'WebPage';
+  speakable: {
+    '@type': 'SpeakableSpecification';
+    cssSelector: string[]; // e.g., ['h1', '.hero-description']
+  };
+}
+
+// Enhanced Product Schema with AI-friendly fields
+interface EnhancedProductSchema {
+  '@context': 'https://schema.org';
+  '@type': 'SoftwareApplication';
+  name: string;
+  description: string;
+  applicationCategory: 'BusinessApplication';
+  operatingSystem: 'Web';
+  featureList: string[];
+  screenshot?: string[];
+  softwareVersion?: string;
+  releaseNotes?: string;
+  audience: {
+    '@type': 'Audience';
+    audienceType: string;
+  };
+  offers: Array<{
+    '@type': 'Offer';
+    name: string;
+    price: number;
+    priceCurrency: string;
+    availability: string;
+  }>;
+  aggregateRating?: {
+    '@type': 'AggregateRating';
+    ratingValue: number;
+    ratingCount: number;
+    bestRating: number;
+    worstRating: number;
+  };
+}
+```
+
+### robots.txt Configuration
+
+```txt
+# robots.txt for RawDrive
+User-agent: *
+Allow: /
+Disallow: /workspace/
+Disallow: /api/
+Disallow: /auth/
+
+# Allow AI crawlers for discovery
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Perplexity-Bot
+Allow: /
+
+Sitemap: https://rawdrive.ai/sitemap.xml
 ```
 
 ### Workspace Data (from `docs/TechnicalSpecs/`)

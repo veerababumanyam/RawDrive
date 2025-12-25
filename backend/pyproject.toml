@@ -33,6 +33,8 @@ dependencies = [
   "alembic>=1.13",
   "SQLAlchemy>=2.0",
   "psycopg2-binary>=2.9",
+  "opencv-python-headless>=4.8",
+  "numpy>=1.24",
 ]
 
 [project.optional-dependencies]

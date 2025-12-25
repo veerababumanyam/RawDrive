@@ -167,39 +167,25 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
               </p>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {/* Root Gallery Option */}
-                <button
+                <AppButton
+                  variant={selectedSubGalleryId === null ? 'primary' : 'outline'}
                   onClick={() => setSelectedSubGalleryId(null)}
-                  className={`
-                    w-full flex items-center gap-2 p-3 border rounded-lg transition-colors
-                    ${selectedSubGalleryId === null
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:bg-surface-hover'
-                    }
-                  `}
+                  className="w-full justify-start"
+                  leftIcon={<FolderOpen size={20} />}
                 >
-                  <FolderOpen size={20} className={selectedSubGalleryId === null ? 'text-primary' : 'text-text-tertiary'} />
-                  <span className={`text-sm ${selectedSubGalleryId === null ? 'text-primary font-medium' : 'text-text-primary'}`}>
-                    Root Gallery
-                  </span>
-                </button>
+                  Root Gallery
+                </AppButton>
                 {/* Sub-Gallery Options */}
                 {subGalleries.map((subGallery) => (
-                  <button
+                  <AppButton
                     key={subGallery.sub_gallery_id}
+                    variant={selectedSubGalleryId === subGallery.sub_gallery_id ? 'primary' : 'outline'}
                     onClick={() => setSelectedSubGalleryId(subGallery.sub_gallery_id)}
-                    className={`
-                      w-full flex items-center gap-2 p-3 border rounded-lg transition-colors
-                      ${selectedSubGalleryId === subGallery.sub_gallery_id
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border hover:bg-surface-hover'
-                      }
-                    `}
+                    className="w-full justify-start"
+                    leftIcon={<FolderOpen size={20} />}
                   >
-                    <FolderOpen size={20} className={selectedSubGalleryId === subGallery.sub_gallery_id ? 'text-primary' : 'text-text-tertiary'} />
-                    <span className={`text-sm ${selectedSubGalleryId === subGallery.sub_gallery_id ? 'text-primary font-medium' : 'text-text-primary'}`}>
-                      {subGallery.name}
-                    </span>
-                  </button>
+                    {subGallery.name}
+                  </AppButton>
                 ))}
               </div>
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">

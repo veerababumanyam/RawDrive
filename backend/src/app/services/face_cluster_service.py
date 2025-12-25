@@ -37,6 +37,10 @@ from app.services.face_configuration_service import (
     FaceConfigurationService,
     get_face_configuration_service,
 )
+from app.services.face_group_history_service import (
+    FaceGroupHistoryService,
+    get_face_group_history_service,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -83,6 +87,7 @@ class FaceClusterService:
         self._group_repo = face_group_repository
         self._embedding_repo = face_embedding_repository
         self._config_service = configuration_service
+        self._history_service: Optional[FaceGroupHistoryService] = None
     
     @property
     def face_repo(self) -> FaceRepository:
@@ -97,6 +102,13 @@ class FaceClusterService:
         if self._group_repo is None:
             self._group_repo = get_face_group_repository()
         return self._group_repo
+
+    @property
+    def history_service(self) -> FaceGroupHistoryService:
+        """Lazy load history service."""
+        if self._history_service is None:
+            self._history_service = get_face_group_history_service()
+        return self._history_service
     
     @property
     def embedding_repo(self) -> FaceEmbeddingRepository:

@@ -1,8 +1,8 @@
 /**
  * GalleryStats Component
- * Displays gallery statistics in a clean, professional layout
- * Total Items and Favorites with stacked number/label design
- * Supports sub-gallery-specific stats via filteredStats prop
+ * Displays gallery statistics matching screenshot layout
+ * Icon badge with count and label - horizontal compact design
+ * Mobile-first responsive design
  */
 
 import React from 'react';
@@ -28,33 +28,33 @@ export const GalleryStats: React.FC<GalleryStatsProps> = ({ gallery, filteredSta
   const favoritesCount = filteredStats?.favoritesCount ?? gallery.stats?.favorites_count ?? 0;
 
   return (
-    <div className={`gallery-stats flex items-center gap-6 sm:gap-8 ${className}`}>
-      {/* Total Items */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Image size={20} className="text-primary" />
+    <div className={`gallery-stats flex items-center gap-4 sm:gap-6 ${className}`}>
+      {/* Total Items - Icon badge style matching screenshot */}
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <Image size={18} className="text-primary" />
         </div>
-        <div className="flex flex-col">
-          <span className="text-2xl font-bold text-text-primary leading-none">
+        <div className="flex flex-col leading-tight">
+          <span className="text-xl font-bold text-text-primary">
             {totalItems}
           </span>
-          <span className="text-xs font-medium text-text-tertiary uppercase tracking-wide mt-0.5">
+          <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
             Total Items
           </span>
         </div>
       </div>
 
-      {/* Favorites */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-pink-500/10 flex items-center justify-center">
-          <Heart size={20} className="text-pink-500 fill-pink-500" />
+      {/* Favorites - Pink heart icon badge style */}
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-lg bg-pink-500/10 flex items-center justify-center flex-shrink-0">
+          <Heart size={18} className="text-pink-500 fill-pink-500" />
         </div>
-        <div className="flex flex-col">
-          <span className="text-2xl font-bold text-text-primary leading-none">
+        <div className="flex flex-col leading-tight">
+          <span className="text-xl font-bold text-text-primary">
             {favoritesCount}
           </span>
-          <span className="text-xs font-medium text-text-tertiary uppercase tracking-wide mt-0.5">
-            Favorites
+          <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
+            Favorite
           </span>
         </div>
       </div>

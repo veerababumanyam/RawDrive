@@ -17,6 +17,7 @@ from app.api.schemas import ErrorResponse
 from app.api.exceptions import NotFoundError, ValidationAppError
 from app.db.postgres import get_postgres_pool
 from app.services.deletion_service import get_deletion_service
+from app.services.gallery_service import get_gallery_service
 
 logger = logging.getLogger(__name__)
 
@@ -71,157 +72,26 @@ async def list_gallery_assets(
     favorites_only: bool = Query(False, description="Filter favorites only"),
     selections_only: bool = Query(False, description="Filter selections only"),
     search_query: str | None = Query(None, description="Search by filename"),
+    face_group_ids: list[UUID] | None = Query(None, description="Filter by face groups (OR logic)"),
 ) -> dict:
     """List assets in a gallery with pagination and filtering."""
     # Extract workspace_id from workspace_access tuple
     _, workspace_id = workspace_access
     
-    pool = await get_postgres_pool()
+    gallery_service = get_gallery_service()
     
-    async with pool.acquire() as conn:
-        # Verify gallery exists and user has access (exclude deleted)
-        gallery = await conn.fetchrow(
-            """
-            SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
-        )
-
-        if not gallery:
-            raise NotFoundError("Gallery", str(gallery_id))
-
-        # Build query with filters (exclude deleted assets)
-        offset = (page - 1) * limit
-        where_conditions = [
-            "ga.workspace_id = $1",
-            "ga.gallery_id = $2",
-            "ga.visible = TRUE",
-            "a.status = 'available'",
-            "a.deleted = FALSE",
-        ]
-        params = [workspace_id, gallery_id]
-        param_idx = 3
-        
-        # Handle sub_gallery_id filtering:
-        # - sub_gallery_id = "" (empty string) → root gallery only (sub_gallery_id IS NULL)
-        # - sub_gallery_id = "<uuid>" → specific sub-gallery
-        # - sub_gallery_id = None (not provided) → all assets (no filter)
-        if sub_gallery_id is not None:
-            if sub_gallery_id == "":
-                # Empty string = root gallery only (no sub-gallery assigned)
-                where_conditions.append("ga.sub_gallery_id IS NULL")
-            else:
-                # Specific sub-gallery filter
-                where_conditions.append(f"ga.sub_gallery_id = ${param_idx}")
-                params.append(UUID(sub_gallery_id))
-                param_idx += 1
-        # If sub_gallery_id is None (not provided as query param), show all assets
-        
-        if picks_only or selections_only:
-            where_conditions.append("ga.is_selected = TRUE")
-        
-        if favorites_only:
-            where_conditions.append("ga.is_favorited = TRUE")
-        
-        if search_query:
-            # Search by filename extracted from original_object_key (case-insensitive)
-            where_conditions.append(f"LOWER(SUBSTRING(a.original_object_key FROM '[^/]+$')) LIKE ${param_idx}")
-            params.append(f"%{search_query.lower()}%")
-            param_idx += 1
-        
-        where_sql = " AND ".join(where_conditions)
-        
-        # Get total count
-        count_query = f"""
-            SELECT COUNT(*)
-            FROM gallery_assets ga
-            INNER JOIN assets a ON ga.asset_id = a.asset_id
-            WHERE {where_sql}
-        """
-        total = await conn.fetchval(count_query, *params)
-        
-        # Get assets with pagination
-        # Note: is_favorited, is_selected, and favorites_count are computed from client_interactions
-        # Add limit and offset to params first, then use their indices
-        params.append(limit)
-        params.append(offset)
-        limit_param_num = len(params) - 1  # asyncpg uses 1-indexed parameters
-        offset_param_num = len(params)      # offset is the last parameter
-        
-        # Build query with correct parameter numbers
-        assets_query = f"""
-            SELECT
-                ga.gallery_asset_id,
-                ga.asset_id,
-                ga.sort_order,
-                ga.visible,
-                ga.is_private,
-                ga.sub_gallery_id,
-                ga.is_favorited,
-                ga.is_selected,
-                (
-                    SELECT COUNT(*) FROM client_interactions ci
-                    WHERE ci.workspace_id = ga.workspace_id
-                    AND ci.gallery_id = ga.gallery_id
-                    AND ci.asset_id = ga.asset_id
-                    AND ci.type = 'favorite'
-                ) AS favorites_count,
-                a.type,
-                a.status,
-                a.mime_type,
-                SUBSTRING(a.original_object_key FROM '[^/]+$') AS filename,
-                (a.exif->>'width')::INTEGER AS width,
-                (a.exif->>'height')::INTEGER AS height,
-                (a.exif->>'duration_ms')::INTEGER AS duration_ms,
-                (a.exif->>'date_taken')::TIMESTAMPTZ AS date_taken,
-                a.exif
-            FROM gallery_assets ga
-            INNER JOIN assets a ON ga.asset_id = a.asset_id
-            WHERE {where_sql}
-            ORDER BY ga.sort_order ASC, ga.gallery_asset_id ASC
-            LIMIT ${limit_param_num} OFFSET ${offset_param_num}
-        """
-        
-        assets = await conn.fetch(assets_query, *params)
-        
-        # Format response
-        assets_data = []
-        for row in assets:
-            asset_data = {
-                "gallery_asset_id": str(row["gallery_asset_id"]),
-                "asset_id": str(row["asset_id"]),
-                "sort_order": row["sort_order"],
-                "visible": row["visible"],
-                "is_private": row["is_private"],
-                "sub_gallery_id": str(row["sub_gallery_id"]) if row["sub_gallery_id"] else None,
-                "is_favorited": row["is_favorited"],
-                "is_selected": row["is_selected"],
-                "favorites_count": row["favorites_count"] or 0,
-                "asset": {
-                    "type": row["type"],
-                    "status": row["status"],
-                    "mime_type": row["mime_type"],
-                    "filename": row["filename"] or "",
-                    "width": row["width"],
-                    "height": row["height"],
-                    "duration_ms": row["duration_ms"],
-                    "date_taken": row["date_taken"].isoformat() if row["date_taken"] else None,
-                    "exif": row["exif"],
-                },
-            }
-            assets_data.append(asset_data)
-        
-        return {
-            "data": assets_data,
-            "meta": {
-                "page": page,
-                "limit": limit,
-                "total": total,
-                "hasMore": (offset + limit) < total,
-            },
-        }
+    return await gallery_service.list_assets(
+        workspace_id=workspace_id,
+        gallery_id=gallery_id,
+        page=page,
+        limit=limit,
+        sub_gallery_id=sub_gallery_id,
+        picks_only=picks_only,
+        favorites_only=favorites_only,
+        selections_only=selections_only,
+        search_query=search_query,
+        face_group_ids=face_group_ids,
+    )
 
 
 @router.patch(
@@ -656,3 +526,117 @@ async def toggle_selection(
         action = "selected" if request.selected else "deselected"
         return {"message": f"{action.capitalize()} {len(request.asset_ids)} asset(s) successfully"}
 
+
+class DownloadListRequest(BaseModel):
+    """Request for download list with filters."""
+    sub_gallery_id: UUID | None = Field(None, description="Filter by sub-gallery")
+    face_group_ids: list[UUID] | None = Field(None, description="Filter by face groups (OR logic)")
+    picks_only: bool = Field(False, description="Only include selected/picked assets")
+    favorites_only: bool = Field(False, description="Only include favorited assets")
+
+
+@router.post(
+    "/download-list",
+    status_code=status.HTTP_200_OK,
+    summary="Get list of asset IDs for download",
+    description="Returns asset IDs filtered by face groups etc. for bulk download. Use with signed URL endpoint.",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def get_download_list(
+    workspace_access: WorkspaceAccessDep,
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    current_user: CurrentUserDep,
+    request: DownloadListRequest,
+) -> dict:
+    """Get list of asset IDs for bulk download, optionally filtered by face groups.
+    
+    This endpoint returns a list of asset IDs that can be used with the 
+    signed URL endpoint to download individual files. The frontend can
+    use this to generate download links for all matching assets.
+    
+    Requirements: 17.5
+    """
+    _, workspace_id = workspace_access
+    pool = await get_postgres_pool()
+    
+    async with pool.acquire() as conn:
+        # Verify gallery exists
+        gallery = await conn.fetchrow(
+            """
+            SELECT gallery_id, download_policy FROM galleries
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+            """,
+            workspace_id,
+            gallery_id,
+        )
+        
+        if not gallery:
+            raise NotFoundError("Gallery", str(gallery_id))
+        
+        download_policy = gallery["download_policy"]
+        
+        # Check download policy
+        if download_policy == "view_only":
+            raise ValidationAppError("Gallery does not allow downloads", field="gallery_id")
+        
+        # Build query with filters
+        query = """
+            SELECT DISTINCT a.asset_id
+            FROM assets a
+            JOIN gallery_assets ga ON a.asset_id = ga.asset_id
+            WHERE ga.workspace_id = $1 
+              AND ga.gallery_id = $2
+              AND a.deleted = FALSE
+              AND ga.visible = TRUE
+        """
+        params = [workspace_id, gallery_id]
+        param_idx = 3
+        
+        # Sub-gallery filter
+        if request.sub_gallery_id:
+            query += f" AND ga.sub_gallery_id = ${param_idx}"
+            params.append(request.sub_gallery_id)
+            param_idx += 1
+        
+        # Picks (selections) filter
+        if request.picks_only:
+            query += " AND ga.is_selected = TRUE"
+        
+        # Favorites filter
+        if request.favorites_only:
+            query += " AND ga.is_favorited = TRUE"
+        
+        # Face group filter - join with faces table
+        if request.face_group_ids:
+            query += f"""
+                AND a.asset_id IN (
+                    SELECT DISTINCT f.photo_id
+                    FROM faces f
+                    WHERE f.workspace_id = $1
+                      AND f.face_group_id = ANY(${param_idx}::uuid[])
+                )
+            """
+            params.append(request.face_group_ids)
+            param_idx += 1
+        
+        query += " ORDER BY a.asset_id"
+        
+        rows = await conn.fetch(query, *params)
+        asset_ids = [row["asset_id"] for row in rows]
+        
+        # Determine allowed variant based on download policy
+        allowed_variant = "original"
+        if download_policy == "web_only":
+            allowed_variant = "preview"
+        elif download_policy == "watermarked_only":
+            allowed_variant = "watermarked"
+        
+        return {
+            "asset_ids": [str(aid) for aid in asset_ids],
+            "total": len(asset_ids),
+            "download_policy": download_policy,
+            "allowed_variant": allowed_variant,
+        }

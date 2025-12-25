@@ -35,10 +35,12 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
     # Import worker handlers to register them
     # This must happen before starting the worker
     import app.services.asset_processing_worker  # noqa: F401
+    import app.services.face_detection_worker  # noqa: F401
 
     # Start background task worker and scheduler (only if not disabled)
     enable_worker = os.getenv("DISABLE_TASK_WORKER", "false").lower() != "true"
     worker_task = None
+    face_worker_task = None
     if enable_worker:
         task_queue = get_task_queue()
         # Increase concurrency for asset processing (can be tuned based on load)
@@ -49,6 +51,16 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
         logger.info(
             f"Background task worker started with concurrency={worker_concurrency}"
         )
+        
+        # Start face detection worker (only if not running as separate microservice)
+        enable_face_worker = os.getenv("DISABLE_FACE_WORKER", "false").lower() != "true"
+        if enable_face_worker:
+            from app.services.face_detection_worker import get_face_detection_worker
+            face_worker = get_face_detection_worker()
+            face_worker_task = asyncio.create_task(face_worker.start())
+            logger.info("Face detection worker started (embedded)")
+        else:
+            logger.info("Face detection worker disabled (using separate microservice)")
 
     logger.info("Application configuration loaded", extra={"config": settings.safe_dump()})
 
@@ -57,6 +69,18 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
     finally:
         # Stop background services
         if enable_worker:
+            # Stop face detection worker (if running embedded)
+            if face_worker_task is not None:
+                from app.services.face_detection_worker import get_face_detection_worker
+                face_worker = get_face_detection_worker()
+                await face_worker.stop()
+                face_worker_task.cancel()
+                try:
+                    await face_worker_task
+                except asyncio.CancelledError:
+                    pass
+                logger.info("Face detection worker stopped")
+            
             task_queue = get_task_queue()
             task_queue.stop_worker()
             if worker_task is not None:

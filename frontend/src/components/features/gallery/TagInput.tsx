@@ -211,7 +211,7 @@ export const TagInput: React.FC<TagInputProps> = ({
                             {!readOnly && (
                                 <button
                                     onClick={() => removeTag(tag.tag_id)}
-                                    className="hover:text-red-500 transition-colors ml-0.5 -mr-0.5"
+                                    className="hover:text-error transition-colors ml-0.5 -mr-0.5"
                                     disabled={loading}
                                     aria-label={`Remove tag ${tag.name}`}
                                 >

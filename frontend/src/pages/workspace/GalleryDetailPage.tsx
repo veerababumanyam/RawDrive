@@ -1,7 +1,14 @@
 /**
  * GalleryDetailPage Component
- * Main gallery detail page with photo grid, upload, and management features
- * Redesigned with clean, professional layout
+ * Main gallery detail page with redesigned layout matching screenshot
+ * Clean, professional layout with consistent spacing and responsive design
+ *
+ * Layout Order:
+ * 1. Back link + Header (logo, title, metadata, status)
+ * 2. Sub-Gallery Tabs
+ * 3. Stats (left) + Action Bar (right)
+ * 4. Toolbar (view toggle, filters, search)
+ * 5. Photo Grid/List
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -26,7 +33,6 @@ import {
   PeoplePanel,
 } from '../../components/features/gallery';
 import { AppButton } from '../../components/ui/AppButton';
-import { AppCard } from '../../components/ui/AppCard';
 import { AppInput } from '../../components/ui/AppInput';
 import Modal, { ModalBody, ModalFooter } from '../../components/ui/Modal';
 import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmationDialog';
@@ -77,9 +83,6 @@ const GalleryDetailPage: React.FC = () => {
     const action = searchParams.get('action');
     if (action === 'upload') {
       setShowUpload(true);
-      // Optional: Clear the param so it doesn't reopen on refresh?
-      // But keeping it state-driven is often simpler. 
-      // We can leave it for now, or user can click cancel to close.
     }
   }, [searchParams]);
 
@@ -115,14 +118,10 @@ const GalleryDetailPage: React.FC = () => {
     autoFetch: !!galleryId && !!workspace?.workspace_id,
   });
 
-  // Compute filtered stats from currently loaded assets (sub-gallery-specific)
-  // This provides accurate counts for the currently selected tab
+  // Compute filtered stats from currently loaded assets
   const filteredStats = useMemo(() => {
-    // Use meta.total for accurate total count (includes pagination)
     const totalItems = meta?.total ?? assets.length;
-    // Count favorites from loaded assets
     const favoritesCount = assets.filter((a) => a.is_favorited).length;
-    // Count selections from loaded assets
     const selectionsCount = assets.filter((a) => a.is_selected).length;
 
     return {
@@ -136,12 +135,10 @@ const GalleryDetailPage: React.FC = () => {
   useSocket({
     autoConnect: !!workspace?.workspace_id,
     onEvent: (event) => {
-      // Handle asset events for current gallery
       if (
         event.gallery_id === galleryId &&
         (event.type === 'asset:created' || event.type === 'asset:processed')
       ) {
-        // Refetch assets to show new thumbnail
         refetchAssets();
       }
     },
@@ -176,7 +173,6 @@ const GalleryDetailPage: React.FC = () => {
     setLightboxOpen(false);
   }, []);
 
-  // Handle favorite toggle
   // Handle asset favorite toggle
   const handleAssetFavorite = useCallback(
     async (assetId: string, favorited: boolean) => {
@@ -218,7 +214,6 @@ const GalleryDetailPage: React.FC = () => {
     async (assetId: string) => {
       if (!workspace?.workspace_id || !galleryId) return;
 
-      // Use window.confirm for now as a simple safeguard
       if (!window.confirm('Are you sure you want to delete this photo?')) return;
 
       try {
@@ -226,7 +221,7 @@ const GalleryDetailPage: React.FC = () => {
         addToast({
           message: 'Photo deleted',
           variant: 'success',
-          duration: 8000, // 8 seconds for undo
+          duration: 8000,
           action: {
             label: 'Undo',
             onClick: async () => {
@@ -256,24 +251,18 @@ const GalleryDetailPage: React.FC = () => {
       const asset = assets.find(a => a.asset_id === assetId);
       if (!asset) return;
 
-      // Import file utilities
       const { isRawAsset, getRawDownloadVariant } = await import('../../utils/fileUtils');
 
-      // Determine download variant based on file type and policy
       let variant: 'original' | 'preview' | null = null;
       const downloadPolicy = gallery?.download_policy || 'view_only';
 
       if (isRawAsset(asset.asset.filename, asset.asset.mime_type)) {
-        // RAW files: use special handling
         variant = getRawDownloadVariant(downloadPolicy);
         if (!variant) {
           addToast({ message: 'Downloads not allowed for this gallery', variant: 'error' });
           return;
         }
-        // Note: For RAW files with web_only/watermarked_only policy,
-        // backend should convert RAW to JPEG on-the-fly when variant='preview'
       } else {
-        // Regular images/videos: standard handling
         variant = downloadPolicy === 'original_allowed' ? 'original' : 'preview';
         if (downloadPolicy === 'view_only') {
           addToast({ message: 'Downloads not allowed for this gallery', variant: 'error' });
@@ -283,15 +272,12 @@ const GalleryDetailPage: React.FC = () => {
 
       const signedUrl = await galleryService.getSignedUrl(workspace.workspace_id, assetId, variant, true);
 
-      // Determine filename - for RAW files downloaded as JPEG, change extension
       let filename = asset.asset.filename || 'download';
       if (isRawAsset(asset.asset.filename, asset.asset.mime_type) && variant === 'preview') {
-        // Change extension to .jpg for converted RAW files
         const baseName = filename.replace(/\.[^.]+$/, '');
         filename = `${baseName}.jpg`;
       }
 
-      // Trigger download
       const link = document.createElement('a');
       link.href = signedUrl;
       link.download = filename;
@@ -304,7 +290,7 @@ const GalleryDetailPage: React.FC = () => {
       console.error('Download error:', error);
       addToast({ message: 'Failed to download', variant: 'error' });
     }
-  }, [workspace?.workspace_id, galleryId, gallery?.download_policy, assets]);
+  }, [workspace?.workspace_id, galleryId, gallery?.download_policy, assets, addToast]);
 
   // Handle upload complete
   const handleUploadComplete = useCallback(
@@ -325,7 +311,7 @@ const GalleryDetailPage: React.FC = () => {
   // Handle sub-gallery change
   const handleSubGalleryChange = useCallback((subGalleryId: string | null) => {
     setActiveSubGalleryId(subGalleryId);
-    setSelectedAssetIds(new Set()); // Clear selection when switching tabs
+    setSelectedAssetIds(new Set());
   }, []);
 
   // Handle create sub-gallery
@@ -345,7 +331,7 @@ const GalleryDetailPage: React.FC = () => {
       });
       setShowCreateSubGallery(false);
       setNewSubGalleryName('');
-      await refetchGallery(); // Refresh gallery to show new sub-gallery
+      await refetchGallery();
     } catch (error) {
       addToast({
         variant: 'error',
@@ -393,7 +379,6 @@ const GalleryDetailPage: React.FC = () => {
         title: 'Sub-gallery deleted',
         message: `"${subGalleryName}" has been deleted`,
       });
-      // Switch to root gallery if deleted sub-gallery was active
       if (activeSubGalleryId === subGalleryId) {
         setActiveSubGalleryId(null);
       }
@@ -464,7 +449,6 @@ const GalleryDetailPage: React.FC = () => {
 
     try {
       if (activeSubGalleryId) {
-        // Set sub-gallery cover
         await galleryService.updateSubGallery(
           workspace.workspace_id,
           galleryId,
@@ -477,7 +461,6 @@ const GalleryDetailPage: React.FC = () => {
           message: 'This photo has been set as the sub-gallery cover',
         });
       } else {
-        // Set root gallery cover
         await galleryService.updateGallery(workspace.workspace_id, galleryId, {
           cover_asset_id: assetId
         });
@@ -497,120 +480,130 @@ const GalleryDetailPage: React.FC = () => {
     }
   }, [workspace?.workspace_id, galleryId, activeSubGalleryId, refetchGallery, addToast]);
 
-  // Loading state - Enhanced with glass effect
+  // Loading state - Using centralized design system
   if (galleryLoading && !gallery) {
     return (
-      <div className="card-glass rounded-2xl flex items-center justify-center min-h-[400px]">
-        <div className="flex flex-col items-center gap-4">
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="glass-card glass-card-hover rounded-2xl p-8 flex flex-col items-center gap-4">
           <div className="relative w-12 h-12">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary to-accent opacity-30 blur-md animate-pulse"></div>
-            <div className="relative animate-spin rounded-full h-12 w-12 border-2 border-transparent border-t-primary border-r-accent"></div>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary to-accent opacity-30 blur-lg animate-pulse" />
+            <div className="glow-ring absolute inset-0 rounded-full" />
+            <div className="relative animate-spin rounded-full h-12 w-12 border-3 border-transparent border-t-primary border-r-accent" />
           </div>
-          <p className="text-text-secondary">Loading gallery...</p>
+          <p className="text-text-secondary text-sm font-medium">Loading gallery...</p>
         </div>
       </div>
     );
   }
 
-  // Error state - Enhanced with glass effect
+  // Error state - Using centralized design system
   if (galleryError || !gallery) {
     return (
-      <div className="card-glass rounded-2xl flex flex-col items-center justify-center min-h-[400px] gap-4 p-8">
-        <p className="text-text-secondary">
-          {galleryError?.message || 'Gallery not found'}
-        </p>
-        <AppButton variant="outline" shine onClick={() => navigate('/workspace/galleries')}>
-          <ArrowLeft size={16} className="mr-2" />
-          Back to Galleries
-        </AppButton>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 p-8">
+        <div className="glass-card glass-card-hover rounded-2xl p-8 text-center max-w-md">
+          <div className="empty-state-icon mx-auto mb-4">
+            <ArrowLeft className="w-8 h-8" />
+          </div>
+          <p className="text-text-secondary mb-6">
+            {galleryError?.message || 'Gallery not found'}
+          </p>
+          <AppButton variant="outline" onClick={() => navigate('/workspace/galleries')}>
+            <ArrowLeft size={16} className="mr-2" />
+            Back to Galleries
+          </AppButton>
+        </div>
       </div>
     );
   }
 
-
   return (
-    <div className="gallery-detail-page space-y-4 sm:space-y-5">
-      {/* Header with Title and Meta */}
-      <GalleryHeader
-        gallery={gallery}
-        onTitleUpdate={async (newTitle: string) => {
-          if (!workspace?.workspace_id || !galleryId) return;
-          await galleryService.updateGallery(workspace.workspace_id, galleryId, { title: newTitle });
-          await refetchGallery();
-          addToast({ message: 'Gallery title updated', variant: 'success' });
-        }}
-        onMetadataUpdate={async (updates) => {
-          if (!workspace?.workspace_id || !galleryId) return;
-          await galleryService.updateGallery(workspace.workspace_id, galleryId, updates);
-          await refetchGallery();
-          addToast({ message: 'Gallery details updated', variant: 'success' });
-        }}
-      />
+    <div className="gallery-detail-page w-full max-w-full overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 min-h-screen">
+      {/* Main Content Container - Responsive padding */}
+      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-5">
 
-      {/* Sub-Gallery Tabs */}
-      <SubGalleryTabs
-        subGalleries={gallery.sub_galleries}
-        activeSubGalleryId={activeSubGalleryId}
-        onTabSelect={handleSubGalleryChange}
-        onCreateSubGallery={() => setShowCreateSubGallery(true)}
-        onSortOrderChange={async (subGalleryIds) => {
-          if (!workspace?.workspace_id || !galleryId) return;
-          try {
-            await galleryService.updateSubGalleriesSortOrder(
-              workspace.workspace_id,
-              galleryId,
-              subGalleryIds
-            );
+        {/* Row 1: Header with Title, Metadata, Status */}
+        <GalleryHeader
+          gallery={gallery}
+          onTitleUpdate={async (newTitle: string) => {
+            if (!workspace?.workspace_id || !galleryId) return;
+            await galleryService.updateGallery(workspace.workspace_id, galleryId, { title: newTitle });
             await refetchGallery();
-            addToast({ message: 'Tab order updated', variant: 'success' });
-          } catch (error) {
-            addToast({ message: 'Failed to update tab order', variant: 'error' });
-          }
-        }}
-        onRename={(subGalleryId, currentName) => {
-          setRenameSubGallery({ id: subGalleryId, name: currentName });
-        }}
-        onDelete={handleDeleteSubGallery}
-        onToggleVisibility={handleToggleVisibility}
-        droppable={true}
-        sortable={true}
-      />
+            addToast({ message: 'Gallery title updated', variant: 'success' });
+          }}
+          onMetadataUpdate={async (updates) => {
+            if (!workspace?.workspace_id || !galleryId) return;
+            await galleryService.updateGallery(workspace.workspace_id, galleryId, updates);
+            await refetchGallery();
+            addToast({ message: 'Gallery details updated', variant: 'success' });
+          }}
+        />
 
-      {/* Unified Action Bar - Color-coded buttons */}
-      <GalleryActionBar
-        isPublished={gallery.status === 'published'}
-        hasPhotos={(gallery.stats?.total_items || 0) > 0}
-        onViewAsClient={() => window.open(`/g/${gallery.gallery_id}`, '_blank')}
-        onFindPeople={() => setShowPeoplePanel(true)}
-        onAIStory={() => addToast({ message: 'AI Story - Coming soon', variant: 'info' })}
-        onShare={() => addToast({ message: 'Share - Coming soon', variant: 'info' })}
-        onSettings={() => setShowSettings(true)}
-        onUpload={() => setShowUpload(!showUpload)}
-        onDelete={() => setShowDeleteDialog(true)}
-        onPublishToggle={async () => {
-          if (!workspace?.workspace_id || !galleryId) return;
-          try {
-            if (gallery.status === 'published') {
-              await galleryService.unpublishGallery(workspace.workspace_id, galleryId);
-              addToast({ message: 'Gallery unpublished', variant: 'success' });
-            } else {
-              await galleryService.publishGallery(workspace.workspace_id, galleryId);
-              addToast({ message: 'Gallery published', variant: 'success' });
+        {/* Row 2: Sub-Gallery Tabs */}
+        <SubGalleryTabs
+          subGalleries={gallery.sub_galleries}
+          activeSubGalleryId={activeSubGalleryId}
+          onTabSelect={handleSubGalleryChange}
+          onCreateSubGallery={() => setShowCreateSubGallery(true)}
+          onSortOrderChange={async (subGalleryIds) => {
+            if (!workspace?.workspace_id || !galleryId) return;
+            try {
+              await galleryService.updateSubGalleriesSortOrder(
+                workspace.workspace_id,
+                galleryId,
+                subGalleryIds
+              );
+              await refetchGallery();
+              addToast({ message: 'Tab order updated', variant: 'success' });
+            } catch (error) {
+              addToast({ message: 'Failed to update tab order', variant: 'error' });
             }
-            await refetchGallery();
-          } catch (error) {
-            addToast({ message: 'Failed to update gallery status', variant: 'error' });
-          }
-        }}
-        uploadOpen={showUpload}
-      />
+          }}
+          onRename={(subGalleryId, currentName) => {
+            setRenameSubGallery({ id: subGalleryId, name: currentName });
+          }}
+          onDelete={handleDeleteSubGallery}
+          onToggleVisibility={handleToggleVisibility}
+          droppable={true}
+          sortable={true}
+        />
 
-      {/* Stats and Toolbar Row */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        {/* Stats - Left */}
-        <GalleryStats gallery={gallery} filteredStats={filteredStats} />
+        {/* Row 3: Stats (left) + Action Bar (right) */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          {/* Stats - Left */}
+          <GalleryStats gallery={gallery} filteredStats={filteredStats} />
 
-        {/* Toolbar - Right (on desktop) */}
+          {/* Action Bar - Right (wraps on mobile) */}
+          <GalleryActionBar
+            isPublished={gallery.status === 'published'}
+            hasPhotos={(gallery.stats?.total_items || 0) > 0}
+            onViewAsClient={() => window.open(`/g/${gallery.gallery_id}`, '_blank')}
+            onFindPeople={() => setShowPeoplePanel(true)}
+            onAIStory={() => addToast({ message: 'AI Story - Coming soon', variant: 'info' })}
+            onSmartCurate={() => addToast({ message: 'Smart Curate - Coming soon', variant: 'info' })}
+            onShare={() => addToast({ message: 'Share - Coming soon', variant: 'info' })}
+            onSettings={() => setShowSettings(true)}
+            onUpload={() => setShowUpload(!showUpload)}
+            onDelete={() => setShowDeleteDialog(true)}
+            onPublishToggle={async () => {
+              if (!workspace?.workspace_id || !galleryId) return;
+              try {
+                if (gallery.status === 'published') {
+                  await galleryService.unpublishGallery(workspace.workspace_id, galleryId);
+                  addToast({ message: 'Gallery unpublished', variant: 'success' });
+                } else {
+                  await galleryService.publishGallery(workspace.workspace_id, galleryId);
+                  addToast({ message: 'Gallery published', variant: 'success' });
+                }
+                await refetchGallery();
+              } catch (error) {
+                addToast({ message: 'Failed to update gallery status', variant: 'error' });
+              }
+            }}
+            uploadOpen={showUpload}
+          />
+        </div>
+
+        {/* Row 4: Toolbar (view toggle, filters, search) */}
         <GalleryToolbar
           viewMode={viewMode}
           filter={filter}
@@ -629,190 +622,173 @@ const GalleryDetailPage: React.FC = () => {
               setSelectedAssetIds(new Set());
             }
           }}
-          className="lg:flex-1 lg:max-w-3xl"
         />
-      </div>
 
-      {/* Upload Section - Collapsible */}
-      {showUpload && (
-        <AppCard padding="md" variant="glass" className="border border-border/50 animate-in slide-in-from-top-2 duration-300">
-          <GalleryUpload
-            galleryId={gallery.gallery_id}
-            subGalleryId={activeSubGalleryId}
-            onUploadComplete={handleUploadComplete}
-            onUploadError={handleUploadError}
-          />
-        </AppCard>
-      )}
+        {/* Upload Section - Collapsible with enhanced styling */}
+        {showUpload && (
+          <div className="glass-card glass-card-hover glass-card-shimmer rounded-2xl p-4 sm:p-6 border border-primary/20 animate-in slide-in-from-top-2 duration-300 shadow-lg shadow-primary/5">
+            <GalleryUpload
+              galleryId={gallery.gallery_id}
+              subGalleryId={activeSubGalleryId}
+              onUploadComplete={handleUploadComplete}
+              onUploadError={handleUploadError}
+            />
+          </div>
+        )}
 
-      {/* Bulk Action Bar - Shows when items selected */}
-      {selectedAssetIds.size > 0 && (
-        <BulkActionBar
-          selectedAssetIds={selectedAssetIds}
-          assets={assets}
-          onClearSelection={() => setSelectedAssetIds(new Set())}
-          subGalleries={gallery?.sub_galleries || []}
-          onBulkMove={async (assetIds, subGalleryId) => {
-            if (!workspace?.workspace_id || !galleryId) return;
-            try {
-              await galleryService.moveAssets(workspace.workspace_id, galleryId, assetIds, subGalleryId);
-              setSelectedAssetIds(new Set());
-              await refetchAssets();
-              addToast({
-                message: `Moved ${assetIds.length} ${assetIds.length === 1 ? 'photo' : 'photos'} successfully`,
-                variant: 'success',
-              });
-            } catch (error) {
-              addToast({ message: 'Failed to move photos', variant: 'error' });
-            }
-          }}
-          onBulkDelete={async (assetIds) => {
-            if (!workspace?.workspace_id || !galleryId) return;
-            try {
-              await galleryService.deleteAssets(workspace.workspace_id, galleryId, assetIds);
-              setSelectedAssetIds(new Set());
-
-              addToast({
-                message: `Deleted ${assetIds.length} ${assetIds.length === 1 ? 'photo' : 'photos'}`,
-                variant: 'success',
-                duration: 8000,
-                action: {
-                  label: 'Undo',
-                  onClick: async () => {
-                    try {
-                      await galleryService.restoreAssets(workspace.workspace_id, galleryId, assetIds);
-                      await refetchAssets();
-                      addToast({ message: 'Photos restored', variant: 'success' });
-                    } catch (error) {
-                      addToast({ message: 'Failed to restore photos', variant: 'error' });
-                    }
-                  },
-                },
-              });
-
-              await refetchAssets();
-            } catch (error) {
-              addToast({ message: 'Failed to delete photos', variant: 'error' });
-            }
-          }}
-          onBulkDownload={async (assetIds) => {
-            addToast({ message: `Download ${assetIds.length} photos - Coming soon`, variant: 'info' });
-          }}
-        />
-      )}
-
-      {/* Photo Section with Section Headers */}
-      <div className="space-y-6">
-
-        {/* Photo Grid or List */}
-        {assetsError ? (
-          <AppCard padding="md" variant="glass" className="card-glass">
-            <div className="text-center py-8">
-              <p className="text-error mb-4">{assetsError.message}</p>
-              <AppButton variant="outline" shine onClick={() => refetchAssets()}>
-                Try Again
-              </AppButton>
-            </div>
-          </AppCard>
-        ) : viewMode === 'grid' ? (
-          <PhotoGrid
-            assets={assets}
+        {/* Bulk Action Bar - Shows when items selected */}
+        {selectedAssetIds.size > 0 && (
+          <BulkActionBar
             selectedAssetIds={selectedAssetIds}
-            selectable={true}
-            coverAssetId={
-              activeSubGalleryId
-                ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === activeSubGalleryId)?.cover_asset_id
-                : gallery?.cover_asset_id
-            }
-            onAssetSelect={handleAssetSelect}
-            onAssetClick={handleAssetClick}
-            onAssetFavorite={handleAssetFavorite}
-            onAssetSelection={handleAssetSelection}
-            onAssetDownload={handleAssetDownload}
-            onAssetDelete={handleDeleteAsset}
-            onSetCover={async (assetId) => {
+            assets={assets}
+            onClearSelection={() => setSelectedAssetIds(new Set())}
+            subGalleries={gallery?.sub_galleries || []}
+            onBulkMove={async (assetIds, subGalleryId) => {
               if (!workspace?.workspace_id || !galleryId) return;
               try {
-                if (activeSubGalleryId) {
-                  // Set sub-gallery cover
-                  await galleryService.updateSubGallery(
-                    workspace.workspace_id,
-                    galleryId,
-                    activeSubGalleryId,
-                    { cover_asset_id: assetId }
-                  );
-                  addToast({
-                    variant: 'success',
-                    message: 'Sub-gallery cover updated',
-                  });
-                } else {
-                  // Set gallery cover
-                  await galleryService.updateGallery(workspace.workspace_id, galleryId, {
-                    cover_asset_id: assetId
-                  });
-                  addToast({
-                    variant: 'success',
-                    message: 'Gallery cover updated',
-                  });
-                }
-                await refetchGallery();
-              } catch (error) {
-                addToast({
-                  variant: 'error',
-                  message: 'Failed to update cover',
-                });
-              }
-            }}
-            onSortOrderChange={async (assetIds) => {
-              if (!workspace?.workspace_id || !galleryId) return;
-              try {
-                await galleryService.updateSortOrder(workspace.workspace_id, galleryId, assetIds);
+                await galleryService.moveAssets(workspace.workspace_id, galleryId, assetIds, subGalleryId);
+                setSelectedAssetIds(new Set());
                 await refetchAssets();
-                addToast({ message: 'Photo order updated', variant: 'success' });
-              } catch (error) {
-                addToast({ message: 'Failed to update photo order', variant: 'error' });
-              }
-            }}
-            onMoveToSubGallery={async (assetId, subGalleryId) => {
-              if (!workspace?.workspace_id || !galleryId) return;
-              try {
-                await galleryService.moveAssets(workspace.workspace_id, galleryId, [assetId], subGalleryId);
-                await refetchAssets();
-                const subGalleryName = subGalleryId
-                  ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === subGalleryId)?.name || 'sub-gallery'
-                  : 'Root Gallery';
                 addToast({
-                  message: `Photo moved to ${subGalleryName}`,
+                  message: `Moved ${assetIds.length} ${assetIds.length === 1 ? 'photo' : 'photos'} successfully`,
                   variant: 'success',
                 });
               } catch (error) {
-                addToast({ message: 'Failed to move photo', variant: 'error' });
+                addToast({ message: 'Failed to move photos', variant: 'error' });
               }
             }}
-            sortable={true}
-            isLoading={assetsLoading}
-          />
-        ) : (
-          <PhotoListView
-            assets={assets}
-            selectedAssetIds={selectedAssetIds}
-            onAssetSelect={handleAssetSelect}
-            onAssetClick={handleAssetClick}
-            onAssetFavorite={handleAssetFavorite}
-            onAssetDownload={handleAssetDownload}
-            onAssetDelete={handleDeleteAsset} // refreshed
-            isLoading={assetsLoading}
+            onBulkDelete={async (assetIds) => {
+              if (!workspace?.workspace_id || !galleryId) return;
+              try {
+                await galleryService.deleteAssets(workspace.workspace_id, galleryId, assetIds);
+                setSelectedAssetIds(new Set());
+                addToast({
+                  message: `Deleted ${assetIds.length} ${assetIds.length === 1 ? 'photo' : 'photos'}`,
+                  variant: 'success',
+                  duration: 8000,
+                  action: {
+                    label: 'Undo',
+                    onClick: async () => {
+                      try {
+                        await galleryService.restoreAssets(workspace.workspace_id, galleryId, assetIds);
+                        await refetchAssets();
+                        addToast({ message: 'Photos restored', variant: 'success' });
+                      } catch (error) {
+                        addToast({ message: 'Failed to restore photos', variant: 'error' });
+                      }
+                    },
+                  },
+                });
+                await refetchAssets();
+              } catch (error) {
+                addToast({ message: 'Failed to delete photos', variant: 'error' });
+              }
+            }}
+            onBulkDownload={async (assetIds) => {
+              addToast({ message: `Download ${assetIds.length} photos - Coming soon`, variant: 'info' });
+            }}
           />
         )}
 
-        {/* Load More - Enhanced with glass effect */}
-        {hasMore && !assetsLoading && (
-          <div className="flex justify-center">
-            <AppButton variant="outline" shine onClick={loadMore} className="hover:-translate-y-0.5 transition-all">
-              Load More
-            </AppButton>
-          </div>
-        )}
+        {/* Photo Section */}
+        <div className="space-y-4">
+          {/* Photo Grid or List */}
+          {assetsError ? (
+            <div className="glass-card glass-card-hover rounded-2xl p-8 text-center">
+              <div className="empty-state-icon mx-auto mb-4 icon-container-error">
+                <ArrowLeft className="w-6 h-6" />
+              </div>
+              <p className="text-error mb-4 font-medium">{assetsError.message}</p>
+              <AppButton variant="outline" onClick={() => refetchAssets()}>
+                Try Again
+              </AppButton>
+            </div>
+          ) : viewMode === 'grid' ? (
+            <PhotoGrid
+              assets={assets}
+              selectedAssetIds={selectedAssetIds}
+              selectable={true}
+              coverAssetId={
+                activeSubGalleryId
+                  ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === activeSubGalleryId)?.cover_asset_id
+                  : gallery?.cover_asset_id
+              }
+              onAssetSelect={handleAssetSelect}
+              onAssetClick={handleAssetClick}
+              onAssetFavorite={handleAssetFavorite}
+              onAssetSelection={handleAssetSelection}
+              onAssetDownload={handleAssetDownload}
+              onAssetDelete={handleDeleteAsset}
+              onSetCover={async (assetId) => {
+                if (!workspace?.workspace_id || !galleryId) return;
+                try {
+                  if (activeSubGalleryId) {
+                    await galleryService.updateSubGallery(
+                      workspace.workspace_id,
+                      galleryId,
+                      activeSubGalleryId,
+                      { cover_asset_id: assetId }
+                    );
+                    addToast({ variant: 'success', message: 'Sub-gallery cover updated' });
+                  } else {
+                    await galleryService.updateGallery(workspace.workspace_id, galleryId, {
+                      cover_asset_id: assetId
+                    });
+                    addToast({ variant: 'success', message: 'Gallery cover updated' });
+                  }
+                  await refetchGallery();
+                } catch (error) {
+                  addToast({ variant: 'error', message: 'Failed to update cover' });
+                }
+              }}
+              onSortOrderChange={async (assetIds) => {
+                if (!workspace?.workspace_id || !galleryId) return;
+                try {
+                  await galleryService.updateSortOrder(workspace.workspace_id, galleryId, assetIds);
+                  await refetchAssets();
+                  addToast({ message: 'Photo order updated', variant: 'success' });
+                } catch (error) {
+                  addToast({ message: 'Failed to update photo order', variant: 'error' });
+                }
+              }}
+              onMoveToSubGallery={async (assetId, subGalleryId) => {
+                if (!workspace?.workspace_id || !galleryId) return;
+                try {
+                  await galleryService.moveAssets(workspace.workspace_id, galleryId, [assetId], subGalleryId);
+                  await refetchAssets();
+                  const subGalleryName = subGalleryId
+                    ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === subGalleryId)?.name || 'sub-gallery'
+                    : 'Root Gallery';
+                  addToast({ message: `Photo moved to ${subGalleryName}`, variant: 'success' });
+                } catch (error) {
+                  addToast({ message: 'Failed to move photo', variant: 'error' });
+                }
+              }}
+              sortable={true}
+              isLoading={assetsLoading}
+            />
+          ) : (
+            <PhotoListView
+              assets={assets}
+              selectedAssetIds={selectedAssetIds}
+              onAssetSelect={handleAssetSelect}
+              onAssetClick={handleAssetClick}
+              onAssetFavorite={handleAssetFavorite}
+              onAssetDownload={handleAssetDownload}
+              onAssetDelete={handleDeleteAsset}
+              isLoading={assetsLoading}
+            />
+          )}
+
+          {/* Load More */}
+          {hasMore && !assetsLoading && (
+            <div className="flex justify-center pt-4">
+              <AppButton variant="outline" onClick={loadMore}>
+                Load More
+              </AppButton>
+            </div>
+          )}
+        </div>
 
         {/* Lightbox */}
         {lightboxOpen && assets[lightboxIndex] && (
@@ -961,18 +937,14 @@ const GalleryDetailPage: React.FC = () => {
           isOpen={showPeoplePanel}
           onClose={() => setShowPeoplePanel(false)}
           onFilterByPerson={(groupId) => {
-            // TODO: Implement filtering by person
             if (groupId) {
               addToast({ message: `Filtering by person - Coming soon`, variant: 'info' });
             }
           }}
         />
       </div>
-      {/* End Photo Section */}
     </div>
   );
 };
 
 export default GalleryDetailPage;
-
-

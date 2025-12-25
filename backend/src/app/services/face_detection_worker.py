@@ -44,6 +44,9 @@ BATCH_SIZE = 10  # Jobs to process per batch
 MAX_RETRIES = 3  # Maximum retry attempts
 RETRY_DELAY_SECONDS = 60  # Initial delay before retry
 POLLING_INTERVAL_SECONDS = 5  # How often to check for new jobs
+JOB_TIMEOUT_SECONDS = 120  # Maximum time for a single job (2 minutes)
+STALE_JOB_TIMEOUT_MINUTES = 10  # Jobs "processing" longer than this are considered stale
+CONCURRENT_JOBS = 1  # Number of jobs to process concurrently (Reduced to 1 for local inference memory stability)
 
 
 class FaceDetectionWorker:
@@ -152,21 +155,43 @@ class FaceDetectionWorker:
     # =========================================================================
     
     async def _process_batch(self) -> int:
-        """Fetch and process a batch of pending jobs.
+        """Fetch and process a batch of pending jobs concurrently.
+        
+        Uses asyncio.gather for concurrent processing with per-job timeouts
+        to ensure no single job blocks others.
         
         Returns:
-            Number of jobs processed
+            Number of jobs processed successfully
         """
+        # First, recover any stale jobs that got stuck
+        await self._recover_stale_jobs()
+        
+        # Fetch jobs
         jobs = await self._fetch_pending_jobs(BATCH_SIZE)
         
         if not jobs:
             return 0
         
-        processed = 0
-        for job in jobs:
+        # Process jobs concurrently with timeout protection
+        async def process_with_timeout(job: dict) -> bool:
+            """Process a single job with timeout, returns True on success."""
             try:
-                await self._process_job(job)
-                processed += 1
+                await asyncio.wait_for(
+                    self._process_job(job),
+                    timeout=JOB_TIMEOUT_SECONDS
+                )
+                return True
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Job timed out",
+                    extra={
+                        "job_id": str(job["id"]),
+                        "photo_id": str(job["photo_id"]),
+                        "timeout_seconds": JOB_TIMEOUT_SECONDS,
+                    },
+                )
+                await self._handle_job_failure(job, f"Job timed out after {JOB_TIMEOUT_SECONDS}s")
+                return False
             except Exception as e:
                 logger.exception(
                     "Failed to process job",
@@ -177,8 +202,56 @@ class FaceDetectionWorker:
                     },
                 )
                 await self._handle_job_failure(job, str(e))
+                return False
+        
+        # Process up to CONCURRENT_JOBS at a time
+        results = await asyncio.gather(
+            *[process_with_timeout(job) for job in jobs[:CONCURRENT_JOBS]],
+            return_exceptions=True
+        )
+        
+        # Count successful jobs (not exceptions and returned True)
+        processed = sum(1 for r in results if r is True)
         
         return processed
+    
+    async def _recover_stale_jobs(self) -> None:
+        """Recover jobs that have been stuck in 'processing' state too long.
+        
+        Jobs stuck in 'processing' for more than STALE_JOB_TIMEOUT_MINUTES
+        are reset to 'pending' for retry.
+        """
+        try:
+            pool = await get_postgres_pool()
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    """
+                    UPDATE face_detection_jobs
+                    SET status = 'pending',
+                        retry_count = retry_count + 1,
+                        scheduled_at = NOW() + INTERVAL '30 seconds',
+                        error_message = 'Recovered from stale processing state'
+                    WHERE status = 'processing'
+                      AND started_at < NOW() - INTERVAL '1 minute' * $1
+                      AND retry_count < $2
+                    """,
+                    STALE_JOB_TIMEOUT_MINUTES,
+                    MAX_RETRIES,
+                )
+                
+                # result format is "UPDATE N"
+                if result and "UPDATE" in result:
+                    count = int(result.split()[1])
+                    if count > 0:
+                        logger.warning(
+                            "Recovered stale jobs",
+                            extra={"count": count},
+                        )
+        except Exception as e:
+            logger.warning(
+                "Failed to recover stale jobs",
+                extra={"error": str(e)},
+            )
     
     async def _process_job(self, job: dict[str, Any]) -> None:
         """Process a single detection job.

@@ -207,11 +207,14 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
   return (
     <section
       id={id}
-      className={`py-20 lg:py-32 ${className}`}
+      className={`py-20 lg:py-32 bg-gradient-to-b from-slate-900 via-slate-900/95 to-slate-900 relative overflow-hidden ${className}`}
       aria-labelledby="faq-heading"
       itemScope
       itemType="https://schema.org/FAQPage"
     >
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.08),transparent_50%)]" aria-hidden="true" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(124,58,237,0.06),transparent_50%)]" aria-hidden="true" />
       {/* JSON-LD Structured Data for SEO */}
       <script
         type="application/ld+json"

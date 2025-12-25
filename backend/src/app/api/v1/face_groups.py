@@ -17,6 +17,8 @@ from app.api.face_schemas import (
     FaceGroupResponse,
     FaceGroupDetailResponse,
     FaceGroupListResponse,
+    FaceGroupGalleryStats,
+    FaceGroupGalleryStatsListResponse,
     FaceGroupUpdate,
     FaceListMeta,
     MergeFaceGroupsRequest,
@@ -109,6 +111,47 @@ async def list_face_groups(
     
     return FaceGroupListResponse(
         data=[FaceGroupResponse(**g, id=g["id"]) for g in groups],
+        meta=FaceListMeta(
+            page=page,
+            limit=limit,
+            total=total,
+            total_pages=total_pages,
+        ),
+    )
+
+
+@router.get(
+    "/galleries/{gallery_id}/face-groups",
+    response_model=FaceGroupGalleryStatsListResponse,
+    summary="List face groups in a gallery",
+    description="Returns face groups that appear in a specific gallery, with gallery-specific statistics.",
+)
+async def list_gallery_face_groups(
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    group_repo: GroupRepoDep,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
+):
+    """List face groups for a gallery."""
+    workspace_id = workspace_access["workspace_id"]
+    offset = (page - 1) * limit
+    
+    # 1. Get groups with stats
+    groups_data = await group_repo.find_by_gallery_id_with_stats(
+        workspace_id=workspace_id,
+        gallery_id=gallery_id,
+        limit=limit,
+        offset=offset,
+    )
+    
+    # 2. Get total count
+    total = await group_repo.count_by_gallery_id(workspace_id, gallery_id)
+    total_pages = (total + limit - 1) // limit if total > 0 else 1
+    
+    return FaceGroupGalleryStatsListResponse(
+        data=[FaceGroupGalleryStats(**g, id=g["id"]) for g in groups_data],
         meta=FaceListMeta(
             page=page,
             limit=limit,
@@ -396,3 +439,57 @@ async def list_group_faces(
             "total_pages": total_pages,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Face Group History (Undo) Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/workspaces/{workspace_id}/face-groups/history",
+    summary="Get face group history",
+    description="Returns recent face group actions for undo functionality.",
+)
+async def get_face_group_history(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    limit: Annotated[int, Query(ge=1, le=100, description="Max entries")] = 50,
+):
+    """Get recent face group history for undo."""
+    from app.services.face_group_history_service import get_face_group_history_service
+    
+    history_service = get_face_group_history_service()
+    history = await history_service.get_recent_history(workspace_id, limit)
+    
+    return {
+        "data": history,
+        "meta": {"total": len(history)},
+    }
+
+
+@router.post(
+    "/workspaces/{workspace_id}/face-groups/history/{history_id}/undo",
+    summary="Undo a face group action",
+    description="Attempts to undo a specific face group action. Not all actions can be undone.",
+)
+async def undo_face_group_action(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    history_id: Annotated[UUID, Path(..., description="History entry ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Undo a face group action."""
+    from app.services.face_group_history_service import get_face_group_history_service
+    
+    history_service = get_face_group_history_service()
+    success = await history_service.undo_action(workspace_id, history_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot undo this action. It may have expired or be a complex operation.",
+        )
+    
+    return {"message": "Action undone successfully"}

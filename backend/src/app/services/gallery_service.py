@@ -484,6 +484,160 @@ class GalleryService:
                 },
             }
 
+    async def list_assets(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        page: int = 1,
+        limit: int = 50,
+        sub_gallery_id: str | None = None,
+        picks_only: bool = False,
+        favorites_only: bool = False,
+        selections_only: bool = False,
+        search_query: str | None = None,
+        face_group_ids: list[UUID] | None = None,
+    ) -> dict:
+        """List assets in a gallery with pagination and filtering."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Verify gallery exists (exclude deleted)
+            exists = await conn.fetchval(
+                "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
+                workspace_id,
+                gallery_id,
+            )
+            if not exists:
+                raise GalleryNotFoundError(gallery_id)
+
+            offset = (page - 1) * limit
+            where_conditions = [
+                "ga.workspace_id = $1",
+                "ga.gallery_id = $2",
+                "ga.visible = TRUE",
+                "a.status = 'available'",
+                "a.deleted = FALSE",
+            ]
+            params = [workspace_id, gallery_id]
+            param_idx = 3
+
+            if sub_gallery_id is not None:
+                if sub_gallery_id == "":
+                    where_conditions.append("ga.sub_gallery_id IS NULL")
+                else:
+                    where_conditions.append(f"ga.sub_gallery_id = ${param_idx}")
+                    params.append(UUID(sub_gallery_id))
+                    param_idx += 1
+
+            if picks_only or selections_only:
+                where_conditions.append("ga.is_selected = TRUE")
+
+            if favorites_only:
+                where_conditions.append("ga.is_favorited = TRUE")
+
+            if search_query:
+                where_conditions.append(f"LOWER(SUBSTRING(a.original_object_key FROM '[^/]+$')) LIKE ${param_idx}")
+                params.append(f"%{search_query.lower()}%")
+                param_idx += 1
+
+            if face_group_ids:
+                where_conditions.append(f"""
+                    EXISTS (
+                        SELECT 1 FROM faces f
+                        WHERE f.photo_id = ga.asset_id
+                        AND f.face_group_id = ANY(${param_idx}::uuid[])
+                    )
+                """)
+                params.append(face_group_ids)
+                param_idx += 1
+
+            where_sql = " AND ".join(where_conditions)
+
+            # Get total count
+            count_query = f"""
+                SELECT COUNT(*)
+                FROM gallery_assets ga
+                INNER JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE {where_sql}
+            """
+            total = await conn.fetchval(count_query, *params)
+
+            # Get assets
+            params.append(limit)
+            params.append(offset)
+            limit_param_num = len(params) - 1
+            offset_param_num = len(params)
+
+            assets_query = f"""
+                SELECT
+                    ga.gallery_asset_id,
+                    ga.asset_id,
+                    ga.sort_order,
+                    ga.visible,
+                    ga.is_private,
+                    ga.sub_gallery_id,
+                    ga.is_favorited,
+                    ga.is_selected,
+                    (
+                        SELECT COUNT(*) FROM client_interactions ci
+                        WHERE ci.workspace_id = ga.workspace_id
+                        AND ci.gallery_id = ga.gallery_id
+                        AND ci.asset_id = ga.asset_id
+                        AND ci.type = 'favorite'
+                    ) AS favorites_count,
+                    a.type,
+                    a.status,
+                    a.mime_type,
+                    SUBSTRING(a.original_object_key FROM '[^/]+$') AS filename,
+                    (a.exif->>'width')::INTEGER AS width,
+                    (a.exif->>'height')::INTEGER AS height,
+                    (a.exif->>'duration_ms')::INTEGER AS duration_ms,
+                    (a.exif->>'date_taken')::TIMESTAMPTZ AS date_taken,
+                    a.exif
+                FROM gallery_assets ga
+                INNER JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE {where_sql}
+                ORDER BY ga.sort_order ASC, ga.gallery_asset_id ASC
+                LIMIT ${limit_param_num} OFFSET ${offset_param_num}
+            """
+
+            assets = await conn.fetch(assets_query, *params)
+
+            # Format response
+            assets_data = []
+            for row in assets:
+                assets_data.append({
+                    "gallery_asset_id": str(row["gallery_asset_id"]),
+                    "asset_id": str(row["asset_id"]),
+                    "sort_order": row["sort_order"],
+                    "visible": row["visible"],
+                    "is_private": row["is_private"],
+                    "sub_gallery_id": str(row["sub_gallery_id"]) if row["sub_gallery_id"] else None,
+                    "is_favorited": row["is_favorited"],
+                    "is_selected": row["is_selected"],
+                    "favorites_count": row["favorites_count"] or 0,
+                    "asset": {
+                        "type": row["type"],
+                        "status": row["status"],
+                        "mime_type": row["mime_type"],
+                        "filename": row["filename"] or "",
+                        "width": row["width"],
+                        "height": row["height"],
+                        "duration_ms": row["duration_ms"],
+                        "date_taken": row["date_taken"].isoformat() if row["date_taken"] else None,
+                        "exif": row["exif"],
+                    },
+                })
+
+            return {
+                "data": assets_data,
+                "meta": {
+                    "page": page,
+                    "limit": limit,
+                    "total": total,
+                    "hasMore": (offset + limit) < total,
+                },
+            }
+
     async def update_gallery(
         self,
         workspace_id: UUID,

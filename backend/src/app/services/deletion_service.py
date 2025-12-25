@@ -634,6 +634,12 @@ class DeletionService:
             # Delete database records
             async with pool.acquire() as conn:
                 async with conn.transaction():
+                    # Delete associated faces
+                    await conn.execute(
+                        "DELETE FROM faces WHERE workspace_id = $1 AND photo_id = $2",
+                        workspace_id, asset_id,
+                    )
+                    
                     await conn.execute(
                         "DELETE FROM gallery_assets WHERE workspace_id = $1 AND asset_id = $2",
                         workspace_id, asset_id,
