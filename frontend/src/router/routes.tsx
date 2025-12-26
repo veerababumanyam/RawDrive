@@ -45,10 +45,14 @@ const ForgotPasswordPage = lazy(() => import('../pages/public/ForgotPasswordPage
 
 // Workspace pages
 const DashboardPage = lazy(() => import('../pages/workspace/DashboardPage'));
+const LibraryPage = lazy(() => import('../pages/workspace/LibraryPage'));
 const GalleriesPage = lazy(() => import('../pages/workspace/GalleriesPage'));
+const FavoritesPage = lazy(() => import('../pages/workspace/FavoritesPage'));
+const RecentPage = lazy(() => import('../pages/workspace/RecentPage'));
 const GalleryCreatePage = lazy(() => import('../pages/workspace/GalleryCreatePage'));
 const GalleryDetailPage = lazy(() => import('../pages/workspace/GalleryDetailPage'));
 const RecycleBinPage = lazy(() => import('../pages/workspace/RecycleBinPage'));
+const SharedDashboardPage = lazy(() => import('../pages/workspace/SharedDashboardPage'));
 
 // Client CRM pages
 const ClientsPage = lazy(() => import('../pages/workspace/ClientsPage'));
@@ -57,6 +61,7 @@ const ClientFormPage = lazy(() => import('../pages/workspace/ClientFormPage'));
 const VisitorsPage = lazy(() => import('../pages/workspace/VisitorsPage'));
 const CompanyProfilePage = lazy(() => import('../pages/workspace/settings/CompanyProfilePage'));
 const GeneralSettingsPage = lazy(() => import('../pages/workspace/settings/GeneralSettingsPage'));
+const HelpSupportPage = lazy(() => import('../pages/workspace/settings/HelpSupportPage'));
 
 // Wrapper for lazy loaded components
 const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
@@ -183,7 +188,7 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'libraries',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
+        element: <CriticalLazyPage component={LibraryPage} />,
       },
       {
         path: 'clients',
@@ -207,15 +212,15 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'shared',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
+        element: <CriticalLazyPage component={SharedDashboardPage} />,
       },
       {
         path: 'recent',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
+        element: <LazyPage component={RecentPage} />,
       },
       {
         path: 'favorites',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
+        element: <LazyPage component={FavoritesPage} />, 
       },
       {
         path: 'trash',
@@ -235,7 +240,7 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'help',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
+        element: <LazyPage component={HelpSupportPage} />,
       },
     ],
   },

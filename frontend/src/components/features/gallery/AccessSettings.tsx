@@ -4,11 +4,12 @@
  */
 
 import React, { useState } from 'react';
-import { Lock, Mail, Calendar } from 'lucide-react';
+import { Lock, Mail, Calendar, Globe } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
 import { Toggle } from '../../ui/FormControls';
 import { AppInput } from '../../ui/AppInput';
 import { AppButton } from '../../ui/AppButton';
+import { PinSettings } from './PinSettings';
 import type { GalleryDetailData, GalleryUpdateRequest } from '../../../types/gallery';
 
 export interface AccessSettingsProps {
@@ -22,6 +23,7 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
   const [expiresAt, setExpiresAt] = useState(
     gallery.expires_at ? new Date(gallery.expires_at).toISOString().slice(0, 16) : ''
   );
+  const [customDomain, setCustomDomain] = useState(gallery.custom_domain || '');
 
   const handlePasswordToggle = (enabled: boolean) => {
     if (enabled) {
@@ -55,6 +57,11 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
     }
   };
 
+  const handleCustomDomainChange = (value: string) => {
+    setCustomDomain(value);
+    onUpdate({ custom_domain: value || null });
+  };
+
   const hasPassword = gallery.password_protected || false;
 
   return (
@@ -84,6 +91,9 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
           )}
         </div>
       </AppCard>
+
+      {/* PIN Protection */}
+      <PinSettings gallery={gallery} onUpdate={onUpdate} />
 
       <AppCard padding="md">
         <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
@@ -126,7 +136,25 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
           )}
         </div>
       </AppCard>
+
+      <AppCard padding="md">
+        <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+          <Globe size={20} />
+          Custom Domain
+        </h3>
+        <div>
+          <AppInput
+            type="text"
+            label="Custom Domain (CNAME)"
+            value={customDomain}
+            onChange={(e) => handleCustomDomainChange(e.target.value)}
+            placeholder="photos.yourstudio.com"
+            helperText="Point a CNAME record to gallery.rawdrive.ai to use your own domain"
+          />
+        </div>
+      </AppCard>
     </div>
   );
 };
+
 

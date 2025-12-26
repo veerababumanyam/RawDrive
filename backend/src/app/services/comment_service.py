@@ -10,6 +10,7 @@ from typing import Optional
 from uuid import UUID
 
 from app.db.postgres import get_postgres_pool
+from app.services.workspace_activity_service import record_comment_added
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,27 @@ class CommentService:
                 annotations,
                 is_internal,
             )
+
+            # Record comment activity (only for non-internal comments)
+            if not is_internal:
+                try:
+                    # Get gallery name for activity
+                    gallery_name = await conn.fetchval(
+                        "SELECT title FROM galleries WHERE gallery_id = $1",
+                        gallery_id,
+                    )
+                    await record_comment_added(
+                        workspace_id=workspace_id,
+                        gallery_id=gallery_id,
+                        gallery_name=gallery_name or "Unknown Gallery",
+                        comment_id=comment_id,
+                        author_name=author_name or "Unknown",
+                        author_email=author_email,
+                        user_id=author_user_id,
+                    )
+                except Exception as e:
+                    # Don't fail comment creation if activity recording fails
+                    logger.warning(f"Failed to record comment activity: {e}")
 
             return await self.get_comment(workspace_id, comment_id)
 

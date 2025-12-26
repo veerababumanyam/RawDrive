@@ -1,0 +1,442 @@
+{
+  "$schema": "./_schema.json",
+  "specVersion": "1.0",
+  "featureId": "magic_links_qr",
+  "name": "Magic Links with QR Codes & Face Discovery",
+  "status": "draft",
+  "lastUpdated": "2025-12-26",
+  "owners": {
+    "productOwner": "Product Team",
+    "techOwner": "Engineering Team"
+  },
+  "sourceDocs": [
+    "docs/Features/MagicLink.md",
+    "docs/TechnicalSpecs/share_links_access.json",
+    "docs/TechnicalSpecs/people_face_recognition.json"
+  ],
+  "description": "Tokenized shareable links for gallery access with dedicated QR codes (PNG/SVG/PDF), client-side face discovery using TensorFlow.js, and privacy-first architecture where face images never leave the client device.",
+  "goals": [
+    "Secure, token-based gallery sharing with 256-bit entropy tokens",
+    "Dedicated QR codes for every link (gallery, sub-gallery, photo)",
+    "Client-side face detection enabling 'Find My Photos' feature",
+    "Privacy-first: face embeddings only, never raw images",
+    "Seamless integration with existing share_links_access and people_face_recognition specs"
+  ],
+  "nonGoals": [
+    "Cross-workspace face matching",
+    "Server-side face image storage",
+    "Real-time video face tracking"
+  ],
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Magic links are workspace-scoped and reference a gallery (and optionally sub-gallery or asset)",
+      "QR codes are cached per-workspace in R2 storage",
+      "Face search is limited to gallery scope, never cross-gallery",
+      "Token hashes stored; never plaintext tokens"
+    ]
+  },
+  "actors": [
+    { "id": "photographer", "name": "Photographer/Staff", "description": "Creates and manages magic links, downloads QR codes" },
+    { "id": "client_viewer", "name": "Client (via Magic Link)", "description": "Views gallery, uses face discovery" },
+    { "id": "system", "name": "System", "description": "Validates tokens, generates QR codes, processes face searches" }
+  ],
+  "permissions": [
+    "gallery:share - Create/manage magic links",
+    "gallery:view - View via magic link (public with token)",
+    "face:search - Use face discovery (public with token + consent)"
+  ],
+  "dataModel": {
+    "entities": [
+      {
+        "name": "MagicLink",
+        "table": "magic_links",
+        "primaryKey": "link_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "link_id", "type": "uuid", "notes": "Primary key" },
+          { "name": "workspace_id", "type": "uuid", "notes": "FK to workspaces" },
+          { "name": "gallery_id", "type": "uuid", "notes": "FK to galleries" },
+          { "name": "token_hash", "type": "varchar(64)", "notes": "SHA-256 hash of token" },
+          { "name": "target_type", "type": "enum", "notes": "gallery|sub_gallery|photo" },
+          { "name": "target_id", "type": "uuid", "nullable": true, "notes": "sub_gallery_id or asset_id" },
+          { "name": "label", "type": "varchar(200)", "nullable": true, "notes": "Friendly name" },
+          { "name": "expires_at", "type": "timestamptz", "nullable": true },
+          { "name": "max_accesses", "type": "integer", "nullable": true },
+          { "name": "qr_config", "type": "jsonb", "notes": "size, color, logo_enabled, error_correction" },
+          { "name": "status", "type": "enum", "notes": "active|expired|revoked" },
+          { "name": "created_by", "type": "uuid", "notes": "FK to users" },
+          { "name": "created_at", "type": "timestamptz" },
+          { "name": "revoked_at", "type": "timestamptz", "nullable": true }
+        ],
+        "indexes": [
+          "idx_magic_links_token UNIQUE (token_hash)",
+          "idx_magic_links_gallery (gallery_id)",
+          "idx_magic_links_workspace (workspace_id)",
+          "idx_magic_links_active (status) WHERE status = 'active'"
+        ]
+      },
+      {
+        "name": "MagicLinkAccess",
+        "table": "magic_link_accesses",
+        "primaryKey": "access_id",
+        "workspaceScoped": true,
+        "fields": [
+          { "name": "access_id", "type": "uuid" },
+          { "name": "link_id", "type": "uuid", "notes": "FK to magic_links" },
+          { "name": "visitor_id", "type": "uuid", "nullable": true, "notes": "FK to visitors" },
+          { "name": "accessed_at", "type": "timestamptz" },
+          { "name": "ip_address", "type": "inet", "nullable": true },
+          { "name": "user_agent", "type": "text", "nullable": true },
+          { "name": "referer", "type": "text", "nullable": true },
+          { "name": "passed_email_gate", "type": "boolean" },
+          { "name": "passed_pin_gate", "type": "boolean" },
+          { "name": "country_code", "type": "varchar(2)", "nullable": true },
+          { "name": "region", "type": "varchar(100)", "nullable": true }
+        ],
+        "indexes": [
+          "idx_link_accesses_link (link_id)",
+          "idx_link_accesses_visitor (visitor_id)",
+          "idx_link_accesses_time (accessed_at)"
+        ]
+      },
+      {
+        "name": "FaceSearchLog",
+        "table": "face_search_logs",
+        "primaryKey": "log_id",
+        "workspaceScoped": false,
+        "fields": [
+          { "name": "log_id", "type": "uuid" },
+          { "name": "gallery_id", "type": "uuid", "notes": "FK to galleries" },
+          { "name": "visitor_id", "type": "uuid", "nullable": true },
+          { "name": "embedding_hash", "type": "varchar(64)", "notes": "Hash of embedding for dedup, NOT raw embedding" },
+          { "name": "matches_count", "type": "integer" },
+          { "name": "top_similarity", "type": "float", "nullable": true },
+          { "name": "searched_at", "type": "timestamptz" },
+          { "name": "processing_ms", "type": "integer" },
+          { "name": "ip_address", "type": "inet", "nullable": true },
+          { "name": "user_agent", "type": "text", "nullable": true }
+        ],
+        "indexes": [
+          "idx_face_search_gallery_ip (gallery_id, ip_address, searched_at)",
+          "idx_face_search_gallery_time (gallery_id, searched_at)"
+        ]
+      }
+    ],
+    "migrations": [
+      "0031_magic_links_and_qr.sql"
+    ]
+  },
+  "apis": [
+    {
+      "id": "magicLinks.create",
+      "method": "POST",
+      "path": "/v1/workspaces/{workspace_id}/galleries/{gallery_id}/links",
+      "auth": "user_jwt",
+      "rateLimit": "100/day/workspace",
+      "request": {
+        "body": {
+          "target_type": "gallery|sub_gallery|photo",
+          "target_id": "uuid?",
+          "label": "string?",
+          "expires_at": "timestamp?",
+          "max_accesses": "integer?",
+          "qr_config": "QRConfig?"
+        }
+      },
+      "response": {
+        "body": {
+          "link_id": "uuid",
+          "token": "string (only on creation)",
+          "url": "string",
+          "qr_preview_url": "string",
+          "status": "string",
+          "created_at": "timestamp"
+        }
+      },
+      "errors": ["FORBIDDEN", "GALLERY_NOT_FOUND", "TARGET_NOT_FOUND"]
+    },
+    {
+      "id": "magicLinks.list",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/galleries/{gallery_id}/links",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": {
+        "query": {
+          "status": "active|expired|revoked",
+          "limit": "integer (max 100)"
+        }
+      },
+      "response": { "body": { "links": "paginated array" } },
+      "errors": ["FORBIDDEN", "GALLERY_NOT_FOUND"]
+    },
+    {
+      "id": "magicLinks.get",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/galleries/{gallery_id}/links/{link_id}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "link": "MagicLinkDetail" } },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    },
+    {
+      "id": "magicLinks.revoke",
+      "method": "DELETE",
+      "path": "/v1/workspaces/{workspace_id}/galleries/{gallery_id}/links/{link_id}",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "response": { "body": { "revoked_at": "timestamp" } },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    },
+    {
+      "id": "magicLinks.downloadQR",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/galleries/{gallery_id}/links/{link_id}/qr",
+      "auth": "user_jwt",
+      "rateLimit": "20/hour/workspace",
+      "request": {
+        "query": {
+          "format": "png|svg|pdf",
+          "size": "integer (256-4096)"
+        }
+      },
+      "response": { "body": "binary (image/png, image/svg+xml, application/pdf)" },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    },
+    {
+      "id": "magicLinks.stats",
+      "method": "GET",
+      "path": "/v1/workspaces/{workspace_id}/galleries/{gallery_id}/links/{link_id}/stats",
+      "auth": "user_jwt",
+      "rateLimit": "standard",
+      "request": { "query": { "period": "7d|30d|90d" } },
+      "response": {
+        "body": {
+          "total_accesses": "integer",
+          "unique_visitors": "integer",
+          "accesses_by_day": "object",
+          "top_countries": "array",
+          "gate_conversion": "object"
+        }
+      },
+      "errors": ["FORBIDDEN", "NOT_FOUND"]
+    },
+    {
+      "id": "publicGallery.access",
+      "method": "GET",
+      "path": "/g/{token}",
+      "auth": "public",
+      "rateLimit": "10/min/IP",
+      "response": {
+        "body": {
+          "gallery": "GalleryDetail",
+          "requires_email": "boolean",
+          "requires_pin": "boolean",
+          "target": "object?"
+        }
+      },
+      "errors": ["LINK_INVALID", "LINK_EXPIRED", "LINK_REVOKED", "GALLERY_NOT_PUBLIC"]
+    },
+    {
+      "id": "publicGallery.faceSearch",
+      "method": "POST",
+      "path": "/g/{token}/face-search",
+      "auth": "public",
+      "rateLimit": "100/hour/gallery/IP",
+      "request": {
+        "body": {
+          "embedding": "float[512]",
+          "threshold": "float (0.4-0.8)",
+          "limit": "integer (1-200)"
+        }
+      },
+      "response": {
+        "body": {
+          "matches": "[{asset_id, similarity, thumbnail_url, filename}]",
+          "total_searched": "integer",
+          "processing_ms": "integer"
+        }
+      },
+      "errors": ["LINK_INVALID", "INVALID_EMBEDDING", "RATE_LIMITED"]
+    },
+    {
+      "id": "publicGallery.qr",
+      "method": "GET",
+      "path": "/g/{token}/qr",
+      "auth": "public",
+      "rateLimit": "60/hour/IP",
+      "request": { "query": { "format": "png", "size": "512" } },
+      "response": { "body": "binary" },
+      "errors": ["LINK_INVALID"]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.magicLink.create",
+      "name": "Create Magic Link with QR",
+      "steps": [
+        "Generate 256-bit token using secrets.token_bytes(32)",
+        "Hash token with SHA-256 for storage",
+        "Store magic_link record with token_hash (never plaintext)",
+        "Return token to client only once (on creation)",
+        "Pre-generate QR code preview and cache in Redis"
+      ]
+    },
+    {
+      "id": "wf.magicLink.validate",
+      "name": "Validate Magic Link Access",
+      "steps": [
+        "Hash incoming token with SHA-256",
+        "Lookup by token_hash using constant-time comparison",
+        "Check status (active), expiry, access count",
+        "Verify gallery sharing_enabled and status",
+        "Check privacy gates (email, PIN) and return requirements",
+        "Log access with metadata"
+      ]
+    },
+    {
+      "id": "wf.faceDiscovery.search",
+      "name": "Client-Side Face Discovery",
+      "steps": [
+        "Show consent dialog and request camera permission",
+        "Capture frame from video stream",
+        "Detect face using BlazeFace (TensorFlow.js)",
+        "Crop and resize face region to 112x112",
+        "Generate 512-dim embedding using MobileFaceNet (client-side)",
+        "Send ONLY embedding (not image) to server",
+        "Server searches pgvector using cosine similarity",
+        "Return matching photos sorted by similarity",
+        "Log search with embedding_hash (for rate limiting)"
+      ]
+    },
+    {
+      "id": "wf.qr.generate",
+      "name": "Generate QR Code",
+      "steps": [
+        "Check Redis cache for existing QR",
+        "If cache miss, generate using qrcode library",
+        "Apply brand color and logo if configured",
+        "Export in requested format (PNG/SVG/PDF)",
+        "Upload to R2 storage and cache URL",
+        "Return presigned URL or binary"
+      ]
+    }
+  ],
+  "events": [
+    { "name": "magic_link.created", "payload": { "workspace_id": "uuid", "gallery_id": "uuid", "link_id": "uuid", "target_type": "string" } },
+    { "name": "magic_link.accessed", "payload": { "link_id": "uuid", "visitor_id": "uuid?", "passed_gates": "boolean" } },
+    { "name": "magic_link.revoked", "payload": { "link_id": "uuid", "revoked_by": "uuid" } },
+    { "name": "face_search.completed", "payload": { "gallery_id": "uuid", "matches_count": "integer", "processing_ms": "integer" } }
+  ],
+  "backgroundJobs": [
+    { "id": "job.magicLink.expireCheck", "trigger": "hourly", "description": "Update status to 'expired' for past-due links" },
+    { "id": "job.qr.cleanup", "trigger": "daily", "description": "Remove orphaned QR codes from storage" }
+  ],
+  "config": {
+    "env": {
+      "QR_CODE_CACHE_TTL": "86400 (24h)",
+      "QR_CODE_MAX_SIZE": "4096",
+      "QR_CODE_DEFAULT_SIZE": "1024",
+      "FACE_SEARCH_RATE_LIMIT": "100 per hour per gallery per IP",
+      "FACE_SEARCH_DEFAULT_THRESHOLD": "0.6",
+      "FACE_SEARCH_MAX_RESULTS": "200"
+    }
+  },
+  "integrations": [
+    { "system": "share_links_access", "type": "extends", "notes": "MagicLinks extend ShareLink with QR and face features" },
+    { "system": "people_face_recognition", "type": "uses", "notes": "Uses face_embeddings table and find_similar function" },
+    { "system": "galleries_client_portal", "type": "uses", "notes": "Integrates with gallery settings and branding" }
+  ],
+  "i18n": {
+    "keys": [
+      "magicLink.create.success",
+      "magicLink.expired",
+      "magicLink.revoked",
+      "faceDiscovery.consent.title",
+      "faceDiscovery.consent.privacy",
+      "faceDiscovery.noMatches",
+      "faceDiscovery.error.noFace",
+      "faceDiscovery.error.cameraAccess"
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "magic_link_created_total{workspace_id, target_type}",
+      "magic_link_accessed_total{workspace_id, status}",
+      "magic_link_validation_latency_seconds",
+      "magic_link_gate_conversion{gate_type, result}",
+      "qr_code_generated_total{format, size_bucket}",
+      "qr_code_cache_hit_total",
+      "face_search_total{gallery_id}",
+      "face_search_latency_seconds",
+      "face_search_matches_bucket{le=0,10,50,100}",
+      "face_search_rate_limited_total"
+    ],
+    "logs": [
+      "Token validation failures (no raw token logged)",
+      "Face search rate limit triggers",
+      "QR generation errors"
+    ],
+    "traces": [
+      "Magic link validation → gate check → gallery load",
+      "Face search → pgvector query → results"
+    ],
+    "alerts": [
+      "High magic link validation latency (p95 > 500ms)",
+      "Excessive face search rate limiting (possible abuse)",
+      "QR code generation failures"
+    ]
+  },
+  "security": {
+    "controls": [
+      "256-bit token entropy using secrets.token_bytes",
+      "SHA-256 hash storage (never plaintext tokens)",
+      "Constant-time token comparison via hmac.compare_digest",
+      "Face images processed client-side only (TensorFlow.js)",
+      "Only 512-dim embeddings transmitted (not face images)",
+      "Rate limiting: 10/min token validation, 100/hour face search",
+      "Embedding hash logged (not raw embedding values)",
+      "QR codes cached per-workspace with TTL"
+    ],
+    "privacy": [
+      "Face discovery requires explicit camera consent",
+      "Raw face images never leave client device",
+      "Face search logs use embedding hash, not embedding",
+      "Optional: disable face discovery per gallery"
+    ]
+  },
+  "performance": {
+    "targets": {
+      "tokenValidationP95": "100ms",
+      "faceSearchP95": "500ms for 10k embeddings",
+      "qrGenerationP95": "200ms"
+    },
+    "caching": {
+      "qrCodes": "Redis + R2, 24h TTL",
+      "tokenLookup": "DB index on token_hash"
+    }
+  },
+  "acceptanceTests": [
+    "Token validation uses constant-time comparison",
+    "Expired/revoked links return appropriate error",
+    "QR codes download in PNG, SVG, PDF formats",
+    "Face discovery works without internet (client-side ML)",
+    "Face search returns photos sorted by similarity",
+    "Rate limiting blocks excessive requests",
+    "Face images never appear in server logs",
+    "Access analytics track unique visitors accurately"
+  ],
+  "dependencies": [
+    "share_links_access",
+    "people_face_recognition",
+    "galleries_client_portal",
+    "observability",
+    "rate_limiting"
+  ],
+  "openQuestions": [
+    "Should we support one-time links (single access)?",
+    "Enable/disable face discovery per gallery setting?",
+    "Cross-browser TensorFlow.js WebGL compatibility testing needed"
+  ]
+}

@@ -13,6 +13,11 @@ from datetime import datetime, timezone
 
 from app.db.postgres import get_postgres_pool
 from app.services.company_profile_service import get_company_profile_service
+from app.services.workspace_activity_service import (
+    record_favorite_toggle,
+    record_selection_toggle,
+    record_gallery_published,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -128,9 +133,11 @@ class GalleryService:
                     status, branding_profile_id, portal_language, layout_style,
                     theme, download_policy, exif_visible,
                     password_hash IS NOT NULL as password_protected,
+                    pin_hash IS NOT NULL as pin_protected,
                     email_registration_required, expires_at, custom_domain,
+                    primary_color, font_family, custom_links,
                     cover_asset_id, created_by_user_id, published_at,
-                    created_at, updated_at, deleted
+                    created_at, updated_at, deleted, pinned_at, last_accessed_at
                 FROM galleries
                 WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
                 """,
@@ -139,6 +146,12 @@ class GalleryService:
             )
             if not row:
                 raise GalleryNotFoundError(gallery_id)
+
+            # Update last_accessed_at
+            await conn.execute(
+                "UPDATE galleries SET last_accessed_at = NOW() WHERE gallery_id = $1",
+                gallery_id,
+            )
 
             # Get sub-galleries (exclude deleted)
             sub_galleries = await conn.fetch(
@@ -216,12 +229,20 @@ class GalleryService:
                 "download_policy": row["download_policy"],
                 "exif_visible": row["exif_visible"],
                 "password_protected": row["password_protected"],
+                "pin_protected": row["pin_protected"],
                 "email_registration_required": row["email_registration_required"],
                 "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
                 "published_at": row["published_at"].isoformat() if row["published_at"] else None,
                 "cover_asset_id": str(row["cover_asset_id"]) if row["cover_asset_id"] else None,
+                "primary_color": row["primary_color"],
+                "font_family": row["font_family"],
+                "custom_domain": row["custom_domain"],
+                "custom_links": row["custom_links"] or [],
                 "created_by_user_id": str(row["created_by_user_id"]),
                 "created_at": row["created_at"].isoformat(),
+                "pinned_at": row["pinned_at"].isoformat() if row["pinned_at"] else None,
+                "is_pinned": row["pinned_at"] is not None,
+                "last_accessed_at": row["last_accessed_at"].isoformat() if row["last_accessed_at"] else None,
                 "sub_galleries": [
                     {
                         "sub_gallery_id": str(sg["sub_gallery_id"]),
@@ -254,7 +275,9 @@ class GalleryService:
                     status, branding_profile_id, portal_language, layout_style,
                     theme, download_policy, exif_visible,
                     password_hash IS NOT NULL as password_protected,
+                    pin_hash IS NOT NULL as pin_protected,
                     email_registration_required, expires_at, custom_domain,
+                    primary_color, font_family, custom_links,
                     cover_asset_id, created_by_user_id, published_at,
                     created_at, updated_at, deleted
                 FROM galleries
@@ -338,10 +361,15 @@ class GalleryService:
                 "download_policy": row["download_policy"],
                 "exif_visible": row["exif_visible"],
                 "password_protected": row["password_protected"],
+                "pin_protected": row["pin_protected"],
                 "email_registration_required": row["email_registration_required"],
                 "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
                 "published_at": row["published_at"].isoformat() if row["published_at"] else None,
                 "cover_asset_id": str(row["cover_asset_id"]) if row["cover_asset_id"] else None,
+                "primary_color": row["primary_color"],
+                "font_family": row["font_family"],
+                "custom_domain": row["custom_domain"],
+                "custom_links": row["custom_links"] or [],
                 "created_by_user_id": str(row["created_by_user_id"]),
                 "created_at": row["created_at"].isoformat(),
                 "sub_galleries": [
@@ -374,6 +402,8 @@ class GalleryService:
         search: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        pinned_only: bool = False,
+        recent_only: bool = False,
     ) -> dict:
         """List galleries for a workspace."""
         pool = await get_postgres_pool()
@@ -405,10 +435,16 @@ class GalleryService:
                 params.append(end_date)
                 param_idx += 1
 
+            if pinned_only:
+                where_clauses.append("pinned_at IS NOT NULL")
+
+            if recent_only:
+                where_clauses.append("last_accessed_at IS NOT NULL")
+
             where_sql = " AND ".join(where_clauses)
 
             # Validate sort column
-            valid_sorts = {"created_at", "title", "status", "shoot_date"}
+            valid_sorts = {"created_at", "title", "status", "shoot_date", "last_accessed_at"}
             if sort not in valid_sorts:
                 sort = "created_at"
             order_sql = f"ORDER BY {sort} DESC" if sort == "created_at" else f"ORDER BY {sort} ASC"
@@ -424,7 +460,7 @@ class GalleryService:
                 f"""
                 SELECT
                     gallery_id, title, description, client_name, client_id, shoot_date, status,
-                    cover_asset_id, published_at, created_at,
+                    cover_asset_id, published_at, created_at, pinned_at, last_accessed_at,
                     (
                         SELECT COUNT(*)
                         FROM gallery_assets ga
@@ -470,6 +506,9 @@ class GalleryService:
                         "photo_count": g["photo_count"] or 0,
                         "created_at": g["created_at"].isoformat(),
                         "published_at": g["published_at"].isoformat() if g["published_at"] else None,
+                        "pinned_at": g["pinned_at"].isoformat() if g["pinned_at"] else None,
+                        "is_pinned": g["pinned_at"] is not None,
+                        "last_accessed_at": g["last_accessed_at"].isoformat() if g["last_accessed_at"] else None,
                         # Use effective_cover_asset_id which falls back to first asset
                         "cover_asset_id": str(g["effective_cover_asset_id"]) if g["effective_cover_asset_id"] else None,
                         "cover_image_url": None,  # Frontend fetches signed URL using cover_asset_id
@@ -694,13 +733,19 @@ class GalleryService:
                 "cover_asset_id",
                 "client_id",
                 "shoot_date",
+                "primary_color",
+                "font_family",
+                "custom_domain",
+                "custom_links",
+                "password_hash",
+                "pin_hash",
             }
 
             for field, value in updates.items():
                 if field in allowed_fields:
                     if field == "expires_at" and value is None:
                         set_clauses.append(f"{field} = NULL")
-                    elif field in ("branding_profile_id", "cover_asset_id", "client_id", "shoot_date") and value is None:
+                    elif field in ("branding_profile_id", "cover_asset_id", "client_id", "shoot_date", "password_hash", "pin_hash", "primary_color", "font_family", "custom_domain") and value is None:
                         set_clauses.append(f"{field} = NULL")
                     else:
                         set_clauses.append(f"{field} = ${param_idx}")
@@ -795,6 +840,46 @@ class GalleryService:
                 )
 
             return await self.get_gallery(workspace_id, gallery_id)
+
+    async def verify_gallery_pin(self, gallery_id: UUID, pin: str) -> bool:
+        """Verify PIN for gallery access.
+
+        Uses constant-time comparison to prevent timing attacks (SOC2 compliant).
+
+        Args:
+            gallery_id: Gallery UUID
+            pin: Plain-text PIN to verify
+
+        Returns:
+            True if PIN is valid, False otherwise
+        """
+        import hmac
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Get the stored PIN hash
+            row = await conn.fetchrow(
+                """
+                SELECT pin_hash, status, deleted
+                FROM galleries
+                WHERE gallery_id = $1
+                """,
+                gallery_id,
+            )
+
+            if not row or row["deleted"] or row["status"] != "published":
+                raise GalleryNotFoundError(gallery_id)
+
+            pin_hash = row["pin_hash"]
+            if not pin_hash:
+                # No PIN set - return True (no verification needed)
+                return True
+
+            # Use constant-time comparison to prevent timing attacks
+            # Note: In production, pin_hash should be bcrypt/argon2 hash
+            # and compared using the appropriate library's verify function.
+            # For now, using hmac.compare_digest for constant-time string comparison.
+            return hmac.compare_digest(pin_hash.encode('utf-8'), pin.encode('utf-8'))
 
     async def create_sub_gallery(
         self,
@@ -1252,3 +1337,501 @@ def get_gallery_service() -> GalleryService:
         _gallery_service = GalleryService()
     return _gallery_service
 
+
+    async def add_assets(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        asset_ids: list[UUID],
+    ) -> dict:
+        """Add existing assets to a gallery.
+        
+        Ignores duplicates (assets already in the gallery).
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Verify gallery exists (exclude deleted)
+            exists = await conn.fetchval(
+                "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
+                workspace_id,
+                gallery_id,
+            )
+            if not exists:
+                raise GalleryNotFoundError(gallery_id)
+
+            # TODO: Verify assets exist and belong to workspace? 
+            # For efficiency we might skip individual checks and rely on foreign key constraints 
+            # or massive IN check if needed. FK constraint checks existence, but not workspace ownership 
+            # if not careful. Assets table has workspace_id, so we should ensure we only link assets 
+            # from same workspace.
+            
+            # Filter valid asset_ids that belong to workspace
+            valid_asset_ids = await conn.fetch(
+                "SELECT asset_id FROM assets WHERE workspace_id = $1 AND asset_id = ANY($2::uuid[]) AND deleted = FALSE",
+                workspace_id,
+                asset_ids
+            )
+            valid_ids = [r['asset_id'] for r in valid_asset_ids]
+            
+            if not valid_ids:
+                 return {"added_count": 0}
+
+            # Insert ignoring duplicates
+            # We assume sort_order should be appended.
+            # Get max sort order
+            max_sort = await conn.fetchval(
+                "SELECT COALESCE(MAX(sort_order), 0) FROM gallery_assets WHERE gallery_id = $1",
+                gallery_id
+            )
+            
+            # Prepare batch data
+            # (gallery_id, asset_id, workspace_id, sort_order, visible, is_selected, is_favorited)
+            # We increment sort_order for each
+            
+            added_count = 0
+            for i, asset_id in enumerate(valid_ids):
+                # We use ON CONFLICT DO NOTHING to handle duplicates
+                # Note: This means if it exists, we don't change it (good).
+                current_sort = max_sort + i + 1
+                result = await conn.execute(
+                    """
+                    INSERT INTO gallery_assets (
+                        gallery_id, asset_id, workspace_id, sort_order, 
+                        visible, is_selected, is_favorited, created_at, updated_at
+                    ) VALUES ($1, $2, $3, $4, TRUE, FALSE, FALSE, NOW(), NOW())
+                    ON CONFLICT (gallery_id, asset_id) DO NOTHING
+                    """,
+                    gallery_id,
+                    asset_id,
+                    workspace_id,
+                    current_sort
+                )
+                if result == "INSERT 0 1":
+                    added_count += 1
+            
+            return {"added_count": added_count}
+
+    async def remove_assets(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        asset_ids: list[UUID],
+    ) -> dict:
+        """Remove assets from a gallery (unlink)."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Verify gallery exists
+            exists = await conn.fetchval(
+                "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
+                workspace_id,
+                gallery_id,
+            )
+            if not exists:
+                raise GalleryNotFoundError(gallery_id)
+
+            # Delete from gallery_assets
+            result = await conn.execute(
+                """
+                DELETE FROM gallery_assets
+                WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = ANY($3::uuid[])
+                """,
+                workspace_id,
+                gallery_id,
+                asset_ids
+            )
+            
+            # Parse "DELETE count"
+            deleted_count = 0
+            if result.startswith("DELETE"):
+                deleted_count = int(result.split(" ")[1])
+
+            return {"removed_count": deleted_count}
+
+    async def pin_gallery(self, workspace_id: UUID, gallery_id: UUID) -> bool:
+        """Pin a gallery."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE galleries
+                SET pinned_at = NOW()
+                WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+                """,
+                workspace_id,
+                gallery_id,
+            )
+            if result == "UPDATE 0":
+                 # Check if gallery exists to throw 404
+                 exists = await conn.fetchval(
+                     "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
+                     workspace_id,
+                     gallery_id,
+                 )
+                 if not exists:
+                     raise GalleryNotFoundError(gallery_id)
+            return True
+
+    async def unpin_gallery(self, workspace_id: UUID, gallery_id: UUID) -> bool:
+        """Unpin a gallery."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE galleries
+                SET pinned_at = NULL
+                WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+                """,
+                workspace_id,
+                gallery_id,
+            )
+            if result == "UPDATE 0":
+                 # Check if gallery exists to throw 404
+                 exists = await conn.fetchval(
+                     "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
+                     workspace_id,
+                     gallery_id,
+                 )
+                 if not exists:
+                     raise GalleryNotFoundError(gallery_id)
+            return True
+
+    async def search_faces_in_gallery(
+        self,
+        gallery_id: UUID,
+        embedding: list[float],
+        threshold: float = 0.6,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Search for faces in a gallery using vector similarity.
+
+        Uses pgvector's cosine distance operator (<=>)  to find similar faces.
+        The search is performed against the face_embeddings table which is
+        pre-indexed with IVFFlat for fast approximate nearest neighbor search.
+
+        Args:
+            gallery_id: Gallery to search within.
+            embedding: Query face embedding vector (128 or 512 dimensions).
+            threshold: Minimum similarity threshold (0.0-1.0). Default 0.6.
+            limit: Maximum number of results to return. Default 50.
+
+        Returns:
+            List of matching assets with similarity scores, sorted by similarity.
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # First verify the gallery exists and get workspace_id
+            gallery = await conn.fetchrow(
+                """
+                SELECT g.gallery_id, g.workspace_id
+                FROM galleries g
+                WHERE g.gallery_id = $1
+                  AND g.deleted = FALSE
+                  AND g.status = 'published'
+                """,
+                gallery_id,
+            )
+
+            if not gallery:
+                raise GalleryNotFoundError(gallery_id)
+
+            # Search for similar faces using pgvector cosine similarity
+            # Cosine distance is 1 - similarity, so we compute 1 - distance
+            # We use <=> operator for cosine distance
+            results = await conn.fetch(
+                """
+                SELECT DISTINCT
+                    ga.asset_id,
+                    1 - (fe.embedding <=> $1::vector) AS similarity
+                FROM face_embeddings fe
+                INNER JOIN gallery_assets ga ON fe.asset_id = ga.asset_id
+                WHERE ga.gallery_id = $2
+                  AND ga.workspace_id = $3
+                  AND 1 - (fe.embedding <=> $1::vector) >= $4
+                ORDER BY similarity DESC
+                LIMIT $5
+                """,
+                str(embedding),  # pgvector expects string representation
+                gallery_id,
+                gallery["workspace_id"],
+                threshold,
+                limit,
+            )
+
+            return [
+                {
+                    "asset_id": str(row["asset_id"]),
+                    "similarity": float(row["similarity"]),
+                }
+                for row in results
+            ]
+
+    async def toggle_public_favorite(
+        self,
+        gallery_id: UUID,
+        asset_id: UUID,
+        visitor_id: Optional[UUID],
+        favorited: bool,
+    ) -> dict:
+        """Toggle favorite status for an asset in a public gallery.
+
+        This allows visitors to mark photos they like in a shared gallery.
+        The favorite is tracked per-visitor if visitor_id is provided,
+        otherwise it increments/decrements the global favorites_count.
+
+        Args:
+            gallery_id: Gallery containing the asset.
+            asset_id: Asset to favorite/unfavorite.
+            visitor_id: Optional visitor ID for per-visitor tracking.
+            favorited: True to favorite, False to unfavorite.
+
+        Returns:
+            Updated asset info with favorite status.
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Verify gallery is published and asset belongs to it
+            row = await conn.fetchrow(
+                """
+                SELECT ga.gallery_asset_id, ga.is_favorited, ga.favorites_count,
+                       g.workspace_id
+                FROM gallery_assets ga
+                INNER JOIN galleries g ON ga.gallery_id = g.gallery_id
+                WHERE ga.gallery_id = $1
+                  AND ga.asset_id = $2
+                  AND g.deleted = FALSE
+                  AND g.status = 'published'
+                  AND ga.visible = TRUE
+                """,
+                gallery_id,
+                asset_id,
+            )
+
+            if not row:
+                raise GalleryError(
+                    f"Asset {asset_id} not found in public gallery {gallery_id}",
+                    code="ASSET_NOT_FOUND",
+                    status=404,
+                )
+
+            # Update favorites_count (increment or decrement)
+            new_count = row["favorites_count"] + (1 if favorited else -1)
+            new_count = max(0, new_count)  # Ensure non-negative
+
+            await conn.execute(
+                """
+                UPDATE gallery_assets
+                SET favorites_count = $1,
+                    updated_at = NOW()
+                WHERE gallery_asset_id = $2
+                """,
+                new_count,
+                row["gallery_asset_id"],
+            )
+
+            # Record activity
+            try:
+                gallery_name = await conn.fetchval(
+                    "SELECT title FROM galleries WHERE gallery_id = $1",
+                    gallery_id,
+                )
+                await record_favorite_toggle(
+                    workspace_id=row["workspace_id"],
+                    gallery_id=gallery_id,
+                    gallery_name=gallery_name or "Unknown Gallery",
+                    asset_id=asset_id,
+                    is_favorited=favorited,
+                    visitor_id=visitor_id,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to record favorite activity: {e}")
+
+            return {
+                "asset_id": str(asset_id),
+                "is_favorited": favorited,
+                "favorites_count": new_count,
+            }
+
+    async def toggle_public_selection(
+        self,
+        gallery_id: UUID,
+        asset_id: UUID,
+        visitor_id: Optional[UUID],
+        selected: bool,
+    ) -> dict:
+        """Toggle selection (pick) status for an asset in a public gallery.
+
+        This allows visitors to "pick" photos they want for their selection.
+        Used for client proofing workflow where clients select their favorites.
+
+        Args:
+            gallery_id: Gallery containing the asset.
+            asset_id: Asset to select/deselect.
+            visitor_id: Optional visitor ID for per-visitor tracking.
+            selected: True to select, False to deselect.
+
+        Returns:
+            Updated asset info with selection status.
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Verify gallery is published and asset belongs to it
+            row = await conn.fetchrow(
+                """
+                SELECT ga.gallery_asset_id, ga.is_selected,
+                       g.workspace_id
+                FROM gallery_assets ga
+                INNER JOIN galleries g ON ga.gallery_id = g.gallery_id
+                WHERE ga.gallery_id = $1
+                  AND ga.asset_id = $2
+                  AND g.deleted = FALSE
+                  AND g.status = 'published'
+                  AND ga.visible = TRUE
+                """,
+                gallery_id,
+                asset_id,
+            )
+
+            if not row:
+                raise GalleryError(
+                    f"Asset {asset_id} not found in public gallery {gallery_id}",
+                    code="ASSET_NOT_FOUND",
+                    status=404,
+                )
+
+            # Update is_selected status
+            await conn.execute(
+                """
+                UPDATE gallery_assets
+                SET is_selected = $1,
+                    updated_at = NOW()
+                WHERE gallery_asset_id = $2
+                """,
+                selected,
+                row["gallery_asset_id"],
+            )
+
+            # Record activity
+            try:
+                gallery_name = await conn.fetchval(
+                    "SELECT title FROM galleries WHERE gallery_id = $1",
+                    gallery_id,
+                )
+                await record_selection_toggle(
+                    workspace_id=row["workspace_id"],
+                    gallery_id=gallery_id,
+                    gallery_name=gallery_name or "Unknown Gallery",
+                    asset_id=asset_id,
+                    is_selected=selected,
+                    visitor_id=visitor_id,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to record selection activity: {e}")
+
+            return {
+                "asset_id": str(asset_id),
+                "is_selected": selected,
+            }
+
+    async def get_public_gallery_assets_with_filters(
+        self,
+        gallery_id: UUID,
+        filter_type: Optional[str] = None,
+        sub_gallery_id: Optional[UUID] = None,
+    ) -> list[dict]:
+        """Get public gallery assets with optional filtering.
+
+        Extends get_public_gallery_assets with filter support for
+        favorites/selections tabs in the client view.
+
+        Args:
+            gallery_id: Gallery to fetch assets from.
+            filter_type: Optional filter - 'favorites', 'selections', or None for all.
+            sub_gallery_id: Optional sub-gallery filter.
+
+        Returns:
+            List of visible assets matching the filter criteria.
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Verify gallery is published (publicly accessible)
+            gallery = await conn.fetchrow(
+                """
+                SELECT gallery_id, workspace_id, status
+                FROM galleries
+                WHERE gallery_id = $1
+                  AND deleted = FALSE
+                  AND status = 'published'
+                """,
+                gallery_id,
+            )
+
+            if not gallery:
+                raise GalleryNotFoundError(gallery_id)
+
+            # Build WHERE conditions
+            where_conditions = [
+                "ga.gallery_id = $1",
+                "ga.visible = TRUE",
+                "a.status = 'available'",
+            ]
+            params: list = [gallery_id]
+            param_idx = 2
+
+            if filter_type == "favorites":
+                where_conditions.append("ga.favorites_count > 0")
+            elif filter_type == "selections":
+                where_conditions.append("ga.is_selected = TRUE")
+
+            if sub_gallery_id:
+                where_conditions.append(f"ga.sub_gallery_id = ${param_idx}")
+                params.append(sub_gallery_id)
+                param_idx += 1
+
+            where_clause = " AND ".join(where_conditions)
+
+            rows = await conn.fetch(
+                f"""
+                SELECT
+                    ga.asset_id,
+                    ga.gallery_id,
+                    ga.sub_gallery_id,
+                    a.type,
+                    a.original_filename AS filename,
+                    a.width,
+                    a.height,
+                    a.duration_ms AS duration,
+                    a.size_bytes,
+                    a.metadata,
+                    ga.sort_order,
+                    ga.is_favorited,
+                    ga.is_selected,
+                    ga.favorites_count,
+                    ga.created_at
+                FROM gallery_assets ga
+                INNER JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE {where_clause}
+                ORDER BY ga.sort_order ASC, ga.created_at DESC
+                """,
+                *params,
+            )
+
+            return [
+                {
+                    "asset_id": str(row["asset_id"]),
+                    "gallery_id": str(row["gallery_id"]),
+                    "sub_gallery_id": str(row["sub_gallery_id"]) if row["sub_gallery_id"] else None,
+                    "type": row["type"],
+                    "filename": row["filename"],
+                    "width": row["width"],
+                    "height": row["height"],
+                    "duration": row["duration"],
+                    "size_bytes": row["size_bytes"],
+                    "metadata": row["metadata"],
+                    "sort_order": row["sort_order"],
+                    "is_favorited": row["is_favorited"],
+                    "is_selected": row["is_selected"],
+                    "favorites_count": row["favorites_count"],
+                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                }
+                for row in rows
+            ]

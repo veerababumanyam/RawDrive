@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Edit, Share2, Image, Clock, Check, Trash2 } from 'lucide-react';
+import { Edit, Share2, Image, Clock, Check, Trash2, Pin } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
 import { GalleryStatusBadge } from './GalleryStatusBadge';
 import { galleryService } from '../../../services/galleryService';
@@ -18,6 +18,8 @@ export interface GalleryCardProps {
   onEdit?: () => void;
   onShare?: () => void;
   onDelete?: () => void;
+  /** Callback to toggle pin status */
+  onTogglePin?: (gallery: GalleryListItem) => void;
   /** Whether selection mode is enabled */
   selectable?: boolean;
   /** Whether this gallery is selected */
@@ -32,6 +34,7 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
   onEdit,
   onShare,
   onDelete,
+  onTogglePin,
   selectable = true,
   isSelected = false,
   onSelect,
@@ -83,6 +86,11 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
     onDelete?.();
   };
 
+  const handleTogglePin = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onTogglePin?.(gallery);
+  };
+
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
     onSelect?.(gallery.gallery_id);
@@ -128,6 +136,39 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
             </div>
           </div>
         )}
+
+        {/* Pin Indicator/Button - Top Right */}
+         <div
+            className={`
+              absolute top-2 right-2 z-30
+              transition-opacity duration-150
+              ${gallery.is_pinned || isHovered ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
+            `}
+         >
+           {onTogglePin && (
+             <button
+               onClick={handleTogglePin}
+               className={`
+                 w-8 h-8 rounded-full
+                 flex items-center justify-center
+                 transition-all duration-150
+                 ${gallery.is_pinned
+                   ? 'bg-primary text-white shadow-lg'
+                   : 'bg-black/50 text-white hover:bg-black/70 backdrop-blur-sm'
+                 }
+               `}
+               title={gallery.is_pinned ? "Unpin gallery" : "Pin gallery"}
+             >
+               <Pin size={14} className={gallery.is_pinned ? "fill-current" : ""} />
+             </button>
+           )}
+           {!onTogglePin && gallery.is_pinned && (
+              <div className="w-8 h-8 rounded-full bg-primary text-white shadow-lg flex items-center justify-center">
+                 <Pin size={14} className="fill-current" />
+              </div>
+           )}
+         </div>
+
 
         {coverImageUrl && !imageError ? (
           <img

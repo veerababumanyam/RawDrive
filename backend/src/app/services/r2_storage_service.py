@@ -90,7 +90,7 @@ class R2StorageService:
     def _build_object_key(
         self,
         workspace_id: UUID,
-        gallery_id: UUID,
+        gallery_id: Optional[UUID],
         asset_id: UUID,
         variant: str,
         filename: str,
@@ -101,7 +101,7 @@ class R2StorageService:
 
         Args:
             workspace_id: Workspace UUID (for validation)
-            gallery_id: Gallery UUID
+            gallery_id: Gallery UUID or None (for library)
             asset_id: Asset UUID
             variant: Media variant ('thumbnail', 'preview', 'original')
             filename: Original filename
@@ -123,12 +123,15 @@ class R2StorageService:
             base_name = filename.rsplit(".", 1)[0] if "." in filename else filename
             filename = f"{base_name}.enc"
 
-        return f"workspaces/{workspace_id}/galleries/{gallery_id}/{variant}/{asset_id}/{filename}"
+        if gallery_id:
+             return f"workspaces/{workspace_id}/galleries/{gallery_id}/{variant}/{asset_id}/{filename}"
+        else:
+             return f"workspaces/{workspace_id}/library/{variant}/{asset_id}/{filename}"
 
     async def upload_encrypted_file(
         self,
         workspace_id: UUID,
-        gallery_id: UUID,
+        gallery_id: Optional[UUID],
         asset_id: UUID,
         variant: str,
         filename: str,
@@ -168,7 +171,7 @@ class R2StorageService:
                     ContentType=content_type,
                     Metadata={
                         "workspace_id": str(workspace_id),
-                        "gallery_id": str(gallery_id),
+                        "gallery_id": str(gallery_id) if gallery_id else "library",
                         "asset_id": str(asset_id),
                         "variant": variant,
                     },
@@ -188,7 +191,7 @@ class R2StorageService:
     async def download_encrypted_file(
         self,
         workspace_id: UUID,
-        gallery_id: UUID,
+        gallery_id: Optional[UUID],
         asset_id: UUID,
         variant: str,
         filename: str,
@@ -298,7 +301,7 @@ class R2StorageService:
     async def delete_file(
         self,
         workspace_id: UUID,
-        gallery_id: UUID,
+        gallery_id: Optional[UUID],
         asset_id: UUID,
         variant: str,
         filename: str,

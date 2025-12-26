@@ -8,6 +8,8 @@ import { Palette } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
 import { AppButton } from '../../ui/AppButton';
 import { Select } from '../../ui/FormControls';
+import { VisualIdentitySettings } from './VisualIdentitySettings';
+import { CustomLinksEditor } from './CustomLinksEditor';
 import type { GalleryDetailData, GalleryUpdateRequest } from '../../../types/gallery';
 import { ROUTE_PATHS } from '../../../constants/api';
 
@@ -18,7 +20,7 @@ export interface BrandingSettingsProps {
 
 export const BrandingSettings: React.FC<BrandingSettingsProps> = ({ gallery, onUpdate }) => {
   // We currently only support the workspace default profile (Company Profile).
-  // In the future, we might support multiple branding profiles.
+  // Visual Identity (Color/Font) allows per-gallery overrides.
 
   return (
     <div className="space-y-6">
@@ -30,7 +32,8 @@ export const BrandingSettings: React.FC<BrandingSettingsProps> = ({ gallery, onU
         <div className="space-y-4">
           <div className="p-4 bg-surface-hover rounded-lg border border-border">
             <p className="text-sm text-text-secondary mb-3">
-              This gallery uses your workspace's <strong>Company Profile</strong> for branding (Logo, Colors, Contact Info).
+              This gallery uses your workspace's <strong>Company Profile</strong> for branding (Logo, Contact Info).
+              You can override colors and typography below.
             </p>
             <AppButton
               variant="outline"
@@ -67,7 +70,12 @@ export const BrandingSettings: React.FC<BrandingSettingsProps> = ({ gallery, onU
           </div>
         </div>
       </AppCard>
+
+      {/* Visual Identity - Color, Font, EXIF visibility */}
+      <VisualIdentitySettings gallery={gallery} onUpdate={onUpdate} />
+
+      {/* Custom Links */}
+      <CustomLinksEditor gallery={gallery} onUpdate={onUpdate} />
     </div>
   );
 };
-

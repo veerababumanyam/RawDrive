@@ -1,6 +1,6 @@
 [project]
 name = "rawdrive-ai-service"
-version = "0.1.3"
+version = "0.1.9"
 description = "AI Service for RawDrive - MCP Server and AI features"
 readme = "README.md"
 requires-python = ">=3.11"

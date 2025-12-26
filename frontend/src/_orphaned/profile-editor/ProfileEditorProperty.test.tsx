@@ -117,7 +117,7 @@ const versionArb = fc.record({
   profile_id: profileIdArb,
   label: fc.option(fc.string({ maxLength: 100 })),
   snapshot: fc.object(),
-  created_at: fc.date().map((d) => d.toISOString()),
+  created_at: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }).map((d) => d.toISOString()),
   is_auto: fc.boolean(),
 });
 

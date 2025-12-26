@@ -8,6 +8,10 @@ from uuid import UUID
 from datetime import datetime
 
 from app.db.postgres import get_postgres_pool
+from app.services.workspace_activity_service import (
+    record_visitor_registered,
+    record_gallery_view,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +90,27 @@ class VisitorService:
                 source,
                 metadata or {},
             )
+
+            # Get gallery name for activity tracking
+            gallery_name = await conn.fetchval(
+                "SELECT title FROM galleries WHERE gallery_id = $1",
+                gallery_id,
+            )
+
+            # Record visitor registration activity
+            try:
+                visitor_name = f"{first_name or ''} {last_name or ''}".strip() or email.split("@")[0]
+                await record_visitor_registered(
+                    workspace_id=workspace_id,
+                    gallery_id=gallery_id,
+                    gallery_name=gallery_name or "Unknown Gallery",
+                    visitor_id=visitor_id,
+                    visitor_name=visitor_name,
+                    visitor_email=email,
+                )
+            except Exception as e:
+                # Don't fail registration if activity recording fails
+                logger.warning(f"Failed to record visitor registration activity: {e}")
 
             return {
                 "visitor_id": str(visitor_id),

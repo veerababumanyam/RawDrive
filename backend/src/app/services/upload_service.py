@@ -167,7 +167,7 @@ class UploadService:
         self,
         workspace_id: UUID,
         user_id: UUID,
-        gallery_id: UUID,
+        gallery_id: Optional[UUID],
         filename: str,
         mime_type: str,
         size_bytes: int,
@@ -180,7 +180,7 @@ class UploadService:
         Args:
             workspace_id: Workspace UUID
             user_id: User UUID creating the upload
-            gallery_id: Target gallery UUID
+            gallery_id: Target gallery UUID (optional)
             filename: Original filename
             mime_type: MIME type
             size_bytes: File size in bytes
@@ -388,7 +388,9 @@ class UploadService:
             # Create asset record
             asset_id = uuid4()
             # Handle asyncpg UUID objects (they're already UUIDs)
-            gallery_id = session["gallery_id"] if isinstance(session["gallery_id"], UUID) else UUID(str(session["gallery_id"]))
+            gallery_id = None
+            if session["gallery_id"]:
+                gallery_id = session["gallery_id"] if isinstance(session["gallery_id"], UUID) else UUID(str(session["gallery_id"]))
 
             # Extract metadata (for images)
             metadata = None
@@ -411,7 +413,11 @@ class UploadService:
                     logger.warning(f"Failed to get image dimensions: {e}")
 
             # Create asset record
-            original_object_key = f"workspaces/{workspace_id}/galleries/{gallery_id}/original/{asset_id}/{session['file_name']}"
+            # Use 'library' or generic key if no gallery
+            if gallery_id:
+                original_object_key = f"workspaces/{workspace_id}/galleries/{gallery_id}/original/{asset_id}/{session['file_name']}"
+            else:
+                original_object_key = f"workspaces/{workspace_id}/library/original/{asset_id}/{session['file_name']}"
             
             await conn.execute(
                 """
@@ -435,21 +441,22 @@ class UploadService:
                 session["created_by_user_id"] if isinstance(session["created_by_user_id"], UUID) else UUID(str(session["created_by_user_id"])),
             )
 
-            # Link asset to gallery
-            await conn.execute(
-                """
-                INSERT INTO gallery_assets (
-                    workspace_id, gallery_id, sub_gallery_id, asset_id,
-                    sort_order, visible
+            # Link asset to gallery (only if gallery_id is present)
+            if gallery_id:
+                await conn.execute(
+                    """
+                    INSERT INTO gallery_assets (
+                        workspace_id, gallery_id, sub_gallery_id, asset_id,
+                        sort_order, visible
+                    )
+                    VALUES ($1, $2, $3, $4, 0, TRUE)
+                    ON CONFLICT (gallery_id, asset_id) DO NOTHING
+                    """,
+                    workspace_id,
+                    gallery_id,
+                    session["sub_gallery_id"],
+                    asset_id,
                 )
-                VALUES ($1, $2, $3, $4, 0, TRUE)
-                ON CONFLICT (gallery_id, asset_id) DO NOTHING
-                """,
-                workspace_id,
-                gallery_id,
-                session["sub_gallery_id"],
-                asset_id,
-            )
 
             # Encrypt and store original file
             try:
@@ -535,6 +542,7 @@ class UploadService:
 
             try:
                 from app.services.websocket_service import emit_asset_created
+                # Emit event (might need update to handle null gallery_id)
                 await emit_asset_created(workspace_id, gallery_id, asset_id)
             except Exception as e:
                 logger.warning(f"Failed to emit asset:created event: {e}")

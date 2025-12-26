@@ -24,7 +24,10 @@ from app.api.schemas import (
     MessageResponse,
     PublishGalleryRequest,
     UpdateGalleryRequest,
+    UpdateGalleryRequest,
     UpdateSubGalleryRequest,
+    BatchAssetOperationRequest,
+    BatchAssetOperationResponse,
 )
 from app.api.exceptions import AppError, ForbiddenError, NotFoundError, ValidationAppError, InternalError
 from app.services.gallery_service import (
@@ -65,6 +68,8 @@ async def list_galleries(
     search: Annotated[str | None, Query(description="Search query")] = None,
     start_date: Annotated[date | None, Query(description="Filter by shoot date start")] = None,
     end_date: Annotated[date | None, Query(description="Filter by shoot date end")] = None,
+    pinned_only: Annotated[bool, Query(description="Show only pinned/favorite galleries")] = False,
+    recent_only: Annotated[bool, Query(description="Show only recently accessed galleries")] = False,
 ) -> GalleryListResponse:
     """List all galleries in a workspace."""
     # workspace_access validates access, workspace_id comes from path
@@ -79,6 +84,8 @@ async def list_galleries(
             search=search,
             start_date=start_date,
             end_date=end_date,
+            pinned_only=pinned_only,
+            recent_only=recent_only,
         )
         return GalleryListResponse(**result)
     except GalleryError as e:
@@ -195,6 +202,15 @@ async def update_gallery(
             # TODO: Hash password using bcrypt
             updates.pop("password", None)
             updates["password_hash"] = request.password  # Placeholder - should hash
+
+        # Handle PIN update
+        if request.remove_pin:
+            updates.pop("pin", None)
+            updates["pin_hash"] = None
+        elif request.pin:
+            # TODO: Hash PIN using bcrypt/argon2
+            updates.pop("pin", None)
+            updates["pin_hash"] = request.pin  # Placeholder - should hash
 
         result = await service.update_gallery(
             workspace_id=workspace_id,
@@ -422,4 +438,132 @@ async def delete_sub_gallery(
     except Exception as e:
         logger.exception("Failed to delete sub-gallery")
         raise InternalError("Failed to delete sub-gallery")
+
+
+@router.post(
+    "/{gallery_id}/assets",
+    response_model=BatchAssetOperationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Add assets to gallery",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def add_assets_to_gallery(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    request: BatchAssetOperationRequest,
+) -> BatchAssetOperationResponse:
+    """Add existing library assets to a gallery."""
+    service = get_gallery_service()
+    try:
+        result = await service.add_assets(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            asset_ids=request.asset_ids,
+        )
+        return BatchAssetOperationResponse(count=result["added_count"])
+    except GalleryNotFoundError as e:
+        raise NotFoundError("Gallery", str(gallery_id))
+    except Exception as e:
+        logger.exception("Failed to add assets to gallery")
+        raise InternalError("Failed to add assets to gallery")
+
+
+@router.delete(
+    "/{gallery_id}/assets",
+    response_model=BatchAssetOperationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Remove assets from gallery",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def remove_assets_from_gallery(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    request: BatchAssetOperationRequest,
+) -> BatchAssetOperationResponse:
+    """Remove assets from a gallery (unlink)."""
+    service = get_gallery_service()
+    try:
+        result = await service.remove_assets(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            asset_ids=request.asset_ids,
+        )
+        return BatchAssetOperationResponse(count=result["removed_count"])
+    except GalleryNotFoundError as e:
+        raise NotFoundError("Gallery", str(gallery_id))
+    except Exception as e:
+        logger.exception("Failed to remove assets from gallery")
+        raise InternalError("Failed to remove assets from gallery")
+
+
+@router.post(
+    "/{gallery_id}/pin",
+    status_code=status.HTTP_200_OK,
+    summary="Pin gallery",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def pin_gallery(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+) -> dict:
+    """Pin a gallery to favorites."""
+    service = get_gallery_service()
+    try:
+        await service.pin_gallery(workspace_id, gallery_id)
+        return {"success": True}
+    except GalleryError as e:
+        raise AppError(message=str(e), code=e.code, status_code=e.status)
+    except Exception as e:
+        logger.exception("Failed to pin gallery")
+        raise AppError(
+            message="Failed to pin gallery",
+            code="INTERNAL_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/{gallery_id}/unpin",
+    status_code=status.HTTP_200_OK,
+    summary="Unpin gallery",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def unpin_gallery(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+) -> dict:
+    """Unpin a gallery from favorites."""
+    service = get_gallery_service()
+    try:
+        await service.unpin_gallery(workspace_id, gallery_id)
+        return {"success": True}
+    except GalleryError as e:
+        raise AppError(message=str(e), code=e.code, status_code=e.status)
+    except Exception as e:
+        logger.exception("Failed to unpin gallery")
+        raise AppError(
+            message="Failed to unpin gallery",
+            code="INTERNAL_ERROR",
+            status_code=500,
+        )
 

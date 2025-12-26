@@ -124,3 +124,22 @@ async def emit_asset_deleted(
     )
 
 
+async def emit_activity_created(
+    workspace_id: UUID,
+    activity: dict,
+) -> None:
+    """Emit activity:created event for real-time dashboard updates.
+
+    Args:
+        workspace_id: Workspace UUID
+        activity: Activity data dict
+    """
+    await emit_event(
+        workspace_id,
+        "activity:created",
+        {
+            "activity": activity,
+        },
+    )
+
+

@@ -399,6 +399,13 @@ class UpdateGalleryRequest(BaseModel):
     cover_asset_id: Optional[UUID] = None
     client_id: Optional[UUID] = None
     shoot_date: Optional[datetime] = None
+    # New fields for gallery settings enhancements
+    pin: Optional[str] = Field(None, description="PIN for additional access protection (will be hashed)")
+    remove_pin: Optional[bool] = Field(None, description="Set to true to remove PIN")
+    primary_color: Optional[str] = Field(None, max_length=50, description="Hex color for branding override")
+    font_family: Optional[str] = Field(None, max_length=100, description="Font family for typography override")
+    custom_domain: Optional[str] = Field(None, max_length=255, description="Custom domain for gallery")
+    custom_links: Optional[list[dict]] = Field(None, description="List of {label, url} custom navigation links")
 
 
 class PublishGalleryRequest(BaseModel):
@@ -479,12 +486,21 @@ class GalleryDetailResponse(BaseModel):
     download_policy: Optional[Literal["view_only", "web_only", "watermarked_only", "original_allowed"]] = None
     exif_visible: Optional[bool] = None
     password_protected: bool
+    pin_protected: bool = False
     email_registration_required: Optional[bool] = None
     expires_at: Optional[str] = None
     published_at: Optional[str] = None
     cover_asset_id: Optional[UUID] = None
+    # Branding and visual identity
+    primary_color: Optional[str] = None
+    font_family: Optional[str] = None
+    custom_domain: Optional[str] = None
+    custom_links: Optional[list[dict]] = None
     sub_galleries: list[SubGalleryItemResponse]
     stats: GalleryStatsResponse
+    pinned_at: Optional[str] = None
+    is_pinned: bool = False
+    last_accessed_at: Optional[str] = None
 
 
 class GalleryListItemResponse(BaseModel):
@@ -501,6 +517,9 @@ class GalleryListItemResponse(BaseModel):
     shoot_date: Optional[str] = None
     cover_image_url: Optional[str] = None
     published_at: Optional[str] = None
+    pinned_at: Optional[str] = None
+    is_pinned: bool = False
+    last_accessed_at: Optional[str] = None
 
 
 class GalleryListMetaResponse(BaseModel):
@@ -527,7 +546,7 @@ class GalleryListResponse(BaseModel):
 class CreateUploadSessionRequest(BaseModel):
     """Create upload session request."""
 
-    gallery_id: UUID = Field(..., description="Target gallery UUID")
+    gallery_id: Optional[UUID] = Field(None, description="Target gallery UUID (null for library upload)")
     sub_gallery_id: Optional[UUID] = Field(None, description="Target sub-gallery UUID (null = root)")
     file_name: str = Field(..., min_length=1, max_length=255, description="Original filename")
     mime_type: str = Field(..., description="MIME type (e.g., image/jpeg)")
@@ -675,3 +694,327 @@ class BulkRecycleBinResponse(BaseModel):
     results: list[BulkOperationResult]
     success_count: int
     failure_count: int
+
+
+# ---------------------------------------------------------------------------
+# Magic Link schemas
+# ---------------------------------------------------------------------------
+
+
+class QRConfigSchema(BaseModel):
+    """QR code configuration for a magic link."""
+
+    size: int = Field(1024, ge=256, le=4096, description="QR code size in pixels")
+    color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$", description="QR code color (hex)")
+    logo_enabled: bool = Field(True, description="Include workspace logo in QR")
+    error_correction: Literal["L", "M", "Q", "H"] = Field("H", description="Error correction level")
+
+
+class PaginationMeta(BaseModel):
+    """Pagination metadata for list responses."""
+
+    page: int = Field(..., ge=1, description="Current page number")
+    limit: int = Field(..., ge=1, le=100, description="Items per page")
+    total: int = Field(..., ge=0, description="Total items")
+    total_pages: int = Field(..., ge=0, description="Total pages")
+
+
+class CreateMagicLinkRequest(BaseModel):
+    """Request to create a magic link."""
+
+    label: Optional[str] = Field(None, max_length=100, description="User-friendly label")
+    target_type: Literal["gallery", "sub_gallery", "photo"] = Field(
+        "gallery", description="What the link provides access to"
+    )
+    target_id: Optional[UUID] = Field(None, description="Target ID (required for sub_gallery/photo)")
+    expires_at: Optional[datetime] = Field(None, description="Expiration date/time (UTC)")
+    max_accesses: Optional[int] = Field(None, ge=1, le=100000, description="Maximum access count")
+    qr_config: Optional[QRConfigSchema] = Field(None, description="QR code configuration")
+
+
+class UpdateMagicLinkRequest(BaseModel):
+    """Request to update a magic link."""
+
+    label: Optional[str] = Field(None, max_length=100, description="User-friendly label")
+    expires_at: Optional[datetime] = Field(None, description="New expiration date/time")
+    max_accesses: Optional[int] = Field(None, ge=1, le=100000, description="New max accesses")
+    qr_config: Optional[QRConfigSchema] = Field(None, description="QR code configuration")
+
+
+class MagicLinkResponse(BaseModel):
+    """Magic link response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    link_id: UUID
+    gallery_id: UUID
+    label: Optional[str] = None
+    target_type: str
+    target_id: Optional[UUID] = None
+    status: str
+    expires_at: Optional[datetime] = None
+    max_accesses: Optional[int] = None
+    access_count: int
+    qr_config: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+
+    # Only included on creation
+    token: Optional[str] = Field(None, description="Access token (only returned on creation)")
+    url: Optional[str] = Field(None, description="Full URL (only returned on creation)")
+
+
+class MagicLinkListResponse(BaseModel):
+    """List of magic links with pagination."""
+
+    data: list[MagicLinkResponse]
+    meta: PaginationMeta
+
+
+class MagicLinkStatsResponse(BaseModel):
+    """Access statistics for a magic link."""
+
+    link_id: UUID
+    period_days: int
+    total_accesses: int
+    unique_visitors: int
+    accesses_by_day: list[dict]
+    accesses_by_device: dict
+    accesses_by_country: list[dict]
+    gate_completion: dict
+
+
+class ValidateMagicLinkResponse(BaseModel):
+    """Response from validating a magic link token."""
+
+    link_id: UUID
+    gallery_id: UUID
+    target_type: str
+    target_id: Optional[UUID] = None
+    gallery: dict
+    company_profile: Optional[dict] = None
+
+
+class BatchAssetOperationRequest(BaseModel):
+    """Request for batch operations on gallery assets."""
+    asset_ids: list[UUID] = Field(..., min_length=1, description="List of asset IDs")
+
+
+class BatchAssetOperationResponse(BaseModel):
+    """Response for batch operations."""
+    success: bool = True
+    count: int = Field(..., description="Number of items affected")
+
+
+# ---------------------------------------------------------------------------
+# Face Search Schemas (Public Gallery Feature)
+# ---------------------------------------------------------------------------
+
+
+class FaceSearchRequest(BaseModel):
+    """Request for face similarity search in a public gallery.
+
+    The embedding is generated client-side using face-api.js or similar,
+    ensuring the user's actual photo never leaves their device (privacy-first).
+    """
+    embedding: list[float] = Field(
+        ...,
+        min_length=128,
+        max_length=512,
+        description="Face embedding vector (128 or 512 dimensions)"
+    )
+    threshold: float = Field(
+        0.6,
+        ge=0.3,
+        le=0.95,
+        description="Similarity threshold (0.6 = ~60% match confidence)"
+    )
+    limit: int = Field(
+        50,
+        ge=1,
+        le=200,
+        description="Maximum number of matching photos to return"
+    )
+
+
+class FaceSearchMatch(BaseModel):
+    """A single face match result."""
+    photo_id: str = Field(..., description="ID of the matching photo")
+    similarity: float = Field(..., ge=0, le=1, description="Cosine similarity score")
+    thumbnail_url: Optional[str] = Field(None, description="URL to photo thumbnail")
+
+
+class FaceSearchResponse(BaseModel):
+    """Response from face similarity search."""
+    matches: list[FaceSearchMatch] = Field(default_factory=list)
+    total_searched: int = Field(0, description="Total faces searched in gallery")
+    query_time_ms: float = Field(0, description="Query execution time in milliseconds")
+
+
+# ---------------------------------------------------------------------------
+# Shared Dashboard Schemas (Security & Sharing Dashboard)
+# ---------------------------------------------------------------------------
+
+
+class AccessPolicySchema(BaseModel):
+    """Access policy for a shared link."""
+    password_protected: bool = False
+    pin_protected: bool = False
+    email_required: bool = False
+    download_policy: str = "view_only"
+
+
+class RecentVisitorSchema(BaseModel):
+    """Recent visitor preview for link row."""
+    country_code: Optional[str] = None
+    device_type: Optional[str] = None
+    accessed_at: Optional[datetime] = None
+
+
+class SharedLinkItem(BaseModel):
+    """A single link in the shared dashboard list."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    link_id: str
+    gallery_id: str
+    gallery_title: Optional[str] = None
+    gallery_status: Optional[str] = None
+    label: Optional[str] = None
+    status: str
+    target_type: str = "gallery"
+    target_id: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    max_accesses: Optional[int] = None
+    access_count: int = 0
+    last_accessed_at: Optional[datetime] = None
+    access_policy: AccessPolicySchema = Field(default_factory=AccessPolicySchema)
+    recent_visitors: list[RecentVisitorSchema] = Field(default_factory=list)
+    created_at: datetime
+    created_by_name: Optional[str] = None
+
+
+class SharedLinksMetaSchema(BaseModel):
+    """Metadata for shared links list response."""
+    total: int
+    active_count: int
+    expired_count: int
+    revoked_count: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class SharedLinksResponse(BaseModel):
+    """Response for listing all shared links in workspace."""
+    data: list[SharedLinkItem]
+    meta: SharedLinksMetaSchema
+
+
+class VisitorSchema(BaseModel):
+    """Visitor information in access log."""
+    visitor_id: Optional[str] = None
+    email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+
+class AccessLogEntry(BaseModel):
+    """Single access log entry."""
+    access_id: str
+    accessed_at: datetime
+    ip_address: Optional[str] = None
+    country_code: Optional[str] = None
+    region: Optional[str] = None
+    city: Optional[str] = None
+    device_type: Optional[str] = None
+    browser: Optional[str] = None
+    os: Optional[str] = None
+    email_gate_passed: bool = False
+    pin_gate_passed: bool = False
+    visitor: Optional[VisitorSchema] = None
+
+
+class SharedLinkDetailResponse(BaseModel):
+    """Detailed response for a single shared link."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    link_id: str
+    gallery_id: str
+    gallery_title: Optional[str] = None
+    gallery_status: Optional[str] = None
+    gallery_description: Optional[str] = None
+    label: Optional[str] = None
+    status: str
+    target_type: str = "gallery"
+    target_id: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    max_accesses: Optional[int] = None
+    access_count: int = 0
+    access_policy: AccessPolicySchema = Field(default_factory=AccessPolicySchema)
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    created_by_email: Optional[str] = None
+    accesses: list[AccessLogEntry] = Field(default_factory=list)
+
+
+class DeviceBreakdownSchema(BaseModel):
+    """Device type breakdown."""
+    desktop: int = 0
+    mobile: int = 0
+    tablet: int = 0
+
+
+class DailyAccessSchema(BaseModel):
+    """Daily access count."""
+    date: str
+    count: int
+
+
+class TopGallerySchema(BaseModel):
+    """Top gallery by access count."""
+    gallery_id: str
+    gallery_title: str
+    link_count: int
+    access_count: int
+
+
+class TopCountrySchema(BaseModel):
+    """Top country by access count."""
+    country_code: str
+    count: int
+
+
+class SharedStatsResponse(BaseModel):
+    """Aggregate statistics for shared dashboard."""
+    total_links: int = 0
+    active_links: int = 0
+    expired_links: int = 0
+    revoked_links: int = 0
+    total_accesses_period: int = 0
+    unique_visitors_period: int = 0
+    period_days: int = 30
+    device_breakdown: DeviceBreakdownSchema = Field(default_factory=DeviceBreakdownSchema)
+    accesses_by_day: list[DailyAccessSchema] = Field(default_factory=list)
+    top_galleries: list[TopGallerySchema] = Field(default_factory=list)
+    top_countries: list[TopCountrySchema] = Field(default_factory=list)
+
+
+class BulkRevokeRequest(BaseModel):
+    """Request to revoke multiple links at once."""
+    link_ids: list[UUID] = Field(..., min_length=1, max_length=100, description="Link IDs to revoke")
+    reason: Optional[str] = Field(None, max_length=500, description="Optional reason for audit")
+
+
+class BulkRevokeFailure(BaseModel):
+    """Single failure in bulk revoke operation."""
+    link_id: str
+    error: str
+
+
+class BulkRevokeResponse(BaseModel):
+    """Response from bulk revoke operation."""
+    revoked_count: int
+    failed: list[BulkRevokeFailure] = Field(default_factory=list)

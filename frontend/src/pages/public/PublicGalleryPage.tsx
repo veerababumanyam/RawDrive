@@ -1,13 +1,41 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { galleryService } from '../../services/galleryService';
 import { GalleryDetailData, PublicGalleryAsset } from '../../types/gallery';
 import { AppButton } from '../../components/ui/AppButton';
-import { Download, Grid, Lock as LockIcon } from 'lucide-react';
+import { useToast } from '../../components/ui/Toast';
+import {
+    Download,
+    Grid,
+    Lock as LockIcon,
+    User,
+    X,
+    Heart,
+    Bookmark,
+    LayoutGrid,
+    Maximize2,
+    ChevronLeft,
+    ChevronRight,
+    Camera,
+    Info,
+    AlertTriangle,
+    FolderOpen,
+    Loader2,
+} from 'lucide-react';
 import { ClientEmailModal } from '../../components/features/gallery/ClientEmailModal';
+import { PinVerificationModal } from '../../components/features/gallery/PinVerificationModal';
+import { FaceDiscovery } from '../../components/features/gallery/FaceDiscovery';
+import { ShareMenu } from '../../components/features/gallery/ShareMenu';
+import {
+    VISITOR_STORAGE_KEY_PREFIX,
+    VISITOR_ID_KEY_PREFIX,
+    PIN_VERIFIED_KEY_PREFIX,
+    BULK_DOWNLOAD_DELAY_MS,
+} from '../../constants/gallery';
 
-const VISITOR_STORAGE_KEY_PREFIX = 'visitor_registered_';
+// Workflow tab type for client viewing
+type WorkflowTab = 'all' | 'favorites' | 'selections';
 
 const PublicGalleryPage: React.FC = () => {
     // Note: Parameter name must match route definition
@@ -22,6 +50,49 @@ const PublicGalleryPage: React.FC = () => {
     const [showEmailModal, setShowEmailModal] = useState(false);
     const [isRegistering, setIsRegistering] = useState(false);
     const [isVisitorAuthenticated, setIsVisitorAuthenticated] = useState(false);
+    const [visitorId, setVisitorId] = useState<string | null>(null);
+
+    // PIN Verification State
+    const [showPinModal, setShowPinModal] = useState(false);
+    const [isPinVerified, setIsPinVerified] = useState(false);
+
+    // Face Discovery State
+    const [showFaceDiscovery, setShowFaceDiscovery] = useState(false);
+    const [filteredPhotoIds, setFilteredPhotoIds] = useState<string[] | null>(null);
+    const [matchSimilarity, setMatchSimilarity] = useState<number | null>(null);
+
+    // Workflow tabs state
+    const [activeTab, setActiveTab] = useState<WorkflowTab>('all');
+
+    // Lightbox state
+    const [lightboxAsset, setLightboxAsset] = useState<PublicGalleryAsset | null>(null);
+    const [lightboxIndex, setLightboxIndex] = useState<number>(0);
+    const [showExif, setShowExif] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
+
+    // Sub-gallery filter state
+    const [activeSubGallery, setActiveSubGallery] = useState<string | null>(null);
+
+    // Local client selections (for optimistic UI updates)
+    const [localFavorites, setLocalFavorites] = useState<Set<string>>(new Set());
+    const [localSelections, setLocalSelections] = useState<Set<string>>(new Set());
+
+    // Bulk download state
+    const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+    const [bulkDownloadProgress, setBulkDownloadProgress] = useState(0);
+
+    // Toast notifications
+    const { addToast } = useToast();
+
+    // Load visitor ID from storage
+    useEffect(() => {
+        if (galleryId) {
+            const storedVisitorId = localStorage.getItem(`${VISITOR_ID_KEY_PREFIX}${galleryId}`);
+            if (storedVisitorId) {
+                setVisitorId(storedVisitorId);
+            }
+        }
+    }, [galleryId]);
 
     useEffect(() => {
         const fetchGalleryData = async () => {
@@ -39,11 +110,16 @@ const PublicGalleryPage: React.FC = () => {
                     setShowEmailModal(true);
                 } else {
                     setIsVisitorAuthenticated(true);
-                    // Fetch assets only if authorized or not required
-                    // Optimistically we can fetch, but maybe save bandwidth?
-                    // Let's fetch assets if auth not required or already auth'd
-                    const assetsData = await galleryService.getPublicGalleryAssets(galleryId);
-                    setAssets(assetsData);
+
+                    // Check PIN protection
+                    const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
+                    if (galleryData.pin_protected && !pinVerified) {
+                        setShowPinModal(true);
+                    } else {
+                        setIsPinVerified(true);
+                        // Fetch assets with filter support
+                        await fetchAssets();
+                    }
                 }
             } catch (err: any) {
                 console.error(err);
@@ -59,18 +135,59 @@ const PublicGalleryPage: React.FC = () => {
         fetchGalleryData();
     }, [galleryId]);
 
-    const handleVisitorSubmit = async (data: { email: string; first_name: string; last_name: string; phone: string }) => {
+    // Fetch assets with current filter
+    const fetchAssets = useCallback(async () => {
+        if (!galleryId) return;
+        try {
+            // Use filtered endpoint to get client interaction data
+            const filterType = activeTab === 'all' ? undefined : activeTab;
+            const assetsData = await galleryService.getPublicGalleryAssetsFiltered(galleryId, filterType);
+            setAssets(assetsData);
+
+            // Initialize local state from server data
+            const favorites = new Set<string>();
+            const selections = new Set<string>();
+            assetsData.forEach(asset => {
+                if (asset.favorites_count && asset.favorites_count > 0) favorites.add(asset.asset_id);
+                if (asset.is_selected) selections.add(asset.asset_id);
+            });
+            setLocalFavorites(favorites);
+            setLocalSelections(selections);
+        } catch (err) {
+            console.error('Failed to fetch assets:', err);
+        }
+    }, [galleryId, activeTab]);
+
+    // Refetch when tab changes
+    useEffect(() => {
+        if (isVisitorAuthenticated && isPinVerified && galleryId) {
+            fetchAssets();
+        }
+    }, [activeTab, isVisitorAuthenticated, isPinVerified, galleryId, fetchAssets]);
+
+    const handleVisitorSubmit = async (data: { email: string; first_name: string; last_name: string; phone: string; address?: string }) => {
         if (!galleryId) return;
         setIsRegistering(true);
         try {
-            await galleryService.registerVisitor(galleryId, data);
+            const result = await galleryService.registerVisitor(galleryId, data);
             localStorage.setItem(`${VISITOR_STORAGE_KEY_PREFIX}${galleryId}`, 'true');
+            localStorage.setItem(`${VISITOR_ID_KEY_PREFIX}${galleryId}`, result.visitor_id);
+            setVisitorId(result.visitor_id);
             setShowEmailModal(false);
             setIsVisitorAuthenticated(true);
 
+            // Check PIN after email registration
+            if (gallery?.pin_protected) {
+                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
+                if (!pinVerified) {
+                    setShowPinModal(true);
+                    return;
+                }
+            }
+            setIsPinVerified(true);
+
             // Load assets now
-            const assetsData = await galleryService.getPublicGalleryAssets(galleryId);
-            setAssets(assetsData);
+            await fetchAssets();
         } catch (error) {
             console.error(error);
             // In a real app, show toast error
@@ -78,6 +195,330 @@ const PublicGalleryPage: React.FC = () => {
             setIsRegistering(false);
         }
     };
+
+    const handlePinVerify = async (pin: string): Promise<boolean> => {
+        if (!galleryId) return false;
+        try {
+            const isValid = await galleryService.verifyPin(galleryId, pin);
+            if (isValid) {
+                localStorage.setItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`, 'true');
+                setShowPinModal(false);
+                setIsPinVerified(true);
+
+                // Load assets after PIN verification
+                await fetchAssets();
+            }
+            return isValid;
+        } catch (error) {
+            console.error(error);
+            return false;
+        }
+    };
+
+    // Face Discovery callbacks
+    const handleFacesFound = useCallback((photoIds: string[], similarity: number) => {
+        setFilteredPhotoIds(photoIds);
+        setMatchSimilarity(similarity);
+    }, []);
+
+    const clearFaceFilter = useCallback(() => {
+        setFilteredPhotoIds(null);
+        setMatchSimilarity(null);
+    }, []);
+
+    // Client interaction handlers
+    const handleFavorite = useCallback(async (assetId: string) => {
+        if (!galleryId) return;
+
+        const currentlyFavorited = localFavorites.has(assetId);
+        const newFavorited = !currentlyFavorited;
+
+        // Optimistic update
+        setLocalFavorites(prev => {
+            const next = new Set(prev);
+            if (newFavorited) {
+                next.add(assetId);
+            } else {
+                next.delete(assetId);
+            }
+            return next;
+        });
+
+        try {
+            await galleryService.togglePublicFavorite(galleryId, assetId, newFavorited, visitorId || undefined);
+        } catch (err) {
+            console.error('Failed to toggle favorite:', err);
+            addToast({
+                message: 'Failed to update favorite. Please try again.',
+                variant: 'error',
+            });
+            // Revert on error
+            setLocalFavorites(prev => {
+                const next = new Set(prev);
+                if (currentlyFavorited) {
+                    next.add(assetId);
+                } else {
+                    next.delete(assetId);
+                }
+                return next;
+            });
+        }
+    }, [galleryId, visitorId, localFavorites]);
+
+    const handleSelection = useCallback(async (assetId: string) => {
+        if (!galleryId) return;
+
+        const currentlySelected = localSelections.has(assetId);
+        const newSelected = !currentlySelected;
+
+        // Optimistic update
+        setLocalSelections(prev => {
+            const next = new Set(prev);
+            if (newSelected) {
+                next.add(assetId);
+            } else {
+                next.delete(assetId);
+            }
+            return next;
+        });
+
+        try {
+            await galleryService.togglePublicSelection(galleryId, assetId, newSelected, visitorId || undefined);
+        } catch (err) {
+            console.error('Failed to toggle selection:', err);
+            addToast({
+                message: 'Failed to update selection. Please try again.',
+                variant: 'error',
+            });
+            // Revert on error
+            setLocalSelections(prev => {
+                const next = new Set(prev);
+                if (currentlySelected) {
+                    next.add(assetId);
+                } else {
+                    next.delete(assetId);
+                }
+                return next;
+            });
+        }
+    }, [galleryId, visitorId, localSelections]);
+
+    // Compute counts for tabs
+    const favoriteCount = localFavorites.size;
+    const selectionCount = localSelections.size;
+
+    // Compute displayed assets based on face filter and sub-gallery
+    const displayedAssets = useMemo(() => {
+        let result = assets;
+        if (filteredPhotoIds) {
+            result = result.filter(asset => filteredPhotoIds.includes(asset.asset_id));
+        }
+        if (activeSubGallery) {
+            result = result.filter(asset => asset.sub_gallery_id === activeSubGallery);
+        }
+        return result;
+    }, [assets, filteredPhotoIds, activeSubGallery]);
+
+    // Lightbox navigation functions
+    const openLightbox = useCallback((asset: PublicGalleryAsset) => {
+        const index = displayedAssets.findIndex(a => a.asset_id === asset.asset_id);
+        setLightboxIndex(index >= 0 ? index : 0);
+        setLightboxAsset(asset);
+        setShowExif(false);
+    }, [displayedAssets]);
+
+    const navigateLightbox = useCallback((direction: 'prev' | 'next') => {
+        if (!lightboxAsset || displayedAssets.length === 0) return;
+
+        let newIndex: number;
+        if (direction === 'prev') {
+            newIndex = lightboxIndex > 0 ? lightboxIndex - 1 : displayedAssets.length - 1;
+        } else {
+            newIndex = lightboxIndex < displayedAssets.length - 1 ? lightboxIndex + 1 : 0;
+        }
+
+        setLightboxIndex(newIndex);
+        setLightboxAsset(displayedAssets[newIndex]);
+    }, [lightboxAsset, lightboxIndex, displayedAssets]);
+
+    const closeLightbox = useCallback(() => {
+        setLightboxAsset(null);
+        setShowExif(false);
+    }, []);
+
+    // Download handler (defined before keyboard navigation useEffect)
+    const handleDownload = useCallback(async (asset: PublicGalleryAsset) => {
+        if (!gallery || !galleryId) return;
+
+        // Check download policy
+        if (gallery.download_policy === 'view_only') return;
+
+        setIsDownloading(true);
+        try {
+            // Determine which variant to download based on policy
+            const variant = gallery.download_policy === 'original_allowed' ? 'original' : 'preview';
+            const url = `/api/v1/public/galleries/${galleryId}/assets/${asset.asset_id}/${variant}`;
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Download failed');
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = asset.filename || `photo-${asset.asset_id}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+        } catch (err) {
+            console.error('Download failed:', err);
+            addToast({
+                message: 'Download failed. Please try again.',
+                variant: 'error',
+            });
+        } finally {
+            setIsDownloading(false);
+        }
+    }, [gallery, galleryId, addToast]);
+
+    // Keyboard navigation for lightbox
+    useEffect(() => {
+        if (!lightboxAsset) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            switch (e.key) {
+                case 'Escape':
+                    closeLightbox();
+                    break;
+                case 'ArrowLeft':
+                    navigateLightbox('prev');
+                    break;
+                case 'ArrowRight':
+                    navigateLightbox('next');
+                    break;
+                case 'f':
+                case 'F':
+                    // Toggle favorite with F key
+                    if (lightboxAsset) handleFavorite(lightboxAsset.asset_id);
+                    break;
+                case 's':
+                case 'S':
+                    // Toggle selection with S key
+                    if (lightboxAsset) handleSelection(lightboxAsset.asset_id);
+                    break;
+                case 'i':
+                case 'I':
+                    // Toggle EXIF info with I key
+                    if (gallery?.exif_visible) setShowExif(prev => !prev);
+                    break;
+                case 'd':
+                case 'D':
+                    // Download with D key
+                    if (lightboxAsset && gallery?.download_policy !== 'view_only') {
+                        handleDownload(lightboxAsset);
+                    }
+                    break;
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [lightboxAsset, navigateLightbox, closeLightbox, handleFavorite, handleSelection, handleDownload, gallery?.exif_visible, gallery?.download_policy]);
+
+    // Check if gallery has expired
+    const isExpired = useMemo(() => {
+        if (!gallery?.expires_at) return false;
+        return new Date(gallery.expires_at) < new Date();
+    }, [gallery?.expires_at]);
+
+    // Get the shareable URL for ShareMenu component
+    const shareUrl = useMemo(() => {
+        if (typeof window === 'undefined') return '';
+        return window.location.href;
+    }, []);
+
+    // Bulk download handler
+    const handleBulkDownload = useCallback(async () => {
+        if (!gallery || !galleryId) return;
+        if (gallery.download_policy === 'view_only') return;
+
+        const assetsToDownload = activeTab === 'selections'
+            ? displayedAssets.filter(a => localSelections.has(a.asset_id))
+            : activeTab === 'favorites'
+                ? displayedAssets.filter(a => localFavorites.has(a.asset_id))
+                : displayedAssets;
+
+        if (assetsToDownload.length === 0) return;
+
+        setIsBulkDownloading(true);
+        setBulkDownloadProgress(0);
+
+        try {
+            const variant = gallery.download_policy === 'original_allowed' ? 'original' : 'preview';
+            let completed = 0;
+
+            // Download files sequentially to avoid overwhelming the browser
+            for (const asset of assetsToDownload) {
+                try {
+                    const url = `/api/v1/public/galleries/${galleryId}/assets/${asset.asset_id}/${variant}`;
+                    const response = await fetch(url);
+                    if (!response.ok) continue;
+
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = asset.filename || `photo-${asset.asset_id}.jpg`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(downloadUrl);
+
+                    completed++;
+                    setBulkDownloadProgress(Math.round((completed / assetsToDownload.length) * 100));
+
+                    // Small delay between downloads to avoid browser overload
+                    await new Promise(resolve => setTimeout(resolve, BULK_DOWNLOAD_DELAY_MS));
+                } catch (err) {
+                    console.error('Failed to download asset:', asset.asset_id, err);
+                }
+            }
+        } catch (err) {
+            console.error('Bulk download failed:', err);
+        } finally {
+            setIsBulkDownloading(false);
+            setBulkDownloadProgress(0);
+        }
+    }, [gallery, galleryId, activeTab, displayedAssets, localSelections, localFavorites]);
+
+    // Show expired state
+    if (isExpired && gallery) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+                <div className="text-center p-8 bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-md mx-4">
+                    <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <AlertTriangle className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Gallery Expired</h1>
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">
+                        This gallery is no longer available.
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-500 mb-6">
+                        Expired on {new Date(gallery.expires_at!).toLocaleDateString()}
+                    </p>
+                    {gallery.company_profile?.website && (
+                        <AppButton
+                            variant="outline"
+                            onClick={() => window.open(gallery.company_profile?.website, '_blank')}
+                        >
+                            Visit {gallery.company_profile.name || 'Studio'}
+                        </AppButton>
+                    )}
+                </div>
+            </div>
+        );
+    }
 
     if (isLoading) {
         return (
@@ -100,7 +541,9 @@ const PublicGalleryPage: React.FC = () => {
     }
 
     const { company_profile } = gallery;
-    const activeColor = company_profile?.brand_color || '#2563EB';
+    // Priority: gallery override > company profile > default
+    const activeColor = gallery.primary_color || company_profile?.brand_color || '#6366f1';
+    const fontFamily = gallery.font_family || 'inherit';
 
     // Construct cover URL
     const coverUrl = gallery.cover_asset_id
@@ -108,17 +551,262 @@ const PublicGalleryPage: React.FC = () => {
         : null;
 
     return (
-        <div className="min-h-screen flex flex-col bg-white dark:bg-gray-950" style={{ '--primary-color': activeColor } as React.CSSProperties}>
+        <div
+            className="min-h-screen flex flex-col bg-white dark:bg-gray-950"
+            style={{
+                '--primary-color': activeColor,
+                '--gallery-font-family': fontFamily,
+                fontFamily: fontFamily !== 'inherit' ? `'${fontFamily}', sans-serif` : undefined,
+            } as React.CSSProperties}
+        >
             <Helmet>
                 <title>{gallery.title} {company_profile?.name ? `| ${company_profile.name}` : ''}</title>
             </Helmet>
 
             <ClientEmailModal
                 isOpen={showEmailModal}
-                onClose={() => navigate('/')} // Redirect home if they reject/close? Actually modal forces choice.
+                onClose={() => navigate('/')}
                 onSubmit={handleVisitorSubmit}
                 isLoading={isRegistering}
+                galleryTitle={gallery.title}
+                companyName={company_profile?.name}
+                logoUrl={company_profile?.logo_url}
             />
+
+            <PinVerificationModal
+                isOpen={showPinModal}
+                onVerify={handlePinVerify}
+                onCancel={() => navigate('/')}
+                galleryTitle={gallery.title}
+                companyName={company_profile?.name}
+                logoUrl={company_profile?.logo_url}
+            />
+
+            {/* Face Discovery Modal */}
+            <FaceDiscovery
+                isOpen={showFaceDiscovery}
+                onClose={() => setShowFaceDiscovery(false)}
+                onFacesFound={handleFacesFound}
+                galleryId={galleryId || ''}
+                galleryTitle={gallery.title}
+            />
+
+            {/* Enhanced Lightbox */}
+            {lightboxAsset && (
+                <div
+                    className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+                    onClick={closeLightbox}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Photo viewer"
+                >
+                    {/* Top bar with close and info buttons */}
+                    <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-10">
+                        <div className="flex items-center gap-2 text-white/80 text-sm">
+                            <span>{lightboxIndex + 1} / {displayedAssets.length}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {/* EXIF toggle button */}
+                            {gallery.exif_visible && lightboxAsset.metadata && (
+                                <button
+                                    className={`p-2 rounded-full transition-colors ${
+                                        showExif ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white'
+                                    }`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowExif(!showExif);
+                                    }}
+                                    aria-label="Toggle photo info"
+                                    title="Photo info (I)"
+                                >
+                                    <Info size={24} />
+                                </button>
+                            )}
+                            {/* Download button */}
+                            {gallery.download_policy !== 'view_only' && (
+                                <button
+                                    className="p-2 text-white/60 hover:text-white transition-colors disabled:opacity-50"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDownload(lightboxAsset);
+                                    }}
+                                    disabled={isDownloading}
+                                    aria-label="Download photo"
+                                    title="Download"
+                                >
+                                    <Download size={24} className={isDownloading ? 'animate-pulse' : ''} />
+                                </button>
+                            )}
+                            <button
+                                className="p-2 text-white/60 hover:text-white transition-colors"
+                                onClick={closeLightbox}
+                                aria-label="Close viewer (Escape)"
+                                title="Close (Esc)"
+                            >
+                                <X size={28} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Navigation arrows */}
+                    {displayedAssets.length > 1 && (
+                        <>
+                            <button
+                                className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-full transition-all backdrop-blur-sm z-10"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigateLightbox('prev');
+                                }}
+                                aria-label="Previous photo (←)"
+                                title="Previous (←)"
+                            >
+                                <ChevronLeft size={32} />
+                            </button>
+                            <button
+                                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white/80 hover:text-white rounded-full transition-all backdrop-blur-sm z-10"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigateLightbox('next');
+                                }}
+                                aria-label="Next photo (→)"
+                                title="Next (→)"
+                            >
+                                <ChevronRight size={32} />
+                            </button>
+                        </>
+                    )}
+
+                    {/* Main image with watermark */}
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                        <img
+                            src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${lightboxAsset.asset_id}/preview`}
+                            alt={lightboxAsset.filename}
+                            className="max-w-[90vw] max-h-[85vh] object-contain"
+                        />
+                        {/* Watermark overlay for restricted downloads */}
+                        {(gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only') && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                                <div
+                                    className="text-white/15 text-4xl md:text-6xl font-bold uppercase tracking-widest rotate-[-25deg] whitespace-nowrap"
+                                    style={{
+                                        textShadow: '0 0 20px rgba(0,0,0,0.5)',
+                                        letterSpacing: '0.15em',
+                                    }}
+                                >
+                                    {company_profile?.name || 'PREVIEW ONLY'}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* EXIF Panel */}
+                    {showExif && lightboxAsset.metadata && (
+                        <div
+                            className="absolute right-4 top-20 bg-black/80 backdrop-blur-md rounded-lg p-4 text-white text-sm max-w-xs z-10"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                <Camera size={16} />
+                                Photo Info
+                            </h4>
+                            <div className="space-y-2 text-white/80">
+                                {lightboxAsset.metadata.make && (
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">Camera</span>
+                                        <span>{lightboxAsset.metadata.make} {lightboxAsset.metadata.model || ''}</span>
+                                    </div>
+                                )}
+                                {lightboxAsset.metadata.lens && (
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">Lens</span>
+                                        <span>{lightboxAsset.metadata.lens}</span>
+                                    </div>
+                                )}
+                                {lightboxAsset.metadata.focal_length && (
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">Focal Length</span>
+                                        <span>{lightboxAsset.metadata.focal_length}mm</span>
+                                    </div>
+                                )}
+                                {lightboxAsset.metadata.aperture && (
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">Aperture</span>
+                                        <span>f/{lightboxAsset.metadata.aperture}</span>
+                                    </div>
+                                )}
+                                {lightboxAsset.metadata.shutter_speed && (
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">Shutter</span>
+                                        <span>{lightboxAsset.metadata.shutter_speed}</span>
+                                    </div>
+                                )}
+                                {lightboxAsset.metadata.iso && (
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">ISO</span>
+                                        <span>{lightboxAsset.metadata.iso}</span>
+                                    </div>
+                                )}
+                                {lightboxAsset.width && lightboxAsset.height && (
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">Resolution</span>
+                                        <span>{lightboxAsset.width} × {lightboxAsset.height}</span>
+                                    </div>
+                                )}
+                                {lightboxAsset.metadata.date_taken && (
+                                    <div className="flex justify-between">
+                                        <span className="text-white/60">Date Taken</span>
+                                        <span>{new Date(lightboxAsset.metadata.date_taken).toLocaleDateString()}</span>
+                                    </div>
+                                )}
+                            </div>
+                            <p className="mt-3 pt-3 border-t border-white/20 text-white/50 text-xs">
+                                Press I to toggle
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Bottom action bar */}
+                    <div className="absolute bottom-0 left-0 right-0 p-6 flex items-center justify-center gap-4 z-10">
+                        {/* Favorite button */}
+                        <button
+                            className={`p-3 rounded-full backdrop-blur-sm transition-all ${
+                                localFavorites.has(lightboxAsset.asset_id)
+                                    ? 'bg-red-500 text-white'
+                                    : 'bg-white/20 text-white hover:bg-white/30'
+                            }`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleFavorite(lightboxAsset.asset_id);
+                            }}
+                            aria-label={localFavorites.has(lightboxAsset.asset_id) ? 'Remove from favorites' : 'Add to favorites'}
+                            title={localFavorites.has(lightboxAsset.asset_id) ? 'Remove from favorites (F)' : 'Add to favorites (F)'}
+                        >
+                            <Heart size={24} className={localFavorites.has(lightboxAsset.asset_id) ? 'fill-current' : ''} />
+                        </button>
+                        {/* Selection button */}
+                        <button
+                            className={`p-3 rounded-full backdrop-blur-sm transition-all ${
+                                localSelections.has(lightboxAsset.asset_id)
+                                    ? 'bg-green-500 text-white'
+                                    : 'bg-white/20 text-white hover:bg-white/30'
+                            }`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelection(lightboxAsset.asset_id);
+                            }}
+                            aria-label={localSelections.has(lightboxAsset.asset_id) ? 'Remove from picks' : 'Add to picks'}
+                            title={localSelections.has(lightboxAsset.asset_id) ? 'Remove from picks (S)' : 'Add to picks (S)'}
+                        >
+                            <Bookmark size={24} className={localSelections.has(lightboxAsset.asset_id) ? 'fill-current' : ''} />
+                        </button>
+                    </div>
+
+                    {/* Keyboard hints */}
+                    <div className="absolute bottom-4 right-4 text-white/40 text-xs hidden md:block">
+                        ← → Navigate • F Favorite • S Select{gallery.download_policy !== 'view_only' ? ' • D Download' : ''} • I Info • Esc Close
+                    </div>
+                </div>
+            )}
 
             {/* Sticky Header */}
             <header className="sticky top-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 transition-all">
@@ -133,12 +821,50 @@ const PublicGalleryPage: React.FC = () => {
                         <h1 className="text-lg font-medium hidden sm:block truncate max-w-md" title={gallery.title}>{gallery.title}</h1>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        {gallery.download_policy !== 'view_only' && isVisitorAuthenticated && (
-                            <AppButton variant="outline" leftIcon={<Download size={16} />} size="sm">
-                                Download
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        {/* Find Me Button - only show when authenticated and assets loaded */}
+                        {isVisitorAuthenticated && isPinVerified && assets.length > 0 && (
+                            <AppButton
+                                variant="outline"
+                                leftIcon={<User size={16} />}
+                                size="sm"
+                                onClick={() => setShowFaceDiscovery(true)}
+                                aria-label="Find photos of yourself"
+                            >
+                                <span className="hidden sm:inline">Find Me</span>
                             </AppButton>
                         )}
+
+                        {/* Bulk Download Button */}
+                        {gallery.download_policy !== 'view_only' && isVisitorAuthenticated && isPinVerified && displayedAssets.length > 0 && (
+                            <AppButton
+                                variant="outline"
+                                leftIcon={isBulkDownloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                                size="sm"
+                                onClick={handleBulkDownload}
+                                disabled={isBulkDownloading}
+                                aria-label="Download all photos"
+                            >
+                                <span className="hidden sm:inline">
+                                    {isBulkDownloading
+                                        ? `${bulkDownloadProgress}%`
+                                        : activeTab === 'selections' && selectionCount > 0
+                                            ? `Download (${selectionCount})`
+                                            : activeTab === 'favorites' && favoriteCount > 0
+                                                ? `Download (${favoriteCount})`
+                                                : 'Download All'
+                                    }
+                                </span>
+                            </AppButton>
+                        )}
+
+                        {/* Share Button with Dropdown - Extracted component */}
+                        <ShareMenu
+                            shareUrl={shareUrl}
+                            title={gallery.title}
+                            description={gallery.description}
+                            buttonSize="sm"
+                        />
                     </div>
                 </div>
             </header>
@@ -183,38 +909,286 @@ const PublicGalleryPage: React.FC = () => {
                 )}
 
                 {/* Privacy Gate */}
-                {showEmailModal ? (
+                {showEmailModal || (gallery.pin_protected && !isPinVerified) ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in">
                         <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
                             <LockIcon className="w-8 h-8 text-gray-400" />
                         </div>
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                        <h3 className="text-xl font-semibold text-text-primary mb-2">
                             Restricted Access
                         </h3>
-                        <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                            Please complete the registration form to view and download photos from this gallery.
+                        <p className="text-text-secondary max-w-md mx-auto mb-6">
+                            {showEmailModal
+                                ? "Please complete registration to view this gallery."
+                                : "This gallery is PIN protected. Please enter the PIN."}
                         </p>
+                        <AppButton
+                            variant="primary"
+                            onClick={() => showEmailModal ? setShowEmailModal(true) : setShowPinModal(true)}
+                        >
+                            {showEmailModal ? "Register Now" : "Enter PIN"}
+                        </AppButton>
                     </div>
                 ) : (
                     <>
-                        {assets.length === 0 ? (
+                        {/* Workflow Tabs */}
+                        <div className="mb-8 flex flex-wrap items-center justify-center gap-2" role="tablist" aria-label="Photo filters">
+                            <button
+                                role="tab"
+                                aria-selected={activeTab === 'all'}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all ${
+                                    activeTab === 'all'
+                                        ? 'bg-primary text-white'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                }`}
+                                onClick={() => setActiveTab('all')}
+                            >
+                                <LayoutGrid size={16} />
+                                All Photos
+                                <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-black/10 dark:bg-white/10">
+                                    {gallery.stats.total_photos}
+                                </span>
+                            </button>
+                            <button
+                                role="tab"
+                                aria-selected={activeTab === 'favorites'}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all ${
+                                    activeTab === 'favorites'
+                                        ? 'bg-red-500 text-white'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                }`}
+                                onClick={() => setActiveTab('favorites')}
+                            >
+                                <Heart size={16} />
+                                Favorites
+                                {favoriteCount > 0 && (
+                                    <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-black/10 dark:bg-white/10">
+                                        {favoriteCount}
+                                    </span>
+                                )}
+                            </button>
+                            <button
+                                role="tab"
+                                aria-selected={activeTab === 'selections'}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all ${
+                                    activeTab === 'selections'
+                                        ? 'bg-green-500 text-white'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                }`}
+                                onClick={() => setActiveTab('selections')}
+                            >
+                                <Bookmark size={16} />
+                                My Picks
+                                {selectionCount > 0 && (
+                                    <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-black/10 dark:bg-white/10">
+                                        {selectionCount}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Sub-Gallery Tabs (if gallery has sections) */}
+                        {gallery.sub_galleries && gallery.sub_galleries.length > 0 && (
+                            <div className="mb-6 flex flex-wrap items-center justify-center gap-2" role="tablist" aria-label="Gallery sections">
+                                <button
+                                    role="tab"
+                                    aria-selected={activeSubGallery === null}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-all ${
+                                        activeSubGallery === null
+                                            ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                    }`}
+                                    onClick={() => setActiveSubGallery(null)}
+                                >
+                                    <FolderOpen size={14} />
+                                    All Sections
+                                </button>
+                                {gallery.sub_galleries.filter(sg => sg.visible).map(subGallery => (
+                                    <button
+                                        key={subGallery.sub_gallery_id}
+                                        role="tab"
+                                        aria-selected={activeSubGallery === subGallery.sub_gallery_id}
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-all ${
+                                            activeSubGallery === subGallery.sub_gallery_id
+                                                ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                                                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                        }`}
+                                        onClick={() => setActiveSubGallery(subGallery.sub_gallery_id)}
+                                    >
+                                        {subGallery.name}
+                                        <span className="px-1.5 py-0.5 rounded text-xs bg-black/10 dark:bg-white/10">
+                                            {subGallery.photo_count}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Face Filter Active Indicator */}
+                        {filteredPhotoIds && (
+                            <div
+                                className="mb-6 p-4 bg-accent/10 border border-accent/20 rounded-lg flex items-center justify-between animate-fade-in"
+                                role="status"
+                                aria-live="polite"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <User size={20} className="text-accent" />
+                                    <div>
+                                        <p className="font-medium text-text-primary">
+                                            Showing {displayedAssets.length} photo{displayedAssets.length !== 1 ? 's' : ''} of you
+                                        </p>
+                                        {matchSimilarity && (
+                                            <p className="text-sm text-text-secondary">
+                                                Average match: {Math.round(matchSimilarity * 100)}%
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                                <AppButton
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={clearFaceFilter}
+                                    aria-label="Clear face filter and show all photos"
+                                >
+                                    <X size={16} className="mr-1" />
+                                    Clear
+                                </AppButton>
+                            </div>
+                        )}
+
+                        {displayedAssets.length === 0 ? (
                             <div className="text-center py-20 text-gray-500">
                                 <Grid className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                                <p>No photos in this gallery yet.</p>
+                                <p>
+                                    {filteredPhotoIds
+                                        ? 'No matching photos found.'
+                                        : activeTab === 'favorites'
+                                            ? 'No favorites yet. Click the heart icon on photos you love!'
+                                            : activeTab === 'selections'
+                                                ? 'No picks yet. Click the bookmark icon to add to your selection.'
+                                                : 'No photos in this gallery yet.'
+                                    }
+                                </p>
+                                {(filteredPhotoIds || activeTab !== 'all') && (
+                                    <AppButton
+                                        variant="outline"
+                                        className="mt-4"
+                                        onClick={() => {
+                                            clearFaceFilter();
+                                            setActiveTab('all');
+                                        }}
+                                    >
+                                        Show All Photos
+                                    </AppButton>
+                                )}
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                {assets.map(asset => (
-                                    <div key={asset.asset_id} className="aspect-[3/2] bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden group relative break-inside-avoid">
-                                        <img
-                                            src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${asset.asset_id}/thumbnail`}
-                                            alt={asset.filename}
-                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                            loading="lazy"
-                                        />
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300"></div>
-                                    </div>
-                                ))}
+                                {displayedAssets.map(asset => {
+                                    const isFavorited = localFavorites.has(asset.asset_id);
+                                    const isSelected = localSelections.has(asset.asset_id);
+                                    const showWatermark = gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only';
+
+                                    return (
+                                        <div
+                                            key={asset.asset_id}
+                                            className="aspect-[3/2] bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden group relative break-inside-avoid cursor-pointer"
+                                            onClick={() => openLightbox(asset)}
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-label={`View ${asset.filename}`}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    openLightbox(asset);
+                                                }
+                                            }}
+                                        >
+                                            <img
+                                                src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${asset.asset_id}/thumbnail`}
+                                                alt={asset.filename}
+                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                loading="lazy"
+                                            />
+
+                                            {/* Watermark overlay for restricted downloads */}
+                                            {showWatermark && (
+                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                                                    <div
+                                                        className="text-white/20 text-lg md:text-xl font-bold uppercase tracking-widest rotate-[-25deg] whitespace-nowrap"
+                                                        style={{
+                                                            textShadow: '0 0 10px rgba(0,0,0,0.3)',
+                                                            letterSpacing: '0.1em',
+                                                        }}
+                                                    >
+                                                        {company_profile?.name || 'PREVIEW ONLY'}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Hover overlay */}
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300">
+                                                {/* View icon in center on hover */}
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Maximize2 size={32} className="text-white drop-shadow-lg" />
+                                                </div>
+                                            </div>
+
+                                            {/* Action buttons (top-right) */}
+                                            <div className="absolute top-2 right-2 flex flex-col gap-2 z-10">
+                                                {/* Favorite button */}
+                                                <button
+                                                    className={`p-2 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 ${
+                                                        isFavorited
+                                                            ? 'bg-red-500 text-white opacity-100'
+                                                            : 'bg-black/40 text-white hover:bg-red-500'
+                                                    }`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleFavorite(asset.asset_id);
+                                                    }}
+                                                    aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                                                    title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                                                >
+                                                    <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
+                                                </button>
+
+                                                {/* Selection/Pick button */}
+                                                <button
+                                                    className={`p-2 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 ${
+                                                        isSelected
+                                                            ? 'bg-green-500 text-white opacity-100'
+                                                            : 'bg-black/40 text-white hover:bg-green-500'
+                                                    }`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleSelection(asset.asset_id);
+                                                    }}
+                                                    aria-label={isSelected ? 'Remove from picks' : 'Add to picks'}
+                                                    title={isSelected ? 'Remove from picks' : 'Add to picks'}
+                                                >
+                                                    <Bookmark size={16} className={isSelected ? 'fill-current' : ''} />
+                                                </button>
+                                            </div>
+
+                                            {/* Show indicators when favorited/selected (always visible) */}
+                                            {(isFavorited || isSelected) && (
+                                                <div className="absolute top-2 left-2 flex gap-1">
+                                                    {isFavorited && (
+                                                        <span className="p-1.5 rounded-full bg-red-500 text-white">
+                                                            <Heart size={12} className="fill-current" />
+                                                        </span>
+                                                    )}
+                                                    {isSelected && (
+                                                        <span className="p-1.5 rounded-full bg-green-500 text-white">
+                                                            <Bookmark size={12} className="fill-current" />
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </>
@@ -239,6 +1213,23 @@ const PublicGalleryPage: React.FC = () => {
                     <div className="text-xs text-gray-400">
                         &copy; {new Date().getFullYear()} {company_profile?.name}. All rights reserved.
                     </div>
+
+                    {/* Custom Links */}
+                    {gallery.custom_links && gallery.custom_links.length > 0 && (
+                        <div className="flex flex-wrap justify-center gap-4 pt-4">
+                            {gallery.custom_links.map((link, index) => (
+                                <a
+                                    key={index}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
+                                >
+                                    {link.label}
+                                </a>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </footer>
         </div>

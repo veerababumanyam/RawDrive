@@ -13,8 +13,13 @@ interface ClientEmailModalProps {
         first_name: string;
         last_name: string;
         phone: string;
+        address?: string;
+        metadata?: Record<string, any>;
     }) => Promise<void>;
     isLoading?: boolean;
+    galleryTitle?: string;
+    companyName?: string;
+    logoUrl?: string;
 }
 
 export const ClientEmailModal: React.FC<ClientEmailModalProps> = ({
@@ -22,12 +27,16 @@ export const ClientEmailModal: React.FC<ClientEmailModalProps> = ({
     onClose,
     onSubmit,
     isLoading = false,
+    galleryTitle,
+    companyName,
+    logoUrl,
 }) => {
     const [formData, setFormData] = useState({
         email: '',
         first_name: '',
         last_name: '',
         phone: '',
+        address: '',
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -83,7 +92,13 @@ export const ClientEmailModal: React.FC<ClientEmailModalProps> = ({
         >
             <form onSubmit={handleSubmit}>
                 <ModalHeader>
-                    <ModalTitle>Welcome to the Gallery</ModalTitle>
+                    {logoUrl && (
+                        <div className="flex justify-center mb-3">
+                            <img src={logoUrl} alt={companyName || 'Logo'} className="h-10 object-contain" />
+                        </div>
+                    )}
+                    <ModalTitle>{galleryTitle ? `Welcome to ${galleryTitle}` : 'Welcome to the Gallery'}</ModalTitle>
+                    {companyName && <p className="text-sm text-text-secondary text-center mt-1">by {companyName}</p>}
                 </ModalHeader>
 
                 <ModalBody className="space-y-4">
@@ -128,6 +143,14 @@ export const ClientEmailModal: React.FC<ClientEmailModalProps> = ({
                         error={errors.phone}
                         leftIcon={<Phone size={16} />}
                         placeholder="+1 234 567 8900"
+                    />
+
+                    <AppInput
+                        label="City / Location (Optional)"
+                        value={formData.address}
+                        onChange={(e) => handleChange('address', e.target.value)}
+                        error={errors.address}
+                        placeholder="City, Country"
                     />
                 </ModalBody>
 

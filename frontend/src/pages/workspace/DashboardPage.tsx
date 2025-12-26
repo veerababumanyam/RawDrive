@@ -22,14 +22,19 @@ import {
     UserPlus,
     TrendingUp,
     Calendar,
+    CheckCircle,
+    Globe,
+    ScanFace,
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import dashboardService, { DashboardStats } from '../../services/dashboardService';
 import galleryService from '../../services/galleryService';
 import { clientService } from '../../services/clientService';
+import { useActivities } from '../../hooks/useActivities';
 import { GalleryListItem } from '../../types/gallery';
 import type { ClientAnalyticsResponse, ClientListItem } from '../../types/client';
+import type { Activity as ActivityItem, ActivityType as ActivityTypeEnum } from '../../types/activity';
 import { formatDistanceToNow } from 'date-fns';
 import { DashboardUploadModal } from '../../components/features/dashboard/DashboardUploadModal';
 import { StatusBadge } from '../../components/ui/AppBadge';
@@ -47,44 +52,68 @@ import { StatusBadge } from '../../components/ui/AppBadge';
    the header, sidebar, and main content area structure.
    ============================================================================= */
 
-const mockActivity = [
-    {
-        id: '1',
-        type: 'download',
-        user: 'Sarah Johnson',
-        action: 'downloaded 12 photos',
-        gallery: 'Johnson Wedding',
-        time: '30m ago',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
-    },
-    {
-        id: '2',
-        type: 'view',
-        user: 'Guest',
-        action: 'viewed gallery',
-        gallery: 'Smith Family Portrait',
-        time: '2h ago',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guest',
-    },
-    {
-        id: '3',
-        type: 'comment',
-        user: 'Mike Johnson',
-        action: 'left a comment',
-        gallery: 'Johnson Wedding',
-        time: '5h ago',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike',
-    },
-    {
-        id: '4',
-        type: 'favorite',
-        user: 'Sarah Johnson',
-        action: 'favorited 5 photos',
-        gallery: 'Johnson Wedding',
-        time: '12h ago',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah2',
-    },
-];
+// Activity type to icon mapping
+const getActivityIcon = (type: ActivityTypeEnum) => {
+    switch (type) {
+        case 'gallery_viewed':
+            return Eye;
+        case 'gallery_published':
+            return Globe;
+        case 'gallery_created':
+            return FolderOpen;
+        case 'photo_downloaded':
+        case 'photos_downloaded':
+            return Download;
+        case 'comment_added':
+            return MessageCircle;
+        case 'favorite_added':
+        case 'favorite_removed':
+            return Heart;
+        case 'selection_added':
+        case 'selection_removed':
+            return CheckCircle;
+        case 'upload_completed':
+            return Upload;
+        case 'visitor_registered':
+            return UserPlus;
+        case 'face_search_performed':
+            return ScanFace;
+        default:
+            return Activity;
+    }
+};
+
+// Activity type to gradient mapping
+const getActivityGradient = (type: ActivityTypeEnum) => {
+    switch (type) {
+        case 'gallery_viewed':
+            return 'from-blue-500 to-cyan-500';
+        case 'gallery_published':
+        case 'gallery_created':
+            return 'from-emerald-500 to-teal-500';
+        case 'photo_downloaded':
+        case 'photos_downloaded':
+            return 'from-violet-500 to-purple-600';
+        case 'comment_added':
+            return 'from-emerald-500 to-teal-500';
+        case 'favorite_added':
+            return 'from-pink-500 to-rose-500';
+        case 'favorite_removed':
+            return 'from-gray-400 to-gray-500';
+        case 'selection_added':
+            return 'from-green-500 to-emerald-500';
+        case 'selection_removed':
+            return 'from-gray-400 to-gray-500';
+        case 'upload_completed':
+            return 'from-blue-500 to-cyan-500';
+        case 'visitor_registered':
+            return 'from-amber-500 to-orange-500';
+        case 'face_search_performed':
+            return 'from-cyan-500 to-blue-500';
+        default:
+            return 'from-gray-500 to-gray-600';
+    }
+};
 
 // Quick actions are defined inside the component to use translations
 // See quickActionsData within DashboardPage component
@@ -99,6 +128,12 @@ const DashboardPage = () => {
     const [clientAnalytics, setClientAnalytics] = useState<ClientAnalyticsResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
+    // Fetch real activities using the hook
+    const { activities, isLoading: activitiesLoading } = useActivities({
+        limit: 10,
+        refetchInterval: 30000, // Refresh every 30 seconds
+    });
 
     // Quick actions with translated labels
     const quickActionsData = useMemo(() => [
@@ -544,50 +579,90 @@ const DashboardPage = () => {
                         </div>
 
                         <div className="divide-y divide-border/50">
-                            {mockActivity.map((activity) => (
-                                <div
-                                    key={activity.id}
-                                    className="group row-hover p-3 sm:p-4"
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className="relative flex-shrink-0">
-                                            <img
-                                                src={activity.avatar}
-                                                alt={activity.user}
-                                                className="w-10 h-10 rounded-full ring-2 ring-white/50 dark:ring-white/10 shadow-md group-hover:shadow-lg transition-shadow"
-                                            />
-                                            <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow-md ring-2 ring-surface ${activity.type === 'download'
-                                                ? 'bg-gradient-to-br from-violet-500 to-purple-600'
-                                                : activity.type === 'view'
-                                                    ? 'bg-gradient-to-br from-blue-500 to-cyan-500'
-                                                    : activity.type === 'comment'
-                                                        ? 'bg-gradient-to-br from-emerald-500 to-teal-500'
-                                                        : 'bg-gradient-to-br from-pink-500 to-rose-500'
-                                                }`}>
-                                                {activity.type === 'download' && <Download size={10} className="text-white" />}
-                                                {activity.type === 'view' && <Eye size={10} className="text-white" />}
-                                                {activity.type === 'comment' && <MessageCircle size={10} className="text-white" />}
-                                                {activity.type === 'favorite' && <Heart size={10} className="text-white" />}
+                            {activitiesLoading ? (
+                                // Loading skeleton
+                                Array.from({ length: 4 }).map((_, i) => (
+                                    <div key={i} className="p-3 sm:p-4 animate-pulse">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-surface-hover" />
+                                            <div className="flex-1">
+                                                <div className="h-4 bg-surface-hover rounded w-3/4 mb-2" />
+                                                <div className="h-3 bg-surface-hover rounded w-1/2" />
                                             </div>
                                         </div>
-
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm text-text-primary">
-                                                <span className="font-semibold group-hover:text-primary transition-colors">{activity.user}</span>
-                                                {' '}
-                                                <span className="text-text-secondary">
-                                                    {activity.action}
-                                                </span>
-                                            </p>
-                                            <p className="text-xs text-text-tertiary mt-0.5 flex items-center gap-1.5">
-                                                <span className="truncate">{activity.gallery}</span>
-                                                <span className="text-border">•</span>
-                                                <span className="whitespace-nowrap">{activity.time}</span>
-                                            </p>
-                                        </div>
                                     </div>
+                                ))
+                            ) : activities.length === 0 ? (
+                                // Empty state
+                                <div className="p-8 text-center">
+                                    <div className="empty-state-icon mx-auto mb-3">
+                                        <Activity className="w-8 h-8" />
+                                    </div>
+                                    <p className="text-text-secondary">{t('empty.noActivity', { defaultValue: 'No recent activity' })}</p>
+                                    <p className="text-xs text-text-tertiary mt-1">
+                                        {t('empty.noActivityHint', { defaultValue: 'Activities will appear when visitors interact with your galleries' })}
+                                    </p>
                                 </div>
-                            ))}
+                            ) : (
+                                // Activity list
+                                activities.map((activity: ActivityItem) => {
+                                    const ActivityIcon = getActivityIcon(activity.activity_type);
+                                    const gradient = getActivityGradient(activity.activity_type);
+                                    // Generate avatar URL from actor name
+                                    const avatarUrl = activity.actor.avatar_url ||
+                                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(activity.actor.name)}`;
+
+                                    return (
+                                        <div
+                                            key={activity.activity_id}
+                                            className="group row-hover p-3 sm:p-4 cursor-pointer"
+                                            onClick={() => {
+                                                // Navigate to gallery if available
+                                                if (activity.gallery?.id) {
+                                                    navigate(`/workspace/galleries/${activity.gallery.id}`);
+                                                }
+                                            }}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <div className="relative flex-shrink-0">
+                                                    <img
+                                                        src={avatarUrl}
+                                                        alt={activity.actor.name}
+                                                        className="w-10 h-10 rounded-full ring-2 ring-white/50 dark:ring-white/10 shadow-md group-hover:shadow-lg transition-shadow"
+                                                    />
+                                                    <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center shadow-md ring-2 ring-surface bg-gradient-to-br ${gradient}`}>
+                                                        <ActivityIcon size={10} className="text-white" />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm text-text-primary">
+                                                        <span className="font-semibold group-hover:text-primary transition-colors">
+                                                            {activity.actor.name}
+                                                        </span>
+                                                        {' '}
+                                                        <span className="text-text-secondary">
+                                                            {activity.description?.replace(activity.actor.name, '').trim() ||
+                                                             activity.activity_type.replace(/_/g, ' ')}
+                                                        </span>
+                                                    </p>
+                                                    <p className="text-xs text-text-tertiary mt-0.5 flex items-center gap-1.5">
+                                                        {activity.gallery?.name && (
+                                                            <>
+                                                                <span className="truncate">{activity.gallery.name}</span>
+                                                                <span className="text-border">•</span>
+                                                            </>
+                                                        )}
+                                                        <span className="whitespace-nowrap">
+                                                            {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
 
                         <div className="p-4 border-t border-border/50 bg-gradient-to-t from-surface-hover/30 to-transparent">

@@ -1,0 +1,594 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shared Dashboard - Security & Sharing Dashboard",
+  "version": "1.0.0",
+  "status": "proposed",
+  "created": "2025-12-26",
+  "authors": ["Claude AI Assistant"],
+
+  "overview": {
+    "description": "A centralized Security & Sharing Dashboard that provides photographers with a single view of all active share links across their workspace. Instead of hunting through individual galleries, users can audit, control, and revoke sharing access from one location.",
+    "product_principles": [
+      "Trust and control - Users see every active link and can revoke instantly",
+      "Audit & compliance - Complete visibility into who accessed what, when",
+      "Security-first - Kill switch capability for immediate access revocation"
+    ],
+    "route": "/workspace/shared",
+    "priority": "high"
+  },
+
+  "existing_infrastructure": {
+    "tables_available": [
+      {
+        "name": "magic_links",
+        "key_columns": ["link_id", "workspace_id", "gallery_id", "token_hash", "status", "expires_at", "max_accesses", "access_count", "label", "target_type", "target_id", "qr_config", "created_by_user_id", "created_at"]
+      },
+      {
+        "name": "magic_link_accesses",
+        "key_columns": ["access_id", "link_id", "visitor_id", "ip_address", "user_agent", "referer", "country_code", "region", "city", "device_type", "browser", "os", "email_gate_passed", "pin_gate_passed", "accessed_at"]
+      },
+      {
+        "name": "galleries",
+        "key_columns": ["gallery_id", "workspace_id", "title", "status", "sharing_enabled", "password_hash", "pin_hash", "email_registration_required", "expires_at", "download_policy"]
+      },
+      {
+        "name": "visitors",
+        "key_columns": ["visitor_id", "workspace_id", "email", "first_name", "last_name", "metadata", "created_at"]
+      },
+      {
+        "name": "client_interactions",
+        "key_columns": ["interaction_id", "gallery_id", "asset_id", "type", "actor", "payload", "created_at"]
+      }
+    ],
+    "services_available": [
+      "MagicLinkService - Token generation, validation, QR codes",
+      "GalleryService - Gallery CRUD and access control",
+      "QRCodeService - QR code generation in PNG/SVG/PDF"
+    ],
+    "frontend_components": [
+      "ShareDialog - Create/manage magic links per gallery",
+      "ShareMenu - Quick share options",
+      "MagicLinkService (client) - API client for magic link operations"
+    ]
+  },
+
+  "database_changes": {
+    "new_tables": [],
+    "new_indexes": [
+      {
+        "name": "idx_magic_links_workspace_status",
+        "table": "magic_links",
+        "columns": ["workspace_id", "status"],
+        "purpose": "Fast filtering of active links across workspace"
+      },
+      {
+        "name": "idx_magic_links_workspace_created",
+        "table": "magic_links",
+        "columns": ["workspace_id", "created_at DESC"],
+        "purpose": "Efficient sorting by creation date for dashboard"
+      }
+    ],
+    "schema_extensions": {
+      "note": "No new tables required. The existing magic_links and magic_link_accesses tables provide all needed data. The dashboard aggregates existing data across galleries."
+    }
+  },
+
+  "api_design": {
+    "base_path": "/api/v1/workspaces/{workspace_id}/shared",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/links",
+        "description": "List all magic links across the workspace (aggregated view)",
+        "query_params": {
+          "status": {
+            "type": "string",
+            "enum": ["active", "expired", "revoked", "all"],
+            "default": "active",
+            "description": "Filter by link status"
+          },
+          "gallery_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional filter by gallery"
+          },
+          "search": {
+            "type": "string",
+            "description": "Search by label or gallery title"
+          },
+          "sort_by": {
+            "type": "string",
+            "enum": ["created_at", "access_count", "expires_at", "last_accessed_at"],
+            "default": "created_at"
+          },
+          "sort_order": {
+            "type": "string",
+            "enum": ["asc", "desc"],
+            "default": "desc"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 50,
+            "maximum": 100
+          },
+          "offset": {
+            "type": "integer",
+            "default": 0
+          }
+        },
+        "response": {
+          "data": [{
+            "link_id": "uuid",
+            "gallery_id": "uuid",
+            "gallery_title": "string",
+            "gallery_status": "draft|published|archived",
+            "label": "string|null",
+            "status": "active|expired|revoked",
+            "target_type": "gallery|sub_gallery|photo",
+            "target_id": "uuid|null",
+            "target_name": "string|null",
+            "expires_at": "datetime|null",
+            "max_accesses": "integer|null",
+            "access_count": "integer",
+            "last_accessed_at": "datetime|null",
+            "access_policy": {
+              "password_protected": "boolean",
+              "pin_protected": "boolean",
+              "email_required": "boolean",
+              "download_policy": "view_only|web_only|watermarked_only|original_allowed"
+            },
+            "recent_visitors": [{
+              "email": "string|null",
+              "country_code": "string|null",
+              "device_type": "string",
+              "accessed_at": "datetime"
+            }],
+            "created_at": "datetime",
+            "created_by": {
+              "user_id": "uuid",
+              "name": "string"
+            }
+          }],
+          "meta": {
+            "total": "integer",
+            "active_count": "integer",
+            "expired_count": "integer",
+            "revoked_count": "integer",
+            "limit": "integer",
+            "offset": "integer",
+            "has_more": "boolean"
+          }
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/stats",
+        "description": "Get aggregate sharing statistics for the workspace",
+        "response": {
+          "total_links": "integer",
+          "active_links": "integer",
+          "total_accesses_30d": "integer",
+          "unique_visitors_30d": "integer",
+          "accesses_by_day": [{
+            "date": "string",
+            "count": "integer"
+          }],
+          "top_galleries": [{
+            "gallery_id": "uuid",
+            "gallery_title": "string",
+            "link_count": "integer",
+            "access_count": "integer"
+          }],
+          "device_breakdown": {
+            "desktop": "integer",
+            "mobile": "integer",
+            "tablet": "integer"
+          },
+          "top_countries": [{
+            "country_code": "string",
+            "country_name": "string",
+            "count": "integer"
+          }]
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/bulk-revoke",
+        "description": "Revoke multiple magic links at once (Kill Switch)",
+        "request_body": {
+          "link_ids": {
+            "type": "array",
+            "items": "uuid",
+            "min_items": 1,
+            "max_items": 100,
+            "description": "List of link IDs to revoke"
+          },
+          "reason": {
+            "type": "string",
+            "max_length": 500,
+            "description": "Optional reason for audit log"
+          }
+        },
+        "response": {
+          "revoked_count": "integer",
+          "failed": [{
+            "link_id": "uuid",
+            "error": "string"
+          }]
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/links/{link_id}",
+        "description": "Get detailed information for a specific link",
+        "response": {
+          "link": "MagicLink object with full details",
+          "gallery": "Gallery summary",
+          "accesses": [{
+            "access_id": "uuid",
+            "visitor": {
+              "visitor_id": "uuid|null",
+              "email": "string|null",
+              "name": "string|null"
+            },
+            "ip_address": "string",
+            "country_code": "string|null",
+            "city": "string|null",
+            "device_type": "string",
+            "browser": "string",
+            "os": "string",
+            "email_gate_passed": "boolean",
+            "pin_gate_passed": "boolean",
+            "accessed_at": "datetime"
+          }],
+          "access_stats": "MagicLinkStats object"
+        }
+      },
+      {
+        "method": "DELETE",
+        "path": "/links/{link_id}",
+        "description": "Revoke a single magic link (same as existing endpoint but workspace-scoped)",
+        "response": {
+          "message": "string",
+          "link_id": "uuid"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/export",
+        "description": "Export sharing data for compliance/audit",
+        "query_params": {
+          "format": {
+            "type": "string",
+            "enum": ["csv", "json"],
+            "default": "csv"
+          },
+          "date_from": "datetime",
+          "date_to": "datetime"
+        },
+        "response": "File download (CSV or JSON)"
+      }
+    ]
+  },
+
+  "frontend_design": {
+    "route": "/workspace/shared",
+    "page_component": "SharedDashboardPage",
+    "layout": {
+      "description": "Three-panel layout with stats overview, link table, and detail sidebar",
+      "sections": [
+        {
+          "name": "StatsOverview",
+          "position": "top",
+          "components": [
+            "StatCard - Active Links count",
+            "StatCard - Total Views (30d)",
+            "StatCard - Unique Visitors (30d)",
+            "MiniChart - Access trend sparkline"
+          ]
+        },
+        {
+          "name": "LinkTable",
+          "position": "main",
+          "components": [
+            "FilterBar - Status filter, gallery filter, search",
+            "DataTable - Sortable columns, row actions",
+            "BulkActions - Select all, bulk revoke",
+            "Pagination - Page controls"
+          ]
+        },
+        {
+          "name": "DetailPanel",
+          "position": "sidebar (responsive)",
+          "components": [
+            "LinkDetails - Full link info when row selected",
+            "AccessLog - Recent accesses timeline",
+            "QuickActions - Copy, revoke, view gallery"
+          ]
+        }
+      ]
+    },
+    "components": [
+      {
+        "name": "SharedDashboardPage",
+        "path": "frontend/src/pages/workspace/SharedDashboardPage.tsx",
+        "description": "Main page component orchestrating the dashboard"
+      },
+      {
+        "name": "ShareLinkTable",
+        "path": "frontend/src/components/features/shared/ShareLinkTable.tsx",
+        "description": "DataTable for displaying all magic links with sorting, filtering"
+      },
+      {
+        "name": "ShareLinkRow",
+        "path": "frontend/src/components/features/shared/ShareLinkRow.tsx",
+        "description": "Individual row component with inline actions"
+      },
+      {
+        "name": "ShareLinkDetail",
+        "path": "frontend/src/components/features/shared/ShareLinkDetail.tsx",
+        "description": "Detail panel showing link info, access log, analytics"
+      },
+      {
+        "name": "ShareStatsOverview",
+        "path": "frontend/src/components/features/shared/ShareStatsOverview.tsx",
+        "description": "Stats cards and mini charts at top of page"
+      },
+      {
+        "name": "BulkRevokeDialog",
+        "path": "frontend/src/components/features/shared/BulkRevokeDialog.tsx",
+        "description": "Confirmation dialog for bulk revocation (Kill Switch)"
+      },
+      {
+        "name": "AccessPolicyBadge",
+        "path": "frontend/src/components/features/shared/AccessPolicyBadge.tsx",
+        "description": "Visual indicator of link's access policy (password, PIN, email, download)"
+      },
+      {
+        "name": "ShareLinkFilters",
+        "path": "frontend/src/components/features/shared/ShareLinkFilters.tsx",
+        "description": "Filter controls for status, gallery, search"
+      }
+    ],
+    "hooks": [
+      {
+        "name": "useSharedLinks",
+        "path": "frontend/src/hooks/useSharedLinks.ts",
+        "description": "React Query hook for fetching and managing shared links"
+      },
+      {
+        "name": "useShareStats",
+        "path": "frontend/src/hooks/useShareStats.ts",
+        "description": "React Query hook for aggregate statistics"
+      }
+    ],
+    "services": [
+      {
+        "name": "sharedService",
+        "path": "frontend/src/services/sharedService.ts",
+        "description": "API client for shared dashboard endpoints"
+      }
+    ]
+  },
+
+  "features": {
+    "core": [
+      {
+        "name": "Aggregated Link View",
+        "description": "See all magic links across all galleries in one table",
+        "priority": "P0"
+      },
+      {
+        "name": "Status Filtering",
+        "description": "Filter by active, expired, revoked status",
+        "priority": "P0"
+      },
+      {
+        "name": "Single Link Revocation",
+        "description": "Revoke individual links with confirmation",
+        "priority": "P0"
+      },
+      {
+        "name": "Bulk Revocation (Kill Switch)",
+        "description": "Select and revoke multiple links at once",
+        "priority": "P0"
+      },
+      {
+        "name": "Access Policy Display",
+        "description": "Show password, PIN, email, download restrictions at a glance",
+        "priority": "P0"
+      },
+      {
+        "name": "Access Statistics",
+        "description": "View count, unique visitors, device breakdown per link",
+        "priority": "P1"
+      }
+    ],
+    "enhanced": [
+      {
+        "name": "Gallery Filtering",
+        "description": "Filter links by specific gallery",
+        "priority": "P1"
+      },
+      {
+        "name": "Search",
+        "description": "Search by link label or gallery title",
+        "priority": "P1"
+      },
+      {
+        "name": "Expiry Warnings",
+        "description": "Visual indicators for links expiring soon",
+        "priority": "P1"
+      },
+      {
+        "name": "Recent Visitors Preview",
+        "description": "Show last 3 visitors inline in table row",
+        "priority": "P2"
+      },
+      {
+        "name": "Access Timeline",
+        "description": "Detailed access log in detail panel",
+        "priority": "P2"
+      },
+      {
+        "name": "Export for Compliance",
+        "description": "Download sharing data as CSV/JSON",
+        "priority": "P2"
+      }
+    ],
+    "future": [
+      {
+        "name": "Scheduled Expiration",
+        "description": "Set auto-expiry rules for all new links",
+        "priority": "P3"
+      },
+      {
+        "name": "Notifications",
+        "description": "Alert when link reaches access limit or expires",
+        "priority": "P3"
+      },
+      {
+        "name": "Geo-blocking",
+        "description": "Restrict link access by country",
+        "priority": "P3"
+      }
+    ]
+  },
+
+  "ux_flows": {
+    "primary_flow": {
+      "name": "Audit All Active Links",
+      "steps": [
+        "User navigates to /workspace/shared",
+        "Dashboard loads with 'Active' filter selected by default",
+        "Stats overview shows total active links, views, visitors",
+        "Table displays all active links sorted by creation date",
+        "User can click column headers to sort",
+        "User can use search to find specific links"
+      ]
+    },
+    "kill_switch_flow": {
+      "name": "Emergency Bulk Revocation",
+      "steps": [
+        "User identifies compromised or unwanted links",
+        "User selects multiple links via checkboxes",
+        "User clicks 'Revoke Selected' button",
+        "Confirmation dialog appears with warning",
+        "User confirms action",
+        "Links are immediately revoked",
+        "Toast notification confirms success",
+        "Table updates to show revoked status"
+      ]
+    },
+    "detail_view_flow": {
+      "name": "Investigate Link Activity",
+      "steps": [
+        "User clicks on a link row in the table",
+        "Detail panel slides in from right (or modal on mobile)",
+        "Panel shows link info, gallery context, access policy",
+        "Access timeline shows all visitor activity",
+        "User can copy link, view gallery, or revoke from panel"
+      ]
+    }
+  },
+
+  "accessibility": {
+    "requirements": [
+      "All interactive elements keyboard accessible",
+      "Proper ARIA labels for table, buttons, filters",
+      "Focus management when opening/closing detail panel",
+      "Screen reader announcements for bulk actions",
+      "Color contrast meeting WCAG 2.1 AA for status badges",
+      "Touch targets minimum 44x44px on mobile"
+    ]
+  },
+
+  "security": {
+    "considerations": [
+      "All endpoints require authentication",
+      "Workspace isolation enforced at API layer",
+      "Bulk revocation limited to 100 links per request",
+      "Audit log entries for all revocations",
+      "Rate limiting on list endpoints (100 req/min)",
+      "No PII in logs (user IDs only, emails hashed for display)"
+    ]
+  },
+
+  "implementation_phases": {
+    "phase1": {
+      "name": "Core Dashboard",
+      "duration": "3-4 days",
+      "deliverables": [
+        "Backend: GET /shared/links endpoint",
+        "Backend: DELETE /shared/links/{link_id}",
+        "Frontend: SharedDashboardPage",
+        "Frontend: ShareLinkTable with basic columns",
+        "Frontend: Status filter dropdown",
+        "Frontend: Single link revocation"
+      ]
+    },
+    "phase2": {
+      "name": "Kill Switch & Stats",
+      "duration": "2-3 days",
+      "deliverables": [
+        "Backend: POST /shared/bulk-revoke endpoint",
+        "Backend: GET /shared/stats endpoint",
+        "Frontend: Bulk selection UI",
+        "Frontend: BulkRevokeDialog",
+        "Frontend: ShareStatsOverview component"
+      ]
+    },
+    "phase3": {
+      "name": "Detail View & Polish",
+      "duration": "2-3 days",
+      "deliverables": [
+        "Backend: GET /shared/links/{link_id} with accesses",
+        "Frontend: ShareLinkDetail panel",
+        "Frontend: Access timeline component",
+        "Frontend: Gallery filter, search",
+        "Frontend: Mobile responsive adjustments"
+      ]
+    },
+    "phase4": {
+      "name": "Export & Extras",
+      "duration": "1-2 days",
+      "deliverables": [
+        "Backend: GET /shared/export endpoint",
+        "Frontend: Export button and format selector",
+        "Frontend: Expiry warnings",
+        "Testing and bug fixes"
+      ]
+    }
+  },
+
+  "testing_strategy": {
+    "unit_tests": [
+      "SharedService API client methods",
+      "useSharedLinks hook state management",
+      "AccessPolicyBadge rendering logic",
+      "Date formatting utilities"
+    ],
+    "integration_tests": [
+      "GET /shared/links returns correct data shape",
+      "Workspace isolation enforced",
+      "Bulk revoke updates all link statuses",
+      "Pagination and filtering work correctly"
+    ],
+    "e2e_tests": [
+      "Navigate to shared dashboard",
+      "Filter by status changes table content",
+      "Revoke link removes from active list",
+      "Bulk select and revoke workflow"
+    ]
+  },
+
+  "migration": {
+    "script": "backend/migrations/versions/0032_shared_dashboard_indexes.py",
+    "changes": [
+      "Add idx_magic_links_workspace_status index",
+      "Add idx_magic_links_workspace_created index"
+    ],
+    "backward_compatible": true,
+    "rollback": "DROP INDEX IF EXISTS idx_* statements"
+  }
+}

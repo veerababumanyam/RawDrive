@@ -83,3 +83,9 @@ export { SearchModal } from './SearchModal';
 export { PeoplePanel } from './PeoplePanel';
 export { GalleryCanvas } from './GalleryCanvas';
 export type { GalleryCanvasProps } from './GalleryCanvas';
+
+export { ShareDialog } from './ShareDialog';
+export type { ShareDialogProps } from './ShareDialog';
+
+export { FaceDiscovery } from './FaceDiscovery';
+export type { FaceDiscoveryProps } from './FaceDiscovery';

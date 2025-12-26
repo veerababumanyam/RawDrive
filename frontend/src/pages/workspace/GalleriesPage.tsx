@@ -198,6 +198,32 @@ const GalleriesPage: React.FC = () => {
     setGalleryToDelete(null);
   }, []);
 
+  const handleTogglePin = async (gallery: GalleryListItem) => {
+      if (!workspace?.workspace_id) return;
+      try {
+          if (gallery.is_pinned) {
+              await galleryService.unpinGallery(workspace.workspace_id, gallery.gallery_id);
+                addToast({
+                  variant: 'success',
+                  message: `Unpinned "${gallery.title}"`,
+              });
+          } else {
+              await galleryService.pinGallery(workspace.workspace_id, gallery.gallery_id);
+              addToast({
+                  variant: 'success',
+                  message: `Pinned "${gallery.title}" to favorites`,
+              });
+          }
+          refetch();
+      } catch (err) {
+          addToast({
+              variant: 'error',
+              message: 'Failed to update pin status',
+          });
+      }
+  };
+
+
   // NOTE: This page is rendered inside WorkspaceLayout via routes.tsx
   // Do NOT wrap in WorkspaceLayout here - it's already provided by the router
   return (
@@ -448,6 +474,7 @@ const GalleriesPage: React.FC = () => {
               onEdit={() => handleGalleryEdit(gallery.gallery_id)}
               onShare={() => handleGalleryShare(gallery.gallery_id)}
               onDelete={() => handleDeleteClick(gallery)}
+              onTogglePin={handleTogglePin}
               selectable={true}
               isSelected={selectedGalleryIds.has(gallery.gallery_id)}
               onSelect={handleGallerySelect}

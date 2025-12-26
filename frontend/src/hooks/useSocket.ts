@@ -9,11 +9,12 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 export interface WebSocketEvent {
-  type: 'asset:created' | 'asset:processed' | 'asset:deleted' | 'connected';
+  type: 'asset:created' | 'asset:processed' | 'asset:deleted' | 'activity:created' | 'connected';
   workspace_id: string;
   gallery_id?: string;
   asset_id?: string;
   status?: string;
+  activity?: Record<string, unknown>;
   data?: Record<string, unknown>;
 }
 
@@ -107,6 +108,36 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
           setError(null);
           currentReconnectDelayRef.current = reconnectDelay; // Reset reconnect delay
           onConnectionChange?.(true);
+        }
+
+        // Dispatch custom events for specific event types
+        // This allows components to subscribe via window.addEventListener
+        if (data.type === 'activity:created' && data.activity) {
+          window.dispatchEvent(
+            new CustomEvent('ws:activity:created', {
+              detail: { activity: data.activity },
+            })
+          );
+        }
+
+        if (data.type === 'asset:created' && data.asset_id) {
+          window.dispatchEvent(
+            new CustomEvent('ws:asset:created', {
+              detail: { asset_id: data.asset_id, gallery_id: data.gallery_id },
+            })
+          );
+        }
+
+        if (data.type === 'asset:processed' && data.asset_id) {
+          window.dispatchEvent(
+            new CustomEvent('ws:asset:processed', {
+              detail: {
+                asset_id: data.asset_id,
+                gallery_id: data.gallery_id,
+                status: data.status,
+              },
+            })
+          );
         }
       } catch (err) {
         console.error('Failed to parse WebSocket message:', err);

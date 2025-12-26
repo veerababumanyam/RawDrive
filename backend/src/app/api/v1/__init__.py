@@ -12,6 +12,7 @@ from app.api.v1.admin import router as admin_router
 from app.api.v1.tasks import router as tasks_router
 from app.api.v1.galleries import router as galleries_router
 from app.api.v1.gallery_assets import router as gallery_assets_router
+from app.api.v1.library import router as library_router
 from app.api.v1.media import router as media_router
 from app.api.v1.uploads import router as uploads_router
 from app.api.v1.websocket import router as websocket_router
@@ -30,6 +31,9 @@ from app.api.v1.profile_editor import router as profile_editor_router
 from app.api.v1.profile_editor import public_router as themes_router
 from app.api.v1.faces import router as faces_router
 from app.api.v1.face_groups import router as face_groups_router
+from app.api.v1.magic_links import router as magic_links_router
+from app.api.v1.magic_links import public_router as public_magic_links_router
+from app.api.v1.shared import router as shared_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -49,6 +53,11 @@ router.include_router(
     gallery_assets_router,
     prefix="/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/assets",
     tags=["gallery-assets"],
+)
+router.include_router(
+    library_router,
+    prefix="/api/v1/workspaces/{workspace_id}/library",
+    tags=["library"],
 )
 router.include_router(media_router, prefix="/api/v1/media", tags=["media"])
 router.include_router(
@@ -136,3 +145,22 @@ router.include_router(
 
 from app.api.v1.admin_ai_providers import router as admin_ai_providers_router
 router.include_router(admin_ai_providers_router)
+
+# Magic Links routes
+router.include_router(
+    magic_links_router,
+    prefix="/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/magic-links",
+    tags=["magic-links"],
+)
+router.include_router(
+    public_magic_links_router,
+    prefix="/api/v1/public/magic-links",
+    tags=["public-magic-links"],
+)
+
+# Shared Dashboard routes (Security & Sharing Dashboard)
+router.include_router(
+    shared_router,
+    prefix="/api/v1/workspaces/{workspace_id}/shared",
+    tags=["shared-dashboard"],
+)

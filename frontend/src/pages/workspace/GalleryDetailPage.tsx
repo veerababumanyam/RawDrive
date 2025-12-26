@@ -31,6 +31,7 @@ import {
   GallerySettingsPanel,
   PeoplePanel,
   GalleryCanvas,
+  ShareDialog,
 } from '../../components/features/gallery';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
@@ -80,6 +81,7 @@ const GalleryDetailPage: React.FC = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showPeoplePanel, setShowPeoplePanel] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   // Register search handler
   const { registerHandler, unregisterHandler } = useSearch();
@@ -673,7 +675,7 @@ const GalleryDetailPage: React.FC = () => {
             onFindPeople={() => setShowPeoplePanel(true)}
             onAIStory={() => addToast({ message: 'AI Story - Coming soon', variant: 'info' })}
             onSmartCurate={() => addToast({ message: 'Smart Curate - Coming soon', variant: 'info' })}
-            onShare={() => addToast({ message: 'Share - Coming soon', variant: 'info' })}
+            onShare={() => setShowShareDialog(true)}
             onSettings={() => setShowSettings(true)}
             onUpload={() => setShowUpload(!showUpload)}
             onDelete={() => setShowDeleteDialog(true)}
@@ -1038,6 +1040,15 @@ const GalleryDetailPage: React.FC = () => {
               addToast({ message: `Filtering by person - Coming soon`, variant: 'info' });
             }
           }}
+        />
+
+        {/* Share Dialog */}
+        <ShareDialog
+          isOpen={showShareDialog}
+          onClose={() => setShowShareDialog(false)}
+          workspaceId={workspace?.workspace_id || ''}
+          galleryId={gallery.gallery_id}
+          galleryTitle={gallery.title}
         />
       </div>
     </div>

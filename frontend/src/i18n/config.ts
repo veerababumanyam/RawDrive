@@ -78,6 +78,10 @@ i18n
             lookupLocalStorage: 'rawdrive_language',
         },
 
+        // Strip regional codes (en-IN → en, es-MX → es)
+        // Avoids needing separate folders for each region variant
+        load: 'languageOnly',
+
         // Debug mode in development
         debug: import.meta.env.DEV,
 

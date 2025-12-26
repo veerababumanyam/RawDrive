@@ -45,7 +45,7 @@ export interface UploadProgress {
 
 export interface UseUploadOptions {
   workspaceId: string;
-  galleryId: string;
+  galleryId?: string;
   subGalleryId?: string | null;
   onComplete?: (assetId: string, fileId: string) => void;
   onError?: (error: Error, fileId: string) => void;
@@ -180,6 +180,12 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
       try {
         const sha256 = await calculateSHA256(file);
+        if (!galleryId && enableDuplicateDetection) {
+          // If no gallery, check against library logic (potentially undefined/null gallery_id in backend)
+          const result = await galleryService.checkDuplicate(workspaceId, sha256, undefined);
+           return result.is_duplicate ? result.duplicates : null;
+        } 
+        
         const result = await galleryService.checkDuplicate(workspaceId, sha256, galleryId);
         return result.is_duplicate ? result.duplicates : null;
       } catch (error) {
@@ -320,7 +326,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
         // Create upload session
         const session = await galleryService.createUploadSession(workspaceId, {
-          gallery_id: galleryId,
+          gallery_id: galleryId || undefined,
           sub_gallery_id: subGalleryId || null,
           file_name: uploadFile.file.name,
           mime_type: uploadFile.file.type,

@@ -28,11 +28,13 @@ export class GalleryService {
     options?: {
       page?: number;
       limit?: number;
-      sort?: 'created_at' | 'title' | 'status' | 'shoot_date';
+      sort?: 'created_at' | 'title' | 'status' | 'shoot_date' | 'last_accessed_at';
       status?: 'draft' | 'published' | 'archived';
       search?: string;
       startDate?: string; // YYYY-MM-DD
       endDate?: string;   // YYYY-MM-DD
+      pinnedOnly?: boolean;
+      recentOnly?: boolean;
     }
   ): Promise<GalleryListResponse> {
     const params = new URLSearchParams();
@@ -43,6 +45,8 @@ export class GalleryService {
     if (options?.search) params.append('search', options.search);
     if (options?.startDate) params.append('start_date', options.startDate);
     if (options?.endDate) params.append('end_date', options.endDate);
+    if (options?.pinnedOnly) params.append('pinned_only', 'true');
+    if (options?.recentOnly) params.append('recent_only', 'true');
 
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries${query ? `?${query}` : ''}`;
@@ -547,6 +551,125 @@ export class GalleryService {
       throw new Error(response.error.message || 'Failed to register visitor');
     }
     return response.data!;
+  }
+
+  /**
+   * Verify gallery PIN
+   */
+  async verifyPin(galleryId: string, pin: string): Promise<boolean> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}/verify-pin`;
+    const response = await apiClient.post<{ valid: boolean }>(endpoint, { pin });
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to verify PIN');
+    }
+    return response.data!.valid;
+  }
+
+  async addAssetsToGallery(
+    workspaceId: string,
+    galleryId: string,
+    assetIds: string[]
+  ): Promise<{ count: number }> {
+    const response = await apiClient.post<{ success: boolean; count: number }>(
+      `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets`,
+      { asset_ids: assetIds }
+    );
+    return response.data!;
+  }
+
+  async removeAssetsFromGallery(
+    workspaceId: string,
+    galleryId: string,
+    assetIds: string[]
+  ): Promise<{ count: number }> {
+    const response = await apiClient.delete<{ success: boolean; count: number }>(
+      `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets`,
+      { data: { asset_ids: assetIds } }
+    );
+    return response.data!;
+  }
+
+  async pinGallery(workspaceId: string, galleryId: string): Promise<void> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/pin`;
+    const response = await apiClient.post<{ success: boolean }>(endpoint, {});
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to pin gallery');
+    }
+  }
+
+  async unpinGallery(workspaceId: string, galleryId: string): Promise<void> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/unpin`;
+    const response = await apiClient.post<{ success: boolean }>(endpoint, {});
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to unpin gallery');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public Gallery Client Interaction Methods
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Toggle favorite status for an asset in a public gallery
+   */
+  async togglePublicFavorite(
+    galleryId: string,
+    assetId: string,
+    favorited: boolean,
+    visitorId?: string
+  ): Promise<{ asset_id: string; is_favorited: boolean; favorites_count: number }> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}/assets/${assetId}/favorite`;
+    const response = await apiClient.post<{
+      asset_id: string;
+      is_favorited: boolean;
+      favorites_count: number;
+    }>(endpoint, { favorited, visitor_id: visitorId });
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to update favorite');
+    }
+    return response.data!;
+  }
+
+  /**
+   * Toggle selection (pick) status for an asset in a public gallery
+   */
+  async togglePublicSelection(
+    galleryId: string,
+    assetId: string,
+    selected: boolean,
+    visitorId?: string
+  ): Promise<{ asset_id: string; is_selected: boolean }> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}/assets/${assetId}/selection`;
+    const response = await apiClient.post<{
+      asset_id: string;
+      is_selected: boolean;
+    }>(endpoint, { selected, visitor_id: visitorId });
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to update selection');
+    }
+    return response.data!;
+  }
+
+  /**
+   * Get public gallery assets with optional filtering
+   * Supports workflow tabs: All, Favorites, Selections
+   */
+  async getPublicGalleryAssetsFiltered(
+    galleryId: string,
+    filterType?: 'favorites' | 'selections' | null,
+    subGalleryId?: string
+  ): Promise<PublicGalleryAsset[]> {
+    const params = new URLSearchParams();
+    if (filterType) params.append('filter_type', filterType);
+    if (subGalleryId) params.append('sub_gallery_id', subGalleryId);
+
+    const query = params.toString();
+    const endpoint = `/api/v1/public/galleries/${galleryId}/assets/filtered${query ? `?${query}` : ''}`;
+    const response = await apiClient.get<{ data: PublicGalleryAsset[] }>(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to fetch filtered assets');
+    }
+    return response.data!.data;
   }
 }
 

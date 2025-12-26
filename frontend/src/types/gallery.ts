@@ -40,6 +40,8 @@ export interface GalleryEntity {
   published_at?: string;
   created_at: string;
   updated_at?: string;
+  pinned_at?: string;
+  last_accessed_at?: string;
 }
 
 // Sub-Gallery Entity
@@ -68,6 +70,9 @@ export interface GalleryListItem {
   cover_image_url?: string;  // Legacy - will be replaced with signed URL
   cover_asset_id?: string;   // Asset ID for fetching signed URL
   published_at?: string;
+  pinned_at?: string;
+  is_pinned?: boolean;
+  last_accessed_at?: string;
 }
 
 // Gallery List Response
@@ -122,12 +127,20 @@ export interface GalleryDetailData {
   download_policy?: DownloadPolicy;
   exif_visible?: boolean;
   password_protected: boolean;
+  pin_protected: boolean;
   email_registration_required?: boolean;
   expires_at?: string;
   published_at?: string;
   cover_asset_id?: string;
+  primary_color?: string;
+  font_family?: string;
+  custom_domain?: string;
+  custom_links?: Array<{ label: string; url: string }>;
   sub_galleries: SubGalleryItem[];
   stats: GalleryStats;
+  pinned_at?: string;
+  is_pinned?: boolean;
+  last_accessed_at?: string;
 }
 
 // Wrapper for API client response
@@ -156,6 +169,10 @@ export interface PublicGalleryAsset {
   metadata?: Record<string, any>;
   sort_order: number;
   created_at: string;
+  // Client interaction fields (from filtered endpoint)
+  is_favorited?: boolean;
+  is_selected?: boolean;
+  favorites_count?: number;
 }
 
 // Asset Info (nested in GalleryAssetItem)
@@ -251,15 +268,21 @@ export interface GalleryUpdateRequest {
   exif_visible?: boolean;
   password?: string;
   remove_password?: boolean;
+  pin?: string;
+  remove_pin?: boolean;
   email_registration_required?: boolean;
   expires_at?: string | null;
   branding_profile_id?: string | null;
   cover_asset_id?: string | null;
+  primary_color?: string | null;
+  font_family?: string | null;
+  custom_domain?: string | null;
+  custom_links?: Array<{ label: string; url: string }> | null;
 }
 
 // Upload Session Request
 export interface UploadSessionRequest {
-  gallery_id: string;
+  gallery_id?: string;
   sub_gallery_id?: string | null;
   file_name: string;
   mime_type: string;
@@ -326,5 +349,112 @@ export interface BrandingProfile {
   logo_url?: string;
   primary_color?: string;
   secondary_color?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Magic Link Types
+// ---------------------------------------------------------------------------
+
+export type MagicLinkStatus = 'active' | 'expired' | 'revoked';
+export type MagicLinkTargetType = 'gallery' | 'sub_gallery' | 'photo';
+
+// QR Code configuration
+export interface QRConfig {
+  size?: number;
+  color?: string;
+  logo_enabled?: boolean;
+  error_correction?: 'L' | 'M' | 'Q' | 'H';
+}
+
+// Magic Link entity
+export interface MagicLink {
+  link_id: string;
+  gallery_id: string;
+  label?: string;
+  target_type: MagicLinkTargetType;
+  target_id?: string;
+  status: MagicLinkStatus;
+  expires_at?: string;
+  max_accesses?: number;
+  access_count: number;
+  qr_config?: QRConfig;
+  created_at: string;
+  updated_at: string;
+  // Only included on creation
+  token?: string;
+  url?: string;
+}
+
+// Create magic link request
+export interface CreateMagicLinkRequest {
+  label?: string;
+  target_type?: MagicLinkTargetType;
+  target_id?: string;
+  expires_at?: string;
+  max_accesses?: number;
+  qr_config?: QRConfig;
+}
+
+// Magic link list response
+export interface MagicLinkListResponse {
+  data: MagicLink[];
+  meta: {
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+  };
+}
+
+// Magic link access statistics
+export interface MagicLinkStats {
+  link_id: string;
+  period_days: number;
+  total_accesses: number;
+  unique_visitors: number;
+  accesses_by_day: Array<{
+    date: string;
+    count: number;
+  }>;
+  accesses_by_device: {
+    desktop: number;
+    mobile: number;
+    tablet: number;
+  };
+  accesses_by_country: Array<{
+    country_code: string;
+    country_name: string;
+    count: number;
+  }>;
+  gate_completion: {
+    email_registered: number;
+    pin_verified: number;
+  };
+}
+
+// Validated magic link response (public)
+export interface ValidatedMagicLink {
+  link_id: string;
+  gallery_id: string;
+  target_type: MagicLinkTargetType;
+  target_id?: string;
+  gallery: {
+    gallery_id: string;
+    title: string;
+    description?: string;
+    status: GalleryStatus;
+    cover_asset_id?: string;
+    primary_color?: string;
+    font_family?: string;
+    custom_links?: Array<{ label: string; url: string }>;
+    pin_protected: boolean;
+    email_registration_required: boolean;
+  };
+  company_profile?: {
+    name: string;
+    logo_url?: string;
+    website?: string;
+    brand_color?: string;
+  };
 }
 
