@@ -25,14 +25,20 @@ import { InlineEditForm } from './InlineEditForm';
 export interface PhotoCardProps {
   asset: GalleryAssetItem;
   index: number;
-  isSelected?: boolean;
-  selectable?: boolean;
+  /** Management selection state (local UI for CRUD bulk operations) */
+  isManagementSelected?: boolean;
+  /** Enable management selection mode for CRUD operations */
+  managementSelectable?: boolean;
+  /** Show customer selection toggle for delivery workflow */
+  showCustomerSelection?: boolean;
   /** Whether this photo is the current cover */
   isCover?: boolean;
-  onSelect?: (assetId: string) => void;
+  /** Management selection callback (for CRUD bulk operations) */
+  onManagementSelect?: (assetId: string) => void;
   onClick?: (asset: GalleryAssetItem, index: number, e: React.MouseEvent) => void;
   onFavorite?: (assetId: string, favorite: boolean) => void;
-  onSelection?: (assetId: string, selected: boolean) => void;
+  /** Customer selection callback (persisted for delivery workflow) */
+  onCustomerSelectionToggle?: (assetId: string, selected: boolean) => void;
   onDownload?: (assetId: string) => void;
   onDelete?: (assetId: string) => void;
   /** Callback to set this photo as the gallery/sub-gallery cover */
@@ -47,13 +53,14 @@ export interface PhotoCardProps {
 export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   asset,
   index,
-  isSelected = false,
-  selectable = false,
+  isManagementSelected = false,
+  managementSelectable = false,
+  showCustomerSelection = true,
   isCover = false,
-  onSelect,
+  onManagementSelect,
   onClick,
   onFavorite,
-  onSelection,
+  onCustomerSelectionToggle,
   onDownload,
   onDelete,
   onSetCover,
@@ -114,13 +121,13 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
       : '4 / 3';
 
   const handleClick = useCallback((e: React.MouseEvent) => {
-    if (selectable && (e.ctrlKey || e.metaKey)) {
+    if (managementSelectable && (e.ctrlKey || e.metaKey)) {
       e.stopPropagation();
-      onSelect?.(asset.asset_id);
+      onManagementSelect?.(asset.asset_id);
     } else {
       onClick?.(asset, index, e);
     }
-  }, [selectable, onSelect, onClick, asset, index]);
+  }, [managementSelectable, onManagementSelect, onClick, asset, index]);
 
   const handleFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -132,15 +139,15 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     onDownload?.(asset.asset_id);
   }, [onDownload, asset.asset_id]);
 
-  const handleSelect = useCallback((e: React.MouseEvent) => {
+  const handleManagementSelect = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    onSelect?.(asset.asset_id);
-  }, [onSelect, asset.asset_id]);
+    onManagementSelect?.(asset.asset_id);
+  }, [onManagementSelect, asset.asset_id]);
 
-  const handleSelectionToggle = useCallback((e: React.MouseEvent) => {
+  const handleCustomerSelectionToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    onSelection?.(asset.asset_id, !asset.is_selected);
-  }, [onSelection, asset.asset_id, asset.is_selected]);
+    onCustomerSelectionToggle?.(asset.asset_id, !asset.is_selected);
+  }, [onCustomerSelectionToggle, asset.asset_id, asset.is_selected]);
 
   const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -175,7 +182,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         cursor-pointer
         bg-surface-hover
         transition-all duration-200 ease-out
-        ${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}
+        ${isManagementSelected ? 'ring-2 ring-primary ring-offset-2' : ''}
         hover:shadow-card-hover
         select-none
         ${className}
@@ -198,7 +205,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           onClick?.(asset, index, syntheticEvent);
         }
       }}
-      aria-selected={isSelected}
+      aria-selected={isManagementSelected}
       aria-label={`Photo ${index + 1}: ${asset.asset.filename || 'Untitled'}`}
     >
       {isEditing && (
@@ -299,12 +306,13 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         asset={asset}
         index={index}
         isHovered={isHovered}
-        isSelected={isSelected}
+        isManagementSelected={isManagementSelected}
         isCover={isCover}
-        selectable={selectable}
+        managementSelectable={managementSelectable}
+        showCustomerSelection={showCustomerSelection}
         showActions={showActions}
-        onSelect={handleSelect}
-        onSelectionToggle={handleSelectionToggle}
+        onManagementSelect={handleManagementSelect}
+        onCustomerSelectionToggle={handleCustomerSelectionToggle}
         onFavorite={handleFavorite}
         onClick={(e) => {
            e.stopPropagation();

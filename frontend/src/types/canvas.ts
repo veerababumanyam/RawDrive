@@ -31,11 +31,17 @@ export interface GalleryCanvasProps {
   columns?: ResponsiveColumns;
   gap?: 'sm' | 'md' | 'lg';
   
-  // Selection
+  // Management Selection (local UI for CRUD bulk operations)
   selectedAssetIds: Set<string>;
   lastSelectedId?: string | null;
-  selectable?: boolean;
+  /** Enable management selection mode for CRUD operations */
+  managementSelectable?: boolean;
+  /** Show customer selection toggle for delivery workflow */
+  showCustomerSelection?: boolean;
+  /** Callback when management selection changes */
   onSelectionChange: (ids: Set<string>) => void;
+  /** Callback when customer selection toggles (persisted) */
+  onCustomerSelectionToggle?: (assetId: string, selected: boolean) => void;
   
   // Actions
   onAssetClick: (asset: GalleryAssetItem, index: number) => void;

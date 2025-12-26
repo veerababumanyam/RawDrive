@@ -4,12 +4,14 @@ import {
   Heart,
   Lock,
   CheckSquare,
+  Check,
   Download,
   Trash2,
   Maximize2,
   Share2,
   Edit3,
   Image,
+  Bookmark,
 } from 'lucide-react';
 import { GalleryAssetItem } from '../../../types/gallery';
 
@@ -17,14 +19,20 @@ export interface HoverOverlayProps {
   asset: GalleryAssetItem;
   index: number;
   isHovered: boolean;
-  isSelected?: boolean;
+  /** Management selection state (local UI for CRUD bulk operations) */
+  isManagementSelected?: boolean;
   isCover?: boolean;
-  selectable?: boolean;
+  /** Enable management selection mode (for CRUD operations) */
+  managementSelectable?: boolean;
+  /** Show customer selection toggle (for delivery workflow) */
+  showCustomerSelection?: boolean;
   showActions?: boolean;
   
   // Callbacks
-  onSelect?: (e: React.MouseEvent) => void;
-  onSelectionToggle?: (e: React.MouseEvent) => void;
+  /** Management selection callback (for CRUD bulk operations) */
+  onManagementSelect?: (e: React.MouseEvent) => void;
+  /** Customer selection callback (persisted for delivery workflow) */
+  onCustomerSelectionToggle?: (e: React.MouseEvent) => void;
   onFavorite?: (e: React.MouseEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
   onDownload?: (e: React.MouseEvent) => void;
@@ -36,12 +44,13 @@ export interface HoverOverlayProps {
 export const HoverOverlay: React.FC<HoverOverlayProps> = ({
   asset,
   isHovered,
-  isSelected = false,
+  isManagementSelected = false,
   isCover = false,
-  selectable = false,
+  managementSelectable = false,
+  showCustomerSelection = true,
   showActions = true,
-  onSelect,
-  onSelectionToggle,
+  onManagementSelect,
+  onCustomerSelectionToggle,
   onFavorite,
   onClick,
   onDownload,
@@ -53,7 +62,29 @@ export const HoverOverlay: React.FC<HoverOverlayProps> = ({
 
   return (
     <>
-      {/* Top-Right Controls - Favorite & Select (Always visible when active, hover for others) */}
+      {/* Top-Left: Management Selection Checkbox (for CRUD bulk operations) */}
+      {managementSelectable && onManagementSelect && (
+        <div className="absolute top-3 left-3 z-30">
+          <button
+            className={`
+              photo-card-top-btn btn-management-select
+              ${isManagementSelected ? 'active always-visible bg-primary text-white' : 'bg-black/40'}
+              ${!isManagementSelected && !isHovered ? 'opacity-0' : 'opacity-100'}
+              transition-all duration-200
+            `}
+            onClick={onManagementSelect}
+            onContextMenu={(e) => e.stopPropagation()}
+            aria-label={isManagementSelected ? 'Deselect for action' : 'Select for action'}
+            title={isManagementSelected ? 'Deselect' : 'Select for bulk action'}
+            tabIndex={isHovered || isManagementSelected ? 0 : -1}
+          >
+            <span className="photo-card-tooltip">{isManagementSelected ? 'Deselect' : 'Select'}</span>
+            {isManagementSelected ? <Check size={20} /> : <CheckSquare size={20} />}
+          </button>
+        </div>
+      )}
+
+      {/* Top-Right Controls - Favorite & Customer Selection */}
       <div className="absolute top-3 right-3 flex flex-col gap-2 z-30">
         {/* Favorite Button */}
         {onFavorite && (
@@ -75,23 +106,23 @@ export const HoverOverlay: React.FC<HoverOverlayProps> = ({
           </button>
         )}
 
-        {/* Selection Toggle Button */}
-        {(selectable || onSelectionToggle) && (
+        {/* Customer Selection Toggle (for delivery workflow - persisted) */}
+        {showCustomerSelection && onCustomerSelectionToggle && (
           <button
             className={`
-              photo-card-top-btn btn-select
-              ${isSelected || asset.is_selected ? 'active always-visible' : ''}
-              ${!(isSelected || asset.is_selected) && !isHovered ? 'opacity-0' : 'opacity-100'}
-              transition-opacity duration-200
+              photo-card-top-btn btn-customer-select
+              ${asset.is_selected ? 'active always-visible bg-success text-white' : 'bg-black/40'}
+              ${!asset.is_selected && !isHovered ? 'opacity-0' : 'opacity-100'}
+              transition-all duration-200
             `}
-            onClick={selectable && onSelect ? onSelect : onSelectionToggle}
+            onClick={onCustomerSelectionToggle}
             onContextMenu={(e) => e.stopPropagation()}
-            aria-label={isSelected || asset.is_selected ? 'Deselect photo' : 'Select photo'}
-            title={isSelected || asset.is_selected ? 'Deselect photo' : 'Select photo'}
-            tabIndex={isHovered || isSelected || asset.is_selected ? 0 : -1}
+            aria-label={asset.is_selected ? 'Remove from client picks' : 'Add to client picks'}
+            title={asset.is_selected ? 'Remove from client picks' : 'Mark as client pick'}
+            tabIndex={isHovered || asset.is_selected ? 0 : -1}
           >
-            <span className="photo-card-tooltip">{isSelected || asset.is_selected ? 'Deselect' : 'Select'}</span>
-            <CheckSquare size={20} />
+            <span className="photo-card-tooltip">{asset.is_selected ? 'Remove pick' : 'Client pick'}</span>
+            <Bookmark size={20} className={asset.is_selected ? "fill-current" : ""} />
           </button>
         )}
       </div>

@@ -31,13 +31,19 @@ import { ResponsiveColumns } from '../../../types/canvas';
 
 export interface PhotoGridProps {
   assets: GalleryAssetItem[];
+  /** Management selection state (local UI for CRUD bulk operations) */
   selectedAssetIds?: Set<string>;
-  selectable?: boolean;
+  /** Enable management selection mode for CRUD operations */
+  managementSelectable?: boolean;
+  /** Show customer selection toggle for delivery workflow */
+  showCustomerSelection?: boolean;
   coverAssetId?: string | null;
-  onAssetSelect?: (assetId: string) => void;
+  /** Management selection callback (for CRUD bulk operations) */
+  onManagementSelect?: (assetId: string) => void;
   onAssetClick?: (asset: GalleryAssetItem, index: number, e?: React.MouseEvent) => void;
   onAssetFavorite?: (assetId: string, favorite: boolean) => void;
-  onAssetSelection?: (assetId: string, selected: boolean) => void;
+  /** Customer selection callback (persisted for delivery workflow) */
+  onCustomerSelectionToggle?: (assetId: string, selected: boolean) => void;
   onAssetDownload?: (assetId: string) => void;
   onAssetDelete?: (assetId: string) => void;
   onSetCover?: (assetId: string) => void;
@@ -70,12 +76,13 @@ const getGapClass = (gap?: 'sm' | 'md' | 'lg') => {
 export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
   assets,
   selectedAssetIds = new Set(),
-  selectable = false,
+  managementSelectable = false,
+  showCustomerSelection = true,
   coverAssetId,
-  onAssetSelect,
+  onManagementSelect,
   onAssetClick,
   onAssetFavorite,
-  onAssetSelection,
+  onCustomerSelectionToggle,
   onAssetDownload,
   onAssetDelete,
   onSetCover,
@@ -337,13 +344,14 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
             key={asset.asset_id}
             asset={asset}
             index={index}
-            isSelected={selectedAssetIds.has(asset.asset_id)}
-            selectable={selectable}
+            isManagementSelected={selectedAssetIds.has(asset.asset_id)}
+            managementSelectable={managementSelectable}
+            showCustomerSelection={showCustomerSelection}
             isCover={coverAssetId === asset.asset_id}
-            onSelect={onAssetSelect}
+            onManagementSelect={onManagementSelect}
             onClick={onAssetClick}
             onFavorite={onAssetFavorite}
-            onSelection={onAssetSelection}
+            onCustomerSelectionToggle={onCustomerSelectionToggle}
             onDownload={onAssetDownload}
             onDelete={onAssetDelete}
             onSetCover={onSetCover}
@@ -386,13 +394,14 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
 interface SortablePhotoCardProps {
   asset: GalleryAssetItem;
   index: number;
-  isSelected: boolean;
-  selectable: boolean;
+  isManagementSelected: boolean;
+  managementSelectable: boolean;
+  showCustomerSelection?: boolean;
   isCover?: boolean;
-  onSelect?: (assetId: string) => void;
+  onManagementSelect?: (assetId: string) => void;
   onClick?: (asset: GalleryAssetItem, index: number, e?: React.MouseEvent) => void;
   onFavorite?: (assetId: string, favorite: boolean) => void;
-  onSelection?: (assetId: string, selected: boolean) => void;
+  onCustomerSelectionToggle?: (assetId: string, selected: boolean) => void;
   onDownload?: (assetId: string) => void;
   onDelete?: (assetId: string) => void;
   onSetCover?: (assetId: string) => void;
@@ -406,13 +415,14 @@ interface SortablePhotoCardProps {
 const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
   asset,
   index,
-  isSelected,
-  selectable,
+  isManagementSelected,
+  managementSelectable,
+  showCustomerSelection,
   isCover,
-  onSelect,
+  onManagementSelect,
   onClick,
   onFavorite,
-  onSelection,
+  onCustomerSelectionToggle,
   onDownload,
   onDelete,
   onSetCover,
@@ -453,13 +463,14 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
       <PhotoCard
         asset={asset}
         index={index}
-        isSelected={isSelected}
-        selectable={selectable}
+        isManagementSelected={isManagementSelected}
+        managementSelectable={managementSelectable}
+        showCustomerSelection={showCustomerSelection}
         isCover={isCover}
-        onSelect={onSelect}
+        onManagementSelect={onManagementSelect}
         onClick={onClick}
         onFavorite={onFavorite}
-        onSelection={onSelection}
+        onCustomerSelectionToggle={onCustomerSelectionToggle}
         onDownload={onDownload}
         onDelete={onDelete}
         onSetCover={onSetCover}
@@ -474,13 +485,14 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
 const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
   asset,
   index,
-  isSelected,
-  selectable,
+  isManagementSelected,
+  managementSelectable,
+  showCustomerSelection,
   isCover,
-  onSelect,
+  onManagementSelect,
   onClick,
   onFavorite,
-  onSelection,
+  onCustomerSelectionToggle,
   onDownload,
   onDelete,
   onSetCover,
@@ -499,13 +511,14 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
       <PhotoCard
         asset={asset}
         index={index}
-        isSelected={isSelected}
-        selectable={selectable}
+        isManagementSelected={isManagementSelected}
+        managementSelectable={managementSelectable}
+        showCustomerSelection={showCustomerSelection}
         isCover={isCover}
-        onSelect={onSelect}
+        onManagementSelect={onManagementSelect}
         onClick={onClick}
         onFavorite={onFavorite}
-        onSelection={onSelection}
+        onCustomerSelectionToggle={onCustomerSelectionToggle}
         onDownload={onDownload}
         onDelete={onDelete}
         onSetCover={onSetCover}

@@ -254,6 +254,30 @@ const GalleryDetailPage: React.FC = () => {
     },
     [workspace?.workspace_id, galleryId, updateAsset, addToast]
   );
+
+  // Handle customer selection toggle (photo picks for delivery workflow - persisted)
+  const handleCustomerSelection = useCallback(
+    async (assetId: string, selected: boolean) => {
+      if (!workspace?.workspace_id || !galleryId) return;
+
+      // Optimistic update
+      updateAsset(assetId, { is_selected: selected });
+
+      try {
+        await galleryService.toggleSelection(workspace.workspace_id, galleryId, [assetId], selected);
+        addToast({
+          message: selected ? 'Photo added to client picks' : 'Photo removed from client picks',
+          variant: 'success',
+        });
+      } catch (error) {
+        // Revert on failure
+        updateAsset(assetId, { is_selected: !selected });
+        addToast({ message: 'Failed to update selection', variant: 'error' });
+      }
+    },
+    [workspace?.workspace_id, galleryId, updateAsset, addToast]
+  );
+
   // Handle asset update (inline edit)
   const handleAssetUpdate = useCallback(
     async (assetId: string, updates: { title?: string; description?: string; is_private?: boolean }) => {
@@ -778,13 +802,15 @@ const GalleryDetailPage: React.FC = () => {
               viewMode={viewMode === 'masonry' ? 'masonry' : 'grid'}
               selectedAssetIds={selectedAssetIds}
               lastSelectedId={lastSelectedId}
-              selectable={true}
+              managementSelectable={true}
+              showCustomerSelection={true}
               coverAssetId={
                 activeSubGalleryId
                   ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === activeSubGalleryId)?.cover_asset_id
                   : gallery?.cover_asset_id
               }
               onSelectionChange={setSelectedAssetIds}
+              onCustomerSelectionToggle={handleCustomerSelection}
               onAssetClick={handleAssetClick}
               onAssetFavorite={handleAssetFavorite}
               onAssetDownload={handleAssetDownload}

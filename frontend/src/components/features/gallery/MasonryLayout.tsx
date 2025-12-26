@@ -16,12 +16,15 @@ export interface MasonryLayoutProps {
   columns?: ResponsiveColumns;
   gap?: 'sm' | 'md' | 'lg';
   selectedAssetIds?: Set<string>;
-  selectable?: boolean;
+  /** Enable management selection mode for CRUD operations */
+  managementSelectable?: boolean;
+  /** Show customer selection toggle for delivery workflow */
+  showCustomerSelection?: boolean;
   coverAssetId?: string | null;
-  onAssetSelect?: (assetId: string) => void;
+  onManagementSelect?: (assetId: string) => void;
   onAssetClick?: (asset: GalleryAssetItem, index: number) => void;
   onAssetFavorite?: (assetId: string, favorite: boolean) => void;
-  onAssetSelection?: (assetId: string, selected: boolean) => void;
+  onCustomerSelectionToggle?: (assetId: string, selected: boolean) => void;
   onAssetDownload?: (assetId: string) => void;
   onAssetDelete?: (assetId: string) => void;
   onSetCover?: (assetId: string) => void;
@@ -35,12 +38,13 @@ export const MasonryLayout: React.FC<MasonryLayoutProps> = ({
   columns,
   gap = 'md',
   selectedAssetIds = new Set(),
-  selectable = false,
+  managementSelectable = false,
+  showCustomerSelection = true,
   coverAssetId,
-  onAssetSelect,
+  onManagementSelect,
   onAssetClick,
   onAssetFavorite,
-  onAssetSelection,
+  onCustomerSelectionToggle,
   onAssetDownload,
   onAssetDelete,
   onSetCover,
@@ -219,13 +223,14 @@ export const MasonryLayout: React.FC<MasonryLayoutProps> = ({
                 <PhotoCard
                     asset={asset}
                     index={assets.findIndex(a => a.asset_id === asset.asset_id)} // Global index
-                    isSelected={selectedAssetIds.has(asset.asset_id)}
-                    selectable={selectable}
+                    isManagementSelected={selectedAssetIds.has(asset.asset_id)}
+                    managementSelectable={managementSelectable}
+                    showCustomerSelection={showCustomerSelection}
                     isCover={coverAssetId === asset.asset_id}
-                    onSelect={onAssetSelect}
+                    onManagementSelect={onManagementSelect}
                     onClick={onAssetClick}
                     onFavorite={onAssetFavorite}
-                    onSelection={onAssetSelection}
+                    onCustomerSelectionToggle={onCustomerSelectionToggle}
                     onDownload={onAssetDownload}
                     onDelete={onAssetDelete}
                     onSetCover={onSetCover}
