@@ -31,6 +31,9 @@ export const VISITOR_ID_KEY_PREFIX = 'visitor_id_';
 /** Prefix for PIN verification status in localStorage */
 export const PIN_VERIFIED_KEY_PREFIX = 'pin_verified_';
 
+/** Prefix for Password verification status in localStorage */
+export const PASSWORD_VERIFIED_KEY_PREFIX = 'password_verified_';
+
 // =============================================================================
 // Gallery Grid Configuration
 // =============================================================================

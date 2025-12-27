@@ -22,7 +22,7 @@ const WorkflowTabs = lazy(() => import('../../components/landing/sections/Workfl
 const AutomationSection = lazy(() => import('../../components/landing/sections/AutomationSection'));
 const SecuritySection = lazy(() => import('../../components/landing/sections/SecuritySection'));
 const TestimonialsSection = lazy(() => import('../../components/landing/sections/TestimonialsSection'));
-const ComparisonSection = lazy(() => import('../../components/landing/sections/ComparisonSection'));
+const WhySwitchSection = lazy(() => import('../../components/landing/sections/WhySwitchSection'));
 const PricingSection = lazy(() => import('../../components/landing/sections/PricingSection'));
 const FAQSection = lazy(() => import('../../components/landing/sections/FAQSection'));
 const CTASection = lazy(() => import('../../components/landing/sections/CTASection'));
@@ -165,7 +165,7 @@ const LandingPage: React.FC = () => {
 
           <Suspense fallback={<SectionSkeleton height="600px" />}>
             {/* Competitor Comparison - Differentiation */}
-            <ComparisonSection />
+            <WhySwitchSection />
           </Suspense>
 
           <Suspense fallback={<SectionSkeleton height="700px" />}>

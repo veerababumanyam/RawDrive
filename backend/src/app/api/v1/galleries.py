@@ -37,6 +37,7 @@ from app.services.gallery_service import (
     SubGalleryNotFoundError,
     get_gallery_service,
 )
+from app.utils.security import hash_password
 from app.services.deletion_service import (
     DeletionError,
     get_deletion_service,
@@ -199,18 +200,16 @@ async def update_gallery(
             updates.pop("password", None)
             updates["password_hash"] = None
         elif request.password:
-            # TODO: Hash password using bcrypt
             updates.pop("password", None)
-            updates["password_hash"] = request.password  # Placeholder - should hash
+            updates["password_hash"] = hash_password(request.password)
 
         # Handle PIN update
         if request.remove_pin:
             updates.pop("pin", None)
             updates["pin_hash"] = None
         elif request.pin:
-            # TODO: Hash PIN using bcrypt/argon2
             updates.pop("pin", None)
-            updates["pin_hash"] = request.pin  # Placeholder - should hash
+            updates["pin_hash"] = hash_password(request.pin)
 
         result = await service.update_gallery(
             workspace_id=workspace_id,
@@ -502,7 +501,15 @@ async def remove_assets_from_gallery(
     except GalleryNotFoundError as e:
         raise NotFoundError("Gallery", str(gallery_id))
     except Exception as e:
-        logger.exception("Failed to remove assets from gallery")
+        logger.exception(
+            "Failed to remove assets from gallery",
+            extra={
+                "workspace_id": str(workspace_id),
+                "gallery_id": str(gallery_id),
+                "asset_ids": [str(a) for a in request.asset_ids],
+                "error": str(e),
+            }
+        )
         raise InternalError("Failed to remove assets from gallery")
 
 

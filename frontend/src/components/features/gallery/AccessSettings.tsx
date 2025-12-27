@@ -25,21 +25,19 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
   );
   const [customDomain, setCustomDomain] = useState(gallery.custom_domain || '');
 
+  const [isPasswordEnabled, setIsPasswordEnabled] = useState(gallery.password_protected || false);
+
   const handlePasswordToggle = (enabled: boolean) => {
-    if (enabled) {
-      // Password will be set when user types it
-    } else {
+    setIsPasswordEnabled(enabled);
+    if (!enabled) {
       onUpdate({ remove_password: true });
+      setPassword('');
     }
   };
 
   const handlePasswordChange = (value: string) => {
     setPassword(value);
-    if (value) {
-      onUpdate({ password: value });
-    } else {
-      onUpdate({ remove_password: true });
-    }
+    onUpdate({ password: value });
   };
 
   const handleEmailRequiredToggle = (enabled: boolean) => {
@@ -62,8 +60,6 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
     onUpdate({ custom_domain: value || null });
   };
 
-  const hasPassword = gallery.password_protected || false;
-
   return (
     <div className="space-y-6">
       <AppCard padding="md">
@@ -74,10 +70,10 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
         <div className="space-y-4">
           <Toggle
             label="Require password to view gallery"
-            checked={hasPassword}
+            checked={isPasswordEnabled}
             onChange={(e) => handlePasswordToggle(e.target.checked)}
           />
-          {hasPassword && (
+          {isPasswordEnabled && (
             <div>
               <AppInput
                 type="password"

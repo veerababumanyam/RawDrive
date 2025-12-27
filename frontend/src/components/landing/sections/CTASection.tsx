@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -7,7 +7,6 @@ import {
   Calendar,
   Clock,
   CreditCard,
-  Gift,
   MessageCircle,
   Shield,
   Sparkles,
@@ -19,13 +18,13 @@ import {
 import { FadeIn } from '../animations/FadeIn';
 
 /* =============================================================================
-   CTASection Component v2.0
+   CTASection Component v2.1
 
-   Final "No Escape" CTA section with:
-   - Urgency timer
+   Final CTA section with:
    - Dual CTAs (Start Free + Book Demo)
-   - Live social proof
+   - Real social proof stats
    - Enhanced trust signals
+   - No fake urgency patterns (removed countdown timer and fake signup counter)
    ============================================================================= */
 
 interface TrustPoint {
@@ -51,54 +50,6 @@ const defaultTrustPoints: TrustPoint[] = [
   { icon: <Shield size={16} />, text: 'Cancel anytime' },
 ];
 
-// Countdown hook
-const useCountdown = (targetHours: number = 24) => {
-  const [timeLeft, setTimeLeft] = useState({
-    hours: targetHours,
-    minutes: 0,
-    seconds: 0,
-  });
-
-  useEffect(() => {
-    const endTime = new Date();
-    endTime.setHours(endTime.getHours() + targetHours);
-
-    const timer = setInterval(() => {
-      const now = new Date();
-      const diff = endTime.getTime() - now.getTime();
-
-      if (diff <= 0) {
-        clearInterval(timer);
-        return;
-      }
-
-      setTimeLeft({
-        hours: Math.floor(diff / (1000 * 60 * 60)),
-        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((diff % (1000 * 60)) / 1000),
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [targetHours]);
-
-  return timeLeft;
-};
-
-// Live signup counter simulation
-const useLiveSignups = (baseCount: number = 47) => {
-  const [count, setCount] = useState(baseCount);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCount(prev => prev + 1);
-    }, 30000); // New signup every 30 seconds
-    return () => clearInterval(interval);
-  }, []);
-
-  return count;
-};
-
 export const CTASection: React.FC<CTASectionProps> = ({
   className = '',
   id = 'cta',
@@ -110,9 +61,6 @@ export const CTASection: React.FC<CTASectionProps> = ({
   secondaryCTALink = '/demo',
   trustPoints = defaultTrustPoints,
 }) => {
-  const countdown = useCountdown(24);
-  const recentSignups = useLiveSignups(47);
-
   return (
     <section
       id={id}
@@ -154,46 +102,21 @@ export const CTASection: React.FC<CTASectionProps> = ({
             />
 
             <div className="relative px-6 py-12 sm:px-12 sm:py-16 lg:px-20 lg:py-20">
-              {/* Urgency Banner */}
+              {/* Trust Badge - Real stat without fake counter */}
               <div className="flex flex-col items-center gap-4 mb-10">
-                {/* Live Activity */}
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20"
                 >
-                  <span className="relative flex h-2 w-2">
+                  <span className="relative flex h-2 w-2" aria-hidden="true">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                   </span>
                   <span className="text-sm text-emerald-300">
-                    <span className="font-semibold">{recentSignups}</span> photographers signed up today
+                    <span className="font-semibold">20,000+</span> photographers already using RawDrive
                   </span>
                 </motion.div>
-
-                {/* Timer Badge */}
-                <div className="inline-flex items-center gap-4 px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
-                  <div className="flex items-center gap-2">
-                    <Gift className="w-5 h-5 text-amber-400" />
-                    <span className="text-white font-semibold">Offer ends in</span>
-                  </div>
-                  <div className="landing-countdown">
-                    <div className="landing-countdown-unit">
-                      <span className="landing-countdown-value">{String(countdown.hours).padStart(2, '0')}</span>
-                      <span className="landing-countdown-label">hrs</span>
-                    </div>
-                    <span className="text-slate-500">:</span>
-                    <div className="landing-countdown-unit">
-                      <span className="landing-countdown-value">{String(countdown.minutes).padStart(2, '0')}</span>
-                      <span className="landing-countdown-label">min</span>
-                    </div>
-                    <span className="text-slate-500">:</span>
-                    <div className="landing-countdown-unit">
-                      <span className="landing-countdown-value">{String(countdown.seconds).padStart(2, '0')}</span>
-                      <span className="landing-countdown-label">sec</span>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* Headline */}
@@ -220,11 +143,12 @@ export const CTASection: React.FC<CTASectionProps> = ({
                   "
                 >
                   <span className="relative z-10 flex items-center gap-2">
-                    <Zap size={20} className="fill-current" />
+                    <Zap size={20} className="fill-current" aria-hidden="true" />
                     {primaryCTA}
                     <ArrowRight
                       size={20}
                       className="transition-transform group-hover:translate-x-1"
+                      aria-hidden="true"
                     />
                   </span>
                 </Link>
@@ -237,7 +161,7 @@ export const CTASection: React.FC<CTASectionProps> = ({
                     w-full sm:w-auto min-w-[220px]
                   "
                 >
-                  <Calendar size={18} className="text-cyan-400" />
+                  <Calendar size={18} className="text-cyan-400" aria-hidden="true" />
                   {secondaryCTA}
                 </Link>
               </div>
@@ -249,7 +173,7 @@ export const CTASection: React.FC<CTASectionProps> = ({
                     key={index}
                     className="flex items-center gap-2 text-sm text-slate-300"
                   >
-                    <span className="text-cyan-400">{point.icon}</span>
+                    <span className="text-cyan-400" aria-hidden="true">{point.icon}</span>
                     {point.text}
                   </div>
                 ))}
@@ -259,7 +183,7 @@ export const CTASection: React.FC<CTASectionProps> = ({
               <div className="flex flex-col items-center gap-6">
                 {/* User Avatars + Rating */}
                 <div className="flex flex-col sm:flex-row items-center gap-4">
-                  <div className="flex -space-x-3">
+                  <div className="flex -space-x-3" aria-hidden="true">
                     {[
                       { letter: 'P', bg: 'bg-pink-500' },
                       { letter: 'A', bg: 'bg-cyan-500' },
@@ -275,7 +199,6 @@ export const CTASection: React.FC<CTASectionProps> = ({
                           flex items-center justify-center
                           text-white text-sm font-bold
                         `}
-                        aria-hidden="true"
                       >
                         {avatar.letter}
                       </div>
@@ -285,19 +208,19 @@ export const CTASection: React.FC<CTASectionProps> = ({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="flex gap-0.5">
+                    <div className="flex gap-0.5" aria-label="4.9 out of 5 stars">
                       {[1, 2, 3, 4, 5].map((i) => (
-                        <Star key={i} size={16} className="text-amber-400 fill-current" />
+                        <Star key={i} size={16} className="text-amber-400 fill-current" aria-hidden="true" />
                       ))}
                     </div>
                     <span className="text-white font-semibold">4.9</span>
-                    <span className="text-slate-400 text-sm">from 20,000+ reviews</span>
+                    <span className="text-slate-300 text-sm">from 20,000+ reviews</span>
                   </div>
                 </div>
 
                 {/* Guarantee Badge */}
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                  <BadgeCheck className="w-5 h-5 text-emerald-400" />
+                  <BadgeCheck className="w-5 h-5 text-emerald-400" aria-hidden="true" />
                   <span className="text-sm text-emerald-300 font-medium">
                     30-day money-back guarantee on all paid plans
                   </span>
@@ -317,9 +240,9 @@ export const CTASection: React.FC<CTASectionProps> = ({
                         key={stat.label}
                         className="rounded-2xl bg-white/[0.03] border border-white/10 p-5 text-center"
                       >
-                        <Icon className="w-5 h-5 text-cyan-400 mx-auto mb-2" />
+                        <Icon className="w-5 h-5 text-cyan-400 mx-auto mb-2" aria-hidden="true" />
                         <div className="text-white font-bold text-2xl mb-1">{stat.value}</div>
-                        <div className="text-slate-500 text-xs">{stat.label}</div>
+                        <div className="text-slate-300 text-xs">{stat.label}</div>
                       </div>
                     );
                   })}
@@ -331,7 +254,7 @@ export const CTASection: React.FC<CTASectionProps> = ({
 
         {/* Footer micro-text */}
         <FadeIn direction="up" delay={0.3}>
-          <p className="text-center text-sm text-slate-500 mt-8">
+          <p className="text-center text-sm text-slate-300 mt-8">
             Trusted by photographers in 50+ countries. Your data is encrypted and secure.
           </p>
         </FadeIn>

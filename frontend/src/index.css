@@ -109,6 +109,7 @@
   --color-surface-hover: var(--color-neutral-100);
   --color-surface-active: var(--color-neutral-200);
   --color-surface-elevated: #FFFFFF;
+  --color-hero-bg: #0a1628;  /* Dark hero gradient base for auth pages */
 
   /* Text */
   --color-text-primary: var(--color-neutral-900);
@@ -2534,6 +2535,237 @@ body {
 }
 
 /* =============================================================================
+   11.1 FUTURISTIC ANIMATION UTILITIES
+   Premium effects for next-level UI design
+   ============================================================================= */
+
+/* Aurora Animation - Organic background motion */
+@keyframes aurora {
+  0%, 100% {
+    transform: rotate(0deg) scale(1) translateX(0);
+  }
+  25% {
+    transform: rotate(3deg) scale(1.05) translateX(10px);
+  }
+  50% {
+    transform: rotate(-3deg) scale(1.1) translateX(-5px);
+  }
+  75% {
+    transform: rotate(2deg) scale(1.02) translateX(5px);
+  }
+}
+
+.animate-aurora {
+  animation: aurora 20s ease-in-out infinite;
+}
+
+.animate-aurora-slow {
+  animation: aurora 40s ease-in-out infinite;
+}
+
+/* Float Delayed Variant */
+@keyframes floatDelayed {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+  }
+  50% {
+    transform: translateY(-20px) translateX(10px);
+  }
+}
+
+.animate-float-delayed {
+  animation: floatDelayed 8s ease-in-out infinite 2s;
+}
+
+/* Gradient Shift - Color cycling */
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradientShift 8s ease-in-out infinite;
+}
+
+/* Gradient Flow - Smooth horizontal gradient animation */
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient {
+  animation: gradient 3s ease-in-out infinite;
+}
+
+/* Glow Pulse - Ambient lighting */
+@keyframes glowPulseAmbient {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
+}
+
+.animate-glow-ambient {
+  animation: glowPulseAmbient 4s ease-in-out infinite;
+}
+
+/* Spotlight Reveal */
+@keyframes spotlightReveal {
+  0% {
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+
+.animate-spotlight {
+  animation: spotlightReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Subtle Breathe - Alive feeling */
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.animate-breathe {
+  animation: breathe 6s ease-in-out infinite;
+}
+
+/* Hover Lift - Enhanced hover */
+.hover-lift {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.4s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.2);
+}
+
+/* Animation Delays */
+.delay-75 { animation-delay: 75ms; }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+.delay-600 { animation-delay: 600ms; }
+.delay-700 { animation-delay: 700ms; }
+.delay-800 { animation-delay: 800ms; }
+.delay-1000 { animation-delay: 1000ms; }
+
+/* Fill Mode for staggered animations */
+.animation-fill-forwards {
+  animation-fill-mode: forwards;
+}
+
+.animation-fill-both {
+  animation-fill-mode: both;
+}
+
+/* Glass Morphism Enhancement Classes */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.glass-dark {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-heavy {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* Premium Glow Shadows */
+.shadow-accent-glow {
+  box-shadow: 0 4px 20px -2px rgba(6, 182, 212, 0.4);
+}
+
+.shadow-primary-glow {
+  box-shadow: 0 4px 20px -2px rgba(37, 99, 235, 0.4);
+}
+
+.shadow-gold-glow {
+  box-shadow: 0 4px 20px -2px rgba(212, 175, 55, 0.4);
+}
+
+/* Aurora Background Container */
+.aurora-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.aurora-bg::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background:
+    radial-gradient(ellipse at 30% 30%, rgba(6, 182, 212, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 70%, rgba(37, 99, 235, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(212, 175, 55, 0.08) 0%, transparent 40%);
+  animation: aurora 30s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Grid Pattern Background */
+.bg-grid-pattern {
+  background-image:
+    linear-gradient(to right, var(--color-border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-border) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+/* Noise Texture Overlay */
+.noise-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+/* =============================================================================
    12. GRADIENT UTILITIES
    ============================================================================= */
 
@@ -3864,6 +4096,289 @@ body {
     0 0 0 1px rgba(37, 99, 235, 0.12) inset;
   border-color: rgba(37, 99, 235, 0.2);
   transform: translateY(-2px);
+}
+
+/* -------------------------------------------------------------------------
+   18.12.3 AUTH GLASS COMPONENTS - SignIn/SignUp pages on hero backgrounds
+   Glassmorphism for dark hero-gradient backgrounds
+   ------------------------------------------------------------------------- */
+
+/* Auth Glass Card - Card container for auth forms on dark hero backgrounds */
+.auth-glass-card {
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.15),
+    0 8px 48px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Auth Glass Input - Text inputs on dark hero backgrounds */
+.auth-input {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  padding-left: 2.5rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: white;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.75rem;
+  outline: none;
+  min-height: 48px;
+  transition:
+    border-color var(--duration-150) var(--ease-out),
+    box-shadow var(--duration-150) var(--ease-out),
+    background-color var(--duration-150) var(--ease-out);
+}
+
+.auth-input::placeholder {
+  color: var(--color-slate-500);
+}
+
+.auth-input:hover:not(:disabled):not(:focus) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.auth-input:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--color-primary-500);
+}
+
+.auth-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Auth Input without icon padding */
+.auth-input-no-icon {
+  padding-left: 1rem;
+}
+
+/* Auth Input Icon Container */
+.auth-input-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-slate-500);
+  pointer-events: none;
+}
+
+/* Auth Input Toggle Button (show/hide password) */
+.auth-input-toggle {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.25rem;
+  color: var(--color-slate-500);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--duration-150) var(--ease-out);
+}
+
+.auth-input-toggle:hover {
+  color: white;
+}
+
+/* Auth Google Button - OAuth button on dark backgrounds */
+.auth-btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-gray-900);
+  background: white;
+  border: none;
+  border-radius: 0.75rem;
+  min-height: 48px;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-150) var(--ease-out),
+    transform var(--duration-150) var(--ease-out);
+}
+
+.auth-btn-google:hover {
+  background: var(--color-gray-50);
+}
+
+.auth-btn-google:active {
+  transform: scale(0.99);
+}
+
+/* Auth Divider - "or" separator line */
+.auth-divider {
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.auth-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.auth-divider-text {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.75rem;
+  font-size: var(--text-xs);
+  color: var(--color-slate-500);
+  background: var(--color-hero-bg);
+}
+
+/* Auth Primary Button - CTA button on dark backgrounds */
+.auth-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: white;
+  background: var(--color-primary-600);
+  border: none;
+  border-radius: 0.75rem;
+  min-height: 48px;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-150) var(--ease-out),
+    transform var(--duration-150) var(--ease-out);
+}
+
+.auth-btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-500);
+}
+
+.auth-btn-primary:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.auth-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Auth Checkbox - Styled checkbox for dark backgrounds */
+.auth-checkbox {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.125rem;
+  border-radius: 0.25rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color var(--duration-150) var(--ease-out),
+    border-color var(--duration-150) var(--ease-out);
+}
+
+.auth-checkbox:checked {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+}
+
+.auth-checkbox:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+/* Auth Text Styles */
+.auth-heading {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: white;
+  margin-bottom: 0.25rem;
+}
+
+.auth-subheading {
+  font-size: var(--text-sm);
+  color: var(--color-slate-400);
+}
+
+.auth-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-slate-300);
+  margin-bottom: 0.375rem;
+}
+
+.auth-link {
+  color: var(--color-primary-400);
+  text-decoration: none;
+  font-weight: var(--font-medium);
+  transition: color var(--duration-150) var(--ease-out);
+}
+
+.auth-link:hover {
+  color: var(--color-primary-300);
+}
+
+.auth-text-muted {
+  color: var(--color-slate-400);
+}
+
+/* Auth Error Alert */
+.auth-error {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--color-red-400);
+  font-size: var(--text-sm);
+}
+
+/* Auth Password Requirements Badge */
+.auth-requirement {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: var(--text-xs);
+  border-radius: 9999px;
+  transition:
+    background-color var(--duration-150) var(--ease-out),
+    color var(--duration-150) var(--ease-out);
+}
+
+.auth-requirement-pending {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-slate-500);
+}
+
+.auth-requirement-met {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-emerald-400);
 }
 
 /* -------------------------------------------------------------------------

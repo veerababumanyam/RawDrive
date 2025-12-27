@@ -241,6 +241,21 @@ class AuditEventType(str, Enum):
     PROFILE_UPDATED = "profile.updated"
     POLICY_GENERATED = "policy.generated"
 
+    # User Profile events
+    USER_PROFILE_UPDATED = "user.profile_updated"
+    USER_AVATAR_UPLOADED = "user.avatar_uploaded"
+    USER_AVATAR_DELETED = "user.avatar_deleted"
+    USER_EMAIL_CHANGE_REQUESTED = "user.email_change_requested"
+    USER_EMAIL_CHANGED = "user.email_changed"
+    USER_2FA_ENABLED = "user.2fa_enabled"
+    USER_2FA_DISABLED = "user.2fa_disabled"
+    USER_SETTINGS_UPDATED = "user.settings_updated"
+    USER_DELETION_REQUESTED = "user.deletion_requested"
+    USER_DELETION_CANCELLED = "user.deletion_cancelled"
+    USER_DELETION_COMPLETED = "user.deletion_completed"  # GDPR: Record when data deleted
+    USER_DELETION_FAILED = "user.deletion_failed"  # GDPR: Record deletion failures
+    DATA_EXPORT_REQUESTED = "user.data_export_requested"
+
 
 @dataclass
 class AuditEvent:

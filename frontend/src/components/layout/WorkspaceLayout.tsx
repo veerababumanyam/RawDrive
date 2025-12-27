@@ -9,6 +9,8 @@ import {
 import { WorkspaceSidebar } from '../workspace/WorkspaceSidebar';
 import { WorkspaceHeader } from '../workspace/WorkspaceHeader';
 import { useTheme } from '../../hooks/useTheme';
+import { useAuth } from '../../contexts/AuthContext';
+import { useStorageUsage } from '../../hooks/useStorageUsage';
 
 /* =============================================================================
    WorkspaceLayout Component
@@ -22,23 +24,10 @@ import { useTheme } from '../../hooks/useTheme';
    - Sidebar is collapsible (hide/show) and persists state
    - Mobile-first responsive design
    - Uses React Router's Outlet for nested routes
+   - Fetches REAL storage data from the backend API
    ============================================================================= */
 
 interface WorkspaceLayoutProps {
-  /** Current workspace name */
-  workspaceName?: string;
-  /** Current user */
-  user?: {
-    name: string;
-    email: string;
-    avatar?: string;
-  };
-  /** User's plan */
-  plan?: 'free' | 'pro' | 'enterprise';
-  /** Storage used in bytes */
-  storageUsed?: number;
-  /** Storage limit in bytes */
-  storageLimit?: number;
   /** Notifications */
   notifications?: Array<{
     id: string;
@@ -59,23 +48,49 @@ interface WorkspaceLayoutProps {
 }
 
 export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
-  workspaceName = 'My Workspace',
-  user = { name: 'John Doe', email: 'john@example.com' },
-  plan = 'free',
-  storageUsed = 2.5 * 1024 * 1024 * 1024, // 2.5GB demo
-  storageLimit = 5 * 1024 * 1024 * 1024,
   notifications = [],
   maxWidth = 'none',
   noPadding = false,
   children,
 }) => {
   const { resolvedTheme, toggleTheme } = useTheme();
+  const { user, workspace } = useAuth();
+
+  // Fetch real storage data from API
+  const workspaceId = workspace?.workspace_id || '';
+  const { storageUsage, subscriptionStatus } = useStorageUsage({
+    workspaceId,
+    autoFetch: !!workspaceId,
+    autoRefresh: true,
+    includeSubscription: true,
+  });
+
+  // Derive plan from subscription status, default to 'free'
+  const planCode = subscriptionStatus?.plan?.code || storageUsage?.plan_code || 'free';
+  const plan = planCode === 'starter' || planCode === 'professional' || planCode === 'business'
+    ? 'pro'
+    : planCode === 'enterprise'
+    ? 'enterprise'
+    : 'free';
+
+  // Get real storage values from API (with fallbacks for loading state)
+  const storageUsedBytes = storageUsage?.storage_used_bytes || 0;
+  const storageLimitBytes = storageUsage?.storage_limit_bytes || (1 * 1024 * 1024 * 1024); // Default 1GB
+
+  // Build user object for header
+  const headerUser = user
+    ? {
+        name: user.displayName || user.email,
+        email: user.email,
+        avatar: user.avatarUrl,
+      }
+    : { name: 'User', email: '' };
 
   return (
     <AppShell>
       {/* Header - Fixed at top, full width */}
       <WorkspaceHeader
-        user={user}
+        user={headerUser}
         notifications={notifications}
         theme={resolvedTheme}
         onToggleTheme={toggleTheme}
@@ -86,10 +101,10 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
         {/* Sidebar - Collapsible, starts below header */}
         <AppShellSidebar>
           <WorkspaceSidebar
-            workspaceName={workspaceName}
+            workspaceName={workspace?.name || 'My Workspace'}
             plan={plan}
-            storageUsed={storageUsed}
-            storageLimit={storageLimit}
+            storageUsed={storageUsedBytes}
+            storageLimit={storageLimitBytes}
           />
         </AppShellSidebar>
 

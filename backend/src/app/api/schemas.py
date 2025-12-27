@@ -515,6 +515,7 @@ class GalleryListItemResponse(BaseModel):
     client_name: Optional[str] = None
     client_id: Optional[UUID] = None
     shoot_date: Optional[str] = None
+    cover_asset_id: Optional[UUID] = None
     cover_image_url: Optional[str] = None
     published_at: Optional[str] = None
     pinned_at: Optional[str] = None
@@ -548,6 +549,7 @@ class CreateUploadSessionRequest(BaseModel):
 
     gallery_id: Optional[UUID] = Field(None, description="Target gallery UUID (null for library upload)")
     sub_gallery_id: Optional[UUID] = Field(None, description="Target sub-gallery UUID (null = root)")
+    folder_id: Optional[UUID] = Field(None, description="Target library folder UUID (null = root library)")
     file_name: str = Field(..., min_length=1, max_length=255, description="Original filename")
     mime_type: str = Field(..., description="MIME type (e.g., image/jpeg)")
     size_bytes: int = Field(..., ge=1, description="File size in bytes")
@@ -1018,3 +1020,479 @@ class BulkRevokeResponse(BaseModel):
     """Response from bulk revoke operation."""
     revoked_count: int
     failed: list[BulkRevokeFailure] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Storage Usage Schemas
+# ---------------------------------------------------------------------------
+
+
+class StorageUsageResponse(BaseModel):
+    """Storage usage for a workspace."""
+
+    workspace_id: UUID
+    storage_used_bytes: int = Field(..., description="Total storage used in bytes")
+    storage_limit_bytes: int = Field(..., description="Storage limit based on plan")
+    storage_used_formatted: str = Field(..., description="Human readable used (e.g. '2.5 GB')")
+    storage_limit_formatted: str = Field(..., description="Human readable limit (e.g. '5 GB')")
+    usage_percent: float = Field(..., ge=0, le=100, description="Usage percentage")
+    asset_count: int = Field(..., description="Number of assets")
+    plan_code: str = Field(..., description="Current plan code")
+    is_near_limit: bool = Field(..., description="True if usage > 80%")
+    is_at_limit: bool = Field(..., description="True if usage >= 100%")
+    last_updated_at: Optional[datetime] = Field(None, description="Cache timestamp")
+
+
+class StorageBreakdownItem(BaseModel):
+    """Storage breakdown by type or folder."""
+
+    name: str
+    storage_bytes: int
+    asset_count: int
+    percentage: float
+
+
+class StorageBreakdownResponse(BaseModel):
+    """Detailed storage breakdown."""
+
+    workspace_id: UUID
+    total_bytes: int
+    by_type: list[StorageBreakdownItem] = Field(default_factory=list)
+    by_month: list[StorageBreakdownItem] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# User Profile Settings Schemas (T005-T007)
+# ---------------------------------------------------------------------------
+
+
+class NotificationChannelPrefs(BaseModel):
+    """Notification preferences for a single channel (email or in-app)."""
+
+    gallery_activity: bool = True
+    client_interactions: bool = True
+    system_alerts: bool = True
+    marketing: bool = False
+
+
+class NotificationPreferencesSchema(BaseModel):
+    """Complete notification preferences."""
+
+    email: NotificationChannelPrefs = Field(default_factory=NotificationChannelPrefs)
+    in_app: NotificationChannelPrefs = Field(default_factory=lambda: NotificationChannelPrefs(marketing=True))
+
+
+class PrivacySettingsSchema(BaseModel):
+    """User privacy settings."""
+
+    analytics_enabled: bool = True
+    public_profile_enabled: bool = True
+
+
+class ExtendedUserProfileResponse(BaseModel):
+    """Extended user profile response with all new fields."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: UUID
+    email: str
+    display_name: str
+    email_verified: bool
+    preferred_language: str
+    created_at: datetime
+    workspace_id: Optional[UUID] = None
+
+    # New profile fields
+    avatar_url: Optional[str] = None
+    job_title: Optional[str] = None
+    phone: Optional[str] = None
+    timezone: str = "Asia/Kolkata"
+    bio: Optional[str] = None
+
+    # Security status
+    totp_enabled: bool = False
+    last_password_changed_at: Optional[datetime] = None
+
+    # Deletion status
+    deletion_requested_at: Optional[datetime] = None
+
+
+class UpdateProfileRequest(BaseModel):
+    """Request to update user profile."""
+
+    display_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    job_title: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=50)
+    timezone: Optional[str] = Field(None, max_length=50)
+    bio: Optional[str] = Field(None, max_length=500)
+    preferred_language: Optional[str] = Field(None, max_length=10)
+
+
+class AvatarUploadResponse(BaseModel):
+    """Response from avatar upload."""
+
+    avatar_url: str
+    thumbnails: dict[str, str] = Field(default_factory=dict)
+
+
+class EmailChangeRequest(BaseModel):
+    """Request to change email address."""
+
+    new_email: EmailStr
+    password: str = Field(..., description="Current password for verification")
+
+
+# ---------------------------------------------------------------------------
+# Security Settings Schemas (T006)
+# ---------------------------------------------------------------------------
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request to change password."""
+
+    current_password: str = Field(..., description="Current password")
+    new_password: str = Field(
+        ...,
+        min_length=12,
+        max_length=128,
+        description="New password (min 12 chars, must include upper, lower, number, special)"
+    )
+
+
+class TwoFactorSetupResponse(BaseModel):
+    """Response from 2FA setup initiation."""
+
+    secret: str = Field(..., description="Base32-encoded TOTP secret")
+    qr_code_uri: str = Field(..., description="otpauth:// URI for QR code")
+    qr_code_svg: Optional[str] = Field(None, description="SVG QR code (base64)")
+    issuer: str = "RawDrive"
+
+
+class Verify2FARequest(BaseModel):
+    """Request to verify and enable 2FA."""
+
+    code: str = Field(..., pattern=r"^\d{6}$", description="6-digit TOTP code")
+
+
+class TwoFactorEnabledResponse(BaseModel):
+    """Response when 2FA is successfully enabled."""
+
+    message: str = "Two-factor authentication enabled"
+    backup_codes: list[str] = Field(..., description="One-time backup codes (show only once)")
+
+
+class TwoFactorStatusResponse(BaseModel):
+    """Response for 2FA status check."""
+
+    enabled: bool
+    enabled_at: Optional[datetime] = None
+    backup_codes_remaining: Optional[int] = None
+
+
+class Disable2FARequest(BaseModel):
+    """Request to disable 2FA."""
+
+    password: str = Field(..., description="Password for verification")
+    code: str = Field(..., pattern=r"^\d{6}$", description="6-digit TOTP code")
+
+
+class PasswordConfirmRequest(BaseModel):
+    """Request that requires password confirmation."""
+
+    password: str = Field(..., description="Password for verification")
+
+
+class BackupCodesResponse(BaseModel):
+    """Response with new backup codes."""
+
+    backup_codes: list[str] = Field(..., description="New backup codes")
+
+
+class SessionLocationSchema(BaseModel):
+    """Session location from IP geolocation."""
+
+    country: Optional[str] = None
+    country_code: Optional[str] = None
+    city: Optional[str] = None
+    region: Optional[str] = None
+
+
+class SessionItemResponse(BaseModel):
+    """Enhanced session item with location."""
+
+    session_id: UUID
+    device_info: Optional[dict] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    location: Optional[SessionLocationSchema] = None
+    created_at: datetime
+    last_used_at: datetime
+    is_current: bool = False
+
+
+class SessionListWithLocationResponse(BaseModel):
+    """List of sessions with location data."""
+
+    items: list[SessionItemResponse]
+
+
+# ---------------------------------------------------------------------------
+# Notification Preferences Schemas (T007)
+# ---------------------------------------------------------------------------
+
+
+class UpdateNotificationPreferencesRequest(BaseModel):
+    """Request to update notification preferences."""
+
+    email: Optional[dict[str, bool]] = None
+    in_app: Optional[dict[str, bool]] = None
+
+
+class NotificationPreferencesResponse(BaseModel):
+    """Response with current notification preferences."""
+
+    email: NotificationChannelPrefs
+    in_app: NotificationChannelPrefs
+
+
+# ---------------------------------------------------------------------------
+# Privacy Settings Schemas (T007)
+# ---------------------------------------------------------------------------
+
+
+class UpdatePrivacySettingsRequest(BaseModel):
+    """Request to update privacy settings."""
+
+    analytics_enabled: Optional[bool] = None
+    public_profile_enabled: Optional[bool] = None
+
+
+class PrivacySettingsResponse(BaseModel):
+    """Response with current privacy settings."""
+
+    analytics_enabled: bool
+    public_profile_enabled: bool
+
+
+# ---------------------------------------------------------------------------
+# Data Export Schemas (T007)
+# ---------------------------------------------------------------------------
+
+
+class DataExportResponse(BaseModel):
+    """Response for data export request."""
+
+    export_id: UUID
+    status: Literal["pending", "processing", "completed", "failed", "expired"]
+    requested_at: datetime
+    completed_at: Optional[datetime] = None
+    download_url: Optional[str] = None
+    expires_at: Optional[datetime] = None
+
+
+# ---------------------------------------------------------------------------
+# Account Deletion Schemas (T062-T079)
+# ---------------------------------------------------------------------------
+
+
+class DeleteAccountRequest(BaseModel):
+    """Request to delete account."""
+
+    password: str = Field(..., min_length=1, description="Password for verification")
+    reason: Optional[str] = Field(None, max_length=500, description="Optional reason for deletion")
+
+
+class AccountDeletionResponse(BaseModel):
+    """Response from account deletion request."""
+
+    deletion_id: str = Field(..., description="Unique deletion request ID")
+    status: Literal["pending", "cancelled", "processing", "completed", "failed"]
+    reason: Optional[str] = None
+    requested_at: datetime
+    scheduled_deletion_at: datetime
+    cancelled_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    days_until_deletion: int = Field(..., description="Days remaining until permanent deletion")
+    can_cancel: bool = Field(..., description="Whether the deletion can still be cancelled")
+    message: str = Field(
+        default="Account deletion scheduled. You can cancel within 30 days.",
+        description="User-friendly status message"
+    )
+
+
+class DeletionStatusResponse(BaseModel):
+    """Response with account deletion status."""
+
+    has_pending_deletion: bool
+    deletion_id: Optional[str] = None
+    scheduled_deletion_at: Optional[datetime] = None
+    days_until_deletion: Optional[int] = None
+    can_cancel: bool = False
+
+
+# Keep legacy schema for compatibility
+class DeletionRequestResponse(BaseModel):
+    """Legacy response from account deletion request."""
+
+    request_id: UUID
+    requested_at: datetime
+    scheduled_deletion_at: datetime
+    message: str = "Account deletion scheduled. Log in within 14 days to cancel."
+
+
+# ---------------------------------------------------------------------------
+# Gemini Settings Schemas (003-user-gemini-settings)
+# ---------------------------------------------------------------------------
+
+
+class GeminiModelPublic(BaseModel):
+    """Public Gemini model information."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    model_id: UUID
+    identifier: str = Field(..., description="Google's model identifier")
+    display_name: str = Field(..., description="User-friendly name")
+    is_default: bool = Field(False, description="Whether this is the platform default")
+
+
+class UserGeminiSettingsResponse(BaseModel):
+    """User's Gemini settings response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    status: Literal["not_configured", "connected", "validation_failed"] = Field(
+        ..., description="Current configuration status"
+    )
+    has_api_key: bool = Field(..., description="Whether an API key is stored")
+    api_key_masked: Optional[str] = Field(
+        None, description="Masked key display (e.g., 'AIza...x7Bq')"
+    )
+    selected_model: Optional[GeminiModelPublic] = Field(
+        None, description="User's selected model (null = using default)"
+    )
+    effective_model: Optional[GeminiModelPublic] = Field(
+        None, description="Model that will be used (selected or platform default)"
+    )
+    last_validated_at: Optional[datetime] = Field(
+        None, description="When the key was last validated"
+    )
+    validation_error: Optional[str] = Field(
+        None, description="Last validation error message"
+    )
+
+
+class UpdateGeminiSettingsRequest(BaseModel):
+    """Request to update Gemini settings."""
+
+    api_key: Optional[str] = Field(
+        None, description="New Gemini API key (will be validated before saving)"
+    )
+    selected_model_id: Optional[UUID] = Field(
+        None, description="Model to select (null to use platform default)"
+    )
+
+
+class GeminiValidationError(BaseModel):
+    """Gemini API key validation error details."""
+
+    error: Literal[
+        "INVALID_KEY",
+        "KEY_UNAUTHORIZED",
+        "KEY_FORBIDDEN",
+        "RATE_LIMITED",
+        "SERVICE_UNAVAILABLE",
+        "NETWORK_ERROR",
+    ] = Field(..., description="Error code")
+    message: str = Field(..., description="User-friendly error message")
+    hint: Optional[str] = Field(None, description="Actionable guidance for the user")
+
+
+class KeyValidationResult(BaseModel):
+    """Result of API key validation."""
+
+    valid: bool = Field(..., description="Whether the key is valid")
+    error: Optional[GeminiValidationError] = Field(
+        None, description="Error details if validation failed"
+    )
+    available_models: Optional[list[str]] = Field(
+        None, description="Models available with this key (if valid)"
+    )
+
+
+class ValidateGeminiKeyRequest(BaseModel):
+    """Request to validate a Gemini API key."""
+
+    api_key: str = Field(..., description="Gemini API key to validate")
+
+
+class GeminiModelsListResponse(BaseModel):
+    """Response for listing available Gemini models."""
+
+    models: list[GeminiModelPublic]
+    default_model_id: Optional[UUID] = Field(
+        None, description="Platform default model ID"
+    )
+
+
+# Admin schemas for model management
+class GeminiModelAdmin(GeminiModelPublic):
+    """Admin view of Gemini model with additional fields."""
+
+    description: Optional[str] = None
+    sort_order: int = 0
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+    user_count: int = Field(0, description="Number of users who selected this model")
+
+
+class CreateGeminiModelRequest(BaseModel):
+    """Request to create a new Gemini model."""
+
+    identifier: str = Field(..., description="Google's model identifier")
+    display_name: str = Field(..., description="User-facing name")
+    description: Optional[str] = None
+    sort_order: int = 0
+    is_active: bool = True
+    is_default: bool = False
+
+
+class UpdateGeminiModelRequest(BaseModel):
+    """Request to update a Gemini model."""
+
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+    is_default: Optional[bool] = None
+
+
+class ReorderGeminiModelsRequest(BaseModel):
+    """Request to reorder Gemini models."""
+
+    model_ids: list[UUID] = Field(
+        ..., description="Model IDs in desired order (first = sort_order 1)"
+    )
+
+
+class ModelDistribution(BaseModel):
+    """Model usage distribution for admin stats."""
+
+    model_identifier: str
+    display_name: str
+    user_count: int
+
+
+class GeminiAdminStats(BaseModel):
+    """Aggregate Gemini configuration statistics for admin."""
+
+    total_users: int = Field(..., description="Total users in scope")
+    users_with_key: int = Field(..., description="Users with configured API key")
+    users_connected: int = Field(..., description="Users with 'connected' status")
+    users_failed: int = Field(..., description="Users with 'validation_failed' status")
+    model_distribution: list[ModelDistribution] = Field(default_factory=list)
+    recent_ai_calls: int = Field(0, description="AI calls in last 24 hours")
+    ai_success_rate: float = Field(
+        0.0, ge=0, le=100, description="Percentage of successful AI calls"
+    )

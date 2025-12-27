@@ -77,9 +77,9 @@ WORKSPACE_ROLE_USERS = [
 ]
 
 DEFAULT_WS_ROLES = [
-    ("owner", ["workspace:write", "members:write", "roles:write", "galleries:write", "assets:write", "billing:write", "audit:read"], True),
-    ("admin", ["workspace:write", "members:write", "roles:write", "galleries:write", "assets:write", "billing:read", "audit:read"], True),
-    ("editor", ["galleries:write", "assets:write"], True),
+    ("owner", ["workspace:*", "members:*", "roles:*", "galleries:*", "assets:*", "billing:*", "audit:read"], True),
+    ("admin", ["workspace:write", "members:write", "roles:write", "galleries:*", "assets:*", "billing:read", "audit:read"], True),
+    ("editor", ["galleries:write", "galleries:read", "assets:write", "assets:read"], True),
     ("viewer", ["galleries:read", "assets:read"], True),
 ]
 

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Twitter, Linkedin, Instagram, Github, Mail, Phone, MapPin, CreditCard, Banknote, Smartphone, Shield, Zap } from 'lucide-react';
+import { Twitter, Linkedin, Instagram, Github, Mail, Phone, MapPin, CreditCard, Banknote, Smartphone, Shield, Zap, Loader2 } from 'lucide-react';
 
 /* =============================================================================
    LandingFooter Component
@@ -39,30 +39,30 @@ const defaultSections: FooterSection[] = [
     title: 'Product',
     links: [
       { label: 'Features', href: '/features' },
-      { label: 'Pricing', href: '/pricing' },
-      { label: 'Galleries', href: '/features#galleries' },
-      { label: 'Albums', href: '/features#albums' },
-      { label: 'Client Proofing', href: '/features#proofing' },
+      { label: 'Pricing', href: '/#pricing' },
+      { label: 'How It Works', href: '/#workflow' },
+      { label: 'Security', href: '/#security' },
+      { label: 'FAQ', href: '/#faq' },
     ],
   },
   {
-    title: 'Company',
+    title: 'Solutions',
     links: [
-      { label: 'About Us', href: '/about' },
-      { label: 'Blog', href: '/blog' },
-      { label: 'Careers', href: '/careers' },
-      { label: 'Press Kit', href: '/press' },
-      { label: 'Contact', href: '/contact' },
+      { label: 'For Marketing', href: '/solutions/marketing' },
+      { label: 'For Delivery', href: '/solutions/delivery' },
+      { label: 'For Business', href: '/solutions/business' },
+      { label: 'Why RawDrive', href: '/#why-switch' },
+      { label: 'Contact Sales', href: '/contact' },
     ],
   },
   {
     title: 'Resources',
     links: [
-      { label: 'Help Center', href: '/help' },
-      { label: 'Documentation', href: '/docs' },
-      { label: 'API Reference', href: '/api-docs', external: true },
+      { label: 'Help & Support', href: '/contact' },
+      { label: 'FAQ', href: '/faq' },
+      { label: 'Pricing', href: '/pricing' },
       { label: 'Status', href: 'https://status.rawdrive.ai', external: true },
-      { label: 'Community', href: '/community' },
+      { label: 'Contact Us', href: '/contact' },
     ],
   },
   {
@@ -90,6 +90,44 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
   socialLinks = defaultSocialLinks,
   copyright = `© ${new Date().getFullYear()} RawDrive by Swaz Solutions. All rights reserved.`,
 }) => {
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setErrorMessage('Please enter a valid email address');
+      setSubmitStatus('error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitStatus('idle');
+    setErrorMessage('');
+
+    try {
+      // TODO: Replace with actual API call when newsletter service is implemented
+      // For now, simulate a successful submission
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      setSubmitStatus('success');
+      setEmail('');
+
+      // Reset success message after 5 seconds
+      setTimeout(() => setSubmitStatus('idle'), 5000);
+    } catch {
+      setErrorMessage('Something went wrong. Please try again.');
+      setSubmitStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <footer
       className={`
@@ -126,7 +164,7 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
               </Link>
 
               {/* Tagline */}
-              <p className="text-slate-400 text-sm leading-relaxed max-w-xs mb-6">
+              <p className="text-slate-300 text-sm leading-relaxed max-w-xs mb-6">
                 {tagline}
               </p>
 
@@ -168,9 +206,9 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                           target="_blank"
                           rel="noopener noreferrer"
                           className="
-                            text-slate-400 hover:text-white text-sm
+                            text-slate-300 hover:text-white text-sm
                             transition-colors duration-200
-                            focus-visible:outline-none focus-visible:text-white
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded
                           "
                         >
                           {link.label}
@@ -179,9 +217,9 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                         <Link
                           to={link.href}
                           className="
-                            text-slate-400 hover:text-white text-sm
+                            text-slate-300 hover:text-white text-sm
                             transition-colors duration-200
-                            focus-visible:outline-none focus-visible:text-white
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded
                           "
                         >
                           {link.label}
@@ -206,7 +244,7 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
             </div>
             <form
               className="flex flex-col sm:flex-row gap-3 w-full md:w-auto"
-              onSubmit={(e) => e.preventDefault()}
+              onSubmit={handleNewsletterSubmit}
               aria-labelledby="newsletter-heading"
             >
               <div className="flex flex-col gap-1.5 w-full sm:w-64">
@@ -218,23 +256,48 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                   type="email"
                   placeholder="Enter your email"
                   required
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (submitStatus === 'error') {
+                      setSubmitStatus('idle');
+                      setErrorMessage('');
+                    }
+                  }}
+                  disabled={isSubmitting}
                   aria-describedby="footer-email-hint footer-email-error"
-                  className="
+                  aria-invalid={submitStatus === 'error'}
+                  className={`
                     px-4 py-2.5 text-sm text-white
-                    bg-white/5 border border-white/10
+                    bg-white/5 border
                     rounded-lg placeholder:text-slate-400
-                    focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                    focus:outline-none focus:ring-2 focus:border-transparent
                     w-full min-h-[44px]
-                    invalid:border-red-500/50 invalid:focus:ring-red-500
-                  "
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    ${submitStatus === 'error'
+                      ? 'border-red-500/50 focus:ring-red-500'
+                      : 'border-white/10 focus:ring-primary-500'
+                    }
+                  `}
                 />
                 <span id="footer-email-hint" className="sr-only">
                   We'll send you photography tips and product updates. Unsubscribe anytime.
                 </span>
-                <span id="footer-email-error" className="sr-only" role="alert" aria-live="polite"></span>
+                {submitStatus === 'error' && errorMessage && (
+                  <span id="footer-email-error" className="text-red-400 text-xs" role="alert" aria-live="polite">
+                    {errorMessage}
+                  </span>
+                )}
+                {submitStatus === 'success' && (
+                  <span className="text-emerald-400 text-xs" role="status" aria-live="polite">
+                    Thanks for subscribing! Check your inbox.
+                  </span>
+                )}
               </div>
               <button
                 type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
                 className="
                   px-6 py-2.5 text-sm font-semibold text-white
                   bg-gradient-to-r from-primary-600 to-primary-700
@@ -242,9 +305,18 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                   rounded-lg transition-all duration-200
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900
                   min-h-[44px] whitespace-nowrap self-end
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  flex items-center gap-2
                 "
               >
-                Subscribe
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                    <span>Subscribing...</span>
+                  </>
+                ) : (
+                  'Subscribe'
+                )}
               </button>
             </form>
           </div>
@@ -260,9 +332,9 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                 <a
                   href="mailto:info@rawdrive.ai"
                   className="
-                    flex items-center gap-2 text-slate-400 hover:text-white text-sm
+                    flex items-center gap-2 text-slate-300 hover:text-white text-sm
                     transition-colors duration-200
-                    focus-visible:outline-none focus-visible:text-white
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded
                   "
                 >
                   <Mail size={16} aria-hidden="true" />
@@ -271,9 +343,9 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                 <a
                   href="mailto:contactus@rawdrive.ai"
                   className="
-                    flex items-center gap-2 text-slate-400 hover:text-white text-sm
+                    flex items-center gap-2 text-slate-300 hover:text-white text-sm
                     transition-colors duration-200
-                    focus-visible:outline-none focus-visible:text-white
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded
                   "
                 >
                   <Mail size={16} aria-hidden="true" />
@@ -291,9 +363,9 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                   href="tel:+919701087446"
                   aria-label="Call India office"
                   className="
-                    flex items-center gap-2 text-slate-400 hover:text-white text-sm
+                    flex items-center gap-2 text-slate-300 hover:text-white text-sm
                     transition-colors duration-200
-                    focus-visible:outline-none focus-visible:text-white
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded
                   "
                 >
                   <Phone size={16} aria-hidden="true" />
@@ -304,9 +376,9 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                   href="tel:+491785220533"
                   aria-label="Call Germany office"
                   className="
-                    flex items-center gap-2 text-slate-400 hover:text-white text-sm
+                    flex items-center gap-2 text-slate-300 hover:text-white text-sm
                     transition-colors duration-200
-                    focus-visible:outline-none focus-visible:text-white
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded
                   "
                 >
                   <Phone size={16} aria-hidden="true" />
@@ -318,16 +390,16 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
             {/* Address */}
             <div>
               <h3 className="text-white font-semibold mb-4">Address</h3>
-              <div className="space-y-3 text-slate-400 text-sm">
+              <div className="space-y-3 text-slate-300 text-sm">
                 {/* India primary address with CTA */}
                 <a
                   href="https://www.google.com/maps/search/?api=1&query=54-05-10+Revenue+Ward+No+28+Addepalli+Colony+Rajahmundry+Andhra+Pradesh+India"
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Open India address in maps"
-                  className="flex items-start gap-2 hover:text-white"
+                  className="flex items-start gap-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded"
                 >
-                  <MapPin size={16} className="mt-0.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                  <MapPin size={16} className="mt-0.5 flex-shrink-0 text-slate-300" aria-hidden="true" />
                   <span>
                     54-05-10 Revenue Ward No 28<br />
                     Addepalli Colony, Rajahmundry, Andhra Pradesh, India
@@ -340,9 +412,9 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Open Germany address in maps"
-                  className="flex items-start gap-2 hover:text-white"
+                  className="flex items-start gap-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded"
                 >
-                  <MapPin size={16} className="mt-0.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                  <MapPin size={16} className="mt-0.5 flex-shrink-0 text-slate-300" aria-hidden="true" />
                   <span>
                     HeiricBrauns Strasse 17,<br />
                     Essen, Germany 45355
@@ -395,7 +467,7 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
                   Wallets
                 </span>
               </div>
-              <p className="text-slate-500 text-xs mt-3">
+              <p className="text-slate-400 text-xs mt-3">
                 All transactions are secured and processed via Razorpay
               </p>
             </div>
@@ -412,9 +484,9 @@ export const LandingFooter: React.FC<LandingFooterProps> = ({
               <a
                 href="mailto:info@rawdrive.ai"
                 className="
-                  inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm
+                  inline-flex items-center gap-2 text-slate-300 hover:text-white text-sm
                   transition-colors duration-200
-                  focus-visible:outline-none focus-visible:text-white
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:rounded
                 "
               >
                 <Mail size={16} aria-hidden="true" />

@@ -565,6 +565,18 @@ export class GalleryService {
     return response.data!.valid;
   }
 
+  /**
+   * Verify gallery Password
+   */
+  async verifyPassword(galleryId: string, password: string): Promise<boolean> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}/verify-password`;
+    const response = await apiClient.post<{ valid: boolean }>(endpoint, { password });
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to verify password');
+    }
+    return response.data!.valid;
+  }
+
   async addAssetsToGallery(
     workspaceId: string,
     galleryId: string,
@@ -584,7 +596,7 @@ export class GalleryService {
   ): Promise<{ count: number }> {
     const response = await apiClient.delete<{ success: boolean; count: number }>(
       `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets`,
-      { data: { asset_ids: assetIds } }
+      { asset_ids: assetIds }
     );
     return response.data!;
   }

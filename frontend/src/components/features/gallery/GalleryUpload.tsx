@@ -17,6 +17,7 @@ export interface GalleryUploadProps {
   subGalleryId?: string | null;
   onUploadComplete?: (assetId: string, fileId: string) => void;
   onUploadError?: (error: Error) => void;
+  onBatchComplete?: (completedCount: number, failedCount: number) => void;
   accept?: string;
   maxSize?: number;
   multiple?: boolean;
@@ -28,6 +29,7 @@ export const GalleryUpload: React.FC<GalleryUploadProps> = ({
   subGalleryId,
   onUploadComplete,
   onUploadError,
+  onBatchComplete,
   accept,
   maxSize,
   multiple = true,
@@ -69,6 +71,7 @@ export const GalleryUpload: React.FC<GalleryUploadProps> = ({
     subGalleryId,
     onComplete: onUploadComplete,
     onError: (err) => onUploadError?.(err),
+    onBatchComplete,
     enableDuplicateDetection: true,
     onDuplicateDetected: handleDuplicateDetected
   });

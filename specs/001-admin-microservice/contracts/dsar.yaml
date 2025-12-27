@@ -1,0 +1,1279 @@
+openapi: 3.1.0
+info:
+  title: DSAR Automation API
+  version: 1.0.0
+  description: |
+    Data Subject Access Request (DSAR) automation endpoints.
+    Covers FR-098 to FR-109 (GDPR/privacy compliance).
+
+servers:
+  - url: /admin/v1
+    description: Admin Service API
+
+tags:
+  - name: Requests
+    description: DSAR request management
+  - name: Workflow
+    description: DSAR workflow and processing
+  - name: Export
+    description: Data export and portability
+  - name: Erasure
+    description: Data erasure (right to be forgotten)
+  - name: Configuration
+    description: DSAR policy configuration
+
+paths:
+  /dsar/requests:
+    get:
+      summary: List DSAR requests
+      description: |
+        List all DSAR requests with filtering (FR-098).
+        Includes access, portability, erasure, and rectification requests.
+      tags: [Requests]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, awaiting_verification, completed, rejected, all]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [access, portability, erasure, rectification, all]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [normal, high, urgent]
+        - name: assigned_to
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: overdue
+          in: query
+          schema:
+            type: boolean
+          description: Filter to show only overdue requests
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: DSAR request list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARRequestListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Create DSAR request
+      description: |
+        Create a new DSAR request on behalf of a data subject (FR-098).
+        Automatically initiates workflow based on request type.
+      tags: [Requests]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDSARRequest'
+      responses:
+        '201':
+          description: DSAR request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARRequestResponse'
+        '400':
+          description: Invalid request data
+        '409':
+          description: Duplicate request (same subject, same type within cooldown period)
+
+  /dsar/requests/{request_id}:
+    get:
+      summary: Get DSAR request details
+      description: Get detailed information about a DSAR request
+      tags: [Requests]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      responses:
+        '200':
+          description: DSAR request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARRequestDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update DSAR request
+      description: Update request metadata or priority
+      tags: [Requests]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDSARRequest'
+      responses:
+        '200':
+          description: Request updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dsar/requests/{request_id}/verify:
+    post:
+      summary: Verify data subject identity
+      description: |
+        Record identity verification for the request (FR-099).
+        Required before processing can begin.
+      tags: [Workflow]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyIdentityRequest'
+      responses:
+        '200':
+          description: Identity verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARRequestResponse'
+        '400':
+          description: Verification failed
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dsar/requests/{request_id}/assign:
+    post:
+      summary: Assign request
+      description: Assign request to an admin for processing
+      tags: [Workflow]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignRequestRequest'
+      responses:
+        '200':
+          description: Request assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dsar/requests/{request_id}/tasks:
+    get:
+      summary: List request tasks
+      description: Get workflow tasks for a DSAR request
+      tags: [Workflow]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARTaskListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dsar/requests/{request_id}/tasks/{task_id}/complete:
+    post:
+      summary: Complete task
+      description: Mark a workflow task as completed
+      tags: [Workflow]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteTaskRequest'
+      responses:
+        '200':
+          description: Task completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARTaskResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Task dependencies not satisfied
+
+  /dsar/requests/{request_id}/extend:
+    post:
+      summary: Extend deadline
+      description: |
+        Request deadline extension with justification (FR-102).
+        Maximum 2-month extension per GDPR.
+      tags: [Workflow]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtendDeadlineRequest'
+      responses:
+        '200':
+          description: Deadline extended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARRequestResponse'
+        '400':
+          description: Extension not allowed or exceeds limit
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dsar/requests/{request_id}/reject:
+    post:
+      summary: Reject request
+      description: |
+        Reject a DSAR request with documented reason (FR-103).
+        Requires legal justification.
+      tags: [Workflow]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectRequestRequest'
+      responses:
+        '200':
+          description: Request rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dsar/requests/{request_id}/complete:
+    post:
+      summary: Complete request
+      description: Mark request as completed after all tasks are done
+      tags: [Workflow]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRequestRequest'
+      responses:
+        '200':
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARRequestResponse'
+        '400':
+          description: Not all tasks completed
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Data Export (Portability)
+  /dsar/requests/{request_id}/export:
+    post:
+      summary: Generate data export
+      description: |
+        Generate data export package for access/portability request (FR-100).
+        Includes all personal data in structured format.
+      tags: [Export]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateExportRequest'
+      responses:
+        '202':
+          description: Export generation started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Export already in progress
+
+  /dsar/requests/{request_id}/export/status:
+    get:
+      summary: Get export status
+      description: Check status of data export generation
+      tags: [Export]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      responses:
+        '200':
+          description: Export status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportStatusResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dsar/requests/{request_id}/export/download:
+    get:
+      summary: Download export package
+      description: Get download URL for completed export
+      tags: [Export]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      responses:
+        '200':
+          description: Download information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportDownloadResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Export not ready
+
+  # Data Erasure
+  /dsar/requests/{request_id}/erasure:
+    post:
+      summary: Initiate data erasure
+      description: |
+        Initiate right to erasure workflow (FR-101).
+        Identifies all data locations and dependencies.
+      tags: [Erasure]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitiateErasureRequest'
+      responses:
+        '202':
+          description: Erasure workflow started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErasureWorkflowResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Erasure already in progress
+
+  /dsar/requests/{request_id}/erasure/preview:
+    get:
+      summary: Preview erasure impact
+      description: |
+        Preview what data will be erased (FR-104).
+        Shows data locations, dependencies, and retention conflicts.
+      tags: [Erasure]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      responses:
+        '200':
+          description: Erasure impact preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErasurePreviewResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dsar/requests/{request_id}/erasure/confirm:
+    post:
+      summary: Confirm erasure
+      description: |
+        Confirm and execute data erasure (FR-105).
+        Requires review of impact preview.
+      tags: [Erasure]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmErasureRequest'
+      responses:
+        '202':
+          description: Erasure confirmed and executing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErasureExecutionResponse'
+        '400':
+          description: Erasure blocked by legal hold or retention policy
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dsar/requests/{request_id}/erasure/status:
+    get:
+      summary: Get erasure status
+      description: Get status of ongoing erasure workflow
+      tags: [Erasure]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestIdParam'
+      responses:
+        '200':
+          description: Erasure status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErasureStatusResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Configuration
+  /dsar/config:
+    get:
+      summary: Get DSAR configuration
+      description: Get DSAR processing configuration and policies
+      tags: [Configuration]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: DSAR configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARConfigResponse'
+
+    put:
+      summary: Update DSAR configuration
+      description: Update DSAR processing policies
+      tags: [Configuration]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDSARConfigRequest'
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARConfigResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /dsar/data-inventory:
+    get:
+      summary: Get data inventory
+      description: |
+        Get inventory of personal data categories and locations (FR-106).
+        Used for DSAR processing and compliance reporting.
+      tags: [Configuration]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Data inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataInventoryResponse'
+
+  /dsar/stats:
+    get:
+      summary: Get DSAR statistics
+      description: Get statistics for DSAR dashboard and compliance reporting
+      tags: [Requests]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: DSAR statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DSARStatsResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    RequestIdParam:
+      name: request_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+
+  responses:
+    Forbidden:
+      description: Permission denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    CreateDSARRequest:
+      type: object
+      required: [type, subject_email]
+      properties:
+        type:
+          type: string
+          enum: [access, portability, erasure, rectification]
+        subject_email:
+          type: string
+          format: email
+          description: Email of the data subject
+        subject_name:
+          type: string
+        subject_id:
+          type: string
+          format: uuid
+          description: User ID if known
+        additional_identifiers:
+          type: object
+          description: Additional identifiers (phone, address, etc.)
+        description:
+          type: string
+          description: Description of the request
+        source:
+          type: string
+          enum: [email, portal, phone, letter]
+          default: portal
+        priority:
+          type: string
+          enum: [normal, high, urgent]
+          default: normal
+        attachments:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: Supporting documentation
+
+    DSARRequestResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        reference_number:
+          type: string
+          description: Human-readable reference (e.g., DSAR-2024-001234)
+        type:
+          type: string
+          enum: [access, portability, erasure, rectification]
+        status:
+          type: string
+          enum: [pending, awaiting_verification, in_progress, completed, rejected]
+        priority:
+          type: string
+          enum: [normal, high, urgent]
+        subject_email:
+          type: string
+          format: email
+        subject_name:
+          type: string
+        verified:
+          type: boolean
+        assigned_to:
+          type: string
+          format: uuid
+        assigned_to_email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+        deadline:
+          type: string
+          format: date-time
+          description: Response deadline (30 days from creation by default)
+        extended_deadline:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        days_remaining:
+          type: integer
+        is_overdue:
+          type: boolean
+
+    DSARRequestDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/DSARRequestResponse'
+        - type: object
+          properties:
+            description:
+              type: string
+            source:
+              type: string
+            additional_identifiers:
+              type: object
+            verification_details:
+              type: object
+              properties:
+                verified_at:
+                  type: string
+                  format: date-time
+                verified_by:
+                  type: string
+                  format: uuid
+                method:
+                  type: string
+            tasks:
+              type: array
+              items:
+                $ref: '#/components/schemas/DSARTaskResponse'
+            timeline:
+              type: array
+              items:
+                $ref: '#/components/schemas/DSARTimelineEntry'
+            data_sources:
+              type: array
+              items:
+                type: object
+                properties:
+                  source:
+                    type: string
+                  status:
+                    type: string
+                  record_count:
+                    type: integer
+
+    DSARRequestListResponse:
+      type: object
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/DSARRequestResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        summary:
+          type: object
+          properties:
+            total_pending:
+              type: integer
+            total_overdue:
+              type: integer
+            avg_completion_days:
+              type: number
+
+    UpdateDSARRequest:
+      type: object
+      properties:
+        priority:
+          type: string
+          enum: [normal, high, urgent]
+        notes:
+          type: string
+
+    VerifyIdentityRequest:
+      type: object
+      required: [method, verified]
+      properties:
+        method:
+          type: string
+          enum: [email_confirmation, id_document, knowledge_based, existing_account]
+        verified:
+          type: boolean
+        notes:
+          type: string
+        evidence_reference:
+          type: string
+          description: Reference to verification evidence
+
+    AssignRequestRequest:
+      type: object
+      required: [assignee_id]
+      properties:
+        assignee_id:
+          type: string
+          format: uuid
+        notes:
+          type: string
+
+    DSARTaskResponse:
+      type: object
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed, blocked, skipped]
+        type:
+          type: string
+          enum: [automated, manual]
+        data_source:
+          type: string
+        depends_on:
+          type: array
+          items:
+            type: string
+            format: uuid
+        assigned_to:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        result:
+          type: object
+
+    DSARTaskListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/DSARTaskResponse'
+        total_tasks:
+          type: integer
+        completed_tasks:
+          type: integer
+        blocked_tasks:
+          type: integer
+
+    CompleteTaskRequest:
+      type: object
+      properties:
+        result:
+          type: object
+        notes:
+          type: string
+
+    ExtendDeadlineRequest:
+      type: object
+      required: [new_deadline, reason]
+      properties:
+        new_deadline:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          minLength: 20
+          description: Legal justification for extension
+        notify_subject:
+          type: boolean
+          default: true
+
+    RejectRequestRequest:
+      type: object
+      required: [reason, legal_basis]
+      properties:
+        reason:
+          type: string
+          minLength: 50
+        legal_basis:
+          type: string
+          enum: [manifestly_unfounded, excessive, identity_not_verified, exemption_applies]
+        exemption_details:
+          type: string
+        notify_subject:
+          type: boolean
+          default: true
+
+    CompleteRequestRequest:
+      type: object
+      properties:
+        summary:
+          type: string
+        notify_subject:
+          type: boolean
+          default: true
+
+    GenerateExportRequest:
+      type: object
+      properties:
+        format:
+          type: string
+          enum: [json, csv, pdf]
+          default: json
+        include_categories:
+          type: array
+          items:
+            type: string
+          description: Specific data categories to include (all if empty)
+        encryption_password:
+          type: string
+          description: Password to encrypt the export package
+
+    ExportJobResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        started_at:
+          type: string
+          format: date-time
+        estimated_completion:
+          type: string
+          format: date-time
+
+    ExportStatusResponse:
+      allOf:
+        - $ref: '#/components/schemas/ExportJobResponse'
+        - type: object
+          properties:
+            progress_percentage:
+              type: integer
+              minimum: 0
+              maximum: 100
+            current_stage:
+              type: string
+            data_sources_processed:
+              type: integer
+            data_sources_total:
+              type: integer
+
+    ExportDownloadResponse:
+      type: object
+      properties:
+        download_url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+        file_size_bytes:
+          type: integer
+        checksum:
+          type: string
+        encryption_applied:
+          type: boolean
+
+    InitiateErasureRequest:
+      type: object
+      properties:
+        scope:
+          type: string
+          enum: [all, specific_categories]
+          default: all
+        categories:
+          type: array
+          items:
+            type: string
+          description: Specific categories to erase (if scope is specific_categories)
+        retain_for_legal:
+          type: array
+          items:
+            type: string
+          description: Categories to retain for legal obligations
+
+    ErasureWorkflowResponse:
+      type: object
+      properties:
+        workflow_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [analyzing, pending_confirmation, executing, completed, blocked]
+        started_at:
+          type: string
+          format: date-time
+
+    ErasurePreviewResponse:
+      type: object
+      properties:
+        data_to_erase:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              source:
+                type: string
+              record_count:
+                type: integer
+              description:
+                type: string
+        data_retained:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              reason:
+                type: string
+                enum: [legal_obligation, contract_fulfillment, public_interest, legal_claims]
+              retention_period:
+                type: string
+        dependencies:
+          type: array
+          items:
+            type: object
+            properties:
+              source:
+                type: string
+              target:
+                type: string
+              description:
+                type: string
+        blockers:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [legal_hold, active_subscription, pending_transaction]
+              description:
+                type: string
+              resolution:
+                type: string
+        estimated_completion:
+          type: string
+          format: date-time
+
+    ConfirmErasureRequest:
+      type: object
+      required: [confirmation_code]
+      properties:
+        confirmation_code:
+          type: string
+          description: Confirmation code shown in preview
+        override_warnings:
+          type: boolean
+          default: false
+        notes:
+          type: string
+
+    ErasureExecutionResponse:
+      type: object
+      properties:
+        execution_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [executing, completed, partial, failed]
+        started_at:
+          type: string
+          format: date-time
+
+    ErasureStatusResponse:
+      type: object
+      properties:
+        execution_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [executing, completed, partial, failed]
+        progress_percentage:
+          type: integer
+        sources_processed:
+          type: array
+          items:
+            type: object
+            properties:
+              source:
+                type: string
+              status:
+                type: string
+              records_erased:
+                type: integer
+              error:
+                type: string
+        completed_at:
+          type: string
+          format: date-time
+        certificate_url:
+          type: string
+          format: uri
+          description: URL to erasure certificate (when completed)
+
+    DSARTimelineEntry:
+      type: object
+      properties:
+        entry_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        event:
+          type: string
+        actor_id:
+          type: string
+          format: uuid
+        actor_email:
+          type: string
+        details:
+          type: object
+
+    DSARConfigResponse:
+      type: object
+      properties:
+        default_deadline_days:
+          type: integer
+          default: 30
+        max_extension_days:
+          type: integer
+          default: 60
+        auto_verification:
+          type: boolean
+          description: Auto-verify for logged-in users
+        notification_settings:
+          type: object
+          properties:
+            notify_on_creation:
+              type: boolean
+            notify_on_completion:
+              type: boolean
+            notify_on_deadline_approaching:
+              type: boolean
+            deadline_warning_days:
+              type: integer
+        retention_after_completion_days:
+          type: integer
+          default: 365
+        workflows:
+          type: object
+          properties:
+            access:
+              type: array
+              items:
+                type: string
+            portability:
+              type: array
+              items:
+                type: string
+            erasure:
+              type: array
+              items:
+                type: string
+
+    UpdateDSARConfigRequest:
+      type: object
+      properties:
+        default_deadline_days:
+          type: integer
+          minimum: 1
+          maximum: 90
+        max_extension_days:
+          type: integer
+          minimum: 0
+          maximum: 90
+        auto_verification:
+          type: boolean
+        notification_settings:
+          type: object
+
+    DataInventoryResponse:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              description:
+                type: string
+              legal_basis:
+                type: string
+              retention_period:
+                type: string
+              sources:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    type:
+                      type: string
+                    can_export:
+                      type: boolean
+                    can_erase:
+                      type: boolean
+        last_updated:
+          type: string
+          format: date-time
+
+    DSARStatsResponse:
+      type: object
+      properties:
+        total_requests:
+          type: integer
+        by_type:
+          type: object
+          additionalProperties:
+            type: integer
+        by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        average_completion_days:
+          type: number
+        overdue_count:
+          type: integer
+        compliance_rate:
+          type: number
+          description: Percentage completed within deadline
+        monthly_trend:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+              count:
+                type: integer
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string

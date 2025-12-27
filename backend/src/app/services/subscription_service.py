@@ -667,8 +667,22 @@ class SubscriptionService:
         except asyncpg.UndefinedTableError:
             pass
 
-        # Storage used (would need to aggregate from photos/files table)
+        # Storage used - aggregate from assets table
         storage_used = 0
+        try:
+            storage_row = await pool.fetchrow(
+                """
+                SELECT COALESCE(SUM(original_bytes), 0) as total_bytes
+                FROM assets
+                WHERE workspace_id = $1 
+                  AND status = 'available'
+                """,
+                workspace_id,
+            )
+            storage_used = storage_row["total_bytes"] if storage_row else 0
+        except asyncpg.UndefinedTableError:
+            # Assets table may not exist yet in fresh installations
+            pass
 
         # AI credits used (would need dedicated tracking table)
         ai_credits_used = 0

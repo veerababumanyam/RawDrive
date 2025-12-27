@@ -4,6 +4,7 @@ import { ProtectedRoute } from '../components/auth';
 import ErrorBoundary from '../components/error/ErrorBoundary';
 import { RouteErrorFallback } from '../components/error/ErrorFallbacks';
 import { WorkspaceLayout } from '../components/layout/WorkspaceLayout';
+import { SettingsLayout } from '../components/layout/SettingsLayout';
 import { RootLayout } from '../components/layout/RootLayout';
 
 /* =============================================================================
@@ -38,6 +39,11 @@ const TermsPage = lazy(() => import('../pages/public/legal/terms'));
 const PrivacyPage = lazy(() => import('../pages/public/legal/privacy'));
 const RefundPage = lazy(() => import('../pages/public/legal/refund'));
 
+// Solution pages
+const ForMarketingPage = lazy(() => import('../pages/public/solutions/ForMarketingPage'));
+const ForDeliveryPage = lazy(() => import('../pages/public/solutions/ForDeliveryPage'));
+const ForBusinessPage = lazy(() => import('../pages/public/solutions/ForBusinessPage'));
+
 // Auth pages
 const SignInPage = lazy(() => import('../pages/public/SignInPage'));
 const SignUpPage = lazy(() => import('../pages/public/SignUpPage'));
@@ -62,6 +68,17 @@ const VisitorsPage = lazy(() => import('../pages/workspace/VisitorsPage'));
 const CompanyProfilePage = lazy(() => import('../pages/workspace/settings/CompanyProfilePage'));
 const GeneralSettingsPage = lazy(() => import('../pages/workspace/settings/GeneralSettingsPage'));
 const HelpSupportPage = lazy(() => import('../pages/workspace/settings/HelpSupportPage'));
+
+// User Settings pages
+const UserProfileSettingsPage = lazy(() => import('../pages/settings/ProfileSettingsPage'));
+const SecuritySettingsPage = lazy(() => import('../pages/settings/SecuritySettingsPage'));
+const NotificationSettingsPage = lazy(() => import('../pages/settings/NotificationSettingsPage'));
+const PrivacySettingsPage = lazy(() => import('../pages/settings/PrivacySettingsPage'));
+const AccountSettingsPage = lazy(() => import('../pages/settings/AccountSettingsPage'));
+const AISettingsPage = lazy(() => import('../pages/settings/AISettingsPage'));
+
+// Admin pages
+const GeminiModelsPage = lazy(() => import('../pages/admin/GeminiModelsPage'));
 
 // Wrapper for lazy loaded components
 const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
@@ -140,6 +157,19 @@ export const publicRoutes: RouteObject[] = [
   {
     path: '/legal/refund',
     element: <LazyPage component={RefundPage} />,
+  },
+  // Solution pages
+  {
+    path: '/solutions/marketing',
+    element: <LazyPage component={ForMarketingPage} />,
+  },
+  {
+    path: '/solutions/delivery',
+    element: <LazyPage component={ForDeliveryPage} />,
+  },
+  {
+    path: '/solutions/business',
+    element: <LazyPage component={ForBusinessPage} />,
   },
 ];
 
@@ -246,6 +276,67 @@ export const workspaceRoutes: RouteObject[] = [
   },
 ];
 
+// User Settings routes (require authentication)
+export const userSettingsRoutes: RouteObject[] = [
+  {
+    path: '/settings',
+    element: (
+      <ProtectedRoute>
+        <SettingsLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <LazyPage component={UserProfileSettingsPage} />,
+      },
+      {
+        path: 'profile',
+        element: <LazyPage component={UserProfileSettingsPage} />,
+      },
+      {
+        path: 'security',
+        element: <CriticalLazyPage component={SecuritySettingsPage} />,
+      },
+      {
+        path: 'notifications',
+        element: <LazyPage component={NotificationSettingsPage} />,
+      },
+      {
+        path: 'privacy',
+        element: <CriticalLazyPage component={PrivacySettingsPage} />,
+      },
+      {
+        path: 'account',
+        element: <CriticalLazyPage component={AccountSettingsPage} />,
+      },
+      {
+        path: 'ai',
+        element: <LazyPage component={AISettingsPage} />,
+      },
+    ],
+  },
+];
+
+// Admin routes (require authentication + admin role)
+// Note: Admin role check is enforced by backend API
+export const adminRoutes: RouteObject[] = [
+  {
+    path: '/admin',
+    element: (
+      <ProtectedRoute>
+        <WorkspaceLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        path: 'gemini-models',
+        element: <CriticalLazyPage component={GeminiModelsPage} />,
+      },
+    ],
+  },
+];
+
 // 404 fallback
 const NotFoundPage: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -276,6 +367,8 @@ export const routes: RouteObject[] = [
       ...publicRoutes,
       ...authRoutes,
       ...workspaceRoutes,
+      ...userSettingsRoutes,
+      ...adminRoutes,
       fallbackRoute,
     ],
   },

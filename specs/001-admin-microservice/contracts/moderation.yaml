@@ -1,0 +1,1098 @@
+openapi: 3.1.0
+info:
+  title: Content Moderation API
+  version: 1.0.0
+  description: |
+    Content moderation queue and action endpoints.
+    Covers FR-046 to FR-055.
+
+servers:
+  - url: /admin/v1
+    description: Admin Service API
+
+tags:
+  - name: Queue
+    description: Moderation queue management
+  - name: Actions
+    description: Moderation actions and decisions
+  - name: Policies
+    description: Moderation policy configuration
+  - name: Reports
+    description: User reports and appeals
+
+paths:
+  /moderation/queue:
+    get:
+      summary: Get moderation queue
+      description: |
+        List items in the moderation queue with filtering (FR-046).
+        Supports priority-based ordering and assignment.
+      tags: [Queue]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_review, escalated, resolved, all]
+          default: pending
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [photo, gallery, profile, comment, all]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [automated, user_report, admin_flag]
+        - name: assigned_to
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by assigned moderator
+        - name: workspace_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Moderation queue items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationQueueResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /moderation/queue/stats:
+    get:
+      summary: Get queue statistics
+      description: Get statistics about the moderation queue
+      tags: [Queue]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Queue statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueStatsResponse'
+
+  /moderation/queue/{item_id}:
+    get:
+      summary: Get queue item details
+      description: Get detailed information about a moderation item
+      tags: [Queue]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ItemIdParam'
+      responses:
+        '200':
+          description: Moderation item details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationItemDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /moderation/queue/{item_id}/claim:
+    post:
+      summary: Claim queue item
+      description: Assign a moderation item to yourself for review
+      tags: [Queue]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ItemIdParam'
+      responses:
+        '200':
+          description: Item claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Item already claimed by another moderator
+
+  /moderation/queue/{item_id}/release:
+    post:
+      summary: Release queue item
+      description: Release a claimed item back to the queue
+      tags: [Queue]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ItemIdParam'
+      responses:
+        '200':
+          description: Item released
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Item not claimed by you
+
+  /moderation/queue/{item_id}/escalate:
+    post:
+      summary: Escalate queue item
+      description: Escalate item to senior moderator or legal team (FR-049)
+      tags: [Queue]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ItemIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EscalateRequest'
+      responses:
+        '200':
+          description: Item escalated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Moderation Actions
+  /moderation/queue/{item_id}/action:
+    post:
+      summary: Take moderation action
+      description: |
+        Apply a moderation action to content (FR-047-048).
+        Actions include: approve, warn, hide, remove, suspend_account.
+      tags: [Actions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ItemIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationActionRequest'
+      responses:
+        '200':
+          description: Action applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationActionResponse'
+        '400':
+          description: Invalid action for content type
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Item already resolved
+
+  /moderation/queue/{item_id}/actions:
+    get:
+      summary: Get action history
+      description: Get history of actions taken on this item
+      tags: [Actions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ItemIdParam'
+      responses:
+        '200':
+          description: Action history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionHistoryResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /moderation/actions/bulk:
+    post:
+      summary: Bulk moderation action
+      description: Apply the same action to multiple items (FR-050)
+      tags: [Actions]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkActionRequest'
+      responses:
+        '200':
+          description: Bulk action results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkActionResponse'
+        '400':
+          description: Invalid action or items
+
+  # User Reports
+  /moderation/reports:
+    get:
+      summary: List user reports
+      description: List reports submitted by users (FR-051)
+      tags: [Reports]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, reviewed, actioned, dismissed, all]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [inappropriate, spam, harassment, copyright, other]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Report list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportListResponse'
+
+  /moderation/reports/{report_id}:
+    get:
+      summary: Get report details
+      description: Get detailed information about a user report
+      tags: [Reports]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Report details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /moderation/reports/{report_id}/resolve:
+    post:
+      summary: Resolve report
+      description: Mark a report as resolved with outcome
+      tags: [Reports]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveReportRequest'
+      responses:
+        '200':
+          description: Report resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Appeals
+  /moderation/appeals:
+    get:
+      summary: List appeals
+      description: List moderation decision appeals (FR-052)
+      tags: [Reports]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, under_review, upheld, overturned, all]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Appeal list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppealListResponse'
+
+  /moderation/appeals/{appeal_id}:
+    get:
+      summary: Get appeal details
+      description: Get detailed information about an appeal
+      tags: [Reports]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: appeal_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Appeal details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppealDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /moderation/appeals/{appeal_id}/decide:
+    post:
+      summary: Decide appeal
+      description: Make a decision on an appeal
+      tags: [Reports]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: appeal_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppealDecisionRequest'
+      responses:
+        '200':
+          description: Appeal decided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppealResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Policies
+  /moderation/policies:
+    get:
+      summary: List moderation policies
+      description: List all moderation policies
+      tags: [Policies]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Policy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyListResponse'
+
+    post:
+      summary: Create moderation policy
+      description: Create a new moderation policy (FR-053)
+      tags: [Policies]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePolicyRequest'
+      responses:
+        '201':
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+
+  /moderation/policies/{policy_id}:
+    get:
+      summary: Get policy details
+      description: Get detailed information about a policy
+      tags: [Policies]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Policy details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update policy
+      description: Update a moderation policy
+      tags: [Policies]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePolicyRequest'
+      responses:
+        '200':
+          description: Policy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /moderation/auto-rules:
+    get:
+      summary: List auto-moderation rules
+      description: List automated moderation rules (FR-054)
+      tags: [Policies]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Auto-moderation rule list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoRuleListResponse'
+
+    post:
+      summary: Create auto-moderation rule
+      description: Create an automated moderation rule
+      tags: [Policies]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAutoRuleRequest'
+      responses:
+        '201':
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoRuleResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ItemIdParam:
+      name: item_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+
+  responses:
+    Forbidden:
+      description: Permission denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ModerationItemResponse:
+      type: object
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        content_type:
+          type: string
+          enum: [photo, gallery, profile, comment]
+        content_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, in_review, escalated, resolved]
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        source:
+          type: string
+          enum: [automated, user_report, admin_flag]
+        reason:
+          type: string
+        assigned_to:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        claimed_at:
+          type: string
+          format: date-time
+
+    ModerationItemDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/ModerationItemResponse'
+        - type: object
+          properties:
+            content_preview:
+              type: object
+              description: Preview of the content (thumbnail URL, text excerpt, etc.)
+            user_info:
+              type: object
+              properties:
+                email:
+                  type: string
+                account_age_days:
+                  type: integer
+                previous_violations:
+                  type: integer
+                workspace_name:
+                  type: string
+            detection_details:
+              type: object
+              description: Details from automated detection
+            related_reports:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReportResponse'
+            action_history:
+              type: array
+              items:
+                $ref: '#/components/schemas/ActionHistoryEntry'
+
+    ModerationQueueResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModerationItemResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    QueueStatsResponse:
+      type: object
+      properties:
+        total_pending:
+          type: integer
+        total_in_review:
+          type: integer
+        total_escalated:
+          type: integer
+        by_priority:
+          type: object
+          properties:
+            critical:
+              type: integer
+            high:
+              type: integer
+            medium:
+              type: integer
+            low:
+              type: integer
+        by_type:
+          type: object
+          additionalProperties:
+            type: integer
+        avg_resolution_time_hours:
+          type: number
+        my_claimed:
+          type: integer
+
+    EscalateRequest:
+      type: object
+      required: [reason, escalate_to]
+      properties:
+        reason:
+          type: string
+          minLength: 20
+        escalate_to:
+          type: string
+          enum: [senior_moderator, legal, trust_safety]
+        notes:
+          type: string
+
+    ModerationActionRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [approve, warn, hide, remove, suspend_account, ban_account]
+        reason:
+          type: string
+          description: Required for non-approve actions
+        duration_hours:
+          type: integer
+          description: For temporary actions like suspension
+        notify_user:
+          type: boolean
+          default: true
+        internal_notes:
+          type: string
+
+    ModerationActionResponse:
+      type: object
+      properties:
+        action_id:
+          type: string
+          format: uuid
+        item_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        performed_by:
+          type: string
+          format: uuid
+        performed_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        result:
+          type: string
+          enum: [success, partial, failed]
+
+    ActionHistoryEntry:
+      type: object
+      properties:
+        action_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        performed_by:
+          type: string
+          format: uuid
+        performed_by_email:
+          type: string
+        performed_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+
+    ActionHistoryResponse:
+      type: object
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionHistoryEntry'
+
+    BulkActionRequest:
+      type: object
+      required: [item_ids, action]
+      properties:
+        item_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 50
+        action:
+          type: string
+          enum: [approve, warn, hide, remove]
+        reason:
+          type: string
+
+    BulkActionResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        successful:
+          type: integer
+        failed:
+          type: integer
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              item_id:
+                type: string
+                format: uuid
+              success:
+                type: boolean
+              error:
+                type: string
+
+    ReportResponse:
+      type: object
+      properties:
+        report_id:
+          type: string
+          format: uuid
+        reporter_id:
+          type: string
+          format: uuid
+        content_type:
+          type: string
+        content_id:
+          type: string
+          format: uuid
+        report_type:
+          type: string
+          enum: [inappropriate, spam, harassment, copyright, other]
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, reviewed, actioned, dismissed]
+        created_at:
+          type: string
+          format: date-time
+
+    ReportDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/ReportResponse'
+        - type: object
+          properties:
+            content_preview:
+              type: object
+            reporter_info:
+              type: object
+              properties:
+                email:
+                  type: string
+                report_count:
+                  type: integer
+            similar_reports:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReportResponse'
+            moderation_item_id:
+              type: string
+              format: uuid
+
+    ReportListResponse:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    ResolveReportRequest:
+      type: object
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [actioned, dismissed]
+        action_taken:
+          type: string
+        response_to_reporter:
+          type: string
+
+    AppealResponse:
+      type: object
+      properties:
+        appeal_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        original_action_id:
+          type: string
+          format: uuid
+        original_action:
+          type: string
+        appeal_reason:
+          type: string
+        status:
+          type: string
+          enum: [pending, under_review, upheld, overturned]
+        created_at:
+          type: string
+          format: date-time
+        decided_at:
+          type: string
+          format: date-time
+        decided_by:
+          type: string
+          format: uuid
+
+    AppealDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/AppealResponse'
+        - type: object
+          properties:
+            user_email:
+              type: string
+            original_content:
+              type: object
+            original_moderation_item:
+              $ref: '#/components/schemas/ModerationItemResponse'
+            decision_notes:
+              type: string
+
+    AppealListResponse:
+      type: object
+      properties:
+        appeals:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppealResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    AppealDecisionRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [uphold, overturn]
+        notes:
+          type: string
+          minLength: 20
+        restore_content:
+          type: boolean
+          default: false
+
+    PolicyResponse:
+      type: object
+      properties:
+        policy_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        enabled:
+          type: boolean
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        actions:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PolicyListResponse:
+      type: object
+      properties:
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyResponse'
+
+    CreatePolicyRequest:
+      type: object
+      required: [name, category, severity]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        actions:
+          type: array
+          items:
+            type: string
+            enum: [flag, warn, hide, remove, suspend]
+        enabled:
+          type: boolean
+          default: true
+
+    UpdatePolicyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        actions:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+
+    AutoRuleResponse:
+      type: object
+      properties:
+        rule_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [keyword, image_hash, ai_detection, regex]
+        pattern:
+          type: string
+        action:
+          type: string
+          enum: [flag, auto_remove, block_upload]
+        enabled:
+          type: boolean
+        match_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    AutoRuleListResponse:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/AutoRuleResponse'
+
+    CreateAutoRuleRequest:
+      type: object
+      required: [name, type, pattern, action]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [keyword, image_hash, ai_detection, regex]
+        pattern:
+          type: string
+        action:
+          type: string
+          enum: [flag, auto_remove, block_upload]
+        enabled:
+          type: boolean
+          default: true
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string

@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Master key from environment (32 bytes = 256 bits)
 MASTER_KEY_ENV = "ENCRYPTION_MASTER_KEY"
 HKDF_INFO = b"rawdrive-workspace-key"  # Context for HKDF
+HKDF_USER_INFO = b"rawdrive-user-api-key"  # Context for user-scoped key derivation
 
 
 class EncryptionError(Exception):
@@ -84,6 +85,78 @@ class EncryptionService:
             backend=default_backend(),
         )
         return hkdf.derive(self.master_key + workspace_bytes)
+
+    def _derive_user_key(self, user_id: UUID, workspace_id: UUID) -> bytes:
+        """Derive user-specific encryption key using HKDF-SHA256.
+
+        Combines workspace isolation with per-user key derivation for API key storage.
+
+        Args:
+            user_id: User UUID
+            workspace_id: Workspace UUID
+
+        Returns:
+            32-byte encryption key unique to this user in this workspace
+        """
+        combined = f"{workspace_id}:{user_id}".encode("utf-8")
+        hkdf = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,  # AES-256 requires 32 bytes
+            salt=None,  # No salt needed for deterministic derivation
+            info=HKDF_USER_INFO,
+            backend=default_backend(),
+        )
+        return hkdf.derive(self.master_key + combined)
+
+    def encrypt_user_api_key(
+        self, api_key: str, user_id: UUID, workspace_id: UUID
+    ) -> tuple[bytes, bytes]:
+        """Encrypt a user's API key using user-scoped AES-256-GCM.
+
+        Args:
+            api_key: Plaintext API key to encrypt
+            user_id: User UUID for key derivation
+            workspace_id: Workspace UUID for key derivation
+
+        Returns:
+            Tuple of (ciphertext_with_tag, iv)
+        """
+        key = self._derive_user_key(user_id, workspace_id)
+        aesgcm = AESGCM(key)
+        iv = os.urandom(12)  # 96-bit nonce for GCM
+
+        # Encrypt (returns ciphertext + auth tag)
+        ciphertext = aesgcm.encrypt(iv, api_key.encode("utf-8"), None)
+
+        return ciphertext, iv
+
+    def decrypt_user_api_key(
+        self, ciphertext: bytes, iv: bytes, user_id: UUID, workspace_id: UUID
+    ) -> str:
+        """Decrypt a user's API key using user-scoped AES-256-GCM.
+
+        Args:
+            ciphertext: Encrypted data with auth tag
+            iv: Initialization vector used during encryption
+            user_id: User UUID for key derivation
+            workspace_id: Workspace UUID for key derivation
+
+        Returns:
+            Decrypted API key as string
+
+        Raises:
+            EncryptionError: If decryption fails
+        """
+        key = self._derive_user_key(user_id, workspace_id)
+        aesgcm = AESGCM(key)
+
+        try:
+            plaintext = aesgcm.decrypt(iv, ciphertext, None)
+            return plaintext.decode("utf-8")
+        except Exception as e:
+            raise EncryptionError(
+                "Failed to decrypt API key", "API_KEY_DECRYPTION_FAILED"
+            ) from e
 
     async def get_workspace_key(
         self, workspace_id: UUID, key_version: Optional[int] = None

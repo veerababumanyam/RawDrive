@@ -10,6 +10,7 @@ import { fadeInUp } from '../../components/landing/animations/presets';
    ForgotPasswordPage Component
 
    Password reset request page.
+   Uses centralized auth utilities from index.css (Section 18.12.3)
    ============================================================================= */
 
 const ForgotPasswordPage: React.FC = () => {
@@ -71,34 +72,23 @@ const ForgotPasswordPage: React.FC = () => {
                   <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-green-500/10 flex items-center justify-center">
                     <CheckCircle size={32} className="text-green-400" />
                   </div>
-                  <h1 className="text-2xl font-bold text-white mb-2">
-                    Check your email
-                  </h1>
-                  <p className="text-slate-400 mb-6">
+                  <h1 className="auth-heading mb-2">Check your email</h1>
+                  <p className="auth-text-muted mb-6">
                     We've sent a password reset link to{' '}
                     <span className="text-white">{email}</span>
                   </p>
-                  <p className="text-sm text-slate-500 mb-6">
+                  <p className="text-sm auth-text-muted mb-6">
                     Didn't receive the email? Check your spam folder or{' '}
                     <button
                       onClick={() => setIsSubmitted(false)}
-                      className="text-primary-400 hover:text-primary-300"
+                      className="auth-link"
                     >
                       try again
                     </button>
                   </p>
                   <Link
                     to="/signin"
-                    className="
-                      inline-flex items-center justify-center gap-2
-                      px-6 py-3
-                      bg-white/5 hover:bg-white/10
-                      border border-white/10 hover:border-white/20
-                      text-white font-medium
-                      rounded-xl transition-all duration-200
-                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
-                      min-h-[48px]
-                    "
+                    className="auth-btn-google inline-flex w-auto px-6"
                   >
                     <ArrowLeft size={18} />
                     Back to Sign In
@@ -108,37 +98,26 @@ const ForgotPasswordPage: React.FC = () => {
                 // Form State
                 <>
                   <div className="text-center mb-8">
-                    <h1 className="text-2xl font-bold text-white mb-2">
-                      Forgot your password?
-                    </h1>
-                    <p className="text-slate-400">
+                    <h1 className="auth-heading mb-2">Forgot your password?</h1>
+                    <p className="auth-subheading">
                       No worries, we'll send you reset instructions.
                     </p>
                   </div>
 
-                  {/* Error Message */}
+                  {/* Error Message - Using centralized auth-error utility */}
                   {error && (
-                    <div
-                      className="mb-4 p-3 rounded-lg bg-error-500/10 border border-error-500/20 text-error-400 text-sm"
-                      role="alert"
-                    >
+                    <div className="auth-error mb-4" role="alert">
                       {error}
                     </div>
                   )}
 
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                      <label
-                        htmlFor="email"
-                        className="block text-sm font-medium text-white mb-2"
-                      >
+                      <label htmlFor="email" className="auth-label">
                         Email
                       </label>
                       <div className="relative">
-                        <Mail
-                          size={18}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                        />
+                        <Mail size={18} className="auth-input-icon" />
                         <input
                           id="email"
                           type="email"
@@ -146,13 +125,7 @@ const ForgotPasswordPage: React.FC = () => {
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="you@example.com"
                           required
-                          className="
-                            w-full pl-10 pr-4 py-3
-                            bg-white/5 border border-white/10
-                            rounded-xl text-white placeholder:text-slate-500
-                            focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
-                            min-h-[48px]
-                          "
+                          className="auth-input"
                         />
                       </div>
                     </div>
@@ -160,18 +133,7 @@ const ForgotPasswordPage: React.FC = () => {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="
-                        w-full py-3 px-4
-                        flex items-center justify-center gap-2
-                        bg-gradient-to-r from-primary-600 to-primary-700
-                        hover:from-primary-500 hover:to-primary-600
-                        text-white font-semibold
-                        rounded-xl shadow-lg shadow-primary-500/25
-                        transition-all duration-200
-                        disabled:opacity-50 disabled:cursor-not-allowed
-                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent
-                        min-h-[48px]
-                      "
+                      className="auth-btn-primary"
                     >
                       {isLoading ? (
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -183,11 +145,7 @@ const ForgotPasswordPage: React.FC = () => {
 
                   <Link
                     to="/signin"
-                    className="
-                      mt-6 flex items-center justify-center gap-2
-                      text-slate-400 hover:text-white
-                      transition-colors
-                    "
+                    className="mt-6 flex items-center justify-center gap-2 auth-text-muted hover:text-white transition-colors"
                   >
                     <ArrowLeft size={16} />
                     Back to Sign In

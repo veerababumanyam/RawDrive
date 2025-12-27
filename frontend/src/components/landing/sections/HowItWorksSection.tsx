@@ -50,7 +50,10 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({
   id = 'how-it-works',
 }) => {
   return (
-    <section id={id} className={`py-20 lg:py-32 ${className}`} aria-labelledby="how-it-works-heading">
+    <section id={id} className={`py-20 lg:py-32 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden ${className}`} aria-labelledby="how-it-works-heading">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(212,175,55,0.08),transparent_50%)]" aria-hidden="true" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(6,182,212,0.06),transparent_50%)]" aria-hidden="true" />
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         <FadeIn direction="up" className="text-center mb-12 lg:mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full mb-6">
@@ -62,7 +65,7 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({
           >
             Get Started in Minutes
           </h2>
-          <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto">
+          <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto">
             Three simple steps to transform your photography workflow.
           </p>
         </FadeIn>
@@ -113,7 +116,7 @@ export const HowItWorksSection: React.FC<HowItWorksSectionProps> = ({
                 </div>
 
                 <h3 className="text-xl font-semibold text-white mb-3">{step.title}</h3>
-                <p className="text-slate-400 leading-relaxed">{step.description}</p>
+                <p className="text-slate-300 leading-relaxed">{step.description}</p>
               </motion.div>
             );
           })}

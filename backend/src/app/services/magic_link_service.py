@@ -598,13 +598,17 @@ class MagicLinkService:
             status=status,
         )
 
+        # Calculate page-based pagination for PaginationMeta schema
+        page = (offset // limit) + 1 if limit > 0 else 1
+        total_pages = (total + limit - 1) // limit if limit > 0 else 0
+
         return {
             "data": links,
             "meta": {
                 "total": total,
                 "limit": limit,
-                "offset": offset,
-                "has_more": offset + len(links) < total,
+                "page": page,
+                "total_pages": total_pages,
             },
         }
 
@@ -687,9 +691,10 @@ class MagicLinkService:
             raise LinkNotFoundError(str(link_id))
 
         # Get QR config from link or use defaults
-        qr_config = link.get("qr_config", {})
-        qr_size = size or qr_config.get("size", 1024)
-        qr_color = fill_color or qr_config.get("color", "#000000")
+        qr_config = link.get("qr_config") or {}
+        qr_size = size or qr_config.get("size") or 1024
+        # Handle null/None color explicitly - dict.get() returns None if key exists with null value
+        qr_color = fill_color or qr_config.get("color") or "#000000"
 
         # NOTE: We store the URL in cache keyed by link_id since tokens are
         # never stored. The URL is built on creation and cached.

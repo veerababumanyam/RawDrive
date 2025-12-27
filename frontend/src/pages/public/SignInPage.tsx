@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts';
    SignInPage Component
 
    Clean, centered, mobile-first authentication page.
+   Uses centralized auth glass utilities from index.css (Section 18.12.3)
    Requirements: 3.2, 4.1
    ============================================================================= */
 
@@ -82,18 +83,15 @@ const SignInPage: React.FC = () => {
             </span>
           </Link>
 
-          {/* Card */}
-          <div className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-8">
+          {/* Card - Using centralized auth-glass-card utility */}
+          <div className="auth-glass-card p-6 sm:p-8">
             <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-white mb-1">Welcome back</h1>
-              <p className="text-slate-400 text-sm">Sign in to your account</p>
+              <h1 className="auth-heading">Welcome back</h1>
+              <p className="auth-subheading">Sign in to your account</p>
             </div>
 
-            {/* Google Button */}
-            <button
-              onClick={handleGoogleSignIn}
-              className="w-full py-3 px-4 bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-3 min-h-[48px]"
-            >
+            {/* Google Button - Using centralized auth-btn-google utility */}
+            <button onClick={handleGoogleSignIn} className="auth-btn-google">
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -103,19 +101,16 @@ const SignInPage: React.FC = () => {
               Continue with Google
             </button>
 
-            {/* Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/10" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="px-3 text-xs text-slate-500 bg-[#0a1628]">or</span>
+            {/* Divider - Using centralized auth-divider utilities */}
+            <div className="auth-divider">
+              <div className="flex justify-center">
+                <span className="auth-divider-text">or</span>
               </div>
             </div>
 
-            {/* Error */}
+            {/* Error - Using centralized auth-error utility */}
             {error && (
-              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm" role="alert">
+              <div className="auth-error mb-4" role="alert">
                 {error}
               </div>
             )}
@@ -123,11 +118,11 @@ const SignInPage: React.FC = () => {
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label htmlFor="email" className="auth-label">
                   Email
                 </label>
                 <div className="relative">
-                  <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Mail size={18} className="auth-input-icon" />
                   <input
                     id="email"
                     type="email"
@@ -136,17 +131,17 @@ const SignInPage: React.FC = () => {
                     placeholder="you@example.com"
                     required
                     autoComplete="email"
-                    className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-[48px]"
+                    className="auth-input"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-1.5">
+                <label htmlFor="password" className="auth-label">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Lock size={18} className="auth-input-icon" />
                   <input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
@@ -155,12 +150,12 @@ const SignInPage: React.FC = () => {
                     placeholder="Enter password"
                     required
                     autoComplete="current-password"
-                    className="w-full pl-10 pr-12 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-[48px]"
+                    className="auth-input pr-12"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-1"
+                    className="auth-input-toggle"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -170,13 +165,10 @@ const SignInPage: React.FC = () => {
 
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded border-white/20 bg-white/5 text-primary-500 focus:ring-primary-500"
-                  />
-                  <span className="text-slate-400">Remember me</span>
+                  <input type="checkbox" className="auth-checkbox" />
+                  <span className="auth-text-muted">Remember me</span>
                 </label>
-                <Link to="/forgot-password" className="text-primary-400 hover:text-primary-300">
+                <Link to="/forgot-password" className="auth-link">
                   Forgot password?
                 </Link>
               </div>
@@ -184,7 +176,7 @@ const SignInPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 min-h-[48px] disabled:opacity-50"
+                className="auth-btn-primary"
               >
                 {isLoading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -197,9 +189,9 @@ const SignInPage: React.FC = () => {
               </button>
             </form>
 
-            <p className="mt-6 text-center text-slate-400 text-sm">
+            <p className="mt-6 text-center auth-text-muted text-sm">
               Don't have an account?{' '}
-              <Link to="/signup" className="text-primary-400 hover:text-primary-300 font-medium">
+              <Link to="/signup" className="auth-link">
                 Sign up
               </Link>
             </p>

@@ -167,6 +167,17 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
     setCurrentIndex((prev) => (prev === totalItems - 1 ? 0 : prev + 1));
   };
 
+  // Handle keyboard navigation for carousel
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      handlePrevious();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      handleNext();
+    }
+  };
+
   // Throttle auto-advance: only rotate every 20s, and pause after user interaction for 30s
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -208,9 +219,12 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
   return (
     <section
       id={id}
-      className={`py-20 lg:py-32 bg-white/[0.02] ${className}`}
+      className={`py-20 lg:py-32 bg-gradient-to-b from-slate-900 to-slate-800 relative overflow-hidden ${className}`}
       aria-labelledby="testimonials-heading"
     >
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(6,182,212,0.08),transparent_50%)]" aria-hidden="true" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(124,58,237,0.06),transparent_50%)]" aria-hidden="true" />
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <FadeIn direction="up" className="text-center mb-12">
@@ -226,7 +240,7 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
           >
             {title}
           </h2>
-          <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto">
+          <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto">
             {subtitle}
           </p>
         </FadeIn>
@@ -246,15 +260,22 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
                   <Icon className="w-5 h-5 text-accent-400" aria-hidden="true" />
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-white">{stat.value}</div>
-                <div className="text-xs sm:text-sm text-slate-500 mt-1">{stat.label}</div>
+                <div className="text-xs sm:text-sm text-slate-300 mt-1">{stat.label}</div>
               </GlassCard>
             );
           })}
         </div>
 
         {/* Mobile: carousel */}
-        <div className="md:hidden relative">
-          <div className="overflow-hidden">
+        <div
+          className="md:hidden relative"
+          role="region"
+          aria-roledescription="carousel"
+          aria-label="Customer testimonials"
+          onKeyDown={handleKeyDown}
+          tabIndex={0}
+        >
+          <div className="overflow-hidden" aria-live="polite" aria-atomic="true">
             <AnimatePresence mode="wait" custom={direction}>
               <motion.div
                 key={currentIndex}
@@ -264,6 +285,9 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
                 animate="center"
                 exit="exit"
                 transition={{ duration: 0.3, ease: 'easeInOut' }}
+                role="group"
+                aria-roledescription="slide"
+                aria-label={`Testimonial ${currentIndex + 1} of ${totalItems}`}
               >
                 <TestimonialTile testimonial={safeTestimonials[currentIndex]} featured />
               </motion.div>
@@ -339,7 +363,7 @@ export const TestimonialsSection: React.FC<TestimonialsSectionProps> = ({
 
         {/* Client Logos */}
         <div className="mt-12 lg:mt-16">
-          <div className="text-center text-sm text-slate-500 mb-6">Trusted by the community</div>
+          <div className="text-center text-sm text-slate-300 mb-6">Trusted by the community</div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {logoBadges.map((badge) => (
               <div
@@ -426,7 +450,7 @@ function TestimonialTile({ testimonial, featured }: { testimonial: Testimonial; 
           )}
           <div>
             <div className="text-white font-semibold">{testimonial.author.name}</div>
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-slate-400">
               {testimonial.author.title}
               {testimonial.author.company ? ` • ${testimonial.author.company}` : ''}
             </div>

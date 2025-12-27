@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { LandingLayout, LandingHeader } from '../landing/layout';
 import { SEOHead, StructuredData } from '../landing/seo';
 import { PolicyDocument } from '../../types/policies';
@@ -74,13 +75,13 @@ const LegalPageLayout: React.FC<Props> = ({ policy, children }) => {
               </h1>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm text-slate-700 dark:text-slate-300">
                 <span className="flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                   </svg>
                   Version: {policy.version}
                 </span>
                 <span className="flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                   </svg>
                   Last updated: {new Date(policy.lastUpdated).toLocaleDateString('en-US', {
@@ -101,8 +102,8 @@ const LegalPageLayout: React.FC<Props> = ({ policy, children }) => {
               {/* Table of Contents - Mobile First */}
               <nav className="mb-8 md:mb-12">
                 <div className="bg-white/90 dark:bg-white/5 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl p-6">
-                  <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                       <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
                     </svg>
                     Table of Contents
@@ -112,7 +113,7 @@ const LegalPageLayout: React.FC<Props> = ({ policy, children }) => {
                       <li key={section.id}>
                         <a
                           href={`#${section.id}`}
-                          className="text-slate-800 dark:text-slate-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors duration-200 block py-1 px-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
+                          className="text-slate-800 dark:text-slate-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors duration-200 block py-1 px-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2"
                         >
                           {section.heading}
                         </a>
@@ -122,7 +123,7 @@ const LegalPageLayout: React.FC<Props> = ({ policy, children }) => {
                               <li key={child.id}>
                                 <a
                                   href={`#${child.id}`}
-                                  className="text-slate-700 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors duration-200 block py-1 px-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-sm"
+                                  className="text-slate-700 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors duration-200 block py-1 px-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2"
                                 >
                                   {child.heading}
                                 </a>
@@ -152,18 +153,30 @@ const LegalPageLayout: React.FC<Props> = ({ policy, children }) => {
                 &copy; {new Date().getFullYear()} RawDrive. All rights reserved.
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-6 text-sm">
-                <a href="/legal/privacy" className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+                <Link
+                  to="/legal/privacy"
+                  className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 rounded"
+                >
                   Privacy Policy
-                </a>
-                <a href="/legal/terms" className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+                </Link>
+                <Link
+                  to="/legal/terms"
+                  className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 rounded"
+                >
                   Terms of Service
-                </a>
-                <a href="/legal/refund" className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+                </Link>
+                <Link
+                  to="/legal/refund"
+                  className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 rounded"
+                >
                   Refund Policy
-                </a>
-                <a href="/contact" className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+                </Link>
+                <Link
+                  to="/contact"
+                  className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 rounded"
+                >
                   Contact Us
-                </a>
+                </Link>
               </div>
             </div>
           </div>

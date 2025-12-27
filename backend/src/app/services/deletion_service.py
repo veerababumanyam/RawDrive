@@ -340,7 +340,52 @@ class DeletionService:
                 asset_id,
             )
 
-        # 3. Log audit event
+            # 3. Auto-select new cover for galleries using this asset as cover
+            # Find galleries that used this asset as cover and select next available asset
+            affected_galleries = await conn.fetch(
+                """
+                SELECT g.gallery_id
+                FROM galleries g
+                WHERE g.workspace_id = $1 AND g.cover_asset_id = $2
+                """,
+                workspace_id,
+                asset_id,
+            )
+
+            for gallery_row in affected_galleries:
+                gallery_id = gallery_row["gallery_id"]
+                # Find first available asset in this gallery to use as new cover
+                new_cover = await conn.fetchrow(
+                    """
+                    SELECT a.asset_id
+                    FROM gallery_assets ga
+                    JOIN assets a ON ga.asset_id = a.asset_id
+                    WHERE ga.gallery_id = $1
+                      AND a.workspace_id = $2
+                      AND a.deleted = FALSE
+                      AND a.status = 'available'
+                      AND a.asset_id != $3
+                    ORDER BY a.created_at DESC
+                    LIMIT 1
+                    """,
+                    gallery_id,
+                    workspace_id,
+                    asset_id,
+                )
+
+                new_cover_id = new_cover["asset_id"] if new_cover else None
+                await conn.execute(
+                    """
+                    UPDATE galleries
+                    SET cover_asset_id = $1, updated_at = $2
+                    WHERE gallery_id = $3
+                    """,
+                    new_cover_id,
+                    now,
+                    gallery_id,
+                )
+
+        # 4. Log audit event
         await self._audit_service.log_soft_delete(
             workspace_id=workspace_id,
             user_id=user_id,

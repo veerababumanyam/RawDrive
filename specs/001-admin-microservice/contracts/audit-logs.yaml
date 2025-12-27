@@ -1,0 +1,1020 @@
+openapi: 3.1.0
+info:
+  title: Audit Logs API
+  version: 1.0.0
+  description: |
+    Audit log querying, export, and retention management endpoints.
+    Covers FR-026 to FR-035, FR-088 (anomaly detection).
+
+servers:
+  - url: /admin/v1
+    description: Admin Service API
+
+tags:
+  - name: Query
+    description: Audit log querying and search
+  - name: Export
+    description: Audit log export operations
+  - name: Anomalies
+    description: Anomaly detection and alerts (FR-088)
+  - name: Retention
+    description: Retention policy management
+
+paths:
+  /audit/logs:
+    get:
+      summary: Query audit logs
+      description: |
+        Search and filter audit log entries with advanced filtering (FR-026-028).
+        Supports full-text search on details field.
+      tags: [Query]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Start of time range (required)
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: End of time range (required)
+        - name: actor_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by admin who performed action
+        - name: actor_type
+          in: query
+          schema:
+            type: string
+            enum: [admin, system, service]
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: Action type filter (e.g., 'admin.login', 'support.session.create')
+        - name: action_category
+          in: query
+          schema:
+            type: string
+            enum: [auth, admin_management, support, moderation, billing, system]
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+          description: Resource type filter (e.g., 'admin', 'workspace', 'user')
+        - name: resource_id
+          in: query
+          schema:
+            type: string
+        - name: workspace_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by affected workspace
+        - name: success
+          in: query
+          schema:
+            type: boolean
+          description: Filter by success/failure
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+        - name: ip_address
+          in: query
+          schema:
+            type: string
+          description: Filter by IP address or CIDR range
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Full-text search in details
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [created_at_asc, created_at_desc]
+            default: created_at_desc
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogListResponse'
+        '400':
+          description: Invalid date range or parameters
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /audit/logs/{log_id}:
+    get:
+      summary: Get audit log entry
+      description: Get detailed information about a specific audit log entry
+      tags: [Query]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: log_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Audit log entry detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /audit/logs/aggregate:
+    get:
+      summary: Aggregate audit statistics
+      description: Get aggregated statistics for dashboard and reporting
+      tags: [Query]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: group_by
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [action, actor_id, resource_type, hour, day, week]
+        - name: action_category
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Aggregated statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditAggregateResponse'
+
+  /audit/logs/timeline:
+    get:
+      summary: Get activity timeline
+      description: Get chronological activity timeline for visualization
+      tags: [Query]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: actor_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: granularity
+          in: query
+          schema:
+            type: string
+            enum: [minute, hour, day]
+            default: hour
+      responses:
+        '200':
+          description: Activity timeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditTimelineResponse'
+
+  # Export Endpoints
+  /audit/exports:
+    get:
+      summary: List export jobs
+      description: List all audit log export jobs
+      tags: [Export]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processing, completed, failed, expired]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Export job list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExportListResponse'
+
+    post:
+      summary: Create export job
+      description: |
+        Create an audit log export job (FR-030-032).
+        Exports are generated asynchronously and available for 24 hours.
+      tags: [Export]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExportRequest'
+      responses:
+        '202':
+          description: Export job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExportResponse'
+        '400':
+          description: Invalid date range or exceeds maximum export size
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          description: Export rate limit exceeded
+
+  /audit/exports/{export_id}:
+    get:
+      summary: Get export job status
+      description: Get status and download URL for an export job
+      tags: [Export]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Export job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExportDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Cancel export job
+      description: Cancel a pending export job
+      tags: [Export]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Export cancelled
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Export already completed or failed
+
+  # Anomaly Detection (FR-088)
+  /audit/anomalies:
+    get:
+      summary: List detected anomalies
+      description: List anomalies detected by the rule-based detection system
+      tags: [Anomalies]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, investigating, resolved, false_positive]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [brute_force, unusual_location, privilege_escalation, bulk_access, off_hours_activity]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Anomaly list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyListResponse'
+
+  /audit/anomalies/{anomaly_id}:
+    get:
+      summary: Get anomaly details
+      description: Get detailed information about a detected anomaly
+      tags: [Anomalies]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: anomaly_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Anomaly details with related audit logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update anomaly status
+      description: Update investigation status of an anomaly
+      tags: [Anomalies]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: anomaly_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAnomalyRequest'
+      responses:
+        '200':
+          description: Anomaly updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /audit/anomaly-rules:
+    get:
+      summary: List anomaly detection rules
+      description: List configured anomaly detection rules
+      tags: [Anomalies]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Anomaly rule list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyRuleListResponse'
+
+    post:
+      summary: Create anomaly rule
+      description: Create a custom anomaly detection rule
+      tags: [Anomalies]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnomalyRuleRequest'
+      responses:
+        '201':
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyRuleResponse'
+
+  # Retention Management
+  /audit/retention:
+    get:
+      summary: Get retention policy
+      description: Get current audit log retention policy settings
+      tags: [Retention]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Retention policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicyResponse'
+
+    put:
+      summary: Update retention policy
+      description: Update audit log retention policy (FR-033-035)
+      tags: [Retention]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRetentionPolicyRequest'
+      responses:
+        '200':
+          description: Retention policy updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicyResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /audit/retention/archive-status:
+    get:
+      summary: Get archive status
+      description: Get status of log archival to cold storage
+      tags: [Retention]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Archive status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveStatusResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 50
+        maximum: 500
+
+  responses:
+    Forbidden:
+      description: Permission denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    AuditLogEntry:
+      type: object
+      properties:
+        log_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        actor_id:
+          type: string
+          format: uuid
+        actor_type:
+          type: string
+          enum: [admin, system, service]
+        actor_email:
+          type: string
+          format: email
+        action:
+          type: string
+        action_category:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        workspace_id:
+          type: string
+          format: uuid
+        success:
+          type: boolean
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        session_id:
+          type: string
+          format: uuid
+
+    AuditLogDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/AuditLogEntry'
+        - type: object
+          properties:
+            details:
+              type: object
+              description: Action-specific details
+            previous_value:
+              type: object
+              description: State before change (for updates)
+            new_value:
+              type: object
+              description: State after change (for updates)
+            correlation_id:
+              type: string
+              description: Request correlation ID
+            related_logs:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditLogEntry'
+              description: Related audit entries
+
+    AuditLogListResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEntry'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        query_stats:
+          type: object
+          properties:
+            total_matches:
+              type: integer
+            query_time_ms:
+              type: integer
+            partitions_scanned:
+              type: integer
+
+    AuditAggregateResponse:
+      type: object
+      properties:
+        group_by:
+          type: string
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              count:
+                type: integer
+              success_count:
+                type: integer
+              failure_count:
+                type: integer
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+
+    AuditTimelineResponse:
+      type: object
+      properties:
+        granularity:
+          type: string
+        points:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              total_events:
+                type: integer
+              by_category:
+                type: object
+                additionalProperties:
+                  type: integer
+
+    CreateExportRequest:
+      type: object
+      required: [from, to, format]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        format:
+          type: string
+          enum: [csv, json, parquet]
+        filters:
+          type: object
+          properties:
+            actor_id:
+              type: string
+              format: uuid
+            action_category:
+              type: string
+            resource_type:
+              type: string
+            workspace_id:
+              type: string
+              format: uuid
+            success:
+              type: boolean
+        include_details:
+          type: boolean
+          default: true
+        compression:
+          type: string
+          enum: [none, gzip, zip]
+          default: gzip
+
+    AuditExportResponse:
+      type: object
+      properties:
+        export_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing, completed, failed, expired]
+        format:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+        estimated_records:
+          type: integer
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+
+    AuditExportDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/AuditExportResponse'
+        - type: object
+          properties:
+            completed_at:
+              type: string
+              format: date-time
+            download_url:
+              type: string
+              format: uri
+              description: Presigned URL (available for 24 hours)
+            download_expires_at:
+              type: string
+              format: date-time
+            file_size_bytes:
+              type: integer
+            record_count:
+              type: integer
+            error_message:
+              type: string
+
+    AuditExportListResponse:
+      type: object
+      properties:
+        exports:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditExportResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    AnomalyResponse:
+      type: object
+      properties:
+        anomaly_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [brute_force, unusual_location, privilege_escalation, bulk_access, off_hours_activity, custom]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        status:
+          type: string
+          enum: [open, investigating, resolved, false_positive]
+        detected_at:
+          type: string
+          format: date-time
+        actor_id:
+          type: string
+          format: uuid
+        actor_email:
+          type: string
+        description:
+          type: string
+        rule_id:
+          type: string
+          format: uuid
+        event_count:
+          type: integer
+          description: Number of events that triggered the anomaly
+
+    AnomalyDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/AnomalyResponse'
+        - type: object
+          properties:
+            details:
+              type: object
+              description: Rule-specific anomaly details
+            triggered_by:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditLogEntry'
+              description: Audit logs that triggered this anomaly
+            investigation_notes:
+              type: array
+              items:
+                type: object
+                properties:
+                  note_id:
+                    type: string
+                    format: uuid
+                  admin_id:
+                    type: string
+                    format: uuid
+                  admin_email:
+                    type: string
+                  note:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+
+    AnomalyListResponse:
+      type: object
+      properties:
+        anomalies:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnomalyResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+        stats:
+          type: object
+          properties:
+            total_open:
+              type: integer
+            by_severity:
+              type: object
+              additionalProperties:
+                type: integer
+
+    UpdateAnomalyRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [investigating, resolved, false_positive]
+        note:
+          type: string
+          description: Investigation note
+
+    AnomalyRuleResponse:
+      type: object
+      properties:
+        rule_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        conditions:
+          type: object
+          description: Rule conditions
+        threshold:
+          type: integer
+        window_minutes:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        is_system:
+          type: boolean
+          description: Whether this is a built-in rule
+
+    AnomalyRuleListResponse:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnomalyRuleResponse'
+
+    CreateAnomalyRuleRequest:
+      type: object
+      required: [name, type, severity, conditions, threshold, window_minutes]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        conditions:
+          type: object
+          description: JSON object defining rule conditions
+        threshold:
+          type: integer
+          minimum: 1
+        window_minutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+        enabled:
+          type: boolean
+          default: true
+
+    RetentionPolicyResponse:
+      type: object
+      properties:
+        online_retention_days:
+          type: integer
+          description: Days to keep logs in hot storage (default 730 = 2 years)
+        archive_retention_years:
+          type: integer
+          description: Years to keep logs in cold storage (default 7)
+        archive_enabled:
+          type: boolean
+        archive_storage:
+          type: string
+          enum: [s3_glacier, azure_archive, gcs_coldline]
+        last_archive_at:
+          type: string
+          format: date-time
+        next_archive_at:
+          type: string
+          format: date-time
+
+    UpdateRetentionPolicyRequest:
+      type: object
+      properties:
+        online_retention_days:
+          type: integer
+          minimum: 90
+          maximum: 2555
+        archive_retention_years:
+          type: integer
+          minimum: 1
+          maximum: 10
+        archive_enabled:
+          type: boolean
+
+    ArchiveStatusResponse:
+      type: object
+      properties:
+        last_archive_at:
+          type: string
+          format: date-time
+        last_archive_size_bytes:
+          type: integer
+        last_archive_record_count:
+          type: integer
+        total_archived_records:
+          type: integer
+        oldest_online_log:
+          type: string
+          format: date-time
+        oldest_archived_log:
+          type: string
+          format: date-time
+        archive_jobs:
+          type: array
+          items:
+            type: object
+            properties:
+              job_id:
+                type: string
+                format: uuid
+              status:
+                type: string
+                enum: [pending, running, completed, failed]
+              started_at:
+                type: string
+                format: date-time
+              completed_at:
+                type: string
+                format: date-time
+              records_archived:
+                type: integer
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string

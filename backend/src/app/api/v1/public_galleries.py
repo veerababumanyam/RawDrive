@@ -85,6 +85,31 @@ async def verify_gallery_pin(
         logger.exception("Failed to verify PIN")
         raise InternalError("Failed to verify PIN")
 
+@router.post(
+    "/{gallery_id}/verify-password",
+    status_code=status.HTTP_200_OK,
+    summary="Verify gallery password",
+)
+async def verify_gallery_password(
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    request: dict = Body(...),
+):
+    """Verify password for protected gallery access."""
+    password = request.get("password", "")
+    if not password:
+        raise AppError(message="Password is required", code="PASSWORD_REQUIRED", status_code=400)
+    
+    gallery_service = get_gallery_service()
+    try:
+        is_valid = await gallery_service.verify_gallery_password(gallery_id, password)
+        return {"valid": is_valid}
+    except GalleryNotFoundError:
+        raise NotFoundError("Gallery", str(gallery_id))
+    except Exception as e:
+        logger.exception("Failed to verify password")
+        raise InternalError("Failed to verify password")
+
+
 @router.get(
     "/{gallery_id}",
     response_model=GalleryDetailResponse,

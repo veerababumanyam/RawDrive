@@ -1,0 +1,725 @@
+openapi: 3.1.0
+info:
+  title: Support Access API
+  version: 1.0.0
+  description: |
+    Support session management and break-glass emergency access endpoints.
+    Covers FR-011 to FR-020 (support sessions), FR-021-025 (break-glass).
+
+servers:
+  - url: /admin/v1
+    description: Admin Service API
+
+tags:
+  - name: Support Sessions
+    description: Customer account support access (FR-011-020)
+  - name: Break-Glass
+    description: Emergency access with dual control (FR-021-025)
+
+paths:
+  /support/sessions:
+    get:
+      summary: List support sessions
+      description: List all support sessions with filtering
+      tags: [Support Sessions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, expired, revoked, all]
+        - name: admin_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: workspace_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Support session list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportSessionListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Create support session
+      description: |
+        Create a time-limited support session for customer account access (FR-011).
+        Requires justification and sends real-time notification to customer.
+      tags: [Support Sessions]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSupportSessionRequest'
+      responses:
+        '201':
+          description: Support session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportSessionResponse'
+        '400':
+          description: Invalid request (e.g., duration exceeds maximum)
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Active session already exists for this workspace
+
+  /support/sessions/{session_id}:
+    get:
+      summary: Get support session details
+      description: Get details of a specific support session including audit trail
+      tags: [Support Sessions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+      responses:
+        '200':
+          description: Support session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportSessionDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /support/sessions/{session_id}/revoke:
+    post:
+      summary: Revoke support session
+      description: Immediately terminate a support session (FR-014)
+      tags: [Support Sessions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeSessionRequest'
+      responses:
+        '200':
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportSessionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Session already expired or revoked
+
+  /support/sessions/{session_id}/extend:
+    post:
+      summary: Extend support session
+      description: Extend active support session duration (FR-013)
+      tags: [Support Sessions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtendSessionRequest'
+      responses:
+        '200':
+          description: Session extended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportSessionResponse'
+        '400':
+          description: Extension exceeds maximum allowed duration
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Session not active
+
+  /support/sessions/{session_id}/actions:
+    get:
+      summary: List session actions
+      description: Get all actions performed during a support session (FR-017)
+      tags: [Support Sessions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Session action log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionActionListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /support/sessions/my:
+    get:
+      summary: List my support sessions
+      description: List support sessions created by the current admin
+      tags: [Support Sessions]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, expired, revoked, all]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: My support sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportSessionListResponse'
+
+  # Break-Glass Endpoints (FR-021-025)
+  /break-glass/requests:
+    get:
+      summary: List break-glass requests
+      description: List all break-glass access requests
+      tags: [Break-Glass]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, denied, expired, used, all]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Break-glass request list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequestListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Initiate break-glass request
+      description: |
+        Request emergency access requiring dual control approval (FR-021).
+        Generates high-severity alert and requires second admin approval.
+      tags: [Break-Glass]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBreakGlassRequest'
+      responses:
+        '201':
+          description: Break-glass request created, awaiting approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequestResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Pending request already exists
+
+  /break-glass/requests/{request_id}:
+    get:
+      summary: Get break-glass request details
+      description: Get details of a specific break-glass request
+      tags: [Break-Glass]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BreakGlassRequestIdParam'
+      responses:
+        '200':
+          description: Break-glass request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequestDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /break-glass/requests/{request_id}/approve:
+    post:
+      summary: Approve break-glass request
+      description: |
+        Second admin approves break-glass request (FR-022).
+        Approver cannot be the initiator.
+      tags: [Break-Glass]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BreakGlassRequestIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveBreakGlassRequest'
+      responses:
+        '200':
+          description: Request approved, access granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassApprovalResponse'
+        '400':
+          description: Cannot approve own request
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Request not in pending status
+
+  /break-glass/requests/{request_id}/deny:
+    post:
+      summary: Deny break-glass request
+      description: Deny a break-glass request with reason
+      tags: [Break-Glass]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BreakGlassRequestIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DenyBreakGlassRequest'
+      responses:
+        '200':
+          description: Request denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Request not in pending status
+
+  /break-glass/access/{access_id}/terminate:
+    post:
+      summary: Terminate break-glass access
+      description: End an active break-glass access session (FR-024)
+      tags: [Break-Glass]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: access_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TerminateAccessRequest'
+      responses:
+        '200':
+          description: Access terminated
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Access already terminated
+
+  /break-glass/pending:
+    get:
+      summary: List pending approvals
+      description: List break-glass requests awaiting my approval
+      tags: [Break-Glass]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Pending approval requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakGlassRequestListResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    SessionIdParam:
+      name: session_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    BreakGlassRequestIdParam:
+      name: request_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+
+  responses:
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Permission denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    CreateSupportSessionRequest:
+      type: object
+      required: [workspace_id, justification, requested_duration_minutes]
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+          description: Target customer workspace
+        justification:
+          type: string
+          minLength: 20
+          maxLength: 1000
+          description: Reason for support access (min 20 chars)
+        requested_duration_minutes:
+          type: integer
+          minimum: 5
+          maximum: 480
+          description: Requested access duration (max 8 hours)
+        ticket_reference:
+          type: string
+          description: Support ticket ID for tracking
+
+    SupportSessionResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        admin_id:
+          type: string
+          format: uuid
+        admin_email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [active, expired, revoked]
+        justification:
+          type: string
+        ticket_reference:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+        revoked_by:
+          type: string
+          format: uuid
+        action_count:
+          type: integer
+          description: Number of actions performed in session
+
+    SupportSessionDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/SupportSessionResponse'
+        - type: object
+          properties:
+            workspace_name:
+              type: string
+            recent_actions:
+              type: array
+              items:
+                $ref: '#/components/schemas/SessionAction'
+              maxItems: 10
+
+    SupportSessionListResponse:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportSessionResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    RevokeSessionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 10
+
+    ExtendSessionRequest:
+      type: object
+      required: [additional_minutes]
+      properties:
+        additional_minutes:
+          type: integer
+          minimum: 5
+          maximum: 120
+        reason:
+          type: string
+
+    SessionAction:
+      type: object
+      properties:
+        action_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        performed_at:
+          type: string
+          format: date-time
+        details:
+          type: object
+
+    SessionActionListResponse:
+      type: object
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionAction'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    CreateBreakGlassRequest:
+      type: object
+      required: [reason, scope, urgency]
+      properties:
+        reason:
+          type: string
+          minLength: 50
+          maxLength: 2000
+          description: Detailed justification for emergency access
+        scope:
+          type: string
+          enum: [full_admin, billing_only, user_management, data_export]
+          description: Requested access scope
+        urgency:
+          type: string
+          enum: [critical, high, medium]
+        target_workspace_id:
+          type: string
+          format: uuid
+          description: Optional - specific workspace (null for platform-wide)
+        estimated_duration_minutes:
+          type: integer
+          minimum: 15
+          maximum: 240
+          default: 60
+
+    BreakGlassRequestResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        initiator_id:
+          type: string
+          format: uuid
+        initiator_email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [pending, approved, denied, expired, used]
+        reason:
+          type: string
+        scope:
+          type: string
+        urgency:
+          type: string
+        target_workspace_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          description: Approval window expiry (15 minutes from creation)
+        approver_id:
+          type: string
+          format: uuid
+        approved_at:
+          type: string
+          format: date-time
+
+    BreakGlassRequestDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/BreakGlassRequestResponse'
+        - type: object
+          properties:
+            initiator_name:
+              type: string
+            approver_name:
+              type: string
+            access_sessions:
+              type: array
+              items:
+                type: object
+                properties:
+                  access_id:
+                    type: string
+                    format: uuid
+                  started_at:
+                    type: string
+                    format: date-time
+                  ended_at:
+                    type: string
+                    format: date-time
+                  action_count:
+                    type: integer
+
+    BreakGlassRequestListResponse:
+      type: object
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakGlassRequestResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    ApproveBreakGlassRequest:
+      type: object
+      required: [mfa_code]
+      properties:
+        mfa_code:
+          type: string
+          pattern: '^\d{6}$'
+          description: MFA code required for approval
+        notes:
+          type: string
+
+    BreakGlassApprovalResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        access_id:
+          type: string
+          format: uuid
+        access_token:
+          type: string
+          description: Temporary access token with elevated permissions
+        expires_at:
+          type: string
+          format: date-time
+        scope:
+          type: string
+
+    DenyBreakGlassRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 10
+
+    TerminateAccessRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string

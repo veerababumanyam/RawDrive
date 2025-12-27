@@ -199,11 +199,8 @@ export class MagicLinkService {
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/magic-links/${linkId}/qr${query ? `?${query}` : ''}`;
 
-    // Use fetch directly for binary response
-    const response = await fetch(endpoint, {
-      method: 'GET',
-      credentials: 'include',
-    });
+    // Use apiClient.fetchRaw to handle base URL and authentication
+    const response = await apiClient.fetchRaw(endpoint);
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));

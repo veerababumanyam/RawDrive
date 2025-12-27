@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { galleryService } from '../../services/galleryService';
-import { GalleryDetailData, PublicGalleryAsset } from '../../types/gallery';
+import { GalleryDetailData, PublicGalleryAsset, GalleryAssetItem } from '../../types/gallery';
+import { GalleryCanvas } from '../../components/features/gallery/GalleryCanvas';
 import { AppButton } from '../../components/ui/AppButton';
 import { useToast } from '../../components/ui/Toast';
 import {
@@ -14,7 +15,6 @@ import {
     Heart,
     Bookmark,
     LayoutGrid,
-    Maximize2,
     ChevronLeft,
     ChevronRight,
     Camera,
@@ -25,12 +25,14 @@ import {
 } from 'lucide-react';
 import { ClientEmailModal } from '../../components/features/gallery/ClientEmailModal';
 import { PinVerificationModal } from '../../components/features/gallery/PinVerificationModal';
+import { PasswordVerificationModal } from '../../components/features/gallery/PasswordVerificationModal';
 import { FaceDiscovery } from '../../components/features/gallery/FaceDiscovery';
 import { ShareMenu } from '../../components/features/gallery/ShareMenu';
 import {
     VISITOR_STORAGE_KEY_PREFIX,
     VISITOR_ID_KEY_PREFIX,
     PIN_VERIFIED_KEY_PREFIX,
+    PASSWORD_VERIFIED_KEY_PREFIX,
     BULK_DOWNLOAD_DELAY_MS,
 } from '../../constants/gallery';
 
@@ -55,6 +57,10 @@ const PublicGalleryPage: React.FC = () => {
     // PIN Verification State
     const [showPinModal, setShowPinModal] = useState(false);
     const [isPinVerified, setIsPinVerified] = useState(false);
+
+    // Password Verification State
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [isPasswordVerified, setIsPasswordVerified] = useState(false);
 
     // Face Discovery State
     const [showFaceDiscovery, setShowFaceDiscovery] = useState(false);
@@ -111,7 +117,17 @@ const PublicGalleryPage: React.FC = () => {
                 } else {
                     setIsVisitorAuthenticated(true);
 
+                    // Check Password protection first
+                    const passwordVerified = localStorage.getItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${galleryId}`);
+                    if (galleryData.password_protected && !passwordVerified) {
+                         setShowPasswordModal(true);
+                         // Don't check PIN yet if password is needed
+                         return;
+                    }
+                    setIsPasswordVerified(true);
+
                     // Check PIN protection
+
                     const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
                     if (galleryData.pin_protected && !pinVerified) {
                         setShowPinModal(true);
@@ -160,10 +176,10 @@ const PublicGalleryPage: React.FC = () => {
 
     // Refetch when tab changes
     useEffect(() => {
-        if (isVisitorAuthenticated && isPinVerified && galleryId) {
+        if (isVisitorAuthenticated && isPinVerified && isPasswordVerified && galleryId) {
             fetchAssets();
         }
-    }, [activeTab, isVisitorAuthenticated, isPinVerified, galleryId, fetchAssets]);
+    }, [activeTab, isVisitorAuthenticated, isPinVerified, isPasswordVerified, galleryId, fetchAssets]);
 
     const handleVisitorSubmit = async (data: { email: string; first_name: string; last_name: string; phone: string; address?: string }) => {
         if (!galleryId) return;
@@ -318,6 +334,37 @@ const PublicGalleryPage: React.FC = () => {
         }
         return result;
     }, [assets, filteredPhotoIds, activeSubGallery]);
+
+    // Adapt PublicGalleryAsset[] to GalleryAssetItem[] for GalleryCanvas
+    const canvasAssets: GalleryAssetItem[] = useMemo(() => {
+        return displayedAssets.map(publicAsset => ({
+            gallery_asset_id: publicAsset.asset_id, // Use same ID for simplicity
+            asset_id: publicAsset.asset_id,
+            sort_order: publicAsset.sort_order,
+            visible: true,
+            is_private: false,
+            sub_gallery_id: publicAsset.sub_gallery_id,
+            is_favorited: localFavorites.has(publicAsset.asset_id),
+            is_selected: localSelections.has(publicAsset.asset_id),
+            favorites_count: publicAsset.favorites_count ?? 0,
+            asset: {
+                type: publicAsset.type,
+                status: 'available' as const,
+                mime_type: publicAsset.type === 'photo' ? 'image/jpeg' : 'video/mp4',
+                filename: publicAsset.filename,
+                width: publicAsset.width,
+                height: publicAsset.height,
+                duration_ms: publicAsset.duration ? publicAsset.duration * 1000 : undefined,
+                file_size: publicAsset.size_bytes,
+                created_at: publicAsset.created_at,
+            },
+        }));
+    }, [displayedAssets, localFavorites, localSelections]);
+
+    // Map layout_style to GalleryCanvas viewMode
+    const canvasViewMode: 'grid' | 'masonry' = useMemo(() => {
+        return gallery?.layout_style === 'continuous' ? 'masonry' : 'grid';
+    }, [gallery?.layout_style]);
 
     // Lightbox navigation functions
     const openLightbox = useCallback((asset: PublicGalleryAsset) => {
@@ -576,6 +623,40 @@ const PublicGalleryPage: React.FC = () => {
             <PinVerificationModal
                 isOpen={showPinModal}
                 onVerify={handlePinVerify}
+                onCancel={() => navigate('/')}
+                galleryTitle={gallery.title}
+                companyName={company_profile?.name}
+                logoUrl={company_profile?.logo_url}
+            />
+
+            <PasswordVerificationModal
+                isOpen={showPasswordModal}
+                onVerify={async (password) => {
+                    if (!galleryId) return false;
+                    try {
+                        const isValid = await galleryService.verifyPassword(galleryId, password);
+                        if (isValid) {
+                            localStorage.setItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${galleryId}`, 'true');
+                            setShowPasswordModal(false);
+                            setIsPasswordVerified(true);
+                            
+                            // Check PIN after Password
+                            if (gallery?.pin_protected) {
+                                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
+                                if (!pinVerified) {
+                                    setShowPinModal(true);
+                                    return true;
+                                }
+                            }
+                            setIsPinVerified(true);
+                            await fetchAssets();
+                        }
+                        return isValid;
+                    } catch (error) {
+                        console.error(error);
+                        return false;
+                    }
+                }}
                 onCancel={() => navigate('/')}
                 galleryTitle={gallery.title}
                 companyName={company_profile?.name}
@@ -1083,113 +1164,27 @@ const PublicGalleryPage: React.FC = () => {
                                 )}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                {displayedAssets.map(asset => {
-                                    const isFavorited = localFavorites.has(asset.asset_id);
-                                    const isSelected = localSelections.has(asset.asset_id);
-                                    const showWatermark = gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only';
-
-                                    return (
-                                        <div
-                                            key={asset.asset_id}
-                                            className="aspect-[3/2] bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden group relative break-inside-avoid cursor-pointer"
-                                            onClick={() => openLightbox(asset)}
-                                            role="button"
-                                            tabIndex={0}
-                                            aria-label={`View ${asset.filename}`}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    openLightbox(asset);
-                                                }
-                                            }}
-                                        >
-                                            <img
-                                                src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${asset.asset_id}/thumbnail`}
-                                                alt={asset.filename}
-                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                                loading="lazy"
-                                            />
-
-                                            {/* Watermark overlay for restricted downloads */}
-                                            {showWatermark && (
-                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                                                    <div
-                                                        className="text-white/20 text-lg md:text-xl font-bold uppercase tracking-widest rotate-[-25deg] whitespace-nowrap"
-                                                        style={{
-                                                            textShadow: '0 0 10px rgba(0,0,0,0.3)',
-                                                            letterSpacing: '0.1em',
-                                                        }}
-                                                    >
-                                                        {company_profile?.name || 'PREVIEW ONLY'}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Hover overlay */}
-                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300">
-                                                {/* View icon in center on hover */}
-                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Maximize2 size={32} className="text-white drop-shadow-lg" />
-                                                </div>
-                                            </div>
-
-                                            {/* Action buttons (top-right) */}
-                                            <div className="absolute top-2 right-2 flex flex-col gap-2 z-10">
-                                                {/* Favorite button */}
-                                                <button
-                                                    className={`p-2 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 ${
-                                                        isFavorited
-                                                            ? 'bg-red-500 text-white opacity-100'
-                                                            : 'bg-black/40 text-white hover:bg-red-500'
-                                                    }`}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleFavorite(asset.asset_id);
-                                                    }}
-                                                    aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-                                                    title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-                                                >
-                                                    <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
-                                                </button>
-
-                                                {/* Selection/Pick button */}
-                                                <button
-                                                    className={`p-2 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 ${
-                                                        isSelected
-                                                            ? 'bg-green-500 text-white opacity-100'
-                                                            : 'bg-black/40 text-white hover:bg-green-500'
-                                                    }`}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleSelection(asset.asset_id);
-                                                    }}
-                                                    aria-label={isSelected ? 'Remove from picks' : 'Add to picks'}
-                                                    title={isSelected ? 'Remove from picks' : 'Add to picks'}
-                                                >
-                                                    <Bookmark size={16} className={isSelected ? 'fill-current' : ''} />
-                                                </button>
-                                            </div>
-
-                                            {/* Show indicators when favorited/selected (always visible) */}
-                                            {(isFavorited || isSelected) && (
-                                                <div className="absolute top-2 left-2 flex gap-1">
-                                                    {isFavorited && (
-                                                        <span className="p-1.5 rounded-full bg-red-500 text-white">
-                                                            <Heart size={12} className="fill-current" />
-                                                        </span>
-                                                    )}
-                                                    {isSelected && (
-                                                        <span className="p-1.5 rounded-full bg-green-500 text-white">
-                                                            <Bookmark size={12} className="fill-current" />
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                            <GalleryCanvas
+                                assets={canvasAssets}
+                                viewMode={canvasViewMode}
+                                selectedAssetIds={localSelections}
+                                managementSelectable={false}
+                                showCustomerSelection={true}
+                                onSelectionChange={() => {}}
+                                onCustomerSelectionToggle={(assetId, _selected) => handleSelection(assetId)}
+                                onAssetClick={(asset, _index) => {
+                                    const pubAsset = displayedAssets.find(a => a.asset_id === asset.asset_id);
+                                    if (pubAsset) openLightbox(pubAsset);
+                                }}
+                                onAssetFavorite={(assetId, _favorited) => handleFavorite(assetId)}
+                                onAssetDownload={gallery?.download_policy !== 'view_only' ? (assetId) => {
+                                    const pubAsset = displayedAssets.find(a => a.asset_id === assetId);
+                                    if (pubAsset) handleDownload(pubAsset);
+                                } : undefined}
+                                isClientView={true}
+                                downloadPolicy={gallery?.download_policy}
+                                showWatermark={gallery?.download_policy === 'view_only' || gallery?.download_policy === 'watermarked_only'}
+                            />
                         )}
                     </>
                 )}

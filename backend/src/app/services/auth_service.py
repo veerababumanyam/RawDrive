@@ -33,6 +33,7 @@ from app.utils.security import (
     hash_password,
     verify_password,
 )
+from app.services.rbac_service import WORKSPACE_PERMISSIONS, WILDCARD_SUFFIX
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,31 @@ class SessionRevokedError(AuthError):
         super().__init__("Session has been revoked", "AUTH_SESSION_REVOKED", 401)
 
 
+class EmailAlreadyInUseError(AuthError):
+    """Email address is already registered to another account."""
+
+    def __init__(self) -> None:
+        super().__init__("Email address is already in use", "AUTH_EMAIL_IN_USE", 409)
+
+
+class PasswordIncorrectError(AuthError):
+    """Password verification failed."""
+
+    def __init__(self) -> None:
+        super().__init__("Current password is incorrect", "AUTH_PASSWORD_INCORRECT", 403)
+
+
+class EmailChangePendingError(AuthError):
+    """Email change already pending verification."""
+
+    def __init__(self, email: str) -> None:
+        super().__init__(
+            f"Email change to {email} is already pending verification",
+            "AUTH_EMAIL_CHANGE_PENDING",
+            409,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
@@ -131,12 +157,33 @@ def _generate_token_bytes(length: int = 32) -> str:
     return secrets.token_urlsafe(length)
 
 
+def _expand_wildcards(permissions: list[str]) -> list[str]:
+    """Expand wildcard permissions to include all sub-permissions.
+
+    For example, 'billing:*' expands to include 'billing:read', 'billing:write'.
+    """
+    expanded = set(permissions)
+
+    for perm in permissions:
+        if perm.endswith(WILDCARD_SUFFIX):
+            prefix = perm[: -len(WILDCARD_SUFFIX)]
+            # Add all permissions that start with this prefix
+            for p in WORKSPACE_PERMISSIONS:
+                if p.startswith(prefix):
+                    expanded.add(p)
+
+    return list(expanded)
+
+
 async def _get_user_permissions(
     pool: asyncpg.Pool,
     user_id: uuid.UUID,
     workspace_id: uuid.UUID,
 ) -> list[str]:
-    """Compute effective permissions for user in workspace (union of all roles)."""
+    """Compute effective permissions for user in workspace (union of all roles).
+
+    Wildcards (e.g., 'billing:*') are expanded to include all matching permissions.
+    """
     query = """
         SELECT r.permissions
         FROM member_roles mr
@@ -146,7 +193,8 @@ async def _get_user_permissions(
     """
     rows = await pool.fetch(query, user_id, workspace_id)
     roles_perms: list[list[str]] = [row["permissions"] for row in rows]
-    return extract_permissions(roles_perms)
+    permissions = extract_permissions(roles_perms)
+    return _expand_wildcards(permissions)
 
 
 async def _get_default_workspace(
@@ -273,7 +321,7 @@ class AuthService:
                     """,
                     role_id,
                     workspace_id,
-                    ["workspace:*", "members:*", "galleries:*", "assets:*", "billing:*"],
+                    ["workspace:*", "members:*", "roles:*", "galleries:*", "assets:*", "billing:*", "audit:read"],
                     now,
                 )
 
@@ -572,4 +620,318 @@ class AuthService:
         await pool.execute(
             "UPDATE sessions SET revoked_at = NOW() WHERE session_id = $1",
             session_id,
+        )
+
+    # -----------------------------------------------------------------------
+    # Email Change
+    # -----------------------------------------------------------------------
+
+    async def request_email_change(
+        self,
+        user_id: uuid.UUID,
+        new_email: str,
+        current_password: str,
+    ) -> str:
+        """Request email address change.
+
+        Flow:
+        1. Verify current password
+        2. Check new email not already in use
+        3. Check no pending email change exists
+        4. Generate verification token
+        5. Store pending change in DB
+        6. Send verification email (TODO: integrate with email service)
+
+        Args:
+            user_id: Current user's ID
+            new_email: New email address
+            current_password: Current password for verification
+
+        Returns:
+            Raw verification token (for testing)
+
+        Raises:
+            PasswordIncorrectError: If current password is wrong
+            EmailAlreadyInUseError: If new email is already registered
+            EmailChangePendingError: If there's already a pending change
+        """
+        pool = await get_postgres_pool()
+        new_email_lower = new_email.lower().strip()
+
+        # Get user and verify password
+        row = await pool.fetchrow(
+            """
+            SELECT u.user_id, u.email, i.password_hash
+            FROM users u
+            JOIN user_identities i ON i.user_id = u.user_id AND i.provider = 'local'
+            WHERE u.user_id = $1
+            """,
+            user_id,
+        )
+
+        if not row:
+            raise PasswordIncorrectError()
+
+        if not verify_password(current_password, row["password_hash"], self._settings):
+            raise PasswordIncorrectError()
+
+        # Check new email not already in use
+        existing = await pool.fetchrow(
+            "SELECT user_id FROM users WHERE email = $1",
+            new_email_lower,
+        )
+        if existing:
+            raise EmailAlreadyInUseError()
+
+        # Check no pending email change
+        pending = await pool.fetchrow(
+            """
+            SELECT new_email FROM pending_email_changes
+            WHERE user_id = $1 AND verified_at IS NULL AND expires_at > NOW()
+            """,
+            user_id,
+        )
+        if pending:
+            raise EmailChangePendingError(pending["new_email"])
+
+        # Generate verification token
+        raw_token = secrets.token_urlsafe(48)
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        change_id = uuid.uuid4()
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(hours=24)
+
+        # Store pending change
+        await pool.execute(
+            """
+            INSERT INTO pending_email_changes (change_id, user_id, new_email, token_hash, created_at, expires_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            change_id,
+            user_id,
+            new_email_lower,
+            token_hash,
+            now,
+            expires_at,
+        )
+
+        logger.info(
+            "Email change requested",
+            extra={
+                "user_id": str(user_id),
+                "old_email": row["email"],
+                "new_email": new_email_lower,
+                "change_id": str(change_id),
+            },
+        )
+
+        # TODO: Send verification email to new address
+        # For now, return token (useful for testing)
+        return raw_token
+
+    async def verify_email_change(self, token: str) -> uuid.UUID:
+        """Verify and complete email change.
+
+        Args:
+            token: Raw verification token
+
+        Returns:
+            User ID whose email was changed
+
+        Raises:
+            TokenInvalidError: If token is invalid or not found
+            TokenExpiredError: If token has expired
+        """
+        pool = await get_postgres_pool()
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+        # Find pending change
+        row = await pool.fetchrow(
+            """
+            SELECT change_id, user_id, new_email, expires_at, verified_at
+            FROM pending_email_changes
+            WHERE token_hash = $1
+            """,
+            token_hash,
+        )
+
+        if not row:
+            raise TokenInvalidError()
+
+        if row["verified_at"] is not None:
+            raise TokenInvalidError()  # Already used
+
+        if row["expires_at"] < datetime.now(timezone.utc):
+            raise TokenExpiredError()
+
+        user_id = row["user_id"]
+        new_email = row["new_email"]
+
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                # Update user email
+                await conn.execute(
+                    """
+                    UPDATE users
+                    SET email = $2, email_verified = TRUE, updated_at = NOW()
+                    WHERE user_id = $1
+                    """,
+                    user_id,
+                    new_email,
+                )
+
+                # Update identity email
+                await conn.execute(
+                    """
+                    UPDATE user_identities
+                    SET email = $2, email_verified = TRUE
+                    WHERE user_id = $1 AND provider = 'local'
+                    """,
+                    user_id,
+                    new_email,
+                )
+
+                # Mark change as verified
+                await conn.execute(
+                    """
+                    UPDATE pending_email_changes
+                    SET verified_at = NOW()
+                    WHERE change_id = $1
+                    """,
+                    row["change_id"],
+                )
+
+        logger.info(
+            "Email change completed",
+            extra={"user_id": str(user_id), "new_email": new_email},
+        )
+
+        return user_id
+
+    async def cancel_email_change(self, user_id: uuid.UUID) -> bool:
+        """Cancel pending email change.
+
+        Args:
+            user_id: User whose pending change to cancel
+
+        Returns:
+            True if a pending change was cancelled
+        """
+        pool = await get_postgres_pool()
+
+        result = await pool.execute(
+            """
+            DELETE FROM pending_email_changes
+            WHERE user_id = $1 AND verified_at IS NULL
+            """,
+            user_id,
+        )
+
+        deleted = int(result.split()[-1]) > 0
+
+        if deleted:
+            logger.info(
+                "Email change cancelled",
+                extra={"user_id": str(user_id)},
+            )
+
+        return deleted
+
+    async def change_password(
+        self,
+        user_id: uuid.UUID,
+        current_password: str,
+        new_password: str,
+        invalidate_other_sessions: bool = True,
+        current_session_id: Optional[uuid.UUID] = None,
+    ) -> None:
+        """Change user password with optional session invalidation.
+
+        Args:
+            user_id: User UUID
+            current_password: Current password for verification
+            new_password: New password to set
+            invalidate_other_sessions: Whether to revoke other sessions
+            current_session_id: Current session to keep active
+
+        Raises:
+            PasswordIncorrectError: If current password is wrong
+        """
+        pool = await get_postgres_pool()
+
+        # Get current password hash
+        row = await pool.fetchrow(
+            """
+            SELECT password_hash FROM user_identities
+            WHERE user_id = $1 AND provider = 'local'
+            """,
+            user_id,
+        )
+
+        if not row:
+            raise PasswordIncorrectError()
+
+        # Verify current password
+        if not verify_password(current_password, row["password_hash"], self._settings):
+            raise PasswordIncorrectError()
+
+        # Hash new password
+        new_password_hash = hash_password(new_password, self._settings)
+
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                # Update password hash
+                await conn.execute(
+                    """
+                    UPDATE user_identities
+                    SET password_hash = $2
+                    WHERE user_id = $1 AND provider = 'local'
+                    """,
+                    user_id,
+                    new_password_hash,
+                )
+
+                # Update last_password_changed_at in users table
+                await conn.execute(
+                    """
+                    UPDATE users
+                    SET last_password_changed_at = NOW(), updated_at = NOW()
+                    WHERE user_id = $1
+                    """,
+                    user_id,
+                )
+
+                # Optionally invalidate other sessions
+                if invalidate_other_sessions and current_session_id:
+                    await conn.execute(
+                        """
+                        UPDATE sessions
+                        SET revoked_at = NOW()
+                        WHERE user_id = $1 AND session_id != $2 AND revoked_at IS NULL
+                        """,
+                        user_id,
+                        current_session_id,
+                    )
+
+                    # Remove revoked refresh tokens from Redis
+                    redis = await get_redis_client()
+                    revoked_sessions = await conn.fetch(
+                        """
+                        SELECT session_id FROM sessions
+                        WHERE user_id = $1 AND session_id != $2 AND revoked_at IS NOT NULL
+                        """,
+                        user_id,
+                        current_session_id,
+                    )
+
+                    for session in revoked_sessions:
+                        session_key = f"session:{session['session_id']}"
+                        await redis.delete(session_key)
+
+        logger.info(
+            "Password changed",
+            extra={
+                "user_id": str(user_id),
+                "other_sessions_invalidated": invalidate_other_sessions,
+            },
         )

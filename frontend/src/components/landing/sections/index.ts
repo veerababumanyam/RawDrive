@@ -17,6 +17,7 @@ export { CTASection, default as CTASectionDefault } from './CTASection';
 export { SocialProofBar, default as SocialProofBarDefault } from './SocialProofBar';
 export { WorkflowTabs, default as WorkflowTabsDefault } from './WorkflowTabs';
 export { AutomationSection, default as AutomationSectionDefault } from './AutomationSection';
-export { SecuritySection, default as SecuritySectionDefault } from './SecuritySection';
+export { SecuritySection, TrustSeals, default as SecuritySectionDefault } from './SecuritySection';
 export { ComparisonSection, default as ComparisonSectionDefault } from './ComparisonSection';
+export { WhySwitchSection, default as WhySwitchSectionDefault } from './WhySwitchSection';
 

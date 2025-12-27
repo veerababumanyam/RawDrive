@@ -386,12 +386,40 @@ const GalleryDetailPage: React.FC = () => {
     }
   }, [workspace?.workspace_id, galleryId, gallery?.download_policy, assets, addToast]);
 
-  // Handle upload complete
+  // Handle individual upload complete (for per-file feedback)
   const handleUploadComplete = useCallback(
-    async (_assetId: string) => {
-      addToast({ message: 'Photo uploaded successfully', variant: 'success' });
-      await refetchAssets();
-      await refetchGallery();
+    (_assetId: string) => {
+      // Individual file completed - no action needed here
+      // Batch refresh happens in handleBatchComplete
+    },
+    []
+  );
+
+  // Handle batch upload complete - refresh gallery when ALL uploads finish
+  const handleBatchComplete = useCallback(
+    async (completedCount: number, failedCount: number) => {
+      // Refresh assets and gallery data
+      await Promise.all([refetchAssets(), refetchGallery()]);
+
+      // Show appropriate toast based on results
+      if (completedCount > 0 && failedCount === 0) {
+        addToast({
+          message: `${completedCount} ${completedCount === 1 ? 'photo' : 'photos'} uploaded successfully`,
+          variant: 'success',
+        });
+      } else if (completedCount > 0 && failedCount > 0) {
+        addToast({
+          message: `${completedCount} uploaded, ${failedCount} failed`,
+          variant: 'warning',
+        });
+      } else if (failedCount > 0) {
+        addToast({
+          message: `${failedCount} ${failedCount === 1 ? 'upload' : 'uploads'} failed`,
+          variant: 'error',
+        });
+      }
+
+      // Close upload panel after batch completes
       setShowUpload(false);
     },
     [refetchAssets, refetchGallery, addToast]
@@ -727,6 +755,7 @@ const GalleryDetailPage: React.FC = () => {
               subGalleryId={activeSubGalleryId}
               onUploadComplete={handleUploadComplete}
               onUploadError={handleUploadError}
+              onBatchComplete={handleBatchComplete}
             />
           </div>
         )}

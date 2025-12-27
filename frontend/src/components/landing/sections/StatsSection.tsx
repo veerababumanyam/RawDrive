@@ -65,9 +65,11 @@ export const StatsSection: React.FC<StatsSectionProps> = ({
   return (
     <section
       id={id}
-      className={`py-16 lg:py-24 ${className}`}
+      className={`py-16 lg:py-24 bg-gradient-to-b from-slate-900 to-slate-800 relative overflow-hidden ${className}`}
       aria-label="Statistics"
     >
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(37,99,235,0.08),transparent_60%)]" aria-hidden="true" />
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial="hidden"

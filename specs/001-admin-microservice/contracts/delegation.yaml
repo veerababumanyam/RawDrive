@@ -1,0 +1,874 @@
+openapi: 3.1.0
+info:
+  title: Permission Delegation API
+  version: 1.0.0
+  description: |
+    Time-boxed permission delegation and presence tracking endpoints.
+    Covers FR-095 to FR-097, US-012, US-014.
+
+servers:
+  - url: /admin/v1
+    description: Admin Service API
+
+tags:
+  - name: Delegation
+    description: Permission delegation management (FR-095-097)
+  - name: Presence
+    description: Real-time presence and concurrent edit detection (US-014)
+
+paths:
+  /delegations:
+    get:
+      summary: List delegations
+      description: |
+        List permission delegations with filtering.
+        Shows both delegations I've granted and delegations I've received.
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [granted, received, all]
+          default: all
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, expired, revoked, all]
+          default: active
+        - name: delegator_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: delegate_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Delegation list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Create delegation
+      description: |
+        Delegate permissions to another admin for a time-boxed period (FR-095).
+        Maximum duration is configurable per permission type.
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDelegationRequest'
+      responses:
+        '201':
+          description: Delegation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationResponse'
+        '400':
+          description: Invalid delegation (e.g., cannot delegate permissions you don't have)
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Active delegation already exists for this delegate and permission
+
+  /delegations/{delegation_id}:
+    get:
+      summary: Get delegation details
+      description: Get detailed information about a delegation
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DelegationIdParam'
+      responses:
+        '200':
+          description: Delegation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /delegations/{delegation_id}/revoke:
+    post:
+      summary: Revoke delegation
+      description: |
+        Revoke an active delegation immediately (FR-096).
+        Only the delegator or super admin can revoke.
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DelegationIdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeDelegationRequest'
+      responses:
+        '200':
+          description: Delegation revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Delegation already expired or revoked
+
+  /delegations/{delegation_id}/extend:
+    post:
+      summary: Extend delegation
+      description: Extend an active delegation's expiry time
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DelegationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtendDelegationRequest'
+      responses:
+        '200':
+          description: Delegation extended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationResponse'
+        '400':
+          description: Extension exceeds maximum allowed duration
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Delegation not active
+
+  /delegations/my/granted:
+    get:
+      summary: List my granted delegations
+      description: List all delegations I have granted to others
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, expired, revoked, all]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Granted delegations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationListResponse'
+
+  /delegations/my/received:
+    get:
+      summary: List my received delegations
+      description: List all delegations I have received from others
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, expired, revoked, all]
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Received delegations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationListResponse'
+
+  /delegations/audit:
+    get:
+      summary: Delegation audit log
+      description: View audit log of delegation actions (FR-097)
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: delegation_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: delegator_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: delegate_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Delegation audit log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationAuditListResponse'
+
+  /delegations/config:
+    get:
+      summary: Get delegation configuration
+      description: Get delegation rules and limits per permission type
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Delegation configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationConfigResponse'
+
+    put:
+      summary: Update delegation configuration
+      description: Update delegation rules (super admin only)
+      tags: [Delegation]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDelegationConfigRequest'
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationConfigResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # Presence Endpoints (US-014)
+  /presence:
+    get:
+      summary: Get active admins
+      description: |
+        Get list of currently active admins and their locations.
+        Used for real-time presence awareness.
+      tags: [Presence]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+          description: Filter by resource type being viewed/edited
+        - name: resource_id
+          in: query
+          schema:
+            type: string
+          description: Filter by specific resource
+      responses:
+        '200':
+          description: Active admin presence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresenceListResponse'
+
+  /presence/heartbeat:
+    post:
+      summary: Update presence
+      description: |
+        Send heartbeat to update current location and activity.
+        Should be called every 30 seconds while active.
+      tags: [Presence]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresenceHeartbeatRequest'
+      responses:
+        '200':
+          description: Presence updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresenceResponse'
+
+  /presence/conflicts:
+    get:
+      summary: Check for conflicts
+      description: |
+        Check if there are potential edit conflicts for a resource.
+        Returns other admins currently editing the same resource.
+      tags: [Presence]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: resource_type
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: resource_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Conflict check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictCheckResponse'
+
+  /presence/lock:
+    post:
+      summary: Acquire edit lock
+      description: |
+        Attempt to acquire an exclusive edit lock on a resource.
+        Used to prevent concurrent edits.
+      tags: [Presence]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcquireLockRequest'
+      responses:
+        '200':
+          description: Lock acquired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LockResponse'
+        '409':
+          description: Resource already locked by another admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LockConflictResponse'
+
+  /presence/lock/{lock_id}:
+    delete:
+      summary: Release edit lock
+      description: Release a held edit lock
+      tags: [Presence]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lock_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Lock released
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Lock not held by current admin
+
+  /presence/ws:
+    get:
+      summary: WebSocket presence endpoint
+      description: |
+        WebSocket endpoint for real-time presence updates.
+
+        **Connection**: `wss://admin.rawdrive.com/admin/v1/presence/ws`
+
+        **Authentication**: Include Bearer token in query param or header.
+
+        **Events Received**:
+        - `admin_joined`: Admin came online
+        - `admin_left`: Admin went offline
+        - `admin_moved`: Admin changed location
+        - `lock_acquired`: Resource was locked
+        - `lock_released`: Resource was unlocked
+        - `conflict_warning`: Another admin started editing same resource
+
+        **Events Sent**:
+        - `subscribe`: Subscribe to presence updates for a resource
+        - `unsubscribe`: Unsubscribe from resource updates
+        - `heartbeat`: Keep connection alive
+      tags: [Presence]
+      responses:
+        '101':
+          description: WebSocket upgrade
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    DelegationIdParam:
+      name: delegation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+
+  responses:
+    Forbidden:
+      description: Permission denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    CreateDelegationRequest:
+      type: object
+      required: [delegate_id, permissions, expires_at]
+      properties:
+        delegate_id:
+          type: string
+          format: uuid
+          description: Admin to receive the delegated permissions
+        permissions:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: Permissions to delegate
+        scope:
+          type: object
+          properties:
+            workspace_ids:
+              type: array
+              items:
+                type: string
+                format: uuid
+              description: Limit delegation to specific workspaces
+          description: Optional scope restrictions
+        expires_at:
+          type: string
+          format: date-time
+          description: When the delegation expires
+        reason:
+          type: string
+          minLength: 10
+          description: Reason for delegation
+        notify_delegate:
+          type: boolean
+          default: true
+
+    DelegationResponse:
+      type: object
+      properties:
+        delegation_id:
+          type: string
+          format: uuid
+        delegator_id:
+          type: string
+          format: uuid
+        delegator_email:
+          type: string
+          format: email
+        delegate_id:
+          type: string
+          format: uuid
+        delegate_email:
+          type: string
+          format: email
+        permissions:
+          type: array
+          items:
+            type: string
+        scope:
+          type: object
+        status:
+          type: string
+          enum: [active, expired, revoked]
+        reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+        revoked_by:
+          type: string
+          format: uuid
+
+    DelegationDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/DelegationResponse'
+        - type: object
+          properties:
+            usage_stats:
+              type: object
+              properties:
+                actions_performed:
+                  type: integer
+                last_used_at:
+                  type: string
+                  format: date-time
+            audit_entries:
+              type: array
+              items:
+                $ref: '#/components/schemas/DelegationAuditEntry'
+              maxItems: 10
+
+    DelegationListResponse:
+      type: object
+      properties:
+        delegations:
+          type: array
+          items:
+            $ref: '#/components/schemas/DelegationResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    RevokeDelegationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    ExtendDelegationRequest:
+      type: object
+      required: [new_expires_at]
+      properties:
+        new_expires_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+
+    DelegationAuditEntry:
+      type: object
+      properties:
+        entry_id:
+          type: string
+          format: uuid
+        delegation_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum: [created, used, extended, revoked, expired]
+        actor_id:
+          type: string
+          format: uuid
+        actor_email:
+          type: string
+        details:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    DelegationAuditListResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/DelegationAuditEntry'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    DelegationConfigResponse:
+      type: object
+      properties:
+        permission_rules:
+          type: array
+          items:
+            type: object
+            properties:
+              permission:
+                type: string
+              delegatable:
+                type: boolean
+              max_duration_hours:
+                type: integer
+              requires_approval:
+                type: boolean
+              allowed_delegators:
+                type: array
+                items:
+                  type: string
+                description: Roles that can delegate this permission
+        global_settings:
+          type: object
+          properties:
+            delegation_enabled:
+              type: boolean
+            require_reason:
+              type: boolean
+            max_active_delegations_per_admin:
+              type: integer
+            notify_on_delegation:
+              type: boolean
+
+    UpdateDelegationConfigRequest:
+      type: object
+      properties:
+        permission_rules:
+          type: array
+          items:
+            type: object
+            properties:
+              permission:
+                type: string
+              delegatable:
+                type: boolean
+              max_duration_hours:
+                type: integer
+              requires_approval:
+                type: boolean
+        global_settings:
+          type: object
+          properties:
+            delegation_enabled:
+              type: boolean
+            require_reason:
+              type: boolean
+            max_active_delegations_per_admin:
+              type: integer
+
+    # Presence Schemas
+    PresenceResponse:
+      type: object
+      properties:
+        admin_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        status:
+          type: string
+          enum: [online, away, busy]
+        current_location:
+          type: object
+          properties:
+            resource_type:
+              type: string
+            resource_id:
+              type: string
+            page:
+              type: string
+        activity:
+          type: string
+          enum: [viewing, editing, idle]
+        last_heartbeat_at:
+          type: string
+          format: date-time
+
+    PresenceListResponse:
+      type: object
+      properties:
+        admins:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresenceResponse'
+        total_online:
+          type: integer
+
+    PresenceHeartbeatRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [online, away, busy]
+        location:
+          type: object
+          properties:
+            resource_type:
+              type: string
+            resource_id:
+              type: string
+            page:
+              type: string
+        activity:
+          type: string
+          enum: [viewing, editing, idle]
+
+    ConflictCheckResponse:
+      type: object
+      properties:
+        has_conflict:
+          type: boolean
+        conflicting_admins:
+          type: array
+          items:
+            type: object
+            properties:
+              admin_id:
+                type: string
+                format: uuid
+              email:
+                type: string
+              name:
+                type: string
+              activity:
+                type: string
+              since:
+                type: string
+                format: date-time
+
+    AcquireLockRequest:
+      type: object
+      required: [resource_type, resource_id]
+      properties:
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        duration_seconds:
+          type: integer
+          default: 300
+          maximum: 3600
+          description: Lock duration (auto-released after)
+
+    LockResponse:
+      type: object
+      properties:
+        lock_id:
+          type: string
+          format: uuid
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        holder_id:
+          type: string
+          format: uuid
+        acquired_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    LockConflictResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          default: resource_locked
+        message:
+          type: string
+        current_holder:
+          type: object
+          properties:
+            admin_id:
+              type: string
+              format: uuid
+            email:
+              type: string
+            name:
+              type: string
+            since:
+              type: string
+              format: date-time
+            expires_at:
+              type: string
+              format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string

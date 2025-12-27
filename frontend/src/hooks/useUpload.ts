@@ -47,9 +47,11 @@ export interface UseUploadOptions {
   workspaceId: string;
   galleryId?: string;
   subGalleryId?: string | null;
+  folderId?: string | null;
   onComplete?: (assetId: string, fileId: string) => void;
   onError?: (error: Error, fileId: string) => void;
   onProgress?: (fileId: string, progress: number) => void;
+  onBatchComplete?: (completedCount: number, failedCount: number) => void; // Called when all uploads finish
   enableDuplicateDetection?: boolean; // Default: true
   enableBackgroundUpload?: boolean; // Default: false (can be enabled later)
   maxConcurrent?: number; // Default: 3
@@ -88,9 +90,11 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     workspaceId,
     galleryId,
     subGalleryId,
+    folderId,
     onComplete,
     onError,
     onProgress,
+    onBatchComplete,
     enableDuplicateDetection = true,
     maxConcurrent = 3,
     retryAttempts = 3,
@@ -105,6 +109,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   const activeUploadsRef = useRef<Set<string>>(new Set());
   const pauseStateRef = useRef<Map<string, boolean>>(new Map());
   const uploadSingleFileRef = useRef<((uploadFile: UploadFile) => Promise<void>) | null>(null);
+  const wasUploadingRef = useRef<boolean>(false);
+  const batchStartedRef = useRef<boolean>(false);
 
   // Calculate progress
   const progress = useMemo<UploadProgress>(() => {
@@ -328,6 +334,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         const session = await galleryService.createUploadSession(workspaceId, {
           gallery_id: galleryId || undefined,
           sub_gallery_id: subGalleryId || null,
+          folder_id: folderId || null,
           file_name: uploadFile.file.name,
           mime_type: uploadFile.file.type,
           size_bytes: uploadFile.file.size,
@@ -482,7 +489,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         }
       }
     },
-    [workspaceId, galleryId, subGalleryId, retryAttempts, retryDelay, updateFile, onComplete, onError, onProgress]
+    [workspaceId, galleryId, subGalleryId, folderId, retryAttempts, retryDelay, updateFile, onComplete, onError, onProgress]
   );
 
   // Store latest version in ref for recursive calls
@@ -662,6 +669,28 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       processQueue();
     }
   }, [files, isPaused, maxConcurrent, processQueue]);
+
+  // Track batch start - when uploading begins
+  useEffect(() => {
+    if (isUploading && !batchStartedRef.current) {
+      batchStartedRef.current = true;
+      wasUploadingRef.current = true;
+    }
+  }, [isUploading]);
+
+  // Detect batch completion - when all uploads finish
+  useEffect(() => {
+    // Only fire if we were uploading and now we're done
+    if (wasUploadingRef.current && !isUploading && batchStartedRef.current) {
+      // All uploads finished (either completed or failed)
+      if (progress.completed > 0 || progress.failed > 0) {
+        onBatchComplete?.(progress.completed, progress.failed);
+      }
+      // Reset tracking for next batch
+      wasUploadingRef.current = false;
+      batchStartedRef.current = false;
+    }
+  }, [isUploading, progress.completed, progress.failed, onBatchComplete]);
 
   return {
     files,

@@ -45,3 +45,4 @@ export type {
 } from './Sidebar';
 
 export { WorkspaceLayout } from './WorkspaceLayout';
+export { SettingsLayout } from './SettingsLayout';

@@ -14,6 +14,10 @@ interface DeleteConfirmModalProps {
   isDeleting?: boolean;
   itemCount: number;
   itemType?: string;
+  /** Custom title override */
+  title?: string;
+  /** Custom message override */
+  message?: string;
 }
 
 const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
@@ -23,6 +27,8 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   isDeleting = false,
   itemCount,
   itemType = 'asset',
+  title,
+  message,
 }) => {
   if (!isOpen) return null;
 
@@ -57,11 +63,10 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         {/* Content */}
         <div className="text-center mb-6">
           <h2 className="text-xl font-semibold text-text-primary mb-2">
-            Delete {itemCount} {itemLabel}?
+            {title || `Delete ${itemCount} ${itemLabel}?`}
           </h2>
           <p className="text-text-secondary text-sm">
-            This action will move the selected {itemLabel} to the trash. 
-            You can restore them from the Trash within 30 days.
+            {message || `This action will move the selected ${itemLabel} to the trash. You can restore them from the Trash within 30 days.`}
           </p>
         </div>
 

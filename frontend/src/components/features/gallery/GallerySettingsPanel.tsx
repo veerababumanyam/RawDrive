@@ -86,7 +86,7 @@ export const GallerySettingsPanel: React.FC<GallerySettingsPanelProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
           <h2 id="settings-panel-title" className="text-2xl font-bold text-text-primary">
-            Gallery Settings
+            Settings: {gallery.title}
           </h2>
           <AppButton
             variant="ghost"

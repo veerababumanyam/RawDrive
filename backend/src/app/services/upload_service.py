@@ -17,6 +17,7 @@ from app.services.encryption_service import get_encryption_service
 from app.services.image_processing_service import get_image_processing_service
 from app.services.metadata_service import get_metadata_service
 from app.services.r2_storage_service import get_r2_storage_service
+from app.services.storage_service import get_storage_service
 from app.services.task_queue import TaskPriority, get_task_queue
 
 logger = logging.getLogger(__name__)
@@ -174,6 +175,7 @@ class UploadService:
         sub_gallery_id: Optional[UUID] = None,
         sha256: Optional[str] = None,
         relative_path: Optional[str] = None,
+        folder_id: Optional[UUID] = None,
     ) -> dict:
         """Create upload session for file upload.
 
@@ -187,6 +189,7 @@ class UploadService:
             sub_gallery_id: Optional sub-gallery UUID
             sha256: Optional SHA256 checksum (can be provided at commit)
             relative_path: Optional relative path from client (for folder uploads)
+            folder_id: Optional library folder UUID
 
         Returns:
             Dictionary with upload_id, upload_url, headers, expires_at
@@ -198,6 +201,18 @@ class UploadService:
         file_type, normalized_mime_type = self.validate_file(
             filename, mime_type, size_bytes
         )
+
+        # Check storage limit before allowing upload
+        storage_service = get_storage_service()
+        allowed, error_message = await storage_service.check_upload_allowed(
+            workspace_id, size_bytes
+        )
+        if not allowed:
+            raise UploadError(
+                error_message or "Storage limit exceeded",
+                "STORAGE_LIMIT_EXCEEDED",
+                402,  # Payment Required
+            )
 
         # Handle folder uploads: create/assign sub-gallery if path provided
         if not sub_gallery_id and relative_path:
@@ -226,17 +241,18 @@ class UploadService:
                 """
                 INSERT INTO upload_sessions (
                     upload_id, workspace_id, created_by_user_id,
-                    gallery_id, sub_gallery_id,
+                    gallery_id, sub_gallery_id, folder_id,
                     file_name, mime_type, size_bytes, sha256,
                     resumable_protocol, provider, state, expires_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                 """,
                 upload_id,
                 workspace_id,
                 user_id,
                 gallery_id,
                 sub_gallery_id,
+                folder_id,
                 filename,
                 normalized_mime_type,
                 size_bytes,
@@ -311,7 +327,7 @@ class UploadService:
                 """
                 SELECT
                     upload_id, workspace_id, created_by_user_id,
-                    gallery_id, sub_gallery_id,
+                    gallery_id, sub_gallery_id, folder_id,
                     file_name, mime_type, size_bytes, sha256 as session_sha256,
                     state, expires_at, asset_id
                 FROM upload_sessions
@@ -422,15 +438,16 @@ class UploadService:
             await conn.execute(
                 """
                 INSERT INTO assets (
-                    asset_id, workspace_id, library_id,
+                    asset_id, workspace_id, library_id, folder_id,
                     type, original_object_key, original_bytes,
                     sha256, mime_type, exif, status, created_by_user_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 """,
                 asset_id,
                 workspace_id,
                 None,
+                session["folder_id"],
                 file_type,
                 original_object_key,
                 len(file_data),
@@ -498,7 +515,7 @@ class UploadService:
                         payload={
                             "asset_id": str(asset_id),
                             "workspace_id": str(workspace_id),
-                            "gallery_id": str(gallery_id),
+                            "gallery_id": str(gallery_id) if gallery_id else None,
                             "file_type": file_type,
                             "mime_type": session["mime_type"],
                             "original_object_key": original_object_key,
@@ -546,6 +563,13 @@ class UploadService:
                 await emit_asset_created(workspace_id, gallery_id, asset_id)
             except Exception as e:
                 logger.warning(f"Failed to emit asset:created event: {e}")
+
+            # Invalidate storage cache after successful upload
+            try:
+                storage_service = get_storage_service()
+                await storage_service.invalidate_cache(workspace_id)
+            except Exception as e:
+                logger.warning(f"Failed to invalidate storage cache: {e}")
 
             return {
                 "asset_id": str(asset_id),

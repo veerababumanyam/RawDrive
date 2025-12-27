@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Check, ZoomIn, Heart, Download, MoreVertical } from 'lucide-react';
+import { Check, ZoomIn, Heart, Download, MoreVertical, ImageOff, RefreshCw, Loader2 } from 'lucide-react';
 
 /* =============================================================================
    PhotoGrid Component
@@ -16,6 +16,8 @@ export interface Photo {
   width: number;
   height: number;
   title?: string;
+  /** Asset processing status - 'processing' shows loading indicator */
+  status?: 'uploading' | 'available' | 'processing' | 'failed' | 'deleted';
   metadata?: {
     dateTaken?: string;
     camera?: string;
@@ -238,7 +240,9 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
+  const MAX_RETRIES = 2;
 
   // Intersection observer for lazy loading
   useEffect(() => {
@@ -306,8 +310,26 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
           group-hover:scale-105
         `}
         loading={lazyLoad ? 'lazy' : undefined}
-        onLoad={() => setImageLoaded(true)}
-        onError={() => setImageError(true)}
+        onLoad={() => {
+          setImageLoaded(true);
+          setImageError(false);
+        }}
+        onError={() => {
+          // Retry loading a few times before showing error
+          if (retryCount < MAX_RETRIES) {
+            setRetryCount(prev => prev + 1);
+            // Force reload with cache-busting query param after a delay
+            setTimeout(() => {
+              if (imgRef.current) {
+                const src = photo.thumbnailSrc || photo.src;
+                const separator = src.includes('?') ? '&' : '?';
+                imgRef.current.src = `${src}${separator}_retry=${retryCount + 1}`;
+              }
+            }, 500 * (retryCount + 1));
+          } else {
+            setImageError(true);
+          }
+        }}
       />
 
       {/* Loading placeholder */}
@@ -315,10 +337,37 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
         <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
       )}
 
+      {/* Processing indicator overlay */}
+      {photo.status === 'processing' && (
+        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center z-10">
+          <Loader2 size={24} className="text-white animate-spin mb-2" />
+          <span className="text-white text-xs font-medium">Processing...</span>
+        </div>
+      )}
+
       {/* Error placeholder */}
       {imageError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-neutral-200 dark:bg-neutral-700">
-          <span className="text-text-tertiary text-sm">Failed to load</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-100 dark:bg-neutral-800 gap-2">
+          <ImageOff size={24} className="text-text-tertiary opacity-50" />
+          <span className="text-text-tertiary text-xs">Unable to load</span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setImageError(false);
+              setRetryCount(0);
+              setImageLoaded(false);
+              if (imgRef.current) {
+                const src = photo.thumbnailSrc || photo.src;
+                const separator = src.includes('?') ? '&' : '?';
+                imgRef.current.src = `${src}${separator}_retry=${Date.now()}`;
+              }
+            }}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-primary hover:text-primary-hover bg-white/50 dark:bg-black/20 rounded transition-colors"
+            aria-label="Retry loading image"
+          >
+            <RefreshCw size={12} />
+            Retry
+          </button>
         </div>
       )}
 

@@ -244,19 +244,18 @@ class WorkspaceService:
 
                 default_roles = [
                     (owner_role_id, "owner", [
-                        "workspace:*", "gallery:*", "photo:*", "album:*",
-                        "client:*", "member:*", "role:*", "billing:*", "settings:*"
+                        "workspace:*", "galleries:*", "assets:*",
+                        "members:*", "roles:*", "billing:*", "audit:read"
                     ], True),
                     (admin_role_id, "admin", [
-                        "gallery:*", "photo:*", "album:*", "client:*",
-                        "member:read", "member:invite", "settings:read"
+                        "workspace:write", "galleries:*", "assets:*",
+                        "members:write", "members:invite", "roles:write", "billing:read", "audit:read"
                     ], True),
                     (editor_role_id, "editor", [
-                        "gallery:read", "gallery:write", "photo:*", "album:*",
-                        "client:read"
+                        "galleries:read", "galleries:write", "assets:read", "assets:write"
                     ], True),
                     (viewer_role_id, "viewer", [
-                        "gallery:read", "photo:read", "album:read", "client:read"
+                        "galleries:read", "assets:read"
                     ], True),
                 ]
 

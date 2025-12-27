@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { FadeIn } from '../animations/FadeIn';
 import { staggerContainer, staggerItem } from '../animations/presets';
+import { TrustSeals } from './SecuritySection';
 
 /* =============================================================================
    PricingSection Component v2.1
@@ -64,7 +65,7 @@ const pricingTiers: PricingTier[] = [
       'Basic client portal',
       'Email support',
     ],
-    storage: '10 GB',
+    storage: '1 GB',
     ctaText: 'Start Free',
   },
   {
@@ -209,14 +210,14 @@ const PricingCard: React.FC<{
             {tier.icon}
           </div>
           <h3 className="text-xl font-bold text-slate-900 mb-1">{tier.name}</h3>
-          <p className="text-sm text-slate-500">{tier.description}</p>
+          <p className="text-sm text-slate-600">{tier.description}</p>
         </div>
 
         {/* Price */}
         <div className="mb-6">
           <div className="flex items-baseline gap-1">
             {!isCustomPricing && !isFree && (
-              <span className="text-slate-500 text-lg">₹</span>
+              <span className="text-slate-600 text-lg">₹</span>
             )}
             <span className={`
               font-bold
@@ -225,14 +226,14 @@ const PricingCard: React.FC<{
               {isFree ? 'Free' : formatPrice(currentPrice)}
             </span>
             {!isCustomPricing && !isFree && (
-              <span className="text-slate-500 text-base">/mo</span>
+              <span className="text-slate-600 text-base">/mo</span>
             )}
           </div>
           {isFree && (
-            <p className="text-sm text-slate-500 mt-1">3 Months Free</p>
+            <p className="text-sm text-slate-600 mt-1">3 Months Free</p>
           )}
           {isCustomPricing && (
-            <p className="text-sm text-slate-500 mt-1">Contact us for pricing</p>
+            <p className="text-sm text-slate-600 mt-1">Contact us for pricing</p>
           )}
         </div>
 
@@ -268,7 +269,7 @@ const PricingCard: React.FC<{
 
         {/* Storage indicator at bottom */}
         <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-          <span className="text-sm text-slate-500">Storage</span>
+          <span className="text-sm text-slate-600">Storage</span>
           <span className="text-sm font-semibold text-slate-900">{tier.storage}</span>
         </div>
       </div>
@@ -300,7 +301,7 @@ export const PricingSection: React.FC<PricingSectionProps> = ({
           >
             {title}
           </h2>
-          <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-8">
+          <p className="text-lg text-slate-600 max-w-2xl mx-auto mb-8">
             {subtitle}
           </p>
 
@@ -370,9 +371,14 @@ export const PricingSection: React.FC<PricingSectionProps> = ({
           ))}
         </motion.div>
 
+        {/* Security Trust Seals */}
+        <FadeIn direction="up" delay={0.3} className="mt-12">
+          <TrustSeals variant="light" className="mb-8" />
+        </FadeIn>
+
         {/* Trust signals */}
-        <FadeIn direction="up" delay={0.3} className="mt-16">
-          <div className="flex flex-wrap items-center justify-center gap-8 text-sm text-slate-500">
+        <FadeIn direction="up" delay={0.35} className="mt-4">
+          <div className="flex flex-wrap items-center justify-center gap-8 text-sm text-slate-600">
             <div className="flex items-center gap-2">
               <Shield size={18} className="text-emerald-500" />
               <span>30-day money-back guarantee</span>
@@ -390,7 +396,7 @@ export const PricingSection: React.FC<PricingSectionProps> = ({
 
         {/* FAQ Link */}
         <FadeIn direction="up" delay={0.4} className="text-center mt-10">
-          <p className="text-slate-600">
+          <p className="text-slate-700">
             Have questions?{' '}
             <a
               href="#faq"

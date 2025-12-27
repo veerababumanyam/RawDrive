@@ -57,6 +57,7 @@ async def create_upload_session(
             size_bytes=request.size_bytes,
             sub_gallery_id=request.sub_gallery_id,
             sha256=request.sha256,
+            folder_id=request.folder_id,
         )
 
         return UploadSessionResponse(**result)

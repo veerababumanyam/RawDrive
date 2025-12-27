@@ -136,17 +136,18 @@ export const WorkflowTabs: React.FC = () => {
     };
 
     return (
-        <section className="py-20 lg:py-32 relative overflow-hidden" id="workflow">
+        <section className="py-20 lg:py-32 relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800" id="workflow">
             {/* Background Decor */}
-            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl" />
-            <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-96 h-96 bg-accent-500/10 rounded-full blur-3xl" />
+            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-primary-500/20 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-96 h-96 bg-accent-500/20 rounded-full blur-3xl" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(6,182,212,0.08),transparent_70%)]" aria-hidden="true" />
 
             <div className="container mx-auto px-4 relative z-10">
                 <div className="text-center mb-16 max-w-3xl mx-auto">
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 mb-6">
-                        The Complete Studio Workflow
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
+                        The Complete <span className="text-gradient bg-gradient-to-r from-accent-400 to-primary-500 bg-clip-text text-transparent">Studio Workflow</span>
                     </h2>
-                    <p className="text-neutral-400 text-lg">
+                    <p className="text-slate-300 text-lg">
                         From the first inquiry to final album delivery, RawDrive handles the busywork so you can focus on creating.
                     </p>
                 </div>
@@ -161,12 +162,12 @@ export const WorkflowTabs: React.FC = () => {
                 flex items-center gap-2 px-6 py-3 rounded-full text-sm font-medium transition-all duration-300
                 ${activeTab === tab.id
                                     ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-500/25 ring-2 ring-primary-500/50'
-                                    : 'bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white border border-white/10'}
+                                    : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white border border-white/10'}
               `}
                             aria-selected={activeTab === tab.id}
                             role="tab"
                         >
-                            <span className={activeTab === tab.id ? 'text-white' : 'text-neutral-500'}>
+                            <span className={activeTab === tab.id ? 'text-white' : 'text-slate-400'}>
                                 {tab.icon}
                             </span>
                             {tab.label}
@@ -190,7 +191,7 @@ export const WorkflowTabs: React.FC = () => {
                                 <h3 className="text-3xl font-bold text-white mb-4">
                                     {currentTab.headline}
                                 </h3>
-                                <p className="text-neutral-400 text-lg leading-relaxed">
+                                <p className="text-slate-300 text-lg leading-relaxed">
                                     {currentTab.description}
                                 </p>
                             </div>
@@ -200,14 +201,14 @@ export const WorkflowTabs: React.FC = () => {
                                     <AppCard
                                         key={idx}
                                         variant="sm"
-                                        className="flex items-start gap-4 p-4 border border-white/5 hover:border-white/20 transition-colors"
+                                        className="flex items-start gap-4 p-4 border border-white/10 hover:border-white/20 transition-colors bg-white/5"
                                     >
-                                        <div className="mt-1 flex-shrink-0 p-2 rounded-lg bg-white/5">
+                                        <div className="mt-1 flex-shrink-0 p-2 rounded-lg bg-white/10">
                                             {feature.icon}
                                         </div>
                                         <div>
                                             <h4 className="text-white font-semibold mb-1">{feature.title}</h4>
-                                            <p className="text-neutral-500 text-sm">{feature.text}</p>
+                                            <p className="text-slate-300 text-sm">{feature.text}</p>
                                         </div>
                                     </AppCard>
                                 ))}
@@ -249,73 +250,88 @@ export const WorkflowTabs: React.FC = () => {
                                     }`} />
                                     
                                     {/* Floating Cards Animation */}
-                                    <motion.div 
+                                    <motion.div
                                         initial={{ opacity: 0, y: 20 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: 0.2 }}
                                         className="relative z-10 grid grid-cols-2 gap-4"
                                     >
                                         {/* Card 1 */}
-                                        <motion.div 
+                                        <motion.div
                                             animate={{ y: [0, -5, 0] }}
                                             transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
                                             className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10"
                                         >
                                             <div className={`w-10 h-10 rounded-lg ${
-                                                activeTab === 'attract' ? 'bg-blue-500/20' :
-                                                activeTab === 'manage' ? 'bg-green-500/20' :
-                                                'bg-orange-500/20'
+                                                activeTab === 'attract' ? 'bg-blue-500/30' :
+                                                activeTab === 'manage' ? 'bg-green-500/30' :
+                                                'bg-orange-500/30'
                                             } flex items-center justify-center mb-3`}>
                                                 {currentTab.features[0]?.icon}
                                             </div>
-                                            <div className="h-2 bg-white/20 rounded mb-2 w-3/4" />
-                                            <div className="h-2 bg-white/10 rounded w-1/2" />
+                                            <h5 className="text-white/90 text-sm font-medium mb-1">
+                                                {currentTab.features[0]?.title}
+                                            </h5>
+                                            <p className="text-white/50 text-xs leading-relaxed">
+                                                {currentTab.features[0]?.text.slice(0, 40)}...
+                                            </p>
                                         </motion.div>
-                                        
+
                                         {/* Card 2 */}
-                                        <motion.div 
+                                        <motion.div
                                             animate={{ y: [0, -8, 0] }}
                                             transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut", delay: 0.5 }}
                                             className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10"
                                         >
                                             <div className={`w-10 h-10 rounded-lg ${
-                                                activeTab === 'attract' ? 'bg-purple-500/20' :
-                                                activeTab === 'manage' ? 'bg-teal-500/20' :
-                                                'bg-amber-500/20'
+                                                activeTab === 'attract' ? 'bg-purple-500/30' :
+                                                activeTab === 'manage' ? 'bg-teal-500/30' :
+                                                'bg-amber-500/30'
                                             } flex items-center justify-center mb-3`}>
                                                 {currentTab.features[1]?.icon}
                                             </div>
-                                            <div className="h-2 bg-white/20 rounded mb-2 w-2/3" />
-                                            <div className="h-2 bg-white/10 rounded w-3/4" />
+                                            <h5 className="text-white/90 text-sm font-medium mb-1">
+                                                {currentTab.features[1]?.title}
+                                            </h5>
+                                            <p className="text-white/50 text-xs leading-relaxed">
+                                                {currentTab.features[1]?.text.slice(0, 40)}...
+                                            </p>
                                         </motion.div>
-                                        
+
                                         {/* Card 3 - Full Width */}
-                                        <motion.div 
+                                        <motion.div
                                             animate={{ y: [0, -6, 0] }}
                                             transition={{ repeat: Infinity, duration: 4, ease: "easeInOut", delay: 1 }}
                                             className="col-span-2 bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10"
                                         >
                                             <div className="flex items-center gap-3 mb-3">
                                                 <div className={`w-10 h-10 rounded-lg ${
-                                                    activeTab === 'attract' ? 'bg-pink-500/20' :
-                                                    activeTab === 'manage' ? 'bg-cyan-500/20' :
-                                                    'bg-yellow-500/20'
-                                                } flex items-center justify-center`}>
+                                                    activeTab === 'attract' ? 'bg-pink-500/30' :
+                                                    activeTab === 'manage' ? 'bg-cyan-500/30' :
+                                                    'bg-yellow-500/30'
+                                                } flex items-center justify-center flex-shrink-0`}>
                                                     {currentTab.features[2]?.icon}
                                                 </div>
-                                                <div className="flex-1">
-                                                    <div className="h-2 bg-white/20 rounded mb-1.5 w-1/3" />
-                                                    <div className="h-1.5 bg-white/10 rounded w-1/2" />
+                                                <div className="flex-1 min-w-0">
+                                                    <h5 className="text-white/90 text-sm font-medium mb-0.5">
+                                                        {currentTab.features[2]?.title}
+                                                    </h5>
+                                                    <p className="text-white/50 text-xs truncate">
+                                                        {currentTab.features[2]?.text}
+                                                    </p>
                                                 </div>
                                             </div>
                                             {/* Progress/Stats Bar */}
-                                            <div className="flex gap-2">
-                                                <div className={`h-1.5 rounded-full flex-1 ${
+                                            <div className="flex gap-2 items-center">
+                                                <div className={`h-2 rounded-full ${
                                                     activeTab === 'attract' ? 'bg-gradient-to-r from-blue-500 to-purple-500' :
                                                     activeTab === 'manage' ? 'bg-gradient-to-r from-green-500 to-teal-500' :
                                                     'bg-gradient-to-r from-orange-500 to-amber-500'
-                                                }`} style={{ width: '75%' }} />
-                                                <div className="h-1.5 bg-white/10 rounded-full flex-1" />
+                                                }`} style={{ width: '60%' }} />
+                                                <div className="h-2 bg-white/10 rounded-full flex-1" />
+                                                <span className="text-white/40 text-xs font-medium ml-2">
+                                                    {activeTab === 'attract' ? '12 leads' : activeTab === 'manage' ? '8 active' : '156 photos'}
+                                                </span>
                                             </div>
                                         </motion.div>
                                     </motion.div>

@@ -292,7 +292,6 @@ async def get_magic_link_qr(
     size: Annotated[Optional[int], Query(ge=256, le=4096, description="Size in pixels")] = None,
     color: Annotated[Optional[str], Query(pattern=r"^#[0-9A-Fa-f]{6}$", description="QR color (hex)")] = None,
 ) -> Response:
-    """Generate QR code for a magic link."""
     service = get_magic_link_service()
     try:
         qr_bytes, content_type = await service.get_qr_code(

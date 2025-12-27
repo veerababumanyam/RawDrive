@@ -96,6 +96,8 @@ async def test_update_gallery_pin_settings(mock_get_pool, mock_db_pool):
             'created_at': datetime.now(timezone.utc),
             'updated_at': datetime.now(timezone.utc),
             'deleted': False,
+            'pinned_at': None,
+            'last_accessed_at': None,
         },
         {
             'total_photos': 0,
@@ -120,10 +122,14 @@ async def test_update_gallery_pin_settings(mock_get_pool, mock_db_pool):
     
     # Verify UPDATE query contains pin_hash
     # update_gallery executes sql
-    update_call = conn.execute.call_args
-    sql = update_call[0][0]
-    
-    assert 'pin_hash' in sql
+    found_sql = False
+    for call in conn.execute.call_args_list:
+        sql = call[0][0]
+        if 'pin_hash' in sql:
+            found_sql = True
+            break
+            
+    assert found_sql, "UPDATE statement with pin_hash not found"
 
 
 @pytest.mark.asyncio
@@ -170,6 +176,8 @@ async def test_update_gallery_branding(mock_get_pool, mock_db_pool):
             'created_at': datetime.now(timezone.utc),
             'updated_at': datetime.now(timezone.utc),
             'deleted': False,
+            'pinned_at': None,
+            'last_accessed_at': None,
         },
         {
             'total_photos': 0,
@@ -192,10 +200,14 @@ async def test_update_gallery_branding(mock_get_pool, mock_db_pool):
         )
     
     # Verify UPDATE query
-    update_call = conn.execute.call_args
-    sql = update_call[0][0]
-    assert 'primary_color' in sql
-    assert 'font_family' in sql
+    found_sql = False
+    for call in conn.execute.call_args_list:
+        sql = call[0][0]
+        if 'primary_color' in sql and 'font_family' in sql:
+            found_sql = True
+            break
+            
+    assert found_sql, "UPDATE statement with branding settings not found"
 
 
 @pytest.mark.asyncio
@@ -248,6 +260,8 @@ async def test_update_gallery_custom_links(mock_get_pool, mock_db_pool):
             'created_at': datetime.now(timezone.utc),
             'updated_at': datetime.now(timezone.utc),
             'deleted': False,
+            'pinned_at': None,
+            'last_accessed_at': None,
         },
         {
             'total_photos': 0,
@@ -269,6 +283,13 @@ async def test_update_gallery_custom_links(mock_get_pool, mock_db_pool):
         )
     
     # Verify UPDATE query
-    update_call = conn.execute.call_args
-    sql = update_call[0][0]
-    assert 'custom_links' in sql
+    # update_gallery executes sql multiple times (update, then last_accessed_at, etc)
+    # We need to find the one that updates the gallery settings
+    found_sql = False
+    for call in conn.execute.call_args_list:
+        sql = call[0][0]
+        if 'custom_links' in sql:
+            found_sql = True
+            break
+            
+    assert found_sql, "UPDATE statement with custom_links not found"

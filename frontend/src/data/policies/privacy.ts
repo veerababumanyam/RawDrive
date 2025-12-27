@@ -117,11 +117,13 @@ const privacy: PolicyDocument = {
       id: 'grievance-officer',
       heading: 'Grievance Officer',
       content: `<p>For any concerns or grievances related to privacy, please contact:</p>
-      <p><strong>SWAZ CONSULTANTS</strong><br/>
+      <p><strong>Email:</strong> privacy@rawdrive.ai</p>
+      <p><strong>Company:</strong> SWAZ CONSULTANTS<br/>
       54-05-10 Revenue Ward No 28<br/>
       Addepalli Colony, Rajahmundry<br/>
       Andhra Pradesh, India</p>
-      <p><strong>Contact Hours:</strong> Monday - Friday (9:00 AM - 6:00 PM IST)</p>`,
+      <p><strong>Contact Hours:</strong> Monday - Friday (9:00 AM - 6:00 PM IST)</p>
+      <p>We will acknowledge your grievance within 24 hours and endeavour to resolve it within 30 days.</p>`,
     },
   ],
 };

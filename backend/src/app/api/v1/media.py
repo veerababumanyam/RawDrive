@@ -73,18 +73,19 @@ async def stream_media(
         # Get asset metadata from database
         pool: asyncpg.Pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Get asset and gallery info
+            # Get asset and optionally gallery info
             # Note: We allow soft-deleted assets (deleted=TRUE, delete_status IS NULL)
             # so that thumbnails can be shown in the recycle bin.
             # Assets being permanently deleted (delete_status='permanent_deleting') are excluded.
+            # Library assets don't have gallery_id (they exist in assets table directly).
             row: asyncpg.Record | None = await conn.fetchrow(
                 """
                 SELECT
                     a.asset_id, a.workspace_id, a.mime_type, a.original_object_key,
                     ga.gallery_id
                 FROM assets a
-                JOIN gallery_assets ga ON a.asset_id = ga.asset_id
-                JOIN galleries g ON ga.gallery_id = g.gallery_id
+                LEFT JOIN gallery_assets ga ON a.asset_id = ga.asset_id
+                LEFT JOIN galleries g ON ga.gallery_id = g.gallery_id
                 WHERE a.asset_id = $1 AND a.workspace_id = $2
                 AND a.delete_status IS DISTINCT FROM 'permanent_deleting'
                 LIMIT 1
@@ -96,7 +97,8 @@ async def stream_media(
             if not row:
                 raise NotFoundError("Asset", asset_id)
 
-            gallery_id = UUID(str(row["gallery_id"]))
+            # gallery_id can be None for library assets
+            gallery_id = UUID(str(row["gallery_id"])) if row["gallery_id"] else None
             original_object_key: str = str(row["original_object_key"] or "")
             mime_type: str = str(row["mime_type"])
             
@@ -364,10 +366,12 @@ async def get_signed_url(
 
         return {
             "url": str(result["url"]),
-            "expires_at": str(result["expires_at"]),
+            "expires_at": int(result["expires_at"]),
             "ttl": int(result["ttl"]),
         }
     except HTTPException:
+        raise
+    except (NotFoundError, ForbiddenError):
         raise
     except SignedUrlError as e:
         raise ValidationAppError(str(e), "url")

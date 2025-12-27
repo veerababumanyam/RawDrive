@@ -195,11 +195,11 @@ async def update_workspace(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="settings:write",
+        required_permissions="settings:write",
     )
     if not permission.allowed:
         raise ForbiddenError(
-            message=permission.reason or "Permission denied",
+            message=f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied",
             code="PERMISSION_DENIED",
         )
 
@@ -240,7 +240,7 @@ async def disable_workspace(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="workspace:*",
+        required_permissions="workspace:*",
     )
     if not permission.allowed:
         raise ForbiddenError(
@@ -279,11 +279,11 @@ async def list_members(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="member:read",
+        required_permissions="member:read",
     )
     if not permission.allowed:
         raise ForbiddenError(
-            message=permission.reason or "Permission denied",
+            message=f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied",
             code="PERMISSION_DENIED",
         )
 
@@ -329,11 +329,11 @@ async def remove_member(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="member:write",
+        required_permissions="member:write",
     )
     if not permission.allowed:
         raise ForbiddenError(
-            message=permission.reason or "Permission denied",
+            message=f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied",
             code="PERMISSION_DENIED",
         )
 
@@ -369,12 +369,12 @@ async def get_subscription(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="billing:read",
+        required_permissions="billing:read",
     )
     if not permission.allowed:
         raise HTTPException(
             status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+            detail={"code": "PERMISSION_DENIED", "message": f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied"},
         )
 
     from app.services.subscription_service import SubscriptionNotFoundError
@@ -439,12 +439,12 @@ async def list_roles(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="role:read",
+        required_permissions="role:read",
     )
     if not permission.allowed:
         raise HTTPException(
             status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+            detail={"code": "PERMISSION_DENIED", "message": f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied"},
         )
 
     roles = await rbac_service.list_workspace_roles(workspace_id)
@@ -483,12 +483,12 @@ async def create_role(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="role:write",
+        required_permissions="role:write",
     )
     if not permission.allowed:
         raise HTTPException(
             status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+            detail={"code": "PERMISSION_DENIED", "message": f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied"},
         )
 
     from app.services.rbac_service import RBACError
@@ -535,12 +535,12 @@ async def update_role(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="role:write",
+        required_permissions="role:write",
     )
     if not permission.allowed:
         raise HTTPException(
             status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+            detail={"code": "PERMISSION_DENIED", "message": f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied"},
         )
 
     from app.services.rbac_service import RBACError
@@ -587,12 +587,12 @@ async def delete_role(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="role:write",
+        required_permissions="role:write",
     )
     if not permission.allowed:
         raise HTTPException(
             status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+            detail={"code": "PERMISSION_DENIED", "message": f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied"},
         )
 
     from app.services.rbac_service import RBACError
@@ -651,12 +651,12 @@ async def invite_member(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="member:invite",
+        required_permissions="member:invite",
     )
     if not permission.allowed:
         raise HTTPException(
             status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+            detail={"code": "PERMISSION_DENIED", "message": f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied"},
         )
 
     try:
@@ -709,12 +709,12 @@ async def list_invitations(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="member:read",
+        required_permissions="member:read",
     )
     if not permission.allowed:
         raise HTTPException(
             status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+            detail={"code": "PERMISSION_DENIED", "message": f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied"},
         )
 
     invitations = await invitation_service.list_workspace_invitations(
@@ -760,12 +760,12 @@ async def revoke_invitation(
     permission = await rbac_service.check_permission(
         user_id=current_user.user_id,
         workspace_id=workspace_id,
-        required_permission="member:invite",
+        required_permissions="member:invite",
     )
     if not permission.allowed:
         raise HTTPException(
             status_code=403,
-            detail={"code": "PERMISSION_DENIED", "message": permission.reason or "Permission denied"},
+            detail={"code": "PERMISSION_DENIED", "message": f"Missing permissions: {permission.missing_permissions}" if permission.missing_permissions else "Permission denied"},
         )
 
     try:

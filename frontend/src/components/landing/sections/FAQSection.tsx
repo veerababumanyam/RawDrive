@@ -231,7 +231,7 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
                 {title}
               </h2>
               {subtitle?.trim() ? (
-                <p className="text-lg sm:text-xl text-slate-400">{subtitle}</p>
+                <p className="text-lg sm:text-xl text-slate-300">{subtitle}</p>
               ) : null}
             </FadeIn>
           ) : (
@@ -333,7 +333,7 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
               <GlassCard variant="md" padding="xl" className="text-center">
                 <HelpCircle className="w-10 h-10 text-slate-500 mx-auto mb-4" aria-hidden="true" />
                 <h3 className="text-lg font-semibold text-white mb-2">No matching questions</h3>
-                <p className="text-slate-400 mb-6">Try a different search term or category.</p>
+                <p className="text-slate-300 mb-6">Try a different search term or category.</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -416,11 +416,11 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
                             itemProp="acceptedAnswer"
                             itemType="https://schema.org/Answer"
                           >
-                            <div className="px-6 pb-5 text-slate-400 leading-relaxed border-t border-white/10 pt-4">
+                            <div className="px-6 pb-5 text-slate-300 leading-relaxed border-t border-white/10 pt-4">
                               <span itemProp="text">{faq.answer}</span>
                               {normalized !== 'all' && (
                                 <div className="mt-4 flex items-center gap-2">
-                                  <span className="text-xs text-slate-500">Category:</span>
+                                  <span className="text-xs text-slate-400">Category:</span>
                                   <span className="px-2 py-1 text-xs font-medium rounded-full bg-white/5 border border-white/10 text-slate-300">
                                     {categoryConfig[normalized].label}
                                   </span>
@@ -444,8 +444,8 @@ export const FAQSection: React.FC<FAQSectionProps> = ({
                 <MessageCircle className="w-8 h-8 text-primary-300" aria-hidden="true" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-2">Still have questions?</h3>
-              <p className="text-slate-400 mb-6">
-                Our support team is here to help. Get in touch and we’ll respond within 24 hours.
+              <p className="text-slate-300 mb-6">
+                Our support team is here to help. Get in touch and we'll respond within 24 hours.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <a

@@ -165,10 +165,13 @@ export const FeaturesSection: React.FC<FeaturesSectionProps> = ({
   return (
     <section
       id={id}
-      className={`py-20 lg:py-32 ${className}`}
+      className={`py-20 lg:py-32 bg-gradient-to-b from-slate-800 via-slate-900 to-slate-900 relative overflow-hidden ${className}`}
       aria-labelledby="features-heading"
     >
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(59,130,246,0.1),transparent_50%)]" aria-hidden="true" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(6,182,212,0.08),transparent_50%)]" aria-hidden="true" />
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
         <FadeIn direction="up" className="text-center mb-16">
           <h2

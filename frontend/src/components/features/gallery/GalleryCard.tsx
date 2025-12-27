@@ -46,14 +46,24 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
 
   // Fetch signed URL for cover image if we have cover_asset_id
   useEffect(() => {
+    console.log('[GalleryCard] Cover image effect:', {
+      galleryId: gallery.gallery_id,
+      cover_asset_id: gallery.cover_asset_id,
+      workspace_id: workspace?.workspace_id,
+      coverImageUrl,
+      imageError,
+    });
+
     if (gallery.cover_asset_id && workspace?.workspace_id && !coverImageUrl && !imageError) {
+      console.log('[GalleryCard] Fetching signed URL for cover:', gallery.cover_asset_id);
       galleryService
         .getSignedUrl(workspace.workspace_id, gallery.cover_asset_id, 'thumbnail')
         .then((url) => {
+          console.log('[GalleryCard] Got signed URL:', url?.substring(0, 80) + '...');
           setCoverImageUrl(url);
         })
         .catch((error) => {
-          console.error('Failed to fetch cover image URL:', error);
+          console.error('[GalleryCard] Failed to fetch cover image URL:', error);
           setImageError(true);
         });
     } else if (gallery.cover_image_url && !coverImageUrl) {

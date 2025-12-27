@@ -15,3 +15,28 @@ export { useUpload } from './useUpload';
 export type { UseUploadOptions, UseUploadReturn, UploadFile, UploadProgress } from './useUpload';
 
 export { useABTest, useABTestValue, useAllABTests } from './useABTest';
+
+export {
+  useUserProfile,
+  useTwoFactorAuth,
+  usePasswordChange,
+  useSessions,
+  useNotificationPreferences,
+  usePrivacySettings,
+  useDataExport,
+  useAccountDeletion,
+} from './useUserSettings';
+
+// Gemini Settings hooks
+export {
+  useGeminiSettings,
+  useGeminiModels,
+  useGeminiSettingsPage,
+} from './useGeminiSettings';
+
+// Admin Gemini hooks
+export {
+  useAdminGeminiModels,
+  useAdminGeminiStats,
+  useAdminGeminiModel,
+} from './useAdminGemini';

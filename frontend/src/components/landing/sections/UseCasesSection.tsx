@@ -173,7 +173,10 @@ export const UseCasesSection: React.FC<UseCasesSectionProps> = ({
   );
 
   return (
-    <section id={id} className={`py-20 lg:py-32 ${className}`} aria-labelledby="use-cases-heading">
+    <section id={id} className={`py-20 lg:py-32 bg-gradient-to-b from-slate-800 via-slate-900 to-slate-900 relative overflow-hidden ${className}`} aria-labelledby="use-cases-heading">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(37,99,235,0.1),transparent_50%)]" aria-hidden="true" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(6,182,212,0.08),transparent_50%)]" aria-hidden="true" />
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         <FadeIn direction="up" className="text-center mb-12 lg:mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full mb-6">
@@ -186,7 +189,7 @@ export const UseCasesSection: React.FC<UseCasesSectionProps> = ({
           >
             Built for Every Photography Style
           </h2>
-          <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto">
+          <p className="text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto">
             Whether you shoot weddings, portraits, events, or commercial work, RawDrive adapts to your workflow.
           </p>
         </FadeIn>
@@ -335,7 +338,7 @@ export const UseCasesSection: React.FC<UseCasesSectionProps> = ({
               {selectedCase.subtitle}
             </h3>
 
-            <p className="text-slate-400 mb-7 leading-relaxed">
+            <p className="text-slate-300 mb-7 leading-relaxed">
               {selectedCase.description}
             </p>
 

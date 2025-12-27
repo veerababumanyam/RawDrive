@@ -28,9 +28,9 @@ export const SocialProofBar: React.FC = () => {
     const duplicatedPartners = [...PARTNERS, ...PARTNERS];
 
     return (
-        <section className="py-10 bg-white border-b border-neutral-100 overflow-hidden">
+        <section className="py-10 bg-slate-50 border-b border-slate-200 overflow-hidden">
             <div className="container mx-auto px-4 mb-6">
-                <p className="text-center text-sm font-medium text-neutral-500 uppercase tracking-wider">
+                <p className="text-center text-sm font-semibold text-slate-600 uppercase tracking-wider">
                     Trusted by Top Pros and Integration Partners
                 </p>
             </div>
@@ -51,9 +51,9 @@ export const SocialProofBar: React.FC = () => {
                     {duplicatedPartners.map((partner, index) => (
                         <div
                             key={`${partner}-${index}`}
-                            className="flex items-center justify-center opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+                            className="flex items-center justify-center opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-300"
                         >
-                            <span className="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-neutral-600 to-neutral-500 hover:from-primary-600 hover:to-accent-600">
+                            <span className="text-xl md:text-2xl font-bold text-slate-700 hover:text-primary-600 transition-colors">
                                 {partner}
                             </span>
                         </div>
@@ -61,8 +61,8 @@ export const SocialProofBar: React.FC = () => {
                 </motion.div>
 
                 {/* Gradient Fade Edges */}
-                <div className="absolute top-0 left-0 w-24 h-full bg-gradient-to-r from-white to-transparent pointer-events-none" />
-                <div className="absolute top-0 right-0 w-24 h-full bg-gradient-to-l from-white to-transparent pointer-events-none" />
+                <div className="absolute top-0 left-0 w-24 h-full bg-gradient-to-r from-slate-50 to-transparent pointer-events-none" />
+                <div className="absolute top-0 right-0 w-24 h-full bg-gradient-to-l from-slate-50 to-transparent pointer-events-none" />
             </div>
         </section>
     );

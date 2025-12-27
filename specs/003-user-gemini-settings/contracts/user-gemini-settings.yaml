@@ -1,0 +1,565 @@
+openapi: 3.1.0
+info:
+  title: User Gemini Settings API
+  description: |
+    Endpoints for managing per-user Gemini API key configuration and model selection.
+    Part of the Per-User Gemini LLM Settings feature (003-user-gemini-settings).
+  version: 1.0.0
+  contact:
+    name: RawDrive Engineering
+    email: engineering@rawdrive.in
+
+servers:
+  - url: /api/v1
+    description: Main API server
+
+tags:
+  - name: User Settings
+    description: User-facing Gemini configuration endpoints
+  - name: Admin Models
+    description: Admin-only model catalogue management
+
+paths:
+  /users/me/gemini-settings:
+    get:
+      operationId: getUserGeminiSettings
+      summary: Get current user's Gemini settings
+      description: |
+        Returns the user's current Gemini configuration including connection status,
+        masked API key (if configured), and selected model.
+
+        **Note**: API key is NEVER returned in plaintext.
+      tags: [User Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User's Gemini settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserGeminiSettingsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      operationId: updateUserGeminiSettings
+      summary: Update user's Gemini settings
+      description: |
+        Update API key and/or model selection. If api_key is provided,
+        it will be validated with a test call to Gemini before being stored.
+
+        **Validation**: API key is validated by listing available models from Gemini.
+        If validation fails, the request returns 400 with error details.
+      tags: [User Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGeminiSettingsRequest'
+      responses:
+        '200':
+          description: Settings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserGeminiSettingsResponse'
+        '400':
+          description: Validation failed (invalid API key or model)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      operationId: revokeUserGeminiKey
+      summary: Revoke user's Gemini API key
+      description: |
+        Permanently deletes the stored API key. After revocation:
+        - Status changes to 'not_configured'
+        - All AI features will be unavailable until a new key is added
+        - Model selection is preserved
+      tags: [User Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: API key revoked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserGeminiSettingsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/me/gemini-settings/validate:
+    post:
+      operationId: validateGeminiKey
+      summary: Validate an API key without saving
+      description: |
+        Tests if an API key is valid by making a test call to Gemini.
+        Does NOT save the key - use PUT /users/me/gemini-settings to save.
+
+        Useful for pre-validation before form submission.
+      tags: [User Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [api_key]
+              properties:
+                api_key:
+                  type: string
+                  description: Gemini API key to validate
+                  example: AIzaSyABC123...
+      responses:
+        '200':
+          description: Key validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyValidationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /gemini-models:
+    get:
+      operationId: listGeminiModels
+      summary: List available Gemini models
+      description: |
+        Returns all active Gemini models from the admin-managed catalogue.
+        Results are ordered by sort_order (ascending).
+
+        Available to all authenticated users.
+      tags: [User Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of available models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GeminiModelPublic'
+                  default_model_id:
+                    type: string
+                    format: uuid
+                    description: Platform default model ID
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/gemini-models:
+    get:
+      operationId: adminListGeminiModels
+      summary: List all Gemini models (admin)
+      description: |
+        Returns ALL models including inactive ones.
+        Admin-only endpoint.
+      tags: [Admin Models]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of all models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GeminiModelAdmin'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      operationId: createGeminiModel
+      summary: Create a new Gemini model entry
+      tags: [Admin Models]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGeminiModelRequest'
+      responses:
+        '201':
+          description: Model created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiModelAdmin'
+        '400':
+          description: Validation error (duplicate identifier, etc.)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/gemini-models/{model_id}:
+    parameters:
+      - name: model_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    put:
+      operationId: updateGeminiModel
+      summary: Update a Gemini model entry
+      tags: [Admin Models]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGeminiModelRequest'
+      responses:
+        '200':
+          description: Model updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiModelAdmin'
+        '400':
+          description: Validation error (cannot deactivate default, etc.)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Model not found
+
+    delete:
+      operationId: deleteGeminiModel
+      summary: Delete a Gemini model entry
+      description: |
+        Permanently removes a model. Cannot delete:
+        - The default model
+        - The last active model
+
+        Users with this model selected will be migrated to the default.
+      tags: [Admin Models]
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Model deleted
+        '400':
+          description: Cannot delete (is default or last active)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Model not found
+
+  /admin/gemini-models/reorder:
+    put:
+      operationId: reorderGeminiModels
+      summary: Update model sort order
+      tags: [Admin Models]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model_ids]
+              properties:
+                model_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Model IDs in desired order (first = sort_order 1)
+      responses:
+        '200':
+          description: Order updated
+        '400':
+          description: Invalid model IDs
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/gemini-stats:
+    get:
+      operationId: adminGetGeminiStats
+      summary: Get Gemini configuration statistics
+      description: |
+        Returns aggregate statistics about user Gemini configurations.
+        Does NOT expose any API keys.
+      tags: [Admin Models]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workspace_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by workspace (optional)
+      responses:
+        '200':
+          description: Gemini usage statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiAdminStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Unauthorized
+              message:
+                type: string
+                example: Authentication required
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Forbidden
+              message:
+                type: string
+                example: Admin access required
+
+  schemas:
+    UserGeminiSettingsResponse:
+      type: object
+      required: [status, has_api_key]
+      properties:
+        status:
+          type: string
+          enum: [not_configured, connected, validation_failed]
+          description: Current configuration status
+        has_api_key:
+          type: boolean
+          description: Whether an API key is stored
+        api_key_masked:
+          type: string
+          nullable: true
+          description: Masked key display (e.g., "AIza...x7Bq")
+          example: "AIza...x7Bq"
+        selected_model:
+          $ref: '#/components/schemas/GeminiModelPublic'
+          nullable: true
+          description: User's selected model (null = using default)
+        effective_model:
+          $ref: '#/components/schemas/GeminiModelPublic'
+          description: Model that will be used (selected or platform default)
+        last_validated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the key was last validated
+        validation_error:
+          type: string
+          nullable: true
+          description: Last validation error message (if status is validation_failed)
+
+    UpdateGeminiSettingsRequest:
+      type: object
+      properties:
+        api_key:
+          type: string
+          description: New Gemini API key (will be validated before saving)
+          example: AIzaSyABC123...
+        selected_model_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Model to select (null to use platform default)
+
+    GeminiValidationError:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          enum: [INVALID_KEY, KEY_UNAUTHORIZED, KEY_FORBIDDEN, RATE_LIMITED, SERVICE_UNAVAILABLE, NETWORK_ERROR]
+        message:
+          type: string
+          description: User-friendly error message
+        hint:
+          type: string
+          description: Actionable guidance for the user
+
+    KeyValidationResult:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+          description: Whether the key is valid
+        error:
+          $ref: '#/components/schemas/GeminiValidationError'
+          nullable: true
+          description: Error details if validation failed
+        available_models:
+          type: array
+          items:
+            type: string
+          description: Models available with this key (if valid)
+
+    GeminiModelPublic:
+      type: object
+      required: [model_id, identifier, display_name]
+      properties:
+        model_id:
+          type: string
+          format: uuid
+        identifier:
+          type: string
+          description: Google's model identifier
+          example: gemini-2.5-flash
+        display_name:
+          type: string
+          description: User-friendly name
+          example: Gemini 2.5 Flash
+        is_default:
+          type: boolean
+          description: Whether this is the platform default
+
+    GeminiModelAdmin:
+      allOf:
+        - $ref: '#/components/schemas/GeminiModelPublic'
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+            sort_order:
+              type: integer
+            is_active:
+              type: boolean
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+            user_count:
+              type: integer
+              description: Number of users who have selected this model
+
+    CreateGeminiModelRequest:
+      type: object
+      required: [identifier, display_name]
+      properties:
+        identifier:
+          type: string
+          description: Google's model identifier
+          example: gemini-3-pro
+        display_name:
+          type: string
+          example: Gemini 3 Pro
+        description:
+          type: string
+          nullable: true
+        sort_order:
+          type: integer
+          default: 0
+        is_active:
+          type: boolean
+          default: true
+        is_default:
+          type: boolean
+          default: false
+
+    UpdateGeminiModelRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        sort_order:
+          type: integer
+        is_active:
+          type: boolean
+        is_default:
+          type: boolean
+
+    GeminiAdminStats:
+      type: object
+      properties:
+        total_users:
+          type: integer
+          description: Total users in scope
+        users_with_key:
+          type: integer
+          description: Users with configured API key
+        users_connected:
+          type: integer
+          description: Users with 'connected' status
+        users_failed:
+          type: integer
+          description: Users with 'validation_failed' status
+        model_distribution:
+          type: array
+          items:
+            type: object
+            properties:
+              model_identifier:
+                type: string
+              display_name:
+                type: string
+              user_count:
+                type: integer
+        recent_ai_calls:
+          type: integer
+          description: AI calls in last 24 hours
+        ai_success_rate:
+          type: number
+          format: float
+          description: Percentage of successful AI calls (0-100)

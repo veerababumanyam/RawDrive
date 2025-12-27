@@ -48,33 +48,33 @@ const solutionsSubItems: SubNavItem[] = [
   {
     label: 'For Marketing',
     description: 'SEO-optimized portfolios, social integrations, and lead capture',
-    href: '#features',
+    href: '/solutions/marketing',
     icon: <Megaphone size={20} className="text-cyan-400" />,
   },
   {
     label: 'For Delivery',
     description: 'Client galleries, proofing, downloads, and print store',
-    href: '#features',
-    icon: <Package size={20} className="text-emerald-400" />,
+    href: '/solutions/delivery',
+    icon: <Package size={20} className="text-pink-400" />,
   },
   {
     label: 'For Business',
     description: 'CRM, contracts, invoicing, and workflow automation',
-    href: '#features',
-    icon: <Briefcase size={20} className="text-amber-400" />,
+    href: '/solutions/business',
+    icon: <Briefcase size={20} className="text-violet-400" />,
   },
 ];
 
 const defaultNavItems: NavItem[] = [
   {
     label: 'Solutions',
-    href: '#features',
+    href: '#workflow',
     isSection: true,
     isDropdown: true,
     subItems: solutionsSubItems,
   },
   { label: 'Pricing', href: '#pricing', isSection: true },
-  { label: 'How It Works', href: '#how-it-works', isSection: true },
+  { label: 'How It Works', href: '#workflow', isSection: true },
   { label: 'FAQ', href: '#faq', isSection: true },
 ];
 
@@ -244,12 +244,10 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                           aria-orientation="vertical"
                         >
                           {item.subItems.map((subItem) => (
-                            <a
+                            <Link
                               key={subItem.label}
-                              href={subItem.href}
-                              onClick={(e) => {
-                                handleNavClick(e, { ...item, href: subItem.href });
-                              }}
+                              to={subItem.href}
+                              onClick={() => setOpenDropdown(null)}
                               className={`
                                 flex items-start gap-3 px-4 py-3 mx-2 rounded-lg
                                 transition-colors duration-150
@@ -270,7 +268,7 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                                   {subItem.description}
                                 </div>
                               </div>
-                            </a>
+                            </Link>
                           ))}
                         </motion.div>
                       )}
@@ -423,10 +421,10 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                           >
                             <div className="flex flex-col gap-2 mt-3 px-4">
                               {item.subItems.map((subItem) => (
-                                <a
+                                <Link
                                   key={subItem.label}
-                                  href={subItem.href}
-                                  onClick={(e) => handleNavClick(e, { ...item, href: subItem.href })}
+                                  to={subItem.href}
+                                  onClick={() => setIsMobileMenuOpen(false)}
                                   className="
                                     flex items-center gap-3 py-3 px-4 rounded-xl
                                     bg-white/5 border border-white/10
@@ -439,7 +437,7 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                                     <div className="text-base font-medium text-white">{subItem.label}</div>
                                     <div className="text-sm text-slate-400">{subItem.description}</div>
                                   </div>
-                                </a>
+                                </Link>
                               ))}
                             </div>
                           </motion.div>

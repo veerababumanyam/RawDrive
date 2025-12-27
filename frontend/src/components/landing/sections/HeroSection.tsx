@@ -386,7 +386,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                             </div>
                           ))}
                         </div>
-                        <span className="text-[10px] text-slate-500 ml-1">+47</span>
+                        <span className="text-[10px] text-slate-400 ml-1">+47</span>
                       </div>
                     </div>
 
@@ -395,7 +395,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       <div className="flex items-center justify-between mb-5">
                         <div>
                           <div className="text-white font-semibold text-lg">My Galleries</div>
-                          <div className="text-xs text-slate-500">12 galleries &bull; 2,450 photos</div>
+                          <div className="text-xs text-slate-400">12 galleries &bull; 2,450 photos</div>
                         </div>
                         <motion.button
                           type="button"
@@ -440,7 +440,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                             </div>
                             <div className="p-3">
                               <div className="text-sm text-white font-medium line-clamp-1">{card.title}</div>
-                              <div className="text-xs text-slate-500">{card.count}</div>
+                              <div className="text-xs text-slate-400">{card.count}</div>
                             </div>
                           </motion.div>
                         ))}
@@ -526,7 +526,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <CheckCircle className="w-5 h-5 text-emerald-400" aria-hidden="true" />
                     <div>
                       <div className="text-xs text-white font-medium">Gallery Shared</div>
-                      <div className="text-[11px] text-slate-500">Just now</div>
+                      <div className="text-[11px] text-slate-400">Just now</div>
                     </div>
                   </div>
                 </GlassCard>
@@ -545,7 +545,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   </div>
                   <div>
                     <div className="text-xs text-white font-medium">AI Powered</div>
-                    <div className="text-[11px] text-slate-500">Auto-tagging</div>
+                    <div className="text-[11px] text-slate-400">Auto-tagging</div>
                   </div>
                 </GlassCard>
               </FloatingElement>
@@ -564,7 +564,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     </div>
                     <div>
                       <div className="text-[11px] text-white font-medium">India's #1</div>
-                      <div className="text-[10px] text-slate-500">Photo Platform</div>
+                      <div className="text-[10px] text-slate-400">Photo Platform</div>
                     </div>
                   </div>
                 </GlassCard>
@@ -634,7 +634,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         transition={{ delay: 2 }}
         className="absolute bottom-8 left-1/2 -translate-x-1/2 hidden sm:flex flex-col items-center gap-2"
       >
-        <span className="text-xs text-slate-500 uppercase tracking-wider">Scroll to explore</span>
+        <span className="text-xs text-slate-400 uppercase tracking-wider">Scroll to explore</span>
         <motion.div
           animate={{ y: [0, 8, 0] }}
           transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}

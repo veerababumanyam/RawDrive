@@ -44,7 +44,8 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
     """
     asset_id = UUID(payload["asset_id"])
     workspace_id = UUID(payload["workspace_id"])
-    gallery_id = UUID(payload["gallery_id"])
+    gallery_id_str = payload.get("gallery_id")
+    gallery_id = UUID(gallery_id_str) if gallery_id_str else None
     file_type = payload.get("file_type", "photo")
     mime_type = payload.get("mime_type", "")
     original_object_key = payload.get("original_object_key", "")

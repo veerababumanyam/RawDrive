@@ -35,6 +35,10 @@ dependencies = [
   "psycopg2-binary>=2.9",
   "opencv-python-headless>=4.8",
   "numpy>=1.24",
+  "pyotp>=2.9",
+  "geoip2>=4.7",
+  "qrcode>=7.4",
+  "Pillow>=10.0",
 ]
 
 [project.optional-dependencies]

@@ -20,7 +20,9 @@ import {
   hasValidAccessToken,
   clearStoredTokens,
   getGoogleOAuthUrl,
+  getStoredTokens,
 } from '../services/auth';
+import { refreshAccessToken } from '../services/api';
 
 // Context types
 interface AuthContextType {
@@ -56,79 +58,102 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Check if we have stored auth
-        if (checkAuth()) {
-          // Load stored user/workspace
-          const storedUser = getStoredUser();
-          const storedWorkspace = getStoredWorkspace();
+        // Check if we have stored auth (tokens exist)
+        if (!checkAuth()) {
+          setIsLoading(false);
+          return;
+        }
 
-          // If access token is expired, don't make API calls - just clear stale state
-          // This prevents unnecessary 401 errors on public pages
-          if (!hasValidAccessToken()) {
-            // Token expired - clear everything and don't attempt API calls
+        // Load stored user/workspace for immediate display
+        const storedUser = getStoredUser();
+        const storedWorkspace = getStoredWorkspace();
+
+        // If access token is expired, try to refresh it using the refresh token
+        // This is the industry-standard approach - don't log out users unnecessarily
+        if (!hasValidAccessToken()) {
+          const tokens = getStoredTokens();
+
+          // Only attempt refresh if we have a refresh token
+          if (tokens?.refreshToken) {
+            console.log('[Auth] Access token expired, attempting silent refresh...');
+            const newAccessToken = await refreshAccessToken();
+
+            if (!newAccessToken) {
+              // Refresh failed - refresh token is also invalid/expired
+              console.warn('[Auth] Token refresh failed, session expired');
+              clearStoredTokens();
+              setUser(null);
+              setWorkspace(null);
+              setIsAuthenticated(false);
+              setIsLoading(false);
+              return;
+            }
+
+            console.log('[Auth] Token refresh successful');
+            // Continue with normal flow - we now have a valid access token
+          } else {
+            // No refresh token available - clear and logout
             clearStoredTokens();
-            setUser(null);
-            setWorkspace(null);
-            setIsAuthenticated(false);
             setIsLoading(false);
             return;
           }
+        }
 
-          if (storedUser) {
-            setUser(storedUser);
-            setWorkspace(storedWorkspace);
-            setIsAuthenticated(true);
+        // Set initial state from storage for faster perceived loading
+        if (storedUser) {
+          setUser(storedUser);
+          setWorkspace(storedWorkspace);
+          setIsAuthenticated(true);
 
-            // Refresh user data and workspace in background (only if we have valid token)
-            getCurrentUser()
-              .then(async (freshUser) => {
-                if (freshUser) {
-                  setUser(freshUser);
-                  // Fetch workspace if we have workspace_id but no workspace
-                  if ((freshUser as any).workspace_id && !storedWorkspace) {
-                    const { getWorkspace } = await import('../services/auth');
-                    const workspace = await getWorkspace((freshUser as any).workspace_id);
-                    if (workspace) {
-                      setWorkspace(workspace);
-                    }
+          // Refresh user data and workspace in background
+          getCurrentUser()
+            .then(async (freshUser) => {
+              if (freshUser) {
+                setUser(freshUser);
+                // Fetch workspace if we have workspace_id but no workspace
+                if ((freshUser as any).workspace_id && !storedWorkspace) {
+                  const { getWorkspace } = await import('../services/auth');
+                  const workspace = await getWorkspace((freshUser as any).workspace_id);
+                  if (workspace) {
+                    setWorkspace(workspace);
                   }
-                } else {
-                  // API returned null - tokens are likely invalid, clear auth state
-                  console.warn('Session invalid, clearing auth state');
-                  clearStoredTokens();
-                  setUser(null);
-                  setWorkspace(null);
-                  setIsAuthenticated(false);
                 }
-              })
-              .catch((error) => {
-                // Failed to validate session - clear tokens to prevent retry loop
-                console.error('Failed to validate session, clearing auth state:', error);
+              } else {
+                // API returned null - tokens are likely invalid, clear auth state
+                console.warn('[Auth] Session invalid, clearing auth state');
                 clearStoredTokens();
                 setUser(null);
                 setWorkspace(null);
                 setIsAuthenticated(false);
-              });
-          } else {
-            // Have tokens but no user - try to fetch
-            try {
-              const freshUser = await getCurrentUser();
-              if (freshUser) {
-                setUser(freshUser);
-                setIsAuthenticated(true);
-              } else {
-                // Couldn't get user, clear tokens
-                clearStoredTokens();
               }
-            } catch (error) {
-              // Failed, clear tokens
-              console.error('Failed to fetch user, clearing tokens:', error);
+            })
+            .catch((error) => {
+              // Failed to validate session - clear tokens to prevent retry loop
+              console.error('[Auth] Failed to validate session, clearing auth state:', error);
+              clearStoredTokens();
+              setUser(null);
+              setWorkspace(null);
+              setIsAuthenticated(false);
+            });
+        } else {
+          // Have tokens but no user - try to fetch
+          try {
+            const freshUser = await getCurrentUser();
+            if (freshUser) {
+              setUser(freshUser);
+              setIsAuthenticated(true);
+            } else {
+              // Couldn't get user, clear tokens
               clearStoredTokens();
             }
+          } catch (error) {
+            // Failed, clear tokens
+            console.error('[Auth] Failed to fetch user, clearing tokens:', error);
+            clearStoredTokens();
           }
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('[Auth] Initialization error:', error);
         // Clear any stale tokens on error
         clearStoredTokens();
       } finally {

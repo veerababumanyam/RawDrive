@@ -284,6 +284,7 @@ export interface GalleryUpdateRequest {
 export interface UploadSessionRequest {
   gallery_id?: string;
   sub_gallery_id?: string | null;
+  folder_id?: string | null;
   file_name: string;
   mime_type: string;
   size_bytes: number;

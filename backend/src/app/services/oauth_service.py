@@ -431,7 +431,7 @@ class GoogleOAuthService:
                     """,
                     role_id,
                     workspace_id,
-                    ["workspace:*", "members:*", "galleries:*", "assets:*", "billing:*"],
+                    ["workspace:*", "members:*", "roles:*", "galleries:*", "assets:*", "billing:*", "audit:read"],
                     now,
                 )
 
@@ -471,7 +471,7 @@ class GoogleOAuthService:
         # Create session and issue tokens
         session_id = await self._auth_service._create_session(user_id, workspace_id)
 
-        permissions = ["workspace:*", "members:*", "galleries:*", "assets:*", "billing:*"]
+        permissions = ["workspace:*", "members:*", "roles:*", "galleries:*", "assets:*", "billing:*", "audit:read"]
         token_pair = self._auth_service._issue_tokens(
             user_id, workspace_id, permissions, session_id=session_id
         )

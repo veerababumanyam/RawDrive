@@ -1748,3 +1748,14 @@ asset_ingest_latency_seconds_bucket               // Histogram
 - AI Integration: `.claude/skills/ai-mcp-integration/SKILL.md`
 - MCP Specification: https://modelcontextprotocol.io/
 - Schema.org: https://schema.org/
+
+## Active Technologies
+- Python 3.11+ (matching main backend) + FastAPI 0.115+, SQLAlchemy 2.0+, asyncpg 0.29+, Redis 5.0+, Pydantic 2.7+, python-jose (JWT) (001-admin-microservice)
+- PostgreSQL 16 with pgvector (shared with main backend, admin_* table prefix), Redis 7 (sessions, cache, pub/sub) (001-admin-microservice)
+- Python 3.9+ (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, argon2-cffi, pyotp (new), react-hook-form, zod (002-user-profile-settings)
+- PostgreSQL 16 (pgvector), Redis 7 (sessions/cache), Cloudflare R2 (avatar storage) (002-user-profile-settings)
+- Python 3.9+ (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, SQLAlchemy 2.0+, asyncpg 0.29+, httpx 0.27+ (Gemini calls) (003-user-gemini-settings)
+- PostgreSQL 16 (new tables: `user_gemini_settings`, `gemini_models`), Redis 7 (settings cache) (003-user-gemini-settings)
+
+## Recent Changes
+- 001-admin-microservice: Added Python 3.11+ (matching main backend) + FastAPI 0.115+, SQLAlchemy 2.0+, asyncpg 0.29+, Redis 5.0+, Pydantic 2.7+, python-jose (JWT)

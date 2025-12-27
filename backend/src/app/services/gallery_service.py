@@ -14,10 +14,9 @@ from datetime import datetime, timezone
 from app.db.postgres import get_postgres_pool
 from app.services.company_profile_service import get_company_profile_service
 from app.services.workspace_activity_service import (
-    record_favorite_toggle,
-    record_selection_toggle,
     record_gallery_published,
 )
+from app.utils.security import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -881,6 +880,24 @@ class GalleryService:
             # For now, using hmac.compare_digest for constant-time string comparison.
             return hmac.compare_digest(pin_hash.encode('utf-8'), pin.encode('utf-8'))
 
+    async def verify_gallery_password(self, gallery_id: UUID, password: str) -> bool:
+        """Verify gallery password."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Get password hash (exclude deleted)
+            row = await conn.fetchrow(
+                "SELECT password_hash FROM galleries WHERE gallery_id = $1 AND deleted = FALSE",
+                gallery_id,
+            )
+            if not row:
+                raise GalleryNotFoundError(gallery_id)
+            
+            if not row["password_hash"]:
+                # Not password protected
+                return True
+            
+            return verify_password(password, row["password_hash"])
+
     async def create_sub_gallery(
         self,
         workspace_id: UUID,
@@ -1494,6 +1511,8 @@ def get_gallery_service() -> GalleryService:
                  if not exists:
                      raise GalleryNotFoundError(gallery_id)
             return True
+
+
 
     async def search_faces_in_gallery(
         self,
