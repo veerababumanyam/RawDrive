@@ -38,6 +38,10 @@ from app.services.face_exceptions import (
     PhotoNotFoundError,
 )
 from app.repositories.face_repository import FaceRepository, get_face_repository
+from app.services.ai.face_embedder import FaceEmbedder
+
+import cv2
+import numpy as np
 
 
 logger = logging.getLogger(__name__)
@@ -226,12 +230,14 @@ class FaceDetectionService:
             
             # Get minimum confidence threshold
             min_confidence = await self._get_min_confidence()
-            
+
+            # Generate embeddings for faces that don't have them
+            # (Cloud Vision and Gemini don't return embeddings)
+            await self._generate_embeddings_for_results(detection_results, image_buffer)
+
             # Filter and store faces
             stored_faces = []
-            # Filter and store faces
-            stored_faces = []
-            
+
             for result in detection_results:
                 # Use provider from result metadata if available, otherwise unknown
                 # The local provider puts this in raw_provider_response
@@ -321,7 +327,101 @@ class FaceDetectionService:
                 error_message=str(e),
             )
             raise
-    
+
+    async def _generate_embeddings_for_results(
+        self,
+        detection_results: list[FaceDetectionResult],
+        image_buffer: bytes,
+    ) -> None:
+        """Generate embeddings for faces that don't have them.
+
+        Cloud Vision and Gemini providers detect faces but don't return embeddings.
+        This method uses the local FaceEmbedder to generate 512-d embeddings
+        for faces that need them.
+
+        Args:
+            detection_results: List of face detection results to process
+            image_buffer: Raw image data as bytes
+
+        Note:
+            Modifies detection_results in place by setting the embedding field.
+            Failures are logged but don't raise exceptions.
+        """
+        # Check if any faces need embeddings
+        faces_without_embeddings = [
+            r for r in detection_results
+            if not hasattr(r, 'embedding') or r.embedding is None
+        ]
+
+        if not faces_without_embeddings:
+            logger.debug("All faces already have embeddings, skipping generation")
+            return
+
+        try:
+            # Initialize embedder
+            embedder = FaceEmbedder()
+            await embedder.ensure_initialized()
+
+            # Decode image
+            nparr = np.frombuffer(image_buffer, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if image is None:
+                logger.warning("Failed to decode image for embedding generation")
+                return
+
+            h, w = image.shape[:2]
+
+            # Generate embeddings for each face
+            embeddings_generated = 0
+            for result in faces_without_embeddings:
+                try:
+                    box = result.bounding_box
+
+                    # Convert percentage coords to pixels
+                    x_px = int((box.x / 100.0) * w)
+                    y_px = int((box.y / 100.0) * h)
+                    w_px = int((box.width / 100.0) * w)
+                    h_px = int((box.height / 100.0) * h)
+
+                    # Ensure coordinates are valid
+                    x_px = max(0, x_px)
+                    y_px = max(0, y_px)
+                    w_px = min(w - x_px, w_px)
+                    h_px = min(h - y_px, h_px)
+
+                    if w_px > 0 and h_px > 0:
+                        # Extract face crop
+                        face_crop = image[y_px:y_px + h_px, x_px:x_px + w_px]
+
+                        if face_crop.size > 0:
+                            # Generate embedding
+                            embedding = await embedder.generate_embedding(face_crop)
+                            if embedding:
+                                result.embedding = embedding
+                                embeddings_generated += 1
+
+                except Exception as e:
+                    logger.warning(
+                        "Failed to generate embedding for face",
+                        extra={"error": str(e)},
+                    )
+
+            logger.info(
+                "Embeddings generated for Cloud Vision/Gemini results",
+                extra={
+                    "faces_total": len(detection_results),
+                    "faces_needing_embeddings": len(faces_without_embeddings),
+                    "embeddings_generated": embeddings_generated,
+                },
+            )
+
+        except Exception as e:
+            logger.warning(
+                "Failed to generate embeddings",
+                extra={"error": str(e)},
+            )
+
     async def reprocess_photo(
         self,
         photo_id: UUID,
