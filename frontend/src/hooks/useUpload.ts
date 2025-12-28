@@ -68,7 +68,7 @@ export interface UseUploadReturn {
   isPaused: boolean;
 
   // Actions
-  addFiles: (files: File[]) => Promise<void>;
+  addFiles: (files: File[], skipDuplicateCheck?: boolean) => Promise<void>;
   removeFile: (fileId: string) => void;
   startUpload: () => Promise<void>;
   pauseUpload: (fileId?: string) => void;
@@ -219,7 +219,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
   // Add files to queue
   const addFiles = useCallback(
-    async (newFiles: File[]) => {
+    async (newFiles: File[], skipDuplicateCheck = false) => {
       const processedFiles: UploadFile[] = [];
 
       for (const file of newFiles) {
@@ -239,17 +239,19 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           continue;
         }
 
-        // Check for duplicates
-        const duplicates = await checkForDuplicates(file);
-        if (duplicates && duplicates.length > 0) {
-          // Call duplicate callback if provided
-          if (onDuplicateDetected) {
-            onDuplicateDetected(file, duplicates);
-            // Don't add to queue - let user decide via dialog
+        // Check for duplicates (skip if explicitly requested)
+        if (!skipDuplicateCheck) {
+          const duplicates = await checkForDuplicates(file);
+          if (duplicates && duplicates.length > 0) {
+            // Call duplicate callback if provided
+            if (onDuplicateDetected) {
+              onDuplicateDetected(file, duplicates);
+              // Don't add to queue - let user decide via dialog
+              continue;
+            }
+            // If no callback, skip file
             continue;
           }
-          // If no callback, skip file
-          continue;
         }
 
         // Generate thumbnail
