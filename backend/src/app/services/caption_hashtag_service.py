@@ -15,6 +15,7 @@ from app.config.settings import get_settings
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
 from app.services.ai_cache_service import get_ai_cache_service
+from app.utils.image_fetch import fetch_image_base64
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ class CaptionHashtagService:
                     {
                         "parts": [
                             {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": await self._fetch_image_data(photo_url)}}
+                            {"inline_data": {"mime_type": "image/jpeg", "data": await fetch_image_base64(photo_url)}}
                         ]
                     }
                 ]
@@ -207,7 +208,7 @@ class CaptionHashtagService:
                     {
                         "parts": [
                             {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": await self._fetch_image_data(photo_url)}}
+                            {"inline_data": {"mime_type": "image/jpeg", "data": await fetch_image_base64(photo_url)}}
                         ]
                     }
                 ]
@@ -243,16 +244,6 @@ class CaptionHashtagService:
                 error_code=str(type(e).__name__),
             )
             raise
-
-    async def _fetch_image_data(self, photo_url: str) -> str:
-        """Fetch image data from URL and encode as base64."""
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.get(photo_url)
-            response.raise_for_status()
-            # Return base64 encoded data
-            import base64
-            return base64.b64encode(response.content).decode()
 
     def _build_caption_prompt(self, style: str, count: int) -> str:
         """Build the caption generation prompt."""

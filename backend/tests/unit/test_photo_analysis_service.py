@@ -105,7 +105,7 @@ class TestPhotoAnalysisService:
              patch("app.services.photo_analysis_service.get_gemini_client_service") as mock_gemini, \
              patch("app.services.photo_analysis_service.get_ai_usage_service") as mock_usage, \
              patch("app.services.photo_analysis_service.get_ai_cache_service") as mock_cache, \
-             patch("app.services.photo_analysis_service.httpx.AsyncClient") as mock_http:
+             patch("app.services.photo_analysis_service.fetch_image_base64") as mock_fetch:
 
             # Setup cache miss
             mock_cache_instance = AsyncMock()
@@ -122,12 +122,8 @@ class TestPhotoAnalysisService:
             mock_response.text = api_response
             mock_client.generate_content.return_value = mock_response
 
-            # Setup HTTP client for image fetch
-            mock_http_instance = AsyncMock()
-            mock_http.return_value.__aenter__.return_value = mock_http_instance
-            mock_http_response = MagicMock()
-            mock_http_response.content = b"fake image data"
-            mock_http_instance.get.return_value = mock_http_response
+            # Setup image fetch mock
+            mock_fetch.return_value = "ZmFrZSBpbWFnZSBkYXRh"  # base64 of "fake image data"
 
             # Setup usage logging
             mock_usage_instance = AsyncMock()
@@ -172,7 +168,7 @@ class TestPhotoAnalysisService:
              patch("app.services.photo_analysis_service.get_gemini_client_service") as mock_gemini, \
              patch("app.services.photo_analysis_service.get_ai_usage_service") as mock_usage, \
              patch("app.services.photo_analysis_service.get_ai_cache_service") as mock_cache, \
-             patch("app.services.photo_analysis_service.httpx.AsyncClient") as mock_http:
+             patch("app.services.photo_analysis_service.fetch_image_base64") as mock_fetch:
 
             mock_cache_instance = AsyncMock()
             mock_cache.return_value = mock_cache_instance
@@ -186,11 +182,8 @@ class TestPhotoAnalysisService:
             mock_response.text = api_response
             mock_client.generate_content.return_value = mock_response
 
-            mock_http_instance = AsyncMock()
-            mock_http.return_value.__aenter__.return_value = mock_http_instance
-            mock_http_response = MagicMock()
-            mock_http_response.content = b"fake image data"
-            mock_http_instance.get.return_value = mock_http_response
+            # Setup image fetch mock
+            mock_fetch.return_value = "ZmFrZSBpbWFnZSBkYXRh"
 
             mock_usage_instance = AsyncMock()
             mock_usage.return_value = mock_usage_instance

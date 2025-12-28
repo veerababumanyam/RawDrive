@@ -11,13 +11,11 @@ import logging
 from typing import Any, Optional
 from uuid import UUID
 
-import base64
-import httpx
-
 from app.config.settings import get_settings
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
 from app.services.ai_cache_service import get_ai_cache_service
+from app.utils.image_fetch import fetch_image_base64, ImageFetchError
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +145,7 @@ class PhotoAnalysisService:
                     {
                         "parts": [
                             {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": await self._fetch_image_data(photo_url)}}
+                            {"inline_data": {"mime_type": "image/jpeg", "data": await fetch_image_base64(photo_url)}}
                         ]
                     }
                 ]
@@ -184,12 +182,6 @@ class PhotoAnalysisService:
             )
             raise
 
-    async def _fetch_image_data(self, photo_url: str) -> str:
-        """Fetch image data from URL and encode as base64."""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(photo_url)
-            response.raise_for_status()
-            return base64.b64encode(response.content).decode()
 
     def _build_analysis_prompt(self) -> str:
         """Build the analysis prompt for Gemini."""
