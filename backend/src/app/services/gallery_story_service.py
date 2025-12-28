@@ -14,6 +14,7 @@ from uuid import UUID
 from app.config.settings import get_settings
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
+from app.services.ai_cache_service import get_ai_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class GalleryStoryService:
         self.settings = get_settings()
         self.gemini_client = get_gemini_client_service()
         self.ai_usage = get_ai_usage_service()
+        self.ai_cache = get_ai_cache_service()
 
     async def generate_story(
         self,
@@ -99,6 +101,17 @@ class GalleryStoryService:
         if len(photo_analyses) < 5:
             raise ValueError("At least 5 analyzed photos are required for story generation")
 
+        # Check cache first
+        cached = await self.ai_cache.get_gallery_story(gallery_id, length, tone)
+        if cached:
+            logger.debug(f"Returning cached story for gallery {gallery_id}")
+            return StoryResult(
+                story=cached.get("story", ""),
+                length=cached.get("length", length),
+                tone=cached.get("tone", tone),
+                word_count=cached.get("word_count", 0),
+            )
+
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -121,6 +134,9 @@ class GalleryStoryService:
                 tone=tone,
                 word_count=word_count,
             )
+
+            # Cache the result
+            await self.ai_cache.set_gallery_story(gallery_id, length, tone, result.to_dict())
 
             # Log usage
             await self.ai_usage.log_ai_call(

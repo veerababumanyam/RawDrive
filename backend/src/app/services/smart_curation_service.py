@@ -12,6 +12,7 @@ from uuid import UUID
 
 from app.config.settings import get_settings
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
+from app.services.ai_cache_service import get_ai_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class SmartCurationService:
     def __init__(self):
         self.settings = get_settings()
         self.ai_usage = get_ai_usage_service()
+        self.ai_cache = get_ai_cache_service()
 
     async def curate_gallery(
         self,
@@ -101,6 +103,20 @@ class SmartCurationService:
                 rankings=[],
             )
 
+        # Check cache first
+        cached = await self.ai_cache.get_curation(
+            gallery_id, quality_threshold, diversity_weight, max_photos
+        )
+        if cached:
+            logger.debug(f"Returning cached curation for gallery {gallery_id}")
+            return CurationResult(
+                asset_ids=cached.get("asset_ids", []),
+                criteria=cached.get("criteria", {}),
+                total_assets=cached.get("total_assets", 0),
+                selected_count=cached.get("selected_count", 0),
+                rankings=cached.get("rankings", []),
+            )
+
         try:
             # Score and rank photos
             scored_photos = self._score_photos(
@@ -136,6 +152,11 @@ class SmartCurationService:
                 total_assets=len(photo_analyses),
                 selected_count=len(selected),
                 rankings=rankings,
+            )
+
+            # Cache the result
+            await self.ai_cache.set_curation(
+                gallery_id, quality_threshold, diversity_weight, max_photos, result.to_dict()
             )
 
             # Log usage

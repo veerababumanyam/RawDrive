@@ -14,6 +14,7 @@ from uuid import UUID
 from app.config.settings import get_settings
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
+from app.services.ai_cache_service import get_ai_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ class CaptionHashtagService:
         self.settings = get_settings()
         self.gemini_client = get_gemini_client_service()
         self.ai_usage = get_ai_usage_service()
+        self.ai_cache = get_ai_cache_service()
 
     async def generate_captions(
         self,
@@ -82,6 +84,7 @@ class CaptionHashtagService:
         style: str = "professional",
         count: int = 3,
         photo_id: Optional[UUID] = None,
+        asset_sha256: Optional[str] = None,
     ) -> CaptionResult:
         """Generate captions for a photo using AI.
 
@@ -92,10 +95,21 @@ class CaptionHashtagService:
             style: Caption style (professional, casual, poetic)
             count: Number of captions to generate
             photo_id: Optional photo ID for logging
+            asset_sha256: Optional SHA256 hash for caching
 
         Returns:
             CaptionResult with generated captions
         """
+        # Check cache first if SHA256 provided
+        if asset_sha256:
+            cached = await self.ai_cache.get_caption(asset_sha256, style)
+            if cached:
+                logger.debug(f"Returning cached captions for {asset_sha256[:16]}...")
+                return CaptionResult(
+                    captions=cached.get("captions", []),
+                    style=cached.get("style", style),
+                )
+
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -118,6 +132,10 @@ class CaptionHashtagService:
             # Parse response
             result = self._parse_caption_response(response.text, style)
 
+            # Cache the result if SHA256 provided
+            if asset_sha256:
+                await self.ai_cache.set_caption(asset_sha256, style, result.to_dict())
+
             # Log usage
             await self.ai_usage.log_ai_call(
                 user_id=user_id,
@@ -125,7 +143,7 @@ class CaptionHashtagService:
                 model_identifier=client.model,
                 feature_type=AIFeatureType.CAPTION_GENERATION,
                 success=True,
-                metadata={"photo_id": str(photo_id), "style": style} if photo_id else {"style": style},
+                metadata={"photo_id": str(photo_id), "style": style, "cached": False} if photo_id else {"style": style, "cached": False},
             )
 
             return result
@@ -149,6 +167,8 @@ class CaptionHashtagService:
         photo_url: str,
         count: int = 15,
         photo_id: Optional[UUID] = None,
+        asset_sha256: Optional[str] = None,
+        category: str = "general",
     ) -> HashtagResult:
         """Generate hashtags for a photo using AI.
 
@@ -158,10 +178,22 @@ class CaptionHashtagService:
             photo_url: URL to the photo
             count: Number of hashtags to generate
             photo_id: Optional photo ID for logging
+            asset_sha256: Optional SHA256 hash for caching
+            category: Hashtag category for cache key (general, niche, trending)
 
         Returns:
             HashtagResult with generated hashtags
         """
+        # Check cache first if SHA256 provided
+        if asset_sha256:
+            cached = await self.ai_cache.get_hashtags(asset_sha256, category)
+            if cached:
+                logger.debug(f"Returning cached hashtags for {asset_sha256[:16]}...")
+                return HashtagResult(
+                    hashtags=cached.get("hashtags", []),
+                    categories=cached.get("categories", {}),
+                )
+
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -184,6 +216,10 @@ class CaptionHashtagService:
             # Parse response
             result = self._parse_hashtag_response(response.text)
 
+            # Cache the result if SHA256 provided
+            if asset_sha256:
+                await self.ai_cache.set_hashtags(asset_sha256, category, result.to_dict())
+
             # Log usage
             await self.ai_usage.log_ai_call(
                 user_id=user_id,
@@ -191,7 +227,7 @@ class CaptionHashtagService:
                 model_identifier=client.model,
                 feature_type=AIFeatureType.AUTO_TAGGING,  # Using existing feature type
                 success=True,
-                metadata={"photo_id": str(photo_id), "count": count} if photo_id else {"count": count},
+                metadata={"photo_id": str(photo_id), "count": count, "cached": False} if photo_id else {"count": count, "cached": False},
             )
 
             return result

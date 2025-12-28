@@ -17,6 +17,7 @@ import httpx
 from app.config.settings import get_settings
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
+from app.services.ai_cache_service import get_ai_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class PhotoAnalysisService:
         self.settings = get_settings()
         self.gemini_client = get_gemini_client_service()
         self.ai_usage = get_ai_usage_service()
+        self.ai_cache = get_ai_cache_service()
 
     async def analyze_photo(
         self,
@@ -94,6 +96,7 @@ class PhotoAnalysisService:
         workspace_id: UUID,
         photo_url: str,
         photo_id: Optional[UUID] = None,
+        asset_sha256: Optional[str] = None,
     ) -> PhotoAnalysis:
         """Analyze a photo using AI.
 
@@ -102,6 +105,7 @@ class PhotoAnalysisService:
             workspace_id: The workspace context
             photo_url: URL to the photo to analyze
             photo_id: Optional photo ID for logging
+            asset_sha256: Optional SHA256 hash for caching
 
         Returns:
             PhotoAnalysis result
@@ -110,6 +114,26 @@ class PhotoAnalysisService:
             AIConfigurationError: If AI is not configured
             AIRuntimeError: If analysis fails
         """
+        # Check cache first if SHA256 provided
+        if asset_sha256:
+            cached = await self.ai_cache.get_photo_analysis(asset_sha256)
+            if cached:
+                logger.debug(f"Returning cached analysis for {asset_sha256[:16]}...")
+                return PhotoAnalysis(
+                    description=cached.get("description", ""),
+                    tags=cached.get("tags", []),
+                    hashtags=cached.get("hashtags", []),
+                    quality_score=cached.get("quality_score", 50),
+                    sharpness=cached.get("sharpness", 50),
+                    exposure=cached.get("exposure", 50),
+                    composition=cached.get("composition", 50),
+                    dominant_colors=cached.get("dominant_colors", []),
+                    lighting=cached.get("lighting", "unknown"),
+                    mood=cached.get("mood", "neutral"),
+                    improvements=cached.get("improvements", []),
+                    best_for=cached.get("best_for", []),
+                )
+
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -132,6 +156,10 @@ class PhotoAnalysisService:
             # Parse response
             result = self._parse_analysis_response(response.text)
 
+            # Cache the result if SHA256 provided
+            if asset_sha256:
+                await self.ai_cache.set_photo_analysis(asset_sha256, result.to_dict())
+
             # Log usage
             await self.ai_usage.log_ai_call(
                 user_id=user_id,
@@ -139,7 +167,7 @@ class PhotoAnalysisService:
                 model_identifier=client.model,
                 feature_type=AIFeatureType.PHOTO_ANALYSIS,
                 success=True,
-                metadata={"photo_id": str(photo_id)} if photo_id else None,
+                metadata={"photo_id": str(photo_id), "cached": False} if photo_id else {"cached": False},
             )
 
             return result

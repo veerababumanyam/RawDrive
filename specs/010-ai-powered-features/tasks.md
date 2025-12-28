@@ -33,7 +33,7 @@
 - [x] T014 [P] [US1] Create frontend PhotoAnalysisPanel component with loading states
 - [x] T015 [P] [US1] Add photo analysis API service in frontend/src/services/
 - [x] T016 [US1] Implement quality badge display (⭐⭐⭐⭐⭐) based on analysis scores
-- [ ] T017 [US1] Add photo analysis results caching (24-hour TTL)
+- [x] T017 [US1] Add photo analysis results caching (24-hour TTL)
 - [ ] T018 [US1] Write unit tests for photo analysis service
 - [ ] T019 [US1] Write integration tests for photo analysis endpoint
 - [ ] T020 [US1] Test photo analysis with real Gemini API key
@@ -52,7 +52,7 @@
 - [x] T026 [P] [US2] Create frontend CaptionGenerator component with style selector
 - [x] T027 [P] [US2] Add caption generation API service
 - [x] T028 [US2] Implement caption copy-to-clipboard functionality
-- [ ] T029 [US2] Add caption caching for repeated requests
+- [x] T029 [US2] Add caption caching for repeated requests
 - [ ] T030 [US2] Write unit tests for caption generation service
 - [ ] T031 [US2] Write integration tests for caption endpoint
 - [ ] T032 [US2] Test caption generation with different styles
@@ -71,7 +71,7 @@
 - [x] T038 [P] [US3] Create frontend HashtagGenerator component
 - [x] T039 [P] [US3] Add hashtag generation API service
 - [x] T040 [US3] Implement hashtag copy-to-clipboard functionality
-- [ ] T041 [US3] Add hashtag caching for performance
+- [x] T041 [US3] Add hashtag caching for performance
 - [ ] T042 [US3] Write unit tests for hashtag generation service
 - [ ] T043 [US3] Write integration tests for hashtag endpoint
 - [ ] T044 [US3] Test hashtag generation with category validation
@@ -92,7 +92,7 @@
 - [x] T052 [P] [US4] Create frontend StoryGenerator component
 - [x] T053 [P] [US4] Add story generation API service
 - [ ] T054 [US4] Implement story editing and export functionality
-- [ ] T055 [US4] Add story caching for gallery-specific results
+- [x] T055 [US4] Add story caching for gallery-specific results
 - [ ] T056 [US4] Write unit tests for story generation service
 - [ ] T057 [US4] Write integration tests for story endpoint
 - [ ] T058 [US4] Test story generation with different lengths and tones
@@ -112,7 +112,7 @@
 - [x] T065 [P] [US5] Create frontend SmartCurationPanel component
 - [x] T066 [P] [US5] Add curation API service
 - [x] T067 [US5] Implement curation results display and selection
-- [ ] T068 [US5] Add curation caching for gallery-specific results
+- [x] T068 [US5] Add curation caching for gallery-specific results
 - [ ] T069 [US5] Write unit tests for curation service
 - [ ] T070 [US5] Write integration tests for curation endpoint
 - [ ] T071 [US5] Test curation algorithm with various gallery sizes
