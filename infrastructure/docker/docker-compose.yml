@@ -212,7 +212,7 @@ services:
     expose:
       - "3000"
     environment:
-      SQL_DSN: "postgres://rawdrive:rawdrive@postgres:5432/rawdrive" # Use existing DB
+      SQL_DSN: "postgres://rawdrive:rawdrive@postgres:5432/one-api" # Use dedicated DB
       REDIS_CONN_STRING: "redis://redis:6379/0"
       SESSION_SECRET: "${LITELLM_MASTER_KEY:-randomsecret123}" # Reusing a secret env var or default
       NODE_TYPE: "master"

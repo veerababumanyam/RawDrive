@@ -52,8 +52,9 @@ FROM deps AS production
 COPY src ./src
 COPY migrations ./migrations
 
-# Create non-root user
+# Create non-root user and models directory for face embeddings
 RUN useradd --create-home --shell /bin/bash appuser \
+    && mkdir -p /app/models \
     && chown -R appuser:appuser /app
 USER appuser
 
