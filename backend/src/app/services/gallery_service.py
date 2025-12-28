@@ -181,6 +181,7 @@ class GalleryService:
                             WHERE ga.gallery_id = galleries.gallery_id
                             AND ga.visible = TRUE
                             AND a.deleted = FALSE
+                            AND a.status = 'available'
                             ORDER BY ga.created_at ASC
                             LIMIT 1
                         )
