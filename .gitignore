@@ -22,6 +22,7 @@ coverage.xml
 .mypy_cache
 .pytest_cache
 .hypothesis
+docparser-468004-7a847fc2e761.json
 
 # Environment variables
 .env
