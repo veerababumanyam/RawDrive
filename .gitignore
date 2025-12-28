@@ -23,6 +23,7 @@ coverage.xml
 .pytest_cache
 .hypothesis
 docparser-468004-7a847fc2e761.json
+docparser-468004-7a847fc2e761.json
 
 # Environment variables
 .env
