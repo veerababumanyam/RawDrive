@@ -34,7 +34,7 @@
 - [x] T015 [P] [US1] Add photo analysis API service in frontend/src/services/
 - [x] T016 [US1] Implement quality badge display (⭐⭐⭐⭐⭐) based on analysis scores
 - [x] T017 [US1] Add photo analysis results caching (24-hour TTL)
-- [ ] T018 [US1] Write unit tests for photo analysis service
+- [x] T018 [US1] Write unit tests for photo analysis service
 - [ ] T019 [US1] Write integration tests for photo analysis endpoint
 - [ ] T020 [US1] Test photo analysis with real Gemini API key
 
@@ -113,7 +113,7 @@
 - [x] T066 [P] [US5] Add curation API service
 - [x] T067 [US5] Implement curation results display and selection
 - [x] T068 [US5] Add curation caching for gallery-specific results
-- [ ] T069 [US5] Write unit tests for curation service
+- [x] T069 [US5] Write unit tests for curation service
 - [ ] T070 [US5] Write integration tests for curation endpoint
 - [ ] T071 [US5] Test curation algorithm with various gallery sizes
 
