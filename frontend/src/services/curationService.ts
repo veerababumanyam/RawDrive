@@ -23,6 +23,9 @@ export class CurationService {
       `/workspaces/${workspaceId}${API_BASE}/galleries/${galleryId}/curate`,
       request || {}
     );
+    if (!response.data) {
+      throw new Error('No data received from API');
+    }
     return response.data;
   }
 
@@ -36,6 +39,9 @@ export class CurationService {
     const response = await apiClient.get<JobResponse & { result?: CurationResult }>(
       `/workspaces/${workspaceId}${API_BASE}/jobs/${jobId}`
     );
+    if (!response.data) {
+      throw new Error('No data received from API');
+    }
     return response.data;
   }
 }

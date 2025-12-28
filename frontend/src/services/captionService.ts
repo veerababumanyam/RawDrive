@@ -22,6 +22,9 @@ export class CaptionService {
       `/workspaces/${workspaceId}${API_BASE}/assets/${assetId}/captions`,
       request
     );
+    if (!response.data) {
+      throw new Error('No data received from API');
+    }
     return response.data;
   }
 }

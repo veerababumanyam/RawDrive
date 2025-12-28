@@ -37,14 +37,23 @@ export interface StoryResult {
   tone: 'professional' | 'casual' | 'poetic' | 'journalistic';
 }
 
+export interface CurationRanking {
+  asset_id: string;
+  score: number;
+  reason: string;
+}
+
 export interface CurationResult {
   asset_ids: string[];
   criteria: {
     quality_threshold: number;
     diversity_weight: number;
+    max_photos?: number;
+    prefer_people?: boolean;
   };
   total_assets: number;
   selected_count: number;
+  rankings?: CurationRanking[];
 }
 
 // API Request Types
@@ -70,6 +79,8 @@ export interface SmartCurationRequest {
   criteria?: {
     quality_threshold?: number;
     diversity_weight?: number;
+    max_photos?: number;
+    prefer_people?: boolean;
   };
 }
 

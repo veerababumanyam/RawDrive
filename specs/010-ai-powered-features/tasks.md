@@ -25,14 +25,14 @@
 **Test Criteria**: Photo analysis returns complete results including scores, tags, colors, lighting, mood, and improvements
 **Parallel Opportunities**: Frontend components can be developed in parallel with backend
 
-- [ ] T009 [US1] Implement photo analysis service with Gemini vision API integration
-- [ ] T010 [US1] Add POST /assets/{asset_id}/analyze endpoint with request validation
-- [ ] T011 [US1] Create PhotoAnalysisResponse schema with all required fields
-- [ ] T012 [US1] Implement AI usage logging for photo analysis operations
-- [ ] T013 [US1] Add error handling for missing API keys with user-friendly messages
-- [ ] T014 [P] [US1] Create frontend PhotoAnalysisPanel component with loading states
-- [ ] T015 [P] [US1] Add photo analysis API service in frontend/src/services/
-- [ ] T016 [US1] Implement quality badge display (⭐⭐⭐⭐⭐) based on analysis scores
+- [x] T009 [US1] Implement photo analysis service with Gemini vision API integration
+- [x] T010 [US1] Add POST /assets/{asset_id}/analyze endpoint with request validation
+- [x] T011 [US1] Create PhotoAnalysisResponse schema with all required fields
+- [x] T012 [US1] Implement AI usage logging for photo analysis operations
+- [x] T013 [US1] Add error handling for missing API keys with user-friendly messages
+- [x] T014 [P] [US1] Create frontend PhotoAnalysisPanel component with loading states
+- [x] T015 [P] [US1] Add photo analysis API service in frontend/src/services/
+- [x] T016 [US1] Implement quality badge display (⭐⭐⭐⭐⭐) based on analysis scores
 - [ ] T017 [US1] Add photo analysis results caching (24-hour TTL)
 - [ ] T018 [US1] Write unit tests for photo analysis service
 - [ ] T019 [US1] Write integration tests for photo analysis endpoint
@@ -44,14 +44,14 @@
 **Test Criteria**: Captions generated in specified styles (professional, casual, poetic) with appropriate tone
 **Parallel Opportunities**: Can be developed alongside hashtag generation
 
-- [ ] T021 [US2] Implement caption generation in caption_hashtag_service.py
-- [ ] T022 [US2] Add POST /assets/{asset_id}/captions endpoint with style/count parameters
-- [ ] T023 [US2] Create CaptionsResponse schema with captions array and style metadata
-- [ ] T024 [US2] Implement AI usage logging for caption generation
-- [ ] T025 [US2] Add caption style validation (professional, casual, poetic)
-- [ ] T026 [P] [US2] Create frontend CaptionGenerator component with style selector
-- [ ] T027 [P] [US2] Add caption generation API service
-- [ ] T028 [US2] Implement caption copy-to-clipboard functionality
+- [x] T021 [US2] Implement caption generation in caption_hashtag_service.py
+- [x] T022 [US2] Add POST /assets/{asset_id}/captions endpoint with style/count parameters
+- [x] T023 [US2] Create CaptionsResponse schema with captions array and style metadata
+- [x] T024 [US2] Implement AI usage logging for caption generation
+- [x] T025 [US2] Add caption style validation (professional, casual, poetic)
+- [x] T026 [P] [US2] Create frontend CaptionGenerator component with style selector
+- [x] T027 [P] [US2] Add caption generation API service
+- [x] T028 [US2] Implement caption copy-to-clipboard functionality
 - [ ] T029 [US2] Add caption caching for repeated requests
 - [ ] T030 [US2] Write unit tests for caption generation service
 - [ ] T031 [US2] Write integration tests for caption endpoint
@@ -63,14 +63,14 @@
 **Test Criteria**: Hashtags generated in categories (trending, niche, general, branded) with correct count
 **Parallel Opportunities**: Can be developed alongside caption generation
 
-- [ ] T033 [US3] Implement hashtag generation in caption_hashtag_service.py
-- [ ] T034 [US3] Add POST /assets/{asset_id}/hashtags endpoint with count parameter
-- [ ] T035 [US3] Create HashtagsResponse schema with categorized hashtags
-- [ ] T036 [US3] Implement AI usage logging for hashtag generation
-- [ ] T037 [US3] Add hashtag categorization logic (trending, niche, general, branded)
-- [ ] T038 [P] [US3] Create frontend HashtagGenerator component
-- [ ] T039 [P] [US3] Add hashtag generation API service
-- [ ] T040 [US3] Implement hashtag copy-to-clipboard functionality
+- [x] T033 [US3] Implement hashtag generation in caption_hashtag_service.py
+- [x] T034 [US3] Add POST /assets/{asset_id}/hashtags endpoint with count parameter
+- [x] T035 [US3] Create HashtagsResponse schema with categorized hashtags
+- [x] T036 [US3] Implement AI usage logging for hashtag generation
+- [x] T037 [US3] Add hashtag categorization logic (trending, niche, general, branded)
+- [x] T038 [P] [US3] Create frontend HashtagGenerator component
+- [x] T039 [P] [US3] Add hashtag generation API service
+- [x] T040 [US3] Implement hashtag copy-to-clipboard functionality
 - [ ] T041 [US3] Add hashtag caching for performance
 - [ ] T042 [US3] Write unit tests for hashtag generation service
 - [ ] T043 [US3] Write integration tests for hashtag endpoint
@@ -82,15 +82,15 @@
 **Test Criteria**: Stories generated with different lengths and tones, coherent and relevant to gallery content
 **Dependencies**: Requires photo analysis data for context
 
-- [ ] T045 [US4] Create backend/src/app/services/gallery_story_service.py
-- [ ] T046 [US4] Implement story generation with gallery context analysis
-- [ ] T047 [US4] Add POST /galleries/{gallery_id}/story endpoint
-- [ ] T048 [US4] Create StoryResponse schema with length/tone metadata
-- [ ] T049 [US4] Implement AI usage logging for story generation
-- [ ] T050 [US4] Add story length options (short, medium, long)
-- [ ] T051 [US4] Add story tone options (professional, casual, poetic, journalistic)
-- [ ] T052 [P] [US4] Create frontend StoryGenerator component
-- [ ] T053 [P] [US4] Add story generation API service
+- [x] T045 [US4] Create backend/src/app/services/gallery_story_service.py
+- [x] T046 [US4] Implement story generation with gallery context analysis
+- [x] T047 [US4] Add POST /galleries/{gallery_id}/story endpoint
+- [x] T048 [US4] Create StoryResponse schema with length/tone metadata
+- [x] T049 [US4] Implement AI usage logging for story generation
+- [x] T050 [US4] Add story length options (short, medium, long)
+- [x] T051 [US4] Add story tone options (professional, casual, poetic, journalistic)
+- [x] T052 [P] [US4] Create frontend StoryGenerator component
+- [x] T053 [P] [US4] Add story generation API service
 - [ ] T054 [US4] Implement story editing and export functionality
 - [ ] T055 [US4] Add story caching for gallery-specific results
 - [ ] T056 [US4] Write unit tests for story generation service
@@ -103,15 +103,15 @@
 **Test Criteria**: Curation selects diverse, high-quality photos based on analysis scores
 **Dependencies**: Requires photo analysis data for scoring
 
-- [ ] T059 [US5] Create backend/src/app/services/smart_curation_service.py
-- [ ] T060 [US5] Implement curation algorithm with quality and diversity scoring
-- [ ] T061 [US5] Add POST /galleries/{gallery_id}/curate endpoint
-- [ ] T062 [US5] Create SmartCurationRequest/Response schemas
-- [ ] T063 [US5] Implement AI usage logging for curation operations
-- [ ] T064 [US5] Add curation criteria configuration (quality threshold, diversity weight)
-- [ ] T065 [P] [US5] Create frontend SmartCurationPanel component
-- [ ] T066 [P] [US5] Add curation API service
-- [ ] T067 [US5] Implement curation results display and selection
+- [x] T059 [US5] Create backend/src/app/services/smart_curation_service.py
+- [x] T060 [US5] Implement curation algorithm with quality and diversity scoring
+- [x] T061 [US5] Add POST /galleries/{gallery_id}/curate endpoint
+- [x] T062 [US5] Create SmartCurationRequest/Response schemas
+- [x] T063 [US5] Implement AI usage logging for curation operations
+- [x] T064 [US5] Add curation criteria configuration (quality threshold, diversity weight)
+- [x] T065 [P] [US5] Create frontend SmartCurationPanel component
+- [x] T066 [P] [US5] Add curation API service
+- [x] T067 [US5] Implement curation results display and selection
 - [ ] T068 [US5] Add curation caching for gallery-specific results
 - [ ] T069 [US5] Write unit tests for curation service
 - [ ] T070 [US5] Write integration tests for curation endpoint

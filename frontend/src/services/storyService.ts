@@ -23,6 +23,9 @@ export class StoryService {
       `/workspaces/${workspaceId}${API_BASE}/galleries/${galleryId}/story`,
       request
     );
+    if (!response.data) {
+      throw new Error('No data received from API');
+    }
     return response.data;
   }
 
@@ -36,6 +39,9 @@ export class StoryService {
     const response = await apiClient.get<JobResponse & { result?: StoryResult }>(
       `/workspaces/${workspaceId}${API_BASE}/jobs/${jobId}`
     );
+    if (!response.data) {
+      throw new Error('No data received from API');
+    }
     return response.data;
   }
 }

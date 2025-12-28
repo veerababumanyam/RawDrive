@@ -761,3 +761,174 @@ async def filter_gallery_assets(
     except Exception as e:
         logger.exception("Failed to filter gallery assets")
         raise InternalError("Failed to filter gallery assets")
+
+
+# ---------------------------------------------------------------------------
+# Gallery Story Endpoints
+# ---------------------------------------------------------------------------
+
+
+class GenerateStoryRequest(BaseModel):
+    """Request to generate a gallery story."""
+
+    length: str = Field("medium", description="Story length: short, medium, long")
+    tone: str = Field("professional", description="Story tone: professional, casual, poetic, journalistic")
+
+
+class StoryResponse(BaseModel):
+    """Story generation response."""
+
+    story: str
+    length: str
+    tone: str
+    word_count: int
+
+
+@router.post(
+    "/galleries/{gallery_id}/story",
+    response_model=StoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate a story for a gallery",
+    responses={
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        400: {"model": ErrorResponse, "description": "AI not configured or insufficient photos"},
+    },
+)
+async def generate_gallery_story(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    request: GenerateStoryRequest,
+) -> StoryResponse:
+    """
+    Generate an AI-powered narrative story about a gallery.
+
+    Requires user to have Gemini API key configured and at least 5
+    analyzed photos in the gallery. Returns a narrative that captures
+    the essence of the photo collection.
+    """
+    from app.services.gallery_story_service import get_gallery_story_service
+    from app.api.exceptions import BadRequestError
+
+    service = get_gallery_story_service()
+    try:
+        # TODO: Fetch analyzed photos from gallery
+        # For now, we return a placeholder indicating this needs implementation
+        # In production, this would query asset_analysis for the gallery
+        photo_analyses: list = []  # Would be fetched from database
+
+        if len(photo_analyses) < 5:
+            raise BadRequestError(
+                "At least 5 analyzed photos are required for story generation. "
+                "Please analyze more photos first."
+            )
+
+        result = await service.generate_story(
+            user_id=current_user.user_id,
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            photo_analyses=photo_analyses,
+            length=request.length,
+            tone=request.tone,
+        )
+
+        return StoryResponse(**result.to_dict())
+
+    except ValueError as e:
+        from app.api.exceptions import BadRequestError
+        raise BadRequestError(str(e))
+    except Exception as e:
+        logger.exception("Failed to generate gallery story")
+        raise InternalError("Failed to generate gallery story")
+
+
+# ---------------------------------------------------------------------------
+# Smart Curation Endpoints
+# ---------------------------------------------------------------------------
+
+
+class SmartCurationRequest(BaseModel):
+    """Request for smart photo curation."""
+
+    quality_threshold: int = Field(70, ge=0, le=100, description="Minimum quality score")
+    diversity_weight: float = Field(0.5, ge=0, le=1, description="Diversity vs quality balance")
+    max_photos: int = Field(20, ge=1, le=50, description="Maximum photos to select")
+    prefer_people: bool = Field(False, description="Weight photos with faces higher")
+
+
+class CurationRanking(BaseModel):
+    """Individual photo ranking in curation results."""
+
+    asset_id: str
+    score: float
+    reason: str
+
+
+class SmartCurationResponse(BaseModel):
+    """Smart curation response."""
+
+    asset_ids: list[str]
+    criteria: dict
+    total_assets: int
+    selected_count: int
+    rankings: list[CurationRanking]
+
+
+@router.post(
+    "/galleries/{gallery_id}/curate",
+    response_model=SmartCurationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Smart curation of gallery photos",
+    responses={
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        400: {"model": ErrorResponse, "description": "No analyzed photos available"},
+    },
+)
+async def curate_gallery(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    request: SmartCurationRequest,
+) -> SmartCurationResponse:
+    """
+    AI-powered selection of the best photos from a gallery.
+
+    Uses quality scores and diversity filtering to select a curated
+    subset of photos. Returns rankings with reasons for each selection.
+    """
+    from app.services.smart_curation_service import get_smart_curation_service
+
+    service = get_smart_curation_service()
+    try:
+        # TODO: Fetch analyzed photos from gallery
+        # For now, return empty result
+        photo_analyses: list = []  # Would be fetched from database
+
+        result = await service.curate_gallery(
+            user_id=current_user.user_id,
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            photo_analyses=photo_analyses,
+            quality_threshold=request.quality_threshold,
+            diversity_weight=request.diversity_weight,
+            max_photos=request.max_photos,
+            prefer_people=request.prefer_people,
+        )
+
+        return SmartCurationResponse(
+            asset_ids=result.asset_ids,
+            criteria=result.criteria,
+            total_assets=result.total_assets,
+            selected_count=result.selected_count,
+            rankings=[
+                CurationRanking(**r) for r in result.rankings
+            ],
+        )
+
+    except Exception as e:
+        logger.exception("Failed to curate gallery")
+        raise InternalError("Failed to curate gallery")

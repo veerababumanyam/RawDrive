@@ -11,6 +11,7 @@ import logging
 from typing import Any, Optional
 from uuid import UUID
 
+import base64
 import httpx
 
 from app.config.settings import get_settings
@@ -154,6 +155,13 @@ class PhotoAnalysisService:
                 error_code=str(type(e).__name__),
             )
             raise
+
+    async def _fetch_image_data(self, photo_url: str) -> str:
+        """Fetch image data from URL and encode as base64."""
+        async with httpx.AsyncClient() as client:
+            response = await client.get(photo_url)
+            response.raise_for_status()
+            return base64.b64encode(response.content).decode()
 
     def _build_analysis_prompt(self) -> str:
         """Build the analysis prompt for Gemini."""
