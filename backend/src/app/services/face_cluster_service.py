@@ -242,18 +242,58 @@ class FaceClusterService:
             )
             
             # Create group with face's embedding as initial centroid
-            group = await self.group_repo.create(
-                workspace_id=workspace_id,
-                representative_face_id=face_id,
-                centroid=embedding,
-            )
-            
+            try:
+                group = await self.group_repo.create(
+                    workspace_id=workspace_id,
+                    representative_face_id=face_id,
+                    centroid=embedding,
+                )
+                logger.debug(
+                    "Group created, now assigning face",
+                    extra={"group_id": str(group["id"]), "face_id": str(face_id)},
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to create group",
+                    extra={"face_id": str(face_id), "error": str(e)},
+                    exc_info=True,
+                )
+                raise
+
             # Assign face to the new group
-            await self.face_repo.assign_to_group(face_id, workspace_id, group["id"])
-            
+            try:
+                await self.face_repo.assign_to_group(face_id, workspace_id, group["id"])
+                logger.debug(
+                    "Face assigned to group",
+                    extra={"group_id": str(group["id"]), "face_id": str(face_id)},
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to assign face to group",
+                    extra={
+                        "face_id": str(face_id),
+                        "group_id": str(group["id"]),
+                        "error": str(e),
+                    },
+                    exc_info=True,
+                )
+                raise
+
             # Set face count to 1
-            await self.group_repo.set_face_count(group["id"], workspace_id, 1)
-            
+            try:
+                await self.group_repo.set_face_count(group["id"], workspace_id, 1)
+                logger.debug(
+                    "Face count set",
+                    extra={"group_id": str(group["id"]), "count": 1},
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to set face count",
+                    extra={"group_id": str(group["id"]), "error": str(e)},
+                    exc_info=True,
+                )
+                raise
+
             return group
     
     async def find_similar_faces(

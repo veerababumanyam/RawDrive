@@ -209,3 +209,4 @@ rawdrive_deploy_key
 backend/venv/
 
 backend/buffalo_l.zip
+backend/credentials/
