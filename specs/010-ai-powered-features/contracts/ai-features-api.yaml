@@ -1,0 +1,486 @@
+openapi: 3.0.3
+info:
+  title: AI-Powered Photo Features API
+  version: 1.0.0
+  description: API contracts for AI-powered photo analysis, captions, hashtags, stories, and curation
+
+servers:
+  - url: /api/v1/workspaces/{workspace_id}/smart-tagging
+    variables:
+      workspace_id:
+        description: Workspace identifier
+        type: string
+
+paths:
+  /assets/{asset_id}/analyze:
+    post:
+      summary: Analyze a photo with AI
+      description: Perform comprehensive AI analysis of a photo including quality scoring, metadata extraction, and improvement suggestions
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                photo_url:
+                  type: string
+                  format: uri
+                  description: URL of the photo to analyze
+              required:
+                - photo_url
+      responses:
+        '200':
+          description: Analysis completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoAnalysisResponse'
+        '400':
+          description: Bad request or AI not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /assets/{asset_id}/captions:
+    post:
+      summary: Generate captions for a photo
+      description: Generate AI-powered captions in specified style and quantity
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateCaptionsRequest'
+      responses:
+        '200':
+          description: Captions generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptionsResponse'
+        '400':
+          description: Bad request or AI not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /assets/{asset_id}/hashtags:
+    post:
+      summary: Generate hashtags for a photo
+      description: Generate categorized hashtags for social media optimization
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateHashtagsRequest'
+      responses:
+        '200':
+          description: Hashtags generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HashtagsResponse'
+        '400':
+          description: Bad request or AI not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /galleries/{gallery_id}/story:
+    post:
+      summary: Generate story for a gallery
+      description: Create AI-generated narrative summary of a photo gallery
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateStoryRequest'
+      responses:
+        '200':
+          description: Story generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryResponse'
+        '400':
+          description: Bad request or AI not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /galleries/{gallery_id}/curate:
+    post:
+      summary: Smart curation of gallery photos
+      description: AI-powered selection of best photos from a gallery
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmartCurationRequest'
+      responses:
+        '202':
+          description: Curation job started (async)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '400':
+          description: Bad request or AI not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    PhotoAnalysisResponse:
+      type: object
+      properties:
+        description:
+          type: string
+          description: AI-generated description of the photo
+        tags:
+          type: array
+          items:
+            type: string
+          description: Descriptive tags
+        hashtags:
+          type: array
+          items:
+            type: string
+          description: Social media hashtags
+        quality_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Overall quality score
+        sharpness:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Focus and clarity score
+        exposure:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Brightness and contrast score
+        composition:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Framing and balance score
+        dominant_colors:
+          type: array
+          items:
+            type: string
+          description: Hex color codes of dominant colors
+        lighting:
+          type: string
+          enum: [natural, artificial, mixed, studio, dramatic]
+          description: Lighting condition
+        mood:
+          type: string
+          description: Emotional tone of the photo
+        improvements:
+          type: array
+          items:
+            type: string
+          description: Suggested improvements
+        best_for:
+          type: array
+          items:
+            type: string
+          description: Recommended uses
+      required:
+        - quality_score
+
+    GenerateCaptionsRequest:
+      type: object
+      properties:
+        photo_url:
+          type: string
+          format: uri
+          description: URL of the photo
+        style:
+          type: string
+          enum: [professional, casual, poetic]
+          default: professional
+          description: Caption style
+        count:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 3
+          description: Number of captions to generate
+      required:
+        - photo_url
+
+    CaptionsResponse:
+      type: object
+      properties:
+        captions:
+          type: array
+          items:
+            type: string
+          description: Generated captions
+        style:
+          type: string
+          description: Style used for generation
+      required:
+        - captions
+        - style
+
+    GenerateHashtagsRequest:
+      type: object
+      properties:
+        photo_url:
+          type: string
+          format: uri
+          description: URL of the photo
+        count:
+          type: integer
+          minimum: 5
+          maximum: 30
+          default: 15
+          description: Number of hashtags to generate
+      required:
+        - photo_url
+
+    HashtagsResponse:
+      type: object
+      properties:
+        hashtags:
+          type: array
+          items:
+            type: string
+          description: All generated hashtags
+        categories:
+          type: object
+          properties:
+            trending:
+              type: array
+              items:
+                type: string
+              description: Popular hashtags
+            niche:
+              type: array
+              items:
+                type: string
+              description: Photography-specific hashtags
+            general:
+              type: array
+              items:
+                type: string
+              description: Broad appeal hashtags
+            branded:
+              type: array
+              items:
+                type: string
+              description: Studio-specific hashtags
+      required:
+        - hashtags
+        - categories
+
+    GenerateStoryRequest:
+      type: object
+      properties:
+        length:
+          type: string
+          enum: [short, medium, long]
+          default: medium
+          description: Story length
+        tone:
+          type: string
+          enum: [professional, casual, poetic, journalistic]
+          default: professional
+          description: Story tone
+      required: []
+
+    StoryResponse:
+      type: object
+      properties:
+        story:
+          type: string
+          description: Generated story text
+        length:
+          type: string
+          description: Length used
+        tone:
+          type: string
+          description: Tone used
+        word_count:
+          type: integer
+          description: Word count of story
+      required:
+        - story
+
+    SmartCurationRequest:
+      type: object
+      properties:
+        criteria:
+          type: object
+          properties:
+            quality_threshold:
+              type: integer
+              minimum: 0
+              maximum: 100
+              default: 70
+              description: Minimum quality score
+            diversity_weight:
+              type: number
+              minimum: 0
+              maximum: 1
+              default: 0.5
+              description: Weight for diversity vs quality
+            max_photos:
+              type: integer
+              minimum: 1
+              maximum: 50
+              default: 20
+              description: Maximum photos to select
+      required: []
+
+    JobResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+          description: Job identifier
+        status:
+          type: string
+          enum: [pending, processing]
+          description: Initial job status
+        estimated_duration:
+          type: integer
+          description: Estimated completion time in seconds
+      required:
+        - job_id
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code
+            message:
+              type: string
+              description: Human-readable error message
+            details:
+              type: object
+              description: Additional error details
+      required:
+        - error

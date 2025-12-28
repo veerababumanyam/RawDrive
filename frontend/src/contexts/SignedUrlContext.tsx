@@ -34,17 +34,19 @@ export const SignedUrlProvider: React.FC<SignedUrlProviderProps> = ({ children }
   
 
   const processQueue = useCallback(async () => {
-    if (queueRef.current.length === 0 || !workspace?.workspace_id) return;
+    if (queueRef.current.length === 0 || !workspace?.workspace_id) {
+      return;
+    }
 
     // Take current batch
     const batch = queueRef.current;
     queueRef.current = [];
-    
+
     // Group by variant to batch efficiently if service supports it
     // Currently service supports list of IDs, assuming same variant?
     // Service signature: getSignedUrls(workspaceId, assetIds, variant)
     // So we must group by variant.
-    
+
     const byVariant: Record<string, SignedUrlRequest[]> = {};
     batch.forEach(req => {
       if (!byVariant[req.variant]) byVariant[req.variant] = [];
@@ -54,40 +56,55 @@ export const SignedUrlProvider: React.FC<SignedUrlProviderProps> = ({ children }
     // Process each variant group
     for (const [variant, requests] of Object.entries(byVariant)) {
         const assetIds = requests.map(r => r.assetId);
-        
+
         try {
             // Call service batch endpoint (or simulated batch)
             const urlMap = await signedUrlService.getSignedUrls(
-                workspace.workspace_id, 
-                assetIds, 
+                workspace.workspace_id,
+                assetIds,
                 variant as 'thumbnail' | 'preview' | 'original'
             );
-            
-            // Resolve promises
+
+            // Resolve promises individually - handle per-asset failures gracefully
             requests.forEach(req => {
                 const url = urlMap.get(req.assetId);
-                req.resolve(url || null);
+                if (url) {
+                    req.resolve(url);
+                } else {
+                    // Asset wasn't in the response - resolve with null instead of rejecting
+                    // This allows the component to handle missing URLs gracefully
+                    req.resolve(null);
+                }
             });
         } catch (error) {
-            // Fail all in this batch
+            // Batch fetch failed entirely (e.g., network error)
+            // Reject all in this batch, but individual asset errors above are handled gracefully
             const err = error instanceof Error ? error : new Error('Batch fetch failed');
             requests.forEach(req => req.reject(err));
         }
     }
   }, [workspace?.workspace_id]);
 
+  // Use a ref to always have the latest processQueue function
+  // This avoids stale closure issues when the timeout fires
+  const processQueueRef = useRef(processQueue);
+  processQueueRef.current = processQueue;
+
   const scheduleProcess = useCallback(() => {
-    if (timeoutRef.current) return;
+    if (timeoutRef.current) {
+      return;
+    }
     timeoutRef.current = setTimeout(() => {
         timeoutRef.current = null;
-        processQueue();
+        // Use ref to get the latest processQueue function
+        processQueueRef.current();
     }, 50); // 50ms debounce
-  }, [processQueue]);
+  }, []); // No dependencies - uses ref for latest processQueue
 
   const getSignedUrl = useCallback((assetId: string, variant: 'thumbnail' | 'preview' | 'original' = 'thumbnail'): Promise<string | null> => {
      return new Promise((resolve, reject) => {
          queueRef.current.push({ assetId, variant, resolve, reject });
-         
+
          // Trigger processing
          if (queueRef.current.length >= 20) {
              if (timeoutRef.current) {
@@ -104,7 +121,10 @@ export const SignedUrlProvider: React.FC<SignedUrlProviderProps> = ({ children }
   // Clean up on unmount
   useEffect(() => {
       return () => {
-          if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
       };
   }, []);
 

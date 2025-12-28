@@ -23,8 +23,6 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { signedUrlService } from '../../../services/signedUrlService';
-import { useAuth } from '../../../contexts/AuthContext';
 import { PhotoCard } from './PhotoCard';
 import { GalleryAssetItem } from '../../../types/gallery';
 import { ResponsiveColumns } from '../../../types/canvas';
@@ -45,6 +43,8 @@ export interface PhotoGridProps {
   /** Customer selection callback (persisted for delivery workflow) */
   onCustomerSelectionToggle?: (assetId: string, selected: boolean) => void;
   onAssetDownload?: (assetId: string) => void;
+  onAssetShare?: (assetId: string) => void;
+  onAssetLock?: (assetId: string, isPrivate: boolean) => void;
   onAssetDelete?: (assetId: string) => void;
   onSetCover?: (assetId: string) => void;
   onSortOrderChange?: (assetIds: string[]) => void;
@@ -54,10 +54,14 @@ export interface PhotoGridProps {
   className?: string;
   columns?: ResponsiveColumns;
   gap?: 'sm' | 'md' | 'lg';
+  isPrivateUnlocked?: boolean;
+  onUnlockPrivate?: () => void;
 }
 
 const getColumnClasses = (columns?: ResponsiveColumns) => {
-  const { sm = 2, md = 3, lg = 4, xl = 5 } = columns || {};
+  // Reduced columns to ensure thumbnails are large enough to fit action icons
+  // Action bar needs ~350px minimum width (6-7 buttons at 44px + gaps)
+  const { sm = 1, md = 2, lg = 3, xl = 4 } = columns || {};
   // Tailwind classes must be complete strings for regex purgers usually, but strict mapping helps.
   // Using dynamic classes might be an issue if they are not safelisted, 
   // but assuming standard grid-cols-* are available.
@@ -84,6 +88,8 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
   onAssetFavorite,
   onCustomerSelectionToggle,
   onAssetDownload,
+  onAssetShare,
+  onAssetLock,
   onAssetDelete,
   onSetCover,
   onSortOrderChange,
@@ -93,9 +99,9 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
   className = '',
   columns,
   gap,
+  isPrivateUnlocked,
+  onUnlockPrivate,
 }) => {
-  const { workspace } = useAuth();
-  const [visibleAssets, setVisibleAssets] = useState<Set<string>>(new Set());
   const [items, setItems] = useState<GalleryAssetItem[]>(assets);
 
   // Update items when assets prop changes
@@ -157,91 +163,9 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
     [items, onSortOrderChange, onMoveToSubGallery]
   );
 
-  // Batch fetch signed URLs for visible assets (optimization)
-  // Note: Individual PhotoCard components will also fetch via useSignedUrl hook
-  // This is an optimization to pre-fetch URLs for better UX
-  useEffect(() => {
-    if (!workspace?.workspace_id || assets.length === 0) return;
-
-    const visibleIds = Array.from(visibleAssets);
-    if (visibleIds.length === 0) {
-      // Initial load - fetch first batch
-      const initialBatch = assets
-        .slice(0, 20)
-        .filter((a) => a.asset.status === 'available')
-        .map((a) => a.asset_id);
-
-      if (initialBatch.length > 0) {
-        signedUrlService
-          .getSignedUrls(workspace.workspace_id, initialBatch, 'thumbnail')
-          .catch((error) => {
-            console.error('Failed to batch fetch signed URLs:', error);
-          });
-      }
-    } else {
-      // Fetch URLs for newly visible assets that don't have cached URLs
-      const newIds = visibleIds.filter(
-        (id) => {
-          const asset = assets.find((a) => a.asset_id === id);
-          return asset && asset.asset.status === 'available' && !asset.asset.thumbnail_url;
-        }
-      );
-
-      if (newIds.length > 0) {
-        signedUrlService
-          .getSignedUrls(workspace.workspace_id, newIds, 'thumbnail')
-          .catch((error) => {
-            console.error('Failed to fetch signed URLs for visible assets:', error);
-          });
-      }
-    }
-  }, [visibleAssets, assets, workspace?.workspace_id]);
-
-  // Intersection Observer for lazy loading
-  const observerRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (!node) return;
-
-      const observer = new IntersectionObserver(
-        (entries) => {
-          const newVisibleIds = new Set<string>();
-
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              const assetId = entry.target.getAttribute('data-asset-id');
-              if (assetId) {
-                newVisibleIds.add(assetId);
-              }
-            }
-          });
-
-          if (newVisibleIds.size > 0) {
-            setVisibleAssets((prev) => {
-              // Check if we actually have new IDs to add to avoid state update
-              let hasNew = false;
-              newVisibleIds.forEach(id => {
-                if (!prev.has(id)) hasNew = true;
-              });
-
-              if (!hasNew) return prev;
-
-              const next = new Set(prev);
-              newVisibleIds.forEach((id) => next.add(id));
-              return next;
-            });
-          }
-        },
-        {
-          rootMargin: '200px', // Start loading 200px before visible
-          threshold: 0.1,
-        }
-      );
-
-      observer.observe(node);
-      return () => observer.disconnect();
-    },
-    []
-  );
+  // Note: SignedUrlContext handles batched URL fetching automatically
+  // Each PhotoCard uses useSignedUrl which goes through the context's batching logic
+  // No need for duplicate batch fetching here
 
   // Responsive columns hook to track current column count for keyboard navigation
   const [currentColCount, setCurrentColCount] = useState(2);
@@ -353,14 +277,17 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
             onFavorite={onAssetFavorite}
             onCustomerSelectionToggle={onCustomerSelectionToggle}
             onDownload={onAssetDownload}
+            onShare={onAssetShare}
+            onLock={onAssetLock}
             onDelete={onAssetDelete}
             onSetCover={onSetCover}
-            observerRef={index >= 20 ? observerRef : undefined}
             sortable={sortable}
             // New Props
             aspectRatio="square"
             data-photo-index={index}
             onKeyDown={(e) => handleKeyDown(e, index)}
+            isPrivateUnlocked={isPrivateUnlocked}
+            onUnlockPrivate={onUnlockPrivate}
           />
         );
       })}
@@ -403,13 +330,16 @@ interface SortablePhotoCardProps {
   onFavorite?: (assetId: string, favorite: boolean) => void;
   onCustomerSelectionToggle?: (assetId: string, selected: boolean) => void;
   onDownload?: (assetId: string) => void;
+  onShare?: (assetId: string) => void;
+  onLock?: (assetId: string, isPrivate: boolean) => void;
   onDelete?: (assetId: string) => void;
   onSetCover?: (assetId: string) => void;
-  observerRef?: (node: HTMLDivElement | null) => void;
   sortable: boolean;
   aspectRatio?: 'square' | 'auto';
   'data-photo-index'?: number;
   onKeyDown?: (e: React.KeyboardEvent, index: number) => void;
+  isPrivateUnlocked?: boolean;
+  onUnlockPrivate?: () => void;
 }
 
 const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
@@ -424,12 +354,15 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
   onFavorite,
   onCustomerSelectionToggle,
   onDownload,
+  onShare,
+  onLock,
   onDelete,
   onSetCover,
-  observerRef,
   aspectRatio,
   'data-photo-index': dataIndex,
   onKeyDown,
+  isPrivateUnlocked,
+  onUnlockPrivate,
 }) => {
   const {
     attributes,
@@ -448,10 +381,7 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
 
   return (
     <div
-      ref={(node) => {
-        setNodeRef(node);
-        if (observerRef) observerRef(node);
-      }}
+      ref={setNodeRef}
       style={style}
       data-asset-id={asset.asset_id}
       data-photo-index={dataIndex}
@@ -472,10 +402,14 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
         onFavorite={onFavorite}
         onCustomerSelectionToggle={onCustomerSelectionToggle}
         onDownload={onDownload}
+        onShare={onShare}
+        onLock={onLock}
         onDelete={onDelete}
         onSetCover={onSetCover}
         showActions={true}
         aspectRatio={aspectRatio}
+        isPrivateUnlocked={isPrivateUnlocked}
+        onUnlockPrivate={onUnlockPrivate}
       />
     </div>
   );
@@ -494,16 +428,18 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
   onFavorite,
   onCustomerSelectionToggle,
   onDownload,
+  onShare,
+  onLock,
   onDelete,
   onSetCover,
-  observerRef,
   aspectRatio,
   'data-photo-index': dataIndex,
   onKeyDown,
+  isPrivateUnlocked,
+  onUnlockPrivate,
 }) => {
   return (
     <div
-      ref={observerRef}
       data-asset-id={asset.asset_id}
       data-photo-index={dataIndex}
       onKeyDown={(e) => onKeyDown?.(e, index)}
@@ -520,10 +456,14 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
         onFavorite={onFavorite}
         onCustomerSelectionToggle={onCustomerSelectionToggle}
         onDownload={onDownload}
+        onShare={onShare}
+        onLock={onLock}
         onDelete={onDelete}
         onSetCover={onSetCover}
         showActions={true}
         aspectRatio={aspectRatio}
+        isPrivateUnlocked={isPrivateUnlocked}
+        onUnlockPrivate={onUnlockPrivate}
       />
     </div>
   );

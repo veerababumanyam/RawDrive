@@ -17,6 +17,8 @@ import {
   PanelLeftClose,
   PanelLeft,
   Building2,
+  UserCircle,
+  User,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -78,6 +80,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     { id: 'dashboard', label: t('nav.dashboard'), icon: <Home size={20} />, path: '/workspace' },
     { id: 'galleries', label: t('nav.galleries'), icon: <LayoutGrid size={20} />, path: '/workspace/galleries' },
     { id: 'libraries', label: t('nav.libraries'), icon: <FolderOpen size={20} />, path: '/workspace/libraries' },
+    { id: 'people', label: t('nav.people', 'People'), icon: <UserCircle size={20} />, path: '/workspace/people' },
     { id: 'clients', label: t('nav.clients'), icon: <Users size={20} />, path: '/workspace/clients' },
     { id: 'visitors', label: t('nav.visitors'), icon: <Users size={20} />, path: '/workspace/visitors' },
     { id: 'shared', label: t('nav.shared'), icon: <Share2 size={20} />, path: '/workspace/shared' },
@@ -92,6 +95,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const bottomNavItems = React.useMemo(() => [
     { id: 'settings', label: t('nav.settings'), icon: <Settings size={20} />, path: '/workspace/settings' },
     { id: 'profile', label: t('nav.companyProfile'), icon: <Building2 size={20} />, path: '/workspace/settings/profile' },
+    { id: 'myProfile', label: t('nav.myProfile', 'My Profile'), icon: <User size={20} />, path: '/settings' },
     { id: 'help', label: t('nav.help'), icon: <HelpCircle size={20} />, path: '/workspace/help' },
   ], [t]);
 

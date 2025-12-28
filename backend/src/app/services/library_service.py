@@ -27,12 +27,13 @@ class LibraryService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         folder_id: Optional[UUID] = None,
+        face_group_id: Optional[UUID] = None,
     ) -> dict:
         """List assets in a workspace with pagination and filtering."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             offset = (page - 1) * limit
-            
+
             # Base WHERE clause
             # Include 'processing' status so newly uploaded assets appear immediately
             where_conditions = [
@@ -52,13 +53,13 @@ class LibraryService:
                 # Filter for assets that are NOT present in gallery_assets
                 where_conditions.append(f"""
                     NOT EXISTS (
-                        SELECT 1 FROM gallery_assets ga 
+                        SELECT 1 FROM gallery_assets ga
                         WHERE ga.asset_id = a.asset_id
                     )
                 """)
 
             if search_query:
-                # Basic filename search for now. 
+                # Basic filename search for now.
                 # TODO: Integrate with GEO/Vector search in future phases
                 where_conditions.append(f"LOWER(SUBSTRING(a.original_object_key FROM '[^/]+$')) LIKE ${param_idx}")
                 params.append(f"%{search_query.lower()}%")
@@ -74,13 +75,26 @@ class LibraryService:
                 params.append(end_date)
                 param_idx += 1
 
-            # Filter by folder - use IS NOT DISTINCT FROM to handle NULL (root folder)
-            if folder_id is not None:
+            # Filter by face group (person) - show assets containing faces from this group
+            if face_group_id is not None:
+                where_conditions.append(f"""
+                    EXISTS (
+                        SELECT 1 FROM faces f
+                        WHERE f.photo_id = a.asset_id
+                          AND f.face_group_id = ${param_idx}
+                          AND f.workspace_id = a.workspace_id
+                    )
+                """)
+                params.append(face_group_id)
+                param_idx += 1
+                # When filtering by person, show from all folders
+            elif folder_id is not None:
+                # Filter by folder - use IS NOT DISTINCT FROM to handle NULL (root folder)
                 where_conditions.append(f"a.folder_id = ${param_idx}")
                 params.append(folder_id)
                 param_idx += 1
             else:
-                # When folder_id is None, show only root-level assets (not in any folder)
+                # When folder_id is None and no face_group_id, show only root-level assets
                 where_conditions.append("a.folder_id IS NULL")
 
             where_sql = " AND ".join(where_conditions)
@@ -160,10 +174,64 @@ class LibraryService:
             }
 
     async def delete_assets(self, workspace_id: UUID, asset_ids: list[UUID], deleted_by_user_id: UUID) -> int:
-        """Soft delete assets (move to recycle bin)."""
+        """Soft delete assets (move to recycle bin).
+
+        Also clears cover_asset_id on any galleries that used the deleted assets as cover,
+        auto-selecting a new cover from remaining available assets.
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Update deleted=TRUE for assets in the list AND belonging to workspace
+            # 1. First, handle cover_asset_id cleanup for affected galleries
+            # Find galleries using any of these assets as cover
+            affected_galleries = await conn.fetch(
+                """
+                SELECT g.gallery_id, g.cover_asset_id
+                FROM galleries g
+                WHERE g.workspace_id = $1 AND g.cover_asset_id = ANY($2::uuid[])
+                """,
+                workspace_id,
+                asset_ids,
+            )
+
+            # For each affected gallery, auto-select a new cover
+            for gallery_row in affected_galleries:
+                gallery_id = gallery_row["gallery_id"]
+                old_cover_id = gallery_row["cover_asset_id"]
+
+                # Find first available asset in this gallery that's not being deleted
+                new_cover = await conn.fetchrow(
+                    """
+                    SELECT a.asset_id
+                    FROM gallery_assets ga
+                    JOIN assets a ON ga.asset_id = a.asset_id
+                    WHERE ga.gallery_id = $1
+                      AND a.workspace_id = $2
+                      AND a.deleted = FALSE
+                      AND a.status = 'available'
+                      AND a.asset_id != ALL($3::uuid[])
+                    ORDER BY a.created_at DESC
+                    LIMIT 1
+                    """,
+                    gallery_id,
+                    workspace_id,
+                    asset_ids,  # Exclude all assets being deleted
+                )
+
+                new_cover_id = new_cover["asset_id"] if new_cover else None
+                await conn.execute(
+                    """
+                    UPDATE galleries
+                    SET cover_asset_id = $1, updated_at = NOW()
+                    WHERE gallery_id = $2
+                    """,
+                    new_cover_id,
+                    gallery_id,
+                )
+                logger.info(
+                    f"Updated gallery {gallery_id} cover: {old_cover_id} -> {new_cover_id}"
+                )
+
+            # 2. Now soft delete the assets
             result = await conn.execute(
                 """
                 UPDATE assets
@@ -354,6 +422,8 @@ class LibraryService:
         color: Optional[str] = None,
         parent_folder_id: Optional[UUID] = None,
         cover_asset_id: Optional[UUID] = None,
+        pin: Optional[str] = None,
+        remove_pin: bool = False,
     ) -> dict:
         """Update a library folder."""
         pool = await get_postgres_pool()
@@ -392,12 +462,20 @@ class LibraryService:
                 params.append(cover_asset_id)
                 param_idx += 1
 
+            # Handle PIN update/removal
+            if remove_pin:
+                updates.append("pin = NULL")
+            elif pin is not None:
+                updates.append(f"pin = ${param_idx}")
+                params.append(pin)
+                param_idx += 1
+
             row = await conn.fetchrow(
                 f"""
                 UPDATE library_folders
                 SET {', '.join(updates)}
                 WHERE folder_id = $1 AND workspace_id = $2
-                RETURNING folder_id, workspace_id, name, parent_folder_id, description, color, sort_order, cover_asset_id, created_at, updated_at
+                RETURNING folder_id, workspace_id, name, parent_folder_id, description, color, sort_order, cover_asset_id, pin, created_at, updated_at
                 """,
                 *params,
             )
@@ -419,6 +497,7 @@ class LibraryService:
                 "color": row["color"],
                 "sort_order": row["sort_order"],
                 "cover_asset_id": str(row["cover_asset_id"]) if row["cover_asset_id"] else None,
+                "is_protected": row["pin"] is not None and len(row["pin"]) > 0,
                 "created_at": row["created_at"].isoformat(),
                 "updated_at": row["updated_at"].isoformat(),
                 "asset_count": asset_count,
@@ -473,11 +552,65 @@ class LibraryService:
                         all_folder_ids,
                     )
                 else:
+                    # Get asset IDs that will be deleted (for cover cleanup)
+                    assets_to_delete = await conn.fetch(
+                        """
+                        SELECT asset_id FROM assets
+                        WHERE workspace_id = $1 AND folder_id = ANY($2::uuid[]) AND deleted = FALSE
+                        """,
+                        workspace_id,
+                        all_folder_ids,
+                    )
+                    asset_ids = [r["asset_id"] for r in assets_to_delete]
+
+                    # Handle cover_asset_id cleanup for affected galleries
+                    if asset_ids:
+                        affected_galleries = await conn.fetch(
+                            """
+                            SELECT g.gallery_id, g.cover_asset_id
+                            FROM galleries g
+                            WHERE g.workspace_id = $1 AND g.cover_asset_id = ANY($2::uuid[])
+                            """,
+                            workspace_id,
+                            asset_ids,
+                        )
+
+                        for gallery_row in affected_galleries:
+                            gallery_id = gallery_row["gallery_id"]
+                            # Find first available asset not being deleted
+                            new_cover = await conn.fetchrow(
+                                """
+                                SELECT a.asset_id
+                                FROM gallery_assets ga
+                                JOIN assets a ON ga.asset_id = a.asset_id
+                                WHERE ga.gallery_id = $1
+                                  AND a.workspace_id = $2
+                                  AND a.deleted = FALSE
+                                  AND a.status = 'available'
+                                  AND a.asset_id != ALL($3::uuid[])
+                                ORDER BY a.created_at DESC
+                                LIMIT 1
+                                """,
+                                gallery_id,
+                                workspace_id,
+                                asset_ids,
+                            )
+                            new_cover_id = new_cover["asset_id"] if new_cover else None
+                            await conn.execute(
+                                """
+                                UPDATE galleries
+                                SET cover_asset_id = $1, updated_at = NOW()
+                                WHERE gallery_id = $2
+                                """,
+                                new_cover_id,
+                                gallery_id,
+                            )
+
                     # Soft delete assets
                     await conn.execute(
                         """
-                        UPDATE assets 
-                        SET deleted = TRUE, deleted_at = NOW() 
+                        UPDATE assets
+                        SET deleted = TRUE, deleted_at = NOW()
                         WHERE folder_id = ANY($1::uuid[])
                         """,
                         all_folder_ids,
@@ -514,6 +647,7 @@ class LibraryService:
                     lf.color,
                     lf.sort_order,
                     lf.cover_asset_id,
+                    lf.pin,
                     lf.created_at,
                     lf.updated_at,
                     COUNT(a.asset_id) FILTER (WHERE a.deleted = FALSE) as asset_count,
@@ -542,6 +676,7 @@ class LibraryService:
                     "updated_at": row["updated_at"].isoformat(),
                     "asset_count": row["asset_count"],
                     "subfolder_count": row["subfolder_count"],
+                    "is_protected": row["pin"] is not None and len(row["pin"]) > 0,
                 }
                 for row in rows
             ]
@@ -707,6 +842,34 @@ class LibraryService:
             logger.info(f"Updated asset: {asset_id}")
 
             return {"updated": True, "asset_id": str(asset_id)}
+
+    async def verify_folder_pin(
+        self,
+        workspace_id: UUID,
+        folder_id: UUID,
+        pin: str,
+    ) -> bool:
+        """Verify PIN for a protected folder."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT pin FROM library_folders 
+                WHERE folder_id = $1 AND workspace_id = $2
+                """,
+                folder_id,
+                workspace_id,
+            )
+            
+            if not row:
+                raise NotFoundError("Folder", str(folder_id))
+            
+            stored_pin = row["pin"]
+            if not stored_pin:
+                # No PIN set - folder is not protected
+                return True
+            
+            return stored_pin == pin
 
 
 def get_library_service() -> LibraryService:

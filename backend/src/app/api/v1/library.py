@@ -83,6 +83,7 @@ async def list_library_assets(
     start_date: Annotated[datetime | None, Query(description="Filter by date taken start")] = None,
     end_date: Annotated[datetime | None, Query(description="Filter by date taken end")] = None,
     folder_id: Annotated[UUID | None, Query(description="Filter by folder ID")] = None,
+    face_group_id: Annotated[UUID | None, Query(description="Filter by face group (person) ID")] = None,
 ) -> LibraryListResponse:
     """List all assets in the workspace library."""
     service = get_library_service()
@@ -98,6 +99,7 @@ async def list_library_assets(
             start_date=start_date,
             end_date=end_date,
             folder_id=folder_id,
+            face_group_id=face_group_id,
         )
         
         # Generate signed URLs for media access
@@ -258,6 +260,8 @@ class FolderUpdateRequest(BaseModel):
     description: Optional[str] = None
     color: Optional[str] = Field(None, max_length=7, pattern=r'^#[0-9A-Fa-f]{6}$')
     cover_asset_id: Optional[UUID] = None
+    pin: Optional[str] = Field(None, min_length=4, max_length=64)  # Set to string to add/change PIN
+    remove_pin: bool = False  # Set to true to remove PIN protection
 
 
 class FolderResponse(BaseModel):
@@ -274,6 +278,17 @@ class FolderResponse(BaseModel):
     updated_at: datetime
     asset_count: int = 0
     subfolder_count: int = 0
+    is_protected: bool = False  # True if folder has a PIN set
+
+
+class PinVerifyRequest(BaseModel):
+    """Request to verify folder PIN."""
+    pin: str = Field(..., min_length=4, max_length=8)
+
+
+class PinVerifyResponse(BaseModel):
+    """Response from PIN verification."""
+    valid: bool
 
 
 class FolderDetailResponse(FolderResponse):
@@ -421,6 +436,8 @@ async def update_folder(
         description=request.description,
         color=request.color,
         cover_asset_id=request.cover_asset_id,
+        pin=request.pin,
+        remove_pin=request.remove_pin,
     )
     return FolderResponse(**folder)
 
@@ -476,4 +493,35 @@ async def move_assets_to_folder(
         folder_id=request.folder_id,
     )
     return MoveAssetsResponse(**result)
+
+
+@router.post(
+    "/folders/{folder_id}/verify-pin",
+    response_model=PinVerifyResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Verify folder PIN",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Folder not found"},
+    },
+)
+async def verify_folder_pin(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    folder_id: Annotated[UUID, Path(..., description="Folder ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    request: PinVerifyRequest,
+) -> PinVerifyResponse:
+    """Verify PIN for a protected folder."""
+    service = get_library_service()
+    try:
+        is_valid = await service.verify_folder_pin(
+            workspace_id=workspace_id,
+            folder_id=folder_id,
+            pin=request.pin,
+        )
+        return PinVerifyResponse(valid=is_valid)
+    except Exception as e:
+        logger.exception("Failed to verify folder PIN")
+        raise NotFoundError("Folder not found")
 

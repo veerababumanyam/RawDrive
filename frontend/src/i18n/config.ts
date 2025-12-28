@@ -83,7 +83,7 @@ i18n
         load: 'languageOnly',
 
         // Debug mode in development
-        debug: import.meta.env.DEV,
+        debug: false, // Cleaner console in dev
 
         // Interpolation options
         interpolation: {

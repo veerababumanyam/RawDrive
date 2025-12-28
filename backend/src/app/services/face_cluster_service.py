@@ -410,10 +410,230 @@ class FaceClusterService:
         
         return await self.group_repo.get_by_id(target_group_id, workspace_id)
     
+    async def multi_merge_groups(
+        self,
+        source_group_ids: list[UUID],
+        target_group_id: UUID,
+        workspace_id: UUID,
+        representative_face_id: Optional[UUID] = None,
+        name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Merge multiple source groups into a single target group.
+
+        All faces from source groups are reassigned to the target group.
+        Source groups are deleted after the merge. Optionally set a new
+        representative face and name for the merged group.
+
+        This operation is performed within a transaction for atomicity.
+
+        Args:
+            source_group_ids: IDs of groups to merge from (will be deleted)
+            target_group_id: ID of the group to merge into (will be preserved)
+            workspace_id: Workspace ID for tenant isolation
+            representative_face_id: Optional face ID to set as representative
+            name: Optional name for the merged group
+
+        Returns:
+            Dict with 'merged_group', 'source_group_ids', 'faces_merged'
+
+        Raises:
+            FaceGroupNotFoundError: If any group doesn't exist
+            InvalidMergeOperationError: If target is in source list or validation fails
+
+        Requirements: 2.7, 16.5
+        """
+        from app.db.postgres import get_postgres_pool
+
+        # Validate: target cannot be in source list
+        if target_group_id in source_group_ids:
+            raise InvalidMergeOperationError(
+                source_group_id=target_group_id,
+                target_group_id=target_group_id,
+                reason="Target group cannot be in source list",
+            )
+
+        # Validate: at least one source group
+        if not source_group_ids:
+            raise InvalidMergeOperationError(
+                source_group_id=None,
+                target_group_id=target_group_id,
+                reason="At least one source group must be provided",
+            )
+
+        # Verify target exists
+        target_group = await self.group_repo.get_by_id(target_group_id, workspace_id)
+
+        # Verify all source groups exist
+        for source_id in source_group_ids:
+            await self.group_repo.get_by_id(source_id, workspace_id)
+
+        logger.info(
+            "Starting multi-group merge",
+            extra={
+                "source_group_ids": [str(gid) for gid in source_group_ids],
+                "target_group_id": str(target_group_id),
+                "workspace_id": str(workspace_id),
+            },
+        )
+
+        total_faces_merged = 0
+        deleted_group_ids = []
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                # Merge each source group sequentially
+                for source_id in source_group_ids:
+                    # Get source group faces
+                    source_faces = await self.face_repo.find_by_group_id(
+                        source_id, workspace_id, limit=10000
+                    )
+
+                    if source_faces:
+                        # Bulk reassign faces to target group
+                        face_ids = [f["id"] for f in source_faces]
+                        await self.face_repo.bulk_assign_to_group(
+                            face_ids, workspace_id, target_group_id
+                        )
+
+                        # Update target group's face count
+                        await self.group_repo.increment_face_count(
+                            target_group_id, workspace_id, delta=len(source_faces)
+                        )
+
+                        total_faces_merged += len(source_faces)
+
+                    # Delete source group using repository method
+                    await self.group_repo.delete_with_connection(
+                        source_id, workspace_id, conn
+                    )
+                    deleted_group_ids.append(source_id)
+
+                    logger.debug(
+                        "Merged source group",
+                        extra={
+                            "source_id": str(source_id),
+                            "faces_moved": len(source_faces) if source_faces else 0,
+                        },
+                    )
+
+                # Set representative face if provided
+                if representative_face_id:
+                    # Verify face belongs to target group after merge
+                    face = await self.face_repo.find_by_id(
+                        representative_face_id, workspace_id
+                    )
+                    if not face or face.get("face_group_id") != target_group_id:
+                        raise InvalidMergeOperationError(
+                            source_group_id=source_group_ids[0] if source_group_ids else None,
+                            target_group_id=target_group_id,
+                            reason=f"Face {representative_face_id} does not belong to target group",
+                        )
+
+                    await self.group_repo.set_representative_face_with_connection(
+                        target_group_id, workspace_id, representative_face_id, conn
+                    )
+
+                # Set name if provided
+                if name:
+                    await self.group_repo.set_name_with_connection(
+                        target_group_id, workspace_id, name, conn
+                    )
+
+        # Recalculate centroid with weighting (outside transaction for simplicity)
+        await self.recalculate_weighted_centroid(target_group_id, workspace_id)
+
+        # Record history
+        await self.history_service.record_merge(
+            workspace_id=workspace_id,
+            target_group_id=target_group_id,
+            source_group_ids=deleted_group_ids,
+            face_count=total_faces_merged,
+        )
+
+        logger.info(
+            "Multi-group merge completed",
+            extra={
+                "target_group_id": str(target_group_id),
+                "source_groups_deleted": len(deleted_group_ids),
+                "total_faces_merged": total_faces_merged,
+            },
+        )
+
+        # Return result
+        merged_group = await self.group_repo.get_by_id(target_group_id, workspace_id)
+
+        return {
+            "merged_group": merged_group,
+            "source_group_ids": deleted_group_ids,
+            "faces_merged": merged_group.get("face_count", 0),
+        }
+
+    async def set_representative_face(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        face_id: UUID,
+        recalculate_centroid: bool = True,
+    ) -> dict[str, Any]:
+        """Set the representative (primary) face for a group.
+
+        The representative face is used for display thumbnails and can be
+        weighted higher in centroid calculations for better matching.
+
+        Args:
+            group_id: ID of the face group
+            workspace_id: Workspace ID for tenant isolation
+            face_id: ID of the face to set as representative
+            recalculate_centroid: If True, recalculate centroid with weighting
+
+        Returns:
+            Updated face group dict
+
+        Raises:
+            FaceGroupNotFoundError: If group doesn't exist
+            FaceNotFoundError: If face doesn't exist
+            InvalidMergeOperationError: If face doesn't belong to group
+        """
+        # Verify group exists
+        group = await self.group_repo.get_by_id(group_id, workspace_id)
+
+        # Verify face exists and belongs to group
+        face = await self.face_repo.find_by_id(face_id, workspace_id)
+        if not face:
+            raise FaceNotFoundError(face_id)
+
+        if face.get("face_group_id") != group_id:
+            raise InvalidMergeOperationError(
+                source_group_id=face.get("face_group_id"),
+                target_group_id=group_id,
+                reason=f"Face {face_id} does not belong to group {group_id}",
+            )
+
+        # Update representative face
+        await self.group_repo.update(
+            group_id, workspace_id,
+            representative_face_id=face_id,
+        )
+
+        logger.info(
+            "Representative face set",
+            extra={
+                "group_id": str(group_id),
+                "face_id": str(face_id),
+            },
+        )
+
+        # Recalculate weighted centroid if requested
+        if recalculate_centroid:
+            await self.recalculate_weighted_centroid(group_id, workspace_id)
+
+        return await self.group_repo.get_by_id(group_id, workspace_id)
+
     # =========================================================================
     # CLUSTER SPLIT
     # =========================================================================
-    
+
     async def split_group(
         self,
         group_id: UUID,
@@ -590,6 +810,92 @@ class FaceClusterService:
         
         return centroid
     
+    async def recalculate_weighted_centroid(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        primary_weight: float = 2.0,
+    ) -> Optional[list[float]]:
+        """Recalculate centroid with weighted representative face.
+
+        The representative face's embedding is given higher weight (default 2x)
+        in the centroid calculation. This improves matching accuracy by
+        biasing toward the user-selected "best" face representation.
+
+        Args:
+            group_id: ID of the group to update
+            workspace_id: Workspace ID for tenant isolation
+            primary_weight: Weight multiplier for representative face (default 2.0)
+
+        Returns:
+            The new weighted centroid vector, or None if no embeddings
+
+        Raises:
+            FaceGroupNotFoundError: If group doesn't exist
+        """
+        # Get group with representative face info
+        group = await self.group_repo.get_by_id(group_id, workspace_id)
+        representative_face_id = group.get("representative_face_id")
+
+        # Get all faces in group
+        faces = await self.face_repo.find_by_group_id(
+            group_id, workspace_id, limit=10000
+        )
+
+        if not faces:
+            logger.debug(
+                "No faces in group for centroid calculation",
+                extra={"group_id": str(group_id)},
+            )
+            return None
+
+        # Calculate weighted centroid
+        dim = 512  # Standard embedding dimension
+        weighted_sum = [0.0] * dim
+        total_weight = 0.0
+
+        for face in faces:
+            embedding = face.get("embedding")
+            if not embedding:
+                continue
+
+            # Apply weight: 2x for representative, 1x for others
+            weight = primary_weight if face["id"] == representative_face_id else 1.0
+
+            for i, val in enumerate(embedding):
+                weighted_sum[i] += val * weight
+            total_weight += weight
+
+        if total_weight == 0:
+            logger.debug(
+                "No embeddings available for centroid",
+                extra={"group_id": str(group_id)},
+            )
+            return None
+
+        # Calculate weighted mean
+        centroid = [v / total_weight for v in weighted_sum]
+
+        # Normalize to unit vector (required for cosine distance)
+        norm = math.sqrt(sum(x * x for x in centroid))
+        if norm > 0:
+            centroid = [x / norm for x in centroid]
+
+        # Update the group's centroid
+        await self.group_repo.update_centroid(group_id, workspace_id, centroid)
+
+        logger.debug(
+            "Weighted centroid recalculated",
+            extra={
+                "group_id": str(group_id),
+                "face_count": len(faces),
+                "representative_face_id": str(representative_face_id) if representative_face_id else None,
+                "primary_weight": primary_weight,
+            },
+        )
+
+        return centroid
+
     def _calculate_centroid(self, embeddings: list[list[float]]) -> list[float]:
         """Calculate the normalized mean (centroid) of embedding vectors.
         
@@ -687,9 +993,110 @@ class FaceClusterService:
         return {"assigned": assigned_count, "new_groups": new_groups_count}
     
     # =========================================================================
+    # PERSON ASSIGNMENT
+    # =========================================================================
+
+    async def assign_person(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        person_id: Optional[UUID] = None,
+        person_name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Assign a person to a face group.
+
+        Either links to an existing person (by person_id) or creates a new
+        person entity from the provided name.
+
+        Args:
+            group_id: ID of the face group
+            workspace_id: Workspace ID for tenant isolation
+            person_id: ID of existing person to link (mutually exclusive with person_name)
+            person_name: Name to create new person with (mutually exclusive with person_id)
+
+        Returns:
+            Updated face group dict with person_id and person_name fields
+
+        Raises:
+            FaceGroupNotFoundError: If group doesn't exist
+            ValueError: If neither person_id nor person_name provided, or both provided
+        """
+        if person_id and person_name:
+            raise ValueError("Provide either person_id or person_name, not both")
+        if not person_id and not person_name:
+            raise ValueError("Either person_id or person_name must be provided")
+
+        # Verify group exists
+        await self.group_repo.get_by_id(group_id, workspace_id)
+
+        if person_name:
+            # Create new person using repository method
+            person_id = await self.group_repo.create_person(workspace_id, person_name)
+
+            logger.info(
+                "Created new person for face group",
+                extra={
+                    "person_id": str(person_id),
+                    "person_name": person_name,
+                    "group_id": str(group_id),
+                },
+            )
+
+        # Update face_groups with person_id using repository method
+        await self.group_repo.set_person_id(group_id, workspace_id, person_id)
+
+        # Get the person name for the response
+        display_name = await self.group_repo.get_person_name(person_id)
+
+        logger.info(
+            "Face group assigned to person",
+            extra={
+                "group_id": str(group_id),
+                "person_id": str(person_id),
+            },
+        )
+
+        # Return updated group with person info
+        updated_group = await self.group_repo.get_by_id(group_id, workspace_id)
+        updated_group["person_id"] = str(person_id)
+        updated_group["person_name"] = display_name
+
+        return updated_group
+
+    async def unassign_person(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+    ) -> dict[str, Any]:
+        """Remove person assignment from a face group.
+
+        Args:
+            group_id: ID of the face group
+            workspace_id: Workspace ID for tenant isolation
+
+        Returns:
+            Updated face group dict with person_id set to None
+
+        Raises:
+            FaceGroupNotFoundError: If group doesn't exist
+        """
+        # Verify group exists
+        await self.group_repo.get_by_id(group_id, workspace_id)
+
+        # Use repository method to clear person_id
+        await self.group_repo.set_person_id(group_id, workspace_id, None)
+
+        logger.info(
+            "Face group person assignment removed",
+            extra={"group_id": str(group_id)},
+        )
+
+        return await self.group_repo.get_by_id(group_id, workspace_id)
+
+    # =========================================================================
     # CONFIGURATION HELPERS
     # =========================================================================
-    
+
     async def _get_similarity_threshold(self) -> float:
         """Get the configured similarity threshold for clustering."""
         try:

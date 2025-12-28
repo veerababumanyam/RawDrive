@@ -258,8 +258,11 @@ export async function signup(data: SignupData): Promise<{
  * Logout
  */
 export async function logout(): Promise<void> {
+  const tokens = getStoredTokens();
   try {
-    await apiClient.post('/api/v1/auth/logout');
+    await apiClient.post('/api/v1/auth/logout', {
+      refresh_token: tokens?.refreshToken || '',
+    });
   } catch (error) {
     console.error('Logout API call failed:', error);
   } finally {

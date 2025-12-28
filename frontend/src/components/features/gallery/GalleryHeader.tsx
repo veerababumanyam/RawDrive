@@ -10,10 +10,12 @@ import { ArrowLeft, Edit2, Check, X, User, Calendar, Image as ImageIcon } from '
 import { useNavigate } from 'react-router-dom';
 import { AppButton } from '../../ui/AppButton';
 import { GalleryStatusBadge } from './GalleryStatusBadge';
+import { TaggingHealthBadge } from './TaggingHealthBadge';
 import { AppInput } from '../../ui/AppInput';
 import { clientService } from '../../../services/clientService';
 import { galleryService } from '../../../services/galleryService';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useGalleryTaggingHealth } from '../../../hooks/useGalleryTaggingHealth';
 import type { GalleryDetailData } from '../../../types/gallery';
 import type { ClientSearchResult } from '../../../types/client';
 
@@ -31,6 +33,10 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
 }) => {
   const navigate = useNavigate();
   const { workspace } = useAuth();
+  const { health: healthData, loading: healthLoading, error: healthError, refreshStats: refreshHealth } = useGalleryTaggingHealth({
+    workspaceId: gallery.workspace_id,
+    galleryId: gallery.gallery_id,
+  });
 
   // Cover Photo State
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
@@ -371,6 +377,14 @@ export const GalleryHeader: React.FC<GalleryHeaderProps> = ({
 
           {/* Status Badge */}
           <GalleryStatusBadge status={gallery.status} size="md" />
+          <TaggingHealthBadge
+            health={healthData}
+            loading={healthLoading}
+            error={!!healthError}
+            showRefresh={true}
+            onRefresh={refreshHealth}
+            size="md"
+          />
         </div>
       </div>
     </div>

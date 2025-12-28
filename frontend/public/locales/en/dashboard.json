@@ -34,6 +34,7 @@
     "empty": {
         "noGalleries": "No galleries yet",
         "noActivity": "No recent activity",
+        "noActivityHint": "Activities will appear when visitors interact with your galleries",
         "getStarted": "Get started by creating your first gallery"
     }
 }

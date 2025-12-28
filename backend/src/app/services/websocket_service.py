@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Optional
 from uuid import UUID
 
 from app.db.redis import get_redis_client
@@ -57,21 +57,21 @@ async def emit_event(
 
 async def emit_asset_created(
     workspace_id: UUID,
-    gallery_id: UUID,
+    gallery_id: Optional[UUID],
     asset_id: UUID,
 ) -> None:
     """Emit asset:created event.
 
     Args:
         workspace_id: Workspace UUID
-        gallery_id: Gallery UUID
+        gallery_id: Gallery UUID or None
         asset_id: Asset UUID
     """
     await emit_event(
         workspace_id,
         "asset:created",
         {
-            "gallery_id": str(gallery_id),
+            "gallery_id": str(gallery_id) if gallery_id else None,
             "asset_id": str(asset_id),
         },
     )

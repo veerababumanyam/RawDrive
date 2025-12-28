@@ -159,14 +159,14 @@ export const GalleryUpload: React.FC<GalleryUploadProps> = ({
       // Ideally backend handles 'replace' param or we skip check.
       // As a safe fallback for this MVP refactor, we just add it back.
       // A real implementation would pass a flag to addFiles to skip check.
-      await addFiles([duplicateDialog.file]);
+      await addFiles([duplicateDialog.file], true);
     }
   }, [duplicateDialog, addFiles]);
 
   const handleDuplicateKeepBoth = useCallback(async () => {
     if (duplicateDialog) {
       setDuplicateDialog(null);
-      await addFiles([duplicateDialog.file]);
+      await addFiles([duplicateDialog.file], true);
     }
   }, [duplicateDialog, addFiles]);
 

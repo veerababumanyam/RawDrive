@@ -188,6 +188,47 @@ class R2StorageService:
             logger.error(f"Failed to upload to R2: {e}")
             raise StorageError(f"Upload failed: {e}", "UPLOAD_FAILED") from e
 
+    async def upload_bytes(
+        self,
+        key: str,
+        data: bytes,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        """Upload raw bytes to R2 at the specified key.
+
+        This method is used for uploading non-encrypted content like
+        face thumbnails or other derived assets.
+
+        Args:
+            key: Full object key path in R2
+            data: Raw bytes to upload
+            content_type: MIME type of the content
+
+        Returns:
+            Object key in R2
+
+        Raises:
+            StorageError: If upload fails
+        """
+        try:
+            # Upload to R2 (run in thread pool since boto3 is synchronous)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                self.executor,
+                lambda: self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=key,
+                    Body=data,
+                    ContentType=content_type,
+                ),
+            )
+
+            logger.debug(f"Uploaded bytes to R2: {key}")
+            return key
+        except (ClientError, BotoCoreError) as e:
+            logger.error(f"Failed to upload bytes to R2: {e}")
+            raise StorageError(f"Upload failed: {e}", "UPLOAD_FAILED") from e
+
     async def download_encrypted_file(
         self,
         workspace_id: UUID,

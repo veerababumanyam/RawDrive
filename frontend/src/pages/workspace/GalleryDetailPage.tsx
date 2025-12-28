@@ -11,9 +11,9 @@
  * 5. Photo Grid/List
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Lock as LockIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useGallery } from '../../hooks/useGallery';
 import { useGalleryAssets } from '../../hooks/useGalleryAssets';
@@ -32,6 +32,7 @@ import {
   PeoplePanel,
   GalleryCanvas,
   ShareDialog,
+  PinVerificationModal,
 } from '../../components/features/gallery';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
@@ -42,6 +43,7 @@ import { useSearch } from '../../contexts/SearchContext';
 import { galleryService } from '../../services/galleryService';
 import { SignedUrlProvider } from '../../contexts/SignedUrlContext';
 import type { GalleryAssetItem, ViewMode, FilterType } from '../../types/gallery';
+import { PRIVATE_UNLOCKED_KEY_PREFIX } from '../../constants/gallery';
 
 const GalleryDetailPage: React.FC = () => {
   const { id: galleryId } = useParams<{ id: string }>();
@@ -82,6 +84,10 @@ const GalleryDetailPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showPeoplePanel, setShowPeoplePanel] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  
+  // Private photo unlock state (admin also needs PIN to see private photos)
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [isPrivateUnlocked, setIsPrivateUnlocked] = useState(false);
 
   // Register search handler
   const { registerHandler, unregisterHandler } = useSearch();
@@ -99,6 +105,33 @@ const GalleryDetailPage: React.FC = () => {
       setShowUpload(true);
     }
   }, [searchParams]);
+
+  // Check localStorage for previous private unlock status
+  useEffect(() => {
+    if (galleryId) {
+      const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
+      if (privateUnlocked) {
+        setIsPrivateUnlocked(true);
+      }
+    }
+  }, [galleryId]);
+
+  // Handle PIN verification for unlocking private photos
+  const handlePrivatePhotoUnlock = useCallback(async (pin: string): Promise<boolean> => {
+    if (!galleryId) return false;
+    try {
+      const isValid = await galleryService.verifyPin(galleryId, pin);
+      if (isValid) {
+        localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
+        setShowPinModal(false);
+        setIsPrivateUnlocked(true);
+      }
+      return isValid;
+    } catch (error) {
+      console.error('PIN verification failed:', error);
+      return false;
+    }
+  }, [galleryId]);
 
   // Fetch gallery details
   const {
@@ -138,11 +171,13 @@ const GalleryDetailPage: React.FC = () => {
     const totalItems = meta?.total ?? assets.length;
     const favoritesCount = assets.filter((a) => a.is_favorited).length;
     const selectionsCount = assets.filter((a) => a.is_selected).length;
+    const privateCount = assets.filter((a) => a.is_private).length;
 
     return {
       totalItems,
       favoritesCount,
       selectionsCount,
+      privateCount,
     };
   }, [assets, meta?.total]);
 
@@ -300,8 +335,48 @@ const GalleryDetailPage: React.FC = () => {
     [workspace?.workspace_id, galleryId, updateAsset, refetchAssets, addToast]
   );
 
+  // Handle asset share
+  const handleAssetShare = useCallback(
+    async (assetId: string) => {
+      if (!workspace?.workspace_id || !galleryId) return;
 
+      try {
+        // Get a shareable signed URL for the original asset
+        const signedUrl = await galleryService.getSignedUrl(workspace.workspace_id, assetId, 'preview', false);
 
+        // Copy to clipboard
+        await navigator.clipboard.writeText(signedUrl);
+        addToast({ message: 'Link copied to clipboard', variant: 'success' });
+      } catch (error) {
+        console.error('Share error:', error);
+        addToast({ message: 'Failed to generate share link', variant: 'error' });
+      }
+    },
+    [workspace?.workspace_id, galleryId, addToast]
+  );
+
+  // Handle asset lock toggle (is_private)
+  const handleAssetLock = useCallback(
+    async (assetId: string, isPrivate: boolean) => {
+      if (!workspace?.workspace_id || !galleryId) return;
+
+      // Optimistic update
+      updateAsset(assetId, { is_private: isPrivate });
+
+      try {
+        await galleryService.updateAsset(workspace.workspace_id, galleryId, assetId, { is_private: isPrivate });
+        addToast({
+          message: isPrivate ? 'Photo locked' : 'Photo unlocked',
+          variant: 'success',
+        });
+      } catch (error) {
+        // Revert on failure
+        updateAsset(assetId, { is_private: !isPrivate });
+        addToast({ message: 'Failed to update privacy', variant: 'error' });
+      }
+    },
+    [workspace?.workspace_id, galleryId, updateAsset, addToast]
+  );
 
   // Handle single asset deletion
   const handleDeleteAsset = useCallback(
@@ -747,6 +822,30 @@ const GalleryDetailPage: React.FC = () => {
           }}
         />
 
+        {/* Unlock Private Photos Button - show when private photos exist and not unlocked */}
+        {!isPrivateUnlocked && filteredStats.privateCount > 0 && (
+          <div className="flex justify-end">
+            <AppButton
+              variant="outline"
+              leftIcon={<LockIcon size={16} />}
+              size="sm"
+              onClick={() => {
+                if (gallery.pin_protected) {
+                  setShowPinModal(true);
+                } else {
+                  // No PIN protection - auto-unlock for admin
+                  setIsPrivateUnlocked(true);
+                  localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
+                  addToast({ message: 'Private photos unlocked', variant: 'success' });
+                }
+              }}
+              aria-label="Unlock private photos"
+            >
+              Unlock {filteredStats.privateCount} Private Photo{filteredStats.privateCount !== 1 ? 's' : ''}
+            </AppButton>
+          </div>
+        )}
+
         {/* Upload Section - Collapsible with enhanced styling */}
         {showUpload && (
           <div className="glass-card glass-card-hover glass-card-shimmer rounded-2xl p-4 sm:p-6 border border-primary/20 animate-in slide-in-from-top-2 duration-300 shadow-lg shadow-primary/5">
@@ -845,6 +944,8 @@ const GalleryDetailPage: React.FC = () => {
               onAssetClick={handleAssetClick}
               onAssetFavorite={handleAssetFavorite}
               onAssetDownload={handleAssetDownload}
+              onAssetShare={handleAssetShare}
+              onAssetLock={handleAssetLock}
               onAssetDelete={handleDeleteAsset}
               onAssetUpdate={handleAssetUpdate}
               onSetCover={async (assetId) => {
@@ -894,6 +995,17 @@ const GalleryDetailPage: React.FC = () => {
               }}
               sortable={true}
               isLoading={assetsLoading}
+              isPrivateUnlocked={isPrivateUnlocked}
+              onUnlockPrivate={() => {
+                if (gallery.pin_protected) {
+                  setShowPinModal(true);
+                } else {
+                  // No PIN protection - auto-unlock for admin
+                  setIsPrivateUnlocked(true);
+                  localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
+                  addToast({ message: 'Private photos unlocked', variant: 'success' });
+                }
+              }}
             />
           ) : (
             <PhotoListView
@@ -1077,6 +1189,14 @@ const GalleryDetailPage: React.FC = () => {
           onClose={() => setShowShareDialog(false)}
           workspaceId={workspace?.workspace_id || ''}
           galleryId={gallery.gallery_id}
+          galleryTitle={gallery.title}
+        />
+
+        {/* PIN Verification Modal for unlocking private photos */}
+        <PinVerificationModal
+          isOpen={showPinModal}
+          onVerify={handlePrivatePhotoUnlock}
+          onCancel={() => setShowPinModal(false)}
           galleryTitle={gallery.title}
         />
       </div>

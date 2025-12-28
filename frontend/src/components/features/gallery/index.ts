@@ -81,6 +81,8 @@ export { CommentSection } from './CommentSection';
 export { SearchModal } from './SearchModal';
 
 export { PeoplePanel } from './PeoplePanel';
+export { FaceGroupMergeModal } from './FaceGroupMergeModal';
+export { FaceGroupDetailPanel } from './FaceGroupDetailPanel';
 export { GalleryCanvas } from './GalleryCanvas';
 export type { GalleryCanvasProps } from './GalleryCanvas';
 
@@ -89,3 +91,5 @@ export type { ShareDialogProps } from './ShareDialog';
 
 export { FaceDiscovery } from './FaceDiscovery';
 export type { FaceDiscoveryProps } from './FaceDiscovery';
+
+export { PinVerificationModal } from './PinVerificationModal';

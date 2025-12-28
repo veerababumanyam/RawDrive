@@ -135,7 +135,6 @@ class GeminiModelService:
                     identifier,
                     display_name,
                     description,
-                    capabilities,
                     is_default,
                     is_active,
                     sort_order,
@@ -164,7 +163,6 @@ class GeminiModelService:
                     "identifier": row["identifier"],
                     "display_name": row["display_name"],
                     "description": row["description"],
-                    "capabilities": row["capabilities"] or [],
                     "is_default": row["is_default"],
                     "is_active": row["is_active"],
                     "sort_order": row["sort_order"],
@@ -197,7 +195,6 @@ class GeminiModelService:
                     identifier,
                     display_name,
                     description,
-                    capabilities,
                     is_default,
                     is_active,
                     sort_order,
@@ -226,7 +223,6 @@ class GeminiModelService:
                 "identifier": row["identifier"],
                 "display_name": row["display_name"],
                 "description": row["description"],
-                "capabilities": row["capabilities"] or [],
                 "is_default": row["is_default"],
                 "is_active": row["is_active"],
                 "sort_order": row["sort_order"],
@@ -240,7 +236,6 @@ class GeminiModelService:
         identifier: str,
         display_name: str,
         description: Optional[str] = None,
-        capabilities: Optional[list[str]] = None,
         sort_order: Optional[int] = None,
         is_active: bool = True,
         is_default: bool = False,
@@ -251,7 +246,6 @@ class GeminiModelService:
             identifier: Gemini model identifier (e.g., "gemini-2.0-flash")
             display_name: Human-readable name
             description: Optional description
-            capabilities: Optional list of capability strings
             sort_order: Optional display order (auto-assigned if not provided)
             is_active: Whether model is active (default True)
             is_default: Whether this is the default model
@@ -292,16 +286,15 @@ class GeminiModelService:
                 model_id = await conn.fetchval(
                     """
                     INSERT INTO gemini_models (
-                        identifier, display_name, description, capabilities,
+                        identifier, display_name, description,
                         is_default, is_active, sort_order, created_at, updated_at
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                     RETURNING model_id
                     """,
                     identifier,
                     display_name,
                     description,
-                    capabilities or [],
                     is_default,
                     is_active,
                     sort_order,
@@ -319,7 +312,6 @@ class GeminiModelService:
         model_id: UUID,
         display_name: Optional[str] = None,
         description: Optional[str] = None,
-        capabilities: Optional[list[str]] = None,
         sort_order: Optional[int] = None,
         is_active: Optional[bool] = None,
         is_default: Optional[bool] = None,
@@ -330,7 +322,6 @@ class GeminiModelService:
             model_id: Model UUID
             display_name: New display name
             description: New description
-            capabilities: New capabilities list
             sort_order: New sort order
             is_active: New active status
             is_default: New default status
@@ -381,11 +372,6 @@ class GeminiModelService:
                 if description is not None:
                     updates.append(f"description = ${param_idx}")
                     params.append(description)
-                    param_idx += 1
-
-                if capabilities is not None:
-                    updates.append(f"capabilities = ${param_idx}")
-                    params.append(capabilities)
                     param_idx += 1
 
                 if sort_order is not None:
@@ -604,7 +590,7 @@ class GeminiModelService:
                         COUNT(DISTINCT ugs.user_id) FILTER (WHERE ugs.api_key_encrypted IS NOT NULL) as users_with_key,
                         COUNT(DISTINCT ugs.user_id) FILTER (WHERE ugs.status = 'connected') as users_connected,
                         COUNT(DISTINCT ugs.user_id) FILTER (WHERE ugs.status = 'validation_failed') as users_failed
-                    FROM workspace_members wm
+                    FROM workspace_memberships wm
                     JOIN users u ON u.user_id = wm.user_id
                     LEFT JOIN user_gemini_settings ugs ON ugs.user_id = u.user_id
                     WHERE wm.workspace_id = $1

@@ -559,3 +559,156 @@ export const searchService = {
         return api.get(`/api/v1/workspaces/${workspaceId}/search/by-person/${personId}?${params.toString()}`);
     },
 };
+
+// ============================================================================
+// Smart Tagging Service (AI Analysis)
+// ============================================================================
+
+export interface AnalysisStatus {
+    asset_id: string;
+    vision_status: string | null;
+    vision_provider: string | null;
+    vision_completed_at: string | null;
+    face_status: string | null;
+    face_provider: string | null;
+    face_completed_at: string | null;
+    tag_count: number;
+    face_count: number;
+}
+
+export interface ContentJob {
+    id: string;
+    asset_id: string;
+    status: string;
+    priority: number;
+    retry_count: number;
+    error_message: string | null;
+    scheduled_at: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    created_at: string;
+}
+
+export interface GalleryHealth {
+    gallery_id: string;
+    total_assets: number;
+    vision_completed: number;
+    vision_failed: number;
+    vision_pending: number;
+    face_completed: number;
+    face_failed: number;
+    face_pending: number;
+    tagged_assets: number;
+    total_tags: number;
+    ai_tags: number;
+    manual_tags: number;
+    badge: {
+        badge: string;
+        vision_pct: number;
+        face_pct: number;
+        tag_pct: number;
+    };
+}
+
+export interface WorkspaceHealth {
+    workspace_id: string;
+    total_assets: number;
+    total_galleries: number;
+    vision_completed: number;
+    vision_pending: number;
+    vision_failed: number;
+    face_completed: number;
+    face_pending: number;
+    face_failed: number;
+    tagged_assets: number;
+    total_tags: number;
+    ai_tags: number;
+    manual_tags: number;
+    galleries: Array<{
+        gallery_id: string;
+        total_assets: number;
+        vision_completed: number;
+        face_completed: number;
+        badge: {
+            badge: string;
+            vision_pct: number;
+            face_pct: number;
+            tag_pct: number;
+        };
+    }>;
+}
+
+export const smartTaggingService = {
+    /**
+     * Get AI analysis status for an asset
+     */
+    async getAnalysisStatus(workspaceId: string, assetId: string): Promise<AnalysisStatus> {
+        return api.get(`/api/v1/workspaces/${workspaceId}/smart-tagging/assets/${assetId}/analysis`);
+    },
+
+    /**
+     * Reanalyze an asset (remove old AI tags and queue for fresh analysis)
+     */
+    async reanalyzeAsset(workspaceId: string, assetId: string): Promise<ContentJob> {
+        return api.post(`/api/v1/workspaces/${workspaceId}/smart-tagging/assets/${assetId}/reanalyze`);
+    },
+
+    /**
+     * Bulk reanalyze multiple assets
+     */
+    async reanalyzeAssetsBulk(
+        workspaceId: string,
+        assetIds: string[]
+    ): Promise<{ queued: number; failed: number }> {
+        return api.post(`/api/v1/workspaces/${workspaceId}/smart-tagging/assets/reanalyze/bulk`, {
+            asset_ids: assetIds,
+        });
+    },
+
+    /**
+     * Queue assets for content detection
+     */
+    async queueDetection(
+        workspaceId: string,
+        assetIds: string[],
+        options?: { priority?: number; force?: boolean }
+    ): Promise<{ queued: number; skipped: number }> {
+        return api.post(`/api/v1/workspaces/${workspaceId}/smart-tagging/queue`, {
+            asset_ids: assetIds,
+            priority: options?.priority ?? 5,
+            force: options?.force ?? false,
+        });
+    },
+
+    /**
+     * Get content detection statistics for a workspace
+     */
+    async getDetectionStats(workspaceId: string): Promise<{
+        jobs: Record<string, number>;
+        analysis: Record<string, number>;
+    }> {
+        return api.get(`/api/v1/workspaces/${workspaceId}/smart-tagging/stats`);
+    },
+
+    /**
+     * Get tagging health for a gallery
+     */
+    async getGalleryHealth(workspaceId: string, galleryId: string): Promise<GalleryHealth> {
+        return api.get(`/api/v1/workspaces/${workspaceId}/smart-tagging/galleries/${galleryId}/health`);
+    },
+
+    /**
+     * Get workspace-level tagging health (overview of all galleries)
+     */
+    async getWorkspaceHealth(workspaceId: string, includeGalleries = true): Promise<WorkspaceHealth> {
+        const query = includeGalleries ? '?include_galleries=true' : '';
+        return api.get(`/api/v1/workspaces/${workspaceId}/smart-tagging/health${query}`);
+    },
+
+    /**
+     * Refresh tagging health statistics
+     */
+    async refreshHealth(workspaceId: string): Promise<void> {
+        await api.post(`/api/v1/workspaces/${workspaceId}/smart-tagging/health/refresh`);
+    },
+};

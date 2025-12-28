@@ -929,6 +929,330 @@ eventBus.on('asset.created', async (event) => {
 });
 ```
 
+## Face Detection Microservice
+
+RawDrive uses a **dedicated face-worker microservice** for AI-powered face detection, separate from the main backend for scalability and resource isolation.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Production Architecture                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Backend (FastAPI)              Face Worker (Microservice)       │
+│  ┌───────────────────┐         ┌───────────────────────┐        │
+│  │ DISABLE_FACE_     │         │ Dockerfile.worker     │        │
+│  │ WORKER=true       │         │ Port: 8001            │        │
+│  │ Port: 8000        │         │ CPU: 1.0, Mem: 1G     │        │
+│  └─────────┬─────────┘         └──────────┬────────────┘        │
+│            │                              │                      │
+│            └──────────┬───────────────────┘                      │
+│                       ▼                                          │
+│              ┌─────────────────┐                                 │
+│              │  PostgreSQL     │ ← face_detection_jobs table     │
+│              │  (Job Queue)    │   (polling-based queue)         │
+│              └─────────────────┘                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Files
+
+| Purpose | Location |
+|---------|----------|
+| Worker Entrypoint | `backend/src/app/face_worker_main.py` |
+| Worker Dockerfile | `backend/Dockerfile.worker` |
+| Face Detection Worker | `backend/src/app/services/face_detection_worker.py` |
+| Cloud Vision Provider | `backend/src/app/services/ai_providers/cloud_vision_provider.py` |
+| Gemini Provider (fallback) | `backend/src/app/services/ai_providers/gemini_provider.py` |
+| Face Group API | `backend/src/app/api/v1/face_groups.py` |
+| Face Repository | `backend/src/app/repositories/face_repository.py` |
+| Face Group Repository | `backend/src/app/repositories/face_group_repository.py` |
+| Technical Spec | `docs/TechnicalSpecs/face_detection_service.json` |
+
+### Deployment Modes
+
+| Mode | Backend Setting | Face Processing |
+|------|-----------------|-----------------|
+| **Production** | `DISABLE_FACE_WORKER=true` | Separate face-worker container |
+| **Development** | `DISABLE_FACE_WORKER=false` | Embedded in backend process |
+
+### AI Provider Failover
+
+The service uses a multi-provider strategy with automatic failover:
+
+```python
+# Provider priority (circuit breaker pattern):
+# 1. Cloud Vision (primary) - High accuracy, 99%+ confidence
+# 2. Gemini (fallback) - Good accuracy, slightly lower
+# 3. Local DeepFace (last resort) - CPU-based, slower
+
+# Providers auto-recover after 60 seconds of failures
+```
+
+### Job Queue (PostgreSQL Polling)
+
+```python
+# Jobs stored in face_detection_jobs table
+# Worker polls every 5 seconds, batch size 10
+# States: pending → processing → completed/failed
+
+# Trigger face detection for an asset:
+await face_service.queue_detection(workspace_id, asset_id)
+```
+
+### Docker Configuration
+
+```yaml
+# infrastructure/docker/docker-compose.yml
+face-worker:
+  build:
+    context: ../../backend
+    dockerfile: Dockerfile.worker
+  container_name: rawdrive-face-worker
+  environment:
+    DATABASE_URL: postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive
+    REDIS_URL: redis://redis:6379/0
+    DB_POOL_MIN_SIZE: 1
+    DB_POOL_MAX_SIZE: 5
+  expose:
+    - "8001"  # Health endpoints
+  deploy:
+    resources:
+      limits:
+        cpus: '1.0'
+        memory: 1G
+```
+
+### Health Endpoints
+
+```bash
+# Face worker health check
+curl http://localhost:8001/health   # Basic health
+curl http://localhost:8001/ready    # Ready status with stats
+```
+
+### Environment Variables
+
+```bash
+# In .env for production:
+DISABLE_FACE_WORKER=true  # Backend won't start embedded worker
+
+# Cloud Vision credentials
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+# Or set via google.cloud.vision client configuration
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/workspaces/{id}/face-groups` | GET | List face groups |
+| `/v1/workspaces/{id}/face-groups/{id}` | GET | Get face group details |
+| `/v1/workspaces/{id}/face-groups/{id}` | PATCH | Update name/hidden status |
+| `/v1/workspaces/{id}/face-groups/merge` | POST | Merge multiple groups |
+| `/v1/workspaces/{id}/face-groups/{id}/split` | POST | Split faces from group |
+| `/v1/galleries/{id}/face-groups/stats` | GET | Gallery face statistics |
+
+### Face Clustering
+
+```python
+# Faces are clustered using 512-dim embeddings:
+# - pgvector for vector similarity search
+# - HDBSCAN algorithm for automatic clustering
+# - Configurable similarity threshold (default: 0.6)
+# - Manual merge/split operations supported
+```
+
+## Smart Tagging Layer
+
+RawDrive includes a **Smart Tagging Layer** that caches AI-generated tags and provides instant search across galleries without repeated AI calls.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Smart Tagging Pipeline                       │
+├─────────────────────────────────────────────────────────────────┤
+│  Photo Upload → Content Detection Worker → AI Provider          │
+│       ↓                    ↓                    ↓                │
+│  gallery_assets      content_jobs         Cloud Vision/Gemini   │
+│       ↓                    ↓                    ↓                │
+│  Asset Analysis ←──── Tag Creation ←────── Labels/Objects       │
+│       ↓                    ↓                                     │
+│  asset_analysis       asset_tags (with source tracking)         │
+│       ↓                    ↓                                     │
+│  Health Dashboard     Instant Search                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+1. **Instant AI-Powered Search** - Search by AI-detected labels, objects, and scenes
+2. **Face Naming & Person Search** - Name face groups and search by person
+3. **Incremental Gallery Addition** - Auto-tag new photos, skip duplicates via SHA256
+4. **Manual Tag Complement** - Add manual tags alongside AI tags
+5. **Re-Analysis** - Clear AI tags and re-analyze with fresh AI calls
+6. **Tagging Health Dashboard** - Monitor AI tagging completion across galleries
+
+### Key Files
+
+| Purpose | Location |
+|---------|----------|
+| Content Detection Service | `backend/src/app/services/content_detection_service.py` |
+| Tagging Health Service | `backend/src/app/services/tagging_health_service.py` |
+| Tag Service | `backend/src/app/services/tag_service.py` |
+| Asset Analysis Repository | `backend/src/app/repositories/asset_analysis_repository.py` |
+| Content Job Repository | `backend/src/app/repositories/content_job_repository.py` |
+| Smart Tagging API | `backend/src/app/api/v1/smart_tagging.py` |
+| Gallery Search Bar | `frontend/src/components/features/gallery/GallerySearchBar.tsx` |
+| Asset Tag Panel | `frontend/src/components/features/gallery/AssetTagPanel.tsx` |
+| Tagging Health Badge | `frontend/src/components/features/gallery/TaggingHealthBadge.tsx` |
+| AI Settings Panel | `frontend/src/components/features/gallery/AISettings.tsx` |
+
+### Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `asset_analysis` | Tracks analysis status per asset (pending, processing, completed, failed) |
+| `content_detection_jobs` | Job queue for content detection (PostgreSQL polling) |
+| `asset_tags` | Junction table with `source` column (manual, ai_vision, ai_gemini, ai_local) |
+| `tags` | Tag dictionary with workspace scope |
+| `gallery_tagging_stats` | Materialized view for health dashboard (refreshed every 5 min) |
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/workspaces/{id}/smart-tagging/queue` | POST | Queue assets for AI detection |
+| `/v1/workspaces/{id}/smart-tagging/status/{asset_id}` | GET | Get analysis status |
+| `/v1/workspaces/{id}/smart-tagging/assets/{id}/reanalyze` | POST | Clear tags and re-analyze |
+| `/v1/workspaces/{id}/smart-tagging/assets/reanalyze/bulk` | POST | Bulk re-analyze |
+| `/v1/workspaces/{id}/galleries/{id}/tagging-health` | GET | Gallery tagging health |
+| `/v1/workspaces/{id}/tagging-health` | GET | Workspace-wide health |
+| `/v1/workspaces/{id}/galleries/{id}/filter` | GET | Filter gallery assets by tags/people |
+| `/v1/workspaces/{id}/assets/{id}/tags` | GET | Get asset tags |
+| `/v1/workspaces/{id}/assets/{id}/tags` | POST | Add manual tag |
+| `/v1/workspaces/{id}/assets/{id}/tags/{tag_id}` | DELETE | Remove tag |
+
+### Gallery Assets Filtering
+
+The gallery assets endpoint supports filtering by tags and people:
+
+```typescript
+// Filter by AI tags
+GET /v1/workspaces/{id}/galleries/{id}/assets?tag_ids=uuid1,uuid2&tag_source=ai_vision
+
+// Filter by people
+GET /v1/workspaces/{id}/galleries/{id}/assets?face_group_ids=uuid1,uuid2
+
+// Combined filters
+GET /v1/workspaces/{id}/galleries/{id}/assets?tag_ids=uuid1&face_group_ids=uuid2&search_query=sunset
+```
+
+### Tag Sources
+
+| Source | Description |
+|--------|-------------|
+| `manual` | User-added tags |
+| `ai_vision` | Cloud Vision API labels |
+| `ai_gemini` | Gemini model labels |
+| `ai_local` | Local model (DeepFace) |
+
+### Health Dashboard
+
+The health dashboard uses a materialized view refreshed every 5 minutes:
+
+```sql
+-- gallery_tagging_stats materialized view
+SELECT gallery_id, workspace_id,
+       total_assets, tagged_assets, pending_assets,
+       processing_assets, failed_assets, skipped_assets
+FROM gallery_tagging_stats
+WHERE workspace_id = $1;
+
+-- Manual refresh
+SELECT refresh_gallery_tagging_stats();
+```
+
+### Frontend Search Integration
+
+The `GallerySearchBar` component provides unified search with tag and person autocomplete:
+
+```typescript
+// Use # prefix for tag search
+#sunset     // Shows tag suggestions matching "sunset"
+
+// Use @ prefix for person search
+@john       // Shows people matching "john"
+
+// Regular text searches filenames
+beach       // Filters by filename containing "beach"
+```
+
+## Admin Microservice
+
+RawDrive uses a **dedicated admin microservice** for platform administration functionality, separated from the main backend to provide better security isolation, independent scaling, and clear domain boundaries for admin operations.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Production Architecture                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Backend (FastAPI)              Admin Microservice (FastAPI)     │
+│  ┌───────────────────┐         ┌───────────────────────┐        │
+│  │ Port: 8000        │         │ Port: 8002            │        │
+│  │ (Main API)        │         │ (Admin API)           │        │
+│  └─────────┬─────────┘         └──────────┬────────────┘        │
+│            │                              │                      │
+│            └──────────┬───────────────────┘                      │
+│                       ▼                                          │
+│              ┌─────────────────┐                                 │
+│              │  PostgreSQL     │ ← admin_* tables (shared)       │
+│              │  + Redis        │   (separate schema isolation)   │
+│              └─────────────────┘                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Service Domains
+
+The Admin Microservice owns these functional domains:
+
+1. **Platform Admin Management** - Admin identity, roles, permissions, invites
+2. **Support Access** - Time-boxed, audited workspace access for customer support
+3. **Subscription & Billing** - Admin view and modifications (MRR, refunds, credits)
+4. **System Monitoring** - Health metrics, performance dashboards, alerting
+5. **Analytics** - Usage, revenue, and feature adoption metrics
+6. **Content Moderation** - Flagged content queue and enforcement actions
+7. **Audit Logging** - Immutable action logs and compliance reporting
+8. **Feature Flags** - Rollout control, A/B testing, targeting
+9. **Platform Configuration** - Settings for AI, email, payments, and platform behavior
+
+### Key Files
+
+| Purpose | Location |
+|---------|----------|
+| Admin Microservice Spec | `specs/001-admin-microservice/spec.md` |
+| Admin Microservice Plan | `specs/001-admin-microservice/plan.md` |
+| Admin Documentation | `docs/admin-microservice/` |
+| Current Admin API | `backend/src/app/api/v1/admin.py` |
+| Admin Features | `docs/Features/ADMIN_AND_PLATFORM_MANAGEMENT.md` |
+
+### Current Status
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Specification | Complete | Feature spec created and validated |
+| Planning | Complete | Implementation tasks and architecture design |
+| Development | Planned | Microservice implementation pending |
+
+### Communication Patterns
+
+- **Internal APIs**: RESTful communication between main backend and admin service
+- **Shared Database**: PostgreSQL with `admin_*` table prefix for isolation
+- **Redis Pub/Sub**: Event-driven communication for real-time updates
+- **JWT Authentication**: Shared authentication tokens for seamless integration
+
 ## Performance Optimization
 
 ### Frontend Performance
@@ -1756,6 +2080,22 @@ asset_ingest_latency_seconds_bucket               // Histogram
 - PostgreSQL 16 (pgvector), Redis 7 (sessions/cache), Cloudflare R2 (avatar storage) (002-user-profile-settings)
 - Python 3.9+ (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, SQLAlchemy 2.0+, asyncpg 0.29+, httpx 0.27+ (Gemini calls) (003-user-gemini-settings)
 - PostgreSQL 16 (new tables: `user_gemini_settings`, `gemini_models`), Redis 7 (settings cache) (003-user-gemini-settings)
+- Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, Pydantic 2.7+, TailwindCSS (004-gallery-gradient-branding)
+- PostgreSQL 16 (JSONB column for gradient_config) (004-gallery-gradient-branding)
+- Python 3.11+ (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, asyncpg 0.29+, pgvector (005-smart-tagging-cache)
+- PostgreSQL 16 (pgvector for embeddings), Redis 7 (caching) (005-smart-tagging-cache)
+- Python 3.11+ (Backend FastAPI), TypeScript 5.2+ (Frontend React 18.3) + FastAPI 0.115+, React 18.3, asyncpg 0.29+, razorpay SDK 1.4+, TailwindCSS (006-user-profile-sidebar)
+- PostgreSQL 16 (new tables: invoices, payment_methods, checkout_sessions), Redis 7 (session cache) (006-user-profile-sidebar)
+- Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, cryptography (AES-256-GCM via existing EncryptionService) (007-fix-gallery-pin-password)
+- PostgreSQL 16 (new columns: `password_encrypted`, `password_iv`, `pin_encrypted`, `pin_iv`) (007-fix-gallery-pin-password)
+- Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, SQLAlchemy 2.0+, asyncpg 0.29+, pgvector (008-face-group-merge)
+- PostgreSQL 16 with pgvector extension, Redis 7 (for caching) (008-face-group-merge)
+- TypeScript 5.2+ (Frontend React 18.3) + React 18.3, React Router DOM 6.21, TailwindCSS 3.3, Lucide React (icons) (009-profile-tabs-redesign)
+- N/A (frontend-only, uses existing API endpoints) (009-profile-tabs-redesign)
+- Python 3.11+ (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, google-generativeai SDK, Pydantic 2.7+, asyncpg 0.29+ (010-ai-powered-features)
+- PostgreSQL 16 (JSONB for analysis results, pgvector for embeddings), Redis 7 (caching, job queues) (010-ai-powered-features)
+- TypeScript 5.2+ (Frontend React 18.3), Python 3.11+ (Backend FastAPI) + React 18.3, React Router DOM, TailwindCSS, FastAPI 0.115+, asyncpg 0.29+ (011-fix-library-photo-operations)
+- PostgreSQL 16 (existing `assets.folder_id` column) (011-fix-library-photo-operations)
 
 ## Recent Changes
 - 001-admin-microservice: Added Python 3.11+ (matching main backend) + FastAPI 0.115+, SQLAlchemy 2.0+, asyncpg 0.29+, Redis 5.0+, Pydantic 2.7+, python-jose (JWT)

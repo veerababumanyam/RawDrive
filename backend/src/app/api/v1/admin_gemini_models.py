@@ -11,9 +11,9 @@ import logging
 from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 
-from app.api.dependencies.auth import CurrentUserDep, require_admin
+from app.api.dependencies.auth import CurrentUserDep, require_platform_permission
 from app.api.schemas import (
     ErrorResponse,
     GeminiModelAdmin,
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/v1/admin/gemini-models",
     tags=["admin-gemini-models"],
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_platform_permission("admin"))],
 )
 
 
@@ -98,7 +98,6 @@ async def list_all_models(
             identifier=m["identifier"],
             display_name=m["display_name"],
             description=m.get("description"),
-            capabilities=m.get("capabilities"),
             is_default=m["is_default"],
             is_active=m["is_active"],
             sort_order=m["sort_order"],
@@ -133,7 +132,6 @@ async def create_model(
             identifier=request.identifier,
             display_name=request.display_name,
             description=request.description,
-            capabilities=request.capabilities,
             sort_order=request.sort_order,
             is_active=request.is_active if request.is_active is not None else True,
             is_default=request.is_default if request.is_default is not None else False,
@@ -255,7 +253,6 @@ async def update_model(
             model_id=model_id,
             display_name=request.display_name,
             description=request.description,
-            capabilities=request.capabilities,
             sort_order=request.sort_order,
             is_active=request.is_active,
             is_default=request.is_default,
@@ -293,6 +290,7 @@ async def update_model(
 @router.delete(
     "/{model_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete Gemini model",
     description="Delete a model from the catalogue. Requires admin role. "
     "Users with this model selected will be migrated to the default model.",
@@ -307,7 +305,7 @@ async def delete_model(
     current_user: CurrentUserDep,
     service: GeminiModelServiceDep,
     model_id: UUID,
-) -> None:
+):
     """Delete a Gemini model."""
     try:
         await service.delete_model(model_id)
@@ -334,6 +332,8 @@ async def delete_model(
             code=e.code,
             status_code=e.status,
         )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch(
@@ -419,7 +419,6 @@ def _to_admin_model(model_dict: dict) -> GeminiModelAdmin:
         identifier=model_dict["identifier"],
         display_name=model_dict["display_name"],
         description=model_dict.get("description"),
-        capabilities=model_dict.get("capabilities"),
         is_default=model_dict["is_default"],
         is_active=model_dict["is_active"],
         sort_order=model_dict["sort_order"],

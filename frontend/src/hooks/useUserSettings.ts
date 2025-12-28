@@ -549,12 +549,10 @@ export const useDataExport = (): UseDataExportReturn => {
     setError(null);
     try {
       const data = await userSettingsService.getDataExportStatus();
+      // data is null if no export exists
       setExportStatus(data);
     } catch (err) {
-      // 404 is expected when no export exists
-      if ((err as { status?: number })?.status !== 404) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch export status'));
-      }
+      setError(err instanceof Error ? err : new Error('Failed to fetch export status'));
       setExportStatus(null);
     } finally {
       setLoading(false);

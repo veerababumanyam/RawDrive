@@ -40,6 +40,8 @@ export interface PhotoCardProps {
   /** Customer selection callback (persisted for delivery workflow) */
   onCustomerSelectionToggle?: (assetId: string, selected: boolean) => void;
   onDownload?: (assetId: string) => void;
+  onShare?: (assetId: string) => void;
+  onLock?: (assetId: string, isPrivate: boolean) => void;
   onDelete?: (assetId: string) => void;
   /** Callback to set this photo as the gallery/sub-gallery cover */
   onSetCover?: (assetId: string) => void;
@@ -48,6 +50,8 @@ export interface PhotoCardProps {
   className?: string;
   /** Aspect ratio mode: 'square' forces 1:1, 'auto' uses image dimensions */
   aspectRatio?: 'square' | 'auto';
+  isPrivateUnlocked?: boolean;
+  onUnlockPrivate?: () => void;
 }
 
 export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
@@ -62,29 +66,33 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   onFavorite,
   onCustomerSelectionToggle,
   onDownload,
+  onShare,
+  onLock,
   onDelete,
   onSetCover,
   onUpdateAsset,
   showActions = true,
   className = '',
   aspectRatio: aspectRatioMode = 'auto',
+  isPrivateUnlocked,
+  onUnlockPrivate,
 }) => {
+  const isLocked = asset.is_private && !isPrivateUnlocked;
   const { workspace } = useAuth();
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [imageError, setImageError] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  // Variant fallback logic for loading images
-  const [activeVariant, setActiveVariant] = useState<'thumbnail' | 'original'>('thumbnail');
-
-  // Reset variant when asset changes
+  // Reset image error state when asset changes
   useEffect(() => {
-    setActiveVariant('thumbnail');
     setImageError(false);
   }, [asset.asset_id]);
 
-  // Fetch signed URL for image
+  // Fetch signed URL for thumbnail - simplified without variant switching
+  // SignedUrlContext handles batching, and we rely on thumbnail variant only
+  const enabledCondition = !!workspace?.workspace_id && asset.asset.status === 'available';
+
   const {
     url: thumbnailUrl,
     loading: urlLoading,
@@ -92,25 +100,9 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     refresh: refreshUrl,
   } = useSignedUrl({
     assetId: asset.asset_id,
-    variant: activeVariant,
-    enabled: !!workspace?.workspace_id && asset.asset.status === 'available',
+    variant: 'thumbnail',
+    enabled: enabledCondition,
   });
-
-  // Handle load errors by trying fallback
-  useEffect(() => {
-    if (urlError && !urlLoading) {
-      if (activeVariant === 'thumbnail') {
-        // Try original if thumbnail fails
-        setActiveVariant('original');
-      } else {
-        // Both failed, try refresh after a delay
-        const timer = setTimeout(() => {
-          refreshUrl();
-        }, 1000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [urlError, urlLoading, activeVariant, refreshUrl]);
 
   // Calculate aspect ratio from asset dimensions
   const aspectRatio =
@@ -121,13 +113,18 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
       : '4 / 3';
 
   const handleClick = useCallback((e: React.MouseEvent) => {
+    if (isLocked) {
+        e.stopPropagation();
+        onUnlockPrivate?.();
+        return;
+    }
     if (managementSelectable && (e.ctrlKey || e.metaKey)) {
       e.stopPropagation();
       onManagementSelect?.(asset.asset_id);
     } else {
       onClick?.(asset, index, e);
     }
-  }, [managementSelectable, onManagementSelect, onClick, asset, index]);
+  }, [managementSelectable, onManagementSelect, onClick, asset, index, isLocked, onUnlockPrivate, isPrivateUnlocked]);
 
   const handleFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -138,6 +135,16 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     e.stopPropagation();
     onDownload?.(asset.asset_id);
   }, [onDownload, asset.asset_id]);
+
+  const handleShare = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onShare?.(asset.asset_id);
+  }, [onShare, asset.asset_id]);
+
+  const handleLock = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onLock?.(asset.asset_id, !asset.is_private);
+  }, [onLock, asset.asset_id, asset.is_private]);
 
   const handleManagementSelect = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -197,10 +204,6 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          // For keyboard, we don't have a click event easily, but we can pass synthetic one if needed
-          // Or just pass undefined as 3rd arg if allow. But type says MouseEvent.
-          // Let's coerce or just mock it.
-          // Actually, let's keep it robust.
           const syntheticEvent = { stopPropagation: () => {}, preventDefault: () => {}, ctrlKey: false, metaKey: false } as unknown as React.MouseEvent;
           onClick?.(asset, index, syntheticEvent);
         }
@@ -224,7 +227,8 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           ref={imgRef}
           src={displayUrl}
           alt={asset.asset.filename || `Photo ${index + 1}`}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className={`w-full h-full object-cover transition-all duration-300 ${!isLocked ? 'group-hover:scale-105' : ''}`}
+          style={isLocked ? { filter: 'blur(20px)', transform: 'scale(1.1)' } : undefined}
           loading="lazy"
           decoding="async"
           draggable={false}
@@ -301,32 +305,69 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         )}
       </div>
 
+      {/* Locked Overlay */}
+      {isLocked && (
+        <div 
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center text-white cursor-pointer group/lock"
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onUnlockPrivate) {
+                    onUnlockPrivate();
+                } else {
+                    console.warn('[PhotoCard] onUnlockPrivate is undefined!');
+                }
+            }}
+        >
+            {/* Background gradient for better visibility */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-black/20" />
+            
+            {/* Content */}
+            <div className="relative flex flex-col items-center gap-2">
+                <div className="p-4 bg-black/50 rounded-full backdrop-blur-md shadow-lg 
+                            group-hover/lock:bg-primary/80 group-hover/lock:scale-110 
+                            transition-all duration-200 animate-pulse group-hover/lock:animate-none">
+                    <Lock size={24} className="text-white" />
+                </div>
+                <span className="text-sm font-medium drop-shadow-md tracking-wide uppercase opacity-90">
+                    Private
+                </span>
+                <span className="text-xs text-white/70 group-hover/lock:text-white transition-colors mt-1">
+                    Tap to unlock
+                </span>
+            </div>
+        </div>
+      )}
+
       {/* Hover Overlay Component - Handles all actions */}
-      <HoverOverlay
-        asset={asset}
-        index={index}
-        isHovered={isHovered}
-        isManagementSelected={isManagementSelected}
-        isCover={isCover}
-        managementSelectable={managementSelectable}
-        showCustomerSelection={showCustomerSelection}
-        showActions={showActions}
-        onManagementSelect={handleManagementSelect}
-        onCustomerSelectionToggle={handleCustomerSelectionToggle}
-        onFavorite={handleFavorite}
-        onClick={(e) => {
-           e.stopPropagation();
-           onClick?.(asset, index, e);
-        }}
-        onDownload={handleDownload}
-        onDelete={handleDelete}
-        onSetCover={handleSetCover}
-        onEdit={handleEdit}
-      />
+      {!isLocked && (
+        <HoverOverlay
+          asset={asset}
+          index={index}
+          isHovered={isHovered}
+          isManagementSelected={isManagementSelected}
+          isCover={isCover}
+          managementSelectable={managementSelectable}
+          showCustomerSelection={showCustomerSelection}
+          showActions={showActions}
+          onManagementSelect={handleManagementSelect}
+          onCustomerSelectionToggle={handleCustomerSelectionToggle}
+          onFavorite={handleFavorite}
+          onClick={(e) => {
+             e.stopPropagation();
+             onClick?.(asset, index, e);
+          }}
+          onDownload={handleDownload}
+          onShare={handleShare}
+          onLock={handleLock}
+          onDelete={handleDelete}
+          onSetCover={handleSetCover}
+          onEdit={handleEdit}
+        />
+      )}
 
     </div>
   );
 };
 
 export const PhotoCard = React.memo(PhotoCardComponent);
-

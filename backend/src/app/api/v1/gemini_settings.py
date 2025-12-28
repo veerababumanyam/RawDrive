@@ -55,7 +55,7 @@ async def _get_user_workspace_id(user_id: UUID) -> UUID:
     pool = await get_postgres_pool()
     workspace_id = await pool.fetchval(
         """
-        SELECT workspace_id FROM workspace_members
+        SELECT workspace_id FROM workspace_memberships
         WHERE user_id = $1
         ORDER BY created_at ASC
         LIMIT 1
@@ -299,7 +299,7 @@ async def list_gemini_models(
     2. Admin-defined sort order
     3. Display name alphabetically
 
-    Includes description and capabilities for each model.
+    Includes description for each model.
     """
     models = await service.get_active_models()
 
@@ -309,8 +309,6 @@ async def list_gemini_models(
                 model_id=m["model_id"],
                 identifier=m["identifier"],
                 display_name=m["display_name"],
-                description=m.get("description"),
-                capabilities=m.get("capabilities"),
                 is_default=m["is_default"],
             )
             for m in models

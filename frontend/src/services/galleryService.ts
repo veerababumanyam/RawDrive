@@ -10,6 +10,7 @@ import type {
   GalleryCreateRequest,
   GalleryUpdateRequest,
   GalleryAssetsResponse,
+  GalleryCredentialsResponse,
   UploadSessionRequest,
   UploadSessionResponse,
   UploadCommitRequest,
@@ -682,6 +683,21 @@ export class GalleryService {
       throw new Error(response.error.message || 'Failed to fetch filtered assets');
     }
     return response.data!.data;
+  }
+
+  /**
+   * Get gallery credentials for reveal feature
+   */
+  async getGalleryCredentials(
+    workspaceId: string,
+    galleryId: string
+  ): Promise<GalleryCredentialsResponse> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/credentials`;
+    const response = await apiClient.get<GalleryCredentialsResponse>(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to get gallery credentials');
+    }
+    return response.data!;
   }
 }
 

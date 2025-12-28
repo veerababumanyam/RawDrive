@@ -218,6 +218,11 @@ class AuditEventType(str, Enum):
     ASSET_DOWNLOADED = "asset.downloaded"
     ASSET_DELETED = "asset.deleted"
 
+    # Face group events
+    FACE_GROUPS_MERGED = "face_group.merged"
+    FACE_GROUP_SPLIT = "face_group.split"
+    FACE_GROUP_PERSON_ASSIGNED = "face_group.person_assigned"
+
     # Deletion/Recycle Bin events
     GALLERY_SOFT_DELETED = "gallery.soft_deleted"
     GALLERY_RESTORED = "gallery.restored"

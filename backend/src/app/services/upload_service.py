@@ -507,6 +507,7 @@ class UploadService:
                 ) from e
 
             # Enqueue background job
+            content_analysis_queued = False  # Track if content detection was queued
             if file_type == "photo":
                 try:
                     task_queue = get_task_queue()
@@ -542,6 +543,24 @@ class UploadService:
                 except Exception as e:
                     logger.debug(f"Failed to enqueue face detection job: {e}")
 
+                # Queue content detection job for AI tagging (T039)
+                # This enables instant AI-powered search after upload
+                content_analysis_queued = False
+                try:
+                    from app.services.content_detection_service import (
+                        get_content_detection_service,
+                    )
+
+                    content_service = get_content_detection_service()
+                    job_id = await content_service.queue_detection(
+                        asset_id=asset_id,
+                        workspace_id=workspace_id,
+                        priority=0,
+                    )
+                    content_analysis_queued = job_id is not None
+                except Exception as e:
+                    logger.debug(f"Failed to queue content detection job: {e}")
+
             # Update upload session with asset_id and state
             await conn.execute(
                 """
@@ -574,6 +593,7 @@ class UploadService:
             return {
                 "asset_id": str(asset_id),
                 "status": "processing",
+                "analysis_queued": content_analysis_queued,
             }
 
 

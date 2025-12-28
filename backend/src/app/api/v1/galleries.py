@@ -19,6 +19,7 @@ from app.api.schemas import (
     CreateGalleryRequest,
     CreateSubGalleryRequest,
     ErrorResponse,
+    GalleryCredentialsResponse,
     GalleryDetailResponse,
     GalleryListResponse,
     MessageResponse,
@@ -42,6 +43,7 @@ from app.services.deletion_service import (
     DeletionError,
     get_deletion_service,
 )
+from app.services.encryption_service import get_encryption_service
 
 logger = logging.getLogger(__name__)
 
@@ -195,21 +197,81 @@ async def update_gallery(
     service = get_gallery_service()
     try:
         updates = request.model_dump(exclude_unset=True)
+        encryption_service = get_encryption_service()
+
         # Handle password update
         if request.remove_password:
             updates.pop("password", None)
             updates["password_hash"] = None
+            updates["password_encrypted"] = None
+            updates["password_iv"] = None
+            # Log password removal
+            logger.info(
+                "Gallery password removed",
+                extra={
+                    "workspace_id": str(workspace_id),
+                    "gallery_id": str(gallery_id),
+                    "user_id": str(current_user.user_id),
+                },
+            )
         elif request.password:
+            # Store hash for verification and encrypted version for reveal
             updates.pop("password", None)
             updates["password_hash"] = hash_password(request.password)
+            # Encrypt for reveal feature
+            encrypted, iv = encryption_service.encrypt_gallery_credential(
+                request.password, workspace_id
+            )
+            updates["password_encrypted"] = encrypted
+            updates["password_iv"] = iv
+            # Log password update
+            logger.info(
+                "Gallery password updated",
+                extra={
+                    "workspace_id": str(workspace_id),
+                    "gallery_id": str(gallery_id),
+                    "user_id": str(current_user.user_id),
+                },
+            )
 
         # Handle PIN update
         if request.remove_pin:
             updates.pop("pin", None)
             updates["pin_hash"] = None
+            updates["pin_encrypted"] = None
+            updates["pin_iv"] = None
+            # Log PIN removal
+            logger.info(
+                "Gallery PIN removed",
+                extra={
+                    "workspace_id": str(workspace_id),
+                    "gallery_id": str(gallery_id),
+                    "user_id": str(current_user.user_id),
+                },
+            )
         elif request.pin:
+            # Store hash for verification and encrypted version for reveal
             updates.pop("pin", None)
             updates["pin_hash"] = hash_password(request.pin)
+            # Encrypt for reveal feature
+            encrypted, iv = encryption_service.encrypt_gallery_credential(
+                request.pin, workspace_id
+            )
+            updates["pin_encrypted"] = encrypted
+            updates["pin_iv"] = iv
+            # Log PIN update
+            logger.info(
+                "Gallery PIN updated",
+                extra={
+                    "workspace_id": str(workspace_id),
+                    "gallery_id": str(gallery_id),
+                    "user_id": str(current_user.user_id),
+                },
+            )
+
+        # Handle gradient_config - ensure it's properly serialized for JSONB
+        # model_dump already converts nested Pydantic models to dicts
+        # If gradient_config is explicitly set to None, it will be NULL in DB
 
         result = await service.update_gallery(
             workspace_id=workspace_id,
@@ -309,6 +371,54 @@ async def publish_gallery(
     except Exception as e:
         logger.exception("Failed to publish gallery")
         raise InternalError("Failed to publish gallery")
+
+
+@router.get(
+    "/{gallery_id}/credentials",
+    response_model=GalleryCredentialsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get gallery credentials",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def get_gallery_credentials(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+) -> GalleryCredentialsResponse:
+    """Get gallery credentials (password and PIN) for owner reveal feature.
+
+    Returns decrypted credentials for authorized workspace members.
+    Legacy galleries (password/PIN set before this feature) will have
+    password/pin = null with password_recoverable/pin_recoverable = false.
+
+    This endpoint is intended for gallery owners to view/share credentials
+    with clients, not for public access verification.
+    """
+    service = get_gallery_service()
+    try:
+        result = await service.get_gallery_credentials(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+        )
+        # Log credential access for audit
+        logger.info(
+            "Gallery credentials accessed",
+            extra={
+                "workspace_id": str(workspace_id),
+                "gallery_id": str(gallery_id),
+                "user_id": str(current_user.user_id),
+            },
+        )
+        return GalleryCredentialsResponse(**result)
+    except GalleryNotFoundError:
+        raise NotFoundError("Gallery", str(gallery_id))
+    except Exception as e:
+        logger.exception("Failed to get gallery credentials")
+        raise InternalError("Failed to get gallery credentials")
 
 
 # Sub-gallery endpoints

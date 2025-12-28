@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSignedUrlContext } from '../contexts/SignedUrlContext';
 import { signedUrlService } from '../services/signedUrlService';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,20 +51,24 @@ export const useSignedUrl = ({
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [mounted, setMounted] = useState(true);
+
+  // Use ref instead of state to track mount status - avoids re-render loops
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const fetchUrl = useCallback(async () => {
     if (!assetId || !workspace?.workspace_id || !enabled) {
-      if (mounted) setUrl(null);
+      if (mountedRef.current) setUrl(null);
       return;
     }
 
-    if (mounted) {
+    if (mountedRef.current) {
       setLoading(true);
       setError(null);
     }
@@ -72,30 +76,24 @@ export const useSignedUrl = ({
     try {
       let signedUrl: string | null = null;
       if (download) {
-         // Downloads usually bypass batching or are specific actions, 
-         // but context supports variant. Download flag isn't in context logic explicitly
-         // Context signature: getSignedUrl(id, variant). 
-         // My context implementation ignored 'download'.
-         // I should probably fix context to support download if needed, 
-         // OR just use service directly for downloads (which is rare/onclick).
-         // Since this hook is mostly for display (thumbnail/preview), context is fine.
-         // If download=true, use service directly?
+         // Downloads bypass batching - use service directly
          signedUrl = await signedUrlService.getSignedUrl(workspace.workspace_id, assetId, variant, true);
       } else {
+         // Use context for batched fetching
          signedUrl = await context.getSignedUrl(assetId, variant);
       }
-      
-      if (mounted) setUrl(signedUrl);
+
+      if (mountedRef.current) setUrl(signedUrl);
     } catch (err) {
-      if (mounted) {
+      if (mountedRef.current) {
         const error = err instanceof Error ? err : new Error('Failed to fetch signed URL');
         setError(error);
         setUrl(null);
       }
     } finally {
-      if (mounted) setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
-  }, [assetId, workspace?.workspace_id, variant, download, enabled, context, mounted]);
+  }, [assetId, workspace?.workspace_id, variant, download, enabled, context]);
 
   useEffect(() => {
     fetchUrl();

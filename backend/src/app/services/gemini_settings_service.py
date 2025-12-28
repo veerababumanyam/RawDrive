@@ -669,7 +669,6 @@ class GeminiSettingsService:
                     identifier,
                     display_name,
                     description,
-                    capabilities,
                     is_default,
                     sort_order,
                     created_at,
@@ -686,7 +685,6 @@ class GeminiSettingsService:
                     "identifier": row["identifier"],
                     "display_name": row["display_name"],
                     "description": row["description"],
-                    "capabilities": row["capabilities"] or [],
                     "is_default": row["is_default"],
                     "sort_order": row["sort_order"],
                 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Folder, Palette } from 'lucide-react';
+import { X, Folder, Palette, Lock, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppButton } from '../../ui/AppButton';
 import type { LibraryFolder } from '../../../services/libraryService';
@@ -7,7 +7,7 @@ import type { LibraryFolder } from '../../../services/libraryService';
 interface EditFolderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (name: string, color?: string, description?: string) => Promise<void>;
+  onSave: (name: string, color?: string, description?: string, pin?: string | null) => Promise<void>;
   folder: LibraryFolder;
 }
 
@@ -32,6 +32,10 @@ const EditFolderModal: React.FC<EditFolderModalProps> = ({
   const [name, setName] = useState(folder.name);
   const [description, setDescription] = useState(folder.description || '');
   const [color, setColor] = useState<string | undefined>(folder.color || undefined);
+  const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [enablePin, setEnablePin] = useState(folder.is_protected || false);
+  const [removePin, setRemovePin] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +44,10 @@ const EditFolderModal: React.FC<EditFolderModalProps> = ({
     setName(folder.name);
     setDescription(folder.description || '');
     setColor(folder.color || undefined);
+    setPin('');
+    setShowPin(false);
+    setEnablePin(folder.is_protected || false);
+    setRemovePin(false);
     setError(null);
   }, [folder]);
 
@@ -47,11 +55,25 @@ const EditFolderModal: React.FC<EditFolderModalProps> = ({
     e.preventDefault();
     if (!name.trim()) return;
 
+    // Validate PIN if enabling
+    if (enablePin && !folder.is_protected && pin.length > 0 && pin.length < 4) {
+      setError('PIN must be at least 4 characters');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
 
     try {
-      await onSave(name.trim(), color, description.trim() || undefined);
+      // Determine PIN value to send
+      let pinValue: string | null | undefined = undefined;
+      if (removePin) {
+        pinValue = null; // Remove PIN
+      } else if (enablePin && pin.trim()) {
+        pinValue = pin.trim(); // Set/update PIN
+      }
+
+      await onSave(name.trim(), color, description.trim() || undefined, pinValue);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update folder');
@@ -82,7 +104,7 @@ const EditFolderModal: React.FC<EditFolderModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', duration: 0.3 }}
-            className="card-glass rounded-2xl shadow-2xl w-full max-w-md"
+            className="card-glass rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -187,6 +209,134 @@ const EditFolderModal: React.FC<EditFolderModalProps> = ({
                     />
                   ))}
                 </div>
+              </div>
+
+              {/* PIN Protection */}
+              <div className="border-t border-white/10 pt-5">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm font-medium text-text-secondary flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-amber-500" />
+                    <span>PIN Protection</span>
+                  </label>
+                  {folder.is_protected && !removePin && (
+                    <span className="text-xs text-amber-500 bg-amber-500/10 px-2 py-1 rounded-full">
+                      Protected
+                    </span>
+                  )}
+                </div>
+
+                {folder.is_protected ? (
+                  // Folder already has PIN - show options to change or remove
+                  <div className="space-y-3">
+                    {!removePin ? (
+                      <>
+                        <p className="text-xs text-text-tertiary">
+                          This folder is PIN protected. You can change or remove the PIN.
+                        </p>
+                        <div className="flex gap-2">
+                          <AppButton
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEnablePin(true)}
+                          >
+                            Change PIN
+                          </AppButton>
+                          <AppButton
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-error border-error/30 hover:bg-error/10"
+                            onClick={() => setRemovePin(true)}
+                          >
+                            Remove PIN
+                          </AppButton>
+                        </div>
+                        {enablePin && (
+                          <div className="relative mt-3">
+                            <input
+                              type={showPin ? 'text' : 'password'}
+                              value={pin}
+                              onChange={(e) => setPin(e.target.value)}
+                              placeholder="Enter new PIN..."
+                              className="
+                                w-full px-4 py-2.5 pr-12
+                                glass-light border border-amber-500/30
+                                rounded-xl text-text-primary placeholder:text-text-tertiary
+                                focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50
+                                transition-all duration-200
+                              "
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPin(!showPin)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary"
+                            >
+                              {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="p-3 bg-error/10 border border-error/20 rounded-xl">
+                        <p className="text-sm text-error mb-2">
+                          PIN protection will be removed. Are you sure?
+                        </p>
+                        <AppButton
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setRemovePin(false)}
+                        >
+                          Cancel
+                        </AppButton>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Folder has no PIN - show option to add
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enablePin}
+                        onChange={(e) => {
+                          setEnablePin(e.target.checked);
+                          if (!e.target.checked) setPin('');
+                        }}
+                        className="w-4 h-4 rounded border-white/20 text-amber-500 focus:ring-amber-500"
+                      />
+                      <span className="text-sm text-text-secondary">
+                        Require PIN to access this folder
+                      </span>
+                    </label>
+
+                    {enablePin && (
+                      <div className="relative">
+                        <input
+                          type={showPin ? 'text' : 'password'}
+                          value={pin}
+                          onChange={(e) => setPin(e.target.value)}
+                          placeholder="Enter PIN (min 4 characters)..."
+                          className="
+                            w-full px-4 py-2.5 pr-12
+                            glass-light border border-amber-500/30
+                            rounded-xl text-text-primary placeholder:text-text-tertiary
+                            focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50
+                            transition-all duration-200
+                          "
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPin(!showPin)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary"
+                        >
+                          {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Error */}

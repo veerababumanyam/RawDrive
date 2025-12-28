@@ -379,3 +379,105 @@ async def get_signed_url(
         logger.exception("Failed to generate signed URL")
         raise InternalError("Failed to generate signed URL")
 
+
+@router.get(
+    "/face/{signed_token}",
+    status_code=status.HTTP_200_OK,
+    summary="Stream face thumbnail",
+    description="Stream face thumbnail image using signed token. No encryption.",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid token"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Face thumbnail not found"},
+    },
+)
+async def stream_face_thumbnail(
+    signed_token: str,
+    request: Request,
+    current_user: OptionalUserDep = None,
+) -> StreamingResponse:
+    """Stream face thumbnail using signed token.
+
+    Face thumbnails are stored unencrypted in R2 for faster access.
+    This endpoint validates the token and streams the image directly.
+    """
+    signed_url_service = get_signed_url_service()
+    storage_service = get_r2_storage_service()
+
+    try:
+        # Validate signed token for face thumbnails
+        token_data = signed_url_service.validate_face_thumbnail_token(signed_token)
+        workspace_id = token_data["workspace_id"]
+        face_id = token_data["face_id"]
+        size = token_data["size"]
+
+        # Build storage key for face thumbnail
+        object_key = f"workspaces/{workspace_id}/faces/{face_id}/{size}.jpg"
+
+        logger.debug(
+            "Streaming face thumbnail",
+            extra={
+                "workspace_id": str(workspace_id),
+                "face_id": str(face_id),
+                "size": size,
+                "object_key": object_key,
+            },
+        )
+
+        # Get object from R2 (unencrypted)
+        try:
+            response = storage_service.s3_client.get_object(
+                Bucket=storage_service.bucket_name,
+                Key=object_key,
+            )
+            body = response["Body"]
+            content_length = response.get("ContentLength")
+        except Exception as e:
+            logger.warning(
+                f"Face thumbnail not found in R2: {object_key}",
+                extra={"error": str(e)},
+            )
+            raise NotFoundError("Face thumbnail", face_id)
+
+        # Stream response
+        async def generate():
+            try:
+                for chunk in body.iter_chunks(chunk_size=64 * 1024):
+                    yield chunk
+            finally:
+                body.close()
+
+        headers = {
+            "Content-Type": "image/jpeg",
+            "Cache-Control": "private, max-age=3600",
+        }
+        if content_length:
+            headers["Content-Length"] = str(content_length)
+
+        return StreamingResponse(
+            generate(),
+            media_type="image/jpeg",
+            headers=headers,
+        )
+
+    except SignedUrlError as e:
+        logger.warning(f"Invalid face thumbnail token: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except NotFoundError:
+        raise
+    except StorageError as e:
+        logger.error(f"Storage error streaming face thumbnail: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve thumbnail",
+        )
+    except Exception as e:
+        logger.exception(f"Error streaming face thumbnail: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )
+

@@ -121,6 +121,65 @@ class AppSettings(BaseSettings):
         description="32-byte hex secret for signed URLs (required in production, optional in development)",
     )
 
+    # Payment Processing (Razorpay)
+    RAZORPAY_KEY_ID: Optional[str] = Field(
+        default=None,
+        alias="RAZORPAY_KEY_ID",
+        description="Razorpay API key ID (required for payments)",
+    )
+    RAZORPAY_KEY_SECRET: Optional[str] = Field(
+        default=None,
+        alias="RAZORPAY_KEY_SECRET",
+        description="Razorpay API key secret (required for payments)",
+    )
+    RAZORPAY_WEBHOOK_SECRET: Optional[str] = Field(
+        default=None,
+        alias="RAZORPAY_WEBHOOK_SECRET",
+        description="Razorpay webhook signature secret",
+    )
+
+    # AI Providers
+    gemini_api_key: Optional[SecretStr] = Field(
+        default=None,
+        alias="GEMINI_API_KEY",
+        description="Google Gemini API key (required for AI features)",
+    )
+    openai_api_key: Optional[SecretStr] = Field(
+        default=None,
+        alias="OPENAI_API_KEY",
+        description="OpenAI API key (optional)",
+    )
+    anthropic_api_key: Optional[SecretStr] = Field(
+        default=None,
+        alias="ANTHROPIC_API_KEY",
+        description="Anthropic API key (optional)",
+    )
+    azure_openai_api_key: Optional[SecretStr] = Field(
+        default=None,
+        alias="AZURE_OPENAI_API_KEY",
+        description="Azure OpenAI API key (optional)",
+    )
+    azure_openai_endpoint: Optional[str] = Field(
+        default=None,
+        alias="AZURE_OPENAI_ENDPOINT",
+        description="Azure OpenAI endpoint URL (optional)",
+    )
+    azure_openai_deployment: Optional[str] = Field(
+        default=None,
+        alias="AZURE_OPENAI_DEPLOYMENT",
+        description="Azure OpenAI deployment name (optional)",
+    )
+    ollama_base_url: str = Field(
+        default="http://localhost:11434",
+        alias="OLLAMA_BASE_URL",
+        description="Ollama base URL for local AI",
+    )
+    lm_studio_base_url: str = Field(
+        default="http://localhost:1234",
+        alias="LM_STUDIO_BASE_URL",
+        description="LM Studio base URL for local AI",
+    )
+
     # CORS / security
     allowed_cors_origins: list[str] = Field(default_factory=list, alias="ALLOWED_CORS_ORIGINS")
 
@@ -158,6 +217,12 @@ class AppSettings(BaseSettings):
             "r2_secret_access_key",
             "encryption_master_key",
             "signed_url_secret",
+            "RAZORPAY_KEY_SECRET",
+            "RAZORPAY_WEBHOOK_SECRET",
+            "gemini_api_key",
+            "openai_api_key",
+            "anthropic_api_key",
+            "azure_openai_api_key",
         }
     )
 

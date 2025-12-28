@@ -19,7 +19,6 @@ import jwt
 
 from app.db.postgres import get_postgres_pool
 from app.services.rbac_service import RBACService
-from app.services.session_service import SessionService
 from app.utils.security import decode_token
 
 logger = logging.getLogger(__name__)
@@ -110,17 +109,10 @@ async def get_current_user(
         logger.warning("Invalid token claims", extra={"error": str(e), "payload_keys": list(payload.keys())})
         raise AuthError("Invalid token claims")
 
-    # Verify session is still valid (only if session_id is present)
-    # Access tokens don't have session_id, refresh tokens do
-    if session_id:
-        session_service = SessionService()
-        session = await session_service.get_session(session_id)
-        if session is None or session.user_id != user_id:
-            raise AuthError("Session expired or invalidated")
-    else:
-        # For access tokens without session_id, we rely on token expiry
-        # Session validation happens during refresh token usage
-        pass
+    # Access tokens rely on JWT expiry only. Session validation happens
+    # during refresh token exchange in AuthService.refresh_token().
+    # This prevents unnecessary Redis lookups on every request and avoids
+    # false 401s when session cache expires before the access token.
 
     # Store user_id in request state for rate limiting
     request.state.user_id = str(user_id)

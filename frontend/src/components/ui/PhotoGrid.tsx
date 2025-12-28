@@ -51,6 +51,12 @@ export interface PhotoGridProps {
   showActions?: boolean;
   /** Custom action buttons */
   actions?: (photo: Photo) => React.ReactNode;
+  /** Favorite action handler */
+  onFavorite?: (photoId: string, isFavorite: boolean) => void;
+  /** Download action handler */
+  onDownload?: (photoId: string) => void;
+  /** More options action handler */
+  onMore?: (photoId: string) => void;
   /** Loading state */
   isLoading?: boolean;
   /** Photo aspect ratio (for grid layout) */
@@ -77,7 +83,7 @@ const aspectRatioStyles = {
 export const PhotoGrid: React.FC<PhotoGridProps> = ({
   photos,
   layout: _layout = 'grid',
-  columns = { sm: 2, md: 3, lg: 4, xl: 5 },
+  columns = { sm: 1, md: 2, lg: 3, xl: 4 },
   gap = 'md',
   selectable = false,
   selectedIds = new Set(),
@@ -87,6 +93,9 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
   showInfo = false,
   showActions = true,
   actions,
+  onFavorite,
+  onDownload,
+  onMore,
   isLoading = false,
   aspectRatio = 'square',
   lazyLoad = true,
@@ -99,7 +108,7 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
     if (typeof columns === 'number') {
       return `grid-cols-${columns}`;
     }
-    const { sm = 2, md = 3, lg = 4, xl = 5 } = columns;
+    const { sm = 1, md = 2, lg = 3, xl = 4 } = columns;
     return `grid-cols-${sm} sm:grid-cols-${sm} md:grid-cols-${md} lg:grid-cols-${lg} xl:grid-cols-${xl}`;
   };
 
@@ -190,6 +199,9 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
             onSelect={handleSelect}
             onClick={handleClick}
             onDoubleClick={onPhotoDoubleClick}
+            onFavorite={onFavorite}
+            onDownload={onDownload}
+            onMore={onMore}
             onMouseEnter={() => setHoveredId(photo.id)}
             onMouseLeave={() => setHoveredId(null)}
           />
@@ -217,6 +229,9 @@ interface PhotoCardProps {
   onSelect: (id: string, e?: React.MouseEvent) => void;
   onClick: (photo: Photo, index: number, e: React.MouseEvent) => void;
   onDoubleClick?: (photo: Photo, index: number) => void;
+  onFavorite?: (photoId: string, isFavorite: boolean) => void;
+  onDownload?: (photoId: string) => void;
+  onMore?: (photoId: string) => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }
@@ -235,6 +250,9 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
   onSelect,
   onClick,
   onDoubleClick,
+  onFavorite,
+  onDownload,
+  onMore,
   onMouseEnter,
   onMouseLeave,
 }) => {
@@ -412,52 +430,59 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
           {/* Default actions */}
           {!actions && (
             <div className="flex items-center gap-2">
-              <button
-                className="
-                  p-1.5 rounded-full
-                  bg-white/20 hover:bg-white/30
-                  text-white
-                  transition-colors
-                "
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Favorite action
-                }}
-                aria-label="Add to favorites"
-              >
-                <Heart size={16} />
-              </button>
-              <button
-                className="
-                  p-1.5 rounded-full
-                  bg-white/20 hover:bg-white/30
-                  text-white
-                  transition-colors
-                "
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Download action
-                }}
-                aria-label="Download"
-              >
-                <Download size={16} />
-              </button>
-              <button
-                className="
-                  p-1.5 rounded-full
-                  bg-white/20 hover:bg-white/30
-                  text-white
-                  transition-colors
-                  ml-auto
-                "
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // More actions
-                }}
-                aria-label="More options"
-              >
-                <MoreVertical size={16} />
-              </button>
+              {onFavorite && (
+                <button
+                  className={`
+                    p-1.5 rounded-full
+                    ${photo.metadata?.isFavorite
+                      ? 'bg-red-500 text-white'
+                      : 'bg-white/20 hover:bg-white/30 text-white'}
+                    transition-colors
+                  `}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFavorite(photo.id, !photo.metadata?.isFavorite);
+                  }}
+                  aria-label={photo.metadata?.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  <Heart size={16} className={photo.metadata?.isFavorite ? 'fill-current' : ''} />
+                </button>
+              )}
+              {onDownload && (
+                <button
+                  className="
+                    p-1.5 rounded-full
+                    bg-white/20 hover:bg-white/30
+                    text-white
+                    transition-colors
+                  "
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDownload(photo.id);
+                  }}
+                  aria-label="Download"
+                >
+                  <Download size={16} />
+                </button>
+              )}
+              {onMore && (
+                <button
+                  className="
+                    p-1.5 rounded-full
+                    bg-white/20 hover:bg-white/30
+                    text-white
+                    transition-colors
+                    ml-auto
+                  "
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMore(photo.id);
+                  }}
+                  aria-label="More options"
+                >
+                  <MoreVertical size={16} />
+                </button>
+              )}
             </div>
           )}
 

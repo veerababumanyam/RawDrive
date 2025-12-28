@@ -260,6 +260,152 @@ class SignedUrlService:
         
         return results
 
+    # =========================================================================
+    # FACE THUMBNAIL URL METHODS
+    # =========================================================================
+
+    def generate_face_thumbnail_token(
+        self,
+        workspace_id: UUID,
+        face_id: UUID,
+        size: str = "medium",
+        ttl: int = DEFAULT_TTL,
+    ) -> str:
+        """Generate signed token for face thumbnail access.
+
+        Args:
+            workspace_id: Workspace UUID
+            face_id: Face UUID
+            size: Thumbnail size ('small', 'medium', 'large')
+            ttl: Time to live in seconds (default: 1 hour)
+
+        Returns:
+            Base64-encoded signed token
+        """
+        # Validate size
+        valid_sizes = {"small", "medium", "large"}
+        if size not in valid_sizes:
+            raise SignedUrlError(
+                f"Invalid size: {size}. Must be one of {valid_sizes}",
+                "INVALID_SIZE",
+            )
+
+        # Calculate expiry timestamp
+        expiry = int(time.time()) + ttl
+
+        # Build token payload with 'face' prefix to distinguish from asset tokens
+        payload = f"face:{workspace_id}:{face_id}:{size}:{expiry}"
+
+        # Generate HMAC signature
+        signature = hmac.new(
+            self.secret, payload.encode("utf-8"), hashlib.sha256
+        ).digest()
+
+        # Combine payload and signature
+        token_data = f"{payload}:{base64.urlsafe_b64encode(signature).decode('utf-8')}"
+
+        # Base64 encode the entire token
+        token = base64.urlsafe_b64encode(token_data.encode("utf-8")).decode("utf-8")
+
+        return token
+
+    def validate_face_thumbnail_token(self, token: str) -> dict:
+        """Validate face thumbnail signed token and extract information.
+
+        Args:
+            token: Base64-encoded signed token
+
+        Returns:
+            Dictionary with workspace_id, face_id, size, expiry
+
+        Raises:
+            SignedUrlError: If token is invalid or expired
+        """
+        try:
+            # Decode token
+            token_data = base64.urlsafe_b64decode(token.encode("utf-8")).decode("utf-8")
+
+            # Split payload and signature
+            parts = token_data.rsplit(":", 1)
+            if len(parts) != 2:
+                raise SignedUrlError("Invalid token format", "INVALID_TOKEN_FORMAT")
+
+            payload, signature_b64 = parts
+
+            # Verify signature
+            expected_signature = hmac.new(
+                self.secret, payload.encode("utf-8"), hashlib.sha256
+            ).digest()
+            provided_signature = base64.urlsafe_b64decode(signature_b64.encode("utf-8"))
+
+            if not hmac.compare_digest(expected_signature, provided_signature):
+                raise SignedUrlError("Invalid token signature", "INVALID_SIGNATURE")
+
+            # Parse payload (format: face:workspace_id:face_id:size:expiry)
+            payload_parts = payload.split(":")
+            if len(payload_parts) != 5 or payload_parts[0] != "face":
+                raise SignedUrlError("Invalid face token format", "INVALID_PAYLOAD")
+
+            _, workspace_id_str, face_id_str, size, expiry_str = payload_parts
+
+            # Validate expiry
+            expiry = int(expiry_str)
+            current_time = int(time.time())
+            if expiry < current_time:
+                raise SignedUrlError("Token expired", "TOKEN_EXPIRED")
+
+            # Validate size
+            valid_sizes = {"small", "medium", "large"}
+            if size not in valid_sizes:
+                raise SignedUrlError(
+                    f"Invalid size: {size}", "INVALID_SIZE"
+                )
+
+            return {
+                "workspace_id": UUID(workspace_id_str),
+                "face_id": UUID(face_id_str),
+                "size": size,
+                "expiry": expiry,
+            }
+        except SignedUrlError:
+            raise
+        except ValueError as e:
+            raise SignedUrlError(f"Invalid token: {e}", "INVALID_TOKEN") from e
+        except Exception as e:
+            raise SignedUrlError(f"Token validation failed: {e}", "VALIDATION_FAILED") from e
+
+    def generate_face_thumbnail_url(
+        self,
+        workspace_id: UUID,
+        face_id: UUID,
+        size: str = "medium",
+        base_url: str = "/api/v1/media/face",
+        ttl: int = DEFAULT_TTL,
+    ) -> dict:
+        """Generate complete signed URL for face thumbnail access.
+
+        Args:
+            workspace_id: Workspace UUID
+            face_id: Face UUID
+            size: Thumbnail size ('small', 'medium', 'large')
+            base_url: Base URL for face media endpoint
+            ttl: Time to live in seconds
+
+        Returns:
+            Dictionary with url and expires_at
+        """
+        token = self.generate_face_thumbnail_token(workspace_id, face_id, size, ttl)
+
+        # Get API base URL for absolute URLs (needed for <img> tags)
+        api_base = os.getenv("API_BASE_URL", "http://localhost:8000")
+        url = f"{api_base}{base_url}/{token}"
+
+        return {
+            "url": url,
+            "expires_at": int(time.time()) + ttl,
+            "ttl": ttl,
+        }
+
 
 # Export singleton instance
 _signed_url_service: Optional[SignedUrlService] = None

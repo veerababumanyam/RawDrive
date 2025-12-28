@@ -1,14 +1,20 @@
 /**
  * VisualIdentitySettings Component
- * Settings for gallery visual identity (color, typography, EXIF visibility)
+ * Settings for gallery visual identity (gradient branding, typography, EXIF visibility)
+ *
+ * Updated: Replaced solid color picker with GradientPicker and live preview.
+ * Added GradientEditor integration for custom gradient creation.
  */
 
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Palette, Info } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
-import { AppInput } from '../../ui/AppInput';
 import { Select, Toggle } from '../../ui/FormControls';
+import { GradientPicker } from './GradientPicker';
+import { GradientPreviewPanel } from './GradientPreviewPanel';
+import { GradientEditor } from './GradientEditor';
 import type { GalleryDetailData, GalleryUpdateRequest } from '../../../types/gallery';
+import type { GradientConfiguration } from '../../../types/gradient';
 
 export interface VisualIdentitySettingsProps {
   gallery: GalleryDetailData;
@@ -28,10 +34,58 @@ const fontFamilyOptions = [
   { value: 'Raleway', label: 'Raleway' },
 ];
 
-export const VisualIdentitySettings: React.FC<VisualIdentitySettingsProps> = ({ gallery, onUpdate }) => {
-  const handleColorChange = (value: string) => {
-    onUpdate({ primary_color: value || null });
-  };
+export const VisualIdentitySettings: React.FC<VisualIdentitySettingsProps> = ({
+  gallery,
+  onUpdate,
+}) => {
+  // Local state for gradient selection (synced with gallery on mount and external updates)
+  const [selectedGradient, setSelectedGradient] = useState<GradientConfiguration | null>(
+    gallery.gradient_config || null
+  );
+
+  // State for showing the gradient editor
+  const [showEditor, setShowEditor] = useState(false);
+  const [editorInitialGradient, setEditorInitialGradient] = useState<GradientConfiguration | null>(
+    null
+  );
+
+  // Sync local state when gallery prop changes (e.g., from parent reset)
+  useEffect(() => {
+    setSelectedGradient(gallery.gradient_config || null);
+  }, [gallery.gradient_config]);
+
+  // Handle gradient selection changes
+  const handleGradientChange = useCallback(
+    (gradient: GradientConfiguration | null) => {
+      setSelectedGradient(gradient);
+      // Immediately propagate to parent for live updates
+      onUpdate({ gradient_config: gradient });
+    },
+    [onUpdate]
+  );
+
+  // Handle customize button - open GradientEditor
+  const handleCustomize = useCallback((gradient: GradientConfiguration) => {
+    setEditorInitialGradient(gradient);
+    setShowEditor(true);
+  }, []);
+
+  // Handle GradientEditor apply
+  const handleEditorApply = useCallback(
+    (gradient: GradientConfiguration) => {
+      setSelectedGradient(gradient);
+      onUpdate({ gradient_config: gradient });
+      setShowEditor(false);
+      setEditorInitialGradient(null);
+    },
+    [onUpdate]
+  );
+
+  // Handle GradientEditor cancel
+  const handleEditorCancel = useCallback(() => {
+    setShowEditor(false);
+    setEditorInitialGradient(null);
+  }, []);
 
   const handleFontChange = (value: string) => {
     onUpdate({ font_family: value || null });
@@ -47,43 +101,59 @@ export const VisualIdentitySettings: React.FC<VisualIdentitySettingsProps> = ({ 
         <Palette size={20} />
         Visual Identity
       </h3>
-      <div className="space-y-5">
-        {/* Primary Color */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-6">
+        {/* Gradient Branding Section */}
+        <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
-              Primary Brand Color
+            <label className="block text-sm font-medium text-text-secondary mb-3">
+              Gallery Header Gradient
             </label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                value={gallery.primary_color || '#6366f1'}
-                onChange={(e) => handleColorChange(e.target.value)}
-                className="w-12 h-10 rounded-md cursor-pointer border border-border"
-              />
-              <AppInput
-                type="text"
-                value={gallery.primary_color || ''}
-                onChange={(e) => handleColorChange(e.target.value)}
-                placeholder="#6366f1"
-                className="flex-1"
-              />
-            </div>
-            <p className="text-xs text-text-tertiary mt-1">
-              Overrides workspace color for this gallery
+            <p className="text-xs text-text-tertiary mb-4">
+              Choose a gradient for your gallery header. This overrides the workspace default.
             </p>
           </div>
 
-          {/* Font Family */}
-          <div>
-            <Select
-              label="Typography"
-              options={fontFamilyOptions}
-              value={gallery.font_family || ''}
-              onChange={(e) => handleFontChange(e.target.value)}
-              helperText="Choose a font for gallery text"
+          {/* Show GradientEditor when customizing */}
+          {showEditor && editorInitialGradient ? (
+            <GradientEditor
+              initialGradient={editorInitialGradient}
+              onApply={handleEditorApply}
+              onCancel={handleEditorCancel}
             />
-          </div>
+          ) : (
+            /* Two-column layout: Picker + Preview */
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Gradient Picker */}
+              <GradientPicker
+                value={selectedGradient}
+                onChange={handleGradientChange}
+                onCustomize={handleCustomize}
+                showCustomize={true}
+                showRemove={true}
+              />
+
+              {/* Live Preview */}
+              <GradientPreviewPanel
+                gradient={selectedGradient}
+                galleryName={gallery.title || 'Untitled Gallery'}
+                showContrastWarning={true}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-border" />
+
+        {/* Typography Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select
+            label="Typography"
+            options={fontFamilyOptions}
+            value={gallery.font_family || ''}
+            onChange={(e) => handleFontChange(e.target.value)}
+            helperText="Choose a font for gallery text"
+          />
         </div>
 
         {/* EXIF Visibility */}
@@ -104,8 +174,9 @@ export const VisualIdentitySettings: React.FC<VisualIdentitySettingsProps> = ({ 
         {/* Preview Hint */}
         <div className="p-3 bg-surface-hover rounded-lg border border-border">
           <p className="text-sm text-text-secondary">
-            <strong>Tip:</strong> These settings will be applied to the public gallery view. 
-            Changes are saved automatically when you modify settings.
+            <strong>Tip:</strong> Changes to gradient and settings will be applied to the public
+            gallery view. Click &quot;Save Changes&quot; in the settings panel to persist your
+            changes.
           </p>
         </div>
       </div>

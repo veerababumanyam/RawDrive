@@ -256,8 +256,12 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
     const inputId = id || generatedId;
     const styles = toggleSizeStyles[size];
 
+    // The toggle switch wrapped in a label so clicking anywhere on it triggers the input
     const toggle = (
-      <div className="relative inline-flex flex-shrink-0">
+      <label
+        htmlFor={inputId}
+        className={`relative inline-flex flex-shrink-0 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+      >
         <input
           ref={ref}
           type="checkbox"
@@ -272,11 +276,11 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
             ${styles.track}
             bg-neutral-300 dark:bg-neutral-600
             rounded-full
-            cursor-pointer
+            pointer-events-none
             transition-colors duration-200 ease-out
             peer-checked:bg-primary
             peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2
-            peer-disabled:opacity-50 peer-disabled:cursor-not-allowed
+            peer-disabled:opacity-50
           `}
         />
         <span
@@ -286,11 +290,12 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
             bg-white
             rounded-full
             shadow-sm
+            pointer-events-none
             transition-transform duration-200 ease-out
             peer-checked:${styles.translate}
           `}
         />
-      </div>
+      </label>
     );
 
     if (!label && !description) {

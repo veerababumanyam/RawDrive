@@ -52,6 +52,13 @@ class ToggleSelectionRequest(BaseModel):
     selected: bool = Field(..., description="True to select, False to deselect")
 
 
+class UpdateAssetRequest(BaseModel):
+    """Request to update gallery asset metadata."""
+    title: str | None = Field(None, description="Asset title", max_length=255)
+    description: str | None = Field(None, description="Asset description", max_length=2000)
+    is_private: bool | None = Field(None, description="Whether the asset is private/locked")
+
+
 @router.get(
     "",
     status_code=status.HTTP_200_OK,
@@ -73,13 +80,15 @@ async def list_gallery_assets(
     selections_only: bool = Query(False, description="Filter selections only"),
     search_query: str | None = Query(None, description="Search by filename"),
     face_group_ids: list[UUID] | None = Query(None, description="Filter by face groups (OR logic)"),
+    tag_ids: list[UUID] | None = Query(None, description="Filter by tag IDs (OR logic)"),
+    tag_source: str | None = Query(None, description="Filter by tag source (manual, ai_vision, ai_gemini, ai_local)"),
 ) -> dict:
     """List assets in a gallery with pagination and filtering."""
     # Extract workspace_id from workspace_access tuple
     _, workspace_id = workspace_access
-    
+
     gallery_service = get_gallery_service()
-    
+
     return await gallery_service.list_assets(
         workspace_id=workspace_id,
         gallery_id=gallery_id,
@@ -91,6 +100,8 @@ async def list_gallery_assets(
         selections_only=selections_only,
         search_query=search_query,
         face_group_ids=face_group_ids,
+        tag_ids=tag_ids,
+        tag_source=tag_source,
     )
 
 
@@ -525,6 +536,95 @@ async def toggle_selection(
         
         action = "selected" if request.selected else "deselected"
         return {"message": f"{action.capitalize()} {len(request.asset_ids)} asset(s) successfully"}
+
+
+@router.patch(
+    "/{asset_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Update gallery asset metadata",
+    responses={
+        400: {"model": ErrorResponse, "description": "Validation error"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery or asset not found"},
+    },
+)
+async def update_asset(
+    workspace_access: WorkspaceAccessDep,
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    asset_id: Annotated[UUID, Path(..., description="Asset ID")],
+    current_user: CurrentUserDep,
+    request: UpdateAssetRequest,
+) -> dict:
+    """Update metadata for a gallery asset (title, description, is_private)."""
+    _, workspace_id = workspace_access
+    pool = await get_postgres_pool()
+
+    async with pool.acquire() as conn:
+        # Verify gallery exists and user has access
+        gallery = await conn.fetchrow(
+            """
+            SELECT gallery_id FROM galleries
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+            """,
+            workspace_id,
+            gallery_id,
+        )
+
+        if not gallery:
+            raise NotFoundError("Gallery", str(gallery_id))
+
+        # Verify asset belongs to this gallery
+        asset = await conn.fetchrow(
+            """
+            SELECT ga.asset_id FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
+            AND ga.asset_id = $3 AND a.deleted = FALSE
+            """,
+            workspace_id,
+            gallery_id,
+            asset_id,
+        )
+
+        if not asset:
+            raise NotFoundError("Asset", str(asset_id))
+
+        # Build update query dynamically based on provided fields
+        updates = []
+        params = []
+        param_idx = 1
+
+        if request.title is not None:
+            updates.append(f"title = ${param_idx}")
+            params.append(request.title)
+            param_idx += 1
+
+        if request.description is not None:
+            updates.append(f"description = ${param_idx}")
+            params.append(request.description)
+            param_idx += 1
+
+        if request.is_private is not None:
+            updates.append(f"is_private = ${param_idx}")
+            params.append(request.is_private)
+            param_idx += 1
+
+        if not updates:
+            return {"message": "No updates provided"}
+
+        # Add workspace_id, gallery_id, asset_id as final parameters
+        params.extend([workspace_id, gallery_id, asset_id])
+
+        await conn.execute(
+            f"""
+            UPDATE gallery_assets
+            SET {', '.join(updates)}
+            WHERE workspace_id = ${param_idx} AND gallery_id = ${param_idx + 1} AND asset_id = ${param_idx + 2}
+            """,
+            *params,
+        )
+
+        return {"message": "Asset updated successfully"}
 
 
 class DownloadListRequest(BaseModel):

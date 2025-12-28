@@ -9,6 +9,8 @@ import React from 'react';
 import { Grid, List, Sparkles, Heart, CheckSquare, Search, X, LayoutDashboard } from 'lucide-react';
 import { Checkbox } from '../../ui/FormControls';
 import { ViewMode, FilterType } from '../../../types/gallery';
+import { GallerySearchBar } from './GallerySearchBar';
+import type { SearchFilters } from '../../../hooks/useAssetSearch';
 
 export interface GalleryToolbarProps {
   viewMode: ViewMode;
@@ -29,6 +31,12 @@ export interface GalleryToolbarProps {
   /** Callback when filter toggles change */
   onFiltersChange?: (filters: { picks?: boolean; favorites?: boolean; selections?: boolean }) => void;
   className?: string;
+  /** Gallery ID for enhanced search (tag/person filtering) */
+  galleryId?: string;
+  /** Use enhanced search bar with tag/person autocomplete */
+  useEnhancedSearch?: boolean;
+  /** Callback for enhanced search filter changes */
+  onEnhancedFiltersChange?: (filters: SearchFilters, queryParams: URLSearchParams) => void;
 }
 
 // Filter pill button styles
@@ -72,6 +80,9 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
   activeFilters = {},
   onFiltersChange,
   className = '',
+  galleryId,
+  useEnhancedSearch = false,
+  onEnhancedFiltersChange,
 }) => {
   const handleFilterToggle = (filterKey: 'picks' | 'favorites' | 'selections') => {
     if (onFiltersChange) {
@@ -199,38 +210,50 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
         {/* Spacer - pushes remaining items to right */}
         <div className="flex-1" />
 
-        {/* Search Input - Clean minimal design */}
-        <div className="relative w-full sm:w-auto sm:min-w-[180px] lg:min-w-[220px]">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Filter items..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="
-              w-full pl-9 pr-8 py-2
-              text-sm
-              bg-surface
-              border border-border
-              rounded-lg
-              placeholder:text-text-tertiary
-              transition-all duration-200
-              focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20
-              hover:border-border-hover
-            "
-            aria-label="Filter items"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => onSearchChange('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-surface-hover transition-colors"
-              aria-label="Clear search"
-            >
-              <X size={14} className="text-text-tertiary" />
-            </button>
-          )}
-        </div>
+        {/* Search Input - Enhanced or basic depending on props */}
+        {useEnhancedSearch && galleryId && onEnhancedFiltersChange ? (
+          <div className="w-full sm:w-auto sm:min-w-[280px] lg:min-w-[360px]">
+            <GallerySearchBar
+              galleryId={galleryId}
+              onFiltersChange={onEnhancedFiltersChange}
+              placeholder="Search by filename, #tag, or @person..."
+              showSourceFilter
+              compact
+            />
+          </div>
+        ) : (
+          <div className="relative w-full sm:w-auto sm:min-w-[180px] lg:min-w-[220px]">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Filter items..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="
+                w-full pl-9 pr-8 py-2
+                text-sm
+                bg-surface
+                border border-border
+                rounded-lg
+                placeholder:text-text-tertiary
+                transition-all duration-200
+                focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20
+                hover:border-border-hover
+              "
+              aria-label="Filter items"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => onSearchChange('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-surface-hover transition-colors"
+                aria-label="Clear search"
+              >
+                <X size={14} className="text-text-tertiary" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Separator */}
         <div className="hidden sm:block w-px h-6 bg-border/50" />

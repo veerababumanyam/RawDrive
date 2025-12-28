@@ -1,10 +1,10 @@
-import React, { Suspense, lazy } from 'react';
+/* @refresh reset */
+import { Suspense, lazy } from 'react';
 import { RouteObject } from 'react-router-dom';
 import { ProtectedRoute } from '../components/auth';
 import ErrorBoundary from '../components/error/ErrorBoundary';
 import { RouteErrorFallback } from '../components/error/ErrorFallbacks';
 import { WorkspaceLayout } from '../components/layout/WorkspaceLayout';
-import { SettingsLayout } from '../components/layout/SettingsLayout';
 import { RootLayout } from '../components/layout/RootLayout';
 
 /* =============================================================================
@@ -53,6 +53,7 @@ const ForgotPasswordPage = lazy(() => import('../pages/public/ForgotPasswordPage
 const DashboardPage = lazy(() => import('../pages/workspace/DashboardPage'));
 const LibraryPage = lazy(() => import('../pages/workspace/LibraryPage'));
 const GalleriesPage = lazy(() => import('../pages/workspace/GalleriesPage'));
+const PeoplePage = lazy(() => import('../pages/workspace/PeoplePage'));
 const FavoritesPage = lazy(() => import('../pages/workspace/FavoritesPage'));
 const RecentPage = lazy(() => import('../pages/workspace/RecentPage'));
 const GalleryCreatePage = lazy(() => import('../pages/workspace/GalleryCreatePage'));
@@ -70,12 +71,8 @@ const GeneralSettingsPage = lazy(() => import('../pages/workspace/settings/Gener
 const HelpSupportPage = lazy(() => import('../pages/workspace/settings/HelpSupportPage'));
 
 // User Settings pages
-const UserProfileSettingsPage = lazy(() => import('../pages/settings/ProfileSettingsPage'));
-const SecuritySettingsPage = lazy(() => import('../pages/settings/SecuritySettingsPage'));
-const NotificationSettingsPage = lazy(() => import('../pages/settings/NotificationSettingsPage'));
-const PrivacySettingsPage = lazy(() => import('../pages/settings/PrivacySettingsPage'));
-const AccountSettingsPage = lazy(() => import('../pages/settings/AccountSettingsPage'));
-const AISettingsPage = lazy(() => import('../pages/settings/AISettingsPage'));
+// Note: Individual settings pages are deprecated - use UserSettingsPage with tabs
+const UserSettingsPage = lazy(() => import('../pages/settings/UserSettingsPage'));
 
 // Admin pages
 const GeminiModelsPage = lazy(() => import('../pages/admin/GeminiModelsPage'));
@@ -221,6 +218,10 @@ export const workspaceRoutes: RouteObject[] = [
         element: <CriticalLazyPage component={LibraryPage} />,
       },
       {
+        path: 'people',
+        element: <LazyPage component={PeoplePage} />,
+      },
+      {
         path: 'clients',
         element: <CriticalLazyPage component={ClientsPage} />,
       },
@@ -277,42 +278,20 @@ export const workspaceRoutes: RouteObject[] = [
 ];
 
 // User Settings routes (require authentication)
+// Uses tabbed navigation within WorkspaceLayout - all settings on single /settings page
+// Tab state managed via URL query parameter: /settings?tab=security
 export const userSettingsRoutes: RouteObject[] = [
   {
     path: '/settings',
     element: (
       <ProtectedRoute>
-        <SettingsLayout />
+        <WorkspaceLayout />
       </ProtectedRoute>
     ),
     children: [
       {
         index: true,
-        element: <LazyPage component={UserProfileSettingsPage} />,
-      },
-      {
-        path: 'profile',
-        element: <LazyPage component={UserProfileSettingsPage} />,
-      },
-      {
-        path: 'security',
-        element: <CriticalLazyPage component={SecuritySettingsPage} />,
-      },
-      {
-        path: 'notifications',
-        element: <LazyPage component={NotificationSettingsPage} />,
-      },
-      {
-        path: 'privacy',
-        element: <CriticalLazyPage component={PrivacySettingsPage} />,
-      },
-      {
-        path: 'account',
-        element: <CriticalLazyPage component={AccountSettingsPage} />,
-      },
-      {
-        path: 'ai',
-        element: <LazyPage component={AISettingsPage} />,
+        element: <CriticalLazyPage component={UserSettingsPage} />,
       },
     ],
   },

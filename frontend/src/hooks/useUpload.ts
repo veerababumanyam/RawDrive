@@ -330,19 +330,30 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           return;
         }
 
-        // Create upload session
-        const session = await galleryService.createUploadSession(workspaceId, {
-          gallery_id: galleryId || undefined,
-          sub_gallery_id: subGalleryId || null,
-          folder_id: folderId || null,
-          file_name: uploadFile.file.name,
-          mime_type: uploadFile.file.type,
-          size_bytes: uploadFile.file.size,
-          sha256,
-          relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
-        });
+        // Reuse existing session if retrying (prevents duplicate uploads)
+        let sessionUploadId = uploadFile.uploadId;
+        let uploadUrl = '';
 
-        updateFile(fileId, { uploadId: session.upload_id });
+        if (!sessionUploadId) {
+          // Create upload session only if we don't have one
+          const session = await galleryService.createUploadSession(workspaceId, {
+            gallery_id: galleryId || undefined,
+            sub_gallery_id: subGalleryId || null,
+            folder_id: folderId || null,
+            file_name: uploadFile.file.name,
+            mime_type: uploadFile.file.type,
+            size_bytes: uploadFile.file.size,
+            sha256,
+            relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
+          });
+          sessionUploadId = session.upload_id;
+          uploadUrl = session.upload_url;
+          updateFile(fileId, { uploadId: session.upload_id });
+        } else {
+          // Existing session - construct upload URL from uploadId
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          uploadUrl = `${apiBase}/api/v1/workspaces/${workspaceId}/uploads/${sessionUploadId}/upload`;
+        }
 
         // Upload file to R2 using XMLHttpRequest for progress tracking
         await new Promise<void>((resolve, reject) => {
@@ -351,17 +362,13 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           let lastLoaded = 0;
           let lastTime = startTime;
 
-          xhr.open('PUT', session.upload_url);
+          xhr.open('PUT', uploadUrl);
 
           // Set headers
           const tokens = getStoredTokens();
-          if (tokens && session.upload_url.includes('/api/v1/')) {
+          if (tokens && uploadUrl.includes('/api/v1/')) {
             xhr.setRequestHeader('Authorization', `Bearer ${tokens.accessToken}`);
           }
-
-          Object.entries(session.headers).forEach(([key, value]) => {
-            xhr.setRequestHeader(key, value);
-          });
 
           // Progress handler
           xhr.upload.onprogress = (event) => {
@@ -430,7 +437,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         // Commit upload
         const commitResult = await galleryService.commitUpload(
           workspaceId,
-          session.upload_id,
+          sessionUploadId,
           {
             sha256,
             etag,
@@ -465,16 +472,17 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         }
 
         if (retryCount <= retryAttempts) {
-          // Retry
+          // Retry - preserve uploadId to avoid creating duplicate sessions
+          const currentUploadId = uploadFile.uploadId;
           updateFile(fileId, {
             status: 'pending',
             error: undefined,
             retryCount,
           });
-          // Retry after delay
+          // Retry after delay with preserved uploadId
           setTimeout(() => {
             if (uploadSingleFileRef.current) {
-              uploadSingleFileRef.current({ ...uploadFile, retryCount });
+              uploadSingleFileRef.current({ ...uploadFile, retryCount, uploadId: currentUploadId });
             }
           }, retryDelay * retryCount); // Exponential backoff
         } else {

@@ -17,7 +17,9 @@
     "help": "Help & Support",
     "search": "Search",
     "visitors": "Visitors",
-    "newGallery": "New Gallery"
+    "newGallery": "New Gallery",
+    "people": "People",
+    "myProfile": "My Profile"
   },
   "actions": {
     "save": "Save",

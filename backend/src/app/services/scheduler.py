@@ -42,6 +42,7 @@ class SchedulerService:
         """Main scheduler loop."""
         last_cleanup = datetime.min.replace(tzinfo=timezone.utc)
         last_trial_check = datetime.min.replace(tzinfo=timezone.utc)
+        last_tagging_stats_refresh = datetime.min.replace(tzinfo=timezone.utc)
 
         while self._running:
             try:
@@ -56,6 +57,12 @@ class SchedulerService:
                 if (now - last_trial_check).total_seconds() >= 21600:
                     await self._schedule_trial_expiration()
                     last_trial_check = now
+
+                # Tagging stats refresh: every 5 minutes
+                # Refreshes gallery_tagging_stats materialized view for health dashboard
+                if (now - last_tagging_stats_refresh).total_seconds() >= 300:
+                    await self._schedule_tagging_stats_refresh()
+                    last_tagging_stats_refresh = now
 
                 # Sleep for 1 minute between checks
                 await asyncio.sleep(60)
@@ -83,6 +90,19 @@ class SchedulerService:
             priority=TaskPriority.NORMAL,
         )
         logger.info("Scheduled trial expiration check", extra={"task_id": task_id})
+
+    async def _schedule_tagging_stats_refresh(self) -> None:
+        """Schedule gallery tagging stats refresh.
+
+        Refreshes the gallery_tagging_stats materialized view for the
+        AI tagging health dashboard. Runs concurrently to avoid blocking reads.
+        """
+        task_id = await enqueue_task(
+            task_type="refresh_tagging_stats",
+            payload={},
+            priority=TaskPriority.LOW,
+        )
+        logger.info("Scheduled tagging stats refresh", extra={"task_id": task_id})
 
 
 # Global instance

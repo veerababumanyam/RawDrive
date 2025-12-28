@@ -47,6 +47,8 @@ export interface GalleryCanvasProps {
   onAssetClick: (asset: GalleryAssetItem, index: number) => void;
   onAssetFavorite?: (assetId: string, favorited: boolean) => void;
   onAssetDownload?: (assetId: string) => void;
+  onAssetShare?: (assetId: string) => void;
+  onAssetLock?: (assetId: string, isPrivate: boolean) => void;
   onAssetDelete?: (assetId: string) => void;
   onAssetUpdate?: (assetId: string, updates: AssetUpdatePayload) => void;
   onSetCover?: (assetId: string) => void;
@@ -67,6 +69,10 @@ export interface GalleryCanvasProps {
   // State
   isLoading?: boolean;
   error?: Error | null;
+  // Protected Content
+  isPrivateUnlocked?: boolean;
+  onUnlockPrivate?: () => void;
+
   className?: string;
 }
 

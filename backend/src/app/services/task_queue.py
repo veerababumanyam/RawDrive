@@ -497,3 +497,22 @@ async def handle_expire_trials(payload: dict[str, Any]) -> dict[str, Any]:
 
     count = await expire_trials_job()
     return {"trials_expired": count}
+
+
+@register_task_handler("refresh_tagging_stats")
+async def handle_refresh_tagging_stats(payload: dict[str, Any]) -> dict[str, Any]:
+    """Refresh the gallery_tagging_stats materialized view.
+
+    Called by scheduler every 5 minutes to keep AI tagging health
+    dashboard statistics up-to-date.
+    """
+    from app.db.postgres import get_postgres_pool
+
+    pool = await get_postgres_pool()
+    async with pool.acquire() as conn:
+        # Call the CONCURRENTLY refresh function
+        # This doesn't block reads on the materialized view
+        await conn.execute("SELECT refresh_gallery_tagging_stats()")
+
+    logger.info("Refreshed gallery_tagging_stats materialized view")
+    return {"refreshed": True}

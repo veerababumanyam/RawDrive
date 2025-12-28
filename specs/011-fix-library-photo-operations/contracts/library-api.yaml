@@ -1,0 +1,290 @@
+# OpenAPI Contract: Library Move Operations
+# Feature: 011-fix-library-photo-operations
+# Purpose: Document existing API contracts for verification (no changes needed)
+
+openapi: 3.0.3
+info:
+  title: RawDrive Library API - Move Operations
+  version: 1.0.0
+  description: API contracts for library asset move operations (existing - for verification)
+
+paths:
+  /api/v1/workspaces/{workspace_id}/library/assets/move:
+    post:
+      operationId: moveAssetsToFolder
+      summary: Move assets to a folder (or root)
+      description: |
+        Moves one or more assets to a target folder. If folder_id is null,
+        assets are moved to the library root level.
+
+        **Bug Fix Note**: This API is correctly implemented. The bug is in
+        frontend state management, not the API.
+      tags:
+        - Library
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Workspace UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveAssetsRequest'
+            examples:
+              moveToFolder:
+                summary: Move to specific folder
+                value:
+                  asset_ids:
+                    - "550e8400-e29b-41d4-a716-446655440001"
+                    - "550e8400-e29b-41d4-a716-446655440002"
+                  folder_id: "770e8400-e29b-41d4-a716-446655440099"
+              moveToRoot:
+                summary: Move to library root
+                value:
+                  asset_ids:
+                    - "550e8400-e29b-41d4-a716-446655440001"
+                  folder_id: null
+      responses:
+        '200':
+          description: Assets moved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoveAssetsResponse'
+              example:
+                moved: true
+                count: 2
+        '403':
+          description: Access denied - missing assets:write permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/workspaces/{workspace_id}/library:
+    get:
+      operationId: listLibraryAssets
+      summary: List library assets with optional filters
+      description: |
+        Lists assets in the library with various filter options.
+
+        **Bug Fix Note**: When face_group_id is provided, the API performs
+        a READ-ONLY filter operation. It does NOT modify any asset data.
+        The unintentional move bug is caused by frontend state management.
+      tags:
+        - Library
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: folder_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+            nullable: true
+          description: Filter by folder (null = root only)
+        - name: face_group_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+            nullable: true
+          description: |
+            Filter by face group (person). When provided, shows assets
+            containing faces from this group across ALL folders.
+            **READ-ONLY operation - does not modify asset data.**
+      responses:
+        '200':
+          description: List of assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryListResponse'
+
+  /api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/assets:
+    post:
+      operationId: addAssetsToGallery
+      summary: Add library assets to a gallery
+      description: |
+        Adds assets from the library to a gallery. This creates gallery_asset
+        junction records but does NOT move the assets out of the library.
+        Assets remain in their original library location.
+
+        **Bug Fix Note**: This API is correctly implemented. The bug is in
+        frontend error handling and feedback.
+      tags:
+        - Gallery
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddAssetsRequest'
+      responses:
+        '200':
+          description: Assets added to gallery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddAssetsResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Gallery not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    MoveAssetsRequest:
+      type: object
+      required:
+        - asset_ids
+      properties:
+        asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          description: UUIDs of assets to move
+        folder_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Target folder UUID (null = move to root)
+
+    MoveAssetsResponse:
+      type: object
+      properties:
+        moved:
+          type: boolean
+          description: Whether the operation succeeded
+        count:
+          type: integer
+          description: Number of assets moved
+
+    AddAssetsRequest:
+      type: object
+      required:
+        - asset_ids
+      properties:
+        asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+
+    AddAssetsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        count:
+          type: integer
+          description: Number of assets added
+
+    LibraryListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LibraryAsset'
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+
+    LibraryAsset:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        folder_id:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          type: string
+          enum: [photo, video]
+        status:
+          type: string
+          enum: [available, processing, deleted]
+        thumbnail_url:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string

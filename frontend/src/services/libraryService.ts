@@ -37,6 +37,7 @@ export interface LibraryFolder {
   updated_at: string;
   asset_count: number;
   subfolder_count?: number;
+  is_protected?: boolean;
 }
 
 export interface LibraryFolderDetail extends LibraryFolder {
@@ -59,6 +60,8 @@ export interface UpdateFolderRequest {
   description?: string;
   color?: string;
   cover_asset_id?: string;
+  pin?: string | null; // Set to string to add/change PIN, null to remove PIN
+  remove_pin?: boolean; // Set to true to remove PIN protection
 }
 
 export interface MoveAssetsRequest {
@@ -82,6 +85,7 @@ export class LibraryService {
       startDate?: string;
       endDate?: string;
       folder_id?: string;
+      face_group_id?: string;
     }
   ): Promise<LibraryListResponse> {
     const params = new URLSearchParams();
@@ -94,6 +98,7 @@ export class LibraryService {
     if (options?.startDate) params.append('start_date', options.startDate);
     if (options?.endDate) params.append('end_date', options.endDate);
     if (options?.folder_id) params.append('folder_id', options.folder_id);
+    if (options?.face_group_id) params.append('face_group_id', options.face_group_id);
 
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/library/assets${query ? `?${query}` : ''}`;
@@ -228,6 +233,24 @@ export class LibraryService {
     );
     if (response.error) {
       throw new Error(response.error.message || 'Failed to move assets');
+    }
+    return response.data!;
+  }
+
+  /**
+   * Verify PIN for a protected folder
+   */
+  async verifyFolderPin(
+    workspaceId: string,
+    folderId: string,
+    pin: string
+  ): Promise<{ valid: boolean }> {
+    const response = await apiClient.post<{ valid: boolean }>(
+      `/api/v1/workspaces/${workspaceId}/library/folders/${folderId}/verify-pin`,
+      { pin }
+    );
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to verify PIN');
     }
     return response.data!;
   }

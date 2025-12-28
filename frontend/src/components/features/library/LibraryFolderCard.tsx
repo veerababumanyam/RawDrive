@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Folder, MoreVertical, Edit, Trash2, FolderOpen, ChevronRight } from 'lucide-react';
+import { Folder, MoreVertical, Edit, Trash2, FolderOpen, ChevronRight, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { LibraryFolder } from '../../../services/libraryService';
 
@@ -35,6 +35,7 @@ const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
   }, [showMenu]);
 
   const folderColor = folder.color || '#3B82F6';
+  const isProtected = folder.is_protected;
 
   return (
     <motion.div
@@ -61,7 +62,7 @@ const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
         <div className="flex items-center gap-3">
           {/* Folder Icon */}
           <div
-            className="p-2.5 rounded-xl transition-all duration-300 group-hover:scale-105"
+            className="p-2.5 rounded-xl transition-all duration-300 group-hover:scale-105 relative"
             style={{
               backgroundColor: `${folderColor}20`,
             }}
@@ -77,12 +78,21 @@ const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
                 style={{ color: folderColor }}
               />
             )}
+            {/* Lock badge for protected folders */}
+            {isProtected && (
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+                <Lock className="w-2.5 h-2.5 text-white" />
+              </div>
+            )}
           </div>
 
           {/* Folder Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-text-primary truncate group-hover:text-primary transition-colors">
+            <h3 className="font-medium text-text-primary truncate group-hover:text-primary transition-colors flex items-center gap-1.5">
               {folder.name}
+              {isProtected && (
+                <Lock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              )}
             </h3>
             <div className="flex items-center gap-2 text-xs text-text-tertiary mt-0.5">
               <span>

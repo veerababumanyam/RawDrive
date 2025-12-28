@@ -4,12 +4,21 @@
  * Allows filtering photos by person and managing face groups
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { X, Users, Search, ChevronRight, Loader2, UserCircle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
+import { X, Users, Search, ChevronRight, Loader2, UserCircle, RefreshCw, CheckCircle2, Merge, Sparkles } from 'lucide-react';
 import { AppButton } from '../../ui/AppButton';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../ui/Toast';
-import { faceApiService, FaceGroup, FaceGroupWithFaces } from '../../../services/faceApiService';
+import { faceApiService, FaceGroup, MergeSuggestion } from '../../../services/faceApiService';
+import { FaceGroupMergeModal } from './FaceGroupMergeModal';
+import { FaceGroupDetailPanel } from './FaceGroupDetailPanel';
+
+// Configuration constants
+const FACE_GROUPS_LIMIT = 100;
+const MERGE_SUGGESTIONS_LIMIT = 20;
+const MERGE_SUGGESTIONS_DISPLAY_LIMIT = 5;
+const SIMILARITY_THRESHOLD = 0.75;
+const MIN_GROUPS_FOR_MERGE = 2;
 
 interface PeoplePanelProps {
     galleryId: string;
@@ -30,10 +39,17 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
     const [groups, setGroups] = useState<FaceGroup[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-    const [_selectedGroup, setSelectedGroup] = useState<FaceGroupWithFaces | null>(null);
     const [editingName, setEditingName] = useState<string | null>(null);
     const [newName, setNewName] = useState('');
+
+    // Selection mode state for merge functionality
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+    const [showMergeModal, setShowMergeModal] = useState(false);
+    const [showDetailPanel, setShowDetailPanel] = useState(false);
+    const [detailGroupId, setDetailGroupId] = useState<string | null>(null);
+    const [mergeSuggestions, setMergeSuggestions] = useState<MergeSuggestion[]>([]);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
     // Fetch face groups
     const fetchGroups = useCallback(async () => {
@@ -43,7 +59,7 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
         try {
             const result = await faceApiService.getFaceGroups(workspace.workspace_id, {
                 minFaces: 1,
-                limit: 100,
+                limit: FACE_GROUPS_LIMIT,
             });
             setGroups(result.groups);
         } catch (error) {
@@ -64,39 +80,135 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
         }
     }, [isOpen, fetchGroups]);
 
-    // Fetch group details when selected
-    useEffect(() => {
-        if (!selectedGroupId || !workspace?.workspace_id) {
-            setSelectedGroup(null);
+    // Fetch merge suggestions when entering selection mode
+    const fetchMergeSuggestions = useCallback(async () => {
+        if (!workspace?.workspace_id) return;
+
+        setLoadingSuggestions(true);
+        try {
+            const result = await faceApiService.getMergeSuggestions(workspace.workspace_id, {
+                threshold: SIMILARITY_THRESHOLD,
+                limit: MERGE_SUGGESTIONS_LIMIT,
+            });
+            setMergeSuggestions(result.suggestions);
+        } catch (error) {
+            console.error('Failed to fetch merge suggestions:', error);
+            // Show toast for failed suggestions (was silent before)
+            addToast({
+                message: 'Could not load merge suggestions',
+                variant: 'warning',
+            });
+        } finally {
+            setLoadingSuggestions(false);
+        }
+    }, [workspace?.workspace_id, addToast]);
+
+    // Toggle selection mode
+    const toggleSelectionMode = useCallback(() => {
+        if (!selectionMode) {
+            // Entering selection mode - fetch suggestions
+            fetchMergeSuggestions();
+        } else {
+            // Exiting selection mode - clear selections
+            setSelectedGroupIds(new Set());
+            setMergeSuggestions([]);
+        }
+        setSelectionMode(!selectionMode);
+    }, [selectionMode, fetchMergeSuggestions]);
+
+    // Toggle selection for a group
+    const toggleGroupSelection = useCallback((groupId: string) => {
+        setSelectedGroupIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(groupId)) {
+                next.delete(groupId);
+            } else {
+                next.add(groupId);
+            }
+            return next;
+        });
+    }, []);
+
+    // Select all groups from a suggestion pair
+    const selectSuggestionPair = useCallback((suggestion: MergeSuggestion) => {
+        setSelectedGroupIds((prev) => {
+            const next = new Set(prev);
+            next.add(suggestion.group1.id);
+            next.add(suggestion.group2.id);
+            return next;
+        });
+    }, []);
+
+    // Handle merge confirmation
+    const handleMergeConfirm = async (
+        targetGroupId: string,
+        representativeFaceId?: string,
+        name?: string
+    ) => {
+        if (!workspace?.workspace_id) return;
+
+        const sourceGroupIds = Array.from(selectedGroupIds).filter(
+            (id) => id !== targetGroupId
+        );
+
+        if (sourceGroupIds.length === 0) {
+            addToast({ message: 'Select at least 2 groups to merge', variant: 'error' });
             return;
         }
 
-        const fetchGroupDetails = async () => {
-            try {
-                const group = await faceApiService.getFaceGroup(workspace.workspace_id, selectedGroupId);
-                setSelectedGroup(group);
-            } catch (error) {
-                console.error('Failed to fetch group details:', error);
-            }
-        };
+        try {
+            await faceApiService.multiMergeFaceGroups(
+                workspace.workspace_id,
+                sourceGroupIds,
+                targetGroupId,
+                { representativeFaceId, name }
+            );
 
-        fetchGroupDetails();
-    }, [selectedGroupId, workspace?.workspace_id]);
+            addToast({
+                message: `Successfully merged ${sourceGroupIds.length + 1} groups`,
+                variant: 'success',
+            });
 
-    // Handle rename
+            // Reset state and refresh
+            setShowMergeModal(false);
+            setSelectedGroupIds(new Set());
+            setSelectionMode(false);
+            fetchGroups();
+        } catch (error) {
+            console.error('Failed to merge groups:', error);
+            addToast({ message: 'Failed to merge groups', variant: 'error' });
+        }
+    };
+
+    // Open detail panel for a group
+    const openDetailPanel = useCallback((groupId: string) => {
+        setDetailGroupId(groupId);
+        setShowDetailPanel(true);
+    }, []);
+
+    // Handle primary face change from detail panel
+    const handlePrimaryFaceChange = useCallback(() => {
+        fetchGroups();
+    }, [fetchGroups]);
+
+    // Handle rename - uses new person naming API
     const handleRename = async (groupId: string) => {
         if (!workspace?.workspace_id || !newName.trim()) return;
 
         try {
-            await faceApiService.updateFaceGroup(workspace.workspace_id, groupId, {
-                name: newName.trim(),
-            });
-            addToast({ message: 'Person renamed', variant: 'success' });
+            // Use the new person naming API which creates/updates person entity
+            await faceApiService.namePerson(
+                workspace.workspace_id,
+                groupId,
+                newName.trim()
+            );
+            addToast({ message: 'Person named successfully', variant: 'success' });
             setEditingName(null);
             setNewName('');
             fetchGroups();
         } catch (error) {
-            addToast({ message: 'Failed to rename', variant: 'error' });
+            console.error('Failed to name person:', error);
+            addToast({ message: 'Failed to name person', variant: 'error' });
         }
     };
 
@@ -138,19 +250,86 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                             )}
                         </div>
                         <div className="flex items-center gap-2">
+                            {/* Selection Mode Toggle */}
+                            {groups.length >= MIN_GROUPS_FOR_MERGE && (
+                                <AppButton
+                                    variant={selectionMode ? 'primary' : 'outline'}
+                                    size="sm"
+                                    onClick={toggleSelectionMode}
+                                    title={selectionMode ? 'Exit merge mode' : 'Merge people'}
+                                >
+                                    <Merge className="w-4 h-4" />
+                                    <span className="ml-1 hidden sm:inline">
+                                        {selectionMode ? 'Cancel' : 'Merge'}
+                                    </span>
+                                </AppButton>
+                            )}
                             <AppButton
                                 variant="ghost"
                                 size="sm"
                                 onClick={fetchGroups}
                                 disabled={loading}
+                                aria-label="Refresh people list"
                             >
                                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                             </AppButton>
-                            <AppButton variant="ghost" size="sm" onClick={onClose}>
+                            <AppButton variant="ghost" size="sm" onClick={onClose} aria-label="Close panel">
                                 <X className="w-5 h-5" />
                             </AppButton>
                         </div>
                     </div>
+
+                    {/* Selection Mode Banner */}
+                    {selectionMode && (
+                        <div className="mb-3 p-2 bg-primary/10 border border-primary/20 rounded-lg">
+                            <p className="text-xs text-primary">
+                                <CheckCircle2 className="w-3 h-3 inline mr-1" />
+                                Select 2 or more people to merge.
+                                {selectedGroupIds.size > 0 && (
+                                    <span className="font-medium ml-1">
+                                        {selectedGroupIds.size} selected
+                                    </span>
+                                )}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Merge Suggestions */}
+                    {selectionMode && mergeSuggestions.length > 0 && (
+                        <div className="mb-3">
+                            <div className="flex items-center gap-1 mb-2">
+                                <Sparkles className="w-3 h-3 text-accent" />
+                                <span className="text-xs font-medium text-accent">AI Suggestions</span>
+                            </div>
+                            <div className="flex gap-2 overflow-x-auto pb-2">
+                                {mergeSuggestions.slice(0, MERGE_SUGGESTIONS_DISPLAY_LIMIT).map((suggestion) => (
+                                    <button
+                                        key={`${suggestion.group1.id}-${suggestion.group2.id}`}
+                                        onClick={() => selectSuggestionPair(suggestion)}
+                                        className="flex-shrink-0 flex items-center gap-1 px-2 py-1 bg-accent/10 hover:bg-accent/20 border border-accent/20 rounded-full text-xs transition-colors"
+                                    >
+                                        <span className="truncate max-w-[60px]">
+                                            {suggestion.group1.name || `Person`}
+                                        </span>
+                                        <span className="text-text-tertiary">+</span>
+                                        <span className="truncate max-w-[60px]">
+                                            {suggestion.group2.name || `Person`}
+                                        </span>
+                                        <span className="text-text-tertiary">
+                                            ({Math.round(suggestion.similarity * 100)}%)
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {loadingSuggestions && (
+                        <div className="mb-3 flex items-center gap-2 text-xs text-text-secondary">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span>Finding similar people...</span>
+                        </div>
+                    )}
 
                     {/* Search */}
                     <div className="relative">
@@ -199,17 +378,42 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                                         setEditingName(null);
                                         setNewName('');
                                     }}
-                                    onSelect={() => setSelectedGroupId(group.id)}
                                     onFilter={() => handleFilterByPerson(group.id)}
+                                    selectionMode={selectionMode}
+                                    isSelected={selectedGroupIds.has(group.id)}
+                                    onToggleSelection={() => toggleGroupSelection(group.id)}
+                                    onOpenDetail={() => openDetailPanel(group.id)}
                                 />
                             ))}
                         </div>
                     )}
                 </div>
 
-                {/* Clear Filter Button */}
-                {onFilterByPerson && (
-                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-sm border-t border-border">
+                {/* Footer Actions */}
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-sm border-t border-border">
+                    {selectionMode && selectedGroupIds.size >= 2 ? (
+                        // Merge action bar
+                        <div className="flex gap-2">
+                            <AppButton
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => {
+                                    setSelectedGroupIds(new Set());
+                                }}
+                            >
+                                Clear ({selectedGroupIds.size})
+                            </AppButton>
+                            <AppButton
+                                variant="primary"
+                                className="flex-1"
+                                onClick={() => setShowMergeModal(true)}
+                            >
+                                <Merge className="w-4 h-4 mr-1" />
+                                Merge {selectedGroupIds.size} People
+                            </AppButton>
+                        </div>
+                    ) : onFilterByPerson ? (
+                        // Clear filter button
                         <AppButton
                             variant="outline"
                             className="w-full"
@@ -220,9 +424,34 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                         >
                             Show All Photos
                         </AppButton>
-                    </div>
-                )}
+                    ) : null}
+                </div>
             </div>
+
+            {/* Merge Modal */}
+            {showMergeModal && workspace?.workspace_id && (
+                <FaceGroupMergeModal
+                    isOpen={showMergeModal}
+                    onClose={() => setShowMergeModal(false)}
+                    selectedGroups={groups.filter((g) => selectedGroupIds.has(g.id))}
+                    workspaceId={workspace.workspace_id}
+                    onConfirm={handleMergeConfirm}
+                />
+            )}
+
+            {/* Detail Panel */}
+            {showDetailPanel && detailGroupId && workspace?.workspace_id && (
+                <FaceGroupDetailPanel
+                    isOpen={showDetailPanel}
+                    onClose={() => {
+                        setShowDetailPanel(false);
+                        setDetailGroupId(null);
+                    }}
+                    groupId={detailGroupId}
+                    workspaceId={workspace.workspace_id}
+                    onPrimaryFaceChange={handlePrimaryFaceChange}
+                />
+            )}
         </div>
     );
 };
@@ -237,11 +466,14 @@ interface PersonCardProps {
     onStartEdit: (id: string, currentName: string) => void;
     onSaveEdit: () => void;
     onCancelEdit: () => void;
-    onSelect: () => void;
     onFilter: () => void;
+    selectionMode: boolean;
+    isSelected: boolean;
+    onToggleSelection: () => void;
+    onOpenDetail: () => void;
 }
 
-const PersonCard: React.FC<PersonCardProps> = ({
+const PersonCard: React.FC<PersonCardProps> = memo(({
     group,
     index,
     isEditing,
@@ -250,19 +482,61 @@ const PersonCard: React.FC<PersonCardProps> = ({
     onStartEdit,
     onSaveEdit,
     onCancelEdit,
-    onSelect,
     onFilter,
+    selectionMode,
+    isSelected,
+    onToggleSelection,
+    onOpenDetail,
 }) => {
-    const displayName = group.name || `Person ${index + 1}`;
+    // Prefer person_name (from people table) over legacy name field
+    const displayName = group.person_name || group.name || `Person ${index + 1}`;
     const thumbnailUrl = group.representative_thumbnail_url;
+    const isNamed = !!(group.person_name || group.name);
+
+    // Handle card click based on mode
+    const handleCardClick = () => {
+        if (selectionMode) {
+            onToggleSelection();
+        } else {
+            onFilter();
+        }
+    };
 
     return (
         <div
-            className="group relative flex flex-col items-center p-3 bg-surface-hover hover:bg-surface-active rounded-xl border border-border/50 hover:border-primary/30 cursor-pointer transition-all duration-200"
-            onClick={onFilter}
+            className={`group relative flex flex-col items-center p-3 rounded-xl border cursor-pointer transition-all duration-200 ${
+                isSelected
+                    ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
+                    : 'bg-surface-hover hover:bg-surface-active border-border/50 hover:border-primary/30'
+            }`}
+            onClick={handleCardClick}
+            role={selectionMode ? 'checkbox' : 'button'}
+            aria-checked={selectionMode ? isSelected : undefined}
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleCardClick();
+                }
+            }}
         >
+            {/* Selection Checkbox (in selection mode) */}
+            {selectionMode && (
+                <div
+                    className={`absolute top-2 left-2 w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                        isSelected
+                            ? 'bg-primary text-white'
+                            : 'bg-surface border-2 border-border'
+                    }`}
+                >
+                    {isSelected && <CheckCircle2 className="w-4 h-4" />}
+                </div>
+            )}
+
             {/* Thumbnail */}
-            <div className="w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 mb-2">
+            <div className={`w-16 h-16 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 mb-2 ${
+                isSelected ? 'ring-2 ring-primary' : ''
+            }`}>
                 {thumbnailUrl ? (
                     <img
                         src={thumbnailUrl}
@@ -287,18 +561,41 @@ const PersonCard: React.FC<PersonCardProps> = ({
                             if (e.key === 'Enter') onSaveEdit();
                             if (e.key === 'Escape') onCancelEdit();
                         }}
+                        placeholder="Enter name..."
                         className="w-full px-2 py-1 text-xs text-center bg-surface border border-primary rounded focus:outline-none"
                         autoFocus
                     />
+                    <div className="flex justify-center gap-2 mt-2">
+                        <button
+                            onClick={onSaveEdit}
+                            className="text-xs text-primary hover:underline font-medium"
+                            aria-label="Save name"
+                        >
+                            Save
+                        </button>
+                        <button
+                            onClick={onCancelEdit}
+                            className="text-xs text-text-tertiary hover:underline"
+                            aria-label="Cancel editing"
+                        >
+                            Cancel
+                        </button>
+                    </div>
                 </div>
             ) : (
                 <span
-                    className="text-xs font-medium text-text-primary truncate max-w-full px-1"
+                    className={`text-xs truncate max-w-full px-1 ${
+                        isNamed
+                            ? 'font-medium text-text-primary'
+                            : 'text-text-tertiary italic'
+                    }`}
                     onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        onStartEdit(group.id, displayName);
+                        if (!selectionMode) {
+                            e.stopPropagation();
+                            onStartEdit(group.id, isNamed ? displayName : '');
+                        }
                     }}
-                    title={displayName}
+                    title={isNamed ? displayName : 'Double-click to name this person'}
                 >
                     {displayName}
                 </span>
@@ -309,21 +606,27 @@ const PersonCard: React.FC<PersonCardProps> = ({
                 {group.face_count} {group.face_count === 1 ? 'photo' : 'photos'}
             </span>
 
-            {/* Hover actions */}
-            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onSelect();
-                    }}
-                    className="p-1 rounded bg-surface/80 hover:bg-surface text-text-secondary hover:text-text-primary"
-                    title="View details"
-                >
-                    <ChevronRight className="w-3 h-3" />
-                </button>
-            </div>
+            {/* Hover actions (when not in selection mode) */}
+            {!selectionMode && (
+                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenDetail();
+                        }}
+                        className="p-1 rounded bg-surface/80 hover:bg-surface text-text-secondary hover:text-text-primary"
+                        title="View all faces"
+                        aria-label={`View details for ${displayName}`}
+                    >
+                        <ChevronRight className="w-3 h-3" />
+                    </button>
+                </div>
+            )}
         </div>
     );
-};
+});
+
+// Display name for React DevTools
+PersonCard.displayName = 'PersonCard';
 
 export default PeoplePanel;

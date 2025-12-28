@@ -8,6 +8,7 @@ import {
 } from './AppShell';
 import { WorkspaceSidebar } from '../workspace/WorkspaceSidebar';
 import { WorkspaceHeader } from '../workspace/WorkspaceHeader';
+import { SubscriptionBanner } from '../subscription';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../contexts/AuthContext';
 import { useStorageUsage } from '../../hooks/useStorageUsage';
@@ -88,6 +89,9 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
 
   return (
     <AppShell>
+      {/* Subscription Warning Banner - Top of page */}
+      <SubscriptionBanner />
+
       {/* Header - Fixed at top, full width */}
       <WorkspaceHeader
         user={headerUser}

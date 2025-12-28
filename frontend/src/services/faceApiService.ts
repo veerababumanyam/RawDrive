@@ -35,11 +35,51 @@ export interface FaceGroup {
     workspace_id: string;
     name?: string;
     person_id?: string;
+    person_name?: string;
     face_count: number;
     representative_face_id?: string;
     representative_thumbnail_url?: string;
     created_at: string;
     updated_at: string;
+}
+
+// Summary version for merge suggestions (lightweight)
+export interface FaceGroupSummary {
+    id: string;
+    name?: string;
+    person_name?: string;
+    face_count: number;
+    representative_thumbnail_url?: string;
+}
+
+// Merge suggestion pair
+export interface MergeSuggestion {
+    group1: FaceGroupSummary;
+    group2: FaceGroupSummary;
+    similarity: number;
+}
+
+// Multi-merge result
+export interface MergeResult {
+    merged_group: FaceGroup;
+    source_group_ids: string[];
+    faces_merged: number;
+}
+
+// Similar group with similarity score
+export interface SimilarGroup {
+    group: FaceGroupSummary;
+    similarity: number;
+}
+
+// Face response for primary face selection
+export interface FaceInGroup {
+    id: string;
+    photo_id: string;
+    bounding_box?: BoundingBox;
+    confidence?: number;
+    thumbnail_url?: string;
+    created_at: string;
 }
 
 export interface FaceGroupWithFaces extends FaceGroup {
@@ -160,6 +200,35 @@ class FaceApiService {
     }
 
     /**
+     * Name a person (assign or create person for a face group)
+     * This links the face group to a person entity with a display name
+     */
+    async namePerson(
+        workspaceId: string,
+        groupId: string,
+        personName: string,
+        personId?: string
+    ): Promise<{ person_id: string; person_name: string }> {
+        const response = await apiClient.put<{ person_id: string; person_name: string }>(
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/${groupId}/name`,
+            { person_name: personName, person_id: personId }
+        );
+        return extractData(response);
+    }
+
+    /**
+     * Unassign person from a face group
+     */
+    async unassignPerson(workspaceId: string, groupId: string): Promise<void> {
+        const response = await apiClient.delete(
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/${groupId}/person`
+        );
+        if (response.error) {
+            throw new Error(response.error.message || 'Failed to unassign person');
+        }
+    }
+
+    /**
      * Delete a face group
      */
     async deleteFaceGroup(workspaceId: string, groupId: string): Promise<void> {
@@ -198,6 +267,166 @@ class FaceApiService {
         const response = await apiClient.post<FaceGroup>(
             `${this.baseUrl}/workspaces/${workspaceId}/face-groups/${groupId}/split`,
             { face_ids: faceIds, new_group_name: newGroupName }
+        );
+        return extractData(response);
+    }
+
+    // =========================================================================
+    // MULTI-MERGE & PRIMARY FACE
+    // =========================================================================
+
+    /**
+     * Merge multiple face groups into a single target group
+     *
+     * @param workspaceId - Workspace ID
+     * @param sourceGroupIds - IDs of groups to merge from (will be deleted)
+     * @param targetGroupId - ID of group to merge into (will be preserved)
+     * @param options - Optional representative face ID and name for merged group
+     */
+    async multiMergeFaceGroups(
+        workspaceId: string,
+        sourceGroupIds: string[],
+        targetGroupId: string,
+        options?: {
+            representativeFaceId?: string;
+            name?: string;
+        }
+    ): Promise<MergeResult> {
+        const response = await apiClient.post<MergeResult>(
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/multi-merge`,
+            {
+                source_group_ids: sourceGroupIds,
+                target_group_id: targetGroupId,
+                representative_face_id: options?.representativeFaceId,
+                name: options?.name,
+            }
+        );
+        return extractData(response);
+    }
+
+    /**
+     * Set the representative (primary) face for a group
+     *
+     * The representative face is used for:
+     * - Display thumbnail in People panel
+     * - 2x weight in centroid calculations for better matching
+     *
+     * @param workspaceId - Workspace ID
+     * @param groupId - Face group ID
+     * @param faceId - Face ID to set as representative
+     * @param recalculateCentroid - Whether to recalculate centroid (default: true)
+     */
+    async setRepresentativeFace(
+        workspaceId: string,
+        groupId: string,
+        faceId: string,
+        recalculateCentroid: boolean = true
+    ): Promise<FaceGroup> {
+        const response = await apiClient.put<FaceGroup>(
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/${groupId}/representative`,
+            {
+                face_id: faceId,
+                recalculate_centroid: recalculateCentroid,
+            }
+        );
+        return extractData(response);
+    }
+
+    /**
+     * Get merge suggestions - pairs of face groups with high similarity
+     *
+     * Returns groups that likely represent the same person and should be merged.
+     *
+     * @param workspaceId - Workspace ID
+     * @param options - Threshold (0.5-0.99, default 0.75) and limit (1-100, default 50)
+     */
+    async getMergeSuggestions(
+        workspaceId: string,
+        options?: {
+            threshold?: number;
+            limit?: number;
+        }
+    ): Promise<{ suggestions: MergeSuggestion[]; total: number }> {
+        const params = new URLSearchParams();
+        if (options?.threshold !== undefined) {
+            params.set('threshold', String(options.threshold));
+        }
+        if (options?.limit !== undefined) {
+            params.set('limit', String(options.limit));
+        }
+
+        const response = await apiClient.get<{ suggestions: MergeSuggestion[]; total: number }>(
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/suggestions?${params}`
+        );
+        return extractData(response);
+    }
+
+    /**
+     * Get face groups similar to a specific group
+     *
+     * Useful for showing "similar people" suggestions when viewing a group.
+     *
+     * @param workspaceId - Workspace ID
+     * @param groupId - Face group to find similar groups for
+     * @param options - Threshold and limit
+     */
+    async getSimilarGroups(
+        workspaceId: string,
+        groupId: string,
+        options?: {
+            threshold?: number;
+            limit?: number;
+        }
+    ): Promise<{ group: FaceGroup; similar_groups: SimilarGroup[] }> {
+        const params = new URLSearchParams();
+        if (options?.threshold !== undefined) {
+            params.set('threshold', String(options.threshold));
+        }
+        if (options?.limit !== undefined) {
+            params.set('limit', String(options.limit));
+        }
+
+        const response = await apiClient.get<{ group: FaceGroup; similar_groups: SimilarGroup[] }>(
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/${groupId}/similar?${params}`
+        );
+        return extractData(response);
+    }
+
+    /**
+     * Get all faces in a group with thumbnails
+     *
+     * Used for browsing faces before merge and for selecting primary face.
+     *
+     * @param workspaceId - Workspace ID
+     * @param groupId - Face group ID
+     * @param options - Pagination options
+     */
+    async getFacesInGroup(
+        workspaceId: string,
+        groupId: string,
+        options?: {
+            limit?: number;
+            offset?: number;
+        }
+    ): Promise<{
+        faces: FaceInGroup[];
+        total: number;
+        representative_face_id?: string;
+    }> {
+        const params = new URLSearchParams();
+        if (options?.limit !== undefined) {
+            params.set('limit', String(options.limit));
+        }
+        if (options?.offset !== undefined) {
+            params.set('offset', String(options.offset));
+        }
+
+        const response = await apiClient.get<{
+            faces: FaceInGroup[];
+            total: number;
+            representative_face_id?: string;
+        }>(
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/${groupId}/faces?${params}`
         );
         return extractData(response);
     }
