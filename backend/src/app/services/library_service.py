@@ -27,12 +27,13 @@ class LibraryService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         folder_id: Optional[UUID] = None,
+        face_group_id: Optional[UUID] = None,
     ) -> dict:
         """List assets in a workspace with pagination and filtering."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             offset = (page - 1) * limit
-            
+
             # Base WHERE clause
             # Include 'processing' status so newly uploaded assets appear immediately
             where_conditions = [
@@ -52,13 +53,13 @@ class LibraryService:
                 # Filter for assets that are NOT present in gallery_assets
                 where_conditions.append(f"""
                     NOT EXISTS (
-                        SELECT 1 FROM gallery_assets ga 
+                        SELECT 1 FROM gallery_assets ga
                         WHERE ga.asset_id = a.asset_id
                     )
                 """)
 
             if search_query:
-                # Basic filename search for now. 
+                # Basic filename search for now.
                 # TODO: Integrate with GEO/Vector search in future phases
                 where_conditions.append(f"LOWER(SUBSTRING(a.original_object_key FROM '[^/]+$')) LIKE ${param_idx}")
                 params.append(f"%{search_query.lower()}%")
@@ -74,13 +75,26 @@ class LibraryService:
                 params.append(end_date)
                 param_idx += 1
 
-            # Filter by folder - use IS NOT DISTINCT FROM to handle NULL (root folder)
-            if folder_id is not None:
+            # Filter by face group (person) - show assets containing faces from this group
+            if face_group_id is not None:
+                where_conditions.append(f"""
+                    EXISTS (
+                        SELECT 1 FROM faces f
+                        WHERE f.photo_id = a.asset_id
+                          AND f.face_group_id = ${param_idx}
+                          AND f.workspace_id = a.workspace_id
+                    )
+                """)
+                params.append(face_group_id)
+                param_idx += 1
+                # When filtering by person, show from all folders
+            elif folder_id is not None:
+                # Filter by folder - use IS NOT DISTINCT FROM to handle NULL (root folder)
                 where_conditions.append(f"a.folder_id = ${param_idx}")
                 params.append(folder_id)
                 param_idx += 1
             else:
-                # When folder_id is None, show only root-level assets (not in any folder)
+                # When folder_id is None and no face_group_id, show only root-level assets
                 where_conditions.append("a.folder_id IS NULL")
 
             where_sql = " AND ".join(where_conditions)

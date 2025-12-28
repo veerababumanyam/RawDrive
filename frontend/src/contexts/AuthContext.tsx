@@ -22,7 +22,7 @@ import {
   getGoogleOAuthUrl,
   getStoredTokens,
 } from '../services/auth';
-import { refreshAccessToken } from '../services/api';
+import { refreshAccessToken, AUTH_EVENTS } from '../services/api';
 
 // Context types
 interface AuthContextType {
@@ -30,6 +30,8 @@ interface AuthContextType {
   workspace: Workspace | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  sessionExpiredRedirect: string | null;
+  clearSessionExpiredRedirect: () => void;
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
   signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -53,6 +55,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Track if session expired event was triggered to prevent multiple redirects
+  const [sessionExpiredRedirect, setSessionExpiredRedirect] = useState<string | null>(null);
+
+  // Listen for session expired events from API client
+  useEffect(() => {
+    const handleSessionExpired = (event: CustomEvent<{ redirectTo: string }>) => {
+      console.warn('[Auth] Session expired event received');
+      // Clear auth state
+      clearStoredTokens();
+      setUser(null);
+      setWorkspace(null);
+      setIsAuthenticated(false);
+      // Store redirect path for navigation (will be handled by component using auth)
+      setSessionExpiredRedirect(event.detail.redirectTo);
+    };
+
+    window.addEventListener(AUTH_EVENTS.SESSION_EXPIRED, handleSessionExpired as EventListener);
+    return () => {
+      window.removeEventListener(AUTH_EVENTS.SESSION_EXPIRED, handleSessionExpired as EventListener);
+    };
+  }, []);
 
   // Initialize auth state from storage on mount
   useEffect(() => {
@@ -106,6 +130,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsAuthenticated(true);
 
           // Refresh user data and workspace in background
+          // IMPORTANT: This is a "fire and forget" refresh for data freshness.
+          // We do NOT clear auth state on failure because:
+          // 1. We already verified tokens are valid (or successfully refreshed) above
+          // 2. Background API failures (network hiccups, timeouts) shouldn't log out users
+          // 3. Only explicit logout or token refresh failure should clear auth state
           getCurrentUser()
             .then(async (freshUser) => {
               if (freshUser) {
@@ -119,21 +148,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   }
                 }
               } else {
-                // API returned null - tokens are likely invalid, clear auth state
-                console.warn('[Auth] Session invalid, clearing auth state');
-                clearStoredTokens();
-                setUser(null);
-                setWorkspace(null);
-                setIsAuthenticated(false);
+                // API returned null - this could be a transient error
+                // Don't clear auth state, user has valid tokens from earlier check
+                console.warn('[Auth] Background user refresh returned null, keeping existing session');
               }
             })
             .catch((error) => {
-              // Failed to validate session - clear tokens to prevent retry loop
-              console.error('[Auth] Failed to validate session, clearing auth state:', error);
-              clearStoredTokens();
-              setUser(null);
-              setWorkspace(null);
-              setIsAuthenticated(false);
+              // Background refresh failed - log but don't logout
+              // The API client will handle 401s with token refresh
+              console.warn('[Auth] Background user refresh failed, keeping existing session:', error);
             });
         } else {
           // Have tokens but no user - try to fetch
@@ -227,12 +250,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // Clear session expired redirect after navigation
+  const clearSessionExpiredRedirect = useCallback(() => {
+    setSessionExpiredRedirect(null);
+  }, []);
+
   // Context value
   const value: AuthContextType = {
     user,
     workspace,
     isAuthenticated,
     isLoading,
+    sessionExpiredRedirect,
+    clearSessionExpiredRedirect,
     login,
     signup,
     logout,

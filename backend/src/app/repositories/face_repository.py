@@ -282,7 +282,71 @@ class FaceRepository:
             )
             
             return [self._row_to_dict(row) for row in rows]
-    
+
+    async def find_photo_ids_by_group_id(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[UUID]:
+        """Find all distinct photo IDs containing faces from a face group.
+
+        Args:
+            group_id: Face group ID to search
+            workspace_id: Workspace ID for tenant isolation
+            limit: Maximum number of results
+            offset: Number of results to skip
+
+        Returns:
+            List of unique photo (asset) IDs
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT photo_id
+                FROM faces
+                WHERE face_group_id = $1 AND workspace_id = $2
+                ORDER BY photo_id
+                LIMIT $3 OFFSET $4
+                """,
+                group_id,
+                workspace_id,
+                limit,
+                offset,
+            )
+
+            return [row["photo_id"] for row in rows]
+
+    async def count_distinct_photos_by_group_id(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+    ) -> int:
+        """Count distinct photos containing faces from a face group.
+
+        Args:
+            group_id: Face group ID to count
+            workspace_id: Workspace ID for tenant isolation
+
+        Returns:
+            Number of distinct photos
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT COUNT(DISTINCT photo_id) as count
+                FROM faces
+                WHERE face_group_id = $1 AND workspace_id = $2
+                """,
+                group_id,
+                workspace_id,
+            )
+
+            return row["count"] if row else 0
+
     async def find_ungrouped(
         self,
         workspace_id: UUID,

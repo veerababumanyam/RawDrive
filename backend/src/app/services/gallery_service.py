@@ -5,6 +5,7 @@ Implements gallery management within workspace scope.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional
 from uuid import UUID
@@ -19,6 +20,35 @@ from app.services.workspace_activity_service import (
 from app.utils.security import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------------------------
+
+
+def migrate_primary_color_to_gradient(primary_color: str) -> dict:
+    """Convert legacy primary_color to gradient config.
+
+    Creates a solid color gradient (same color at both ends) from the
+    legacy primary_color field. This is used for backward compatibility
+    when reading galleries that have primary_color but no gradient_config.
+
+    Args:
+        primary_color: Hex color code (e.g., '#FF0000')
+
+    Returns:
+        GradientConfiguration dict with solid color gradient
+    """
+    return {
+        "type": "linear",
+        "preset_id": None,
+        "direction": 135,
+        "colors": [
+            {"color": primary_color, "position": 0},
+            {"color": primary_color, "position": 100},
+        ]
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +164,7 @@ class GalleryService:
                     password_hash IS NOT NULL as password_protected,
                     pin_hash IS NOT NULL as pin_protected,
                     email_registration_required, expires_at, custom_domain,
-                    primary_color, font_family, custom_links,
+                    primary_color, gradient_config, font_family, custom_links,
                     cover_asset_id, created_by_user_id, published_at,
                     created_at, updated_at, deleted, pinned_at, last_accessed_at
                 FROM galleries
@@ -234,6 +264,10 @@ class GalleryService:
                 "published_at": row["published_at"].isoformat() if row["published_at"] else None,
                 "cover_asset_id": str(row["cover_asset_id"]) if row["cover_asset_id"] else None,
                 "primary_color": row["primary_color"],
+                # Support legacy primary_color -> gradient migration
+                "gradient_config": row["gradient_config"] if row["gradient_config"] else (
+                    migrate_primary_color_to_gradient(row["primary_color"]) if row["primary_color"] else None
+                ),
                 "font_family": row["font_family"],
                 "custom_domain": row["custom_domain"],
                 "custom_links": row["custom_links"] or [],
@@ -276,7 +310,7 @@ class GalleryService:
                     password_hash IS NOT NULL as password_protected,
                     pin_hash IS NOT NULL as pin_protected,
                     email_registration_required, expires_at, custom_domain,
-                    primary_color, font_family, custom_links,
+                    primary_color, gradient_config, font_family, custom_links,
                     cover_asset_id, created_by_user_id, published_at,
                     created_at, updated_at, deleted
                 FROM galleries
@@ -366,6 +400,10 @@ class GalleryService:
                 "published_at": row["published_at"].isoformat() if row["published_at"] else None,
                 "cover_asset_id": str(row["cover_asset_id"]) if row["cover_asset_id"] else None,
                 "primary_color": row["primary_color"],
+                # Support legacy primary_color -> gradient migration
+                "gradient_config": row["gradient_config"] if row["gradient_config"] else (
+                    migrate_primary_color_to_gradient(row["primary_color"]) if row["primary_color"] else None
+                ),
                 "font_family": row["font_family"],
                 "custom_domain": row["custom_domain"],
                 "custom_links": row["custom_links"] or [],
@@ -534,6 +572,8 @@ class GalleryService:
         selections_only: bool = False,
         search_query: str | None = None,
         face_group_ids: list[UUID] | None = None,
+        tag_ids: list[UUID] | None = None,
+        tag_source: str | None = None,
     ) -> dict:
         """List assets in a gallery with pagination and filtering."""
         pool = await get_postgres_pool()
@@ -586,6 +626,37 @@ class GalleryService:
                     )
                 """)
                 params.append(face_group_ids)
+                param_idx += 1
+
+            # Tag filtering - filter by tag IDs and optionally by source
+            if tag_ids:
+                tag_subquery = f"""
+                    EXISTS (
+                        SELECT 1 FROM asset_tags at
+                        WHERE at.asset_id = ga.asset_id
+                        AND at.tag_id = ANY(${param_idx}::uuid[])
+                """
+                params.append(tag_ids)
+                param_idx += 1
+
+                # Optionally filter by tag source (ai_vision, ai_gemini, ai_local, manual)
+                if tag_source:
+                    tag_subquery += f" AND at.source = ${param_idx}"
+                    params.append(tag_source)
+                    param_idx += 1
+
+                tag_subquery += ")"
+                where_conditions.append(tag_subquery)
+            elif tag_source:
+                # Filter only by source (show all assets with any tag from this source)
+                where_conditions.append(f"""
+                    EXISTS (
+                        SELECT 1 FROM asset_tags at
+                        WHERE at.asset_id = ga.asset_id
+                        AND at.source = ${param_idx}
+                    )
+                """)
+                params.append(tag_source)
                 param_idx += 1
 
             where_sql = " AND ".join(where_conditions)
@@ -733,19 +804,38 @@ class GalleryService:
                 "client_id",
                 "shoot_date",
                 "primary_color",
+                "gradient_config",
                 "font_family",
                 "custom_domain",
                 "custom_links",
                 "password_hash",
+                "password_encrypted",
+                "password_iv",
                 "pin_hash",
+                "pin_encrypted",
+                "pin_iv",
+            }
+
+            # Fields that can be set to NULL
+            nullable_fields = {
+                "branding_profile_id", "cover_asset_id", "client_id", "shoot_date",
+                "password_hash", "password_encrypted", "password_iv",
+                "pin_hash", "pin_encrypted", "pin_iv",
+                "primary_color", "gradient_config", "font_family", "custom_domain",
             }
 
             for field, value in updates.items():
                 if field in allowed_fields:
                     if field == "expires_at" and value is None:
                         set_clauses.append(f"{field} = NULL")
-                    elif field in ("branding_profile_id", "cover_asset_id", "client_id", "shoot_date", "password_hash", "pin_hash", "primary_color", "font_family", "custom_domain") and value is None:
+                    elif field in nullable_fields and value is None:
                         set_clauses.append(f"{field} = NULL")
+                    elif field in ("gradient_config", "custom_links") and value is not None:
+                        # JSONB fields - asyncpg's codec handles dict->JSON conversion
+                        # Don't use json.dumps() as the codec will double-encode
+                        set_clauses.append(f"{field} = ${param_idx}")
+                        params.append(value)
+                        param_idx += 1
                     else:
                         set_clauses.append(f"{field} = ${param_idx}")
                         params.append(value)
@@ -843,7 +933,8 @@ class GalleryService:
     async def verify_gallery_pin(self, gallery_id: UUID, pin: str) -> bool:
         """Verify PIN for gallery access.
 
-        Uses constant-time comparison to prevent timing attacks (SOC2 compliant).
+        Uses Argon2id verification which provides constant-time comparison
+        to prevent timing attacks (SOC2 compliant).
 
         Args:
             gallery_id: Gallery UUID
@@ -852,8 +943,6 @@ class GalleryService:
         Returns:
             True if PIN is valid, False otherwise
         """
-        import hmac
-
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             # Get the stored PIN hash
@@ -874,11 +963,8 @@ class GalleryService:
                 # No PIN set - return True (no verification needed)
                 return True
 
-            # Use constant-time comparison to prevent timing attacks
-            # Note: In production, pin_hash should be bcrypt/argon2 hash
-            # and compared using the appropriate library's verify function.
-            # For now, using hmac.compare_digest for constant-time string comparison.
-            return hmac.compare_digest(pin_hash.encode('utf-8'), pin.encode('utf-8'))
+            # Use Argon2id verification for secure, constant-time comparison
+            return verify_password(pin, pin_hash)
 
     async def verify_gallery_password(self, gallery_id: UUID, password: str) -> bool:
         """Verify gallery password."""
@@ -897,6 +983,85 @@ class GalleryService:
                 return True
             
             return verify_password(password, row["password_hash"])
+
+    async def get_gallery_credentials(
+        self, workspace_id: UUID, gallery_id: UUID
+    ) -> dict:
+        """Get gallery credentials for owner reveal feature.
+
+        Returns decrypted password and PIN if stored with encryption.
+        Legacy galleries (password/PIN set before encryption feature) will have
+        null values with *_recoverable = False.
+
+        Args:
+            workspace_id: Workspace UUID (required for key derivation and security)
+            gallery_id: Gallery UUID
+
+        Returns:
+            dict with password, pin, has_password, has_pin,
+            password_recoverable, pin_recoverable
+        """
+        from app.services.encryption_service import get_encryption_service
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    password_hash IS NOT NULL as has_password,
+                    pin_hash IS NOT NULL as has_pin,
+                    password_encrypted,
+                    password_iv,
+                    pin_encrypted,
+                    pin_iv
+                FROM galleries
+                WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+                """,
+                workspace_id,
+                gallery_id,
+            )
+            if not row:
+                raise GalleryNotFoundError(gallery_id)
+
+            result = {
+                "has_password": row["has_password"],
+                "has_pin": row["has_pin"],
+                "password": None,
+                "pin": None,
+                "password_recoverable": False,
+                "pin_recoverable": False,
+            }
+
+            # Decrypt password if encrypted version exists
+            if row["password_encrypted"] and row["password_iv"]:
+                result["password_recoverable"] = True
+                try:
+                    encryption_service = get_encryption_service()
+                    result["password"] = encryption_service.decrypt_gallery_credential(
+                        row["password_encrypted"],
+                        row["password_iv"],
+                        workspace_id,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to decrypt gallery password: {e}")
+                    # Keep password as None but mark as recoverable
+                    result["password_recoverable"] = False
+
+            # Decrypt PIN if encrypted version exists
+            if row["pin_encrypted"] and row["pin_iv"]:
+                result["pin_recoverable"] = True
+                try:
+                    encryption_service = get_encryption_service()
+                    result["pin"] = encryption_service.decrypt_gallery_credential(
+                        row["pin_encrypted"],
+                        row["pin_iv"],
+                        workspace_id,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to decrypt gallery PIN: {e}")
+                    result["pin_recoverable"] = False
+
+            return result
 
     async def create_sub_gallery(
         self,
@@ -1238,7 +1403,7 @@ class GalleryService:
                 SELECT 
                     a.asset_id, a.gallery_id, ga.sub_gallery_id, a.type, a.filename, 
                     a.width, a.height, a.duration, a.size_bytes, a.metadata, 
-                    a.created_at, ga.sort_order
+                    a.created_at, ga.sort_order, ga.is_private
                 FROM gallery_assets ga
                 JOIN assets a ON ga.asset_id = a.asset_id
                 WHERE ga.gallery_id = $1
@@ -1264,6 +1429,7 @@ class GalleryService:
                     "metadata": row["metadata"] or {},
                     "sort_order": row["sort_order"],
                     "created_at": row["created_at"].isoformat(),
+                    "is_private": row["is_private"],
                 })
             
             return results
@@ -1825,7 +1991,8 @@ def get_gallery_service() -> GalleryService:
                     ga.is_favorited,
                     ga.is_selected,
                     ga.favorites_count,
-                    ga.created_at
+                    ga.created_at,
+                    ga.is_private
                 FROM gallery_assets ga
                 INNER JOIN assets a ON ga.asset_id = a.asset_id
                 WHERE {where_clause}
@@ -1851,6 +2018,7 @@ def get_gallery_service() -> GalleryService:
                     "is_selected": row["is_selected"],
                     "favorites_count": row["favorites_count"],
                     "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                    "is_private": row["is_private"],
                 }
                 for row in rows
             ]

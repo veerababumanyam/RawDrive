@@ -8,8 +8,10 @@ import React, { useState, useEffect } from 'react';
 import { Edit, Share2, Image, Clock, Check, Trash2, Pin } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
 import { GalleryStatusBadge } from './GalleryStatusBadge';
+import { TaggingHealthBadge } from './TaggingHealthBadge';
 import { galleryService } from '../../../services/galleryService';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useGalleryTaggingHealth } from '../../../hooks/useGalleryTaggingHealth';
 import type { GalleryListItem } from '../../../types/gallery';
 
 export interface GalleryCardProps {
@@ -43,6 +45,13 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(gallery.cover_image_url || null);
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+
+  // Fetch tagging health data
+  const { health: taggingHealth, loading: healthLoading, error: healthError, refreshStats: refreshHealth } = useGalleryTaggingHealth({
+    workspaceId: workspace?.workspace_id || '',
+    galleryId: gallery.gallery_id,
+    enabled: !!workspace?.workspace_id,
+  });
 
   // Fetch signed URL for cover image if we have cover_asset_id
   useEffect(() => {
@@ -199,7 +208,18 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
 
         {/* Status badge and actions */}
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <GalleryStatusBadge status={gallery.status} />
+          <div className="flex items-center gap-2">
+            <GalleryStatusBadge status={gallery.status} />
+            <TaggingHealthBadge
+              health={taggingHealth}
+              loading={healthLoading}
+              error={!!healthError}
+              showRefresh={true}
+              onRefresh={refreshHealth}
+              compact
+              size="sm"
+            />
+          </div>
           <div className="flex items-center gap-2">
             {onEdit && (
               <button

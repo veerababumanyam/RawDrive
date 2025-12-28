@@ -2,72 +2,182 @@
   "$schema": "./_schema.json",
   "id": "face_detection_service",
   "title": "Face Detection and Identification Service",
-  "version": "1.0.0",
-  "status": "draft",
+  "version": "2.0.0",
+  "status": "active",
   "owner": "platform-team",
-  "description": "Comprehensive face detection, identification, and clustering service for organizing gallery photos by detected faces",
-  
+  "description": "Comprehensive face detection, identification, and clustering service with dedicated microservice architecture for scalable processing",
+
   "architecture": {
-    "overview": "Multi-provider face detection service with automatic failover, embedding-based clustering, and admin-configurable settings",
+    "overview": "Microservice-based face detection with dedicated worker process, multi-provider failover, embedding-based clustering, and admin-configurable settings",
+    "deploymentModes": {
+      "production": {
+        "description": "Face worker runs as separate Docker container (recommended)",
+        "mainBackend": "DISABLE_FACE_WORKER=true",
+        "faceWorker": "Dockerfile.worker on port 8001"
+      },
+      "development": {
+        "description": "Face worker embedded in main backend process (optional)",
+        "mainBackend": "DISABLE_FACE_WORKER=false",
+        "note": "Useful for single-process debugging"
+      }
+    },
     "components": [
+      {
+        "name": "FaceDetectionWorker",
+        "type": "microservice",
+        "description": "Dedicated microservice for processing face detection jobs. Runs as separate Docker container with its own resource limits.",
+        "location": "backend/src/app/face_worker_main.py",
+        "port": 8001,
+        "healthEndpoints": ["/health", "/ready"],
+        "dockerfile": "backend/Dockerfile.worker"
+      },
       {
         "name": "FaceDetectionService",
         "type": "service",
         "description": "Core service orchestrating face detection, embedding generation, and clustering",
-        "location": "backend/src/services/faceDetectionService.ts"
+        "location": "backend/src/app/services/face_detection_service.py"
+      },
+      {
+        "name": "FaceDetectionWorkerProcess",
+        "type": "worker",
+        "description": "Background worker processing face detection jobs from PostgreSQL queue",
+        "location": "backend/src/app/services/face_detection_worker.py"
       },
       {
         "name": "ProviderManager",
         "type": "service",
-        "description": "Manages AI provider selection, failover, and health monitoring",
-        "location": "backend/src/services/ai/providerManager.ts"
+        "description": "Manages AI provider selection, failover, and health monitoring with circuit breakers",
+        "location": "backend/src/app/services/ai/providers/provider_manager.py"
       },
       {
         "name": "CloudVisionProvider",
         "type": "provider",
-        "description": "Google Cloud Vision API integration for face detection",
-        "location": "backend/src/services/ai/providers/cloudVisionProvider.ts"
+        "description": "Google Cloud Vision API integration for face detection (primary provider)",
+        "location": "backend/src/app/services/ai/providers/cloud_vision_provider.py"
       },
       {
         "name": "GeminiProvider",
         "type": "provider",
         "description": "Google Gemini API integration for face detection (fallback)",
-        "location": "backend/src/services/ai/providers/geminiProvider.ts"
+        "location": "backend/src/app/services/ai/providers/gemini_provider.py"
+      },
+      {
+        "name": "LocalProvider",
+        "type": "provider",
+        "description": "OpenCV + MediaPipe local face detection (last resort, no API needed)",
+        "location": "backend/src/app/services/ai/providers/local_provider.py"
       },
       {
         "name": "FaceClusterService",
         "type": "service",
         "description": "Manages face clustering, similarity matching, and group operations",
-        "location": "backend/src/services/faceClusterService.ts"
+        "location": "backend/src/app/services/face_cluster_service.py"
       },
       {
-        "name": "FaceEmbeddingStore",
+        "name": "FaceRepository",
         "type": "repository",
-        "description": "pgvector-based storage and search for face embeddings",
-        "location": "backend/src/db/repositories/faceEmbeddingRepository.ts"
+        "description": "Data access for face records with pgvector embedding storage",
+        "location": "backend/src/app/repositories/face_repository.py"
       },
       {
-        "name": "FaceDetectionWorker",
-        "type": "worker",
-        "description": "Background worker for processing face detection jobs",
-        "location": "backend/src/workers/faceDetectionWorker.ts"
+        "name": "FaceGroupRepository",
+        "type": "repository",
+        "description": "Data access for face groups/clusters",
+        "location": "backend/src/app/repositories/face_group_repository.py"
       },
       {
-        "name": "AdminSettingsService",
+        "name": "FaceConfigurationService",
         "type": "service",
-        "description": "Manages admin-configurable settings for AI providers",
-        "location": "backend/src/services/adminSettingsService.ts"
+        "description": "Manages admin-configurable settings for AI providers and detection parameters",
+        "location": "backend/src/app/services/face_configuration_service.py"
+      },
+      {
+        "name": "FaceAdminSettingsService",
+        "type": "service",
+        "description": "Admin interface for managing face detection settings",
+        "location": "backend/src/app/services/face_admin_settings_service.py"
       }
     ],
     "dataFlow": [
-      "Photo upload triggers detection job queue",
-      "Worker fetches photo and sends to ProviderManager",
-      "ProviderManager selects provider based on priority and health",
-      "Provider returns face detections with bounding boxes",
-      "Service generates embeddings and stores in pgvector",
-      "ClusterService matches faces to existing groups or creates new ones",
-      "Face groups become available through API"
-    ]
+      "1. Photo upload triggers face_detection job insertion into face_detection_jobs table",
+      "2. Face Worker microservice polls face_detection_jobs for pending jobs",
+      "3. Worker downloads and decrypts photo from R2 storage",
+      "4. ProviderManager selects provider (Cloud Vision → Gemini → Local) with circuit breaker failover",
+      "5. Provider returns face detections with bounding boxes (normalized to 0-100%)",
+      "6. Worker generates 512-dim embeddings and stores in pgvector",
+      "7. ClusterService auto-clusters faces if confidence >= clustering threshold",
+      "8. Face thumbnails generated and uploaded to R2",
+      "9. Job status updated to completed/failed",
+      "10. Face groups become available through API"
+    ],
+    "queueSystem": {
+      "type": "PostgreSQL polling",
+      "table": "face_detection_jobs",
+      "pollingInterval": "5 seconds",
+      "batchSize": 10,
+      "concurrency": 1,
+      "note": "Uses PostgreSQL for simplicity; no Kafka/RabbitMQ required"
+    }
+  },
+
+  "microservice": {
+    "name": "face-worker",
+    "description": "Dedicated microservice for CPU-intensive face detection processing",
+    "dockerfile": "backend/Dockerfile.worker",
+    "port": 8001,
+    "healthCheck": {
+      "endpoint": "/health",
+      "interval": "10s",
+      "timeout": "5s"
+    },
+    "resourceLimits": {
+      "cpus": "1.0",
+      "memory": "1G",
+      "reservations": {
+        "cpus": "0.25",
+        "memory": "256M"
+      }
+    },
+    "environmentVariables": [
+      {
+        "name": "DATABASE_URL",
+        "description": "PostgreSQL connection string (shared with main backend)",
+        "required": true
+      },
+      {
+        "name": "REDIS_URL",
+        "description": "Redis connection string (for caching)",
+        "required": true
+      },
+      {
+        "name": "DB_POOL_MIN_SIZE",
+        "description": "Minimum database connections",
+        "default": "1"
+      },
+      {
+        "name": "DB_POOL_MAX_SIZE",
+        "description": "Maximum database connections (conservative for face processing)",
+        "default": "5"
+      },
+      {
+        "name": "GOOGLE_APPLICATION_CREDENTIALS",
+        "description": "Path to Google Cloud Vision service account JSON",
+        "required": false
+      }
+    ],
+    "dependencies": {
+      "python": "3.11+",
+      "packages": [
+        "fastapi", "uvicorn", "asyncpg", "pydantic",
+        "boto3 (S3/R2 storage)",
+        "Pillow (image processing)",
+        "opencv-python-headless (local detection)",
+        "mediapipe (local face detection)",
+        "google-cloud-vision (Cloud Vision API)",
+        "google-generativeai (Gemini API)",
+        "cryptography (encryption)"
+      ]
+    }
   },
 
   "providers": {
@@ -76,12 +186,13 @@
       "type": "cloud_vision",
       "capabilities": ["face_detection", "face_landmarks", "emotions"],
       "configuration": {
-        "credentialsSource": ["admin_settings", "env:GOOGLE_CLOUD_VISION_CREDENTIALS"],
-        "serviceAccountEmail": "configurable",
-        "projectId": "configurable",
+        "credentialsSource": ["admin_settings", "env:GOOGLE_APPLICATION_CREDENTIALS"],
+        "serviceAccountEmail": "rawdrivevision@docparser-468004.iam.gserviceaccount.com",
+        "projectId": "docparser-468004",
         "rateLimitPerMinute": "configurable (default: 1800)",
         "timeoutMs": "configurable (default: 30000)"
       },
+      "coordinateNormalization": "Pixel coordinates normalized to percentages (0-100) using PIL image dimensions",
       "responseFormat": {
         "faces": [
           {
@@ -113,6 +224,17 @@
         "timeoutMs": "configurable (default: 60000)"
       },
       "promptTemplate": "Analyze this image and detect all human faces. For each face, provide: 1) bounding box coordinates (x, y, width, height as percentages), 2) confidence score (0-1), 3) estimated age range, 4) any distinguishing features. Return as JSON array."
+    },
+    "lastResort": {
+      "name": "Local Provider",
+      "type": "local",
+      "capabilities": ["face_detection"],
+      "configuration": {
+        "noApiRequired": true,
+        "backend": "OpenCV + MediaPipe",
+        "cpuOnly": true
+      },
+      "note": "Used when cloud providers are unavailable. No API costs but lower accuracy."
     }
   },
 
@@ -123,14 +245,15 @@
         "description": "Stores detected faces with embeddings",
         "columns": [
           {"name": "id", "type": "UUID", "constraints": "PRIMARY KEY DEFAULT gen_random_uuid()"},
-          {"name": "workspace_id", "type": "UUID", "constraints": "NOT NULL REFERENCES workspaces(id)"},
-          {"name": "photo_id", "type": "UUID", "constraints": "NOT NULL REFERENCES photos(id)"},
+          {"name": "workspace_id", "type": "UUID", "constraints": "NOT NULL REFERENCES workspaces(workspace_id)"},
+          {"name": "photo_id", "type": "UUID", "constraints": "NOT NULL REFERENCES assets(asset_id)"},
           {"name": "face_group_id", "type": "UUID", "constraints": "REFERENCES face_groups(id)"},
-          {"name": "bounding_box", "type": "JSONB", "constraints": "NOT NULL", "schema": {"x": "number", "y": "number", "width": "number", "height": "number"}},
+          {"name": "bounding_box", "type": "JSONB", "constraints": "NOT NULL", "schema": {"x": "number (0-100%)", "y": "number (0-100%)", "width": "number (0-100%)", "height": "number (0-100%)"}},
           {"name": "confidence", "type": "DECIMAL(5,4)", "constraints": "NOT NULL"},
           {"name": "embedding", "type": "vector(512)", "constraints": ""},
           {"name": "provider", "type": "VARCHAR(50)", "constraints": "NOT NULL"},
           {"name": "detection_metadata", "type": "JSONB", "constraints": ""},
+          {"name": "thumbnail_urls", "type": "JSONB", "constraints": "", "schema": {"small": "64px", "medium": "128px", "large": "256px"}},
           {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()"},
           {"name": "updated_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()"}
         ],
@@ -146,7 +269,7 @@
         "description": "Stores face clusters/groups",
         "columns": [
           {"name": "id", "type": "UUID", "constraints": "PRIMARY KEY DEFAULT gen_random_uuid()"},
-          {"name": "workspace_id", "type": "UUID", "constraints": "NOT NULL REFERENCES workspaces(id)"},
+          {"name": "workspace_id", "type": "UUID", "constraints": "NOT NULL REFERENCES workspaces(workspace_id)"},
           {"name": "name", "type": "VARCHAR(255)", "constraints": ""},
           {"name": "representative_face_id", "type": "UUID", "constraints": "REFERENCES faces(id)"},
           {"name": "centroid", "type": "vector(512)", "constraints": ""},
@@ -179,33 +302,26 @@
       },
       {
         "name": "face_detection_jobs",
-        "description": "Tracks face detection job status",
+        "description": "Job queue for face detection processing (polled by face-worker microservice)",
         "columns": [
           {"name": "id", "type": "UUID", "constraints": "PRIMARY KEY DEFAULT gen_random_uuid()"},
-          {"name": "workspace_id", "type": "UUID", "constraints": "NOT NULL REFERENCES workspaces(id)"},
-          {"name": "photo_id", "type": "UUID", "constraints": "NOT NULL REFERENCES photos(id)"},
-          {"name": "status", "type": "VARCHAR(20)", "constraints": "NOT NULL DEFAULT 'pending'"},
+          {"name": "workspace_id", "type": "UUID", "constraints": "NOT NULL REFERENCES workspaces(workspace_id)"},
+          {"name": "photo_id", "type": "UUID", "constraints": "NOT NULL UNIQUE REFERENCES assets(asset_id)"},
+          {"name": "status", "type": "VARCHAR(20)", "constraints": "NOT NULL DEFAULT 'pending'", "values": ["pending", "processing", "completed", "failed"]},
           {"name": "provider_used", "type": "VARCHAR(50)", "constraints": ""},
           {"name": "faces_detected", "type": "INTEGER", "constraints": ""},
           {"name": "error_message", "type": "TEXT", "constraints": ""},
           {"name": "retry_count", "type": "INTEGER", "constraints": "DEFAULT 0"},
-          {"name": "priority", "type": "INTEGER", "constraints": "DEFAULT 0"},
+          {"name": "priority", "type": "INTEGER", "constraints": "DEFAULT 0", "note": "Higher = processed first. 0 for auto-upload, 10+ for manual re-scan"},
           {"name": "started_at", "type": "TIMESTAMPTZ", "constraints": ""},
           {"name": "completed_at", "type": "TIMESTAMPTZ", "constraints": ""},
           {"name": "created_at", "type": "TIMESTAMPTZ", "constraints": "DEFAULT NOW()"}
         ],
         "indexes": [
-          {"name": "idx_detection_jobs_status", "columns": ["status", "priority", "created_at"]},
-          {"name": "idx_detection_jobs_photo", "columns": ["photo_id"]}
+          {"name": "idx_detection_jobs_status", "columns": ["status", "priority DESC", "created_at"]},
+          {"name": "idx_detection_jobs_photo", "columns": ["photo_id"], "unique": true}
         ]
       }
-    ],
-    "migrations": [
-      "001_enable_pgvector_extension.sql",
-      "002_create_faces_table.sql",
-      "003_create_face_groups_table.sql",
-      "004_create_ai_provider_settings_table.sql",
-      "005_create_face_detection_jobs_table.sql"
     ]
   },
 
@@ -217,328 +333,156 @@
         "path": "/galleries/{galleryId}/faces",
         "description": "List all detected faces in a gallery",
         "auth": "required",
-        "params": {
-          "galleryId": "UUID"
-        },
-        "query": {
-          "page": "number (default: 1)",
-          "limit": "number (default: 50)",
-          "minConfidence": "number (default: 0.7)",
-          "faceGroupId": "UUID (optional filter)"
-        },
-        "response": {
-          "faces": [
-            {
-              "id": "UUID",
-              "photoId": "UUID",
-              "faceGroupId": "UUID | null",
-              "boundingBox": {"x": 0, "y": 0, "width": 0, "height": 0},
-              "confidence": 0.95,
-              "thumbnailUrl": "string"
-            }
-          ],
-          "pagination": {"page": 1, "limit": 50, "total": 100}
-        }
+        "file": "backend/src/app/api/v1/faces.py"
       },
       {
         "method": "GET",
         "path": "/faces/{faceId}",
         "description": "Get detailed face information",
-        "auth": "required",
-        "params": {
-          "faceId": "UUID"
-        },
-        "response": {
-          "id": "UUID",
-          "photoId": "UUID",
-          "faceGroupId": "UUID | null",
-          "boundingBox": {"x": 0, "y": 0, "width": 0, "height": 0},
-          "confidence": 0.95,
-          "provider": "string",
-          "detectionMetadata": {},
-          "createdAt": "ISO8601"
-        }
+        "auth": "required"
       },
       {
         "method": "POST",
         "path": "/faces/{faceId}/identify",
         "description": "Manually assign face to a group",
-        "auth": "required",
-        "params": {
-          "faceId": "UUID"
-        },
-        "body": {
-          "faceGroupId": "UUID"
-        },
-        "response": {
-          "success": true,
-          "face": {}
-        }
+        "auth": "required"
       },
       {
         "method": "GET",
         "path": "/workspaces/{workspaceId}/face-groups",
         "description": "List all face groups in workspace",
         "auth": "required",
-        "params": {
-          "workspaceId": "UUID"
-        },
-        "query": {
-          "page": "number",
-          "limit": "number",
-          "search": "string (name search)"
-        },
-        "response": {
-          "faceGroups": [
-            {
-              "id": "UUID",
-              "name": "string | null",
-              "faceCount": 0,
-              "representativeThumbnailUrl": "string",
-              "createdAt": "ISO8601"
-            }
-          ],
-          "pagination": {}
-        }
+        "file": "backend/src/app/api/v1/face_groups.py"
+      },
+      {
+        "method": "GET",
+        "path": "/galleries/{galleryId}/face-groups",
+        "description": "List face groups with gallery-specific statistics",
+        "auth": "required"
       },
       {
         "method": "PUT",
         "path": "/face-groups/{groupId}",
-        "description": "Update face group metadata",
-        "auth": "required",
-        "params": {
-          "groupId": "UUID"
-        },
-        "body": {
-          "name": "string (optional)",
-          "representativeFaceId": "UUID (optional)"
-        },
-        "response": {
-          "success": true,
-          "faceGroup": {}
-        }
+        "description": "Update face group metadata (name, representative)",
+        "auth": "required"
+      },
+      {
+        "method": "DELETE",
+        "path": "/face-groups/{groupId}",
+        "description": "Delete face group (faces become ungrouped)",
+        "auth": "required"
       },
       {
         "method": "POST",
         "path": "/face-groups/merge",
         "description": "Merge two face groups",
-        "auth": "required",
-        "body": {
-          "sourceGroupId": "UUID",
-          "targetGroupId": "UUID"
-        },
-        "response": {
-          "success": true,
-          "mergedGroup": {}
-        }
+        "auth": "required"
       },
       {
         "method": "POST",
         "path": "/face-groups/{groupId}/split",
         "description": "Split faces from a group into new group",
-        "auth": "required",
-        "params": {
-          "groupId": "UUID"
-        },
-        "body": {
-          "faceIds": ["UUID"]
-        },
-        "response": {
-          "success": true,
-          "newGroup": {}
-        }
+        "auth": "required"
       },
       {
         "method": "POST",
         "path": "/photos/{photoId}/detect-faces",
-        "description": "Trigger manual face detection",
-        "auth": "required",
-        "params": {
-          "photoId": "UUID"
-        },
-        "body": {
-          "priority": "number (optional, default: 10)"
-        },
-        "response": {
-          "success": true,
-          "jobId": "UUID"
-        }
+        "description": "Trigger manual face detection (priority: 10+)",
+        "auth": "required"
       },
       {
         "method": "GET",
         "path": "/admin/ai-providers",
         "description": "List AI provider configurations",
         "auth": "admin",
-        "response": {
-          "providers": [
-            {
-              "id": "UUID",
-              "providerName": "string",
-              "isEnabled": true,
-              "priority": 0,
-              "healthStatus": "healthy | unhealthy | unknown",
-              "rateLimitPerMinute": 1800,
-              "timeoutMs": 30000
-            }
-          ]
-        }
+        "file": "backend/src/app/api/v1/admin_ai_providers.py"
       },
       {
         "method": "PUT",
         "path": "/admin/ai-providers/{providerId}",
         "description": "Update AI provider configuration",
-        "auth": "admin",
-        "params": {
-          "providerId": "UUID"
-        },
-        "body": {
-          "credentials": "object (encrypted)",
-          "config": "object",
-          "isEnabled": "boolean",
-          "priority": "number",
-          "rateLimitPerMinute": "number",
-          "timeoutMs": "number"
-        },
-        "response": {
-          "success": true,
-          "provider": {}
-        }
+        "auth": "admin"
       },
       {
         "method": "POST",
         "path": "/admin/ai-providers/{providerId}/test",
         "description": "Test AI provider connectivity",
-        "auth": "admin",
-        "params": {
-          "providerId": "UUID"
-        },
-        "response": {
-          "success": true,
-          "latencyMs": 250,
-          "message": "string"
-        }
+        "auth": "admin"
       }
     ]
   },
 
   "configuration": {
-    "adminSettings": {
-      "description": "Settings configurable through admin interface",
-      "settings": [
-        {
-          "key": "face.similarity_threshold",
-          "type": "number",
-          "default": 0.85,
-          "min": 0.5,
-          "max": 0.99,
-          "description": "Minimum similarity score to consider faces as same person"
-        },
-        {
-          "key": "face.min_confidence",
-          "type": "number",
-          "default": 0.7,
-          "min": 0.1,
-          "max": 0.99,
-          "description": "Minimum detection confidence to process a face"
-        },
-        {
-          "key": "face.batch_size",
-          "type": "number",
-          "default": 10,
-          "min": 1,
-          "max": 100,
-          "description": "Number of photos to process in a single batch"
-        },
-        {
-          "key": "face.max_retries",
-          "type": "number",
-          "default": 3,
-          "min": 0,
-          "max": 10,
-          "description": "Maximum retry attempts for failed detections"
-        },
-        {
-          "key": "face.processing_enabled",
-          "type": "boolean",
-          "default": true,
-          "description": "Global toggle for face detection processing"
-        }
-      ]
+    "workerSettings": {
+      "DISABLE_FACE_WORKER": {
+        "description": "Set to 'true' in main backend to use dedicated microservice (production)",
+        "default": "false (embedded worker)",
+        "production": "true"
+      },
+      "BATCH_SIZE": {
+        "description": "Number of jobs to fetch per polling cycle",
+        "default": 10
+      },
+      "POLL_INTERVAL": {
+        "description": "Seconds between job queue polls",
+        "default": 5
+      },
+      "CONCURRENT_JOBS": {
+        "description": "Number of jobs processed concurrently (1 due to memory constraints)",
+        "default": 1
+      },
+      "STALE_JOB_TIMEOUT_MINUTES": {
+        "description": "Minutes before stuck processing jobs are reset",
+        "default": 10
+      }
     },
-    "environmentVariables": {
-      "description": "Fallback environment variables when admin settings not configured",
-      "variables": [
-        {
-          "name": "GOOGLE_CLOUD_VISION_CREDENTIALS",
-          "description": "Path to Google Cloud Vision service account JSON file",
-          "required": false
-        },
-        {
-          "name": "GEMINI_API_KEY",
-          "description": "Google Gemini API key",
-          "required": false
-        },
-        {
-          "name": "GEMINI_MODEL",
-          "description": "Default Gemini model for face detection",
-          "default": "gemini-3-flash-preview"
-        },
-        {
-          "name": "GEMINI_MODEL_FAST",
-          "description": "Fast Gemini model for face detection",
-          "default": "gemini-2.5-flash"
-        },
-        {
-          "name": "FACE_SIMILARITY_THRESHOLD",
-          "description": "Default similarity threshold",
-          "default": "0.85"
-        },
-        {
-          "name": "FACE_MIN_CONFIDENCE",
-          "description": "Default minimum confidence",
-          "default": "0.7"
-        }
-      ]
-    }
-  },
-
-  "backgroundJobs": {
-    "queue": "face-detection",
-    "jobs": [
+    "detectionSettings": {
+      "face.similarity_threshold": {
+        "type": "number",
+        "default": 0.85,
+        "min": 0.5,
+        "max": 0.99,
+        "description": "Minimum similarity score to consider faces as same person"
+      },
+      "face.min_confidence": {
+        "type": "number",
+        "default": 0.3,
+        "min": 0.1,
+        "max": 0.99,
+        "description": "Minimum detection confidence to store a face"
+      },
+      "face.auto_cluster_threshold": {
+        "type": "number",
+        "default": 0.6,
+        "description": "Minimum confidence for automatic clustering"
+      },
+      "face.max_retries": {
+        "type": "number",
+        "default": 3,
+        "description": "Maximum retry attempts for failed detections"
+      },
+      "face.processing_enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Global toggle for face detection processing"
+      }
+    },
+    "environmentVariables": [
       {
-        "name": "detectFaces",
-        "description": "Process face detection for a single photo",
-        "payload": {
-          "photoId": "UUID",
-          "workspaceId": "UUID",
-          "priority": "number"
-        },
-        "retryStrategy": {
-          "maxRetries": 3,
-          "backoff": "exponential",
-          "initialDelayMs": 1000
-        }
+        "name": "GOOGLE_APPLICATION_CREDENTIALS",
+        "description": "Path to Google Cloud Vision service account JSON file",
+        "required": false,
+        "example": "docs/docparser-468004-9b82008238af.json"
       },
       {
-        "name": "batchDetectFaces",
-        "description": "Process face detection for multiple photos",
-        "payload": {
-          "photoIds": ["UUID"],
-          "workspaceId": "UUID"
-        }
+        "name": "GEMINI_API_KEY",
+        "description": "Google Gemini API key",
+        "required": false
       },
       {
-        "name": "recalculateClusterCentroid",
-        "description": "Recalculate centroid after cluster changes",
-        "payload": {
-          "faceGroupId": "UUID"
-        }
-      },
-      {
-        "name": "providerHealthCheck",
-        "description": "Periodic health check for AI providers",
-        "schedule": "*/5 * * * *",
-        "payload": {}
+        "name": "GEMINI_MODEL",
+        "description": "Default Gemini model for face detection",
+        "default": "gemini-3-flash-preview"
       }
     ]
   },
@@ -547,44 +491,29 @@
     "circuitBreaker": {
       "failureThreshold": 5,
       "recoveryTimeMs": 60000,
-      "halfOpenRequests": 3
+      "halfOpenRequests": 3,
+      "location": "backend/src/app/services/ai/circuit_breaker.py"
+    },
+    "retryStrategy": {
+      "maxRetries": 3,
+      "backoffType": "exponential",
+      "initialDelayMs": 60000,
+      "formula": "delay = 60s × 2^attempt",
+      "location": "backend/src/app/services/ai/retry_strategy.py"
     },
     "errorCodes": [
-      {
-        "code": "FACE_DETECTION_FAILED",
-        "httpStatus": 500,
-        "message": "Face detection failed after all provider attempts"
-      },
-      {
-        "code": "PROVIDER_UNAVAILABLE",
-        "httpStatus": 503,
-        "message": "All AI providers are currently unavailable"
-      },
-      {
-        "code": "RATE_LIMIT_EXCEEDED",
-        "httpStatus": 429,
-        "message": "Provider rate limit exceeded, request queued for retry"
-      },
-      {
-        "code": "INVALID_IMAGE_FORMAT",
-        "httpStatus": 400,
-        "message": "Image format not supported for face detection"
-      },
-      {
-        "code": "FACE_GROUP_NOT_FOUND",
-        "httpStatus": 404,
-        "message": "Face group not found"
-      },
-      {
-        "code": "CROSS_WORKSPACE_ACCESS",
-        "httpStatus": 403,
-        "message": "Cannot access face data from another workspace"
-      }
-    ]
+      {"code": "PROVIDER_UNAVAILABLE", "httpStatus": 503},
+      {"code": "ALL_PROVIDERS_FAILED", "httpStatus": 503},
+      {"code": "RATE_LIMIT_EXCEEDED", "httpStatus": 429},
+      {"code": "INVALID_IMAGE_FORMAT", "httpStatus": 400},
+      {"code": "FACE_GROUP_NOT_FOUND", "httpStatus": 404},
+      {"code": "CROSS_WORKSPACE_ACCESS", "httpStatus": 403}
+    ],
+    "errorHandler": "backend/src/app/middleware/face_error_handler.py"
   },
 
   "security": {
-    "dataIsolation": "All face queries filtered by workspace_id",
+    "dataIsolation": "All face queries filtered by workspace_id (multi-tenant)",
     "credentialStorage": "AES-256-GCM encryption for provider credentials",
     "auditLogging": "All face data access logged with user and workspace context",
     "apiAuth": "JWT authentication required for all endpoints",
@@ -606,27 +535,22 @@
   },
 
   "monitoring": {
+    "healthEndpoints": {
+      "faceWorker": "http://face-worker:8001/health",
+      "ready": "http://face-worker:8001/ready"
+    },
     "metrics": [
       "face_detection_total",
       "face_detection_duration_seconds",
       "face_detection_errors_total",
       "provider_requests_total",
       "provider_latency_seconds",
-      "face_clusters_total",
-      "similarity_search_duration_seconds"
+      "face_clusters_total"
     ],
-    "alerts": [
-      {
-        "name": "HighDetectionErrorRate",
-        "condition": "rate(face_detection_errors_total[5m]) > 0.1",
-        "severity": "warning"
-      },
-      {
-        "name": "AllProvidersUnhealthy",
-        "condition": "sum(provider_health_status) == 0",
-        "severity": "critical"
-      }
-    ]
+    "logging": {
+      "destination": "Loki via structured logging",
+      "contextFields": ["job_id", "photo_id", "workspace_id", "provider"]
+    }
   },
 
   "relatedSpecs": [

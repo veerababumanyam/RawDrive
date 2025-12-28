@@ -83,6 +83,7 @@ async def list_library_assets(
     start_date: Annotated[datetime | None, Query(description="Filter by date taken start")] = None,
     end_date: Annotated[datetime | None, Query(description="Filter by date taken end")] = None,
     folder_id: Annotated[UUID | None, Query(description="Filter by folder ID")] = None,
+    face_group_id: Annotated[UUID | None, Query(description="Filter by face group (person) ID")] = None,
 ) -> LibraryListResponse:
     """List all assets in the workspace library."""
     service = get_library_service()
@@ -98,6 +99,7 @@ async def list_library_assets(
             start_date=start_date,
             end_date=end_date,
             folder_id=folder_id,
+            face_group_id=face_group_id,
         )
         
         # Generate signed URLs for media access

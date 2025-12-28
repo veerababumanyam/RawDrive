@@ -4,7 +4,7 @@
  * Requirement 13.1
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -35,8 +35,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredPermissions: _requiredPermissions = [],
   redirectTo = '/signin',
 }) => {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, sessionExpiredRedirect, clearSessionExpiredRedirect } = useAuth();
   const location = useLocation();
+
+  // Clear session expired redirect when navigating away
+  useEffect(() => {
+    if (sessionExpiredRedirect) {
+      clearSessionExpiredRedirect();
+    }
+  }, [sessionExpiredRedirect, clearSessionExpiredRedirect]);
 
   // Show loading while checking auth state
   if (isLoading) {
@@ -46,8 +53,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Redirect to signin if not authenticated
   if (!isAuthenticated) {
     // Preserve the attempted URL for redirect after login
-    const returnUrl = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`${redirectTo}?redirect=${returnUrl}`} replace />;
+    // Use sessionExpiredRedirect if available (from API 401), otherwise use current location
+    const returnPath = sessionExpiredRedirect || (location.pathname + location.search);
+    const returnUrl = encodeURIComponent(returnPath);
+    // Add session_expired param to show appropriate message on signin page
+    const expiredParam = sessionExpiredRedirect ? '&session_expired=true' : '';
+    return <Navigate to={`${redirectTo}?redirect=${returnUrl}${expiredParam}`} replace />;
   }
 
   // Check email verification if required

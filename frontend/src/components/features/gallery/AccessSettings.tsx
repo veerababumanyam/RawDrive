@@ -1,15 +1,22 @@
 /**
  * AccessSettings Component
  * Settings for gallery access control
+ *
+ * Uses the shared useGalleryCredentials hook to avoid duplicate API calls
+ * when both password and PIN settings need credential status.
+ *
+ * Feature: 007-fix-gallery-pin-password
  */
 
-import React, { useState } from 'react';
-import { Lock, Mail, Calendar, Globe } from 'lucide-react';
+import React, { useState, useRef, useCallback } from 'react';
+import { Lock, Mail, Calendar, Globe, Eye, EyeOff } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
 import { Toggle } from '../../ui/FormControls';
 import { AppInput } from '../../ui/AppInput';
 import { AppButton } from '../../ui/AppButton';
 import { PinSettings } from './PinSettings';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useGalleryCredentials } from '../../../hooks/useGalleryCredentials';
 import type { GalleryDetailData, GalleryUpdateRequest } from '../../../types/gallery';
 
 export interface AccessSettingsProps {
@@ -18,6 +25,7 @@ export interface AccessSettingsProps {
 }
 
 export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdate }) => {
+  const { workspace } = useAuth();
   const [password, setPassword] = useState('');
   const [emailRequired, setEmailRequired] = useState(gallery.email_registration_required || false);
   const [expiresAt, setExpiresAt] = useState(
@@ -26,18 +34,53 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
   const [customDomain, setCustomDomain] = useState(gallery.custom_domain || '');
 
   const [isPasswordEnabled, setIsPasswordEnabled] = useState(gallery.password_protected || false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Use shared credentials hook - single API call for both password and PIN
+  const credentials = useGalleryCredentials({
+    workspaceId: workspace?.workspace_id,
+    galleryId: gallery.gallery_id,
+    fallback: {
+      passwordProtected: gallery.password_protected,
+      pinProtected: gallery.pin_protected,
+    },
+  });
+
+  // Track the last password value sent to parent to avoid duplicate updates
+  const lastSentPasswordRef = useRef<string | null>(null);
 
   const handlePasswordToggle = (enabled: boolean) => {
     setIsPasswordEnabled(enabled);
     if (!enabled) {
       onUpdate({ remove_password: true });
       setPassword('');
+      lastSentPasswordRef.current = null;
+      // Reset credential display state via hook
+      credentials.resetCredentials('password');
+      setShowPassword(false);
     }
   };
 
-  const handlePasswordChange = (value: string) => {
+  const handlePasswordChange = useCallback((value: string) => {
     setPassword(value);
-    onUpdate({ password: value });
+    // Clear revealed password when user starts typing new value
+    if (credentials.revealedPassword && value !== credentials.revealedPassword) {
+      credentials.clearRevealed('password');
+      setShowPassword(false);
+    }
+    // Only send password update if non-empty and different from last sent
+    if (value && value !== lastSentPasswordRef.current) {
+      lastSentPasswordRef.current = value;
+      onUpdate({ password: value });
+    }
+  }, [onUpdate, credentials]);
+
+  const handlePasswordRevealToggle = async () => {
+    if (!showPassword && credentials.hasPassword && credentials.passwordRecoverable && !credentials.revealedPassword) {
+      // Fetch fresh credentials when revealing for the first time
+      await credentials.revealCredentials();
+    }
+    setShowPassword(!showPassword);
   };
 
   const handleEmailRequiredToggle = (enabled: boolean) => {
@@ -74,22 +117,54 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
             onChange={(e) => handlePasswordToggle(e.target.checked)}
           />
           {isPasswordEnabled && (
-            <div>
+            <div className="relative">
+              {/* Hidden fields to trick password managers */}
+              <input type="text" name="prevent_autofill" id="prevent_autofill" value="" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} readOnly />
+              <input type="password" name="password_fake" id="password_fake" value="" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} readOnly />
               <AppInput
-                type="password"
-                label="Password"
-                value={password}
+                type={showPassword ? 'text' : 'password'}
+                name="gallery_access_code"
+                label="Gallery Password"
+                value={showPassword && credentials.revealedPassword && !password ? credentials.revealedPassword : password}
                 onChange={(e) => handlePasswordChange(e.target.value)}
-                placeholder="Enter new password"
-                helperText="Leave empty to remove password protection"
+                placeholder={credentials.isLoading ? "Loading..." : (credentials.hasPassword ? "********" : "Enter gallery password")}
+                autoComplete="new-password"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                disabled={credentials.isLoading}
+                helperText={
+                  credentials.hasPassword && !credentials.passwordRecoverable
+                    ? "Password is set (legacy - original value cannot be revealed). Enter a new password to replace it."
+                    : credentials.hasPassword
+                    ? "Password is set. Click the eye icon to reveal, or enter a new password to change it."
+                    : "Set any password you like. This is a simple access code for gallery visitors, not an account password."
+                }
               />
+              <button
+                type="button"
+                onClick={handlePasswordRevealToggle}
+                className="absolute right-3 top-[38px] text-text-tertiary hover:text-text-secondary disabled:opacity-50"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                disabled={(credentials.hasPassword && !credentials.passwordRecoverable && !password) || credentials.isRevealing}
+                title={credentials.hasPassword && !credentials.passwordRecoverable && !password ? "Original password cannot be revealed (legacy)" : undefined}
+              >
+                {credentials.isRevealing ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-text-tertiary border-t-transparent" />
+                ) : showPassword ? (
+                  <EyeOff size={18} />
+                ) : (
+                  <Eye size={18} />
+                )}
+              </button>
             </div>
           )}
         </div>
       </AppCard>
 
-      {/* PIN Protection */}
-      <PinSettings gallery={gallery} onUpdate={onUpdate} />
+      {/* PIN Protection - receives credentials from shared hook */}
+      <PinSettings gallery={gallery} onUpdate={onUpdate} credentials={credentials} />
 
       <AppCard padding="md">
         <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">

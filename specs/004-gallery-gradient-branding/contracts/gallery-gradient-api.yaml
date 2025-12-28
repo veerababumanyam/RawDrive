@@ -1,0 +1,295 @@
+openapi: 3.1.0
+info:
+  title: Gallery Gradient Branding API
+  version: 1.0.0
+  description: |
+    API extensions for gallery gradient branding feature.
+    Extends existing gallery CRUD endpoints with gradient_config field.
+
+paths:
+  /api/v1/workspaces/{workspace_id}/galleries/{gallery_id}:
+    patch:
+      summary: Update gallery settings (including gradient)
+      description: |
+        Updates gallery settings. The gradient_config field replaces the legacy
+        primary_color for branding. Existing PATCH behavior is preserved.
+      operationId: updateGallery
+      tags:
+        - Galleries
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GalleryUpdateRequest'
+            examples:
+              applyPresetGradient:
+                summary: Apply a predefined gradient preset
+                value:
+                  gradient_config:
+                    type: linear
+                    preset_id: sunset-glow
+                    direction: 135
+                    colors:
+                      - color: "#FF6B6B"
+                        position: 0
+                      - color: "#FFA502"
+                        position: 100
+              applyCustomGradient:
+                summary: Apply a custom gradient
+                value:
+                  gradient_config:
+                    type: linear
+                    preset_id: null
+                    direction: 90
+                    colors:
+                      - color: "#1A1A2E"
+                        position: 0
+                      - color: "#16213E"
+                        position: 50
+                      - color: "#0F3460"
+                        position: 100
+              removeGradient:
+                summary: Remove gradient (reset to none)
+                value:
+                  gradient_config: null
+      responses:
+        '200':
+          description: Gallery updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryDetailResponse'
+        '400':
+          description: Invalid gradient configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient permissions
+        '404':
+          description: Gallery not found
+
+    get:
+      summary: Get gallery details (includes gradient)
+      description: |
+        Returns full gallery details including gradient_config.
+        Legacy primary_color is still returned for backward compatibility.
+      operationId: getGallery
+      tags:
+        - Galleries
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Gallery details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryDetailResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ColorStop:
+      type: object
+      description: Single color stop in a gradient
+      required:
+        - color
+        - position
+      properties:
+        color:
+          type: string
+          pattern: '^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$'
+          description: Hex color code (#RRGGBB or #RGB)
+          example: "#FF6B6B"
+        position:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Position as percentage (0-100)
+          example: 0
+
+    GradientConfiguration:
+      type: object
+      description: Complete gradient configuration for gallery branding
+      required:
+        - type
+        - direction
+        - colors
+      properties:
+        type:
+          type: string
+          enum: [linear]
+          description: Gradient type (linear only in v1)
+          default: linear
+        preset_id:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Reference to predefined preset, null for custom gradients
+          example: "sunset-glow"
+        direction:
+          type: integer
+          minimum: 0
+          maximum: 359
+          description: Direction in degrees (0=top, 90=right, 180=bottom, 270=left)
+          default: 135
+          example: 135
+        colors:
+          type: array
+          minItems: 2
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/ColorStop'
+          description: Array of 2-5 color stops
+
+    GalleryUpdateRequest:
+      type: object
+      description: Request body for updating gallery settings
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        layout_style:
+          type: string
+          enum: [tabs, continuous]
+        theme:
+          type: string
+          enum: [light, dark, system]
+        download_policy:
+          type: string
+          enum: [view_only, web_only, watermarked_only, original_allowed]
+        exif_visible:
+          type: boolean
+        primary_color:
+          type: string
+          maxLength: 50
+          nullable: true
+          deprecated: true
+          description: "DEPRECATED: Use gradient_config instead"
+        gradient_config:
+          oneOf:
+            - $ref: '#/components/schemas/GradientConfiguration'
+            - type: 'null'
+          description: Gradient configuration for gallery branding. Set to null to remove.
+        font_family:
+          type: string
+          maxLength: 100
+          nullable: true
+        custom_links:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+                maxLength: 100
+              url:
+                type: string
+                format: uri
+                maxLength: 500
+
+    GalleryDetailResponse:
+      type: object
+      description: Full gallery details including gradient configuration
+      properties:
+        gallery_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+          enum: [draft, published, archived]
+        description:
+          type: string
+          nullable: true
+        layout_style:
+          type: string
+          enum: [tabs, continuous]
+        theme:
+          type: string
+          enum: [light, dark, system]
+        primary_color:
+          type: string
+          nullable: true
+          deprecated: true
+          description: "DEPRECATED: Use gradient_config for new integrations"
+        gradient_config:
+          oneOf:
+            - $ref: '#/components/schemas/GradientConfiguration'
+            - type: 'null'
+          description: Current gradient configuration, null if not set
+        font_family:
+          type: string
+          nullable: true
+        # ... other existing fields ...
+
+    ValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  oneOf:
+                    - type: string
+                    - type: integer
+              msg:
+                type: string
+              type:
+                type: string
+      example:
+        detail:
+          - loc: ["body", "gradient_config", "colors", 0, "color"]
+            msg: "Invalid hex color format"
+            type: "value_error"

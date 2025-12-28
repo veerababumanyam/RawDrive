@@ -18,9 +18,10 @@ Configuration:
 
 import asyncio
 import base64
+import io
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 from app.api.face_schemas import (
     BoundingBox,
@@ -227,11 +228,14 @@ class CloudVisionProvider(BaseProvider):
             
             # Get face annotations
             faces = response.face_annotations or []
-            
+
             self.log_response("detect_faces", True, {
                 "faces_detected": len(faces),
             })
-            
+
+            # Get image dimensions for coordinate normalization
+            image_width, image_height = self._get_image_dimensions(image_buffer)
+
             # Transform Vision API response to our format
             results = []
             for face in faces:
@@ -239,10 +243,12 @@ class CloudVisionProvider(BaseProvider):
                 confidence = face.detection_confidence or 0
                 if confidence < options.min_confidence:
                     continue
-                
-                result = self._transform_vision_face(face, options)
+
+                result = self._transform_vision_face(
+                    face, options, image_width, image_height
+                )
                 results.append(result)
-            
+
             return results
             
         except FaceDetectionError:
@@ -251,29 +257,162 @@ class CloudVisionProvider(BaseProvider):
             self.log_response("detect_faces", False, {"error": str(e)})
             raise self.wrap_provider_error(e, "detect_faces")
 
+    def _get_image_dimensions(self, image_buffer: bytes) -> Tuple[int, int]:
+        """Get image dimensions from image buffer.
+
+        Args:
+            image_buffer: Raw image data as bytes
+
+        Returns:
+            Tuple of (width, height) in pixels
+        """
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(image_buffer))
+            return img.size  # (width, height)
+        except ImportError:
+            logger.warning("PIL not available, using default image dimensions")
+            return (1000, 1000)  # Fallback
+        except Exception as e:
+            logger.warning(f"Failed to get image dimensions: {e}")
+            return (1000, 1000)  # Fallback
+
+    # =========================================================================
+    # LABEL DETECTION (Smart Tagging)
+    # =========================================================================
+
+    async def detect_labels(
+        self,
+        image_buffer: bytes,
+        options: Optional["LabelDetectionOptions"] = None,
+    ) -> "LabelDetectionResult":
+        """Detect labels/content in an image using Google Cloud Vision API.
+
+        Uses the LABEL_DETECTION feature to identify objects, scenes,
+        activities, animal species, products, and other content.
+
+        Args:
+            image_buffer: Raw image data as bytes
+            options: Label detection options (max_labels, min_confidence)
+
+        Returns:
+            LabelDetectionResult with detected labels
+
+        Raises:
+            FaceDetectionError: If detection fails (reuses face error class)
+        """
+        from app.services.ai.providers.types import (
+            LabelDetectionOptions,
+            LabelDetectionResult,
+            LabelResult,
+        )
+
+        # Use default options if not provided
+        if options is None:
+            options = LabelDetectionOptions()
+
+        # Validate image before sending to API
+        self.validate_image(image_buffer)
+
+        self.log_request("detect_labels", {
+            "image_size": len(image_buffer),
+            "max_labels": options.max_labels,
+            "min_confidence": options.min_confidence,
+        })
+
+        try:
+            # Ensure client is initialized
+            client = await self._ensure_client()
+
+            # Import Vision types
+            from google.cloud import vision
+
+            # Create image object
+            image = vision.Image(content=image_buffer)
+
+            # Call Vision API with label detection feature
+            # Run in thread pool since the client is synchronous
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: client.label_detection(
+                    image=image,
+                    max_results=options.max_labels,
+                ),
+            )
+
+            # Check for errors in response
+            if response.error.message:
+                raise FaceDetectionError(
+                    code="PROVIDER_ERROR",
+                    message=f"Vision API error: {response.error.message}",
+                    user_message="Unable to analyze the image. Please try a different photo.",
+                )
+
+            # Get label annotations
+            labels = response.label_annotations or []
+
+            self.log_response("detect_labels", True, {
+                "labels_detected": len(labels),
+            })
+
+            # Transform Vision API response to our format
+            results = []
+            for label in labels:
+                # Filter by confidence threshold
+                confidence = label.score or 0
+                if confidence < options.min_confidence:
+                    continue
+
+                results.append(LabelResult(
+                    name=label.description,
+                    confidence=confidence,
+                    mid=label.mid if label.mid else None,
+                    topicality=label.topicality if label.topicality else None,
+                ))
+
+            return LabelDetectionResult(
+                labels=results,
+                provider=self.name,
+            )
+
+        except FaceDetectionError:
+            raise
+        except Exception as e:
+            self.log_response("detect_labels", False, {"error": str(e)})
+            raise self.wrap_provider_error(e, "detect_labels")
+
     def _transform_vision_face(
         self,
         face: Any,  # google.cloud.vision.FaceAnnotation
         options: DetectionOptions,
+        image_width: int,
+        image_height: int,
     ) -> FaceDetectionResult:
         """Transform Cloud Vision face annotation to our standard format.
-        
+
         Args:
             face: Vision API FaceAnnotation object
             options: Detection options
-            
+            image_width: Width of the source image in pixels
+            image_height: Height of the source image in pixels
+
         Returns:
             FaceDetectionResult in our standard format
         """
         # Extract bounding box from fdBoundingPoly (face detection bounding poly)
         # This is more accurate than boundingPoly for face detection
         bounding_poly = face.fd_bounding_poly or face.bounding_poly
-        bounding_box = self._extract_bounding_box(bounding_poly)
+        bounding_box = self._extract_bounding_box(
+            bounding_poly, image_width, image_height
+        )
         
         # Extract landmarks if requested
         landmarks: Optional[list[FaceLandmark]] = None
         if options.include_landmarks and face.landmarks:
-            landmarks = self._extract_landmarks(face.landmarks)
+            landmarks = self._extract_landmarks(
+                face.landmarks, image_width, image_height
+            )
         
         # Extract attributes if requested
         attributes: Optional[FaceAttributes] = None
@@ -288,61 +427,76 @@ class CloudVisionProvider(BaseProvider):
             raw_provider_response=self._face_to_dict(face),
         )
 
-    def _extract_bounding_box(self, bounding_poly: Any) -> BoundingBox:
+    def _extract_bounding_box(
+        self,
+        bounding_poly: Any,
+        image_width: int,
+        image_height: int,
+    ) -> BoundingBox:
         """Extract bounding box from Vision API bounding polygon.
-        
-        Vision API returns face bounds as a polygon with 4 vertices.
-        We convert this to our standard x, y, width, height format.
-        
-        Note: Vision API returns pixel coordinates. We store them as-is
-        and normalize to percentages when we have image dimensions.
-        
+
+        Vision API returns face bounds as a polygon with 4 vertices in pixels.
+        We convert this to our standard x, y, width, height format and
+        normalize to percentages (0-100) of image dimensions.
+
         Args:
             bounding_poly: Vision API BoundingPoly object
-            
+            image_width: Width of the source image in pixels
+            image_height: Height of the source image in pixels
+
         Returns:
-            BoundingBox with pixel coordinates
+            BoundingBox with normalized percentage coordinates (0-100)
         """
         if not bounding_poly or not bounding_poly.vertices:
             return BoundingBox(x=0, y=0, width=0, height=0)
-        
+
         vertices = bounding_poly.vertices
-        
-        # Extract x and y coordinates from vertices
+
+        # Extract x and y coordinates from vertices (pixel values)
         xs = [v.x or 0 for v in vertices]
         ys = [v.y or 0 for v in vertices]
-        
-        # Calculate bounding box
+
+        # Calculate bounding box in pixels
         min_x = min(xs)
         max_x = max(xs)
         min_y = min(ys)
         max_y = max(ys)
-        
-        # Return pixel coordinates (will be normalized later with image dimensions)
-        # For now, we return as percentages assuming typical image size
-        # The actual normalization happens when we have image metadata
+
+        # Normalize to percentages (0-100)
+        # Clamp values to valid range to handle edge cases
+        x_pct = min(100.0, max(0.0, (min_x / image_width) * 100))
+        y_pct = min(100.0, max(0.0, (min_y / image_height) * 100))
+        width_pct = min(100.0 - x_pct, max(0.0, ((max_x - min_x) / image_width) * 100))
+        height_pct = min(100.0 - y_pct, max(0.0, ((max_y - min_y) / image_height) * 100))
+
         return BoundingBox(
-            x=float(min_x),
-            y=float(min_y),
-            width=float(max_x - min_x),
-            height=float(max_y - min_y),
+            x=x_pct,
+            y=y_pct,
+            width=width_pct,
+            height=height_pct,
         )
 
     def _extract_landmarks(
         self,
         landmarks: list[Any],
+        image_width: int,
+        image_height: int,
     ) -> list[FaceLandmark]:
         """Extract facial landmarks from Vision API response.
-        
+
         Args:
             landmarks: List of Vision API Landmark objects
-            
+            image_width: Width of the source image in pixels
+            image_height: Height of the source image in pixels
+
         Returns:
-            List of FaceLandmark objects in our format
+            List of FaceLandmark objects with normalized percentage coordinates
         """
         result = []
-        
+
         # Map Vision API landmark types to our types
+        # Note: Vision API has many more landmark types; we only map the ones
+        # supported by our FaceLandmarkType enum
         landmark_type_map = {
             "LEFT_EYE": FaceLandmarkType.LEFT_EYE,
             "RIGHT_EYE": FaceLandmarkType.RIGHT_EYE,
@@ -351,28 +505,33 @@ class CloudVisionProvider(BaseProvider):
             "MOUTH_RIGHT": FaceLandmarkType.MOUTH_RIGHT,
             "LEFT_EYE_PUPIL": FaceLandmarkType.LEFT_EYE,
             "RIGHT_EYE_PUPIL": FaceLandmarkType.RIGHT_EYE,
-            "UPPER_LIP": FaceLandmarkType.MOUTH_CENTER,
-            "LOWER_LIP": FaceLandmarkType.MOUTH_CENTER,
+            "LEFT_OF_LEFT_EYEBROW": FaceLandmarkType.LEFT_EYEBROW,
+            "RIGHT_OF_LEFT_EYEBROW": FaceLandmarkType.LEFT_EYEBROW,
+            "LEFT_OF_RIGHT_EYEBROW": FaceLandmarkType.RIGHT_EYEBROW,
+            "RIGHT_OF_RIGHT_EYEBROW": FaceLandmarkType.RIGHT_EYEBROW,
+            "CHIN_GNATHION": FaceLandmarkType.CHIN,
         }
-        
+
         for landmark in landmarks:
             # Get landmark type name
             type_name = landmark.type_.name if hasattr(landmark.type_, "name") else str(landmark.type_)
-            
+
             # Map to our landmark type
             landmark_type = landmark_type_map.get(type_name)
             if landmark_type is None:
                 continue
-            
-            # Extract position
+
+            # Extract position and normalize to percentages
             position = landmark.position
             if position:
+                x_pct = min(100.0, max(0.0, ((position.x or 0) / image_width) * 100))
+                y_pct = min(100.0, max(0.0, ((position.y or 0) / image_height) * 100))
                 result.append(FaceLandmark(
                     type=landmark_type,
-                    x=position.x or 0,
-                    y=position.y or 0,
+                    x=x_pct,
+                    y=y_pct,
                 ))
-        
+
         return result
 
     def _extract_attributes(self, face: Any) -> FaceAttributes:

@@ -4,10 +4,40 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+import re
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+
+# ---------------------------------------------------------------------------
+# Gradient Configuration Schemas
+# ---------------------------------------------------------------------------
+
+
+class ColorStop(BaseModel):
+    """Single color stop in a gradient."""
+
+    color: str = Field(..., description="Hex color code (#RRGGBB or #RGB)")
+    position: int = Field(..., ge=0, le=100, description="Position as percentage (0-100)")
+
+    @field_validator("color")
+    @classmethod
+    def validate_hex_color(cls, v: str) -> str:
+        """Validate and normalize hex color format."""
+        if not re.match(r"^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", v):
+            raise ValueError("Invalid hex color format. Use #RGB or #RRGGBB")
+        return v.upper()
+
+
+class GradientConfiguration(BaseModel):
+    """Complete gradient configuration for gallery branding."""
+
+    type: Literal["linear"] = Field("linear", description="Gradient type (linear only for v1)")
+    preset_id: Optional[str] = Field(None, max_length=50, description="Reference to predefined preset, null for custom")
+    direction: int = Field(135, ge=0, lt=360, description="Direction in degrees (0=top, 90=right)")
+    colors: list[ColorStop] = Field(..., min_length=2, max_length=5, description="Array of 2-5 color stops")
 
 
 # ---------------------------------------------------------------------------
@@ -402,7 +432,8 @@ class UpdateGalleryRequest(BaseModel):
     # New fields for gallery settings enhancements
     pin: Optional[str] = Field(None, description="PIN for additional access protection (will be hashed)")
     remove_pin: Optional[bool] = Field(None, description="Set to true to remove PIN")
-    primary_color: Optional[str] = Field(None, max_length=50, description="Hex color for branding override")
+    primary_color: Optional[str] = Field(None, max_length=50, description="DEPRECATED: Use gradient_config instead")
+    gradient_config: Optional[GradientConfiguration] = Field(None, description="Gradient configuration for gallery branding")
     font_family: Optional[str] = Field(None, max_length=100, description="Font family for typography override")
     custom_domain: Optional[str] = Field(None, max_length=255, description="Custom domain for gallery")
     custom_links: Optional[list[dict]] = Field(None, description="List of {label, url} custom navigation links")
@@ -492,7 +523,8 @@ class GalleryDetailResponse(BaseModel):
     published_at: Optional[str] = None
     cover_asset_id: Optional[UUID] = None
     # Branding and visual identity
-    primary_color: Optional[str] = None
+    primary_color: Optional[str] = None  # DEPRECATED: Use gradient_config
+    gradient_config: Optional[dict] = None  # Returns raw JSONB as dict
     font_family: Optional[str] = None
     custom_domain: Optional[str] = None
     custom_links: Optional[list[dict]] = None
@@ -530,6 +562,34 @@ class GalleryListMetaResponse(BaseModel):
     limit: int
     total: int
     totalPages: int
+
+
+class GalleryCredentialsResponse(BaseModel):
+    """Gallery credentials response for owner reveal feature.
+
+    Returns decrypted credentials for authorized workspace members.
+    Legacy galleries (password set before encryption feature) will have
+    password/pin = null with password_recoverable/pin_recoverable = false.
+    """
+
+    password: Optional[str] = Field(
+        None, description="Decrypted password if set and recoverable"
+    )
+    pin: Optional[str] = Field(
+        None, description="Decrypted PIN if set and recoverable"
+    )
+    has_password: bool = Field(
+        ..., description="Whether password protection is enabled"
+    )
+    has_pin: bool = Field(
+        ..., description="Whether PIN protection is enabled"
+    )
+    password_recoverable: bool = Field(
+        ..., description="Whether original password can be revealed (false for legacy)"
+    )
+    pin_recoverable: bool = Field(
+        ..., description="Whether original PIN can be revealed (false for legacy)"
+    )
 
 
 class GalleryListResponse(BaseModel):
@@ -584,6 +644,10 @@ class UploadCommitResponse(BaseModel):
 
     asset_id: UUID
     status: Literal["available", "processing"]
+    analysis_queued: bool = Field(
+        False,
+        description="Whether AI content analysis was queued for this asset"
+    )
 
 
 class CheckDuplicateRequest(BaseModel):
@@ -1496,3 +1560,416 @@ class GeminiAdminStats(BaseModel):
     ai_success_rate: float = Field(
         0.0, ge=0, le=100, description="Percentage of successful AI calls"
     )
+
+
+# ---------------------------------------------------------------------------
+# Smart Tagging / AI Tag Schemas (T012)
+# ---------------------------------------------------------------------------
+
+
+class AITagMetadata(BaseModel):
+    """Provider-specific metadata for AI-generated tags."""
+
+    mid: Optional[str] = Field(None, description="Cloud Vision MID identifier")
+    topicality: Optional[float] = Field(None, ge=0, le=1, description="Topicality score")
+    bounding_box: Optional[dict] = Field(None, description="Bounding box if localized")
+    model_version: Optional[str] = Field(None, description="AI model version used")
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AITagInput(BaseModel):
+    """Input schema for adding an AI-generated tag."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="Tag name")
+    confidence: Optional[float] = Field(None, ge=0, le=1, description="AI confidence 0.0-1.0")
+    type: str = Field("keyword", description="Tag type (keyword, category, etc.)")
+    color: Optional[str] = Field(None, description="Optional color for display")
+    metadata: Optional[AITagMetadata] = Field(None, description="Provider-specific metadata")
+
+
+class AITagResponse(BaseModel):
+    """Response schema for an AI-generated tag."""
+
+    tag_id: UUID
+    name: str
+    type: str
+    color: Optional[str] = None
+    source: Literal["manual", "ai_vision", "ai_gemini", "ai_local"]
+    confidence: Optional[float] = Field(None, ge=0, le=1)
+    ai_metadata: Optional[dict] = None
+    created_at: Optional[datetime] = None
+
+
+class AddAITagsRequest(BaseModel):
+    """Request to add AI-generated tags to an asset."""
+
+    tags: list[AITagInput] = Field(..., min_length=1, max_length=100)
+    source: Literal["ai_vision", "ai_gemini", "ai_local"] = Field(
+        ..., description="AI provider source"
+    )
+
+
+class AddAITagsResponse(BaseModel):
+    """Response after adding AI tags."""
+
+    tags: list[AITagResponse]
+    added_count: int
+    updated_count: int = 0
+
+
+class AssetTagsResponse(BaseModel):
+    """Response for asset tags with source filtering."""
+
+    asset_id: UUID
+    tags: list[AITagResponse]
+    total_count: int
+    manual_count: int = 0
+    ai_count: int = 0
+
+
+class AITagStats(BaseModel):
+    """Statistics for AI tagging in a workspace."""
+
+    manual: dict = Field(default_factory=dict)
+    ai_vision: dict = Field(default_factory=dict)
+    ai_gemini: dict = Field(default_factory=dict)
+    ai_local: dict = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Asset Analysis Schemas
+# ---------------------------------------------------------------------------
+
+
+class AssetAnalysisStatus(BaseModel):
+    """Analysis status for a single asset."""
+
+    asset_id: UUID
+    status: Literal["pending", "processing", "completed", "failed", "partial"]
+    vision_status: Optional[Literal["pending", "processing", "completed", "failed"]] = None
+    face_status: Optional[Literal["pending", "processing", "completed", "failed"]] = None
+    vision_analyzed_at: Optional[datetime] = None
+    face_analyzed_at: Optional[datetime] = None
+    retry_count: int = 0
+    last_error: Optional[str] = None
+
+
+class ContentDetectionJobStatus(BaseModel):
+    """Status of a content detection job."""
+
+    id: UUID
+    asset_id: UUID
+    status: Literal["pending", "processing", "completed", "failed"]
+    priority: int = 0
+    retry_count: int = 0
+    scheduled_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+
+
+class QueueDetectionRequest(BaseModel):
+    """Request to queue an asset for content detection."""
+
+    priority: int = Field(0, ge=0, le=10, description="Job priority (higher = sooner)")
+    force: bool = Field(False, description="Force requeue even if already processed")
+
+
+class BulkQueueRequest(BaseModel):
+    """Request to queue multiple assets for content detection."""
+
+    asset_ids: list[UUID] = Field(..., min_length=1, max_length=1000)
+    priority: int = Field(0, ge=0, le=10)
+
+
+class BulkQueueResponse(BaseModel):
+    """Response from bulk queue operation."""
+
+    queued: int
+    skipped: int
+
+
+class ReanalyzeRequest(BaseModel):
+    """Request to reanalyze an asset."""
+
+    remove_existing_ai_tags: bool = Field(
+        True, description="Remove existing AI tags before reanalysis"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tagging Health Schemas
+# ---------------------------------------------------------------------------
+
+
+class GalleryTaggingHealth(BaseModel):
+    """Tagging health metrics for a gallery."""
+
+    gallery_id: UUID
+    total_assets: int
+    vision_analyzed: int
+    face_analyzed: int
+    vision_percent: float = Field(ge=0, le=100)
+    face_percent: float = Field(ge=0, le=100)
+    overall_health: int = Field(ge=0, le=100)
+    last_analyzed_at: Optional[datetime] = None
+    last_refreshed_at: Optional[datetime] = None
+
+
+class HealthBadge(BaseModel):
+    """Minimal health data for UI badge display."""
+
+    gallery_id: UUID
+    status: Literal["complete", "partial", "processing", "pending"]
+    percent: int = Field(ge=0, le=100)
+    color: Literal["green", "yellow", "blue", "gray"]
+    vision_percent: float
+    face_percent: float
+
+
+class WorkspaceTaggingHealthSummary(BaseModel):
+    """Summary of workspace-wide tagging health."""
+
+    total_assets: int
+    vision_analyzed: int
+    face_analyzed: int
+    vision_pending: int
+    face_pending: int
+    vision_failed: int
+    face_failed: int
+    vision_percent: float
+    face_percent: float
+    overall_health: int
+
+
+class GalleryHealthItem(BaseModel):
+    """Gallery health item in workspace overview."""
+
+    gallery_id: UUID
+    total_assets: int
+    vision_analyzed: int
+    face_analyzed: int
+    health: int
+    last_analyzed_at: Optional[datetime] = None
+
+
+class WorkspaceTaggingHealth(BaseModel):
+    """Complete workspace tagging health response."""
+
+    workspace_id: UUID
+    summary: WorkspaceTaggingHealthSummary
+    galleries: list[GalleryHealthItem]
+
+
+# ---------------------------------------------------------------------------
+# Detection Stats Schemas
+# ---------------------------------------------------------------------------
+
+
+class ContentDetectionStats(BaseModel):
+    """Content detection statistics for a workspace."""
+
+    jobs: dict = Field(
+        ...,
+        description="Job queue stats: total, completed, pending, processing, failed",
+    )
+    analysis: dict = Field(
+        ...,
+        description="Analysis stats: total_assets, vision/face completed/failed",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Subscription Management Schemas (006-user-profile-sidebar)
+# ---------------------------------------------------------------------------
+
+
+class UsageStats(BaseModel):
+    """Usage statistics within subscription limits."""
+
+    storage_used_bytes: int = Field(0, description="Storage used in bytes")
+    storage_limit_bytes: int = Field(..., description="Storage limit from plan")
+    galleries_count: int = Field(0, description="Number of galleries")
+    galleries_limit: int = Field(..., description="Gallery limit from plan")
+    clients_count: int = Field(0, description="Number of clients")
+    clients_limit: int = Field(..., description="Client limit from plan")
+    team_members_count: int = Field(0, description="Number of team members")
+    team_members_limit: int = Field(..., description="Team member limit from plan")
+    ai_credits_used: int = Field(0, description="AI credits used this month")
+    ai_credits_limit: int = Field(..., description="Monthly AI credit limit")
+
+
+class SubscriptionStatusResponse(BaseModel):
+    """Complete subscription status with plan and usage."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    workspace_id: UUID
+    plan: PlanResponse
+    status: Literal[
+        "active", "trialing", "past_due", "canceled", "paused", "expired"
+    ] = Field(..., description="Current subscription status")
+    is_trial: bool = Field(False, description="Whether on trial period")
+    trial_days_remaining: Optional[int] = Field(
+        None, description="Days left in trial (null if not on trial)"
+    )
+    current_period_start: Optional[datetime] = Field(
+        None, description="Current billing period start"
+    )
+    current_period_end: Optional[datetime] = Field(
+        None, description="Current billing period end / renewal date"
+    )
+    cancel_at_period_end: bool = Field(
+        False, description="Whether subscription is scheduled to cancel"
+    )
+    canceled_at: Optional[datetime] = Field(
+        None, description="When cancellation was requested"
+    )
+    usage: UsageStats = Field(..., description="Current usage statistics")
+
+
+class CheckoutRequest(BaseModel):
+    """Request to create a checkout session for plan upgrade."""
+
+    plan_id: UUID = Field(..., description="Plan to upgrade to")
+    billing_cycle: Literal["monthly", "annual"] = Field(
+        "monthly", description="Billing frequency"
+    )
+    success_url: Optional[str] = Field(
+        None, description="URL to redirect after successful payment"
+    )
+    cancel_url: Optional[str] = Field(
+        None, description="URL to redirect after cancelled payment"
+    )
+
+
+class CheckoutSessionResponse(BaseModel):
+    """Response with checkout session details."""
+
+    checkout_id: str = Field(..., description="Razorpay/Stripe session ID")
+    checkout_url: str = Field(..., description="URL to redirect user for payment")
+    provider: Literal["razorpay", "stripe"] = Field(
+        "razorpay", description="Payment provider"
+    )
+    expires_at: datetime = Field(..., description="Session expiration time")
+
+
+class CancelSubscriptionRequest(BaseModel):
+    """Request to cancel subscription."""
+
+    reason: Optional[str] = Field(
+        None, max_length=500, description="Optional cancellation reason"
+    )
+    feedback: Optional[str] = Field(
+        None, max_length=1000, description="Optional feedback for improvement"
+    )
+
+
+class CancelSubscriptionResponse(BaseModel):
+    """Response after subscription cancellation."""
+
+    status: Literal["canceled"] = "canceled"
+    cancel_at_period_end: bool = True
+    current_period_end: datetime = Field(
+        ..., description="When subscription access ends"
+    )
+    message: str = Field(
+        default="Subscription will be canceled at the end of your current billing period."
+    )
+
+
+class ReactivateSubscriptionResponse(BaseModel):
+    """Response after subscription reactivation."""
+
+    status: Literal["active"] = "active"
+    cancel_at_period_end: bool = False
+    current_period_end: datetime = Field(..., description="Next renewal date")
+    message: str = Field(
+        default="Subscription reactivated. Your subscription will renew automatically."
+    )
+
+
+class InvoiceLineItem(BaseModel):
+    """Line item in an invoice."""
+
+    description: str = Field(..., description="Item description")
+    quantity: int = Field(1, ge=1, description="Quantity")
+    unit_price: Decimal = Field(..., description="Price per unit")
+    amount: Decimal = Field(..., description="Total amount for line item")
+
+
+class InvoiceResponse(BaseModel):
+    """Invoice details response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    invoice_id: UUID
+    invoice_number: str = Field(..., description="Human-readable invoice number")
+    workspace_id: UUID
+    subscription_id: Optional[UUID] = None
+    status: Literal["pending", "paid", "failed", "refunded", "void"] = Field(
+        ..., description="Invoice status"
+    )
+    amount: Decimal = Field(..., description="Total amount")
+    currency: str = Field("INR", description="Currency code")
+    tax_amount: Optional[Decimal] = Field(None, description="GST/tax amount")
+    billing_period_start: Optional[datetime] = Field(
+        None, description="Billing period start"
+    )
+    billing_period_end: Optional[datetime] = Field(
+        None, description="Billing period end"
+    )
+    paid_at: Optional[datetime] = Field(None, description="Payment timestamp")
+    pdf_url: Optional[str] = Field(None, description="URL to download PDF")
+    created_at: datetime
+    line_items: Optional[list[InvoiceLineItem]] = Field(
+        None, description="Invoice line items"
+    )
+
+
+class InvoiceListResponse(PaginatedResponse):
+    """Paginated list of invoices."""
+
+    items: list[InvoiceResponse]
+
+
+class PaymentMethodResponse(BaseModel):
+    """Payment method details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    payment_method_id: UUID
+    provider: Literal["razorpay", "stripe"] = Field(
+        ..., description="Payment provider"
+    )
+    type: Literal["card", "upi", "netbanking", "wallet"] = Field(
+        ..., description="Payment method type"
+    )
+    last_four: Optional[str] = Field(None, description="Last 4 digits (for cards)")
+    brand: Optional[str] = Field(None, description="Card brand (Visa, Mastercard)")
+    expiry_month: Optional[int] = Field(None, ge=1, le=12, description="Card expiry month")
+    expiry_year: Optional[int] = Field(None, description="Card expiry year")
+    is_default: bool = Field(False, description="Whether this is the default method")
+    created_at: datetime
+
+
+class PaymentMethodListResponse(BaseModel):
+    """List of payment methods."""
+
+    items: list[PaymentMethodResponse]
+
+
+class AddPaymentMethodRequest(BaseModel):
+    """Request to add a payment method (from provider token)."""
+
+    provider_token: str = Field(
+        ..., description="Token from Razorpay/Stripe frontend SDK"
+    )
+    set_default: bool = Field(True, description="Set as default payment method")
+
+
+class SetDefaultPaymentMethodRequest(BaseModel):
+    """Request to set default payment method."""
+
+    payment_method_id: UUID = Field(..., description="Payment method to set as default")

@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: rawdrive-backend
-Version: 0.1.4
+Version: 0.1.9
 Summary: RawDrive FastAPI backend for authentication, RBAC, and workspace services
 Author-email: RawDrive <engineering@rawdrive.in>
 License: MIT
@@ -26,6 +26,12 @@ Requires-Dist: email-validator>=2.1
 Requires-Dist: alembic>=1.13
 Requires-Dist: SQLAlchemy>=2.0
 Requires-Dist: psycopg2-binary>=2.9
+Requires-Dist: opencv-python-headless>=4.8
+Requires-Dist: numpy>=1.24
+Requires-Dist: pyotp>=2.9
+Requires-Dist: geoip2>=4.7
+Requires-Dist: qrcode>=7.4
+Requires-Dist: Pillow>=10.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.3; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.23; extra == "dev"

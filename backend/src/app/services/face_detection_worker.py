@@ -46,7 +46,8 @@ RETRY_DELAY_SECONDS = 60  # Initial delay before retry
 POLLING_INTERVAL_SECONDS = 5  # How often to check for new jobs
 JOB_TIMEOUT_SECONDS = 120  # Maximum time for a single job (2 minutes)
 STALE_JOB_TIMEOUT_MINUTES = 10  # Jobs "processing" longer than this are considered stale
-CONCURRENT_JOBS = 1  # Number of jobs to process concurrently (Reduced to 1 for local inference memory stability)
+CONCURRENT_JOBS = 5  # Number of jobs to process concurrently (increased for parallel processing)
+OLD_JOB_CLEANUP_MINUTES = 60  # Jobs older than this are auto-deleted to prevent blocking
 
 
 class FaceDetectionWorker:
@@ -216,14 +217,34 @@ class FaceDetectionWorker:
         return processed
     
     async def _recover_stale_jobs(self) -> None:
-        """Recover jobs that have been stuck in 'processing' state too long.
-        
-        Jobs stuck in 'processing' for more than STALE_JOB_TIMEOUT_MINUTES
-        are reset to 'pending' for retry.
+        """Recover jobs stuck in 'processing' state and cleanup old jobs.
+
+        1. Jobs stuck in 'processing' for more than STALE_JOB_TIMEOUT_MINUTES
+           are reset to 'pending' for retry.
+        2. Jobs older than OLD_JOB_CLEANUP_MINUTES are auto-deleted to prevent
+           blocking new jobs.
         """
         try:
             pool = await get_postgres_pool()
             async with pool.acquire() as conn:
+                # First, delete jobs older than 1 hour to prevent blocking
+                delete_result = await conn.execute(
+                    """
+                    DELETE FROM face_detection_jobs
+                    WHERE created_at < NOW() - INTERVAL '1 minute' * $1
+                    """,
+                    OLD_JOB_CLEANUP_MINUTES,
+                )
+
+                if delete_result and "DELETE" in delete_result:
+                    deleted_count = int(delete_result.split()[1])
+                    if deleted_count > 0:
+                        logger.warning(
+                            "Deleted old jobs blocking queue",
+                            extra={"count": deleted_count, "older_than_minutes": OLD_JOB_CLEANUP_MINUTES},
+                        )
+
+                # Then recover stale processing jobs
                 result = await conn.execute(
                     """
                     UPDATE face_detection_jobs
@@ -238,7 +259,7 @@ class FaceDetectionWorker:
                     STALE_JOB_TIMEOUT_MINUTES,
                     MAX_RETRIES,
                 )
-                
+
                 # result format is "UPDATE N"
                 if result and "UPDATE" in result:
                     count = int(result.split()[1])
@@ -520,16 +541,18 @@ class FaceDetectionWorker:
         thumbnail_urls: dict[str, str],
     ) -> None:
         """Update face with generated thumbnail URLs."""
+        import json
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            import json
+            # Use json.dumps but cast properly - asyncpg needs string for jsonb parameter
+            # The key is that we pass a JSON string that PostgreSQL casts to jsonb
             await conn.execute(
                 """
                 UPDATE faces
-                SET thumbnail_urls = $1::jsonb, updated_at = NOW()
+                SET thumbnail_urls = $1, updated_at = NOW()
                 WHERE id = $2 AND workspace_id = $3
                 """,
-                json.dumps(thumbnail_urls),
+                json.dumps(thumbnail_urls),  # This becomes a proper jsonb object
                 face_id,
                 workspace_id,
             )

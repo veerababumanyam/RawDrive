@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { libraryService, LibraryAsset, LibraryFolder, LibraryFolderDetail } from '../../services/libraryService';
 import { galleryService } from '../../services/galleryService';
+import { faceApiService, FaceGroup } from '../../services/faceApiService';
 import { PhotoGrid, Photo } from '../../components/ui/PhotoGrid';
 import { AppButton } from '../../components/ui/AppButton';
 import { useToast } from '../../components/ui/Toast';
@@ -17,7 +19,9 @@ import {
     FolderInput,
     AlertCircle,
     Upload,
-    Loader2
+    Loader2,
+    UserCircle,
+    X,
 } from 'lucide-react';
 import { useUpload } from '../../hooks/useUpload';
 import MoveToGalleryModal from '../../components/workspace/library/MoveToGalleryModal';
@@ -32,6 +36,7 @@ const LibraryPage: React.FC = () => {
     const { t } = useTranslation();
     const { user } = useAuth();
     const { addToast } = useToast();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [assets, setAssets] = useState<LibraryAsset[]>([]);
     const [folders, setFolders] = useState<LibraryFolder[]>([]);
     const [currentFolder, setCurrentFolder] = useState<LibraryFolderDetail | null>(null);
@@ -45,7 +50,11 @@ const LibraryPage: React.FC = () => {
     const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    
+
+    // Person/face group filter from URL
+    const personFilter = searchParams.get('person');
+    const [filterPerson, setFilterPerson] = useState<FaceGroup | null>(null);
+
     // Folder modals
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [showEditFolder, setShowEditFolder] = useState(false);
@@ -57,6 +66,32 @@ const LibraryPage: React.FC = () => {
     // Lightbox state
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
+
+    // Fetch person info when filtering by person
+    useEffect(() => {
+        const fetchPersonInfo = async () => {
+            if (!personFilter || !user?.workspace_id) {
+                setFilterPerson(null);
+                return;
+            }
+            try {
+                const group = await faceApiService.getFaceGroup(user.workspace_id, personFilter);
+                setFilterPerson(group);
+            } catch (error) {
+                console.error('Failed to fetch person info:', error);
+                setFilterPerson(null);
+            }
+        };
+        fetchPersonInfo();
+    }, [personFilter, user?.workspace_id]);
+
+    // Clear person filter
+    const clearPersonFilter = useCallback(() => {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('person');
+        setSearchParams(newParams);
+        setFilterPerson(null);
+    }, [searchParams, setSearchParams]);
 
     const fetchFolders = useCallback(async () => {
         if (!user?.workspace_id) return;
@@ -87,7 +122,9 @@ const LibraryPage: React.FC = () => {
                 type: filterType === 'photo' || filterType === 'video' ? filterType : undefined,
                 unassigned_only: filterType === 'unassigned',
                 search: searchQuery || undefined,
-                folder_id: currentFolder?.folder_id,
+                // When filtering by person, don't filter by folder
+                folder_id: personFilter ? undefined : currentFolder?.folder_id,
+                face_group_id: personFilter || undefined,
             });
             setAssets(response.data);
         } catch (error) {
@@ -101,7 +138,7 @@ const LibraryPage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [user?.workspace_id, page, filterType, searchQuery, currentFolder?.folder_id, addToast]);
+    }, [user?.workspace_id, page, filterType, searchQuery, currentFolder?.folder_id, personFilter, addToast]);
 
     const { addFiles, isUploading } = useUpload({
         workspaceId: user?.workspace_id || '',
@@ -302,9 +339,48 @@ const LibraryPage: React.FC = () => {
                 </div>
             </motion.div>
 
+            {/* Person Filter Badge */}
+            {personFilter && filterPerson && (
+                <motion.div
+                    variants={staggerItem}
+                    className="card-glass rounded-xl px-4 py-3 flex items-center gap-3"
+                >
+                    <div className="flex items-center gap-2">
+                        {filterPerson.representative_thumbnail_url ? (
+                            <img
+                                src={filterPerson.representative_thumbnail_url}
+                                alt={filterPerson.name || 'Person'}
+                                className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/30"
+                            />
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <UserCircle className="w-5 h-5 text-primary" />
+                            </div>
+                        )}
+                        <div>
+                            <p className="text-sm font-medium text-text-primary">
+                                Showing photos of {filterPerson.name || 'Person'}
+                            </p>
+                            <p className="text-xs text-text-tertiary">
+                                {filterPerson.face_count} {filterPerson.face_count === 1 ? 'photo' : 'photos'} • All folders
+                            </p>
+                        </div>
+                    </div>
+                    <AppButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearPersonFilter}
+                        className="ml-auto"
+                        leftIcon={<X size={16} />}
+                    >
+                        Clear Filter
+                    </AppButton>
+                </motion.div>
+            )}
+
             {/* Breadcrumb */}
-            {currentFolder && (
-                <motion.div 
+            {currentFolder && !personFilter && (
+                <motion.div
                     variants={staggerItem}
                     className="card-glass rounded-xl px-4 py-3 flex items-center gap-2 text-sm"
                 >
@@ -573,7 +649,7 @@ const LibraryPage: React.FC = () => {
                                 setLightboxOpen(true);
                             }
                         }}
-                        columns={{ sm: 2, md: 3, lg: 4, xl: 5 }}
+                        columns={{ sm: 1, md: 2, lg: 3, xl: 4 }}
                     />
                 </motion.div>
             ) : folders.length === 0 ? (

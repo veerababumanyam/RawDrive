@@ -4,6 +4,7 @@
  */
 
 import { CompanyProfile } from './companyProfile';
+import type { GradientConfiguration } from './gradient';
 
 // Gallery Status
 export type GalleryStatus = 'draft' | 'published' | 'archived';
@@ -133,6 +134,8 @@ export interface GalleryDetailData {
   published_at?: string;
   cover_asset_id?: string;
   primary_color?: string;
+  /** Gradient configuration for gallery branding */
+  gradient_config?: GradientConfiguration | null;
   font_family?: string;
   custom_domain?: string;
   custom_links?: Array<{ label: string; url: string }>;
@@ -173,6 +176,7 @@ export interface PublicGalleryAsset {
   is_favorited?: boolean;
   is_selected?: boolean;
   favorites_count?: number;
+  is_private?: boolean;
 }
 
 // Asset Info (nested in GalleryAssetItem)
@@ -275,6 +279,8 @@ export interface GalleryUpdateRequest {
   branding_profile_id?: string | null;
   cover_asset_id?: string | null;
   primary_color?: string | null;
+  /** Gradient configuration for gallery branding */
+  gradient_config?: GradientConfiguration | null;
   font_family?: string | null;
   custom_domain?: string | null;
   custom_links?: Array<{ label: string; url: string }> | null;
@@ -431,6 +437,16 @@ export interface MagicLinkStats {
     email_registered: number;
     pin_verified: number;
   };
+}
+
+// Gallery Credentials Response (for owner reveal feature)
+export interface GalleryCredentialsResponse {
+  password: string | null;  // Decrypted password, null if not set or not recoverable
+  pin: string | null;       // Decrypted PIN, null if not set or not recoverable
+  has_password: boolean;    // True if password_hash is set
+  has_pin: boolean;         // True if pin_hash is set
+  password_recoverable: boolean;  // True if encrypted version exists (false for legacy)
+  pin_recoverable: boolean;       // True if encrypted version exists (false for legacy)
 }
 
 // Validated magic link response (public)

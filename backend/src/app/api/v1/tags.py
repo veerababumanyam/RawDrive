@@ -113,6 +113,8 @@ class AssetTagResponse(BaseModel):
     name: str
     type: str
     color: Optional[str] = None
+    source: Optional[str] = Field(None, description="Tag source: manual, ai_vision, ai_gemini, ai_local")
+    confidence: Optional[float] = Field(None, description="AI confidence score (0.0-1.0)")
 
 
 # ---------------------------------------------------------------------------
@@ -303,11 +305,28 @@ async def get_asset_tags(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     asset_id: Annotated[UUID, Path(..., description="Asset ID")],
+    source: Annotated[
+        Optional[str],
+        Query(description="Filter by source: all, manual, ai, ai_vision, ai_gemini, ai_local"),
+    ] = None,
 ) -> list[AssetTagResponse]:
-    """Get all tags for an asset."""
+    """Get all tags for an asset.
+
+    The `source` parameter filters tags by their origin:
+    - `all`: Return all tags (default)
+    - `manual`: Only manually added tags
+    - `ai`: All AI-generated tags (vision, gemini, local)
+    - `ai_vision`: Only Cloud Vision API tags
+    - `ai_gemini`: Only Gemini API tags
+    - `ai_local`: Only locally processed tags
+    """
     service = get_tag_service()
     try:
-        result = await service.get_asset_tags(workspace_id=workspace_id, asset_id=asset_id)
+        result = await service.get_asset_tags(
+            workspace_id=workspace_id,
+            asset_id=asset_id,
+            source=source,
+        )
         return [AssetTagResponse(**t) for t in result]
     except Exception as e:
         logger.exception("Failed to get asset tags")

@@ -102,17 +102,27 @@ export const PasswordVerificationModal: React.FC<PasswordVerificationModalProps>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-5" autoComplete="off" data-form-type="other">
           <div className="relative">
+            {/* Hidden fields to trick password managers */}
+            <input type="text" name="prevent_autofill" value="" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} readOnly />
+            <input type="password" name="password_fake" value="" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} readOnly />
             <input
               ref={inputRef}
               type={showPassword ? 'text' : 'password'}
+              name="gallery_visitor_password"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
                 setError(null);
               }}
               placeholder="Enter gallery password"
+              autoComplete="new-password"
+              data-form-type="other"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              aria-label="Gallery access password"
               className={`
                 w-full px-4 py-3 text-lg
                 border rounded-lg bg-surface-secondary text-text-primary

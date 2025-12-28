@@ -34,6 +34,9 @@ export const PIN_VERIFIED_KEY_PREFIX = 'pin_verified_';
 /** Prefix for Password verification status in localStorage */
 export const PASSWORD_VERIFIED_KEY_PREFIX = 'password_verified_';
 
+/** Prefix for private photos unlock status in localStorage */
+export const PRIVATE_UNLOCKED_KEY_PREFIX = 'private_unlocked_';
+
 // =============================================================================
 // Gallery Grid Configuration
 // =============================================================================

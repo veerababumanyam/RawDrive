@@ -419,6 +419,57 @@ class EncryptionService:
             ) from e
 
 
+    def encrypt_gallery_credential(
+        self, credential: str, workspace_id: UUID
+    ) -> tuple[bytes, str]:
+        """Encrypt a gallery credential (password or PIN) using workspace-scoped key.
+
+        Args:
+            credential: Plaintext credential to encrypt
+            workspace_id: Workspace UUID for key derivation
+
+        Returns:
+            Tuple of (ciphertext_with_tag, iv_base64)
+        """
+        key = self._derive_workspace_key(workspace_id)
+        aesgcm = AESGCM(key)
+        iv = os.urandom(12)  # 96-bit nonce for GCM
+
+        # Encrypt (returns ciphertext + auth tag)
+        ciphertext = aesgcm.encrypt(iv, credential.encode("utf-8"), None)
+
+        # Return ciphertext and base64-encoded IV
+        return ciphertext, base64.b64encode(iv).decode("utf-8")
+
+    def decrypt_gallery_credential(
+        self, ciphertext: bytes, iv_base64: str, workspace_id: UUID
+    ) -> str:
+        """Decrypt a gallery credential using workspace-scoped key.
+
+        Args:
+            ciphertext: Encrypted data with auth tag
+            iv_base64: Base64-encoded initialization vector
+            workspace_id: Workspace UUID for key derivation
+
+        Returns:
+            Decrypted credential as string
+
+        Raises:
+            EncryptionError: If decryption fails
+        """
+        key = self._derive_workspace_key(workspace_id)
+        aesgcm = AESGCM(key)
+        iv = base64.b64decode(iv_base64)
+
+        try:
+            plaintext = aesgcm.decrypt(iv, ciphertext, None)
+            return plaintext.decode("utf-8")
+        except Exception as e:
+            raise EncryptionError(
+                "Failed to decrypt credential", "CREDENTIAL_DECRYPTION_FAILED"
+            ) from e
+
+
 # Export singleton instance
 _encryption_service: Optional[EncryptionService] = None
 

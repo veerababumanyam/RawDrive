@@ -4,7 +4,7 @@
  * Organizes settings into sections: General, Access, Downloads, Branding
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { AppButton } from '../../ui/AppButton';
@@ -14,6 +14,7 @@ import type { GalleryDetailData, GalleryUpdateRequest } from '../../../types/gal
 import { AccessSettings } from './AccessSettings';
 import { DownloadSettings } from './DownloadSettings';
 import { BrandingSettings } from './BrandingSettings';
+import { AISettings } from './AISettings';
 
 export interface GallerySettingsPanelProps {
   isOpen: boolean;
@@ -30,9 +31,31 @@ export const GallerySettingsPanel: React.FC<GallerySettingsPanelProps> = ({
   onSave,
 }) => {
   const { addToast } = useToast();
-  const [activeSection, setActiveSection] = useState<'general' | 'access' | 'downloads' | 'branding'>('general');
+  const [activeSection, setActiveSection] = useState<'general' | 'access' | 'downloads' | 'branding' | 'ai'>('general');
   const [isSaving, setIsSaving] = useState(false);
   const [updates, setUpdates] = useState<Partial<GalleryUpdateRequest>>({});
+
+  // Reset state when panel opens/closes to prevent stale data
+  useEffect(() => {
+    if (isOpen) {
+      setUpdates({});
+      setActiveSection('general');
+    }
+  }, [isOpen]);
+
+  // Handle Escape key to close modal (WCAG 2.1 AA requirement)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSaving) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, isSaving, onClose]);
 
   const handleSave = async () => {
     if (Object.keys(updates).length === 0) {
@@ -65,6 +88,7 @@ export const GallerySettingsPanel: React.FC<GallerySettingsPanelProps> = ({
     { id: 'access' as const, label: 'Access' },
     { id: 'downloads' as const, label: 'Downloads' },
     { id: 'branding' as const, label: 'Branding' },
+    { id: 'ai' as const, label: 'AI' },
   ];
 
   const panel = (
@@ -186,6 +210,10 @@ export const GallerySettingsPanel: React.FC<GallerySettingsPanelProps> = ({
               gallery={gallery}
               onUpdate={handleUpdate}
             />
+          )}
+
+          {activeSection === 'ai' && (
+            <AISettings gallery={gallery} />
           )}
         </div>
 

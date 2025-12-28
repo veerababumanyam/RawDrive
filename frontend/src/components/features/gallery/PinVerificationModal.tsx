@@ -1,6 +1,7 @@
 /**
  * PinVerificationModal Component
  * Modal for visitors to enter PIN to access protected gallery content
+ * Uses a simple text input without length restrictions
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -24,66 +25,34 @@ export const PinVerificationModal: React.FC<PinVerificationModalProps> = ({
   companyName,
   logoUrl,
 }) => {
-  const [pin, setPin] = useState(['', '', '', '', '', '']);
+  const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (isOpen && inputRefs.current[0]) {
-      inputRefs.current[0]?.focus();
+    if (isOpen && inputRef.current) {
+      inputRef.current?.focus();
+    }
+  }, [isOpen]);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setPin('');
+      setError(null);
+      setIsVerifying(false);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleChange = (index: number, value: string) => {
-    // Only allow numeric input
-    const numericValue = value.replace(/\D/g, '');
-    if (numericValue.length > 1) return;
-
-    const newPin = [...pin];
-    newPin[index] = numericValue;
-    setPin(newPin);
-    setError(null);
-
-    // Auto-focus next input
-    if (numericValue && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !pin[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    const newPin = [...pin];
-    pastedData.split('').forEach((char, index) => {
-      if (index < 6) newPin[index] = char;
-    });
-    setPin(newPin);
-    
-    // Focus the next empty input or last input
-    const nextEmptyIndex = newPin.findIndex(p => !p);
-    if (nextEmptyIndex !== -1) {
-      inputRefs.current[nextEmptyIndex]?.focus();
-    } else {
-      inputRefs.current[5]?.focus();
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const fullPin = pin.join('');
     
-    if (fullPin.length < 4) {
-      setError('Please enter at least 4 digits');
+    if (!pin.trim()) {
+      setError('Please enter the PIN');
       return;
     }
 
@@ -91,11 +60,11 @@ export const PinVerificationModal: React.FC<PinVerificationModalProps> = ({
     setError(null);
 
     try {
-      const isValid = await onVerify(fullPin);
+      const isValid = await onVerify(pin);
       if (!isValid) {
         setError('Incorrect PIN. Please try again.');
-        setPin(['', '', '', '', '', '']);
-        inputRefs.current[0]?.focus();
+        setPin('');
+        inputRef.current?.focus();
       }
     } catch (err) {
       setError('Verification failed. Please try again.');
@@ -136,46 +105,43 @@ export const PinVerificationModal: React.FC<PinVerificationModalProps> = ({
             </p>
           )}
           <p className="text-sm text-text-tertiary mt-3">
-            This gallery is protected. Please enter the PIN to continue.
+            This content is protected. Please enter the PIN to continue.
           </p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-5">
-          {/* PIN Input Grid */}
-          <div className="flex justify-center gap-2">
-            {pin.map((digit, index) => (
-              <input
-                key={index}
-                ref={(el) => (inputRefs.current[index] = el)}
-                type={showPin ? 'text' : 'password'}
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => handleChange(index, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(index, e)}
-                onPaste={index === 0 ? handlePaste : undefined}
-                className={`
-                  w-11 h-14 text-center text-xl font-semibold
-                  border-2 rounded-lg bg-surface-secondary
-                  focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
-                  transition-all
-                  ${error ? 'border-error' : 'border-border'}
-                `}
-                disabled={isVerifying}
-              />
-            ))}
+        <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-5" autoComplete="off">
+          {/* Simple PIN Input */}
+          <div className="relative">
+            <input
+              ref={inputRef}
+              type={showPin ? 'text' : 'password'}
+              value={pin}
+              onChange={(e) => {
+                setPin(e.target.value);
+                setError(null);
+              }}
+              placeholder="Enter PIN"
+              autoComplete="off"
+              className={`
+                w-full px-4 py-3 text-center text-lg font-medium tracking-wider
+                border-2 rounded-lg bg-surface-secondary
+                focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
+                transition-all
+                ${error ? 'border-error' : 'border-border'}
+              `}
+              disabled={isVerifying}
+            />
+            
+            {/* Show/Hide PIN toggle */}
+            <button
+              type="button"
+              onClick={() => setShowPin(!showPin)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+            >
+              {showPin ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
           </div>
-
-          {/* Show/Hide PIN */}
-          <button
-            type="button"
-            onClick={() => setShowPin(!showPin)}
-            className="flex items-center justify-center gap-2 text-sm text-text-secondary hover:text-text-primary mx-auto"
-          >
-            {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
-            {showPin ? 'Hide PIN' : 'Show PIN'}
-          </button>
 
           {/* Error Message */}
           {error && (
@@ -201,7 +167,7 @@ export const PinVerificationModal: React.FC<PinVerificationModalProps> = ({
               variant="primary"
               size="md"
               className="flex-1"
-              disabled={isVerifying || pin.filter(p => p).length < 4}
+              disabled={isVerifying || !pin.trim()}
             >
               {isVerifying ? 'Verifying...' : 'Verify'}
             </AppButton>

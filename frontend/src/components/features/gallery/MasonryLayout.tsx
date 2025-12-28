@@ -4,12 +4,10 @@
  * Property 2: Masonry Layout Aspect Ratio Preservation
  */
 
-import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { GalleryAssetItem } from '../../../types/gallery';
 import { ResponsiveColumns } from '../../../types/canvas';
 import { PhotoCard } from './PhotoCard';
-import { useAuth } from '../../../contexts/AuthContext';
-import { signedUrlService } from '../../../services/signedUrlService';
 
 export interface MasonryLayoutProps {
   assets: GalleryAssetItem[];
@@ -26,10 +24,15 @@ export interface MasonryLayoutProps {
   onAssetFavorite?: (assetId: string, favorite: boolean) => void;
   onCustomerSelectionToggle?: (assetId: string, selected: boolean) => void;
   onAssetDownload?: (assetId: string) => void;
+  onAssetShare?: (assetId: string) => void;
+  onAssetLock?: (assetId: string, isPrivate: boolean) => void;
   onAssetDelete?: (assetId: string) => void;
   onSetCover?: (assetId: string) => void;
+  onUpdateAsset?: (assetId: string, data: { title: string; description: string; is_private: boolean }) => void;
   isLoading?: boolean;
   className?: string;
+  isPrivateUnlocked?: boolean;
+  onUnlockPrivate?: () => void;
   // Masonry doesn't support DnD sortable in this version
 }
 
@@ -46,10 +49,15 @@ export const MasonryLayout: React.FC<MasonryLayoutProps> = ({
   onAssetFavorite,
   onCustomerSelectionToggle,
   onAssetDownload,
+  onAssetShare,
+  onAssetLock,
   onAssetDelete,
   onSetCover,
+  onUpdateAsset,
   isLoading = false,
   className = '',
+  isPrivateUnlocked,
+  onUnlockPrivate,
 }) => {
   // Column calculation
   const [columnCount, setColumnCount] = useState(3);
@@ -110,81 +118,11 @@ export const MasonryLayout: React.FC<MasonryLayoutProps> = ({
   
   const gapSize = getGapSize();
 
-  // Lazy loading observer logic (similar to PhotoGrid)
-  const { workspace } = useAuth();
-  const [visibleAssets, setVisibleAssets] = useState<Set<string>>(new Set());
+  // Note: SignedUrlContext handles batched URL fetching automatically
+  // Each PhotoCard uses useSignedUrl which goes through the context's batching logic
+  // No need for duplicate batch fetching or intersection observer here
 
-  // Batch fetch signed URLs
-  useEffect(() => {
-     if (!workspace?.workspace_id || assets.length === 0) return;
-
-    const visibleIds = Array.from(visibleAssets);
-    // Logic duped from PhotoGrid - reusing service
-    if (visibleIds.length > 0) {
-       const newIds = visibleIds.filter(
-        (id) => {
-          const asset = assets.find((a) => a.asset_id === id);
-          return asset && asset.asset.status === 'available' && !asset.asset.thumbnail_url;
-        }
-      );
-      
-      if (newIds.length > 0) {
-        signedUrlService
-          .getSignedUrls(workspace.workspace_id, newIds, 'thumbnail')
-          .catch(console.error);
-      }
-    } else {
-        // Initial load
-        const initialBatch = assets
-        .slice(0, 20)
-        .filter((a) => a.asset.status === 'available')
-        .map((a) => a.asset_id);
-        
-        if (initialBatch.length > 0) {
-            signedUrlService.getSignedUrls(workspace.workspace_id, initialBatch, 'thumbnail').catch(console.error);
-        }
-    }
-  }, [visibleAssets, assets, workspace?.workspace_id]);
-
-  const observerInstance = useRef<IntersectionObserver | null>(null);
-
-  useEffect(() => {
-    return () => {
-      observerInstance.current?.disconnect();
-    };
-  }, []);
-
-  const observerRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (!node) return;
-      
-      if (!observerInstance.current) {
-        observerInstance.current = new IntersectionObserver(
-          (entries) => {
-            entries.forEach((entry) => {
-              if (entry.isIntersecting) {
-                const assetId = entry.target.getAttribute('data-asset-id');
-                if (assetId) {
-                  setVisibleAssets(prev => {
-                      if (prev.has(assetId)) return prev;
-                      const next = new Set(prev);
-                      next.add(assetId);
-                      return next;
-                  });
-                }
-              }
-            });
-          },
-          { rootMargin: '200px', threshold: 0.1 }
-        );
-      }
-      
-      observerInstance.current.observe(node);
-    },
-    []
-  );
-
-    if (isLoading) {
+  if (isLoading) {
     return (
       <div className={`grid grid-cols-${columnCount} gap-${gap} ${className}`}>
          {/* Skeleton */}
@@ -215,9 +153,8 @@ export const MasonryLayout: React.FC<MasonryLayoutProps> = ({
             style={{ gap: `${gapSize}px` }}
         >
           {col.map((asset) => (
-             <div 
+             <div
                 key={asset.asset_id}
-                ref={observerRef}
                 data-asset-id={asset.asset_id}
              >
                 <PhotoCard
@@ -232,10 +169,15 @@ export const MasonryLayout: React.FC<MasonryLayoutProps> = ({
                     onFavorite={onAssetFavorite}
                     onCustomerSelectionToggle={onCustomerSelectionToggle}
                     onDownload={onAssetDownload}
+                    onShare={onAssetShare}
+                    onLock={onAssetLock}
                     onDelete={onAssetDelete}
                     onSetCover={onSetCover}
+                    onUpdateAsset={onUpdateAsset}
                     showActions={true}
                     aspectRatio="auto" // Preserves original aspect ratio
+                    isPrivateUnlocked={isPrivateUnlocked}
+                    onUnlockPrivate={onUnlockPrivate}
                 />
              </div>
           ))}

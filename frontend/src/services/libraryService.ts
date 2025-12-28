@@ -82,6 +82,7 @@ export class LibraryService {
       startDate?: string;
       endDate?: string;
       folder_id?: string;
+      face_group_id?: string;
     }
   ): Promise<LibraryListResponse> {
     const params = new URLSearchParams();
@@ -94,6 +95,7 @@ export class LibraryService {
     if (options?.startDate) params.append('start_date', options.startDate);
     if (options?.endDate) params.append('end_date', options.endDate);
     if (options?.folder_id) params.append('folder_id', options.folder_id);
+    if (options?.face_group_id) params.append('face_group_id', options.face_group_id);
 
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/library/assets${query ? `?${query}` : ''}`;

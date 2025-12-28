@@ -1,0 +1,825 @@
+openapi: 3.1.0
+info:
+  title: Smart Local Tagging Layer API
+  description: |
+    API endpoints for the Smart Local Tagging Layer feature.
+    Extends existing RawDrive API with AI-powered tagging and analysis.
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+paths:
+  # ============================================================================
+  # ASSET TAGS (Extended)
+  # ============================================================================
+
+  /workspaces/{workspace_id}/assets/{asset_id}/tags:
+    get:
+      summary: Get tags for an asset
+      description: Returns all tags (manual and AI-generated) for a specific asset
+      operationId: getAssetTags
+      tags: [Tags]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [all, manual, ai]
+          description: Filter by tag source
+      responses:
+        '200':
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetTagsResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      summary: Add tag to asset
+      description: Add a manual tag to an asset
+      operationId: addTagToAsset
+      tags: [Tags]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTagRequest'
+      responses:
+        '200':
+          description: Tag added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetTag'
+        '409':
+          description: Tag already exists on asset
+
+    put:
+      summary: Replace all tags on asset
+      description: Replace all manual tags on an asset with a new set
+      operationId: setAssetTags
+      tags: [Tags]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetTagsRequest'
+      responses:
+        '200':
+          description: Tags replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetTagsResponse'
+
+  /workspaces/{workspace_id}/assets/{asset_id}/tags/{tag_id}:
+    delete:
+      summary: Remove tag from asset
+      operationId: removeTagFromAsset
+      tags: [Tags]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+        - $ref: '#/components/parameters/TagId'
+      responses:
+        '204':
+          description: Tag removed
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # BULK TAG OPERATIONS
+  # ============================================================================
+
+  /workspaces/{workspace_id}/assets/tags/bulk:
+    post:
+      summary: Bulk tag operation
+      description: Add or remove tags from multiple assets at once
+      operationId: bulkTagAssets
+      tags: [Tags]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkTagRequest'
+      responses:
+        '200':
+          description: Bulk operation completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkTagResponse'
+
+  # ============================================================================
+  # AI ANALYSIS
+  # ============================================================================
+
+  /workspaces/{workspace_id}/assets/{asset_id}/analysis:
+    get:
+      summary: Get asset analysis status
+      description: Returns AI analysis status and metadata for an asset
+      operationId: getAssetAnalysis
+      tags: [Analysis]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Analysis status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetAnalysis'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /workspaces/{workspace_id}/assets/{asset_id}/reanalyze:
+    post:
+      summary: Request re-analysis
+      description: Queue asset for fresh AI analysis
+      operationId: reanalyzeAsset
+      tags: [Analysis]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReanalyzeRequest'
+      responses:
+        '202':
+          description: Re-analysis queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJob'
+        '409':
+          description: Analysis already in progress
+
+  /workspaces/{workspace_id}/assets/reanalyze/bulk:
+    post:
+      summary: Bulk re-analysis
+      description: Queue multiple assets for fresh AI analysis
+      operationId: bulkReanalyzeAssets
+      tags: [Analysis]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkReanalyzeRequest'
+      responses:
+        '202':
+          description: Re-analysis jobs queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkAnalysisResponse'
+
+  # ============================================================================
+  # GALLERY TAGGING HEALTH
+  # ============================================================================
+
+  /workspaces/{workspace_id}/galleries/{gallery_id}/tagging-health:
+    get:
+      summary: Get gallery tagging health
+      description: Returns tagging completion statistics for a gallery
+      operationId: getGalleryTaggingHealth
+      tags: [Health]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Tagging health stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryTaggingHealth'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /workspaces/{workspace_id}/tagging-health:
+    get:
+      summary: Get workspace tagging overview
+      description: Returns tagging health for all galleries in workspace
+      operationId: getWorkspaceTaggingHealth
+      tags: [Health]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, incomplete, failed]
+          description: Filter galleries by tagging status
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Workspace tagging overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceTaggingHealth'
+
+  # ============================================================================
+  # FACE GROUPS + PEOPLE NAMING
+  # ============================================================================
+
+  /workspaces/{workspace_id}/face-groups/{face_group_id}/name:
+    put:
+      summary: Name a face group
+      description: Assign a person name to a face group
+      operationId: nameFaceGroup
+      tags: [Faces]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: face_group_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameFaceGroupRequest'
+      responses:
+        '200':
+          description: Face group named
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceGroup'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # SEARCH WITH TAGS
+  # ============================================================================
+
+  /workspaces/{workspace_id}/search:
+    get:
+      summary: Unified search
+      description: Search across galleries, assets, tags, and people
+      operationId: unifiedSearch
+      tags: [Search]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - name: types
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [galleries, assets, tags, people]
+          description: Entity types to search
+        - name: gallery_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Limit search to specific gallery
+        - name: tag_source
+          in: query
+          schema:
+            type: string
+            enum: [all, manual, ai]
+          description: Filter tag matches by source
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+
+  /workspaces/{workspace_id}/galleries/{gallery_id}/filter:
+    get:
+      summary: Filter gallery assets
+      description: Filter assets in a gallery by tags, people, or date
+      operationId: filterGalleryAssets
+      tags: [Search]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          description: Filter by tag names (OR logic)
+        - name: people
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          description: Filter by person names (OR logic)
+        - name: tag_ids
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+          description: Filter by tag IDs (OR logic)
+        - name: person_ids
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+          description: Filter by person IDs (OR logic)
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Filtered assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilteredAssetsResponse'
+
+# ==============================================================================
+# COMPONENTS
+# ==============================================================================
+
+components:
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Workspace ID
+
+    AssetId:
+      name: asset_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Asset ID
+
+    TagId:
+      name: tag_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Tag ID
+
+    GalleryId:
+      name: gallery_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Gallery ID
+
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Page number
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Results per page
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    # Tags
+    AssetTag:
+      type: object
+      properties:
+        tag_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [keyword, location, event, category, custom]
+        color:
+          type: string
+        source:
+          type: string
+          enum: [manual, ai_vision, ai_gemini, ai_local]
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        created_at:
+          type: string
+          format: date-time
+
+    AssetTagsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetTag'
+        manual_count:
+          type: integer
+        ai_count:
+          type: integer
+
+    AddTagRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        type:
+          type: string
+          enum: [keyword, location, event, category, custom]
+          default: keyword
+        color:
+          type: string
+
+    SetTagsRequest:
+      type: object
+      required: [tag_ids]
+      properties:
+        tag_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    BulkTagRequest:
+      type: object
+      required: [asset_ids, operation]
+      properties:
+        asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 100
+        operation:
+          type: string
+          enum: [add, remove]
+        tag_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        tag_names:
+          type: array
+          items:
+            type: string
+          description: Create tags if not exists (add only)
+
+    BulkTagResponse:
+      type: object
+      properties:
+        success_count:
+          type: integer
+        failed_count:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              asset_id:
+                type: string
+                format: uuid
+              error:
+                type: string
+
+    # Analysis
+    AssetAnalysis:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing, completed, failed, skipped]
+        vision_status:
+          type: string
+          enum: [pending, processing, completed, failed, skipped]
+        vision_analyzed_at:
+          type: string
+          format: date-time
+        vision_provider:
+          type: string
+        vision_tags_count:
+          type: integer
+        face_status:
+          type: string
+          enum: [pending, processing, completed, failed, skipped]
+        face_analyzed_at:
+          type: string
+          format: date-time
+        face_provider:
+          type: string
+        faces_detected:
+          type: integer
+        error_message:
+          type: string
+        retry_count:
+          type: integer
+
+    ReanalyzeRequest:
+      type: object
+      properties:
+        include_faces:
+          type: boolean
+          default: true
+        include_content:
+          type: boolean
+          default: true
+        preserve_manual_tags:
+          type: boolean
+          default: true
+
+    AnalysisJob:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        asset_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing]
+        priority:
+          type: integer
+        queued_at:
+          type: string
+          format: date-time
+
+    BulkReanalyzeRequest:
+      type: object
+      required: [asset_ids]
+      properties:
+        asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 100
+        include_faces:
+          type: boolean
+          default: true
+        include_content:
+          type: boolean
+          default: true
+        preserve_manual_tags:
+          type: boolean
+          default: true
+
+    BulkAnalysisResponse:
+      type: object
+      properties:
+        queued_count:
+          type: integer
+        skipped_count:
+          type: integer
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalysisJob'
+
+    # Health
+    GalleryTaggingHealth:
+      type: object
+      properties:
+        gallery_id:
+          type: string
+          format: uuid
+        total_assets:
+          type: integer
+        tagged_assets:
+          type: integer
+        pending_assets:
+          type: integer
+        failed_assets:
+          type: integer
+        completion_percentage:
+          type: number
+          format: float
+        last_analysis_at:
+          type: string
+          format: date-time
+        estimated_completion:
+          type: string
+          format: date-time
+          description: Estimated time to complete pending processing
+
+    WorkspaceTaggingHealth:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GalleryTaggingHealth'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+        summary:
+          type: object
+          properties:
+            total_galleries:
+              type: integer
+            fully_tagged_galleries:
+              type: integer
+            galleries_with_pending:
+              type: integer
+            galleries_with_failures:
+              type: integer
+
+    # Faces
+    NameFaceGroupRequest:
+      type: object
+      required: [display_name]
+      properties:
+        display_name:
+          type: string
+          maxLength: 255
+        create_person:
+          type: boolean
+          default: true
+          description: Create new person if name doesn't match existing
+        person_id:
+          type: string
+          format: uuid
+          description: Link to existing person instead of creating
+
+    FaceGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        person_id:
+          type: string
+          format: uuid
+        person_display_name:
+          type: string
+        face_count:
+          type: integer
+        representative_thumbnail_url:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+
+    # Search
+    SearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        results:
+          type: object
+          properties:
+            galleries:
+              type: array
+              items:
+                type: object
+            assets:
+              type: array
+              items:
+                type: object
+            tags:
+              type: array
+              items:
+                $ref: '#/components/schemas/AssetTag'
+            people:
+              type: array
+              items:
+                type: object
+        total:
+          type: integer
+
+    FilteredAssetsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              asset_id:
+                type: string
+                format: uuid
+              file_name:
+                type: string
+              thumbnail_url:
+                type: string
+                format: uri
+              matched_tags:
+                type: array
+                items:
+                  type: string
+              matched_people:
+                type: array
+                items:
+                  type: string
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+        filters_applied:
+          type: object
+          properties:
+            tag_count:
+              type: integer
+            people_count:
+              type: integer
+
+    # Common
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object

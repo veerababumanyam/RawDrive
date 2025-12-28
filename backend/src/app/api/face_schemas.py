@@ -396,33 +396,41 @@ class FaceGroupUpdate(BaseModel):
 
 class FaceGroupResponse(FaceGroupBase):
     """Face group response schema."""
-    
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     face_group_id: UUID = Field(..., alias="id", description="Unique group identifier")
     workspace_id: UUID = Field(..., description="Workspace ID")
     representative_face_id: Optional[UUID] = Field(
-        None, 
+        None,
         description="Representative face ID"
     )
     face_count: int = Field(..., ge=0, description="Number of faces in this group")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+    representative_thumbnail_url: Optional[str] = Field(
+        None,
+        description="Signed URL for representative face thumbnail"
+    )
+    person_id: Optional[UUID] = Field(
+        None,
+        description="ID of the linked person entity"
+    )
+    person_name: Optional[str] = Field(
+        None,
+        description="Display name of the linked person"
+    )
 
 
 class FaceGroupDetailResponse(FaceGroupResponse):
     """Detailed face group response with additional data."""
-    
+
     centroid: Optional[list[float]] = Field(
-        None, 
+        None,
         description="Group centroid embedding (512 dimensions)"
     )
-    representative_thumbnail_url: Optional[str] = Field(
-        None, 
-        description="Thumbnail URL of representative face"
-    )
     sample_faces: Optional[list[FaceResponse]] = Field(
-        None, 
+        None,
         description="Sample faces from this group"
     )
 
@@ -555,15 +563,137 @@ class AssignFaceToGroupRequest(BaseModel):
 
 class BulkAssignFacesRequest(BaseModel):
     """Request to assign multiple faces to a group."""
-    
+
     face_ids: list[UUID] = Field(
-        ..., 
-        min_length=1, 
+        ...,
+        min_length=1,
         description="Faces to assign"
     )
     group_id: Optional[UUID] = Field(
-        None, 
+        None,
         description="Group to assign to (null to unassign all)"
+    )
+
+
+class MultiMergeFaceGroupsRequest(BaseModel):
+    """Request to merge multiple face groups into one target group."""
+
+    source_group_ids: list[UUID] = Field(
+        ...,
+        min_length=1,
+        max_length=99,
+        description="Groups to merge from (will be deleted)"
+    )
+    target_group_id: UUID = Field(
+        ...,
+        description="Group to merge into (will be preserved)"
+    )
+    representative_face_id: Optional[UUID] = Field(
+        None,
+        description="Face to set as primary for merged group"
+    )
+    name: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Name for merged group (overrides inherited name)"
+    )
+
+    @field_validator("source_group_ids")
+    @classmethod
+    def validate_no_target_in_sources(cls, v, info):
+        """Ensure target is not in source list."""
+        target = info.data.get("target_group_id")
+        if target and target in v:
+            raise ValueError("Target group cannot be in source list")
+        return v
+
+
+class SetRepresentativeFaceRequest(BaseModel):
+    """Request to set primary (representative) face for a group."""
+
+    face_id: UUID = Field(
+        ...,
+        description="Face to designate as primary"
+    )
+    recalculate_centroid: bool = Field(
+        True,
+        description="Whether to recalculate centroid with face weighting"
+    )
+
+
+class MergeResultResponse(BaseModel):
+    """Response from multi-merge operation."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    merged_group: "FaceGroupResponse" = Field(
+        ...,
+        description="The resulting merged group"
+    )
+    source_group_ids: list[UUID] = Field(
+        ...,
+        description="IDs of groups that were deleted"
+    )
+    faces_merged: int = Field(
+        ...,
+        description="Total number of faces now in merged group"
+    )
+
+
+class FaceGroupSummary(BaseModel):
+    """Minimal face group info for suggestions."""
+
+    id: UUID = Field(..., description="Group ID")
+    name: Optional[str] = Field(None, description="Group name")
+    person_name: Optional[str] = Field(None, description="Person name")
+    face_count: int = Field(..., description="Number of faces")
+    representative_thumbnail_url: Optional[str] = Field(
+        None,
+        description="Signed thumbnail URL"
+    )
+
+
+class MergeSuggestion(BaseModel):
+    """A pair of face groups suggested for merging."""
+
+    group1: FaceGroupSummary = Field(..., description="First group")
+    group2: FaceGroupSummary = Field(..., description="Second group")
+    similarity: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Cosine similarity between group centroids"
+    )
+
+
+class MergeSuggestionsResponse(BaseModel):
+    """Response containing merge suggestions."""
+
+    suggestions: list[MergeSuggestion] = Field(
+        ...,
+        description="Suggested group pairs to merge"
+    )
+    total: int = Field(..., description="Total suggestions available")
+
+
+class SimilarGroupsResponse(BaseModel):
+    """Response containing groups similar to a specific group."""
+
+    group: "FaceGroupResponse" = Field(..., description="The queried group")
+    similar_groups: list[dict] = Field(
+        ...,
+        description="Similar groups with similarity scores"
+    )
+
+
+class FacesInGroupResponse(BaseModel):
+    """Response containing faces within a group."""
+
+    faces: list["FaceResponse"] = Field(..., description="Faces in the group")
+    total: int = Field(..., description="Total face count")
+    representative_face_id: Optional[UUID] = Field(
+        None,
+        description="ID of the current representative face"
     )
 
 

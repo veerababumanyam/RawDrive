@@ -1,13 +1,22 @@
 /**
  * SettingsLayout Component
  *
- * Layout wrapper for user settings pages.
- * Provides a sidebar navigation for settings sections:
+ * @deprecated This layout is deprecated in favor of UserSettingsPage with tabbed navigation.
+ * The new tabbed approach uses /settings?tab=security URL pattern.
+ * Kept for potential rollback only - will be removed in a future release.
+ *
+ * Original purpose:
+ * Layout wrapper for user settings pages with sidebar navigation for settings sections:
  * - Profile
  * - Security
  * - Notifications
  * - Privacy
+ * - AI & Gemini
+ * - Subscription
  * - Account (danger zone)
+ *
+ * @see UserSettingsPage - The new tabbed settings page
+ * @see SettingsTabs - The new tab navigation component
  */
 
 import React from 'react';
@@ -20,6 +29,7 @@ import {
   Trash2,
   ChevronLeft,
   Sparkles,
+  CreditCard,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -77,6 +87,13 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     icon: <Sparkles size={20} />,
     path: '/settings/ai',
     description: 'Configure Gemini API key and model preferences',
+  },
+  {
+    id: 'subscription',
+    label: 'Subscription',
+    icon: <CreditCard size={20} />,
+    path: '/settings/subscription',
+    description: 'Manage your plan, usage, and billing',
   },
   {
     id: 'account',

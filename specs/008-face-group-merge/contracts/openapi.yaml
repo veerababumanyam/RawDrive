@@ -1,0 +1,450 @@
+# OpenAPI Contract Additions for Face Group Merge Feature
+# Feature: 008-face-group-merge
+# Date: 2025-12-28
+
+openapi: 3.0.3
+info:
+  title: RawDrive Face Group Merge API
+  version: 1.0.0
+  description: API additions for multi-group merge, primary face selection, and merge suggestions
+
+paths:
+  /api/v1/workspaces/{workspaceId}/face-groups/multi-merge:
+    post:
+      operationId: multiMergeFaceGroups
+      summary: Merge multiple face groups
+      description: |
+        Merge 2+ face groups into a single target group. Source groups are deleted
+        and all their faces are reassigned to the target group. Optionally set
+        a primary (representative) face for the merged group.
+      tags:
+        - Face Groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MultiMergeFaceGroupsRequest'
+      responses:
+        '200':
+          description: Groups merged successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeResult'
+        '400':
+          description: Invalid merge request (e.g., less than 2 groups, invalid IDs)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: One or more groups not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Workspace access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/workspaces/{workspaceId}/face-groups/{groupId}/representative:
+    put:
+      operationId: setRepresentativeFace
+      summary: Set primary (representative) face for a group
+      description: |
+        Designate a face as the primary representative for this group.
+        The primary face's thumbnail is displayed in the People panel,
+        and its embedding is weighted 2x in centroid calculations.
+      tags:
+        - Face Groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/groupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetRepresentativeFaceRequest'
+      responses:
+        '200':
+          description: Representative face set successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceGroupResponse'
+        '400':
+          description: Face does not belong to this group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Group or face not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/workspaces/{workspaceId}/face-groups/suggestions:
+    get:
+      operationId: getMergeSuggestions
+      summary: Get suggested face groups to merge
+      description: |
+        Returns pairs of face groups with high centroid similarity (>=0.75 by default)
+        that may represent the same person. Use these suggestions to help users
+        identify and merge duplicate face groups.
+      tags:
+        - Face Groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - name: threshold
+          in: query
+          description: Minimum similarity threshold (0.0-1.0)
+          required: false
+          schema:
+            type: number
+            format: float
+            minimum: 0.5
+            maximum: 0.99
+            default: 0.75
+        - name: limit
+          in: query
+          description: Maximum number of suggestion pairs to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Merge suggestions retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeSuggestionsResponse'
+
+  /api/v1/workspaces/{workspaceId}/face-groups/{groupId}/similar:
+    get:
+      operationId: getSimilarFaceGroups
+      summary: Get face groups similar to a specific group
+      description: |
+        Find face groups that may represent the same person as the specified group,
+        based on centroid similarity. Useful for showing merge suggestions in
+        the group detail view.
+      tags:
+        - Face Groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/groupId'
+        - name: threshold
+          in: query
+          description: Minimum similarity threshold
+          required: false
+          schema:
+            type: number
+            format: float
+            default: 0.75
+        - name: limit
+          in: query
+          description: Maximum results
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Similar groups retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimilarGroupsResponse'
+
+  /api/v1/workspaces/{workspaceId}/face-groups/{groupId}/faces:
+    get:
+      operationId: getFacesInGroup
+      summary: Get all faces in a group with thumbnails
+      description: |
+        Retrieve all faces belonging to a face group, including thumbnail URLs.
+        Used for browsing faces before merge and for selecting primary face.
+      tags:
+        - Face Groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/groupId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Faces retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacesInGroupResponse'
+
+components:
+  parameters:
+    workspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      description: Workspace UUID
+      schema:
+        type: string
+        format: uuid
+
+    groupId:
+      name: groupId
+      in: path
+      required: true
+      description: Face group UUID
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    MultiMergeFaceGroupsRequest:
+      type: object
+      required:
+        - source_group_ids
+        - target_group_id
+      properties:
+        source_group_ids:
+          type: array
+          description: IDs of groups to merge from (will be deleted)
+          minItems: 1
+          maxItems: 99
+          items:
+            type: string
+            format: uuid
+        target_group_id:
+          type: string
+          format: uuid
+          description: ID of group to merge into (will be preserved)
+        representative_face_id:
+          type: string
+          format: uuid
+          description: Optional face to set as primary for merged group
+        name:
+          type: string
+          maxLength: 255
+          description: Optional name for merged group (overrides inherited name)
+
+    SetRepresentativeFaceRequest:
+      type: object
+      required:
+        - face_id
+      properties:
+        face_id:
+          type: string
+          format: uuid
+          description: Face to designate as primary/representative
+        recalculate_centroid:
+          type: boolean
+          default: true
+          description: Whether to recalculate group centroid with face weighting
+
+    MergeResult:
+      type: object
+      properties:
+        merged_group:
+          $ref: '#/components/schemas/FaceGroupResponse'
+        source_group_ids:
+          type: array
+          description: IDs of groups that were deleted
+          items:
+            type: string
+            format: uuid
+        faces_merged:
+          type: integer
+          description: Total number of faces now in the merged group
+
+    MergeSuggestionsResponse:
+      type: object
+      properties:
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MergeSuggestion'
+        total:
+          type: integer
+          description: Total number of suggestions available
+
+    MergeSuggestion:
+      type: object
+      properties:
+        group1:
+          $ref: '#/components/schemas/FaceGroupSummary'
+        group2:
+          $ref: '#/components/schemas/FaceGroupSummary'
+        similarity:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Cosine similarity between group centroids
+
+    FaceGroupSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        face_count:
+          type: integer
+        representative_thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+
+    SimilarGroupsResponse:
+      type: object
+      properties:
+        group:
+          $ref: '#/components/schemas/FaceGroupResponse'
+        similar_groups:
+          type: array
+          items:
+            type: object
+            properties:
+              group:
+                $ref: '#/components/schemas/FaceGroupSummary'
+              similarity:
+                type: number
+                format: float
+
+    FacesInGroupResponse:
+      type: object
+      properties:
+        faces:
+          type: array
+          items:
+            $ref: '#/components/schemas/FaceResponse'
+        total:
+          type: integer
+        is_representative:
+          type: object
+          additionalProperties:
+            type: boolean
+          description: Map of face_id to boolean indicating if it's the representative
+
+    FaceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        photo_id:
+          type: string
+          format: uuid
+        bounding_box:
+          type: object
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+            width:
+              type: number
+            height:
+              type: number
+        confidence:
+          type: number
+          format: float
+        thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    FaceGroupResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        person_id:
+          type: string
+          format: uuid
+          nullable: true
+        person_name:
+          type: string
+          nullable: true
+        face_count:
+          type: integer
+        representative_face_id:
+          type: string
+          format: uuid
+          nullable: true
+        representative_thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

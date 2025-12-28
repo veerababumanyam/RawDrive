@@ -1,7 +1,20 @@
 {
-  "python.defaultInterpreterPath": "python3",
-  "basedpyright.analysis": {
-    "ignore": ["**/backend/src/**"],
-    "typeCheckingMode": "basic"
-  }
+    "python.defaultInterpreterPath": "python3",
+    "basedpyright.analysis": {
+        "ignore": [
+            "**/backend/src/**"
+        ],
+        "typeCheckingMode": "basic"
+    },
+    "chat.promptFilesRecommendations": {
+        "speckit.constitution": true,
+        "speckit.specify": true,
+        "speckit.plan": true,
+        "speckit.tasks": true,
+        "speckit.implement": true
+    },
+    "chat.tools.terminal.autoApprove": {
+        ".specify/scripts/bash/": true,
+        ".specify/scripts/powershell/": true
+    }
 }

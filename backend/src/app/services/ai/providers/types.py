@@ -20,7 +20,7 @@ from app.api.face_schemas import FaceDetectionResult
 @dataclass
 class DetectionOptions:
     """Options for face detection operations.
-    
+
     Attributes:
         max_faces: Maximum number of faces to detect (default: 50)
         min_confidence: Minimum confidence threshold (0-1, default: 0.0)
@@ -31,6 +31,53 @@ class DetectionOptions:
     min_confidence: float = 0.0
     include_landmarks: bool = True
     include_attributes: bool = True
+
+
+@dataclass
+class LabelDetectionOptions:
+    """Options for label/content detection operations.
+
+    Attributes:
+        max_labels: Maximum number of labels to return (default: 50)
+        min_confidence: Minimum confidence threshold (0-1, default: 0.5)
+    """
+    max_labels: int = 50
+    min_confidence: float = 0.5
+
+
+# =============================================================================
+# LABEL DETECTION RESULT
+# =============================================================================
+
+
+@dataclass
+class LabelResult:
+    """A single label/tag detected in an image.
+
+    Attributes:
+        name: Label name (e.g., "sunset", "beach", "wedding")
+        confidence: Detection confidence (0-1)
+        mid: Knowledge Graph MID (Cloud Vision specific)
+        topicality: Relevance score for this image
+    """
+    name: str
+    confidence: float
+    mid: Optional[str] = None
+    topicality: Optional[float] = None
+
+
+@dataclass
+class LabelDetectionResult:
+    """Result of label detection operation.
+
+    Attributes:
+        labels: List of detected labels
+        provider: Name of the provider used
+        processing_time_ms: Time taken to process (optional)
+    """
+    labels: list[LabelResult]
+    provider: str
+    processing_time_ms: Optional[int] = None
 
 
 # =============================================================================
@@ -92,26 +139,26 @@ class ProviderStatus:
 
 
 class IAIProvider(ABC):
-    """Abstract interface for AI face detection providers.
-    
+    """Abstract interface for AI detection providers.
+
     All concrete providers must implement this interface to ensure
     consistent behavior across different AI services.
-    
+
     Implementations:
     - CloudVisionProvider: Google Cloud Vision API (primary)
     - GeminiProvider: Google Gemini API (fallback)
     """
-    
+
     @property
     @abstractmethod
     def name(self) -> str:
         """Provider name for identification and logging.
-        
+
         Returns:
             Provider identifier (e.g., 'cloud_vision', 'gemini')
         """
         pass
-    
+
     @abstractmethod
     async def detect_faces(
         self,
@@ -119,28 +166,50 @@ class IAIProvider(ABC):
         options: Optional[DetectionOptions] = None,
     ) -> list[FaceDetectionResult]:
         """Detect faces in an image.
-        
+
         Args:
             image_buffer: Raw image data as bytes
             options: Detection options (max_faces, min_confidence, etc.)
-            
+
         Returns:
             List of detected faces with bounding boxes and confidence scores
-            
+
         Raises:
             FaceDetectionError: If detection fails
         """
         pass
-    
+
+    async def detect_labels(
+        self,
+        image_buffer: bytes,
+        options: Optional["LabelDetectionOptions"] = None,
+    ) -> "LabelDetectionResult":
+        """Detect labels/content in an image.
+
+        Optional method - providers may implement this for content tagging.
+        Default implementation raises NotImplementedError.
+
+        Args:
+            image_buffer: Raw image data as bytes
+            options: Label detection options (max_labels, min_confidence)
+
+        Returns:
+            LabelDetectionResult with detected labels
+
+        Raises:
+            NotImplementedError: If provider doesn't support label detection
+        """
+        raise NotImplementedError(f"{self.name} does not support label detection")
+
     @abstractmethod
     async def is_healthy(self) -> bool:
         """Check if the provider is healthy and operational.
-        
+
         Performs a lightweight health check to verify:
         - API credentials are valid
         - Service is reachable
         - No critical errors
-        
+
         Returns:
             True if provider is healthy, False otherwise
         """

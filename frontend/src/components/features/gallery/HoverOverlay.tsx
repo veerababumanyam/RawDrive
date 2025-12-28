@@ -36,6 +36,8 @@ export interface HoverOverlayProps {
   onFavorite?: (e: React.MouseEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
   onDownload?: (e: React.MouseEvent) => void;
+  onShare?: (e: React.MouseEvent) => void;
+  onLock?: (e: React.MouseEvent) => void;
   onDelete?: (e: React.MouseEvent) => void;
   onSetCover?: (e: React.MouseEvent) => void;
   onEdit?: (e: React.MouseEvent) => void;
@@ -54,6 +56,8 @@ export const HoverOverlay: React.FC<HoverOverlayProps> = ({
   onFavorite,
   onClick,
   onDownload,
+  onShare,
+  onLock,
   onDelete,
   onSetCover,
   onEdit,
@@ -156,29 +160,33 @@ export const HoverOverlay: React.FC<HoverOverlayProps> = ({
             </button>
           )}
 
-          {/* Share Button (Placeholder logic in UI for now) */}
-          <button
-            className="photo-card-action-btn"
-            onClick={(e) => e.stopPropagation()}
-            onContextMenu={(e) => e.stopPropagation()}
-            aria-label="Share Photo"
-            title="Share Photo"
-          >
-            <span className="photo-card-tooltip">Share</span>
-            <Share2 size={20} />
-          </button>
+          {/* Share Button */}
+          {onShare && (
+            <button
+              className="photo-card-action-btn"
+              onClick={onShare}
+              onContextMenu={(e) => e.stopPropagation()}
+              aria-label="Share Photo"
+              title="Share Photo"
+            >
+              <span className="photo-card-tooltip">Share</span>
+              <Share2 size={20} />
+            </button>
+          )}
 
           {/* Lock / Private Button */}
-          <button
-            className={`photo-card-action-btn btn-lock ${asset.is_private ? 'active' : ''}`}
-            onClick={(e) => e.stopPropagation()}
-            onContextMenu={(e) => e.stopPropagation()}
-            aria-label={asset.is_private ? 'Unlock Photo' : 'Lock Photo'}
-            title={asset.is_private ? 'Unlock Photo' : 'Lock Photo'}
-          >
-            <span className="photo-card-tooltip">{asset.is_private ? 'Unlock' : 'Lock'}</span>
-            <Lock size={20} />
-          </button>
+          {onLock && (
+            <button
+              className={`photo-card-action-btn btn-lock ${asset.is_private ? 'active' : ''}`}
+              onClick={onLock}
+              onContextMenu={(e) => e.stopPropagation()}
+              aria-label={asset.is_private ? 'Unlock Photo' : 'Lock Photo'}
+              title={asset.is_private ? 'Unlock Photo' : 'Lock Photo'}
+            >
+              <span className="photo-card-tooltip">{asset.is_private ? 'Unlock' : 'Lock'}</span>
+              <Lock size={20} />
+            </button>
+          )}
 
           {/* Set as Cover / Edit Button */}
           {onSetCover && !isCover ? (

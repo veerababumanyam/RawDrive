@@ -236,7 +236,74 @@ class FaceGroupRepository:
             )
             
             return [self._row_to_dict(row) for row in rows]
-    
+
+    async def find_by_workspace_with_thumbnails(
+        self,
+        workspace_id: UUID,
+        limit: int = 100,
+        offset: int = 0,
+        order_by: str = "face_count",
+        order_desc: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Find all face groups in a workspace with representative thumbnail info.
+
+        This method joins with the faces table to get the representative face's
+        thumbnail_urls for generating signed media URLs, and with people table
+        to get the linked person's name.
+
+        Args:
+            workspace_id: Workspace ID
+            limit: Maximum number of results
+            offset: Number of results to skip
+            order_by: Field to order by (face_count, name, created_at)
+            order_desc: Whether to order descending
+
+        Returns:
+            List of face group records with rep_face_id, rep_thumbnail_urls,
+            person_id, and person_name
+        """
+        # Validate order_by to prevent SQL injection
+        valid_order_fields = {"face_count", "name", "created_at", "updated_at"}
+        if order_by not in valid_order_fields:
+            order_by = "face_count"
+
+        order_dir = "DESC" if order_desc else "ASC"
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""
+                SELECT
+                    fg.*,
+                    f.id as rep_face_id,
+                    f.thumbnail_urls as rep_thumbnail_urls,
+                    p.person_id as person_id,
+                    p.display_name as person_name
+                FROM face_groups fg
+                LEFT JOIN faces f ON fg.representative_face_id = f.id
+                LEFT JOIN people p ON fg.person_id = p.person_id
+                WHERE fg.workspace_id = $1
+                ORDER BY fg.{order_by} {order_dir}
+                LIMIT $2 OFFSET $3
+                """,
+                workspace_id,
+                limit,
+                offset,
+            )
+
+            result = []
+            for row in rows:
+                group_dict = self._row_to_dict(row)
+                # Add representative face info
+                group_dict["rep_face_id"] = row.get("rep_face_id")
+                group_dict["rep_thumbnail_urls"] = row.get("rep_thumbnail_urls")
+                # Add person info
+                group_dict["person_id"] = row.get("person_id")
+                group_dict["person_name"] = row.get("person_name")
+                result.append(group_dict)
+
+            return result
+
     async def find_similar_by_centroid(
         self,
         centroid: list[float],
@@ -298,44 +365,70 @@ class FaceGroupRepository:
         gallery_id: UUID,
         limit: int = 50,
         offset: int = 0,
+        search: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """Find face groups appearing in a gallery with localized stats.
-        
+
         Args:
             workspace_id: Workspace ID
             gallery_id: Gallery ID
             limit: Limit results
             offset: Offset results
-            
+            search: Optional search by person name
+
         Returns:
-            List of face group dicts with added 'gallery_photo_count' and 'gallery_face_count'
+            List of face group dicts with added 'gallery_photo_count', 'gallery_face_count',
+            representative face thumbnail info, person_id and person_name
         """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
+            # Build search condition
+            search_condition = ""
+            params = [gallery_id, workspace_id]
+            
+            if search:
+                search_condition = "AND (p.display_name ILIKE $5 OR p.name ILIKE $5)"
+                params.append(f"%{search}%")
+            
+            params.extend([limit, offset])
+
             rows = await conn.fetch(
-                """
+                f"""
                 SELECT
                     fg.*,
+                    rep_face.id as rep_face_id,
+                    rep_face.thumbnail_urls as rep_thumbnail_urls,
+                    p.person_id as person_id,
+                    p.display_name as person_name,
                     COUNT(DISTINCT f.photo_id) as gallery_photo_count,
                     COUNT(f.id) as gallery_face_count
                 FROM face_groups fg
+                LEFT JOIN faces rep_face ON fg.representative_face_id = rep_face.id
+                LEFT JOIN people p ON fg.person_id = p.person_id
                 JOIN faces f ON fg.id = f.face_group_id
                 JOIN gallery_assets ga ON f.photo_id = ga.asset_id
                 JOIN assets a ON ga.asset_id = a.asset_id
                 WHERE ga.gallery_id = $1 AND ga.workspace_id = $2
                 AND ga.visible = TRUE
                 AND a.deleted = FALSE
-                GROUP BY fg.id
+                {search_condition}
+                GROUP BY fg.id, rep_face.id, rep_face.thumbnail_urls, p.person_id, p.display_name
                 ORDER BY gallery_photo_count DESC, fg.updated_at DESC
-                LIMIT $3 OFFSET $4
+                LIMIT ${len(params)-1} OFFSET ${len(params)}
                 """,
-                gallery_id,
-                workspace_id,
-                limit,
-                offset,
+                *params,
             )
-            
-            return [self._row_to_dict(row) for row in rows]
+
+            result = []
+            for row in rows:
+                group_dict = self._row_to_dict(row)
+                group_dict["rep_face_id"] = row.get("rep_face_id")
+                group_dict["rep_thumbnail_urls"] = row.get("rep_thumbnail_urls")
+                group_dict["person_id"] = row.get("person_id")
+                group_dict["person_name"] = row.get("person_name")
+                result.append(group_dict)
+
+            return result
 
     async def count_by_gallery_id(
         self,
@@ -652,9 +745,497 @@ class FaceGroupRepository:
             return count
     
     # =========================================================================
+    # MERGE SUGGESTIONS (Similar Group Discovery)
+    # =========================================================================
+
+    async def find_similar_pairs(
+        self,
+        workspace_id: UUID,
+        threshold: float = 0.75,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Find pairs of face groups with similar centroids for merge suggestions.
+
+        Uses pgvector cosine distance to compute pairwise similarity between
+        all groups in a workspace. Returns pairs above the similarity threshold,
+        sorted by similarity descending.
+
+        Args:
+            workspace_id: Workspace ID for tenant isolation
+            threshold: Minimum similarity threshold (0.0-1.0), default 0.75
+            limit: Maximum number of pairs to return
+
+        Returns:
+            List of dicts with group1, group2 info and similarity score:
+            [
+                {
+                    "group1_id": UUID, "group1_name": str, "group1_face_count": int,
+                    "group1_person_name": str, "group1_rep_thumbnail_urls": dict,
+                    "group2_id": UUID, "group2_name": str, "group2_face_count": int,
+                    "group2_person_name": str, "group2_rep_thumbnail_urls": dict,
+                    "similarity": float
+                }
+            ]
+        """
+        # Convert similarity threshold to cosine distance
+        max_distance = 1.0 - threshold
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    fg1.id as group1_id,
+                    fg1.name as group1_name,
+                    fg1.face_count as group1_face_count,
+                    p1.display_name as group1_person_name,
+                    fg1.representative_face_id as group1_rep_face_id,
+                    fg2.id as group2_id,
+                    fg2.name as group2_name,
+                    fg2.face_count as group2_face_count,
+                    p2.display_name as group2_person_name,
+                    fg2.representative_face_id as group2_rep_face_id,
+                    1 - (fg1.centroid <=> fg2.centroid) as similarity
+                FROM face_groups fg1
+                CROSS JOIN face_groups fg2
+                LEFT JOIN people p1 ON fg1.person_id = p1.person_id
+                LEFT JOIN people p2 ON fg2.person_id = p2.person_id
+                WHERE fg1.workspace_id = $1
+                  AND fg2.workspace_id = $1
+                  AND fg1.id < fg2.id
+                  AND fg1.centroid IS NOT NULL
+                  AND fg2.centroid IS NOT NULL
+                  AND (fg1.centroid <=> fg2.centroid) <= $2
+                ORDER BY (fg1.centroid <=> fg2.centroid) ASC
+                LIMIT $3
+                """,
+                workspace_id,
+                max_distance,
+                limit,
+            )
+
+            results = []
+            for row in rows:
+                results.append({
+                    "group1_id": row["group1_id"],
+                    "group1_name": row["group1_name"],
+                    "group1_face_count": row["group1_face_count"],
+                    "group1_person_name": row["group1_person_name"],
+                    "group1_rep_face_id": row["group1_rep_face_id"],
+                    "group2_id": row["group2_id"],
+                    "group2_name": row["group2_name"],
+                    "group2_face_count": row["group2_face_count"],
+                    "group2_person_name": row["group2_person_name"],
+                    "group2_rep_face_id": row["group2_rep_face_id"],
+                    "similarity": float(row["similarity"]),
+                })
+
+            logger.debug(
+                "Found similar face group pairs",
+                extra={
+                    "workspace_id": str(workspace_id),
+                    "threshold": threshold,
+                    "pairs_found": len(results),
+                },
+            )
+
+            return results
+
+    async def find_similar_to_group(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        threshold: float = 0.75,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Find face groups similar to a specific group.
+
+        Uses the group's centroid to find other groups with similar centroids.
+        Useful for showing "similar people" suggestions in the UI.
+
+        Args:
+            group_id: The face group to find similar groups for
+            workspace_id: Workspace ID for tenant isolation
+            threshold: Minimum similarity threshold (0.0-1.0), default 0.75
+            limit: Maximum number of similar groups to return
+
+        Returns:
+            List of dicts with group info and similarity score:
+            [
+                {
+                    "group": dict (full group record with person_name and thumbnail),
+                    "similarity": float
+                }
+            ]
+
+        Raises:
+            FaceGroupNotFoundError: If group doesn't exist in workspace
+        """
+        # Convert similarity threshold to cosine distance
+        max_distance = 1.0 - threshold
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # First get the source group's centroid
+            source_row = await conn.fetchrow(
+                """
+                SELECT centroid
+                FROM face_groups
+                WHERE id = $1 AND workspace_id = $2
+                """,
+                group_id,
+                workspace_id,
+            )
+
+            if not source_row:
+                raise FaceGroupNotFoundError(group_id)
+
+            if not source_row["centroid"]:
+                # No centroid means no similar groups can be found
+                logger.debug(
+                    "Group has no centroid, cannot find similar groups",
+                    extra={"group_id": str(group_id)},
+                )
+                return []
+
+            # Find similar groups (excluding the source group)
+            rows = await conn.fetch(
+                """
+                SELECT
+                    fg.*,
+                    p.display_name as person_name,
+                    f.thumbnail_urls as rep_thumbnail_urls,
+                    1 - (fg.centroid <=> $1) as similarity
+                FROM face_groups fg
+                LEFT JOIN people p ON fg.person_id = p.person_id
+                LEFT JOIN faces f ON fg.representative_face_id = f.id
+                WHERE fg.workspace_id = $2
+                  AND fg.id != $3
+                  AND fg.centroid IS NOT NULL
+                  AND (fg.centroid <=> $1) <= $4
+                ORDER BY (fg.centroid <=> $1) ASC
+                LIMIT $5
+                """,
+                source_row["centroid"],
+                workspace_id,
+                group_id,
+                max_distance,
+                limit,
+            )
+
+            results = []
+            for row in rows:
+                group_dict = self._row_to_dict(row)
+                group_dict["person_name"] = row["person_name"]
+                group_dict["rep_thumbnail_urls"] = row["rep_thumbnail_urls"]
+                similarity = float(row["similarity"])
+
+                results.append({
+                    "group": group_dict,
+                    "similarity": similarity,
+                })
+
+            logger.debug(
+                "Found similar face groups",
+                extra={
+                    "source_group_id": str(group_id),
+                    "threshold": threshold,
+                    "similar_found": len(results),
+                },
+            )
+
+            return results
+
+    # =========================================================================
+    # TRANSACTION-AWARE OPERATIONS
+    # =========================================================================
+
+    async def delete_with_connection(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        conn,
+    ) -> bool:
+        """Delete a face group using an existing connection (for transactions).
+
+        This method is for use within a larger transaction where you need
+        to coordinate with other operations.
+
+        Args:
+            group_id: Face group ID to delete
+            workspace_id: Workspace ID for tenant isolation
+            conn: Existing database connection
+
+        Returns:
+            True if group was deleted, False if not found
+        """
+        result = await conn.execute(
+            """
+            DELETE FROM face_groups
+            WHERE id = $1 AND workspace_id = $2
+            """,
+            group_id,
+            workspace_id,
+        )
+
+        deleted = result and int(result.split()[-1]) > 0
+
+        if deleted:
+            logger.debug(
+                "Face group deleted (transaction)",
+                extra={"group_id": str(group_id)},
+            )
+
+        return deleted
+
+    async def set_representative_face_with_connection(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        face_id: UUID,
+        conn,
+    ) -> bool:
+        """Set representative face using an existing connection (for transactions).
+
+        Args:
+            group_id: Face group ID to update
+            workspace_id: Workspace ID for tenant isolation
+            face_id: Face ID to set as representative
+            conn: Existing database connection
+
+        Returns:
+            True if updated, False if not found
+        """
+        result = await conn.execute(
+            """
+            UPDATE face_groups
+            SET representative_face_id = $1, updated_at = NOW()
+            WHERE id = $2 AND workspace_id = $3
+            """,
+            face_id,
+            group_id,
+            workspace_id,
+        )
+
+        return result and int(result.split()[-1]) > 0
+
+    async def set_name_with_connection(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        name: str,
+        conn,
+    ) -> bool:
+        """Set group name using an existing connection (for transactions).
+
+        Args:
+            group_id: Face group ID to update
+            workspace_id: Workspace ID for tenant isolation
+            name: New name for the group
+            conn: Existing database connection
+
+        Returns:
+            True if updated, False if not found
+        """
+        result = await conn.execute(
+            """
+            UPDATE face_groups
+            SET name = $1, updated_at = NOW()
+            WHERE id = $2 AND workspace_id = $3
+            """,
+            name.strip(),
+            group_id,
+            workspace_id,
+        )
+
+        return result and int(result.split()[-1]) > 0
+
+    async def set_person_id(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        person_id: Optional[UUID],
+    ) -> bool:
+        """Set or clear the person_id for a face group.
+
+        Args:
+            group_id: Face group ID to update
+            workspace_id: Workspace ID for tenant isolation
+            person_id: Person ID to link, or None to unlink
+
+        Returns:
+            True if updated, False if not found
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE face_groups
+                SET person_id = $1, updated_at = NOW()
+                WHERE id = $2 AND workspace_id = $3
+                """,
+                person_id,
+                group_id,
+                workspace_id,
+            )
+
+            updated = result and int(result.split()[-1]) > 0
+
+            if updated:
+                logger.debug(
+                    "Face group person_id updated",
+                    extra={
+                        "group_id": str(group_id),
+                        "person_id": str(person_id) if person_id else None,
+                    },
+                )
+
+            return updated
+
+    async def set_person_id_with_connection(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+        person_id: Optional[UUID],
+        conn,
+    ) -> bool:
+        """Set person_id using an existing connection (for transactions).
+
+        Args:
+            group_id: Face group ID to update
+            workspace_id: Workspace ID for tenant isolation
+            person_id: Person ID to link, or None to unlink
+            conn: Existing database connection
+
+        Returns:
+            True if updated, False if not found
+        """
+        result = await conn.execute(
+            """
+            UPDATE face_groups
+            SET person_id = $1, updated_at = NOW()
+            WHERE id = $2 AND workspace_id = $3
+            """,
+            person_id,
+            group_id,
+            workspace_id,
+        )
+
+        return result and int(result.split()[-1]) > 0
+
+    # =========================================================================
+    # PERSON OPERATIONS (helper methods for people table)
+    # =========================================================================
+
+    async def create_person(
+        self,
+        workspace_id: UUID,
+        display_name: str,
+    ) -> UUID:
+        """Create a new person entry.
+
+        Args:
+            workspace_id: Workspace ID for tenant isolation
+            display_name: Display name for the person
+
+        Returns:
+            The newly created person_id
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO people (workspace_id, display_name, status)
+                VALUES ($1, $2, 'active')
+                RETURNING person_id
+                """,
+                workspace_id,
+                display_name.strip(),
+            )
+
+            person_id = row["person_id"]
+
+            logger.info(
+                "Person created",
+                extra={
+                    "person_id": str(person_id),
+                    "workspace_id": str(workspace_id),
+                    "display_name": display_name,
+                },
+            )
+
+            return person_id
+
+    async def create_person_with_connection(
+        self,
+        workspace_id: UUID,
+        display_name: str,
+        conn,
+    ) -> UUID:
+        """Create a person using an existing connection (for transactions).
+
+        Args:
+            workspace_id: Workspace ID for tenant isolation
+            display_name: Display name for the person
+            conn: Existing database connection
+
+        Returns:
+            The newly created person_id
+        """
+        row = await conn.fetchrow(
+            """
+            INSERT INTO people (workspace_id, display_name, status)
+            VALUES ($1, $2, 'active')
+            RETURNING person_id
+            """,
+            workspace_id,
+            display_name.strip(),
+        )
+
+        return row["person_id"]
+
+    async def get_person_name(
+        self,
+        person_id: UUID,
+    ) -> Optional[str]:
+        """Get the display name for a person.
+
+        Args:
+            person_id: Person ID to look up
+
+        Returns:
+            The display_name or None if not found
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            return await conn.fetchval(
+                "SELECT display_name FROM people WHERE person_id = $1",
+                person_id,
+            )
+
+    async def get_person_name_with_connection(
+        self,
+        person_id: UUID,
+        conn,
+    ) -> Optional[str]:
+        """Get person name using an existing connection.
+
+        Args:
+            person_id: Person ID to look up
+            conn: Existing database connection
+
+        Returns:
+            The display_name or None if not found
+        """
+        return await conn.fetchval(
+            "SELECT display_name FROM people WHERE person_id = $1",
+            person_id,
+        )
+
+    # =========================================================================
     # STATISTICS
     # =========================================================================
-    
+
     async def count_by_workspace(self, workspace_id: UUID) -> int:
         """Count total face groups in a workspace."""
         pool = await get_postgres_pool()

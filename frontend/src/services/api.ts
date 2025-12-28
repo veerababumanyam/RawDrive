@@ -42,6 +42,22 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second
 const TIMEOUT_MS = 30000; // 30 seconds
 
+// Event for auth state changes - allows React to handle navigation instead of hard redirects
+export const AUTH_EVENTS = {
+  SESSION_EXPIRED: 'rawdrive:session_expired',
+} as const;
+
+/**
+ * Emit auth session expired event
+ * This allows React components to handle the redirect gracefully
+ * instead of doing a hard window.location.href which causes flickering
+ */
+function emitSessionExpired(): void {
+  window.dispatchEvent(new CustomEvent(AUTH_EVENTS.SESSION_EXPIRED, {
+    detail: { redirectTo: window.location.pathname }
+  }));
+}
+
 /**
  * Sleep for a given number of milliseconds
  */
@@ -110,10 +126,11 @@ export async function refreshAccessToken(): Promise<string | null> {
     }
 
     const data = await response.json();
+    // Refresh endpoint returns TokenResponse directly (flat), not nested under 'tokens'
     const newTokens = {
-      accessToken: data.tokens.access_token,
-      refreshToken: data.tokens.refresh_token,
-      expiresAt: Date.now() + (data.tokens.expires_in || 3600) * 1000,
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
     };
 
     setStoredTokens(newTokens);
@@ -223,8 +240,9 @@ class ApiClient {
             clearTimeout(retryTimeoutId);
           }
         } else {
-          // Redirect to signin
-          window.location.href = `/signin?redirect=${encodeURIComponent(window.location.pathname)}`;
+          // Emit session expired event - let React handle the redirect gracefully
+          // This prevents jarring hard redirects that can happen during normal user interactions
+          emitSessionExpired();
           return { error: { code: 'UNAUTHORIZED', message: 'Session expired' } };
         }
       }
@@ -321,6 +339,13 @@ class ApiClient {
   async patch<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'PATCH',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  async put<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
       body: body ? JSON.stringify(body) : undefined,
     });
   }

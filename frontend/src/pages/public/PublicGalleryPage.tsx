@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { galleryService } from '../../services/galleryService';
 import { GalleryDetailData, PublicGalleryAsset, GalleryAssetItem } from '../../types/gallery';
+import { gradientToCss, isValidGradientConfig } from '../../utils/gradientUtils';
 import { GalleryCanvas } from '../../components/features/gallery/GalleryCanvas';
 import { AppButton } from '../../components/ui/AppButton';
 import { useToast } from '../../components/ui/Toast';
@@ -33,6 +34,7 @@ import {
     VISITOR_ID_KEY_PREFIX,
     PIN_VERIFIED_KEY_PREFIX,
     PASSWORD_VERIFIED_KEY_PREFIX,
+    PRIVATE_UNLOCKED_KEY_PREFIX,
     BULK_DOWNLOAD_DELAY_MS,
 } from '../../constants/gallery';
 
@@ -57,6 +59,9 @@ const PublicGalleryPage: React.FC = () => {
     // PIN Verification State
     const [showPinModal, setShowPinModal] = useState(false);
     const [isPinVerified, setIsPinVerified] = useState(false);
+    const [isPrivateUnlocked, setIsPrivateUnlocked] = useState(false);
+    // Track whether PIN modal is for gallery access or private photo unlock
+    const [pinModalMode, setPinModalMode] = useState<'gallery' | 'private'>('gallery');
 
     // Password Verification State
     const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -130,11 +135,17 @@ const PublicGalleryPage: React.FC = () => {
 
                     const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
                     if (galleryData.pin_protected && !pinVerified) {
+                        setPinModalMode('gallery');
                         setShowPinModal(true);
                     } else {
                         setIsPinVerified(true);
-                        // Fetch assets with filter support
-                        await fetchAssets();
+                        // Check if private photos were previously unlocked
+                        const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
+                        if (privateUnlocked) {
+                            setIsPrivateUnlocked(true);
+                        }
+                        // Fetching is now handled by the reactive useEffect hook below
+                        // to prevent race conditions and double-fetching.
                     }
                 }
             } catch (err: any) {
@@ -196,8 +207,14 @@ const PublicGalleryPage: React.FC = () => {
             if (gallery?.pin_protected) {
                 const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
                 if (!pinVerified) {
+                    setPinModalMode('gallery');
                     setShowPinModal(true);
                     return;
+                }
+                // Check if private photos were previously unlocked (separate from PIN)
+                const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
+                if (privateUnlocked) {
+                    setIsPrivateUnlocked(true);
                 }
             }
             setIsPinVerified(true);
@@ -220,9 +237,28 @@ const PublicGalleryPage: React.FC = () => {
                 localStorage.setItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`, 'true');
                 setShowPinModal(false);
                 setIsPinVerified(true);
+                // NOTE: Do NOT auto-unlock private content here
+                // Private photos require explicit unlock action via header button
 
                 // Load assets after PIN verification
                 await fetchAssets();
+            }
+            return isValid;
+        } catch (error) {
+            console.error(error);
+            return false;
+        }
+    };
+
+    // Handler for unlocking private photos (uses same gallery PIN)
+    const handlePrivatePhotoUnlock = async (pin: string): Promise<boolean> => {
+        if (!galleryId) return false;
+        try {
+            const isValid = await galleryService.verifyPin(galleryId, pin);
+            if (isValid) {
+                localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
+                setShowPinModal(false);
+                setIsPrivateUnlocked(true);
             }
             return isValid;
         } catch (error) {
@@ -323,9 +359,15 @@ const PublicGalleryPage: React.FC = () => {
     const favoriteCount = localFavorites.size;
     const selectionCount = localSelections.size;
 
-    // Compute displayed assets based on face filter and sub-gallery
+    // Compute displayed assets based on face filter, sub-gallery, and privacy
     const displayedAssets = useMemo(() => {
         let result = assets;
+        
+        // Filter out private photos unless unlocked via PIN
+        if (!isPrivateUnlocked) {
+            result = result.filter(asset => !asset.is_private);
+        }
+        
         if (filteredPhotoIds) {
             result = result.filter(asset => filteredPhotoIds.includes(asset.asset_id));
         }
@@ -333,33 +375,48 @@ const PublicGalleryPage: React.FC = () => {
             result = result.filter(asset => asset.sub_gallery_id === activeSubGallery);
         }
         return result;
-    }, [assets, filteredPhotoIds, activeSubGallery]);
+    }, [assets, filteredPhotoIds, activeSubGallery, isPrivateUnlocked]);
+
+    // Count of private photos (for unlock button badge)
+    const privatePhotoCount = useMemo(() => {
+        return assets.filter(asset => asset.is_private).length;
+    }, [assets]);
 
     // Adapt PublicGalleryAsset[] to GalleryAssetItem[] for GalleryCanvas
     const canvasAssets: GalleryAssetItem[] = useMemo(() => {
-        return displayedAssets.map(publicAsset => ({
-            gallery_asset_id: publicAsset.asset_id, // Use same ID for simplicity
-            asset_id: publicAsset.asset_id,
-            sort_order: publicAsset.sort_order,
-            visible: true,
-            is_private: false,
-            sub_gallery_id: publicAsset.sub_gallery_id,
-            is_favorited: localFavorites.has(publicAsset.asset_id),
-            is_selected: localSelections.has(publicAsset.asset_id),
-            favorites_count: publicAsset.favorites_count ?? 0,
-            asset: {
-                type: publicAsset.type,
-                status: 'available' as const,
-                mime_type: publicAsset.type === 'photo' ? 'image/jpeg' : 'video/mp4',
-                filename: publicAsset.filename,
-                width: publicAsset.width,
-                height: publicAsset.height,
-                duration_ms: publicAsset.duration ? publicAsset.duration * 1000 : undefined,
-                file_size: publicAsset.size_bytes,
-                created_at: publicAsset.created_at,
-            },
-        }));
-    }, [displayedAssets, localFavorites, localSelections]);
+        return displayedAssets.map(publicAsset => {
+            // Construct public URLs for the assets
+            // This ensures meaningful thumbnails are available even without signed URLs
+            const publicThumbnailUrl = `/api/v1/public/galleries/${galleryId}/assets/${publicAsset.asset_id}/thumbnail`;
+            const publicPreviewUrl = `/api/v1/public/galleries/${galleryId}/assets/${publicAsset.asset_id}/preview`;
+            
+            return {
+                gallery_asset_id: publicAsset.asset_id, // Use same ID for simplicity
+                asset_id: publicAsset.asset_id,
+                sort_order: publicAsset.sort_order,
+                visible: true,
+                is_private: publicAsset.is_private || false,
+                sub_gallery_id: publicAsset.sub_gallery_id,
+                is_favorited: localFavorites.has(publicAsset.asset_id),
+                is_selected: localSelections.has(publicAsset.asset_id),
+                favorites_count: publicAsset.favorites_count ?? 0,
+                asset: {
+                    type: publicAsset.type,
+                    status: 'available' as const,
+                    mime_type: publicAsset.type === 'photo' ? 'image/jpeg' : 'video/mp4',
+                    filename: publicAsset.filename,
+                    width: publicAsset.width,
+                    height: publicAsset.height,
+                    duration_ms: publicAsset.duration ? publicAsset.duration * 1000 : undefined,
+                    file_size: publicAsset.size_bytes,
+                    created_at: publicAsset.created_at,
+                    // vital: Provide the constructed public URLs
+                    thumbnail_url: publicThumbnailUrl,
+                    preview_url: publicPreviewUrl,
+                },
+            };
+        });
+    }, [displayedAssets, localFavorites, localSelections, galleryId]);
 
     // Map layout_style to GalleryCanvas viewMode
     const canvasViewMode: 'grid' | 'masonry' = useMemo(() => {
@@ -597,6 +654,18 @@ const PublicGalleryPage: React.FC = () => {
         ? `/api/v1/public/galleries/${gallery.gallery_id}/assets/${gallery.cover_asset_id}/preview`
         : null;
 
+    // Compute gradient CSS for hero section
+    const heroGradientStyle = useMemo(() => {
+        if (gallery.gradient_config && isValidGradientConfig(gallery.gradient_config)) {
+            return gradientToCss(gallery.gradient_config);
+        }
+        // Fallback to primary color or default gradient
+        if (activeColor && activeColor !== '#6366f1') {
+            return `linear-gradient(135deg, ${activeColor} 0%, ${activeColor}dd 100%)`;
+        }
+        return 'linear-gradient(135deg, #1f2937 0%, #111827 100%)';
+    }, [gallery.gradient_config, activeColor]);
+
     return (
         <div
             className="min-h-screen flex flex-col bg-white dark:bg-gray-950"
@@ -622,8 +691,16 @@ const PublicGalleryPage: React.FC = () => {
 
             <PinVerificationModal
                 isOpen={showPinModal}
-                onVerify={handlePinVerify}
-                onCancel={() => navigate('/')}
+                onVerify={pinModalMode === 'private' ? handlePrivatePhotoUnlock : handlePinVerify}
+                onCancel={() => {
+                    if (pinModalMode === 'private') {
+                        // Just close modal when canceling private photo unlock
+                        setShowPinModal(false);
+                    } else {
+                        // Navigate away if canceling gallery access
+                        navigate('/');
+                    }
+                }}
                 galleryTitle={gallery.title}
                 companyName={company_profile?.name}
                 logoUrl={company_profile?.logo_url}
@@ -647,6 +724,8 @@ const PublicGalleryPage: React.FC = () => {
                                     setShowPinModal(true);
                                     return true;
                                 }
+                                // PIN was already verified in a previous session, unlock private content
+                                setIsPrivateUnlocked(true);
                             }
                             setIsPinVerified(true);
                             await fetchAssets();
@@ -903,6 +982,23 @@ const PublicGalleryPage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2 sm:gap-3">
+                        {/* Unlock Private Photos Button - show when gallery has PIN protection and private photos exist */}
+                        {gallery?.pin_protected && !isPrivateUnlocked && privatePhotoCount > 0 && (
+                            <AppButton
+                                variant="outline"
+                                leftIcon={<LockIcon size={16} />}
+                                size="sm"
+                                onClick={() => {
+                                    setPinModalMode('private');
+                                    setShowPinModal(true);
+                                }}
+                                aria-label="Unlock private photos"
+                            >
+                                <span className="hidden sm:inline">Unlock {privatePhotoCount} Private</span>
+                                <span className="sm:hidden">{privatePhotoCount}</span>
+                            </AppButton>
+                        )}
+
                         {/* Find Me Button - only show when authenticated and assets loaded */}
                         {isVisitorAuthenticated && isPinVerified && assets.length > 0 && (
                             <AppButton
@@ -950,7 +1046,7 @@ const PublicGalleryPage: React.FC = () => {
                 </div>
             </header>
 
-            {/* Hero / Cover */}
+            {/* Hero / Cover with Gradient Branding */}
             <div className="relative h-[40vh] md:h-[50vh] bg-gray-100 dark:bg-gray-900 overflow-hidden">
                 {coverUrl ? (
                     <div className="absolute inset-0">
@@ -963,7 +1059,11 @@ const PublicGalleryPage: React.FC = () => {
                         <div className="absolute inset-0 bg-black/30"></div>
                     </div>
                 ) : (
-                    <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-black"></div>
+                    /* Apply gradient_config or fallback gradient when no cover image */
+                    <div
+                        className="absolute inset-0 transition-all duration-500"
+                        style={{ background: heroGradientStyle }}
+                    />
                 )}
 
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end justify-center pb-12 p-4 text-center">
@@ -1005,7 +1105,14 @@ const PublicGalleryPage: React.FC = () => {
                         </p>
                         <AppButton
                             variant="primary"
-                            onClick={() => showEmailModal ? setShowEmailModal(true) : setShowPinModal(true)}
+                            onClick={() => {
+                                if (showEmailModal) {
+                                    setShowEmailModal(true);
+                                } else {
+                                    setPinModalMode('gallery');
+                                    setShowPinModal(true);
+                                }
+                            }}
                         >
                             {showEmailModal ? "Register Now" : "Enter PIN"}
                         </AppButton>
@@ -1167,10 +1274,22 @@ const PublicGalleryPage: React.FC = () => {
                             <GalleryCanvas
                                 assets={canvasAssets}
                                 viewMode={canvasViewMode}
+                                columns={{ sm: 1, md: 2, lg: 3, xl: 4 }}
+                                gap="md"
                                 selectedAssetIds={localSelections}
-                                managementSelectable={false}
+                                lastSelectedId={null} // Track this if shift-click range select is needed
+                                managementSelectable={false} // Disable admin selection UI for public view
                                 showCustomerSelection={true}
-                                onSelectionChange={() => {}}
+                                onSelectionChange={selection => {
+                                    // Update local selections based on set difference
+                                    const currentlySelected = localSelections;
+                                    const newSelections = new Set(selection);
+                                    const added = [...newSelections].filter(x => !currentlySelected.has(x));
+                                    const removed = [...currentlySelected].filter(x => !newSelections.has(x));
+
+                                    added.forEach(assetId => handleSelection(assetId));
+                                    removed.forEach(assetId => handleSelection(assetId));
+                                }}
                                 onCustomerSelectionToggle={(assetId, _selected) => handleSelection(assetId)}
                                 onAssetClick={(asset, _index) => {
                                     const pubAsset = displayedAssets.find(a => a.asset_id === asset.asset_id);
@@ -1184,6 +1303,25 @@ const PublicGalleryPage: React.FC = () => {
                                 isClientView={true}
                                 downloadPolicy={gallery?.download_policy}
                                 showWatermark={gallery?.download_policy === 'view_only' || gallery?.download_policy === 'watermarked_only'}
+                                isPrivateUnlocked={isPrivateUnlocked}
+                                onUnlockPrivate={() => {
+                                    console.log('[PublicGalleryPage] onUnlockPrivate called!', { 
+                                        pin_protected: gallery?.pin_protected,
+                                        isPrivateUnlocked,
+                                        isPinVerified
+                                    });
+                                    if (gallery?.pin_protected) {
+                                        console.log('[PublicGalleryPage] Opening PIN modal for private unlock...');
+                                        setPinModalMode('private');
+                                        setShowPinModal(true);
+                                    } else {
+                                        console.log('[PublicGalleryPage] Gallery not PIN protected, showing toast');
+                                        addToast({
+                                            message: 'This photo is private. Please contact the photographer to view this content.',
+                                            variant: 'info',
+                                        });
+                                    }
+                                }}
                             />
                         )}
                     </>

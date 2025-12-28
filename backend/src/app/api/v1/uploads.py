@@ -22,7 +22,7 @@ from app.api.schemas import (
     ErrorResponse,
 )
 from app.api.exceptions import ValidationAppError, InternalError, NotFoundError
-from app.services.upload_service import UploadError, get_upload_service
+from app.services.content_detection_service import get_content_detection_service
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +171,19 @@ async def commit_upload(
             sha256=sha256,
             client_metadata=metadata_dict,
         )
+
+        # T039: After commit, create asset_analysis record and queue content detection job
+        content_detection_service = get_content_detection_service()
+        asset_id = result["asset_id"]
+        
+        # Queue content detection (handles deduplication and tag inheritance)
+        job_id = await content_detection_service.queue_detection(
+            asset_id=asset_id,
+            workspace_id=workspace_id,
+        )
+        
+        # Update response to indicate analysis was queued
+        result["analysis_queued"] = job_id is not None
 
         return UploadCommitResponse(**result)
     except UploadError as e:

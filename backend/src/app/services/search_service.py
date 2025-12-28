@@ -22,6 +22,26 @@ logger = logging.getLogger(__name__)
 class SearchService:
     """Service for unified search operations."""
 
+    def _build_tag_source_filter(self, tag_source: Optional[str]) -> str:
+        """Build SQL filter clause for tag source.
+
+        Args:
+            tag_source: Filter mode - 'all', 'manual', 'ai', 'ai_vision', 'ai_gemini', 'ai_local'
+
+        Returns:
+            SQL clause to append to tag subqueries
+        """
+        if not tag_source or tag_source == "all":
+            return ""
+        elif tag_source == "manual":
+            return "AND at.source = 'manual'"
+        elif tag_source == "ai":
+            # Match any AI source
+            return "AND at.source != 'manual'"
+        elif tag_source in ("ai_vision", "ai_gemini", "ai_local"):
+            return f"AND at.source = '{tag_source}'"
+        return ""
+
     async def search(
         self,
         workspace_id: UUID,
@@ -30,10 +50,11 @@ class SearchService:
         gallery_id: Optional[UUID] = None,
         page: int = 1,
         limit: int = 20,
+        tag_source: Optional[str] = None,
     ) -> dict:
         """
         Unified search across multiple entity types.
-        
+
         Args:
             workspace_id: Workspace to search in
             query: Search query string
@@ -41,7 +62,8 @@ class SearchService:
             gallery_id: Optional gallery to scope the search
             page: Page number
             limit: Results per page
-        
+            tag_source: Filter tags by source ('all', 'manual', 'ai', 'ai_vision', 'ai_gemini', 'ai_local')
+
         Returns:
             Dict with results grouped by entity type
         """
@@ -61,7 +83,7 @@ class SearchService:
             results["total"] += len(galleries)
 
         if "assets" in entity_types:
-            assets = await self._search_assets(workspace_id, query, gallery_id, limit)
+            assets = await self._search_assets(workspace_id, query, gallery_id, limit, tag_source)
             results["results"]["assets"] = assets
             results["total"] += len(assets)
 
@@ -132,8 +154,20 @@ class SearchService:
         query: str,
         gallery_id: Optional[UUID] = None,
         limit: int = 20,
+        tag_source: Optional[str] = None,
     ) -> list[dict]:
-        """Search assets by filename, tags, people names, or comments."""
+        """Search assets by filename, tags, people names, or comments.
+
+        Args:
+            workspace_id: Workspace to search in
+            query: Search query string
+            gallery_id: Optional gallery to scope the search
+            limit: Maximum results to return
+            tag_source: Filter tags by source ('all', 'manual', 'ai', 'ai_vision', 'ai_gemini', 'ai_local')
+
+        Returns:
+            List of matching assets with match_type indicator
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             # Build query to search assets by various criteria
@@ -143,6 +177,9 @@ class SearchService:
             if gallery_id:
                 gallery_filter = "AND ga.gallery_id = $4"
                 params.append(gallery_id)
+
+            # Build tag source filter
+            tag_source_filter = self._build_tag_source_filter(tag_source)
 
             assets = await conn.fetch(
                 f"""
@@ -155,11 +192,15 @@ class SearchService:
                             SELECT 1 FROM asset_tags at
                             JOIN tags t ON at.tag_id = t.tag_id
                             WHERE at.asset_id = a.asset_id AND t.name ILIKE $2
+                            {tag_source_filter}
                         ) THEN 'tag'
                         WHEN EXISTS (
                             SELECT 1 FROM face_detections fd
-                            JOIN people p ON fd.person_id = p.person_id
-                            WHERE fd.asset_id = a.asset_id AND p.display_name ILIKE $2
+                            LEFT JOIN people p ON fd.person_id = p.person_id
+                            LEFT JOIN face_groups fg ON fd.group_id = fg.id
+                            LEFT JOIN people pg ON fg.person_id = pg.person_id
+                            WHERE fd.asset_id = a.asset_id
+                            AND (p.display_name ILIKE $2 OR pg.display_name ILIKE $2)
                         ) THEN 'person'
                         WHEN EXISTS (
                             SELECT 1 FROM comments c
@@ -178,11 +219,15 @@ class SearchService:
                         SELECT 1 FROM asset_tags at
                         JOIN tags t ON at.tag_id = t.tag_id
                         WHERE at.asset_id = a.asset_id AND t.name ILIKE $2
+                        {tag_source_filter}
                     )
                     OR EXISTS (
                         SELECT 1 FROM face_detections fd
-                        JOIN people p ON fd.person_id = p.person_id
-                        WHERE fd.asset_id = a.asset_id AND p.display_name ILIKE $2
+                        LEFT JOIN people p ON fd.person_id = p.person_id
+                        LEFT JOIN face_groups fg ON fd.group_id = fg.id
+                        LEFT JOIN people pg ON fg.person_id = pg.person_id
+                        WHERE fd.asset_id = a.asset_id
+                        AND (p.display_name ILIKE $2 OR pg.display_name ILIKE $2)
                     )
                     OR EXISTS (
                         SELECT 1 FROM comments c
@@ -339,8 +384,21 @@ class SearchService:
         gallery_id: Optional[UUID] = None,
         page: int = 1,
         limit: int = 50,
+        tag_source: Optional[str] = None,
     ) -> dict:
-        """Get all assets with a specific tag."""
+        """Get all assets with a specific tag.
+
+        Args:
+            workspace_id: Workspace to search in
+            tag_id: Tag ID to filter by
+            gallery_id: Optional gallery to scope the search
+            page: Page number
+            limit: Results per page
+            tag_source: Filter by tag source ('all', 'manual', 'ai', 'ai_vision', 'ai_gemini', 'ai_local')
+
+        Returns:
+            Paginated dict with assets matching the tag
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             offset = (page - 1) * limit
@@ -352,6 +410,9 @@ class SearchService:
                 gallery_filter = "AND ga.gallery_id = $5"
                 params.append(gallery_id)
 
+            # Build tag source filter
+            tag_source_filter = self._build_tag_source_filter(tag_source)
+
             # Get total count
             count_query = f"""
                 SELECT COUNT(DISTINCT a.asset_id)
@@ -361,6 +422,7 @@ class SearchService:
                 WHERE a.workspace_id = $1
                 AND at.tag_id = $2
                 AND a.deleted = FALSE
+                {tag_source_filter}
                 {gallery_filter}
             """
             total = await conn.fetchval(count_query, *params[:2] if not gallery_id else params[:2] + [gallery_id])
@@ -377,6 +439,7 @@ class SearchService:
                 WHERE a.workspace_id = $1
                 AND at.tag_id = $2
                 AND a.deleted = FALSE
+                {tag_source_filter}
                 {gallery_filter}
                 ORDER BY a.asset_id, a.created_at DESC
                 LIMIT $3 OFFSET $4
@@ -412,7 +475,15 @@ class SearchService:
         page: int = 1,
         limit: int = 50,
     ) -> dict:
-        """Get all assets containing a specific person."""
+        """Get all assets containing a specific person.
+
+        Searches for assets where the person appears via:
+        1. Direct face_detections.person_id assignment
+        2. Face group assignment (face_detections.group_id → face_groups.person_id)
+
+        This unified search ensures all photos of a person are found regardless
+        of whether faces were assigned individually or via group naming.
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             offset = (page - 1) * limit
@@ -424,22 +495,23 @@ class SearchService:
                 gallery_filter = "AND ga.gallery_id = $5"
                 params.append(gallery_id)
 
-            # Get total count
+            # Get total count - search both direct and group-based person assignments
             total = await conn.fetchval(
                 f"""
                 SELECT COUNT(DISTINCT a.asset_id)
                 FROM assets a
                 JOIN face_detections fd ON a.asset_id = fd.asset_id
+                LEFT JOIN face_groups fg ON fd.group_id = fg.id
                 LEFT JOIN gallery_assets ga ON a.asset_id = ga.asset_id
                 WHERE a.workspace_id = $1
-                AND fd.person_id = $2
+                AND (fd.person_id = $2 OR fg.person_id = $2)
                 AND a.deleted = FALSE
                 {gallery_filter}
                 """,
                 *params[:2] if not gallery_id else params[:2] + [gallery_id],
             )
 
-            # Get assets
+            # Get assets - search both direct and group-based person assignments
             assets = await conn.fetch(
                 f"""
                 SELECT DISTINCT ON (a.asset_id)
@@ -447,9 +519,10 @@ class SearchService:
                     ga.gallery_id
                 FROM assets a
                 JOIN face_detections fd ON a.asset_id = fd.asset_id
+                LEFT JOIN face_groups fg ON fd.group_id = fg.id
                 LEFT JOIN gallery_assets ga ON a.asset_id = ga.asset_id
                 WHERE a.workspace_id = $1
-                AND fd.person_id = $2
+                AND (fd.person_id = $2 OR fg.person_id = $2)
                 AND a.deleted = FALSE
                 {gallery_filter}
                 ORDER BY a.asset_id, a.created_at DESC
@@ -476,6 +549,77 @@ class SearchService:
                     "total": total or 0,
                     "totalPages": ((total or 0) + limit - 1) // limit if total else 0,
                 },
+            }
+
+
+    async def filter_gallery_assets(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        filters: dict,
+    ) -> dict:
+        """Filter gallery assets by tags, people, and tag source.
+
+        Args:
+            workspace_id: Workspace to search in
+            gallery_id: Gallery to filter assets from
+            filters: Dict with optional keys: tags, people, tag_source
+
+        Returns:
+            Dict with asset_ids list and total_count
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Build WHERE clauses
+            where_clauses = [
+                "a.workspace_id = $1",
+                "ga.gallery_id = $2",
+                "a.deleted = FALSE"
+            ]
+            params = [workspace_id, gallery_id]
+            param_index = 3
+
+            # Tag filter
+            if filters.get("tags"):
+                tag_names = filters["tags"]
+                placeholders = ", ".join(f"${param_index + i}" for i in range(len(tag_names)))
+                where_clauses.append(f"t.name = ANY(ARRAY[{placeholders}])")
+                params.extend(tag_names)
+                param_index += len(tag_names)
+
+            # Person filter
+            if filters.get("people"):
+                person_names = filters["people"]
+                placeholders = ", ".join(f"${param_index + i}" for i in range(len(person_names)))
+                where_clauses.append(f"p.name = ANY(ARRAY[{placeholders}])")
+                params.extend(person_names)
+                param_index += len(person_names)
+
+            # Tag source filter
+            tag_source_filter = self._build_tag_source_filter(filters.get("tag_source"))
+            if tag_source_filter:
+                where_clauses.append(tag_source_filter.replace("at.", ""))  # Remove table prefix
+
+            where_clause = " AND ".join(where_clauses)
+
+            # Build the query
+            query = f"""
+                SELECT DISTINCT a.asset_id::text
+                FROM assets a
+                JOIN gallery_assets ga ON a.asset_id = ga.asset_id
+                {"LEFT JOIN asset_tags at ON a.asset_id = at.asset_id" if filters.get("tags") or tag_source_filter else ""}
+                {"LEFT JOIN tags t ON at.tag_id = t.tag_id" if filters.get("tags") else ""}
+                {"LEFT JOIN face_groups fg ON a.asset_id = fg.asset_id" if filters.get("people") else ""}
+                {"LEFT JOIN people p ON fg.person_id = p.person_id" if filters.get("people") else ""}
+                WHERE {where_clause}
+                ORDER BY a.asset_id
+            """
+
+            assets = await conn.fetch(query, *params)
+
+            return {
+                "asset_ids": [a["asset_id"] for a in assets],
+                "total_count": len(assets),
             }
 
 

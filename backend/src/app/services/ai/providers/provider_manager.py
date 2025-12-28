@@ -344,21 +344,55 @@ class ProviderManager:
         options: Optional[DetectionOptions] = None,
     ) -> list[FaceDetectionResult]:
         """Detect faces in an image with automatic failover.
-        
+
         Convenience method that wraps detect_faces with failover logic.
-        
+
         Args:
             image_buffer: Raw image data as bytes
             options: Detection options
-            
+
         Returns:
             List of detected faces
-            
+
         Raises:
             AllProvidersFailedError: If all providers fail
         """
         return await self.execute_with_failover(
             lambda provider: provider.detect_faces(image_buffer, options)
+        )
+
+    # =========================================================================
+    # LABEL DETECTION (CONVENIENCE METHOD)
+    # =========================================================================
+
+    async def detect_labels(
+        self,
+        image_buffer: bytes,
+        options: Optional["LabelDetectionOptions"] = None,
+    ) -> "LabelDetectionResult":
+        """Detect labels/content in an image with automatic failover.
+
+        Convenience method that wraps detect_labels with failover logic.
+        Not all providers support label detection - will only try providers
+        that implement the method.
+
+        Args:
+            image_buffer: Raw image data as bytes
+            options: Label detection options
+
+        Returns:
+            LabelDetectionResult with detected labels
+
+        Raises:
+            AllProvidersFailedError: If all providers fail
+        """
+        from app.services.ai.providers.types import LabelDetectionOptions
+
+        if options is None:
+            options = LabelDetectionOptions()
+
+        return await self.execute_with_failover(
+            lambda provider: provider.detect_labels(image_buffer, options)
         )
 
     # =========================================================================

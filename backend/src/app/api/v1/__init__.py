@@ -35,6 +35,12 @@ from app.api.v1.magic_links import router as magic_links_router
 from app.api.v1.magic_links import public_router as public_magic_links_router
 from app.api.v1.shared import router as shared_router
 from app.api.v1.storage import router as storage_router
+from app.api.v1.smart_tagging import router as smart_tagging_router
+from app.api.v1.subscription import (
+    router as subscription_router,
+    plans_router as subscription_plans_router,
+    webhook_router as subscription_webhook_router,
+)
 # TODO: Re-enable when Gemini settings feature is complete
 # from app.api.v1.gemini_settings import router as gemini_settings_router
 # from app.api.v1.gemini_settings import models_router as gemini_models_router
@@ -172,6 +178,18 @@ router.include_router(
 
 # Storage routes
 router.include_router(storage_router)
+
+# Smart Tagging routes (AI-powered content analysis)
+router.include_router(
+    smart_tagging_router,
+    prefix="/api/v1/workspaces/{workspace_id}/smart-tagging",
+    tags=["smart-tagging"],
+)
+
+# Subscription management routes (006-user-profile-sidebar)
+router.include_router(subscription_router)
+router.include_router(subscription_plans_router)
+router.include_router(subscription_webhook_router)
 
 # TODO: Re-enable when Gemini settings feature is complete
 # Gemini Settings routes (per-user AI configuration)
