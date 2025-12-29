@@ -2005,15 +2005,16 @@ class GalleryService:
                         regexp_replace(a.original_object_key, '^.*/', ''),
                         a.asset_id::text
                     ) AS filename,
-                    a.width,
-                    a.height,
-                    a.duration_ms AS duration,
-                    a.size_bytes,
-                    a.metadata,
+                    -- Extract dimensions from exif JSON if available
+                    (a.exif->>'ImageWidth')::int AS width,
+                    (a.exif->>'ImageHeight')::int AS height,
+                    NULL::int AS duration,
+                    a.original_bytes AS size_bytes,
+                    a.exif AS metadata,
                     ga.sort_order,
                     ga.is_favorited,
                     ga.is_selected,
-                    ga.favorites_count,
+                    0 AS favorites_count,
                     ga.created_at,
                     ga.is_private
                 FROM gallery_assets ga
@@ -2035,7 +2036,7 @@ class GalleryService:
                     "height": row["height"],
                     "duration": row["duration"],
                     "size_bytes": row["size_bytes"],
-                    "metadata": row["metadata"],
+                    "metadata": row["metadata"] if row["metadata"] else {},
                     "sort_order": row["sort_order"],
                     "is_favorited": row["is_favorited"],
                     "is_selected": row["is_selected"],
