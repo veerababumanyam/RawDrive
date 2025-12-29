@@ -44,6 +44,7 @@ class MagicLinkRepository:
         token_hash: str,
         target_type: str = "gallery",
         target_id: Optional[UUID] = None,
+        album_title: Optional[str] = None,
         label: Optional[str] = None,
         expires_at: Optional[datetime] = None,
         max_accesses: Optional[int] = None,
@@ -59,6 +60,7 @@ class MagicLinkRepository:
             token_hash: SHA-256 hash of the access token
             target_type: What the link targets ('gallery', 'sub_gallery', 'photo')
             target_id: ID of sub_gallery or photo (NULL for gallery-level)
+            album_title: Client-facing album title for public display (max 200 chars)
             label: User-friendly label for management
             expires_at: Optional expiration datetime (UTC)
             max_accesses: Optional maximum number of accesses
@@ -85,10 +87,10 @@ class MagicLinkRepository:
                 """
                 INSERT INTO magic_links (
                     workspace_id, gallery_id, token_hash, target_type, target_id,
-                    label, expires_at, max_accesses, qr_config, created_by_user_id,
-                    public_url
+                    album_title, label, expires_at, max_accesses, qr_config,
+                    created_by_user_id, public_url
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 RETURNING *
                 """,
                 workspace_id,
@@ -96,6 +98,7 @@ class MagicLinkRepository:
                 token_hash,
                 target_type,
                 target_id,
+                album_title,
                 label,
                 expires_at,
                 max_accesses,

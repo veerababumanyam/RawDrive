@@ -139,6 +139,7 @@ async def create_magic_link(
             gallery_id=gallery_id,
             target_type=request.target_type,
             target_id=request.target_id,
+            album_title=request.album_title,
             label=request.label,
             expires_at=request.expires_at,
             max_accesses=request.max_accesses,

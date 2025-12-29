@@ -72,10 +72,18 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   // Create form state
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [formData, setFormData] = useState<CreateMagicLinkRequest>({
+    album_title: galleryTitle, // Default to gallery title
     label: '',
     expires_at: undefined,
     max_accesses: undefined,
   });
+
+  // Update album_title when galleryTitle changes or dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setFormData((prev) => ({ ...prev, album_title: galleryTitle }));
+    }
+  }, [isOpen, galleryTitle]);
 
   // Load existing links on open
   useEffect(() => {
@@ -110,7 +118,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       setSelectedLink(newLink);
       setViewMode('qr');
       // Reset form
-      setFormData({ label: '', expires_at: undefined, max_accesses: undefined });
+      setFormData({ album_title: galleryTitle, label: '', expires_at: undefined, max_accesses: undefined });
       setShowAdvanced(false);
     } catch (err) {
       if (err instanceof MagicLinkError) {
@@ -180,7 +188,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     setViewMode('create');
     setSelectedLink(null);
     setError(null);
-    setFormData({ label: '', expires_at: undefined, max_accesses: undefined });
+    setFormData({ album_title: galleryTitle, label: '', expires_at: undefined, max_accesses: undefined });
     setShowAdvanced(false);
     onClose();
   };
@@ -260,10 +268,20 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
         {viewMode === 'create' && (
           <div className="space-y-4">
             <AppInput
+              label="Album Title"
+              value={formData.album_title}
+              onChange={(e) => setFormData({ ...formData, album_title: e.target.value })}
+              placeholder="e.g., Sarah & John's Wedding - June 2025"
+              maxLength={200}
+              required
+              helperText="This title will be displayed to your clients on the public gallery page"
+            />
+
+            <AppInput
               label="Link Label (Optional)"
               value={formData.label || ''}
               onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-              placeholder="e.g., Wedding Gallery - Smith Family"
+              placeholder="Internal label for your reference"
               leftIcon={<Link size={16} />}
             />
 
@@ -315,6 +333,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               variant="primary"
               onClick={handleCreateLink}
               isLoading={isCreating}
+              disabled={!formData.album_title?.trim()}
               fullWidth
               className="mt-4"
             >

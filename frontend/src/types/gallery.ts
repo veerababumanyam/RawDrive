@@ -113,6 +113,8 @@ export interface GalleryDetailData {
   gallery_id: string;
   workspace_id: string;
   title: string;
+  /** Client-facing album title from magic link (falls back to title if not set) */
+  album_title?: string;
   status: GalleryStatus;
   created_by_user_id: string;
   created_at: string;
@@ -377,6 +379,7 @@ export interface QRConfig {
 export interface MagicLink {
   link_id: string;
   gallery_id: string;
+  album_title?: string;
   label?: string;
   target_type: MagicLinkTargetType;
   target_id?: string;
@@ -396,6 +399,7 @@ export interface MagicLink {
 
 // Create magic link request
 export interface CreateMagicLinkRequest {
+  album_title: string;
   label?: string;
   target_type?: MagicLinkTargetType;
   target_id?: string;
@@ -457,6 +461,8 @@ export interface ValidatedMagicLink {
   gallery_id: string;
   target_type: MagicLinkTargetType;
   target_id?: string;
+  /** Client-facing album title (falls back to gallery.title if not set) */
+  album_title?: string;
   gallery: {
     gallery_id: string;
     title: string;

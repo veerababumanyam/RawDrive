@@ -788,7 +788,8 @@ class PaginationMeta(BaseModel):
 class CreateMagicLinkRequest(BaseModel):
     """Request to create a magic link."""
 
-    label: Optional[str] = Field(None, max_length=100, description="User-friendly label")
+    album_title: str = Field(..., min_length=1, max_length=200, description="Client-facing album title for public display")
+    label: Optional[str] = Field(None, max_length=100, description="Internal label for organization")
     target_type: Literal["gallery", "sub_gallery", "photo"] = Field(
         "gallery", description="What the link provides access to"
     )
@@ -814,6 +815,7 @@ class MagicLinkResponse(BaseModel):
 
     link_id: UUID
     gallery_id: UUID
+    album_title: Optional[str] = None
     label: Optional[str] = None
     target_type: str
     target_id: Optional[UUID] = None
@@ -857,6 +859,7 @@ class ValidateMagicLinkResponse(BaseModel):
     gallery_id: UUID
     target_type: str
     target_id: Optional[UUID] = None
+    album_title: Optional[str] = None
     gallery: dict
     company_profile: Optional[dict] = None
 

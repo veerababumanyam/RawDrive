@@ -110,6 +110,7 @@ export class GalleryService {
       gallery_id: validated.gallery.gallery_id,
       workspace_id: '', // Not exposed in magic link response for security
       title: validated.gallery.title,
+      album_title: validated.album_title, // Client-facing album title from magic link
       status: validated.gallery.status,
       created_by_user_id: '', // Not exposed in magic link response
       created_at: '', // Not exposed in magic link response

@@ -674,9 +674,10 @@ const PublicGalleryPage: React.FC = () => {
     const activeColor = gallery.primary_color || company_profile?.brand_color || '#6366f1';
     const fontFamily = gallery.font_family || 'inherit';
 
-    // Construct cover URL
-    const coverUrl = gallery.cover_asset_id
-        ? `/api/v1/public/galleries/${gallery.gallery_id}/assets/${gallery.cover_asset_id}/preview`
+    // Construct cover URL with fallback to first asset
+    const coverAssetId = gallery.cover_asset_id || assets[0]?.asset_id;
+    const coverUrl = coverAssetId
+        ? `/api/v1/public/galleries/${gallery.gallery_id}/assets/${coverAssetId}/preview`
         : null;
 
     return (
@@ -985,13 +986,17 @@ const PublicGalleryPage: React.FC = () => {
             <header className="sticky top-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 transition-all">
                 <div className="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        {company_profile?.logo_url ? (
-                            <img src={company_profile.logo_url} alt={company_profile.name} className="h-10 w-auto object-contain" />
-                        ) : (
-                            company_profile?.name && <span className="text-lg font-bold font-heading">{company_profile.name}</span>
+                        {/* Company branding: show logo and/or name */}
+                        {(company_profile?.logo_url || company_profile?.name) && (
+                            <div className="flex items-center gap-3">
+                                {company_profile.logo_url && (
+                                    <img src={company_profile.logo_url} alt={company_profile.name || 'Company logo'} className="h-10 w-auto object-contain" />
+                                )}
+                                {company_profile.name && (
+                                    <span className="text-lg font-bold font-heading hidden sm:inline">{company_profile.name}</span>
+                                )}
+                            </div>
                         )}
-                        <div className="w-px h-8 bg-gray-200 dark:bg-gray-800 mx-2 hidden sm:block"></div>
-                        <h1 className="text-lg font-medium hidden sm:block truncate max-w-md" title={gallery.title}>{gallery.title}</h1>
                     </div>
 
                     <div className="flex items-center gap-2 sm:gap-3">
@@ -1081,14 +1086,10 @@ const PublicGalleryPage: React.FC = () => {
 
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end justify-center pb-12 p-4 text-center">
                     <div className="max-w-3xl">
-                        <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 drop-shadow-lg font-heading">{gallery.title}</h2>
+                        <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 drop-shadow-lg font-heading">{gallery.album_title || gallery.title}</h2>
                         {gallery.description && (
                             <p className="text-white/90 text-lg md:text-xl drop-shadow-md max-w-2xl mx-auto">{gallery.description}</p>
                         )}
-                        <div className="mt-6 flex flex-wrap justify-center gap-4 text-white/80 text-sm font-medium">
-                            <span className="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">{new Date(gallery.created_at).toLocaleDateString()}</span>
-                            {!showEmailModal && <span className="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">{gallery.stats.total_photos} Photos</span>}
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1147,7 +1148,7 @@ const PublicGalleryPage: React.FC = () => {
                                 <LayoutGrid size={16} />
                                 All Photos
                                 <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-black/10 dark:bg-white/10">
-                                    {gallery.stats.total_photos}
+                                    {assets.length}
                                 </span>
                             </button>
                             <button

@@ -213,6 +213,7 @@ class MagicLinkService:
         gallery_id: UUID,
         target_type: str = "gallery",
         target_id: Optional[UUID] = None,
+        album_title: Optional[str] = None,
         label: Optional[str] = None,
         expires_at: Optional[datetime] = None,
         max_accesses: Optional[int] = None,
@@ -230,7 +231,8 @@ class MagicLinkService:
             gallery_id: Gallery to provide access to
             target_type: What to scope access to ('gallery', 'sub_gallery', 'photo')
             target_id: ID of sub_gallery or photo (required if not 'gallery')
-            label: User-friendly label
+            album_title: Client-facing album title for public display
+            label: Internal label for organization
             expires_at: Optional expiration (UTC)
             max_accesses: Optional maximum accesses
             qr_config: QR code generation settings
@@ -253,6 +255,7 @@ class MagicLinkService:
             token_hash=token_hash,
             target_type=target_type,
             target_id=target_id,
+            album_title=album_title,
             label=label,
             expires_at=expires_at,
             max_accesses=max_accesses,
@@ -414,6 +417,7 @@ class MagicLinkService:
             "gallery_id": link["gallery_id"],
             "target_type": link["target_type"],
             "target_id": link.get("target_id"),
+            "album_title": link.get("album_title"),  # Client-facing title (fallback to gallery.title if None)
             "gallery": {
                 "gallery_id": link["gallery_id"],
                 "title": link.get("gallery_title"),
