@@ -360,6 +360,7 @@ class GeminiSettingsService:
         api_key: Optional[str] = None,
         selected_model_id: Optional[UUID] = None,
         skip_validation: bool = False,
+        update_model_selection: bool = True,
     ) -> dict:
         """Create or update user's Gemini settings.
 
@@ -369,6 +370,9 @@ class GeminiSettingsService:
             api_key: New API key to store (will be validated first)
             selected_model_id: Model ID to select (None = use platform default)
             skip_validation: Skip API key validation (for internal use only)
+            update_model_selection: Whether to update the model selection.
+                If True and selected_model_id is None, uses platform default.
+                If False, keeps current model selection.
 
         Returns:
             Updated settings dict
@@ -473,10 +477,10 @@ class GeminiSettingsService:
                     params.append(None)
                     param_idx += 1
 
-                if selected_model_id is not None:
-                    # Allow setting to NULL (use default)
+                if update_model_selection:
+                    # Update model selection - None means use platform default
                     updates.append(f"selected_model_id = ${param_idx}")
-                    params.append(selected_model_id if selected_model_id else None)
+                    params.append(selected_model_id)
                     param_idx += 1
 
                 await conn.execute(

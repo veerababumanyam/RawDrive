@@ -2096,6 +2096,8 @@ asset_ingest_latency_seconds_bucket               // Histogram
 - PostgreSQL 16 (JSONB for analysis results, pgvector for embeddings), Redis 7 (caching, job queues) (010-ai-powered-features)
 - TypeScript 5.2+ (Frontend React 18.3), Python 3.11+ (Backend FastAPI) + React 18.3, React Router DOM, TailwindCSS, FastAPI 0.115+, asyncpg 0.29+ (011-fix-library-photo-operations)
 - PostgreSQL 16 (existing `assets.folder_id` column) (011-fix-library-photo-operations)
+- Python 3.11+ (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, SQLAlchemy 2.0+, asyncpg 0.29+, python-zipstream-ng (streaming ZIP) (012-client-favorites)
+- PostgreSQL 16 (new tables: `favorite_lists`, `favorite_shares`, `favorite_downloads`), Redis 7 (ZIP job queue), Cloudflare R2 (temporary ZIP storage) (012-client-favorites)
 
 ## Recent Changes
 - 001-admin-microservice: Added Python 3.11+ (matching main backend) + FastAPI 0.115+, SQLAlchemy 2.0+, asyncpg 0.29+, Redis 5.0+, Pydantic 2.7+, python-jose (JWT)

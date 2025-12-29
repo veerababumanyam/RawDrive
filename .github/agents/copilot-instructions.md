@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2025-12-28
 
 ## Active Technologies
+- Python 3.11+ (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, SQLAlchemy 2.0+, asyncpg 0.29+, python-zipstream-ng (streaming ZIP) (012-client-favorites)
+- PostgreSQL 16 (new tables: `favorite_lists`, `favorite_shares`, `favorite_downloads`), Redis 7 (ZIP job queue), Cloudflare R2 (temporary ZIP storage) (012-client-favorites)
 
 - (010-ai-powered-features) Python 3.11, TypeScript 5.2+, Google Gemini API, FastAPI, React
 - (009-profile-tabs-redesign)
@@ -61,6 +63,7 @@ npm test -- --testPathPattern=ai
 - **Validation**: Strict input validation for AI requests
 
 ## Recent Changes
+- 012-client-favorites: Added Python 3.11+ (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 18.3, SQLAlchemy 2.0+, asyncpg 0.29+, python-zipstream-ng (streaming ZIP)
 
 - 010-ai-powered-features: AI-powered photo analysis, caption generation, hashtag generation using Gemini LLM
 - 009-profile-tabs-redesign: Added

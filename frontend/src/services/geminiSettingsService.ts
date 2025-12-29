@@ -32,7 +32,7 @@ export class GeminiSettingsService {
    * Update Gemini settings (API key and/or model selection)
    */
   async updateSettings(data: UpdateGeminiSettingsRequest): Promise<UserGeminiSettings> {
-    const response = await apiClient.patch<UserGeminiSettings>('/api/v1/users/me/gemini-settings', data);
+    const response = await apiClient.put<UserGeminiSettings>('/api/v1/users/me/gemini-settings', data);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to update Gemini settings');
     }

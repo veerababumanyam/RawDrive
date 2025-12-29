@@ -15,6 +15,19 @@ export interface WatermarkSettings {
   scale?: number;  // For tiled mode
 }
 
+/**
+ * Summary of face detection data for an asset
+ * Used in PhotoCard to display face count badge
+ */
+export interface FaceSummary {
+  /** Number of faces detected in the asset */
+  faceCount: number;
+  /** Names of identified people (from face groups) */
+  personNames: string[];
+  /** IDs of detected faces for linking to detail view */
+  faceIds: string[];
+}
+
 export interface AssetUpdatePayload {
   title?: string;
   description?: string;
@@ -25,6 +38,8 @@ export interface AssetUpdatePayload {
 export interface GalleryCanvasProps {
   // Data
   assets: GalleryAssetItem[];
+  /** Gallery ID - required for face detection feature */
+  galleryId?: string;
   
   // Layout
   viewMode: 'grid' | 'masonry';
@@ -65,6 +80,12 @@ export interface GalleryCanvasProps {
   showFaceDetection?: boolean;
   isClientView?: boolean;
   downloadPolicy?: DownloadPolicy;
+
+  // Virtualization (for large galleries)
+  /** Enable virtual scrolling - auto-disabled when sortable */
+  enableVirtualization?: boolean;
+  /** Row height in pixels for virtualization */
+  rowHeight?: number;
   
   // State
   isLoading?: boolean;

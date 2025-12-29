@@ -1,0 +1,349 @@
+# Photographer Favorites Analytics API Contract
+# Feature: 012-client-favorites
+# Audience: Photographers (workspace members)
+
+openapi: 3.1.0
+info:
+  title: Photographer Favorites Analytics API
+  version: 1.0.0
+  description: API for photographers to view aggregate client favorites data
+
+servers:
+  - url: /api/v1
+    description: RawDrive API v1
+
+security:
+  - BearerAuth: []
+
+paths:
+  /workspaces/{workspace_id}/galleries/{gallery_id}/favorites/analytics:
+    get:
+      operationId: getFavoritesAnalytics
+      summary: Get aggregate favorites analytics
+      description: Returns summary of client favorites for a gallery
+      tags: [Analytics]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [favorite_count, last_favorited]
+            default: favorite_count
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Favorites analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoritesAnalyticsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /workspaces/{workspace_id}/galleries/{gallery_id}/favorites/analytics/summary:
+    get:
+      operationId: getFavoritesSummary
+      summary: Get favorites summary stats
+      description: Returns high-level statistics about favorites
+      tags: [Analytics]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Summary statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoritesSummary'
+
+  /workspaces/{workspace_id}/galleries/{gallery_id}/favorites/analytics/refresh:
+    post:
+      operationId: refreshFavoritesAnalytics
+      summary: Refresh analytics data
+      description: Manually refresh the materialized view for up-to-date data
+      tags: [Analytics]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '202':
+          description: Refresh initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Analytics refresh initiated"
+                  estimated_completion:
+                    type: string
+                    format: date-time
+
+  /workspaces/{workspace_id}/galleries/{gallery_id}/favorites/export:
+    get:
+      operationId: exportFavorites
+      summary: Export favorites as CSV
+      description: Download CSV of favorited photo filenames for editing prioritization
+      tags: [Export]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+        - name: min_favorites
+          in: query
+          description: Only include photos with at least this many favorites
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="gallery-favorites.csv"'
+
+  /workspaces/{workspace_id}/galleries/{gallery_id}/favorites/settings:
+    get:
+      operationId: getFavoritesSettings
+      summary: Get favorites feature settings
+      description: Get gallery-specific favorites settings
+      tags: [Settings]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Favorites settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoritesSettings'
+
+    patch:
+      operationId: updateFavoritesSettings
+      summary: Update favorites settings
+      description: Configure favorites feature for the gallery
+      tags: [Settings]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FavoritesSettingsUpdate'
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoritesSettings'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    GalleryId:
+      name: gallery_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    FavoritesAnalyticsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhotoFavoritesStats'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            total_pages:
+              type: integer
+            last_refreshed:
+              type: string
+              format: date-time
+              description: When the analytics were last updated
+
+    PhotoFavoritesStats:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        thumbnail_url:
+          type: string
+          format: uri
+        unique_favorite_count:
+          type: integer
+          description: Number of unique clients who favorited this photo
+        last_favorited_at:
+          type: string
+          format: date-time
+        rank:
+          type: integer
+          description: Ranking by popularity (1 = most favorited)
+
+    FavoritesSummary:
+      type: object
+      properties:
+        total_photos:
+          type: integer
+          description: Total photos in gallery
+        photos_with_favorites:
+          type: integer
+          description: Photos that have at least one favorite
+        total_favorites:
+          type: integer
+          description: Sum of all favorites across all photos
+        unique_clients:
+          type: integer
+          description: Number of unique clients who favorited
+        most_favorited_photo:
+          $ref: '#/components/schemas/PhotoFavoritesStats'
+        favorites_by_day:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              count:
+                type: integer
+
+    FavoritesSettings:
+      type: object
+      properties:
+        favorites_enabled:
+          type: boolean
+          default: true
+          description: Whether clients can favorite photos
+        sharing_enabled:
+          type: boolean
+          default: true
+          description: Whether clients can share favorites lists
+        download_enabled:
+          type: boolean
+          default: true
+          description: Whether clients can download favorites as ZIP
+        max_lists_per_client:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 50
+        download_resolution:
+          type: string
+          enum: [web_only, original_allowed]
+          default: web_only
+        download_limit_per_client:
+          type: integer
+          description: Max downloads per client (null = unlimited)
+
+    FavoritesSettingsUpdate:
+      type: object
+      properties:
+        favorites_enabled:
+          type: boolean
+        sharing_enabled:
+          type: boolean
+        download_enabled:
+          type: boolean
+        max_lists_per_client:
+          type: integer
+          minimum: 1
+          maximum: 50
+        download_resolution:
+          type: string
+          enum: [web_only, original_allowed]
+        download_limit_per_client:
+          type: integer
+          minimum: 0
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

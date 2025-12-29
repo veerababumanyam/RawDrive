@@ -5,7 +5,7 @@
  * Supports drag-drop reordering via @dnd-kit
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -25,7 +25,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { PhotoCard } from './PhotoCard';
 import { GalleryAssetItem } from '../../../types/gallery';
-import { ResponsiveColumns } from '../../../types/canvas';
+import { ResponsiveColumns, WatermarkSettings, FaceSummary } from '../../../types/canvas';
+import { useGridVirtualization } from '../../../hooks/useGridVirtualization';
 
 export interface PhotoGridProps {
   assets: GalleryAssetItem[];
@@ -56,6 +57,20 @@ export interface PhotoGridProps {
   gap?: 'sm' | 'md' | 'lg';
   isPrivateUnlocked?: boolean;
   onUnlockPrivate?: () => void;
+  /** Show watermark overlay on photos */
+  showWatermark?: boolean;
+  /** Watermark configuration settings */
+  watermarkSettings?: WatermarkSettings;
+  /** Map of asset IDs to face summaries for face detection badges */
+  faceSummaries?: Map<string, FaceSummary>;
+  /** Enable virtual scrolling for large galleries (auto-disabled when sortable) */
+  enableVirtualization?: boolean;
+  /** Height of each row in pixels (for virtualization) */
+  rowHeight?: number;
+  /** Number of rows to render above/below visible area */
+  overscan?: number;
+  /** Callback when an asset update is needed */
+  onUpdateAsset?: (assetId: string, data: { title: string; description: string; is_private: boolean }) => void;
 }
 
 const getColumnClasses = (columns?: ResponsiveColumns) => {
@@ -94,6 +109,7 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
   onSetCover,
   onSortOrderChange,
   onMoveToSubGallery,
+  onUpdateAsset,
   sortable = false,
   isLoading = false,
   className = '',
@@ -101,8 +117,15 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
   gap,
   isPrivateUnlocked,
   onUnlockPrivate,
+  showWatermark = false,
+  watermarkSettings,
+  faceSummaries,
+  enableVirtualization = false,
+  rowHeight = 280,
+  overscan = 2,
 }) => {
   const [items, setItems] = useState<GalleryAssetItem[]>(assets);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Update items when assets prop changes
   useEffect(() => {
@@ -169,26 +192,50 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
 
   // Responsive columns hook to track current column count for keyboard navigation
   const [currentColCount, setCurrentColCount] = useState(2);
-  
+
   useEffect(() => {
     const update = () => {
       // Using window check for safety
       if (typeof window === 'undefined') return;
       const width = window.innerWidth;
       const { sm = 2, md = 3, lg = 4, xl = 5 } = columns || {};
-      
+
       if (width < 640) setCurrentColCount(sm);
       else if (width < 1024) setCurrentColCount(md);
       else if (width < 1536) setCurrentColCount(lg);
       else setCurrentColCount(xl);
     };
-    
+
     update();
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, [columns]);
 
-  // Keyboard navigation handler
+  // Determine if virtualization should be active
+  // Disabled when sortable (DnD incompatible) or explicitly disabled
+  const shouldVirtualize = useMemo(() => {
+    return enableVirtualization && !sortable && items.length > 50;
+  }, [enableVirtualization, sortable, items.length]);
+
+  // Use virtualization hook
+  const {
+    virtualRows,
+    totalHeight,
+    topSpacerHeight,
+    bottomSpacerHeight,
+    scrollToItem,
+    // visibleRange - available but not used currently
+    isItemRendered,
+  } = useGridVirtualization({
+    items,
+    columnCount: currentColCount,
+    rowHeight,
+    overscan,
+    enabled: shouldVirtualize,
+    containerRef: scrollContainerRef,
+  });
+
+  // Keyboard navigation handler with virtualization support
   const handleKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
     // Only handle arrow keys
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
@@ -213,6 +260,22 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
     }
 
     if (nextIndex >= 0 && nextIndex < total) {
+      // If virtualization is active and the target item isn't rendered, scroll to it first
+      if (shouldVirtualize && !isItemRendered(nextIndex)) {
+        scrollToItem(nextIndex);
+        // Use requestAnimationFrame to wait for re-render, then focus
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const wrapper = document.querySelector(`[data-photo-index="${nextIndex}"]`) as HTMLElement;
+            if (wrapper) {
+              const focusableInfo = wrapper.querySelector('[tabindex="0"]') as HTMLElement;
+              (focusableInfo || wrapper).focus();
+            }
+          });
+        });
+        return;
+      }
+
       // Find element by data-index
       const wrapper = document.querySelector(`[data-photo-index="${nextIndex}"]`) as HTMLElement;
       if (wrapper) {
@@ -225,7 +288,7 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
         }
       }
     }
-  }, [items.length, currentColCount]);
+  }, [items.length, currentColCount, shouldVirtualize, isItemRendered, scrollToItem]);
 
   // Loading skeleton
   if (isLoading) {
@@ -253,46 +316,94 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
     );
   }
 
-  const gridContent = (
+  // Helper to render a single photo card
+  const renderPhotoCard = (asset: GalleryAssetItem, index: number) => {
+    const SortableItem = sortable ? SortablePhotoCard : PhotoCardWrapper;
+
+    return (
+      <SortableItem
+        key={asset.asset_id}
+        asset={asset}
+        index={index}
+        isManagementSelected={selectedAssetIds.has(asset.asset_id)}
+        managementSelectable={managementSelectable}
+        showCustomerSelection={showCustomerSelection}
+        isCover={coverAssetId === asset.asset_id}
+        onManagementSelect={onManagementSelect}
+        onClick={onAssetClick}
+        onFavorite={onAssetFavorite}
+        onCustomerSelectionToggle={onCustomerSelectionToggle}
+        onDownload={onAssetDownload}
+        onShare={onAssetShare}
+        onLock={onAssetLock}
+        onDelete={onAssetDelete}
+        onSetCover={onSetCover}
+        onUpdateAsset={onUpdateAsset}
+        sortable={sortable}
+        // Display Options
+        aspectRatio="square"
+        data-photo-index={index}
+        onKeyDown={(e) => handleKeyDown(e, index)}
+        isPrivateUnlocked={isPrivateUnlocked}
+        onUnlockPrivate={onUnlockPrivate}
+        // Watermark props
+        showWatermark={showWatermark}
+        watermarkSettings={watermarkSettings}
+        // Face detection props
+        faceCount={faceSummaries?.get(asset.asset_id)?.faceCount}
+        personNames={faceSummaries?.get(asset.asset_id)?.personNames}
+      />
+    );
+  };
+
+  // Standard grid content (non-virtualized)
+  const standardGridContent = (
     <div
       className={`grid ${getColumnClasses(columns)} ${getGapClass(gap)} ${className}`}
       role="grid"
       aria-label="Photo gallery"
       onContextMenu={(e) => e.preventDefault()}
     >
-      {items.map((asset, index) => {
-        const SortableItem = sortable ? SortablePhotoCard : PhotoCardWrapper;
-
-        return (
-          <SortableItem
-            key={asset.asset_id}
-            asset={asset}
-            index={index}
-            isManagementSelected={selectedAssetIds.has(asset.asset_id)}
-            managementSelectable={managementSelectable}
-            showCustomerSelection={showCustomerSelection}
-            isCover={coverAssetId === asset.asset_id}
-            onManagementSelect={onManagementSelect}
-            onClick={onAssetClick}
-            onFavorite={onAssetFavorite}
-            onCustomerSelectionToggle={onCustomerSelectionToggle}
-            onDownload={onAssetDownload}
-            onShare={onAssetShare}
-            onLock={onAssetLock}
-            onDelete={onAssetDelete}
-            onSetCover={onSetCover}
-            sortable={sortable}
-            // New Props
-            aspectRatio="square"
-            data-photo-index={index}
-            onKeyDown={(e) => handleKeyDown(e, index)}
-            isPrivateUnlocked={isPrivateUnlocked}
-            onUnlockPrivate={onUnlockPrivate}
-          />
-        );
-      })}
+      {items.map((asset, index) => renderPhotoCard(asset, index))}
     </div>
   );
+
+  // Virtualized grid content
+  const virtualizedGridContent = (
+    <div
+      ref={scrollContainerRef}
+      className={`overflow-y-auto h-full ${className}`}
+      role="grid"
+      aria-label="Photo gallery"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Total height container for scroll */}
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        {/* Top spacer */}
+        <div style={{ height: topSpacerHeight }} aria-hidden="true" />
+
+        {/* Visible rows */}
+        {virtualRows.map((row) => (
+          <div
+            key={`row-${row.rowIndex}`}
+            className={`grid ${getColumnClasses(columns)} ${getGapClass(gap)}`}
+            style={{ height: rowHeight }}
+          >
+            {row.items.map((asset, colIndex) => {
+              const globalIndex = row.startIndex + colIndex;
+              return renderPhotoCard(asset, globalIndex);
+            })}
+          </div>
+        ))}
+
+        {/* Bottom spacer */}
+        <div style={{ height: bottomSpacerHeight }} aria-hidden="true" />
+      </div>
+    </div>
+  );
+
+  // Choose content based on virtualization state
+  const gridContent = shouldVirtualize ? virtualizedGridContent : standardGridContent;
 
   // Enable DndContext if sortable or drag-to-tab is enabled
   // This DndContext handles both sorting within grid and drag-to-tab
@@ -334,12 +445,17 @@ interface SortablePhotoCardProps {
   onLock?: (assetId: string, isPrivate: boolean) => void;
   onDelete?: (assetId: string) => void;
   onSetCover?: (assetId: string) => void;
+  onUpdateAsset?: (assetId: string, data: { title: string; description: string; is_private: boolean }) => void;
   sortable: boolean;
   aspectRatio?: 'square' | 'auto';
   'data-photo-index'?: number;
   onKeyDown?: (e: React.KeyboardEvent, index: number) => void;
   isPrivateUnlocked?: boolean;
   onUnlockPrivate?: () => void;
+  showWatermark?: boolean;
+  watermarkSettings?: WatermarkSettings;
+  faceCount?: number;
+  personNames?: string[];
 }
 
 const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
@@ -358,11 +474,16 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
   onLock,
   onDelete,
   onSetCover,
+  onUpdateAsset,
   aspectRatio,
   'data-photo-index': dataIndex,
   onKeyDown,
   isPrivateUnlocked,
   onUnlockPrivate,
+  showWatermark,
+  watermarkSettings,
+  faceCount,
+  personNames,
 }) => {
   const {
     attributes,
@@ -406,10 +527,15 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
         onLock={onLock}
         onDelete={onDelete}
         onSetCover={onSetCover}
+        onUpdateAsset={onUpdateAsset}
         showActions={true}
         aspectRatio={aspectRatio}
         isPrivateUnlocked={isPrivateUnlocked}
         onUnlockPrivate={onUnlockPrivate}
+        showWatermark={showWatermark}
+        watermarkSettings={watermarkSettings}
+        faceCount={faceCount}
+        personNames={personNames}
       />
     </div>
   );
@@ -432,11 +558,16 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
   onLock,
   onDelete,
   onSetCover,
+  onUpdateAsset,
   aspectRatio,
   'data-photo-index': dataIndex,
   onKeyDown,
   isPrivateUnlocked,
   onUnlockPrivate,
+  showWatermark,
+  watermarkSettings,
+  faceCount,
+  personNames,
 }) => {
   return (
     <div
@@ -460,10 +591,15 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
         onLock={onLock}
         onDelete={onDelete}
         onSetCover={onSetCover}
+        onUpdateAsset={onUpdateAsset}
         showActions={true}
         aspectRatio={aspectRatio}
         isPrivateUnlocked={isPrivateUnlocked}
         onUnlockPrivate={onUnlockPrivate}
+        showWatermark={showWatermark}
+        watermarkSettings={watermarkSettings}
+        faceCount={faceCount}
+        personNames={personNames}
       />
     </div>
   );

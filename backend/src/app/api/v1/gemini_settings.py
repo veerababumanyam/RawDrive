@@ -22,6 +22,8 @@ from app.api.schemas import (
     ValidateGeminiKeyRequest,
     GeminiModelPublic,
     GeminiModelsListResponse,
+    UNSET,
+    _Unset,
 )
 from app.api.exceptions import AppError
 from app.services.gemini_settings_service import (
@@ -130,15 +132,24 @@ async def update_gemini_settings(
     - If `api_key` is provided, it will be validated with Gemini API before saving
     - If `selected_model_id` is provided, it must be an active model
     - Set `selected_model_id` to null to use platform default
+    - Omit `selected_model_id` to keep current selection
     """
     workspace_id = await _get_user_workspace_id(current_user.user_id)
+
+    # Determine if model selection should be updated
+    # UNSET means field was not provided - don't update
+    # None means explicitly set to null - use platform default
+    # UUID means select that model
+    update_model = not isinstance(request.selected_model_id, _Unset)
+    model_id = None if isinstance(request.selected_model_id, _Unset) else request.selected_model_id
 
     try:
         settings = await service.create_or_update_settings(
             user_id=current_user.user_id,
             workspace_id=workspace_id,
             api_key=request.api_key,
-            selected_model_id=request.selected_model_id,
+            selected_model_id=model_id,
+            update_model_selection=update_model,
         )
 
         # Audit log for security

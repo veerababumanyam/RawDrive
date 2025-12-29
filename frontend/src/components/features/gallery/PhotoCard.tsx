@@ -19,8 +19,11 @@ import {
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { GalleryAssetItem } from '../../../types/gallery';
+import type { WatermarkSettings } from '../../../types/canvas';
 import { HoverOverlay } from './HoverOverlay';
 import { InlineEditForm } from './InlineEditForm';
+import { WatermarkOverlay } from './WatermarkOverlay';
+import { FaceIndicatorBadge } from './FaceIndicatorBadge';
 
 export interface PhotoCardProps {
   asset: GalleryAssetItem;
@@ -52,6 +55,14 @@ export interface PhotoCardProps {
   aspectRatio?: 'square' | 'auto';
   isPrivateUnlocked?: boolean;
   onUnlockPrivate?: () => void;
+  /** Show watermark overlay on the photo */
+  showWatermark?: boolean;
+  /** Watermark configuration settings */
+  watermarkSettings?: WatermarkSettings;
+  /** Face count for this photo (from useFacesSummary) */
+  faceCount?: number;
+  /** Person names detected in this photo */
+  personNames?: string[];
 }
 
 export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
@@ -76,6 +87,10 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   aspectRatio: aspectRatioMode = 'auto',
   isPrivateUnlocked,
   onUnlockPrivate,
+  showWatermark = false,
+  watermarkSettings,
+  faceCount,
+  personNames,
 }) => {
   const isLocked = asset.is_private && !isPrivateUnlocked;
   const { workspace } = useAuth();
@@ -264,6 +279,11 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         </div>
       )}
 
+      {/* Watermark Overlay - Visible when configured and image is loaded */}
+      {showWatermark && watermarkSettings && !isLocked && displayUrl && !imageError && (
+        <WatermarkOverlay settings={watermarkSettings} />
+      )}
+
       {/* Status Badges - Top Left (Cover, Private, Video) */}
       <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
         {/* Cover Badge */}
@@ -302,6 +322,14 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
               </span>
             )}
           </div>
+        )}
+
+        {/* Face Detection Badge */}
+        {faceCount !== undefined && faceCount > 0 && (
+          <FaceIndicatorBadge
+            faceCount={faceCount}
+            personNames={personNames}
+          />
         )}
       </div>
 

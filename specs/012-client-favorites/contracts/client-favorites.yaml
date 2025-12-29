@@ -1,0 +1,595 @@
+# Client Favorites API Contract
+# Feature: 012-client-favorites
+# Audience: Public gallery clients (visitors)
+
+openapi: 3.1.0
+info:
+  title: Client Favorites API
+  version: 1.0.0
+  description: API for clients to manage their photo favorites in public galleries
+
+servers:
+  - url: /api/v1
+    description: RawDrive API v1
+
+paths:
+  /public/galleries/{gallery_id}/favorites:
+    post:
+      operationId: toggleFavorite
+      summary: Toggle favorite status for a photo
+      description: Mark or unmark a photo as favorite. Creates default list if first favorite.
+      tags: [Favorites]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ClientToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToggleFavoriteRequest'
+      responses:
+        '200':
+          description: Favorite toggled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToggleFavoriteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    get:
+      operationId: listFavorites
+      summary: List all favorited photos
+      description: Returns all photos the client has favorited across all lists
+      tags: [Favorites]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ClientToken'
+        - name: list_id
+          in: query
+          description: Filter by specific list (omit for all)
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: List of favorited photos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoritesListResponse'
+
+  /public/galleries/{gallery_id}/favorites/lists:
+    get:
+      operationId: getFavoriteLists
+      summary: Get client's favorite lists
+      description: Returns all favorite lists for the current client
+      tags: [Lists]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ClientToken'
+      responses:
+        '200':
+          description: List of favorite lists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteListsResponse'
+
+    post:
+      operationId: createFavoriteList
+      summary: Create a new favorite list
+      description: Creates a custom named favorite list
+      tags: [Lists]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ClientToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateListRequest'
+      responses:
+        '201':
+          description: List created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: List with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /public/galleries/{gallery_id}/favorites/lists/{list_id}:
+    patch:
+      operationId: updateFavoriteList
+      summary: Update a favorite list
+      description: Rename or reorder a favorite list
+      tags: [Lists]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ListId'
+        - $ref: '#/components/parameters/ClientToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateListRequest'
+      responses:
+        '200':
+          description: List updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Cannot modify default list name
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: deleteFavoriteList
+      summary: Delete a favorite list
+      description: Delete a custom favorite list. Default list cannot be deleted.
+      tags: [Lists]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ListId'
+        - $ref: '#/components/parameters/ClientToken'
+      responses:
+        '204':
+          description: List deleted successfully
+        '403':
+          description: Cannot delete default list
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /public/galleries/{gallery_id}/favorites/lists/{list_id}/photos:
+    post:
+      operationId: addToList
+      summary: Add photo to a specific list
+      description: Add a photo to a specific favorite list
+      tags: [Lists]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ListId'
+        - $ref: '#/components/parameters/ClientToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asset_id]
+              properties:
+                asset_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Photo added to list
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Photo already in list
+
+  /public/galleries/{gallery_id}/favorites/lists/{list_id}/photos/{asset_id}:
+    delete:
+      operationId: removeFromList
+      summary: Remove photo from a list
+      description: Remove a specific photo from a favorite list
+      tags: [Lists]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ListId'
+        - $ref: '#/components/parameters/ClientToken'
+        - name: asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Photo removed from list
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /public/galleries/{gallery_id}/favorites/lists/{list_id}/move:
+    post:
+      operationId: moveToList
+      summary: Move photo between lists
+      description: Move a photo from one list to another
+      tags: [Lists]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ListId'
+        - $ref: '#/components/parameters/ClientToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asset_id, target_list_id]
+              properties:
+                asset_id:
+                  type: string
+                  format: uuid
+                target_list_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Photo moved successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /public/galleries/{gallery_id}/favorites/lists/{list_id}/share:
+    post:
+      operationId: createShareLink
+      summary: Generate share link for list
+      description: Generate a read-only shareable link for a favorites list
+      tags: [Sharing]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ListId'
+        - $ref: '#/components/parameters/ClientToken'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expires_in_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+                  description: Optional expiration in days
+      responses:
+        '201':
+          description: Share link created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLink'
+        '403':
+          description: Sharing disabled for this gallery
+
+    get:
+      operationId: getShareLinks
+      summary: Get existing share links
+      description: Get all active share links for a list
+      tags: [Sharing]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ListId'
+        - $ref: '#/components/parameters/ClientToken'
+      responses:
+        '200':
+          description: List of share links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shares:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShareLink'
+
+  /public/galleries/{gallery_id}/favorites/lists/{list_id}/download:
+    post:
+      operationId: requestDownload
+      summary: Request ZIP download
+      description: Request a ZIP file of all photos in the list
+      tags: [Downloads]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/ListId'
+        - $ref: '#/components/parameters/ClientToken'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resolution:
+                  type: string
+                  enum: [web, original]
+                  default: web
+                  description: Image resolution for download
+      responses:
+        '202':
+          description: Download request accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Download limit exceeded or not allowed
+
+  /public/galleries/{gallery_id}/favorites/downloads/{download_id}:
+    get:
+      operationId: getDownloadStatus
+      summary: Check download status
+      description: Poll for ZIP generation progress
+      tags: [Downloads]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: download_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/ClientToken'
+      responses:
+        '200':
+          description: Download status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadStatus'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    GalleryId:
+      name: gallery_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Gallery identifier
+
+    ListId:
+      name: list_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Favorite list identifier
+
+    ClientToken:
+      name: X-Client-Token
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Client identification token (stored in browser)
+
+  schemas:
+    ToggleFavoriteRequest:
+      type: object
+      required: [asset_id]
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        favorited:
+          type: boolean
+          description: Set to true to favorite, false to unfavorite
+        list_id:
+          type: string
+          format: uuid
+          description: Target list (defaults to default list)
+
+    ToggleFavoriteResponse:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        is_favorited:
+          type: boolean
+        favorites_count:
+          type: integer
+          description: Total favorites on this asset
+        list_id:
+          type: string
+          format: uuid
+
+    FavoritesListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FavoriteItem'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            total_pages:
+              type: integer
+
+    FavoriteItem:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        list_id:
+          type: string
+          format: uuid
+        thumbnail_url:
+          type: string
+          format: uri
+        filename:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        favorited_at:
+          type: string
+          format: date-time
+
+    FavoriteListsResponse:
+      type: object
+      properties:
+        lists:
+          type: array
+          items:
+            $ref: '#/components/schemas/FavoriteList'
+        total_favorites:
+          type: integer
+
+    FavoriteList:
+      type: object
+      properties:
+        list_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 50
+        is_default:
+          type: boolean
+        sort_order:
+          type: integer
+        photo_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateListRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+
+    UpdateListRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        sort_order:
+          type: integer
+
+    ShareLink:
+      type: object
+      properties:
+        share_id:
+          type: string
+          format: uuid
+        share_token:
+          type: string
+        share_url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+        access_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    DownloadStatus:
+      type: object
+      properties:
+        download_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        file_size_bytes:
+          type: integer
+        download_url:
+          type: string
+          format: uri
+          description: Present when status is completed
+        error_message:
+          type: string
+          description: Present when status is failed
+        expires_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

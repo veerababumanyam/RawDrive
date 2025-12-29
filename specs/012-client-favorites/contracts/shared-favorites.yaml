@@ -1,0 +1,193 @@
+# Shared Favorites API Contract
+# Feature: 012-client-favorites
+# Audience: Anyone with a share link (read-only access)
+
+openapi: 3.1.0
+info:
+  title: Shared Favorites API
+  version: 1.0.0
+  description: API for viewing shared favorites lists (read-only)
+
+servers:
+  - url: /api/v1
+    description: RawDrive API v1
+
+paths:
+  /shared/favorites/{share_token}:
+    get:
+      operationId: getSharedFavorites
+      summary: View shared favorites
+      description: Access a shared favorites list in read-only mode
+      tags: [Shared]
+      parameters:
+        - name: share_token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 43
+            maxLength: 43
+          description: Share token from shared link
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Shared favorites list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedFavoritesResponse'
+        '404':
+          description: Share link not found or expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: Share link has expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /shared/favorites/{share_token}/photo/{asset_id}:
+    get:
+      operationId: getSharedPhoto
+      summary: Get photo details from shared list
+      description: Get full details for a specific photo in the shared list
+      tags: [Shared]
+      parameters:
+        - name: share_token
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Photo details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedPhoto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  schemas:
+    SharedFavoritesResponse:
+      type: object
+      properties:
+        list_name:
+          type: string
+          description: Name of the favorites list
+        gallery_title:
+          type: string
+          description: Gallery this list belongs to
+        owner_display_name:
+          type: string
+          description: Display name or "A client" for anonymous
+        photo_count:
+          type: integer
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/SharedPhotoItem'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            total_pages:
+              type: integer
+        share_info:
+          type: object
+          properties:
+            expires_at:
+              type: string
+              format: date-time
+              description: When this share link expires (if set)
+            is_read_only:
+              type: boolean
+              default: true
+
+    SharedPhotoItem:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        thumbnail_url:
+          type: string
+          format: uri
+        width:
+          type: integer
+        height:
+          type: integer
+        filename:
+          type: string
+          description: Original filename (without path)
+
+    SharedPhoto:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        image_url:
+          type: string
+          format: uri
+          description: Full-resolution (or web-optimized) image URL
+        thumbnail_url:
+          type: string
+          format: uri
+        width:
+          type: integer
+        height:
+          type: integer
+        filename:
+          type: string
+        exif:
+          type: object
+          description: EXIF data if visible in gallery settings
+        gallery_title:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+          description: Error code for client handling
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -21,6 +21,9 @@ boto3==1.35.0
 # Image processing (open-source)
 Pillow==10.4.0
 exifread==3.0.0
+
+# ZIP streaming for favorites download (012-client-favorites)
+zipstream-ng>=1.7.1
 # rawpy==0.25.1  # RAW file processing (requires LibRaw system library)
 pg8000==1.31.5
 

@@ -44,6 +44,8 @@ from app.api.v1.subscription import (
 from app.api.v1.gemini_settings import router as gemini_settings_router
 from app.api.v1.gemini_settings import models_router as gemini_models_router
 from app.api.v1.admin_gemini_models import router as admin_gemini_models_router
+from app.api.v1.client_favorites import router as client_favorites_router
+from app.api.v1.favorites_analytics import router as favorites_analytics_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -198,3 +200,19 @@ router.include_router(gemini_models_router)
 
 # Admin Gemini Models route (T039 - admin catalogue management)
 router.include_router(admin_gemini_models_router)
+
+# Client Favorites routes (012-client-favorites)
+# Public endpoints for gallery visitors to manage their favorites
+router.include_router(
+    client_favorites_router,
+    prefix="/api/v1/public/galleries/{gallery_id}/favorites",
+    tags=["client-favorites"],
+)
+
+# Favorites Analytics routes (012-client-favorites US5)
+# Private endpoints for photographers to view favorites analytics
+router.include_router(
+    favorites_analytics_router,
+    prefix="/api/v1",
+    tags=["favorites-analytics"],
+)
