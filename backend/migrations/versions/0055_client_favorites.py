@@ -136,7 +136,7 @@ def upgrade() -> None:
             ga.workspace_id,
             ga.gallery_id,
             ga.asset_id,
-            COALESCE(SUBSTRING(a.original_object_key FROM '[^/]+$'), a.original_filename) AS filename,
+            SUBSTRING(a.original_object_key FROM '[^/]+$') AS filename,
             COUNT(DISTINCT ci.actor->>'visitor_id') AS unique_favorite_count,
             MAX(ci.created_at) AS last_favorited_at
         FROM gallery_assets ga
@@ -146,7 +146,7 @@ def upgrade() -> None:
             AND ga.asset_id = ci.asset_id
             AND ci.type = 'favorite'
         WHERE ga.visible = TRUE AND a.deleted = FALSE
-        GROUP BY ga.workspace_id, ga.gallery_id, ga.asset_id, a.original_object_key, a.original_filename;
+        GROUP BY ga.workspace_id, ga.gallery_id, ga.asset_id, a.original_object_key;
         """
     )
 
