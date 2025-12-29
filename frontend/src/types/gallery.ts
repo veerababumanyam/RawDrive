@@ -390,6 +390,8 @@ export interface MagicLink {
   // Only included on creation
   token?: string;
   url?: string;
+  // Stored in database - always available for existing links
+  public_url?: string;
 }
 
 // Create magic link request

@@ -49,6 +49,7 @@ class MagicLinkRepository:
         max_accesses: Optional[int] = None,
         qr_config: Optional[dict[str, Any]] = None,
         created_by_user_id: Optional[UUID] = None,
+        public_url: Optional[str] = None,
     ) -> dict[str, Any]:
         """Create a new magic link record.
 
@@ -63,6 +64,7 @@ class MagicLinkRepository:
             max_accesses: Optional maximum number of accesses
             qr_config: QR code generation configuration
             created_by_user_id: User who created this link
+            public_url: The shareable URL for this magic link
 
         Returns:
             Created magic link record as dict
@@ -83,9 +85,10 @@ class MagicLinkRepository:
                 """
                 INSERT INTO magic_links (
                     workspace_id, gallery_id, token_hash, target_type, target_id,
-                    label, expires_at, max_accesses, qr_config, created_by_user_id
+                    label, expires_at, max_accesses, qr_config, created_by_user_id,
+                    public_url
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 RETURNING *
                 """,
                 workspace_id,
@@ -98,6 +101,7 @@ class MagicLinkRepository:
                 max_accesses,
                 final_qr_config,
                 created_by_user_id,
+                public_url,
             )
 
             result = self._row_to_dict(row)

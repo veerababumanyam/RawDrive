@@ -243,7 +243,10 @@ class MagicLinkService:
         # Generate secure token
         token, token_hash = self._generate_token()
 
-        # Create the link record
+        # Build the public URL first (needed for repository storage)
+        url = self._build_url(token, target_type, target_id, base_url)
+
+        # Create the link record with the public URL stored in database
         link = await self.repo.create(
             workspace_id=workspace_id,
             gallery_id=gallery_id,
@@ -255,10 +258,8 @@ class MagicLinkService:
             max_accesses=max_accesses,
             qr_config=qr_config,
             created_by_user_id=created_by_user_id,
+            public_url=url,
         )
-
-        # Build the public URL
-        url = self._build_url(token, target_type, target_id, base_url)
 
         # Cache URL for QR code generation (token can't be recovered later)
         await self.cache_link_url(UUID(link["link_id"]), url)

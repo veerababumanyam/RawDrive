@@ -124,7 +124,8 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   };
 
   const handleCopyLink = async (link: MagicLink) => {
-    const url = link.url || `${window.location.origin}/g/${link.link_id}`;
+    // Use url (from creation), public_url (from database), or fallback
+    const url = link.url || link.public_url || `${window.location.origin}/g/${link.link_id}`;
     const success = await magicLinkService.copyToClipboard(url);
     if (success) {
       setCopiedLinkId(link.link_id);
@@ -133,7 +134,8 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   };
 
   const handleShare = async (link: MagicLink) => {
-    const url = link.url || `${window.location.origin}/g/${link.link_id}`;
+    // Use url (from creation), public_url (from database), or fallback
+    const url = link.url || link.public_url || `${window.location.origin}/g/${link.link_id}`;
     const result = await magicLinkService.share(
       url,
       galleryTitle,
@@ -535,7 +537,8 @@ const QRCodeView: React.FC<QRCodeViewProps> = ({
     };
   }, [workspaceId, galleryId, link.link_id]);
 
-  const linkUrl = link.url || `${window.location.origin}/g/${link.link_id}`;
+  // Use url (from creation), public_url (from database), or fallback
+  const linkUrl = link.url || link.public_url || `${window.location.origin}/g/${link.link_id}`;
 
   return (
     <div className="space-y-4">
