@@ -15,6 +15,7 @@ import { AccessSettings } from './AccessSettings';
 import { DownloadSettings } from './DownloadSettings';
 import { BrandingSettings } from './BrandingSettings';
 import { AISettings } from './AISettings';
+import { ClientCombobox } from '../clients';
 
 export interface GallerySettingsPanelProps {
   isOpen: boolean;
@@ -175,15 +176,17 @@ export const GallerySettingsPanel: React.FC<GallerySettingsPanelProps> = ({
                   />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-text-primary mb-2">
-                      Client Name
-                    </label>
-                    <input
-                      type="text"
-                      defaultValue={gallery.client_name || ''}
-                      onChange={(e) => handleUpdate({ client_name: e.target.value.trim() || undefined })}
-                      className="w-full px-4 py-2 bg-surface border border-border rounded-input text-text-primary"
-                      maxLength={255}
+                    <ClientCombobox
+                      value={gallery.client_id || undefined}
+                      onChange={(clientId, clientName) => {
+                        handleUpdate({
+                          client_id: clientId || undefined,
+                          client_name: clientName?.trim() || undefined,
+                        });
+                      }}
+                      label="Client Name"
+                      placeholder="Search or type client name..."
+                      helperText="Search existing clients or type a new name"
                     />
                   </div>
                 </div>
