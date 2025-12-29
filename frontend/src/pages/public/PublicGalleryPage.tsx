@@ -100,6 +100,22 @@ const PublicGalleryPage: React.FC = () => {
     // Toast notifications
     const { addToast } = useToast();
 
+    // Compute gradient CSS for hero section - MUST be before any early returns (React hooks rule)
+    const heroGradientStyle = useMemo(() => {
+        if (!gallery) {
+            return 'linear-gradient(135deg, #1f2937 0%, #111827 100%)';
+        }
+        if (gallery.gradient_config && isValidGradientConfig(gallery.gradient_config)) {
+            return gradientToCss(gallery.gradient_config);
+        }
+        // Fallback to primary color or default gradient
+        const activeColor = gallery.primary_color || gallery.company_profile?.brand_color || '#6366f1';
+        if (activeColor && activeColor !== '#6366f1') {
+            return `linear-gradient(135deg, ${activeColor} 0%, ${activeColor}dd 100%)`;
+        }
+        return 'linear-gradient(135deg, #1f2937 0%, #111827 100%)';
+    }, [gallery]);
+
     // Load visitor ID from storage (using actual gallery ID after it's available)
     useEffect(() => {
         if (actualGalleryId) {
@@ -662,18 +678,6 @@ const PublicGalleryPage: React.FC = () => {
     const coverUrl = gallery.cover_asset_id
         ? `/api/v1/public/galleries/${gallery.gallery_id}/assets/${gallery.cover_asset_id}/preview`
         : null;
-
-    // Compute gradient CSS for hero section
-    const heroGradientStyle = useMemo(() => {
-        if (gallery.gradient_config && isValidGradientConfig(gallery.gradient_config)) {
-            return gradientToCss(gallery.gradient_config);
-        }
-        // Fallback to primary color or default gradient
-        if (activeColor && activeColor !== '#6366f1') {
-            return `linear-gradient(135deg, ${activeColor} 0%, ${activeColor}dd 100%)`;
-        }
-        return 'linear-gradient(135deg, #1f2937 0%, #111827 100%)';
-    }, [gallery.gradient_config, activeColor]);
 
     return (
         <div
