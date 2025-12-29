@@ -142,6 +142,14 @@ const SharedDashboardPage: React.FC = () => {
   }, [linkToRevoke, revokeLink, addToast]);
 
   // Handle bulk revoke (Kill Switch)
+  // Filter out already-revoked links before bulk revoke
+  const revocableLinkIds = useMemo(() => {
+    return Array.from(selectedLinkIds).filter((id) => {
+      const link = links.find((l) => l.link_id === id);
+      return link && link.status !== 'revoked';
+    });
+  }, [selectedLinkIds, links]);
+
   const handleBulkRevokeClick = useCallback(() => {
     if (selectedLinkIds.size === 0) {
       addToast({
@@ -150,20 +158,43 @@ const SharedDashboardPage: React.FC = () => {
       });
       return;
     }
+
+    // Check if any selected links can be revoked
+    if (revocableLinkIds.length === 0) {
+      addToast({
+        variant: 'warning',
+        message: 'All selected links are already revoked',
+      });
+      return;
+    }
+
     setShowBulkRevokeDialog(true);
-  }, [selectedLinkIds, addToast]);
+  }, [selectedLinkIds, revocableLinkIds, addToast]);
 
   const handleConfirmBulkRevoke = useCallback(async () => {
     try {
+      // Only send non-revoked links to the API
       const result = await bulkRevoke({
-        linkIds: Array.from(selectedLinkIds),
+        linkIds: revocableLinkIds,
         reason: 'Bulk revoke via Security Dashboard',
       });
 
-      if (result.failed.length > 0) {
+      const skippedCount = selectedLinkIds.size - revocableLinkIds.length;
+
+      if (result.failed.length > 0 || skippedCount > 0) {
+        const messages = [];
+        if (result.revoked_count > 0) {
+          messages.push(`Revoked ${result.revoked_count} links`);
+        }
+        if (result.failed.length > 0) {
+          messages.push(`${result.failed.length} failed`);
+        }
+        if (skippedCount > 0) {
+          messages.push(`${skippedCount} already revoked`);
+        }
         addToast({
-          variant: 'warning',
-          message: `Revoked ${result.revoked_count} links, ${result.failed.length} failed`,
+          variant: result.revoked_count > 0 ? 'warning' : 'error',
+          message: messages.join(', '),
         });
       } else {
         addToast({
@@ -180,7 +211,7 @@ const SharedDashboardPage: React.FC = () => {
         message: error instanceof Error ? error.message : 'Bulk revoke failed',
       });
     }
-  }, [selectedLinkIds, bulkRevoke, clearSelection, addToast]);
+  }, [selectedLinkIds, revocableLinkIds, bulkRevoke, clearSelection, addToast]);
 
   // Handle export
   const handleExport = useCallback(
