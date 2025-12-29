@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Plus, Check, Loader2, X } from 'lucide-react';
 import { clientService } from '../../../services/clientService';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useClientAvatars } from '../../../hooks/useClientAvatars';
 import { QuickClientCreateModal } from './QuickClientCreateModal';
-import type { ClientSearchResult, ClientCreateResponse } from '../../../types/client';
+import type { ClientSearchResult, ClientCreateResponse, ClientListItem } from '../../../types/client';
 
 interface ClientComboboxProps {
     value?: string;           // Selected client ID
@@ -32,6 +33,26 @@ export const ClientCombobox: React.FC<ClientComboboxProps> = ({
 
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // Convert search results to ClientListItem format for useClientAvatars hook
+    const resultsAsListItems = useMemo((): ClientListItem[] =>
+        results.map(r => ({
+            client_id: r.client_id,
+            full_name: r.full_name,
+            first_name: r.first_name,
+            last_name: r.last_name,
+            avatar_url: r.avatar_url,
+            status: r.status,
+            initials: `${r.first_name[0] || ''}${r.last_name?.[0] || ''}`,
+            created_at: '',
+            linked_galleries_count: 0,
+            tags: [],
+        })),
+        [results]
+    );
+
+    // Fetch authenticated avatar URLs for search results
+    const { avatarBlobUrls } = useClientAvatars(workspace?.workspace_id, resultsAsListItems, 64);
 
     // Initial load if value is provided
     useEffect(() => {
@@ -192,33 +213,36 @@ export const ClientCombobox: React.FC<ClientComboboxProps> = ({
                 <div className="absolute z-50 w-full mt-2 bg-surface-card border border-border rounded-xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
                     {results.length > 0 ? (
                         <ul className="divide-y divide-border/30">
-                            {results.map((client) => (
-                                <li key={client.client_id}>
-                                    <button
-                                        onClick={() => handleSelect(client)}
-                                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-hover transition-colors text-left group"
-                                    >
-                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm group-hover:bg-primary group-hover:text-white transition-colors">
-                                            {client.avatar_url ? (
-                                                <img src={client.avatar_url} alt={client.full_name} className="w-full h-full rounded-full object-cover" />
-                                            ) : (
-                                                <span>{client.first_name[0]}{client.last_name?.[0]}</span>
+                            {results.map((client) => {
+                                const avatarUrl = avatarBlobUrls[client.client_id];
+                                return (
+                                    <li key={client.client_id}>
+                                        <button
+                                            onClick={() => handleSelect(client)}
+                                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-hover transition-colors text-left group"
+                                        >
+                                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm group-hover:bg-primary group-hover:text-white transition-colors overflow-hidden">
+                                                {avatarUrl ? (
+                                                    <img src={avatarUrl} alt={client.full_name} className="w-full h-full rounded-full object-cover" />
+                                                ) : (
+                                                    <span>{client.first_name[0]}{client.last_name?.[0]}</span>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium text-text-primary truncate">
+                                                    {client.full_name}
+                                                </p>
+                                                <p className="text-xs text-text-tertiary truncate">
+                                                    {client.primary_email || client.organization || 'No contact details'}
+                                                </p>
+                                            </div>
+                                            {selectedClient?.client_id === client.client_id && (
+                                                <Check size={16} className="text-primary" />
                                             )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-text-primary truncate">
-                                                {client.full_name}
-                                            </p>
-                                            <p className="text-xs text-text-tertiary truncate">
-                                                {client.primary_email || client.organization || 'No contact details'}
-                                            </p>
-                                        </div>
-                                        {selectedClient?.client_id === client.client_id && (
-                                            <Check size={16} className="text-primary" />
-                                        )}
-                                    </button>
-                                </li>
-                            ))}
+                                        </button>
+                                    </li>
+                                );
+                            })}
                         </ul>
                     ) : (
                         !isLoading && (

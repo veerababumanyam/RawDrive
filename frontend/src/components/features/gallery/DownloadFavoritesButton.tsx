@@ -9,7 +9,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { AppButton } from '../../ui/AppButton';
-import { useDownloadFavorites, DownloadState } from '../../../hooks/useDownloadFavorites';
+import { useDownloadFavorites } from '../../../hooks/useDownloadFavorites';
 
 export interface DownloadFavoritesButtonProps {
   galleryId: string;

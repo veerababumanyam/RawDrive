@@ -7,7 +7,7 @@
  * Feature: 012-client-favorites
  */
 
-import { api } from './apiService';
+import apiClient from './api';
 
 // ============================================================================
 // T022: Client Token Management
@@ -148,11 +148,14 @@ export const favoritesService = {
     galleryId: string,
     request: ToggleFavoriteRequest
   ): Promise<ToggleFavoriteResponse> {
-    const response = await api.post<ToggleFavoriteResponse>(
+    const response = await apiClient.post<ToggleFavoriteResponse>(
       `/public/galleries/${galleryId}/favorites`,
       request,
       { headers: getFavoritesHeaders() }
     );
+    if (response.error || !response.data) {
+      throw new Error(response.error?.message || 'Failed to toggle favorite');
+    }
     return response.data;
   },
 
@@ -171,9 +174,12 @@ export const favoritesService = {
     const queryString = params.toString();
     const url = `/public/galleries/${galleryId}/favorites${queryString ? `?${queryString}` : ''}`;
 
-    const response = await api.get<FavoritesListResponse>(url, {
+    const response = await apiClient.get<FavoritesListResponse>(url, {
       headers: getFavoritesHeaders(),
     });
+    if (response.error || !response.data) {
+      throw new Error(response.error?.message || 'Failed to get favorites');
+    }
     return response.data;
   },
 
@@ -203,11 +209,14 @@ export const favoritesService = {
     }
 
     try {
-      const response = await api.post<Record<string, boolean>>(
+      const response = await apiClient.post<Record<string, boolean>>(
         `/public/galleries/${galleryId}/favorites/check`,
         assetIds,
         { headers: getFavoritesHeaders() }
       );
+      if (response.error || !response.data) {
+        throw new Error(response.error?.message || 'Failed to check favorites');
+      }
       return response.data;
     } catch {
       // Return all false on error
@@ -223,10 +232,13 @@ export const favoritesService = {
    * Get all favorite lists for the current client.
    */
   async getLists(galleryId: string): Promise<FavoriteListsResponse> {
-    const response = await api.get<FavoriteListsResponse>(
+    const response = await apiClient.get<FavoriteListsResponse>(
       `/public/galleries/${galleryId}/favorites/lists`,
       { headers: getFavoritesHeaders() }
     );
+    if (response.error || !response.data) {
+      throw new Error(response.error?.message || 'Failed to get lists');
+    }
     return response.data;
   },
 
@@ -237,11 +249,14 @@ export const favoritesService = {
     galleryId: string,
     request: CreateListRequest
   ): Promise<FavoriteList> {
-    const response = await api.post<FavoriteList>(
+    const response = await apiClient.post<FavoriteList>(
       `/public/galleries/${galleryId}/favorites/lists`,
       request,
       { headers: getFavoritesHeaders() }
     );
+    if (response.error || !response.data) {
+      throw new Error(response.error?.message || 'Failed to create list');
+    }
     return response.data;
   },
 
@@ -253,11 +268,14 @@ export const favoritesService = {
     listId: string,
     request: UpdateListRequest
   ): Promise<FavoriteList> {
-    const response = await api.patch<FavoriteList>(
+    const response = await apiClient.patch<FavoriteList>(
       `/public/galleries/${galleryId}/favorites/lists/${listId}`,
       request,
       { headers: getFavoritesHeaders() }
     );
+    if (response.error || !response.data) {
+      throw new Error(response.error?.message || 'Failed to update list');
+    }
     return response.data;
   },
 
@@ -265,9 +283,14 @@ export const favoritesService = {
    * Delete a favorite list.
    */
   async deleteList(galleryId: string, listId: string): Promise<void> {
-    await api.delete(`/public/galleries/${galleryId}/favorites/lists/${listId}`, {
-      headers: getFavoritesHeaders(),
-    });
+    const response = await apiClient.delete(
+      `/public/galleries/${galleryId}/favorites/lists/${listId}`,
+      undefined,
+      { headers: getFavoritesHeaders() }
+    );
+    if (response.error) {
+      throw new Error(response.error?.message || 'Failed to delete list');
+    }
   },
 
   /**
@@ -279,11 +302,14 @@ export const favoritesService = {
     assetId: string,
     targetListId: string
   ): Promise<void> {
-    await api.post(
+    const response = await apiClient.post(
       `/public/galleries/${galleryId}/favorites/lists/${listId}/move`,
       { asset_id: assetId, target_list_id: targetListId },
       { headers: getFavoritesHeaders() }
     );
+    if (response.error) {
+      throw new Error(response.error?.message || 'Failed to move to list');
+    }
   },
 
   // ==========================================================================
@@ -298,11 +324,14 @@ export const favoritesService = {
     listId: string,
     expiresInDays?: number
   ): Promise<ShareLink> {
-    const response = await api.post<ShareLink>(
+    const response = await apiClient.post<ShareLink>(
       `/public/galleries/${galleryId}/favorites/lists/${listId}/share`,
       { expires_in_days: expiresInDays },
       { headers: getFavoritesHeaders() }
     );
+    if (response.error || !response.data) {
+      throw new Error(response.error?.message || 'Failed to create share link');
+    }
     return response.data;
   },
 
@@ -313,10 +342,13 @@ export const favoritesService = {
     galleryId: string,
     listId: string
   ): Promise<{ shares: ShareLink[] }> {
-    const response = await api.get<{ shares: ShareLink[] }>(
+    const response = await apiClient.get<{ shares: ShareLink[] }>(
       `/public/galleries/${galleryId}/favorites/lists/${listId}/share`,
       { headers: getFavoritesHeaders() }
     );
+    if (response.error || !response.data) {
+      throw new Error(response.error?.message || 'Failed to get share links');
+    }
     return response.data;
   },
 
@@ -328,10 +360,14 @@ export const favoritesService = {
     listId: string,
     shareId: string
   ): Promise<void> {
-    await api.delete(
+    const response = await apiClient.delete(
       `/public/galleries/${galleryId}/favorites/lists/${listId}/share/${shareId}`,
+      undefined,
       { headers: getFavoritesHeaders() }
     );
+    if (response.error) {
+      throw new Error(response.error?.message || 'Failed to revoke share link');
+    }
   },
 
   // ==========================================================================
@@ -346,11 +382,14 @@ export const favoritesService = {
     listId: string,
     resolution: 'web' | 'original' = 'web'
   ): Promise<DownloadStatus> {
-    const response = await api.post<DownloadStatus>(
+    const response = await apiClient.post<DownloadStatus>(
       `/public/galleries/${galleryId}/favorites/lists/${listId}/download`,
       { resolution },
       { headers: getFavoritesHeaders() }
     );
+    if (response.error || !response.data) {
+      throw new Error(response.error?.message || 'Failed to request download');
+    }
     return response.data;
   },
 
@@ -361,10 +400,13 @@ export const favoritesService = {
     galleryId: string,
     downloadId: string
   ): Promise<DownloadStatus> {
-    const response = await api.get<DownloadStatus>(
+    const response = await apiClient.get<DownloadStatus>(
       `/public/galleries/${galleryId}/favorites/downloads/${downloadId}`,
       { headers: getFavoritesHeaders() }
     );
+    if (response.error || !response.data) {
+      throw new Error(response.error?.message || 'Failed to get download status');
+    }
     return response.data;
   },
 };

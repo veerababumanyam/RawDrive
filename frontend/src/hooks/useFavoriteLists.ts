@@ -168,7 +168,6 @@ export function useFavoriteLists({
 
       // Optimistic update - remove from list and adjust default list count
       const originalLists = [...lists];
-      const defaultList = lists.find((l) => l.is_default);
       const photosToMove = listToDelete.photo_count;
 
       setLists((prev) =>

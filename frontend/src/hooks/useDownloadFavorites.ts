@@ -33,9 +33,6 @@ export interface UseDownloadFavoritesResult {
 // Download polling configuration
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 180; // 6 minutes max (180 * 2 seconds)
-const DOWNLOAD_TIMEOUT_MINUTES = Math.floor(
-  (MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS) / 60000
-);
 
 export function useDownloadFavorites(
   galleryId: string,

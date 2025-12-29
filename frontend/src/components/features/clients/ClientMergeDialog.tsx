@@ -23,6 +23,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AppButton } from '../../ui/AppButton';
 import { useToast } from '../../ui/Toast';
 import { clientService } from '../../../services/clientService';
+import { useClientAvatar } from '../../../hooks/useClientAvatar';
 import type { ClientDetail } from '../../../types/client';
 
 /* =============================================================================
@@ -53,6 +54,20 @@ export const ClientMergeDialog: React.FC<ClientMergeDialogProps> = ({
   onMerged,
 }) => {
   const { addToast } = useToast();
+
+  // Fetch authenticated avatar URLs for both clients
+  const { avatarBlobUrl: sourceAvatarUrl } = useClientAvatar({
+    workspaceId,
+    clientId: sourceClient.client_id,
+    avatarUrl: sourceClient.avatar_url,
+    size: 64,
+  });
+  const { avatarBlobUrl: targetAvatarUrl } = useClientAvatar({
+    workspaceId,
+    clientId: targetClient.client_id,
+    avatarUrl: targetClient.avatar_url,
+    size: 64,
+  });
 
   // State
   const [primaryClientId, setPrimaryClientId] = useState<string>(targetClient.client_id);
@@ -214,6 +229,7 @@ export const ClientMergeDialog: React.FC<ClientMergeDialogProps> = ({
                   isSelected={primaryClientId === sourceClient.client_id}
                   onSelect={() => setPrimaryClientId(sourceClient.client_id)}
                   label="Keep as primary"
+                  avatarBlobUrl={sourceAvatarUrl}
                 />
 
                 {/* Target Client */}
@@ -222,6 +238,7 @@ export const ClientMergeDialog: React.FC<ClientMergeDialogProps> = ({
                   isSelected={primaryClientId === targetClient.client_id}
                   onSelect={() => setPrimaryClientId(targetClient.client_id)}
                   label="Keep as primary"
+                  avatarBlobUrl={targetAvatarUrl}
                 />
               </div>
             </div>
@@ -330,6 +347,7 @@ interface ClientSelectionCardProps {
   isSelected: boolean;
   onSelect: () => void;
   label: string;
+  avatarBlobUrl: string | null;
 }
 
 const ClientSelectionCard: React.FC<ClientSelectionCardProps> = ({
@@ -337,6 +355,7 @@ const ClientSelectionCard: React.FC<ClientSelectionCardProps> = ({
   isSelected,
   onSelect,
   label,
+  avatarBlobUrl,
 }) => {
   return (
     <button
@@ -362,9 +381,9 @@ const ClientSelectionCard: React.FC<ClientSelectionCardProps> = ({
         {/* Client Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            {client.avatar_url ? (
+            {avatarBlobUrl ? (
               <img
-                src={client.avatar_url}
+                src={avatarBlobUrl}
                 alt={client.full_name}
                 className="w-8 h-8 rounded-full object-cover"
               />

@@ -20,6 +20,7 @@ import { AppInput } from '../../ui/AppInput';
 import { useToast } from '../../ui/Toast';
 import { SmartListFilterBuilder } from './SmartListFilterBuilder';
 import { clientService } from '../../../services/clientService';
+import { useClientAvatars } from '../../../hooks/useClientAvatars';
 import type {
   SmartList,
   SmartListFilterCriteria,
@@ -71,6 +72,9 @@ export const SmartListDialog: React.FC<SmartListDialogProps> = ({
 
   // Available tags for autocomplete
   const [availableTags, setAvailableTags] = useState<string[]>([]);
+
+  // Fetch authenticated avatar URLs for preview clients
+  const { avatarBlobUrls } = useClientAvatars(workspaceId, previewClients, 64);
 
   // Initialize form when dialog opens
   useEffect(() => {
@@ -296,43 +300,46 @@ export const SmartListDialog: React.FC<SmartListDialogProps> = ({
                     </div>
                   ) : (
                     <div className="divide-y divide-border max-h-[200px] overflow-y-auto">
-                      {previewClients.map((client) => (
-                        <div
-                          key={client.client_id}
-                          className="flex items-center gap-3 p-3 hover:bg-surface-hover/50"
-                        >
-                          {client.avatar_url ? (
-                            <img
-                              src={client.avatar_url}
-                              alt={client.full_name}
-                              className="w-8 h-8 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
-                              {client.initials || client.full_name.charAt(0)}
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-text-primary truncate">
-                              {client.full_name}
-                            </p>
-                            {client.organization && (
-                              <p className="text-xs text-text-tertiary truncate">
-                                {client.organization}
-                              </p>
-                            )}
-                          </div>
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full ${
-                              client.status === 'active'
-                                ? 'bg-success/10 text-success'
-                                : 'bg-text-tertiary/10 text-text-tertiary'
-                            }`}
+                      {previewClients.map((client) => {
+                        const avatarUrl = avatarBlobUrls[client.client_id];
+                        return (
+                          <div
+                            key={client.client_id}
+                            className="flex items-center gap-3 p-3 hover:bg-surface-hover/50"
                           >
-                            {client.status}
-                          </span>
-                        </div>
-                      ))}
+                            {avatarUrl ? (
+                              <img
+                                src={avatarUrl}
+                                alt={client.full_name}
+                                className="w-8 h-8 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
+                                {client.initials || client.full_name.charAt(0)}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-text-primary truncate">
+                                {client.full_name}
+                              </p>
+                              {client.organization && (
+                                <p className="text-xs text-text-tertiary truncate">
+                                  {client.organization}
+                                </p>
+                              )}
+                            </div>
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full ${
+                                client.status === 'active'
+                                  ? 'bg-success/10 text-success'
+                                  : 'bg-text-tertiary/10 text-text-tertiary'
+                              }`}
+                            >
+                              {client.status}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

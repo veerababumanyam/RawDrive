@@ -32,6 +32,7 @@ import dashboardService, { DashboardStats } from '../../services/dashboardServic
 import galleryService from '../../services/galleryService';
 import { clientService } from '../../services/clientService';
 import { useActivities } from '../../hooks/useActivities';
+import { useClientAvatars } from '../../hooks/useClientAvatars';
 import { GalleryListItem } from '../../types/gallery';
 import type { ClientAnalyticsResponse, ClientListItem } from '../../types/client';
 import type { Activity as ActivityItem, ActivityType as ActivityTypeEnum } from '../../types/activity';
@@ -134,6 +135,9 @@ const DashboardPage = () => {
         limit: 10,
         refetchInterval: 30000, // Refresh every 30 seconds
     });
+
+    // Fetch authenticated avatar URLs for recent clients
+    const { avatarBlobUrls } = useClientAvatars(workspace?.workspace_id, recentClients, 64);
 
     // Quick actions with translated labels
     const quickActionsData = useMemo(() => [
@@ -422,29 +426,32 @@ const DashboardPage = () => {
                                     <span className="text-xs font-medium text-text-tertiary uppercase tracking-wide">Recently Added</span>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
-                                    {recentClients.slice(0, 5).map((client) => (
-                                        <button
-                                            key={client.client_id}
-                                            onClick={() => navigate(`/workspace/clients/${client.client_id}`)}
-                                            className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-list-item hover:shadow-md transition-all group"
-                                        >
-                                            {client.avatar_url ? (
-                                                <img
-                                                    src={client.avatar_url}
-                                                    alt={client.full_name}
-                                                    className="w-5 h-5 rounded-full object-cover ring-2 ring-white/50"
-                                                />
-                                            ) : (
-                                                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-[10px] font-semibold text-white shadow-sm">
-                                                    {client.initials || client.full_name.charAt(0)}
-                                                </div>
-                                            )}
-                                            <span className="text-sm text-text-primary group-hover:text-primary transition-colors">
-                                                {client.full_name}
-                                            </span>
-                                            <StatusBadge status={client.status} size="sm" />
-                                        </button>
-                                    ))}
+                                    {recentClients.slice(0, 5).map((client) => {
+                                        const avatarUrl = avatarBlobUrls[client.client_id];
+                                        return (
+                                            <button
+                                                key={client.client_id}
+                                                onClick={() => navigate(`/workspace/clients/${client.client_id}`)}
+                                                className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-list-item hover:shadow-md transition-all group"
+                                            >
+                                                {avatarUrl ? (
+                                                    <img
+                                                        src={avatarUrl}
+                                                        alt={client.full_name}
+                                                        className="w-5 h-5 rounded-full object-cover ring-2 ring-white/50"
+                                                    />
+                                                ) : (
+                                                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-[10px] font-semibold text-white shadow-sm">
+                                                        {client.initials || client.full_name.charAt(0)}
+                                                    </div>
+                                                )}
+                                                <span className="text-sm text-text-primary group-hover:text-primary transition-colors">
+                                                    {client.full_name}
+                                                </span>
+                                                <StatusBadge status={client.status} size="sm" />
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
