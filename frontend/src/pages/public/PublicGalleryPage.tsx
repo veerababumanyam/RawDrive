@@ -43,12 +43,17 @@ type WorkflowTab = 'all' | 'favorites' | 'selections';
 
 const PublicGalleryPage: React.FC = () => {
     // Note: Parameter name must match route definition
-    const { galleryId } = useParams<{ galleryId: string }>();
+    // This can be either a UUID (direct gallery access) or a magic link token
+    const { galleryId: galleryIdOrToken } = useParams<{ galleryId: string }>();
     const navigate = useNavigate();
     const [gallery, setGallery] = useState<GalleryDetailData | null>(null);
     const [assets, setAssets] = useState<PublicGalleryAsset[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // The actual gallery UUID - derived from gallery data after loading
+    // Use this for all API calls instead of the URL param
+    const actualGalleryId = gallery?.gallery_id;
 
     // Visitor Registration State
     const [showEmailModal, setShowEmailModal] = useState(false);
@@ -95,27 +100,30 @@ const PublicGalleryPage: React.FC = () => {
     // Toast notifications
     const { addToast } = useToast();
 
-    // Load visitor ID from storage
+    // Load visitor ID from storage (using actual gallery ID after it's available)
     useEffect(() => {
-        if (galleryId) {
-            const storedVisitorId = localStorage.getItem(`${VISITOR_ID_KEY_PREFIX}${galleryId}`);
+        if (actualGalleryId) {
+            const storedVisitorId = localStorage.getItem(`${VISITOR_ID_KEY_PREFIX}${actualGalleryId}`);
             if (storedVisitorId) {
                 setVisitorId(storedVisitorId);
             }
         }
-    }, [galleryId]);
+    }, [actualGalleryId]);
 
     useEffect(() => {
         const fetchGalleryData = async () => {
-            if (!galleryId) return;
+            if (!galleryIdOrToken) return;
             setIsLoading(true);
             try {
-                // Fetch gallery details
-                const galleryData = await galleryService.getPublicGallery(galleryId);
+                // Fetch gallery details - this handles both UUIDs and magic link tokens
+                const galleryData = await galleryService.getPublicGallery(galleryIdOrToken);
                 setGallery(galleryData);
 
+                // Use the actual gallery ID for localStorage keys
+                const realGalleryId = galleryData.gallery_id;
+
                 // Check registration requirement
-                const isRegistered = localStorage.getItem(`${VISITOR_STORAGE_KEY_PREFIX}${galleryId}`);
+                const isRegistered = localStorage.getItem(`${VISITOR_STORAGE_KEY_PREFIX}${realGalleryId}`);
 
                 if (galleryData.email_registration_required && !isRegistered) {
                     setShowEmailModal(true);
@@ -123,7 +131,7 @@ const PublicGalleryPage: React.FC = () => {
                     setIsVisitorAuthenticated(true);
 
                     // Check Password protection first
-                    const passwordVerified = localStorage.getItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${galleryId}`);
+                    const passwordVerified = localStorage.getItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${realGalleryId}`);
                     if (galleryData.password_protected && !passwordVerified) {
                          setShowPasswordModal(true);
                          // Don't check PIN yet if password is needed
@@ -132,15 +140,14 @@ const PublicGalleryPage: React.FC = () => {
                     setIsPasswordVerified(true);
 
                     // Check PIN protection
-
-                    const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
+                    const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${realGalleryId}`);
                     if (galleryData.pin_protected && !pinVerified) {
                         setPinModalMode('gallery');
                         setShowPinModal(true);
                     } else {
                         setIsPinVerified(true);
                         // Check if private photos were previously unlocked
-                        const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
+                        const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${realGalleryId}`);
                         if (privateUnlocked) {
                             setIsPrivateUnlocked(true);
                         }
@@ -152,6 +159,8 @@ const PublicGalleryPage: React.FC = () => {
                 console.error(err);
                 if (err.message && err.message.includes('404')) {
                     setError('Gallery not found or is not public.');
+                } else if (err.message && (err.message.includes('expired') || err.message.includes('revoked'))) {
+                    setError('This link is no longer valid.');
                 } else {
                     setError('Failed to load gallery.');
                 }
@@ -160,15 +169,15 @@ const PublicGalleryPage: React.FC = () => {
             }
         };
         fetchGalleryData();
-    }, [galleryId]);
+    }, [galleryIdOrToken]);
 
     // Fetch assets with current filter
     const fetchAssets = useCallback(async () => {
-        if (!galleryId) return;
+        if (!actualGalleryId) return;
         try {
             // Use filtered endpoint to get client interaction data
             const filterType = activeTab === 'all' ? undefined : activeTab;
-            const assetsData = await galleryService.getPublicGalleryAssetsFiltered(galleryId, filterType);
+            const assetsData = await galleryService.getPublicGalleryAssetsFiltered(actualGalleryId, filterType);
             setAssets(assetsData);
 
             // Initialize local state from server data
@@ -183,36 +192,36 @@ const PublicGalleryPage: React.FC = () => {
         } catch (err) {
             console.error('Failed to fetch assets:', err);
         }
-    }, [galleryId, activeTab]);
+    }, [actualGalleryId, activeTab]);
 
     // Refetch when tab changes
     useEffect(() => {
-        if (isVisitorAuthenticated && isPinVerified && isPasswordVerified && galleryId) {
+        if (isVisitorAuthenticated && isPinVerified && isPasswordVerified && actualGalleryId) {
             fetchAssets();
         }
-    }, [activeTab, isVisitorAuthenticated, isPinVerified, isPasswordVerified, galleryId, fetchAssets]);
+    }, [activeTab, isVisitorAuthenticated, isPinVerified, isPasswordVerified, actualGalleryId, fetchAssets]);
 
     const handleVisitorSubmit = async (data: { email: string; first_name: string; last_name: string; phone: string; address?: string }) => {
-        if (!galleryId) return;
+        if (!actualGalleryId) return;
         setIsRegistering(true);
         try {
-            const result = await galleryService.registerVisitor(galleryId, data);
-            localStorage.setItem(`${VISITOR_STORAGE_KEY_PREFIX}${galleryId}`, 'true');
-            localStorage.setItem(`${VISITOR_ID_KEY_PREFIX}${galleryId}`, result.visitor_id);
+            const result = await galleryService.registerVisitor(actualGalleryId, data);
+            localStorage.setItem(`${VISITOR_STORAGE_KEY_PREFIX}${actualGalleryId}`, 'true');
+            localStorage.setItem(`${VISITOR_ID_KEY_PREFIX}${actualGalleryId}`, result.visitor_id);
             setVisitorId(result.visitor_id);
             setShowEmailModal(false);
             setIsVisitorAuthenticated(true);
 
             // Check PIN after email registration
             if (gallery?.pin_protected) {
-                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
+                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${actualGalleryId}`);
                 if (!pinVerified) {
                     setPinModalMode('gallery');
                     setShowPinModal(true);
                     return;
                 }
                 // Check if private photos were previously unlocked (separate from PIN)
-                const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
+                const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${actualGalleryId}`);
                 if (privateUnlocked) {
                     setIsPrivateUnlocked(true);
                 }
@@ -230,11 +239,11 @@ const PublicGalleryPage: React.FC = () => {
     };
 
     const handlePinVerify = async (pin: string): Promise<boolean> => {
-        if (!galleryId) return false;
+        if (!actualGalleryId) return false;
         try {
-            const isValid = await galleryService.verifyPin(galleryId, pin);
+            const isValid = await galleryService.verifyPin(actualGalleryId, pin);
             if (isValid) {
-                localStorage.setItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`, 'true');
+                localStorage.setItem(`${PIN_VERIFIED_KEY_PREFIX}${actualGalleryId}`, 'true');
                 setShowPinModal(false);
                 setIsPinVerified(true);
                 // NOTE: Do NOT auto-unlock private content here
@@ -252,11 +261,11 @@ const PublicGalleryPage: React.FC = () => {
 
     // Handler for unlocking private photos (uses same gallery PIN)
     const handlePrivatePhotoUnlock = async (pin: string): Promise<boolean> => {
-        if (!galleryId) return false;
+        if (!actualGalleryId) return false;
         try {
-            const isValid = await galleryService.verifyPin(galleryId, pin);
+            const isValid = await galleryService.verifyPin(actualGalleryId, pin);
             if (isValid) {
-                localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
+                localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${actualGalleryId}`, 'true');
                 setShowPinModal(false);
                 setIsPrivateUnlocked(true);
             }
@@ -280,7 +289,7 @@ const PublicGalleryPage: React.FC = () => {
 
     // Client interaction handlers
     const handleFavorite = useCallback(async (assetId: string) => {
-        if (!galleryId) return;
+        if (!actualGalleryId) return;
 
         const currentlyFavorited = localFavorites.has(assetId);
         const newFavorited = !currentlyFavorited;
@@ -297,7 +306,7 @@ const PublicGalleryPage: React.FC = () => {
         });
 
         try {
-            await galleryService.togglePublicFavorite(galleryId, assetId, newFavorited, visitorId || undefined);
+            await galleryService.togglePublicFavorite(actualGalleryId, assetId, newFavorited, visitorId || undefined);
         } catch (err) {
             console.error('Failed to toggle favorite:', err);
             addToast({
@@ -315,10 +324,10 @@ const PublicGalleryPage: React.FC = () => {
                 return next;
             });
         }
-    }, [galleryId, visitorId, localFavorites]);
+    }, [actualGalleryId, visitorId, localFavorites]);
 
     const handleSelection = useCallback(async (assetId: string) => {
-        if (!galleryId) return;
+        if (!actualGalleryId) return;
 
         const currentlySelected = localSelections.has(assetId);
         const newSelected = !currentlySelected;
@@ -335,7 +344,7 @@ const PublicGalleryPage: React.FC = () => {
         });
 
         try {
-            await galleryService.togglePublicSelection(galleryId, assetId, newSelected, visitorId || undefined);
+            await galleryService.togglePublicSelection(actualGalleryId, assetId, newSelected, visitorId || undefined);
         } catch (err) {
             console.error('Failed to toggle selection:', err);
             addToast({
@@ -353,7 +362,7 @@ const PublicGalleryPage: React.FC = () => {
                 return next;
             });
         }
-    }, [galleryId, visitorId, localSelections]);
+    }, [actualGalleryId, visitorId, localSelections]);
 
     // Compute counts for tabs
     const favoriteCount = localFavorites.size;
@@ -387,9 +396,9 @@ const PublicGalleryPage: React.FC = () => {
         return displayedAssets.map(publicAsset => {
             // Construct public URLs for the assets
             // This ensures meaningful thumbnails are available even without signed URLs
-            const publicThumbnailUrl = `/api/v1/public/galleries/${galleryId}/assets/${publicAsset.asset_id}/thumbnail`;
-            const publicPreviewUrl = `/api/v1/public/galleries/${galleryId}/assets/${publicAsset.asset_id}/preview`;
-            
+            const publicThumbnailUrl = `/api/v1/public/galleries/${actualGalleryId}/assets/${publicAsset.asset_id}/thumbnail`;
+            const publicPreviewUrl = `/api/v1/public/galleries/${actualGalleryId}/assets/${publicAsset.asset_id}/preview`;
+
             return {
                 gallery_asset_id: publicAsset.asset_id, // Use same ID for simplicity
                 asset_id: publicAsset.asset_id,
@@ -416,7 +425,7 @@ const PublicGalleryPage: React.FC = () => {
                 },
             };
         });
-    }, [displayedAssets, localFavorites, localSelections, galleryId]);
+    }, [displayedAssets, localFavorites, localSelections, actualGalleryId]);
 
     // Map layout_style to GalleryCanvas viewMode
     const canvasViewMode: 'grid' | 'masonry' = useMemo(() => {
@@ -452,7 +461,7 @@ const PublicGalleryPage: React.FC = () => {
 
     // Download handler (defined before keyboard navigation useEffect)
     const handleDownload = useCallback(async (asset: PublicGalleryAsset) => {
-        if (!gallery || !galleryId) return;
+        if (!gallery || !actualGalleryId) return;
 
         // Check download policy
         if (gallery.download_policy === 'view_only') return;
@@ -461,7 +470,7 @@ const PublicGalleryPage: React.FC = () => {
         try {
             // Determine which variant to download based on policy
             const variant = gallery.download_policy === 'original_allowed' ? 'original' : 'preview';
-            const url = `/api/v1/public/galleries/${galleryId}/assets/${asset.asset_id}/${variant}`;
+            const url = `/api/v1/public/galleries/${actualGalleryId}/assets/${asset.asset_id}/${variant}`;
 
             const response = await fetch(url);
             if (!response.ok) throw new Error('Download failed');
@@ -484,7 +493,7 @@ const PublicGalleryPage: React.FC = () => {
         } finally {
             setIsDownloading(false);
         }
-    }, [gallery, galleryId, addToast]);
+    }, [gallery, actualGalleryId, addToast]);
 
     // Keyboard navigation for lightbox
     useEffect(() => {
@@ -544,7 +553,7 @@ const PublicGalleryPage: React.FC = () => {
 
     // Bulk download handler
     const handleBulkDownload = useCallback(async () => {
-        if (!gallery || !galleryId) return;
+        if (!gallery || !actualGalleryId) return;
         if (gallery.download_policy === 'view_only') return;
 
         const assetsToDownload = activeTab === 'selections'
@@ -565,7 +574,7 @@ const PublicGalleryPage: React.FC = () => {
             // Download files sequentially to avoid overwhelming the browser
             for (const asset of assetsToDownload) {
                 try {
-                    const url = `/api/v1/public/galleries/${galleryId}/assets/${asset.asset_id}/${variant}`;
+                    const url = `/api/v1/public/galleries/${actualGalleryId}/assets/${asset.asset_id}/${variant}`;
                     const response = await fetch(url);
                     if (!response.ok) continue;
 
@@ -594,7 +603,7 @@ const PublicGalleryPage: React.FC = () => {
             setIsBulkDownloading(false);
             setBulkDownloadProgress(0);
         }
-    }, [gallery, galleryId, activeTab, displayedAssets, localSelections, localFavorites]);
+    }, [gallery, actualGalleryId, activeTab, displayedAssets, localSelections, localFavorites]);
 
     // Show expired state
     if (isExpired && gallery) {
@@ -709,17 +718,17 @@ const PublicGalleryPage: React.FC = () => {
             <PasswordVerificationModal
                 isOpen={showPasswordModal}
                 onVerify={async (password) => {
-                    if (!galleryId) return false;
+                    if (!actualGalleryId) return false;
                     try {
-                        const isValid = await galleryService.verifyPassword(galleryId, password);
+                        const isValid = await galleryService.verifyPassword(actualGalleryId, password);
                         if (isValid) {
-                            localStorage.setItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${galleryId}`, 'true');
+                            localStorage.setItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${actualGalleryId}`, 'true');
                             setShowPasswordModal(false);
                             setIsPasswordVerified(true);
-                            
+
                             // Check PIN after Password
                             if (gallery?.pin_protected) {
-                                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
+                                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${actualGalleryId}`);
                                 if (!pinVerified) {
                                     setShowPinModal(true);
                                     return true;
@@ -747,7 +756,7 @@ const PublicGalleryPage: React.FC = () => {
                 isOpen={showFaceDiscovery}
                 onClose={() => setShowFaceDiscovery(false)}
                 onFacesFound={handleFacesFound}
-                galleryId={galleryId || ''}
+                galleryId={actualGalleryId || ''}
                 galleryTitle={gallery.title}
             />
 

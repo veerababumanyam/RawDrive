@@ -18,7 +18,16 @@ import type {
   CheckDuplicateRequest,
   CheckDuplicateResponse,
   PublicGalleryAsset,
+  ValidatedMagicLink,
 } from '../types/gallery';
+
+/**
+ * Check if a string is a valid UUID format
+ */
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
 
 export class GalleryService {
   /**
@@ -75,12 +84,79 @@ export class GalleryService {
 
   /**
    * Get public gallery details
+   *
+   * Handles two scenarios:
+   * 1. galleryId is a UUID - calls public galleries endpoint directly
+   * 2. galleryId is a magic link token - validates token and extracts gallery data
    */
-  async getPublicGallery(galleryId: string): Promise<GalleryDetailData> {
-    const endpoint = `/api/v1/public/galleries/${galleryId}`;
-    const response = await apiClient.get<GalleryDetailData>(endpoint);
+  async getPublicGallery(galleryIdOrToken: string): Promise<GalleryDetailData> {
+    // If it's a valid UUID, use the direct gallery endpoint
+    if (isValidUUID(galleryIdOrToken)) {
+      const endpoint = `/api/v1/public/galleries/${galleryIdOrToken}`;
+      const response = await apiClient.get<GalleryDetailData>(endpoint);
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to fetch public gallery');
+      }
+      return response.data!;
+    }
+
+    // Otherwise, treat it as a magic link token
+    const validated = await this.validateMagicLink(galleryIdOrToken);
+
+    // Convert ValidatedMagicLink to GalleryDetailData format
+    // The magic link response has a nested gallery object that needs to be expanded
+    // Note: company_profile from magic link has limited fields, cast to partial
+    return {
+      gallery_id: validated.gallery.gallery_id,
+      workspace_id: '', // Not exposed in magic link response for security
+      title: validated.gallery.title,
+      status: validated.gallery.status,
+      created_by_user_id: '', // Not exposed in magic link response
+      created_at: '', // Not exposed in magic link response
+      description: validated.gallery.description,
+      cover_asset_id: validated.gallery.cover_asset_id,
+      primary_color: validated.gallery.primary_color,
+      font_family: validated.gallery.font_family,
+      custom_links: validated.gallery.custom_links,
+      pin_protected: validated.gallery.pin_protected,
+      password_protected: false, // Magic links don't expose password protection status
+      email_registration_required: validated.gallery.email_registration_required,
+      company_profile: validated.company_profile ? {
+        profile_id: '',
+        workspace_id: '',
+        name: validated.company_profile.name,
+        slug: '',
+        email: '',
+        secondary_emails: [],
+        secondary_phones: [],
+        socials: {},
+        custom_links: [],
+        company_visibility: {},
+        created_at: '',
+        updated_at: '',
+        logo_url: validated.company_profile.logo_url,
+        website: validated.company_profile.website,
+        brand_color: validated.company_profile.brand_color,
+      } : undefined,
+      sub_galleries: [],
+      stats: {
+        total_items: 0,
+        total_photos: 0,
+        total_videos: 0,
+        favorites_count: 0,
+        selections_count: 0,
+      },
+    };
+  }
+
+  /**
+   * Validate a magic link token and get gallery data
+   */
+  async validateMagicLink(token: string): Promise<ValidatedMagicLink> {
+    const endpoint = `/api/v1/public/magic-links/${token}`;
+    const response = await apiClient.get<ValidatedMagicLink>(endpoint);
     if (response.error) {
-      throw new Error(response.error.message || 'Failed to fetch public gallery');
+      throw new Error(response.error.message || 'Failed to validate magic link');
     }
     return response.data!;
   }
