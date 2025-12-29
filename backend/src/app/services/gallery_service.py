@@ -2000,7 +2000,11 @@ class GalleryService:
                     ga.gallery_id,
                     ga.sub_gallery_id,
                     a.type,
-                    a.original_filename AS filename,
+                    -- Extract filename from original_object_key (last segment after /)
+                    COALESCE(
+                        regexp_replace(a.original_object_key, '^.*/', ''),
+                        a.asset_id::text
+                    ) AS filename,
                     a.width,
                     a.height,
                     a.duration_ms AS duration,
