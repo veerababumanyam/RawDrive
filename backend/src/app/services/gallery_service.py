@@ -1522,30 +1522,41 @@ class GalleryService:
             
             from app.services.r2_storage_service import get_r2_storage_service, StorageError
             storage = get_r2_storage_service()
-            
-            try:
-                content = await storage.download_encrypted_file(
-                    workspace_id=workspace_id,
-                    gallery_id=gallery_id,
-                    asset_id=asset_id,
-                    variant=variant,
-                    filename=asset["filename"],
-                )
-                
-                # Determine mime type
-                content_type = "application/octet-stream"
-                if variant in ("thumbnail", "preview") or asset["type"] == "photo":
-                    # Assume JPEG for generated variants, or based on filename
-                    if asset["filename"].lower().endswith(".png"):
-                        content_type = "image/png"
-                    elif asset["filename"].lower().endswith(".webp"):
-                         content_type = "image/webp"
-                    else:
-                        content_type = "image/jpeg"
 
-                return content, content_type
-            except StorageError:
-                raise GalleryError("Failed to retrieve asset content", "STORAGE_ERROR", 500)
+            # Try requested variant first, then fallback to original if variant not found
+            variants_to_try = [variant]
+            if variant in ("thumbnail", "preview"):
+                variants_to_try.append("original")
+
+            content = None
+            for try_variant in variants_to_try:
+                try:
+                    content = await storage.download_encrypted_file(
+                        workspace_id=workspace_id,
+                        gallery_id=gallery_id,
+                        asset_id=asset_id,
+                        variant=try_variant,
+                        filename=asset["filename"],
+                    )
+                    break  # Success
+                except StorageError:
+                    if try_variant == variants_to_try[-1]:
+                        # Last variant failed, raise error
+                        raise GalleryError("Failed to retrieve asset content", "STORAGE_ERROR", 500)
+                    continue  # Try next variant
+
+            # Determine mime type
+            content_type = "application/octet-stream"
+            if variant in ("thumbnail", "preview") or asset["type"] == "photo":
+                # Assume JPEG for generated variants, or based on filename
+                if asset["filename"].lower().endswith(".png"):
+                    content_type = "image/png"
+                elif asset["filename"].lower().endswith(".webp"):
+                    content_type = "image/webp"
+                else:
+                    content_type = "image/jpeg"
+
+            return content, content_type
 
     async def add_assets(
         self,
