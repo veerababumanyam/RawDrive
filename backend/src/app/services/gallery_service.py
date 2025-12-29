@@ -1430,9 +1430,14 @@ class GalleryService:
             # Fetch visible assets
             rows = await conn.fetch(
                 """
-                SELECT 
-                    a.asset_id, a.gallery_id, ga.sub_gallery_id, a.type, a.filename, 
-                    a.width, a.height, a.duration, a.size_bytes, a.metadata, 
+                SELECT
+                    a.asset_id, ga.gallery_id, ga.sub_gallery_id, a.type,
+                    COALESCE(regexp_replace(a.original_object_key, '^.*/', ''), a.asset_id::text) AS filename,
+                    (a.exif->>'ImageWidth')::int AS width,
+                    (a.exif->>'ImageHeight')::int AS height,
+                    NULL::int AS duration,
+                    a.original_bytes AS size_bytes,
+                    a.exif AS metadata,
                     a.created_at, ga.sort_order, ga.is_private
                 FROM gallery_assets ga
                 JOIN assets a ON ga.asset_id = a.asset_id
@@ -1461,7 +1466,7 @@ class GalleryService:
                     "created_at": row["created_at"].isoformat(),
                     "is_private": row["is_private"],
                 })
-            
+
             return results
 
     async def get_public_asset_content(
@@ -1487,10 +1492,12 @@ class GalleryService:
             # 2. Verify asset exists, is part of this gallery, and is visible
             asset = await conn.fetchrow(
                 """
-                SELECT a.asset_id, a.filename, a.type
+                SELECT a.asset_id,
+                       COALESCE(regexp_replace(a.original_object_key, '^.*/', ''), a.asset_id::text) AS filename,
+                       a.type
                 FROM gallery_assets ga
                 JOIN assets a ON ga.asset_id = a.asset_id
-                WHERE ga.gallery_id = $1 
+                WHERE ga.gallery_id = $1
                 AND ga.asset_id = $2
                 AND ga.visible = TRUE
                 AND a.deleted = FALSE
