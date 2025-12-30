@@ -85,6 +85,8 @@ const PublicGalleryPage: React.FC = () => {
     const [lightboxIndex, setLightboxIndex] = useState<number>(0);
     const [showExif, setShowExif] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [lightboxImageLoading, setLightboxImageLoading] = useState(true);
+    const [lightboxImageError, setLightboxImageError] = useState(false);
 
     // Sub-gallery filter state
     const [activeSubGallery, setActiveSubGallery] = useState<string | null>(null);
@@ -454,6 +456,8 @@ const PublicGalleryPage: React.FC = () => {
         setLightboxIndex(index >= 0 ? index : 0);
         setLightboxAsset(asset);
         setShowExif(false);
+        setLightboxImageLoading(true);
+        setLightboxImageError(false);
     }, [displayedAssets]);
 
     const navigateLightbox = useCallback((direction: 'prev' | 'next') => {
@@ -468,6 +472,8 @@ const PublicGalleryPage: React.FC = () => {
 
         setLightboxIndex(newIndex);
         setLightboxAsset(displayedAssets[newIndex]);
+        setLightboxImageLoading(true);
+        setLightboxImageError(false);
     }, [lightboxAsset, lightboxIndex, displayedAssets]);
 
     const closeLightbox = useCallback(() => {
@@ -508,6 +514,46 @@ const PublicGalleryPage: React.FC = () => {
             });
         } finally {
             setIsDownloading(false);
+        }
+    }, [gallery, actualGalleryId, addToast]);
+
+    // Share handler
+    const handleShare = useCallback(async (asset: PublicGalleryAsset) => {
+        if (!gallery || !actualGalleryId) return;
+
+        const shareUrl = `${window.location.origin}/gallery/${actualGalleryId}?photo=${asset.asset_id}`;
+        const shareData = {
+            title: asset.filename || 'Photo',
+            text: `Check out this photo from ${gallery.title}`,
+            url: shareUrl,
+        };
+
+        try {
+            // Try Web Share API first (works on mobile and some desktop browsers)
+            if (navigator.share && navigator.canShare?.(shareData)) {
+                await navigator.share(shareData);
+                return;
+            }
+        } catch (err) {
+            // User cancelled or share failed, fall through to clipboard
+            if ((err as Error).name !== 'AbortError') {
+                console.error('Share failed:', err);
+            }
+        }
+
+        // Fallback: copy to clipboard
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            addToast({
+                message: 'Link copied to clipboard!',
+                variant: 'success',
+            });
+        } catch (err) {
+            console.error('Copy to clipboard failed:', err);
+            addToast({
+                message: 'Failed to copy link. Please try again.',
+                variant: 'error',
+            });
         }
     }, [gallery, actualGalleryId, addToast]);
 
@@ -852,13 +898,54 @@ const PublicGalleryPage: React.FC = () => {
 
                     {/* Main image with watermark */}
                     <div className="relative" onClick={(e) => e.stopPropagation()}>
-                        <img
-                            src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${lightboxAsset.asset_id}/preview`}
-                            alt={lightboxAsset.filename}
-                            className="max-w-[90vw] max-h-[85vh] object-contain"
-                        />
+                        {/* Loading indicator */}
+                        {lightboxImageLoading && !lightboxImageError && (
+                            <div className="absolute inset-0 flex items-center justify-center min-w-[300px] min-h-[300px]">
+                                <div className="flex flex-col items-center gap-3">
+                                    <Loader2 className="w-10 h-10 text-white animate-spin" />
+                                    <span className="text-white/70 text-sm">Loading image...</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Error state with retry button */}
+                        {lightboxImageError && (
+                            <div className="flex flex-col items-center justify-center min-w-[300px] min-h-[300px] gap-4">
+                                <AlertTriangle className="w-12 h-12 text-amber-400" />
+                                <p className="text-white/80 text-center">Failed to load image</p>
+                                <AppButton
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        setLightboxImageError(false);
+                                        setLightboxImageLoading(true);
+                                    }}
+                                    className="text-white border-white/30 hover:bg-white/10"
+                                >
+                                    Try Again
+                                </AppButton>
+                            </div>
+                        )}
+
+                        {/* Main image */}
+                        {!lightboxImageError && (
+                            <img
+                                key={lightboxAsset.asset_id}
+                                src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${lightboxAsset.asset_id}/preview`}
+                                alt={lightboxAsset.filename}
+                                className={`max-w-[90vw] max-h-[85vh] object-contain transition-opacity duration-300 ${
+                                    lightboxImageLoading ? 'opacity-0' : 'opacity-100'
+                                }`}
+                                onLoad={() => setLightboxImageLoading(false)}
+                                onError={() => {
+                                    setLightboxImageLoading(false);
+                                    setLightboxImageError(true);
+                                }}
+                            />
+                        )}
+
                         {/* Watermark overlay for restricted downloads */}
-                        {(gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only') && (
+                        {!lightboxImageError && !lightboxImageLoading && (gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only') && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                                 <div
                                     className="text-white/15 text-4xl md:text-6xl font-bold uppercase tracking-widest rotate-[-25deg] whitespace-nowrap"
@@ -1314,6 +1401,10 @@ const PublicGalleryPage: React.FC = () => {
                                     const pubAsset = displayedAssets.find(a => a.asset_id === assetId);
                                     if (pubAsset) handleDownload(pubAsset);
                                 } : undefined}
+                                onAssetShare={(assetId) => {
+                                    const pubAsset = displayedAssets.find(a => a.asset_id === assetId);
+                                    if (pubAsset) handleShare(pubAsset);
+                                }}
                                 isClientView={true}
                                 downloadPolicy={gallery?.download_policy}
                                 showWatermark={gallery?.download_policy === 'view_only' || gallery?.download_policy === 'watermarked_only'}

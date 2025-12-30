@@ -14,6 +14,7 @@ import {
   Lock,
   Play,
   Image,
+  Bookmark,
 } from 'lucide-react';
 
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
@@ -330,6 +331,18 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
             faceCount={faceCount}
             personNames={personNames}
           />
+        )}
+
+        {/* Client Pick Badge */}
+        {asset.is_selected && (
+          <div
+            className="px-2 py-1 rounded-full bg-success/90 backdrop-blur-sm flex items-center gap-1"
+            aria-label="Client Pick"
+            title="Client Pick"
+          >
+            <Bookmark size={12} className="text-white fill-white" />
+            <span className="text-[10px] font-semibold text-white uppercase tracking-wide">Pick</span>
+          </div>
         )}
       </div>
 

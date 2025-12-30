@@ -2032,7 +2032,7 @@ class GalleryService:
                     ga.sort_order,
                     ga.is_favorited,
                     ga.is_selected,
-                    0 AS favorites_count,
+                    ga.favorites_count,
                     ga.created_at,
                     ga.is_private
                 FROM gallery_assets ga
