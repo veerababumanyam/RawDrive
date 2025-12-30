@@ -25,6 +25,7 @@ import { HoverOverlay } from './HoverOverlay';
 import { InlineEditForm } from './InlineEditForm';
 import { WatermarkOverlay } from './WatermarkOverlay';
 import { FaceIndicatorBadge } from './FaceIndicatorBadge';
+import { ClientActivityBadge } from './ClientActivityBadge';
 
 export interface PhotoCardProps {
   asset: GalleryAssetItem;
@@ -283,6 +284,16 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
       {/* Watermark Overlay - Visible when configured and image is loaded */}
       {showWatermark && watermarkSettings && !isLocked && displayUrl && !imageError && (
         <WatermarkOverlay settings={watermarkSettings} />
+      )}
+
+      {/* Client Activity Badge - Top Right (Favorites & Picks counts) */}
+      {!isLocked && (asset.client_favorites_count > 0 || asset.client_picks_count > 0) && (
+        <div className="absolute top-3 right-3 z-10">
+          <ClientActivityBadge
+            favoritesCount={asset.client_favorites_count}
+            picksCount={asset.client_picks_count}
+          />
+        </div>
       )}
 
       {/* Status Badges - Top Left (Cover, Private, Video) */}

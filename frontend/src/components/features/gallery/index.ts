@@ -93,3 +93,6 @@ export { FaceDiscovery } from './FaceDiscovery';
 export type { FaceDiscoveryProps } from './FaceDiscovery';
 
 export { PinVerificationModal } from './PinVerificationModal';
+
+export { ClientActivityBadge } from './ClientActivityBadge';
+export type { ClientActivityBadgeProps } from './ClientActivityBadge';

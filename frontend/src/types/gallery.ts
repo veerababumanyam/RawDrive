@@ -14,6 +14,8 @@ export type DownloadPolicy = 'view_only' | 'web_only' | 'watermarked_only' | 'or
 export type ViewMode = 'grid' | 'masonry' | 'list';
 export type FilterType = 'all' | 'picks' | 'favorites' | 'selections';
 export type BulkAction = 'move' | 'delete' | 'download';
+/** Sort options for gallery assets - includes popularity sorting */
+export type GalleryAssetSortOption = 'position' | 'favorites' | 'picks' | 'newest' | 'oldest';
 
 // Gallery Entity
 export interface GalleryEntity {
@@ -235,6 +237,10 @@ export interface GalleryAssetItem {
   is_favorited: boolean;
   is_selected: boolean;
   favorites_count: number;
+  /** Aggregated count: unique visitors who favorited this asset */
+  client_favorites_count: number;
+  /** Aggregated count: unique visitors who picked/selected this asset */
+  client_picks_count: number;
   title?: string;
   description?: string;
   tags?: string[];

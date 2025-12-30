@@ -242,6 +242,8 @@ export class GalleryService {
       favorites_only?: boolean;
       selections_only?: boolean;
       search_query?: string;
+      /** Sort by: position (default), favorites, picks, newest, oldest */
+      sort_by?: 'position' | 'favorites' | 'picks' | 'newest' | 'oldest';
     }
   ): Promise<GalleryAssetsResponse> {
     const params = new URLSearchParams();
@@ -254,6 +256,9 @@ export class GalleryService {
     if (options?.favorites_only) params.append('favorites_only', 'true');
     if (options?.selections_only) params.append('selections_only', 'true');
     if (options?.search_query) params.append('search_query', options.search_query);
+    if (options?.sort_by && options.sort_by !== 'position') {
+      params.append('sort_by', options.sort_by);
+    }
 
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets${query ? `?${query}` : ''}`;

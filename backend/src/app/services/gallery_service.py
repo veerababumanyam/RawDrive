@@ -604,8 +604,13 @@ class GalleryService:
         face_group_ids: list[UUID] | None = None,
         tag_ids: list[UUID] | None = None,
         tag_source: str | None = None,
+        sort_by: str | None = None,
     ) -> dict:
-        """List assets in a gallery with pagination and filtering."""
+        """List assets in a gallery with pagination and filtering.
+
+        Args:
+            sort_by: Optional sort order - 'position' (default), 'favorites', 'picks'
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             # Verify gallery exists (exclude deleted)
@@ -706,6 +711,15 @@ class GalleryService:
             limit_param_num = len(params) - 1
             offset_param_num = len(params)
 
+            # Determine sort order based on sort_by parameter
+            if sort_by == "favorites":
+                order_clause = "COALESCE(gfs.unique_favorite_count, 0) DESC, ga.sort_order ASC"
+            elif sort_by == "picks":
+                order_clause = "COALESCE(gps.unique_pick_count, 0) DESC, ga.sort_order ASC"
+            else:
+                # Default: position-based sorting
+                order_clause = "ga.sort_order ASC, ga.gallery_asset_id ASC"
+
             assets_query = f"""
                 SELECT
                     ga.gallery_asset_id,
@@ -723,6 +737,8 @@ class GalleryService:
                         AND ci.asset_id = ga.asset_id
                         AND ci.type = 'favorite'
                     ) AS favorites_count,
+                    COALESCE(gfs.unique_favorite_count, 0) AS client_favorites_count,
+                    COALESCE(gps.unique_pick_count, 0) AS client_picks_count,
                     a.type,
                     a.status,
                     a.mime_type,
@@ -734,8 +750,12 @@ class GalleryService:
                     a.exif
                 FROM gallery_assets ga
                 INNER JOIN assets a ON ga.asset_id = a.asset_id
+                LEFT JOIN gallery_favorites_summary gfs
+                    ON ga.gallery_id = gfs.gallery_id AND ga.asset_id = gfs.asset_id
+                LEFT JOIN gallery_picks_summary gps
+                    ON ga.gallery_id = gps.gallery_id AND ga.asset_id = gps.asset_id
                 WHERE {where_sql}
-                ORDER BY ga.sort_order ASC, ga.gallery_asset_id ASC
+                ORDER BY {order_clause}
                 LIMIT ${limit_param_num} OFFSET ${offset_param_num}
             """
 
@@ -754,6 +774,8 @@ class GalleryService:
                     "is_favorited": row["is_favorited"],
                     "is_selected": row["is_selected"],
                     "favorites_count": row["favorites_count"] or 0,
+                    "client_favorites_count": row["client_favorites_count"] or 0,
+                    "client_picks_count": row["client_picks_count"] or 0,
                     "asset": {
                         "type": row["type"],
                         "status": row["status"],

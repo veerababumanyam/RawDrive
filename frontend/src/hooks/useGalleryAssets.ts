@@ -18,6 +18,8 @@ interface UseGalleryAssetsOptions {
   page?: number;
   limit?: number;
   autoFetch?: boolean;
+  /** Sort by: position (default), favorites, picks, newest, oldest */
+  sortBy?: 'position' | 'favorites' | 'picks' | 'newest' | 'oldest';
 }
 
 interface UseGalleryAssetsReturn {
@@ -42,6 +44,7 @@ export const useGalleryAssets = ({
   page = 1,
   limit = 50,
   autoFetch = true,
+  sortBy = 'position',
 }: UseGalleryAssetsOptions): UseGalleryAssetsReturn => {
   const [assets, setAssets] = useState<GalleryAssetItem[]>([]);
   const [meta, setMeta] = useState<GalleryAssetsResponse['meta'] | null>(null);
@@ -66,6 +69,7 @@ export const useGalleryAssets = ({
           favorites_only: favoritesOnly,
           selections_only: selectionsOnly,
           search_query: searchQuery || undefined,
+          sort_by: sortBy,
         });
 
         if (append) {
@@ -85,14 +89,14 @@ export const useGalleryAssets = ({
         setLoading(false);
       }
     },
-    [workspaceId, galleryId, subGalleryId, picksOnly, favoritesOnly, selectionsOnly, searchQuery, limit, currentPage]
+    [workspaceId, galleryId, subGalleryId, picksOnly, favoritesOnly, selectionsOnly, searchQuery, sortBy, limit, currentPage]
   );
 
   useEffect(() => {
     if (autoFetch && galleryId) {
       fetchAssets(1, false);
     }
-  }, [autoFetch, galleryId, subGalleryId, picksOnly, favoritesOnly, selectionsOnly, searchQuery, fetchAssets]);
+  }, [autoFetch, galleryId, subGalleryId, picksOnly, favoritesOnly, selectionsOnly, searchQuery, sortBy, fetchAssets]);
 
   const refetch = useCallback(async () => {
     await fetchAssets(1, false);

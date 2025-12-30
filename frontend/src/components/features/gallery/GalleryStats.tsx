@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Image, Heart, Sparkles } from 'lucide-react';
+import { Image, Heart, CheckCircle2, Sparkles } from 'lucide-react';
 import type { GalleryDetailData } from '../../../types/gallery';
 import { useGalleryTaggingHealth } from '../../../hooks/useGalleryTaggingHealth';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -15,6 +15,8 @@ export interface FilteredStats {
   totalItems: number;
   favoritesCount: number;
   selectionsCount?: number;
+  /** Aggregated client picks count across all assets */
+  clientPicksCount?: number;
 }
 
 export interface GalleryStatsProps {
@@ -37,6 +39,7 @@ export const GalleryStats: React.FC<GalleryStatsProps> = ({
   // Use filtered stats if provided, otherwise fall back to gallery-wide stats
   const totalItems = filteredStats?.totalItems ?? gallery.stats?.total_items ?? 0;
   const favoritesCount = filteredStats?.favoritesCount ?? gallery.stats?.favorites_count ?? 0;
+  const clientPicksCount = filteredStats?.clientPicksCount ?? 0;
 
   // Fetch tagging health (with auto-refresh every 60s)
   const { health, loading: healthLoading } = useGalleryTaggingHealth({
@@ -87,10 +90,27 @@ export const GalleryStats: React.FC<GalleryStatsProps> = ({
             {favoritesCount}
           </span>
           <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
-            Favorite
+            Favorites
           </span>
         </div>
       </div>
+
+      {/* Client Picks - Green checkmark icon badge style */}
+      {clientPicksCount > 0 && (
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 size={18} className="text-emerald-500" />
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="text-xl font-bold text-text-primary">
+              {clientPicksCount}
+            </span>
+            <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
+              Picks
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* AI Tagging Health - Sparkles icon badge style */}
       {showHealth && totalItems > 0 && (

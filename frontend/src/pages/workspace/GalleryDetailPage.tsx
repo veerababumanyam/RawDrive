@@ -46,7 +46,7 @@ import { useToast } from '../../components/ui/Toast';
 import { useSearch } from '../../contexts/SearchContext';
 import { galleryService } from '../../services/galleryService';
 import { SignedUrlProvider } from '../../contexts/SignedUrlContext';
-import type { GalleryAssetItem, ViewMode, FilterType } from '../../types/gallery';
+import type { GalleryAssetItem, ViewMode, FilterType, GalleryAssetSortOption } from '../../types/gallery';
 import { PRIVATE_UNLOCKED_KEY_PREFIX } from '../../constants/gallery';
 
 const GalleryDetailPage: React.FC = () => {
@@ -75,6 +75,7 @@ const GalleryDetailPage: React.FC = () => {
     favorites?: boolean;
     selections?: boolean;
   }>({});
+  const [sortBy, setSortBy] = useState<GalleryAssetSortOption>('position');
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   const [activeSubGalleryId, setActiveSubGalleryId] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -222,6 +223,7 @@ const GalleryDetailPage: React.FC = () => {
     favoritesOnly: activeFilters.favorites || false,
     selectionsOnly: activeFilters.selections || false,
     searchQuery: searchQuery,
+    sortBy: sortBy,
     autoFetch: !!galleryId && !!workspace?.workspace_id,
   });
 
@@ -231,12 +233,15 @@ const GalleryDetailPage: React.FC = () => {
     const favoritesCount = assets.filter((a) => a.is_favorited).length;
     const selectionsCount = assets.filter((a) => a.is_selected).length;
     const privateCount = assets.filter((a) => a.is_private).length;
+    // Aggregate client picks count from all loaded assets
+    const clientPicksCount = assets.reduce((sum, a) => sum + (a.client_picks_count || 0), 0);
 
     return {
       totalItems,
       favoritesCount,
       selectionsCount,
       privateCount,
+      clientPicksCount,
     };
   }, [assets, meta?.total]);
 
@@ -879,6 +884,9 @@ const GalleryDetailPage: React.FC = () => {
               setSelectedAssetIds(new Set());
             }
           }}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          showSortOptions
         />
 
         {/* Unlock Private Photos Button - show when private photos exist and not unlocked */}

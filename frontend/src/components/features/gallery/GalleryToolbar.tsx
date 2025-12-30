@@ -6,9 +6,9 @@
  */
 
 import React from 'react';
-import { Grid, List, Sparkles, Heart, CheckSquare, Search, X, LayoutDashboard } from 'lucide-react';
+import { Grid, List, Sparkles, Heart, CheckSquare, Search, X, LayoutDashboard, ArrowUpDown } from 'lucide-react';
 import { Checkbox } from '../../ui/FormControls';
-import { ViewMode, FilterType } from '../../../types/gallery';
+import { ViewMode, FilterType, GalleryAssetSortOption } from '../../../types/gallery';
 import { GallerySearchBar } from './GallerySearchBar';
 import type { SearchFilters } from '../../../hooks/useAssetSearch';
 
@@ -37,6 +37,12 @@ export interface GalleryToolbarProps {
   useEnhancedSearch?: boolean;
   /** Callback for enhanced search filter changes */
   onEnhancedFiltersChange?: (filters: SearchFilters, queryParams: URLSearchParams) => void;
+  /** Current sort option for gallery assets */
+  sortBy?: GalleryAssetSortOption;
+  /** Callback when sort option changes */
+  onSortChange?: (sortBy: GalleryAssetSortOption) => void;
+  /** Show sort dropdown (default: false) */
+  showSortOptions?: boolean;
 }
 
 // Filter pill button styles
@@ -69,6 +75,15 @@ const getFilterPillClasses = (isActive: boolean, variant: 'default' | 'favorites
   `;
 };
 
+// Sort option labels for dropdown
+const SORT_OPTIONS: { value: GalleryAssetSortOption; label: string }[] = [
+  { value: 'position', label: 'Manual Order' },
+  { value: 'favorites', label: 'Most Favorited' },
+  { value: 'picks', label: 'Most Picked' },
+  { value: 'newest', label: 'Newest First' },
+  { value: 'oldest', label: 'Oldest First' },
+];
+
 export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
   viewMode,
   onViewModeChange,
@@ -83,6 +98,9 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
   galleryId,
   useEnhancedSearch = false,
   onEnhancedFiltersChange,
+  sortBy = 'position',
+  onSortChange,
+  showSortOptions = false,
 }) => {
   const handleFilterToggle = (filterKey: 'picks' | 'favorites' | 'selections') => {
     if (onFiltersChange) {
@@ -143,6 +161,39 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Sort Dropdown - Popularity sorting */}
+        {showSortOptions && onSortChange && (
+          <>
+            <div className="hidden sm:block w-px h-6 bg-border/50" />
+            <div className="relative">
+              <div className="flex items-center gap-1.5">
+                <ArrowUpDown size={14} className="text-text-tertiary" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => onSortChange(e.target.value as GalleryAssetSortOption)}
+                  className="
+                    appearance-none
+                    bg-transparent
+                    text-sm font-medium
+                    text-text-secondary hover:text-text-primary
+                    cursor-pointer
+                    pr-6
+                    focus:outline-none focus:ring-0
+                    transition-colors duration-200
+                  "
+                  aria-label="Sort photos by"
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Separator - visible on larger screens */}
         <div className="hidden sm:block w-px h-6 bg-border/50" />
