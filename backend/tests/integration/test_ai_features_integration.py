@@ -423,6 +423,463 @@ class TestHashtagGenerationIntegration:
 
 
 # ---------------------------------------------------------------------------
+# Gallery Story Generation Integration Tests (T057)
+# ---------------------------------------------------------------------------
+
+
+class TestGalleryStoryIntegration:
+    """Integration tests for gallery story generation feature."""
+
+    @pytest.fixture
+    def story_service(self):
+        """Get story service."""
+        from app.services.gallery_story_service import GalleryStoryService
+        return GalleryStoryService()
+
+    @pytest.fixture
+    def mock_story_response(self) -> dict:
+        """Mock AI story response."""
+        return {
+            "title": "A Journey Through Light and Shadow",
+            "story": "The gallery captures a series of moments bathed in golden light, where every frame tells a story of tranquility and wonder. From the early morning mist rising over peaceful landscapes to the warm glow of sunset reflecting on calm waters, each photograph invites viewers into a world of serene beauty.",
+            "themes": ["nature", "tranquility", "golden hour", "landscapes"],
+        }
+
+    @pytest.mark.asyncio
+    async def test_story_generation_flow(
+        self,
+        story_service,
+        mock_story_response: dict,
+    ) -> None:
+        """Test complete story generation flow.
+
+        T057: Integration test for story endpoint.
+
+        Steps:
+        1. Mock Gemini client response
+        2. Call generate_story
+        3. Verify response structure with length/tone
+        4. Verify AI usage logged
+        """
+        from app.services.gallery_story_service import StoryResult
+        import json
+
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+        gallery_name = "Nature Collection"
+        photo_descriptions = [
+            {"description": "Sunset over mountains", "tags": ["sunset", "mountains"]},
+            {"description": "Morning fog in forest", "tags": ["fog", "forest"]},
+            {"description": "Calm lake reflection", "tags": ["lake", "reflection"]},
+        ]
+
+        with patch.object(
+            story_service.gemini_client,
+            "get_client_for_user",
+            new_callable=AsyncMock,
+        ) as mock_get_client, patch.object(
+            story_service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ) as mock_log, patch(
+            "app.services.gallery_story_service.get_redis_client",
+            new_callable=AsyncMock,
+        ) as mock_redis:
+            # Setup mocks
+            mock_client = MagicMock()
+            mock_client.model = "gemini-2.0-flash"
+            mock_response = MagicMock()
+            mock_response.text = json.dumps(mock_story_response)
+            mock_client.generate_content = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
+
+            # Mock Redis for caching
+            mock_redis_client = MagicMock()
+            mock_redis_client.get = AsyncMock(return_value=None)
+            mock_redis_client.setex = AsyncMock()
+            mock_redis.return_value = mock_redis_client
+
+            # Execute
+            result = await story_service.generate_story(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                gallery_name=gallery_name,
+                photo_descriptions=photo_descriptions,
+                length="medium",
+                tone="professional",
+                use_cache=False,
+            )
+
+            # Verify result
+            assert result is not None
+            assert isinstance(result, StoryResult)
+            assert result.title == mock_story_response["title"]
+            assert result.story == mock_story_response["story"]
+            assert result.length == "medium"
+            assert result.tone == "professional"
+            assert result.photo_count == 3
+            assert len(result.themes) > 0
+
+            # Verify AI usage logged
+            mock_log.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_story_caching(
+        self,
+        story_service,
+        mock_story_response: dict,
+    ) -> None:
+        """Test story generation uses caching."""
+        import json
+
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        cached_story = {
+            "gallery_id": str(gallery_id),
+            "story": "Cached story content",
+            "title": "Cached Title",
+            "length": "short",
+            "tone": "casual",
+            "word_count": 50,
+            "photo_count": 5,
+            "themes": ["cached"],
+        }
+
+        with patch(
+            "app.services.gallery_story_service.get_redis_client",
+            new_callable=AsyncMock,
+        ) as mock_redis:
+            mock_redis_client = MagicMock()
+            mock_redis_client.get = AsyncMock(return_value=json.dumps(cached_story).encode())
+            mock_redis.return_value = mock_redis_client
+
+            # Get cached story
+            result = await story_service.get_cached_story(
+                gallery_id=gallery_id,
+                length="short",
+                tone="casual",
+            )
+
+            assert result is not None
+            assert result.title == "Cached Title"
+            assert result.story == "Cached story content"
+
+    @pytest.mark.asyncio
+    async def test_story_export_formats(
+        self,
+        story_service,
+    ) -> None:
+        """Test story export in different formats."""
+        from app.services.gallery_story_service import StoryResult
+
+        story = StoryResult(
+            gallery_id="test-gallery",
+            story="This is the story content.",
+            title="Test Story",
+            length="short",
+            tone="casual",
+            word_count=5,
+            photo_count=10,
+            themes=["test", "sample"],
+        )
+
+        # Test text export
+        text_output = await story_service.export_story(story, format="text")
+        assert "Test Story" in text_output
+        assert "This is the story content." in text_output
+
+        # Test markdown export
+        md_output = await story_service.export_story(story, format="markdown")
+        assert "# Test Story" in md_output
+        assert "**Themes:**" in md_output
+
+        # Test HTML export
+        html_output = await story_service.export_story(story, format="html")
+        assert "<h1>Test Story</h1>" in html_output
+        assert "gallery-story" in html_output
+
+
+# ---------------------------------------------------------------------------
+# Smart Curation Integration Tests (T070)
+# ---------------------------------------------------------------------------
+
+
+class TestSmartCurationIntegration:
+    """Integration tests for smart curation feature."""
+
+    @pytest.fixture
+    def curation_service(self):
+        """Get curation service."""
+        from app.services.smart_curation_service import SmartCurationService
+        return SmartCurationService()
+
+    @pytest.fixture
+    def sample_gallery_assets(self) -> list[dict]:
+        """Sample gallery assets for curation testing."""
+        return [
+            {
+                "asset_id": str(uuid4()),
+                "quality_score": 0.95,
+                "sharpness": 0.9,
+                "exposure": 0.92,
+                "composition": 0.88,
+                "face_count": 2,
+                "thumbnail_url": "https://example.com/thumb1.jpg",
+            },
+            {
+                "asset_id": str(uuid4()),
+                "quality_score": 0.7,
+                "sharpness": 0.65,
+                "exposure": 0.75,
+                "composition": 0.7,
+                "face_count": 0,
+                "thumbnail_url": "https://example.com/thumb2.jpg",
+            },
+            {
+                "asset_id": str(uuid4()),
+                "quality_score": 0.85,
+                "sharpness": 0.8,
+                "exposure": 0.88,
+                "composition": 0.85,
+                "face_count": 1,
+                "thumbnail_url": "https://example.com/thumb3.jpg",
+            },
+            {
+                "asset_id": str(uuid4()),
+                "quality_score": 0.55,
+                "sharpness": 0.5,
+                "exposure": 0.6,
+                "composition": 0.5,
+                "face_count": 0,
+                "thumbnail_url": "https://example.com/thumb4.jpg",
+            },
+            {
+                "asset_id": str(uuid4()),
+                "quality_score": 0.9,
+                "sharpness": 0.88,
+                "exposure": 0.9,
+                "composition": 0.92,
+                "face_count": 0,
+                "thumbnail_url": "https://example.com/thumb5.jpg",
+            },
+        ]
+
+    @pytest.mark.asyncio
+    async def test_curation_flow(
+        self,
+        curation_service,
+        sample_gallery_assets: list[dict],
+    ) -> None:
+        """Test complete curation flow.
+
+        T070: Integration test for curation endpoint.
+
+        Steps:
+        1. Mock gallery service to return test assets
+        2. Call curate_gallery
+        3. Verify selected photos meet quality threshold
+        4. Verify diversity in selection
+        5. Verify AI usage logged
+        """
+        from app.services.smart_curation_service import CurationResult
+
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": sample_gallery_assets}
+        )
+
+        with patch(
+            "app.services.smart_curation_service.get_gallery_service",
+            return_value=mock_gallery_service,
+        ), patch.object(
+            curation_service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ) as mock_log, patch(
+            "app.services.smart_curation_service.get_redis_client",
+            new_callable=AsyncMock,
+        ) as mock_redis:
+            # Mock Redis for caching
+            mock_redis_client = MagicMock()
+            mock_redis_client.get = AsyncMock(return_value=None)
+            mock_redis_client.setex = AsyncMock()
+            mock_redis.return_value = mock_redis_client
+
+            result = await curation_service.curate_gallery(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                count=3,
+                quality_threshold=0.6,
+                diversity_weight=0.3,
+                use_cache=False,
+            )
+
+            # Verify result
+            assert result is not None
+            assert isinstance(result, CurationResult)
+            assert len(result.selected_assets) == 3
+            assert result.total_candidates == 5
+            assert result.quality_threshold == 0.6
+            assert result.diversity_weight == 0.3
+
+            # Verify all selected assets meet threshold
+            for asset in result.selected_assets:
+                assert asset["score"] >= 0.6
+
+            # Verify AI usage logged
+            mock_log.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_curation_with_people_preference(
+        self,
+        curation_service,
+        sample_gallery_assets: list[dict],
+    ) -> None:
+        """Test curation with people preference enabled."""
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": sample_gallery_assets}
+        )
+
+        with patch(
+            "app.services.smart_curation_service.get_gallery_service",
+            return_value=mock_gallery_service,
+        ), patch.object(
+            curation_service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ), patch(
+            "app.services.smart_curation_service.get_redis_client",
+            new_callable=AsyncMock,
+        ) as mock_redis:
+            mock_redis_client = MagicMock()
+            mock_redis_client.get = AsyncMock(return_value=None)
+            mock_redis_client.setex = AsyncMock()
+            mock_redis.return_value = mock_redis_client
+
+            result = await curation_service.curate_gallery(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                count=3,
+                quality_threshold=0.0,  # Accept all
+                diversity_weight=0.0,
+                prefer_people=True,
+                use_cache=False,
+            )
+
+            # With people preference, photos with faces should rank higher
+            # Check that at least one selected has faces
+            has_faces = [a for a in result.selected_assets if a.get("has_faces", False)]
+            assert len(has_faces) >= 1
+
+    @pytest.mark.asyncio
+    async def test_curation_caching(
+        self,
+        curation_service,
+        sample_gallery_assets: list[dict],
+    ) -> None:
+        """Test curation uses caching."""
+        import json
+
+        gallery_id = uuid4()
+
+        cached_curation = {
+            "gallery_id": str(gallery_id),
+            "selected_assets": [
+                {"asset_id": "cached-1", "score": 0.9, "quality_score": 0.85, "has_faces": True}
+            ],
+            "total_candidates": 10,
+            "quality_threshold": 0.6,
+            "diversity_weight": 0.3,
+        }
+
+        with patch(
+            "app.services.smart_curation_service.get_redis_client",
+            new_callable=AsyncMock,
+        ) as mock_redis:
+            mock_redis_client = MagicMock()
+            mock_redis_client.get = AsyncMock(return_value=json.dumps(cached_curation).encode())
+            mock_redis.return_value = mock_redis_client
+
+            result = await curation_service.get_cached_curation(
+                gallery_id=gallery_id,
+                count=5,
+                quality_threshold=0.6,
+                diversity_weight=0.3,
+                prefer_people=False,
+            )
+
+            assert result is not None
+            assert len(result.selected_assets) == 1
+            assert result.selected_assets[0]["asset_id"] == "cached-1"
+
+    @pytest.mark.asyncio
+    async def test_curation_with_exclusions(
+        self,
+        curation_service,
+        sample_gallery_assets: list[dict],
+    ) -> None:
+        """Test curation excludes specified assets."""
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        # Get the first asset ID to exclude
+        exclude_id = uuid4()
+        sample_gallery_assets[0]["asset_id"] = str(exclude_id)
+
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": sample_gallery_assets}
+        )
+
+        with patch(
+            "app.services.smart_curation_service.get_gallery_service",
+            return_value=mock_gallery_service,
+        ), patch.object(
+            curation_service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ), patch(
+            "app.services.smart_curation_service.get_redis_client",
+            new_callable=AsyncMock,
+        ) as mock_redis:
+            mock_redis_client = MagicMock()
+            mock_redis_client.get = AsyncMock(return_value=None)
+            mock_redis_client.setex = AsyncMock()
+            mock_redis.return_value = mock_redis_client
+
+            result = await curation_service.curate_gallery(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                count=10,
+                quality_threshold=0.0,
+                diversity_weight=0.0,
+                exclude_asset_ids=[exclude_id],
+                use_cache=False,
+            )
+
+            # Excluded asset should not be in results
+            selected_ids = [a["asset_id"] for a in result.selected_assets]
+            assert str(exclude_id) not in selected_ids
+
+
+# ---------------------------------------------------------------------------
 # End-to-End AI Feature Tests
 # ---------------------------------------------------------------------------
 

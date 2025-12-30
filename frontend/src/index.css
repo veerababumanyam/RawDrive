@@ -4962,6 +4962,241 @@ body {
 .activity-item { @apply row-hover; }
 
 /* =============================================================================
+   18.13 AI FEATURE STYLES
+   Dark mode support for AI-powered features (010-ai-powered-features)
+   ============================================================================= */
+
+/* AI Feature Range Inputs */
+.ai-range-input {
+  width: 100%;
+  height: 0.5rem;
+  background: var(--color-surface-hover);
+  border-radius: 9999px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.ai-range-input::-webkit-slider-thumb {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  background: var(--color-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-range-input::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+}
+
+.ai-range-input::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  background: var(--color-primary);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-range-input::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+}
+
+.ai-range-input:focus-visible {
+  outline: none;
+}
+
+.ai-range-input:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--color-primary-300);
+}
+
+.ai-range-input.ai-range-accent::-webkit-slider-thumb {
+  background: var(--color-accent);
+}
+
+.ai-range-input.ai-range-accent::-moz-range-thumb {
+  background: var(--color-accent);
+}
+
+.ai-range-input.ai-range-accent::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.2);
+}
+
+.ai-range-input.ai-range-accent:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--color-accent-300);
+}
+
+[data-theme="dark"] .ai-range-input {
+  background: var(--color-neutral-700);
+}
+
+[data-theme="dark"] .ai-range-input::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="dark"] .ai-range-input.ai-range-accent::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.3);
+}
+
+/* AI Feature Toggle Switch */
+.ai-toggle {
+  position: relative;
+  width: 2.75rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background: var(--color-border);
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.ai-toggle[aria-checked="true"] {
+  background: var(--color-success);
+}
+
+.ai-toggle-thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ai-toggle[aria-checked="true"] .ai-toggle-thumb {
+  transform: translateX(1.25rem);
+}
+
+[data-theme="dark"] .ai-toggle {
+  background: var(--color-neutral-600);
+}
+
+[data-theme="dark"] .ai-toggle[aria-checked="true"] {
+  background: var(--color-success);
+}
+
+/* AI Dropdown Menus */
+.ai-dropdown {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .ai-dropdown {
+  background: var(--color-neutral-800);
+  border-color: var(--color-neutral-700);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.ai-dropdown-item {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.ai-dropdown-item:hover {
+  background: var(--color-surface-hover);
+}
+
+[data-theme="dark"] .ai-dropdown-item:hover {
+  background: var(--color-neutral-700);
+}
+
+.ai-dropdown-item.selected {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--color-primary);
+}
+
+[data-theme="dark"] .ai-dropdown-item.selected {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--color-primary-400);
+}
+
+/* AI Photo Grid Overlays */
+.ai-photo-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .ai-photo-overlay {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.ai-photo-badge {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  color: white;
+}
+
+[data-theme="dark"] .ai-photo-badge {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* AI Result Cards */
+.ai-result-card {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+}
+
+[data-theme="dark"] .ai-result-card {
+  background: var(--color-neutral-800);
+  border-color: var(--color-neutral-700);
+}
+
+/* AI Feature Tags */
+.ai-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 9999px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+}
+
+.ai-tag-accent {
+  background: rgba(6, 182, 212, 0.1);
+  color: var(--color-accent);
+}
+
+.ai-tag-primary {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--color-primary);
+}
+
+.ai-tag-success {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--color-success);
+}
+
+[data-theme="dark"] .ai-tag {
+  background: var(--color-neutral-700);
+  color: var(--color-neutral-300);
+}
+
+[data-theme="dark"] .ai-tag-accent {
+  background: rgba(6, 182, 212, 0.2);
+  color: var(--color-accent-400);
+}
+
+[data-theme="dark"] .ai-tag-primary {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--color-primary-400);
+}
+
+[data-theme="dark"] .ai-tag-success {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--color-success-400);
+}
+
+/* =============================================================================
    19. PRINT STYLES
    ============================================================================= */
 

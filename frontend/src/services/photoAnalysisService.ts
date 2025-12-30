@@ -22,6 +22,9 @@ export class PhotoAnalysisService {
       `/workspaces/${workspaceId}${API_BASE}/assets/${assetId}/analyze`,
       request
     );
+    if (!response.data) {
+      throw new Error('No data returned from analysis');
+    }
     return response.data;
   }
 }

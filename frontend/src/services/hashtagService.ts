@@ -22,6 +22,9 @@ export class HashtagService {
       `/workspaces/${workspaceId}${API_BASE}/assets/${assetId}/hashtags`,
       request
     );
+    if (!response.data) {
+      throw new Error('No data returned from hashtag generation');
+    }
     return response.data;
   }
 }

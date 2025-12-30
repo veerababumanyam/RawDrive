@@ -2,6 +2,7 @@
 
 Uses AI to analyze photos for metadata, quality scoring, colors, lighting, mood, and suggestions.
 Feature: AI-powered photo analysis
+Tasks: T009-T020, T077
 """
 
 from __future__ import annotations
@@ -11,11 +12,10 @@ import logging
 from typing import Any, Optional
 from uuid import UUID
 
-import httpx
-
 from app.config.settings import get_settings
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
+from app.services.ai_request_deduplication import get_ai_deduplication_service
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,7 @@ class PhotoAnalysisService:
         self.settings = get_settings()
         self.gemini_client = get_gemini_client_service()
         self.ai_usage = get_ai_usage_service()
+        self.dedup = get_ai_deduplication_service()
 
     async def analyze_photo(
         self,
@@ -109,6 +110,29 @@ class PhotoAnalysisService:
             AIConfigurationError: If AI is not configured
             AIRuntimeError: If analysis fails
         """
+        # Generate deduplication key
+        cache_key = self.dedup.generate_request_key(
+            operation="analysis",
+            user_id=user_id,
+            photo_id=photo_id,
+        )
+
+        # Use deduplication to prevent duplicate concurrent requests
+        return await self.dedup.deduplicated_call(
+            cache_key=cache_key,
+            operation=lambda: self._analyze_photo_impl(
+                user_id, workspace_id, photo_url, photo_id
+            ),
+        )
+
+    async def _analyze_photo_impl(
+        self,
+        user_id: UUID,
+        workspace_id: UUID,
+        photo_url: str,
+        photo_id: Optional[UUID],
+    ) -> PhotoAnalysis:
+        """Internal implementation of photo analysis."""
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -116,13 +140,16 @@ class PhotoAnalysisService:
             # Build analysis prompt
             prompt = self._build_analysis_prompt()
 
+            # Fetch image data with caching
+            image_data = await self.dedup.fetch_image_data(photo_url)
+
             # Make API call
             response = await client.generate_content(
                 contents=[
                     {
                         "parts": [
                             {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": await self._fetch_image_data(photo_url)}}
+                            {"inline_data": {"mime_type": "image/jpeg", "data": image_data}}
                         ]
                     }
                 ]

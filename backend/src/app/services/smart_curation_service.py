@@ -7,14 +7,20 @@ Tasks: T059-T068
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from typing import Any, Optional
 from uuid import UUID
 
 from app.config.settings import get_settings
+from app.db.redis import get_redis_client
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
 
 logger = logging.getLogger(__name__)
+
+# Cache TTL for curation results (4 hours - shorter than stories since galleries change more)
+CURATION_CACHE_TTL = 14400
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +68,91 @@ class SmartCurationService:
         self.settings = get_settings()
         self.ai_usage = get_ai_usage_service()
 
+    def _get_cache_key(
+        self,
+        gallery_id: UUID,
+        count: int,
+        quality_threshold: float,
+        diversity_weight: float,
+        prefer_people: bool,
+        exclude_ids: Optional[list[UUID]],
+    ) -> str:
+        """Generate a cache key for curation lookup."""
+        exclude_hash = ""
+        if exclude_ids:
+            exclude_hash = hashlib.md5(
+                ",".join(str(eid) for eid in sorted(exclude_ids)).encode()
+            ).hexdigest()[:8]
+        return f"curation:{gallery_id}:{count}:{quality_threshold:.2f}:{diversity_weight:.2f}:{prefer_people}:{exclude_hash}"
+
+    async def get_cached_curation(
+        self,
+        gallery_id: UUID,
+        count: int,
+        quality_threshold: float,
+        diversity_weight: float,
+        prefer_people: bool,
+        exclude_asset_ids: Optional[list[UUID]] = None,
+    ) -> Optional[CurationResult]:
+        """Get cached curation if available."""
+        try:
+            redis = await get_redis_client()
+            cache_key = self._get_cache_key(
+                gallery_id, count, quality_threshold, diversity_weight, prefer_people, exclude_asset_ids
+            )
+            cached = await redis.get(cache_key)
+            if cached:
+                data = json.loads(cached)
+                logger.info(f"Curation cache hit for gallery {gallery_id}")
+                return CurationResult(
+                    gallery_id=data["gallery_id"],
+                    selected_assets=data["selected_assets"],
+                    total_candidates=data["total_candidates"],
+                    quality_threshold=data["quality_threshold"],
+                    diversity_weight=data["diversity_weight"],
+                )
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to get cached curation: {e}")
+            return None
+
+    async def cache_curation(
+        self,
+        result: CurationResult,
+        count: int,
+        prefer_people: bool,
+        exclude_asset_ids: Optional[list[UUID]] = None,
+    ) -> None:
+        """Cache curation result."""
+        try:
+            redis = await get_redis_client()
+            cache_key = self._get_cache_key(
+                UUID(result.gallery_id),
+                count,
+                result.quality_threshold,
+                result.diversity_weight,
+                prefer_people,
+                exclude_asset_ids,
+            )
+            await redis.setex(cache_key, CURATION_CACHE_TTL, json.dumps(result.to_dict()))
+            logger.info(f"Cached curation for gallery {result.gallery_id}")
+        except Exception as e:
+            logger.warning(f"Failed to cache curation: {e}")
+
+    async def invalidate_curation_cache(self, gallery_id: UUID) -> None:
+        """Invalidate all cached curation results for a gallery."""
+        try:
+            redis = await get_redis_client()
+            pattern = f"curation:{gallery_id}:*"
+            keys = []
+            async for key in redis.scan_iter(match=pattern):
+                keys.append(key)
+            if keys:
+                await redis.delete(*keys)
+                logger.info(f"Invalidated {len(keys)} cached curations for gallery {gallery_id}")
+        except Exception as e:
+            logger.warning(f"Failed to invalidate curation cache: {e}")
+
     async def curate_gallery(
         self,
         user_id: UUID,
@@ -72,6 +163,7 @@ class SmartCurationService:
         diversity_weight: float = 0.3,
         prefer_people: bool = False,
         exclude_asset_ids: Optional[list[UUID]] = None,
+        use_cache: bool = True,
     ) -> CurationResult:
         """Curate the best photos from a gallery.
 
@@ -84,11 +176,20 @@ class SmartCurationService:
             diversity_weight: Weight for diversity vs pure quality (0-1)
             prefer_people: Whether to prioritize photos with people
             exclude_asset_ids: Asset IDs to exclude from selection
+            use_cache: Whether to use/store cached results (default: True)
 
         Returns:
             CurationResult with selected photos and their scores
         """
         try:
+            # Check cache first
+            if use_cache:
+                cached = await self.get_cached_curation(
+                    gallery_id, count, quality_threshold, diversity_weight, prefer_people, exclude_asset_ids
+                )
+                if cached:
+                    return cached
+
             # Get gallery assets with their analysis data
             from app.services.gallery_service import get_gallery_service
             gallery_service = get_gallery_service()
@@ -162,13 +263,19 @@ class SmartCurationService:
                 },
             )
 
-            return CurationResult(
+            result = CurationResult(
                 gallery_id=str(gallery_id),
                 selected_assets=selected,
                 total_candidates=total_candidates,
                 quality_threshold=quality_threshold,
                 diversity_weight=diversity_weight,
             )
+
+            # Cache the result
+            if use_cache:
+                await self.cache_curation(result, count, prefer_people, exclude_asset_ids)
+
+            return result
 
         except Exception as e:
             logger.error(f"Curation failed: {e}", exc_info=True)

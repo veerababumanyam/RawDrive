@@ -45,6 +45,14 @@ RATE_LIMIT_ROUTES = {
     "/api/": RateLimitType.API,
 }
 
+# AI endpoint patterns - checked separately for more specific matching
+AI_RATE_LIMIT_PATTERNS = [
+    "/smart-tagging/",  # Smart tagging analysis, captions, hashtags
+    "/stories/",  # Story generation
+    "/curation/",  # Smart curation
+    "/ai/",  # Direct AI endpoints
+]
+
 # Routes exempt from rate limiting
 EXEMPT_ROUTES = [
     "/health",
@@ -136,6 +144,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _get_limit_type(self, path: str) -> Optional[RateLimitType]:
         """Determine rate limit type for path."""
+        # Check for AI-specific endpoints first (more specific matching)
+        for pattern in AI_RATE_LIMIT_PATTERNS:
+            if pattern in path:
+                return RateLimitType.AI
+
+        # Then check prefix-based routes
         for prefix, limit_type in RATE_LIMIT_ROUTES.items():
             if path.startswith(prefix):
                 return limit_type

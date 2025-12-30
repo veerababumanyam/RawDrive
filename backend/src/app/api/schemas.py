@@ -1563,6 +1563,55 @@ class GeminiAdminStats(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# AI Feature Toggles Schemas (T080)
+# ---------------------------------------------------------------------------
+
+
+class AIFeatureToggles(BaseModel):
+    """AI feature toggle settings."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    photo_analysis: bool = Field(True, description="Enable AI photo analysis")
+    captions: bool = Field(True, description="Enable AI caption generation")
+    hashtags: bool = Field(True, description="Enable AI hashtag generation")
+    gallery_story: bool = Field(True, description="Enable AI gallery story generation")
+    smart_curation: bool = Field(True, description="Enable AI smart curation")
+
+
+class UpdateAIFeatureTogglesRequest(BaseModel):
+    """Request to update AI feature toggles."""
+
+    photo_analysis: Optional[bool] = Field(
+        None, description="Enable/disable AI photo analysis"
+    )
+    captions: Optional[bool] = Field(
+        None, description="Enable/disable AI caption generation"
+    )
+    hashtags: Optional[bool] = Field(
+        None, description="Enable/disable AI hashtag generation"
+    )
+    gallery_story: Optional[bool] = Field(
+        None, description="Enable/disable AI gallery story generation"
+    )
+    smart_curation: Optional[bool] = Field(
+        None, description="Enable/disable AI smart curation"
+    )
+
+
+class AIFeatureTogglesResponse(BaseModel):
+    """Response with AI feature toggles and status."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    toggles: AIFeatureToggles = Field(..., description="Current feature toggle settings")
+    has_api_key: bool = Field(..., description="Whether user has configured Gemini API key")
+    api_status: Literal["not_configured", "connected", "validation_failed"] = Field(
+        ..., description="API key configuration status"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Smart Tagging / AI Tag Schemas (T012)
 # ---------------------------------------------------------------------------
 

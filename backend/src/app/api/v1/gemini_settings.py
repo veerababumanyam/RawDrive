@@ -22,6 +22,9 @@ from app.api.schemas import (
     ValidateGeminiKeyRequest,
     GeminiModelPublic,
     GeminiModelsListResponse,
+    AIFeatureToggles,
+    AIFeatureTogglesResponse,
+    UpdateAIFeatureTogglesRequest,
 )
 from app.api.exceptions import AppError
 from app.services.gemini_settings_service import (
@@ -265,6 +268,105 @@ async def revoke_gemini_key(
         effective_model=_to_model_public(settings["effective_model"]),
         last_validated_at=settings["last_validated_at"],
         validation_error=settings["validation_error"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# AI Feature Toggles (T080)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/feature-toggles",
+    response_model=AIFeatureTogglesResponse,
+    summary="Get AI feature toggles",
+    description="Get the current user's AI feature toggle settings.",
+    responses={
+        401: {"model": ErrorResponse, "description": "Authentication required"},
+    },
+)
+async def get_feature_toggles(
+    current_user: CurrentUserDep,
+    service: GeminiSettingsServiceDep,
+) -> AIFeatureTogglesResponse:
+    """Get user's AI feature toggle settings.
+
+    Returns which AI features are enabled/disabled for this user,
+    along with their API key configuration status.
+    """
+    settings = await service.get_feature_toggles(current_user.user_id)
+
+    return AIFeatureTogglesResponse(
+        toggles=AIFeatureToggles(
+            photo_analysis=settings["toggles"]["photo_analysis"],
+            captions=settings["toggles"]["captions"],
+            hashtags=settings["toggles"]["hashtags"],
+            gallery_story=settings["toggles"]["gallery_story"],
+            smart_curation=settings["toggles"]["smart_curation"],
+        ),
+        has_api_key=settings["has_api_key"],
+        api_status=settings["api_status"],
+    )
+
+
+@router.patch(
+    "/feature-toggles",
+    response_model=AIFeatureTogglesResponse,
+    summary="Update AI feature toggles",
+    description="Update the current user's AI feature toggle settings. "
+    "Only non-null values are updated.",
+    responses={
+        401: {"model": ErrorResponse, "description": "Authentication required"},
+    },
+)
+async def update_feature_toggles(
+    current_user: CurrentUserDep,
+    service: GeminiSettingsServiceDep,
+    request: UpdateAIFeatureTogglesRequest,
+) -> AIFeatureTogglesResponse:
+    """Update user's AI feature toggle settings.
+
+    - Only non-null values in the request are updated
+    - Features default to enabled (True) if not previously set
+    - Changes take effect immediately
+    """
+    toggles = {}
+    if request.photo_analysis is not None:
+        toggles["photo_analysis"] = request.photo_analysis
+    if request.captions is not None:
+        toggles["captions"] = request.captions
+    if request.hashtags is not None:
+        toggles["hashtags"] = request.hashtags
+    if request.gallery_story is not None:
+        toggles["gallery_story"] = request.gallery_story
+    if request.smart_curation is not None:
+        toggles["smart_curation"] = request.smart_curation
+
+    settings = await service.update_feature_toggles(
+        user_id=current_user.user_id,
+        toggles=toggles,
+    )
+
+    # Audit log for settings change
+    await AuditService().log_event(
+        event_type=AuditEventType.SETTINGS_CHANGED,
+        user_id=current_user.user_id,
+        workspace_id=await _get_user_workspace_id(current_user.user_id),
+        resource_type="ai_feature_toggles",
+        resource_id=str(current_user.user_id),
+        details={"updated_toggles": toggles},
+    )
+
+    return AIFeatureTogglesResponse(
+        toggles=AIFeatureToggles(
+            photo_analysis=settings["toggles"]["photo_analysis"],
+            captions=settings["toggles"]["captions"],
+            hashtags=settings["toggles"]["hashtags"],
+            gallery_story=settings["toggles"]["gallery_story"],
+            smart_curation=settings["toggles"]["smart_curation"],
+        ),
+        has_api_key=settings["has_api_key"],
+        api_status=settings["api_status"],
     )
 
 

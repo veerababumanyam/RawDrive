@@ -40,3 +40,16 @@ export {
   useAdminGeminiStats,
   useAdminGeminiModel,
 } from './useAdminGemini';
+
+// AI Job Polling hook
+export {
+  useJobPolling,
+  DEFAULT_POLL_INTERVAL_MS,
+  DEFAULT_MAX_ATTEMPTS,
+  DEFAULT_TIMEOUT_MS,
+} from './useJobPolling';
+export type {
+  JobStatus,
+  JobPollingOptions,
+  UseJobPollingReturn,
+} from './useJobPolling';

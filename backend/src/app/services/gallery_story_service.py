@@ -7,16 +7,21 @@ Tasks: T045-T055
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from typing import Any, Literal, Optional
 from uuid import UUID
 
 from app.config.settings import get_settings
+from app.db.redis import get_redis_client
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
 
 logger = logging.getLogger(__name__)
+
+# Cache TTL for generated stories (24 hours)
+STORY_CACHE_TTL = 86400
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +94,66 @@ class GalleryStoryService:
         self.gemini_client = get_gemini_client_service()
         self.ai_usage = get_ai_usage_service()
 
+    def _get_cache_key(
+        self,
+        gallery_id: UUID,
+        length: StoryLength,
+        tone: StoryTone,
+        custom_context: Optional[str],
+    ) -> str:
+        """Generate a cache key for story lookup."""
+        context_hash = hashlib.md5(
+            (custom_context or "").encode()
+        ).hexdigest()[:8]
+        return f"story:{gallery_id}:{length}:{tone}:{context_hash}"
+
+    async def get_cached_story(
+        self,
+        gallery_id: UUID,
+        length: StoryLength,
+        tone: StoryTone,
+        custom_context: Optional[str] = None,
+    ) -> Optional[StoryResult]:
+        """Get a cached story if available."""
+        try:
+            redis = await get_redis_client()
+            cache_key = self._get_cache_key(gallery_id, length, tone, custom_context)
+            cached = await redis.get(cache_key)
+            if cached:
+                data = json.loads(cached)
+                logger.info(f"Story cache hit for gallery {gallery_id}")
+                return StoryResult(**data)
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to get cached story: {e}")
+            return None
+
+    async def cache_story(self, story: StoryResult, custom_context: Optional[str] = None) -> None:
+        """Cache a generated story."""
+        try:
+            redis = await get_redis_client()
+            cache_key = self._get_cache_key(
+                UUID(story.gallery_id), story.length, story.tone, custom_context
+            )
+            await redis.setex(cache_key, STORY_CACHE_TTL, json.dumps(story.to_dict()))
+            logger.info(f"Cached story for gallery {story.gallery_id}")
+        except Exception as e:
+            logger.warning(f"Failed to cache story: {e}")
+
+    async def invalidate_story_cache(self, gallery_id: UUID) -> None:
+        """Invalidate all cached stories for a gallery."""
+        try:
+            redis = await get_redis_client()
+            pattern = f"story:{gallery_id}:*"
+            keys = []
+            async for key in redis.scan_iter(match=pattern):
+                keys.append(key)
+            if keys:
+                await redis.delete(*keys)
+                logger.info(f"Invalidated {len(keys)} cached stories for gallery {gallery_id}")
+        except Exception as e:
+            logger.warning(f"Failed to invalidate story cache: {e}")
+
     async def generate_story(
         self,
         user_id: UUID,
@@ -99,6 +164,7 @@ class GalleryStoryService:
         length: StoryLength = "medium",
         tone: StoryTone = "professional",
         custom_context: Optional[str] = None,
+        use_cache: bool = True,
     ) -> StoryResult:
         """Generate a narrative story for a gallery.
 
@@ -111,6 +177,7 @@ class GalleryStoryService:
             length: Story length (short, medium, long)
             tone: Story tone (professional, casual, poetic, journalistic)
             custom_context: Optional additional context for the story
+            use_cache: Whether to use/store cached results (default: True)
 
         Returns:
             StoryResult with generated story
@@ -121,6 +188,12 @@ class GalleryStoryService:
                 raise ValueError(f"Invalid length: {length}. Must be short, medium, or long.")
             if tone not in ["professional", "casual", "poetic", "journalistic"]:
                 raise ValueError(f"Invalid tone: {tone}.")
+
+            # Check cache first
+            if use_cache:
+                cached = await self.get_cached_story(gallery_id, length, tone, custom_context)
+                if cached:
+                    return cached
 
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -162,6 +235,10 @@ class GalleryStoryService:
                     "photo_count": len(photo_descriptions),
                 },
             )
+
+            # Cache the result
+            if use_cache:
+                await self.cache_story(result, custom_context)
 
             return result
 

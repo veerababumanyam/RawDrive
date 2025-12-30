@@ -11,6 +11,9 @@ import type {
   UpdateGeminiSettingsRequest,
   KeyValidationResult,
   GeminiModel,
+  AIFeatureToggles,
+  AIFeatureTogglesResponse,
+  UpdateAIFeatureTogglesRequest,
 } from '../types/geminiSettings';
 
 // ---------------------------------------------------------------------------
@@ -289,5 +292,106 @@ export const useGeminiSettingsPage = ({
     revokeKey,
     updateModelSelection,
     refetchAll,
+  };
+};
+
+// ---------------------------------------------------------------------------
+// AI Feature Toggles Hook (T080)
+// ---------------------------------------------------------------------------
+
+interface UseAIFeatureTogglesOptions {
+  /** Auto-fetch on mount (default: true) */
+  autoFetch?: boolean;
+}
+
+interface UseAIFeatureTogglesReturn {
+  /** Feature toggle response */
+  featureToggles: AIFeatureTogglesResponse | null;
+  /** Loading state */
+  loading: boolean;
+  /** Error state */
+  error: Error | null;
+  /** Refetch feature toggles */
+  refetch: () => Promise<void>;
+  /** Update feature toggles */
+  updateToggles: (updates: UpdateAIFeatureTogglesRequest) => Promise<AIFeatureTogglesResponse>;
+  /** Toggle a single feature */
+  toggleFeature: (feature: keyof AIFeatureToggles) => Promise<AIFeatureTogglesResponse>;
+  /** Check if a feature is enabled */
+  isFeatureEnabled: (feature: keyof AIFeatureToggles) => boolean;
+}
+
+export const useAIFeatureToggles = ({
+  autoFetch = true,
+}: UseAIFeatureTogglesOptions = {}): UseAIFeatureTogglesReturn => {
+  const [featureToggles, setFeatureToggles] = useState<AIFeatureTogglesResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchToggles = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await geminiSettingsService.getFeatureToggles();
+      setFeatureToggles(data);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch feature toggles'));
+      setFeatureToggles(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (autoFetch) {
+      fetchToggles();
+    }
+  }, [autoFetch, fetchToggles]);
+
+  const updateToggles = useCallback(async (updates: UpdateAIFeatureTogglesRequest) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await geminiSettingsService.updateFeatureToggles(updates);
+      setFeatureToggles(updated);
+      return updated;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Failed to update feature toggles');
+      setError(error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const toggleFeature = useCallback(
+    async (feature: keyof AIFeatureToggles) => {
+      if (!featureToggles) {
+        throw new Error('Feature toggles not loaded');
+      }
+      const currentValue = featureToggles.toggles[feature];
+      return updateToggles({ [feature]: !currentValue });
+    },
+    [featureToggles, updateToggles]
+  );
+
+  const isFeatureEnabled = useCallback(
+    (feature: keyof AIFeatureToggles): boolean => {
+      if (!featureToggles) {
+        return true; // Default to enabled if not loaded
+      }
+      return featureToggles.toggles[feature];
+    },
+    [featureToggles]
+  );
+
+  return {
+    featureToggles,
+    loading,
+    error,
+    refetch: fetchToggles,
+    updateToggles,
+    toggleFeature,
+    isFeatureEnabled,
   };
 };

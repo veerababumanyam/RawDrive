@@ -488,16 +488,47 @@ interface AIPreferences {
 
 ### AI Feature Toggles
 
-Enable/disable specific AI features.
+Enable/disable specific AI features per user. Users can control which AI features are active in their settings.
 
-**Features:**
-- Photo analysis
-- Caption generation
-- Hashtag generation
-- Face detection
-- Story generation
-- Smart curation
-- Duplicate detection
+**Available Toggles:**
+| Feature | Description | Default |
+|---------|-------------|---------|
+| Photo Analysis | AI-powered quality assessment, tags, colors, lighting, and suggestions | Enabled |
+| Caption Generation | Generate professional, casual, or poetic captions for photos | Enabled |
+| Hashtag Generation | Generate categorized hashtags for social media optimization | Enabled |
+| Gallery Stories | AI-written narratives and descriptions for photo galleries | Enabled |
+| Smart Curation | AI-powered selection of best photos based on quality and diversity | Enabled |
+
+**API Endpoints:**
+```typescript
+// Get feature toggles
+GET /api/v1/users/me/gemini-settings/feature-toggles
+// Response: { toggles: AIFeatureToggles, has_api_key: boolean, api_status: string }
+
+// Update feature toggles
+PATCH /api/v1/users/me/gemini-settings/feature-toggles
+// Body: { photo_analysis?: boolean, captions?: boolean, ... }
+```
+
+**Database Schema:**
+```sql
+-- Feature toggles stored in user_gemini_settings table
+ALTER TABLE user_gemini_settings ADD COLUMN
+  feature_photo_analysis BOOLEAN NOT NULL DEFAULT TRUE,
+  feature_captions BOOLEAN NOT NULL DEFAULT TRUE,
+  feature_hashtags BOOLEAN NOT NULL DEFAULT TRUE,
+  feature_gallery_story BOOLEAN NOT NULL DEFAULT TRUE,
+  feature_smart_curation BOOLEAN NOT NULL DEFAULT TRUE;
+```
+
+**UI Location:**
+Settings > AI & Gemini Settings > AI Features section
+
+**Behavior:**
+- Disabled features return 403 Forbidden when called
+- Toggles require valid Gemini API key to be configured
+- Changes are audited for compliance
+- Toggles persist after API key revocation (preference preserved)
 
 ## AI Usage Analytics
 

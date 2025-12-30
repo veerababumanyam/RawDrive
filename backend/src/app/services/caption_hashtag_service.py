@@ -2,6 +2,7 @@
 
 Uses AI to generate captions and hashtags for photos.
 Feature: AI-powered caption and hashtag generation
+Tasks: T021-T044, T077
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from uuid import UUID
 from app.config.settings import get_settings
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
+from app.services.ai_request_deduplication import get_ai_deduplication_service
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +75,7 @@ class CaptionHashtagService:
         self.settings = get_settings()
         self.gemini_client = get_gemini_client_service()
         self.ai_usage = get_ai_usage_service()
+        self.dedup = get_ai_deduplication_service()
 
     async def generate_captions(
         self,
@@ -96,6 +99,33 @@ class CaptionHashtagService:
         Returns:
             CaptionResult with generated captions
         """
+        # Generate deduplication key
+        cache_key = self.dedup.generate_request_key(
+            operation="captions",
+            user_id=user_id,
+            photo_id=photo_id,
+            style=style,
+            count=count,
+        )
+
+        # Use deduplication to prevent duplicate concurrent requests
+        return await self.dedup.deduplicated_call(
+            cache_key=cache_key,
+            operation=lambda: self._generate_captions_impl(
+                user_id, workspace_id, photo_url, style, count, photo_id
+            ),
+        )
+
+    async def _generate_captions_impl(
+        self,
+        user_id: UUID,
+        workspace_id: UUID,
+        photo_url: str,
+        style: str,
+        count: int,
+        photo_id: Optional[UUID],
+    ) -> CaptionResult:
+        """Internal implementation of caption generation."""
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -103,13 +133,16 @@ class CaptionHashtagService:
             # Build caption prompt
             prompt = self._build_caption_prompt(style, count)
 
+            # Fetch image data with caching
+            image_data = await self.dedup.fetch_image_data(photo_url)
+
             # Make API call
             response = await client.generate_content(
                 contents=[
                     {
                         "parts": [
                             {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": await self._fetch_image_data(photo_url)}}
+                            {"inline_data": {"mime_type": "image/jpeg", "data": image_data}}
                         ]
                     }
                 ]
@@ -162,6 +195,31 @@ class CaptionHashtagService:
         Returns:
             HashtagResult with generated hashtags
         """
+        # Generate deduplication key
+        cache_key = self.dedup.generate_request_key(
+            operation="hashtags",
+            user_id=user_id,
+            photo_id=photo_id,
+            count=count,
+        )
+
+        # Use deduplication to prevent duplicate concurrent requests
+        return await self.dedup.deduplicated_call(
+            cache_key=cache_key,
+            operation=lambda: self._generate_hashtags_impl(
+                user_id, workspace_id, photo_url, count, photo_id
+            ),
+        )
+
+    async def _generate_hashtags_impl(
+        self,
+        user_id: UUID,
+        workspace_id: UUID,
+        photo_url: str,
+        count: int,
+        photo_id: Optional[UUID],
+    ) -> HashtagResult:
+        """Internal implementation of hashtag generation."""
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -169,13 +227,16 @@ class CaptionHashtagService:
             # Build hashtag prompt
             prompt = self._build_hashtag_prompt(count)
 
+            # Fetch image data with caching
+            image_data = await self.dedup.fetch_image_data(photo_url)
+
             # Make API call
             response = await client.generate_content(
                 contents=[
                     {
                         "parts": [
                             {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": await self._fetch_image_data(photo_url)}}
+                            {"inline_data": {"mime_type": "image/jpeg", "data": image_data}}
                         ]
                     }
                 ]
@@ -207,16 +268,6 @@ class CaptionHashtagService:
                 error_code=str(type(e).__name__),
             )
             raise
-
-    async def _fetch_image_data(self, photo_url: str) -> str:
-        """Fetch image data from URL and encode as base64."""
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.get(photo_url)
-            response.raise_for_status()
-            # Return base64 encoded data
-            import base64
-            return base64.b64encode(response.content).decode()
 
     def _build_caption_prompt(self, style: str, count: int) -> str:
         """Build the caption generation prompt."""
