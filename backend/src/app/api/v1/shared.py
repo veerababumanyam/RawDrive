@@ -66,6 +66,10 @@ async def list_shared_links(
         Optional[str],
         Query(alias="status", description="Filter by status (active, expired, revoked, all)"),
     ] = "active",
+    exclude_revoked: Annotated[
+        bool,
+        Query(description="Exclude revoked links from results (useful for hiding old revoked links)"),
+    ] = False,
     gallery_id: Annotated[
         Optional[UUID], Query(description="Filter by gallery ID")
     ] = None,
@@ -91,6 +95,7 @@ async def list_shared_links(
             limit=limit,
             offset=offset,
             status=status_filter,
+            exclude_revoked=exclude_revoked,
             gallery_id=gallery_id,
             search=search,
             sort_by=sort_by,

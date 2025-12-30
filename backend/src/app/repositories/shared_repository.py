@@ -41,6 +41,7 @@ class SharedRepository:
         limit: int = 50,
         offset: int = 0,
         status: Optional[str] = None,
+        exclude_revoked: bool = False,
         gallery_id: Optional[UUID] = None,
         search: Optional[str] = None,
         sort_by: str = "created_at",
@@ -53,6 +54,7 @@ class SharedRepository:
             limit: Maximum results (1-100)
             offset: Pagination offset
             status: Filter by status ('active', 'expired', 'revoked', or None for all)
+            exclude_revoked: If True, exclude revoked links from results
             gallery_id: Filter by specific gallery
             search: Search term for label or gallery title
             sort_by: Column to sort by ('created_at', 'access_count', 'expires_at')
@@ -72,6 +74,9 @@ class SharedRepository:
                 conditions.append(f"ml.status = ${param_idx}")
                 params.append(status)
                 param_idx += 1
+            elif exclude_revoked:
+                # When showing all but excluding revoked
+                conditions.append("ml.status != 'revoked'")
 
             if gallery_id:
                 conditions.append(f"ml.gallery_id = ${param_idx}")
@@ -466,7 +471,7 @@ class SharedRepository:
                 result = await conn.execute(
                     """
                     UPDATE magic_links
-                    SET status = 'revoked', updated_at = NOW()
+                    SET status = 'revoked', updated_at = NOW(), revoked_at = NOW()
                     WHERE workspace_id = $1 AND link_id = ANY($2)
                     """,
                     workspace_id,
@@ -487,6 +492,116 @@ class SharedRepository:
                 return revoked_count, failures
 
             return 0, failures
+
+    # =========================================================================
+    # PURGE OPERATIONS
+    # =========================================================================
+
+    async def purge_old_revoked_links(
+        self,
+        retention_days: int = 90,
+        batch_size: int = 1000,
+    ) -> tuple[int, int]:
+        """Permanently delete revoked links older than retention period.
+
+        This method supports SOC 2 compliance by maintaining audit trail for
+        the retention period before permanent deletion. Access logs are
+        preserved in magic_link_accesses table.
+
+        Args:
+            retention_days: Number of days to retain revoked links (default: 90)
+            batch_size: Maximum links to delete per batch (default: 1000)
+
+        Returns:
+            Tuple of (deleted_count, remaining_count)
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # First, count how many links are eligible for purge
+            remaining = await conn.fetchval(
+                """
+                SELECT COUNT(*)
+                FROM magic_links
+                WHERE status = 'revoked'
+                  AND revoked_at IS NOT NULL
+                  AND revoked_at < NOW() - INTERVAL '%s days'
+                """ % retention_days
+            )
+
+            if remaining == 0:
+                return 0, 0
+
+            # Delete in batch to avoid long-running transactions
+            result = await conn.execute(
+                """
+                DELETE FROM magic_links
+                WHERE link_id IN (
+                    SELECT link_id
+                    FROM magic_links
+                    WHERE status = 'revoked'
+                      AND revoked_at IS NOT NULL
+                      AND revoked_at < NOW() - INTERVAL '%s days'
+                    ORDER BY revoked_at ASC
+                    LIMIT %s
+                )
+                """ % (retention_days, batch_size)
+            )
+
+            deleted_count = int(result.split(" ")[1]) if result else 0
+            remaining_count = remaining - deleted_count
+
+            logger.info(
+                "Purged old revoked magic links",
+                extra={
+                    "deleted_count": deleted_count,
+                    "remaining_count": remaining_count,
+                    "retention_days": retention_days,
+                },
+            )
+
+            return deleted_count, remaining_count
+
+    async def get_purge_stats(self) -> dict[str, Any]:
+        """Get statistics about revoked links eligible for purge.
+
+        Returns:
+            Dict with counts by age bracket
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            stats = await conn.fetchrow(
+                """
+                SELECT
+                    COUNT(*) FILTER (WHERE status = 'revoked') as total_revoked,
+                    COUNT(*) FILTER (
+                        WHERE status = 'revoked'
+                        AND revoked_at IS NOT NULL
+                        AND revoked_at < NOW() - INTERVAL '90 days'
+                    ) as eligible_for_purge,
+                    COUNT(*) FILTER (
+                        WHERE status = 'revoked'
+                        AND revoked_at IS NOT NULL
+                        AND revoked_at >= NOW() - INTERVAL '30 days'
+                    ) as revoked_last_30_days,
+                    COUNT(*) FILTER (
+                        WHERE status = 'revoked'
+                        AND revoked_at IS NOT NULL
+                        AND revoked_at >= NOW() - INTERVAL '90 days'
+                        AND revoked_at < NOW() - INTERVAL '30 days'
+                    ) as revoked_30_to_90_days,
+                    MIN(revoked_at) FILTER (WHERE status = 'revoked') as oldest_revoked_at
+                FROM magic_links
+                """
+            )
+
+            return {
+                "total_revoked": stats["total_revoked"] or 0,
+                "eligible_for_purge": stats["eligible_for_purge"] or 0,
+                "revoked_last_30_days": stats["revoked_last_30_days"] or 0,
+                "revoked_30_to_90_days": stats["revoked_30_to_90_days"] or 0,
+                "oldest_revoked_at": stats["oldest_revoked_at"].isoformat() if stats["oldest_revoked_at"] else None,
+                "retention_days": 90,
+            }
 
     # =========================================================================
     # EXPORT

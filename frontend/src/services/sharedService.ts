@@ -142,6 +142,7 @@ export interface ListLinksOptions {
   limit?: number;
   offset?: number;
   status?: 'active' | 'expired' | 'revoked' | 'all';
+  exclude_revoked?: boolean; // Hide revoked links from list (default: false for backward compatibility)
   gallery_id?: string;
   search?: string;
   sort_by?: 'created_at' | 'access_count' | 'expires_at' | 'last_accessed_at';
@@ -191,6 +192,7 @@ export class SharedService {
     if (options?.limit) params.append('limit', options.limit.toString());
     if (options?.offset) params.append('offset', options.offset.toString());
     if (options?.status) params.append('status', options.status);
+    if (options?.exclude_revoked !== undefined) params.append('exclude_revoked', options.exclude_revoked.toString());
     if (options?.gallery_id) params.append('gallery_id', options.gallery_id);
     if (options?.search) params.append('search', options.search);
     if (options?.sort_by) params.append('sort_by', options.sort_by);

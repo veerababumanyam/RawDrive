@@ -93,6 +93,7 @@ class SharedService:
         limit: int = 50,
         offset: int = 0,
         status: Optional[str] = None,
+        exclude_revoked: bool = False,
         gallery_id: Optional[UUID] = None,
         search: Optional[str] = None,
         sort_by: str = "created_at",
@@ -105,6 +106,7 @@ class SharedService:
             limit: Maximum results (1-100)
             offset: Pagination offset
             status: Filter by status ('active', 'expired', 'revoked', 'all')
+            exclude_revoked: If True, exclude revoked links from results
             gallery_id: Filter by specific gallery
             search: Search term for label or gallery title
             sort_by: Column to sort by
@@ -133,6 +135,7 @@ class SharedService:
             limit=limit,
             offset=offset,
             status=status,
+            exclude_revoked=exclude_revoked,
             gallery_id=gallery_id,
             search=search,
             sort_by=sort_by,

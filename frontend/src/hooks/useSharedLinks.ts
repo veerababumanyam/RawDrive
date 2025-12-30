@@ -3,7 +3,7 @@
  * Custom hooks for Security & Sharing Dashboard operations
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   sharedService,
   SharedLinksResponse,
@@ -38,7 +38,7 @@ export function useSharedLinks(
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId, options?.limit, options?.offset, options?.status, options?.gallery_id, options?.search, options?.sort_by, options?.sort_order]);
+  }, [workspaceId, options?.limit, options?.offset, options?.status, options?.exclude_revoked, options?.gallery_id, options?.search, options?.sort_by, options?.sort_order]);
 
   useEffect(() => {
     fetchLinks();
@@ -201,17 +201,25 @@ export function useExportSharedData(workspaceId: string | undefined) {
  */
 export function useSharedDashboard(workspaceId: string | undefined) {
   const [selectedLinkIds, setSelectedLinkIds] = useState<Set<string>>(new Set());
+  // Default to hiding revoked links (they're kept for 90 days for audit then auto-purged)
+  const [hideRevoked, setHideRevoked] = useState(true);
   const [filterOptions, setFilterOptions] = useState<ListLinksOptions>({
     limit: 25,
     offset: 0,
-    status: 'active',
+    status: 'all', // Show all non-revoked by default, use exclude_revoked param
     sort_by: 'created_at',
     sort_order: 'desc',
   });
 
+  // Merge hideRevoked into filterOptions for the API call
+  const effectiveFilterOptions = useMemo(() => ({
+    ...filterOptions,
+    exclude_revoked: hideRevoked,
+  }), [filterOptions, hideRevoked]);
+
   const { data: linksData, isLoading: isLoadingLinks, error: linksError, refetch } = useSharedLinks(
     workspaceId,
-    filterOptions
+    effectiveFilterOptions
   );
   const { data: stats, isLoading: isLoadingStats, error: statsError } = useShareStats(workspaceId);
   const { revokeLink, isPending: isRevoking } = useRevokeLink(workspaceId);
@@ -265,6 +273,11 @@ export function useSharedDashboard(workspaceId: string | undefined) {
     [bulkRevoke, refetch]
   );
 
+  // Toggle handler for hideRevoked
+  const toggleHideRevoked = useCallback(() => {
+    setHideRevoked((prev) => !prev);
+  }, []);
+
   return {
     // Data
     links: linksData?.data || [],
@@ -291,6 +304,8 @@ export function useSharedDashboard(workspaceId: string | undefined) {
     filterOptions,
     handleFilterChange,
     handlePageChange,
+    hideRevoked,
+    toggleHideRevoked,
 
     // Actions
     revokeLink: handleRevokeLink,

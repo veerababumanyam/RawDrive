@@ -23,6 +23,7 @@ import {
   ChevronDown,
   Clock,
   Eye,
+  EyeOff,
   Lock,
   Mail,
   Key,
@@ -73,6 +74,8 @@ const SharedDashboardPage: React.FC = () => {
     filterOptions,
     handleFilterChange,
     handlePageChange,
+    hideRevoked,
+    toggleHideRevoked,
     revokeLink,
     bulkRevoke,
     exportData,
@@ -515,6 +518,29 @@ const SharedDashboardPage: React.FC = () => {
             )}
           </div>
 
+          {/* Hide Revoked Toggle */}
+          <button
+            onClick={toggleHideRevoked}
+            className={`
+              flex items-center gap-2
+              px-3 py-2.5
+              glass-light border rounded-xl
+              hover:shadow-md
+              transition-all duration-200
+              min-h-[44px]
+              ${hideRevoked
+                ? 'border-primary/30 bg-primary/5 text-primary'
+                : 'border-white/20 dark:border-white/10 text-text-secondary hover:text-text-primary hover:border-white/30'}
+            `}
+            aria-label={hideRevoked ? 'Show revoked links' : 'Hide revoked links'}
+            title={hideRevoked ? 'Revoked links are hidden (click to show)' : 'Click to hide revoked links'}
+          >
+            {hideRevoked ? <EyeOff size={16} /> : <Eye size={16} />}
+            <span className="hidden sm:inline text-sm">
+              {hideRevoked ? 'Revoked Hidden' : 'Show All'}
+            </span>
+          </button>
+
           {/* Refresh */}
           <button
             onClick={() => refetch()}
@@ -537,7 +563,7 @@ const SharedDashboardPage: React.FC = () => {
 
       {/* Status Summary Bar */}
       {meta && (
-        <motion.div variants={staggerItem} className="flex items-center gap-4 flex-wrap">
+        <motion.div variants={staggerItem} className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 text-sm text-text-secondary">
             <span>{meta.total} total links</span>
             <span className="text-text-tertiary">•</span>
@@ -547,6 +573,16 @@ const SharedDashboardPage: React.FC = () => {
             <span className="text-text-tertiary">•</span>
             <span className="text-error">{meta.revoked_count} revoked</span>
           </div>
+          {/* Info about auto-purge */}
+          {hideRevoked && meta.revoked_count > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
+              <Info size={14} />
+              <span>
+                {meta.revoked_count} revoked link{meta.revoked_count !== 1 ? 's' : ''} hidden
+                (auto-deleted after 90 days)
+              </span>
+            </div>
+          )}
         </motion.div>
       )}
 
