@@ -213,6 +213,46 @@ class GalleryFilterResponse(BaseModel):
     applied_filters: dict = Field(..., description="Applied filter criteria")
 
 
+class GenerateStoryRequest(BaseModel):
+    """Request to generate a gallery story."""
+
+    length: str = Field("medium", description="Story length: short, medium, long")
+    tone: str = Field("professional", description="Story tone: professional, casual, poetic, journalistic")
+    custom_context: Optional[str] = Field(None, description="Additional context for the story")
+
+
+class StoryResponse(BaseModel):
+    """Gallery story generation response."""
+
+    gallery_id: str
+    story: str = Field(..., description="The generated narrative story")
+    title: str = Field(..., description="Story title")
+    length: str = Field(..., description="Story length used")
+    tone: str = Field(..., description="Story tone used")
+    word_count: int = Field(..., description="Number of words in the story")
+    photo_count: int = Field(..., description="Number of photos analyzed for the story")
+    themes: list[str] = Field(default_factory=list, description="Key themes identified")
+
+
+class SmartCurationRequest(BaseModel):
+    """Request for smart photo curation."""
+
+    count: int = Field(10, ge=1, le=100, description="Number of photos to select")
+    quality_threshold: float = Field(0.6, ge=0.0, le=1.0, description="Minimum quality score threshold")
+    diversity_weight: float = Field(0.3, ge=0.0, le=1.0, description="Weight for diversity vs quality")
+    prefer_people: bool = Field(False, description="Prefer photos with people")
+    exclude_asset_ids: Optional[list[UUID]] = Field(None, description="Asset IDs to exclude")
+
+
+class SmartCurationResponse(BaseModel):
+    """Smart curation response."""
+
+    gallery_id: str
+    selected_assets: list[dict] = Field(..., description="Selected asset IDs with scores")
+    total_candidates: int = Field(..., description="Total photos analyzed")
+    selection_criteria: dict = Field(..., description="Criteria used for selection")
+
+
 # ---------------------------------------------------------------------------
 # Asset Analysis Endpoints
 # ---------------------------------------------------------------------------
@@ -761,3 +801,238 @@ async def filter_gallery_assets(
     except Exception as e:
         logger.exception("Failed to filter gallery assets")
         raise InternalError("Failed to filter gallery assets")
+
+
+# ---------------------------------------------------------------------------
+# Gallery Story Generation Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/galleries/{gallery_id}/story",
+    response_model=StoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate a narrative story for a gallery",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid request parameters"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def generate_gallery_story(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    request: GenerateStoryRequest,
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+) -> StoryResponse:
+    """
+    Generate an AI-written narrative story for a photo gallery.
+
+    The story is generated based on the gallery's photos and their AI analysis.
+    Supports different lengths (short, medium, long) and tones (professional,
+    casual, poetic, journalistic).
+    """
+    from app.services.gallery_story_service import get_gallery_story_service
+    from app.services.gallery_service import get_gallery_service
+
+    # Validate length and tone
+    valid_lengths = ["short", "medium", "long"]
+    valid_tones = ["professional", "casual", "poetic", "journalistic"]
+
+    if request.length not in valid_lengths:
+        from app.api.exceptions import ValidationError
+        raise ValidationError(f"Invalid length. Must be one of: {', '.join(valid_lengths)}")
+
+    if request.tone not in valid_tones:
+        from app.api.exceptions import ValidationError
+        raise ValidationError(f"Invalid tone. Must be one of: {', '.join(valid_tones)}")
+
+    try:
+        # Get gallery details
+        gallery_service = get_gallery_service()
+        gallery = await gallery_service.get_gallery(
+            gallery_id=gallery_id,
+            workspace_id=workspace_id,
+        )
+
+        if not gallery:
+            raise NotFoundError("Gallery not found")
+
+        # Get photo descriptions from gallery assets
+        # In a real implementation, this would fetch AI analysis data for the photos
+        photo_descriptions = []
+        assets = await gallery_service.get_gallery_assets(
+            gallery_id=gallery_id,
+            workspace_id=workspace_id,
+            limit=50,
+        )
+
+        for asset in assets.get("assets", []):
+            desc = {
+                "description": asset.get("ai_description", asset.get("filename", "")),
+                "tags": asset.get("ai_tags", []),
+                "mood": asset.get("mood", ""),
+            }
+            photo_descriptions.append(desc)
+
+        # Generate the story
+        story_service = get_gallery_story_service()
+        result = await story_service.generate_story(
+            user_id=current_user.user_id,
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            gallery_name=gallery.get("name", "Untitled Gallery"),
+            photo_descriptions=photo_descriptions,
+            length=request.length,
+            tone=request.tone,
+            custom_context=request.custom_context,
+        )
+
+        return StoryResponse(
+            gallery_id=str(gallery_id),
+            story=result.story,
+            title=result.title,
+            length=result.length,
+            tone=result.tone,
+            word_count=result.word_count,
+            photo_count=result.photo_count,
+            themes=result.themes,
+        )
+
+    except NotFoundError:
+        raise
+    except Exception as e:
+        logger.exception("Failed to generate gallery story")
+        raise InternalError("Failed to generate gallery story")
+
+
+@router.post(
+    "/galleries/{gallery_id}/story/export",
+    status_code=status.HTTP_200_OK,
+    summary="Export a generated story in different formats",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid format"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+    },
+)
+async def export_gallery_story(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    story: StoryResponse,
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    format: Annotated[str, Query(description="Export format: text, markdown, html")] = "text",
+) -> dict:
+    """
+    Export a previously generated story in different formats.
+
+    Supports text, markdown, and HTML export formats.
+    """
+    from app.services.gallery_story_service import get_gallery_story_service, StoryResult
+
+    valid_formats = ["text", "markdown", "html"]
+    if format not in valid_formats:
+        from app.api.exceptions import ValidationError
+        raise ValidationError(f"Invalid format. Must be one of: {', '.join(valid_formats)}")
+
+    try:
+        # Convert StoryResponse back to StoryResult
+        story_result = StoryResult(
+            gallery_id=story.gallery_id,
+            story=story.story,
+            title=story.title,
+            length=story.length,
+            tone=story.tone,
+            word_count=story.word_count,
+            photo_count=story.photo_count,
+            themes=story.themes,
+        )
+
+        story_service = get_gallery_story_service()
+        exported = await story_service.export_story(story_result, format=format)
+
+        return {
+            "format": format,
+            "content": exported,
+            "gallery_id": story.gallery_id,
+        }
+
+    except Exception as e:
+        logger.exception("Failed to export story")
+        raise InternalError("Failed to export story")
+
+
+# ---------------------------------------------------------------------------
+# Smart Curation Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/galleries/{gallery_id}/curate",
+    response_model=SmartCurationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Smart curation - AI-powered photo selection",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid request parameters"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def smart_curate_gallery(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    request: SmartCurationRequest,
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+) -> SmartCurationResponse:
+    """
+    AI-powered selection of the best photos from a gallery.
+
+    Uses quality scores, diversity analysis, and optional preferences
+    to select the best photos for highlights, sharing, or printing.
+    """
+    from app.services.smart_curation_service import get_smart_curation_service
+    from app.services.gallery_service import get_gallery_service
+
+    try:
+        # Verify gallery exists
+        gallery_service = get_gallery_service()
+        gallery = await gallery_service.get_gallery(
+            gallery_id=gallery_id,
+            workspace_id=workspace_id,
+        )
+
+        if not gallery:
+            raise NotFoundError("Gallery not found")
+
+        # Perform curation
+        curation_service = get_smart_curation_service()
+        result = await curation_service.curate_gallery(
+            user_id=current_user.user_id,
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            count=request.count,
+            quality_threshold=request.quality_threshold,
+            diversity_weight=request.diversity_weight,
+            prefer_people=request.prefer_people,
+            exclude_asset_ids=request.exclude_asset_ids,
+        )
+
+        return SmartCurationResponse(
+            gallery_id=str(gallery_id),
+            selected_assets=result.selected_assets,
+            total_candidates=result.total_candidates,
+            selection_criteria={
+                "count": request.count,
+                "quality_threshold": request.quality_threshold,
+                "diversity_weight": request.diversity_weight,
+                "prefer_people": request.prefer_people,
+            },
+        )
+
+    except NotFoundError:
+        raise
+    except Exception as e:
+        logger.exception("Failed to curate gallery")
+        raise InternalError("Failed to curate gallery")

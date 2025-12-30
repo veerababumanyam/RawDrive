@@ -28,6 +28,7 @@ class RateLimitType(str, Enum):
     UPLOAD = "upload"  # File uploads
     SEARCH = "search"  # Search/query endpoints
     PUBLIC = "public"  # Public profile endpoints (QR, vCard, profile view)
+    AI = "ai"  # AI operations (analysis, captions, hashtags, stories, curation)
 
 
 @dataclass
@@ -45,6 +46,7 @@ DEFAULT_LIMITS: dict[RateLimitType, RateLimitConfig] = {
     RateLimitType.UPLOAD: RateLimitConfig(requests=20, window_seconds=3600),  # 20 req / hour
     RateLimitType.SEARCH: RateLimitConfig(requests=30, window_seconds=60),  # 30 req / min
     RateLimitType.PUBLIC: RateLimitConfig(requests=60, window_seconds=60),  # 60 req / min (public profile views)
+    RateLimitType.AI: RateLimitConfig(requests=30, window_seconds=60),  # 30 req / min (AI operations)
 }
 
 # Development rate limits (more lenient)
@@ -54,6 +56,7 @@ DEV_LIMITS: dict[RateLimitType, RateLimitConfig] = {
     RateLimitType.UPLOAD: RateLimitConfig(requests=200, window_seconds=3600),  # 200 req / hour
     RateLimitType.SEARCH: RateLimitConfig(requests=300, window_seconds=60),  # 300 req / min
     RateLimitType.PUBLIC: RateLimitConfig(requests=300, window_seconds=60),  # 300 req / min (dev)
+    RateLimitType.AI: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min (dev AI)
 }
 
 

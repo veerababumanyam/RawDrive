@@ -32,19 +32,32 @@ export interface HashtagResult {
 }
 
 export interface StoryResult {
+  gallery_id: string;
   story: string;
+  title: string;
   length: 'short' | 'medium' | 'long';
   tone: 'professional' | 'casual' | 'poetic' | 'journalistic';
+  word_count: number;
+  photo_count: number;
+  themes: string[];
 }
 
 export interface CurationResult {
-  asset_ids: string[];
-  criteria: {
+  gallery_id: string;
+  selected_assets: {
+    asset_id: string;
+    score: number;
+    quality_score: number;
+    has_faces: boolean;
+    thumbnail_url?: string;
+  }[];
+  total_candidates: number;
+  selection_criteria: {
+    count: number;
     quality_threshold: number;
     diversity_weight: number;
+    prefer_people: boolean;
   };
-  total_assets: number;
-  selected_count: number;
 }
 
 // API Request Types
