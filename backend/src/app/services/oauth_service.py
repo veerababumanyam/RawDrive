@@ -12,6 +12,7 @@ Correctness Properties enforced:
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import uuid
@@ -103,8 +104,12 @@ class GoogleOAuthService:
         self._settings = settings or get_settings()
         self._auth_service = AuthService(self._settings)
 
-    async def get_authorization_url(self, redirect_uri: str | None = None) -> tuple[str, str]:
+    async def get_authorization_url(self, frontend_redirect: str | None = None) -> tuple[str, str]:
         """Generate Google OAuth authorization URL with state parameter.
+
+        Args:
+            frontend_redirect: URL to redirect to after successful OAuth (frontend URL).
+                             This is stored in Redis and used after callback, NOT sent to Google.
 
         Returns:
             Tuple of (authorization_url, state)
@@ -112,12 +117,19 @@ class GoogleOAuthService:
         state = secrets.token_urlsafe(32)
 
         # Store state in Redis for validation (5 minute TTL)
+        # Also store the frontend redirect URL if provided
         redis = await get_redis_client()
-        await redis.setex(f"oauth:state:{state}", 300, "pending")
+        state_data = {
+            "status": "pending",
+            "frontend_redirect": frontend_redirect or "",
+        }
+        await redis.setex(f"oauth:state:{state}", 300, json.dumps(state_data))
 
+        # Always use the backend callback URL for Google OAuth
+        # This URL must be registered in Google Cloud Console
         params = {
             "client_id": self._settings.google_client_id,
-            "redirect_uri": redirect_uri or str(self._settings.google_redirect_uri),
+            "redirect_uri": str(self._settings.google_redirect_uri),
             "response_type": "code",
             "scope": " ".join(SCOPES),
             "state": state,
@@ -128,17 +140,30 @@ class GoogleOAuthService:
         url = f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
         return url, state
 
-    async def verify_state(self, state: str) -> bool:
-        """Verify state parameter matches stored value."""
+    async def verify_state(self, state: str) -> tuple[bool, str]:
+        """Verify state parameter matches stored value.
+
+        Returns:
+            Tuple of (is_valid, frontend_redirect_url)
+        """
         redis = await get_redis_client()
         stored = await redis.get(f"oauth:state:{state}")
 
         if stored is None:
-            return False
+            return False, ""
 
         # Delete state after verification (one-time use)
         await redis.delete(f"oauth:state:{state}")
-        return True
+
+        # Parse the stored state data
+        try:
+            state_data = json.loads(stored)
+            frontend_redirect = state_data.get("frontend_redirect", "")
+        except (json.JSONDecodeError, TypeError):
+            # Legacy format - just "pending" string
+            frontend_redirect = ""
+
+        return True, frontend_redirect
 
     async def exchange_code(
         self,
@@ -199,19 +224,22 @@ class GoogleOAuthService:
         self,
         code: str,
         state: str,
-        redirect_uri: str | None = None,
-    ) -> tuple[AuthUser, TokenPair]:
+    ) -> tuple[AuthUser, TokenPair, str]:
         """Handle OAuth callback: verify state, exchange code, create/link user.
 
         Property 14 (OAuth Account Linking): If email matches existing user,
         link Google identity to that user.
+
+        Returns:
+            Tuple of (AuthUser, TokenPair, frontend_redirect_url)
         """
-        # Verify state
-        if not await self.verify_state(state):
+        # Verify state and get frontend redirect URL
+        is_valid, frontend_redirect = await self.verify_state(state)
+        if not is_valid:
             raise OAuthStateMismatchError()
 
-        # Exchange code for tokens
-        token_response = await self.exchange_code(code, redirect_uri)
+        # Exchange code for tokens (always use backend callback URL)
+        token_response = await self.exchange_code(code)
         google_access_token = token_response["access_token"]
 
         # Get user info
@@ -233,12 +261,13 @@ class GoogleOAuthService:
         if existing_identity:
             # Existing Google identity - login
             user_id = existing_identity["user_id"]
-            return await self._login_existing_user(
+            user, tokens = await self._login_existing_user(
                 user_id=user_id,
                 email=existing_identity["email"],
                 display_name=existing_identity["display_name"],
                 email_verified=existing_identity["email_verified"],
             )
+            return user, tokens, frontend_redirect
 
         # Check for existing user by email (Property 14: Account Linking)
         existing_user = await pool.fetchrow(
@@ -256,15 +285,17 @@ class GoogleOAuthService:
                 extra={"user_id": str(user_id), "google_sub": user_info.sub},
             )
 
-            return await self._login_existing_user(
+            user, tokens = await self._login_existing_user(
                 user_id=user_id,
                 email=existing_user["email"],
                 display_name=existing_user["display_name"],
                 email_verified=True,  # Google-verified email
             )
+            return user, tokens, frontend_redirect
 
         # New user - create account
-        return await self._create_new_user(user_info)
+        user, tokens = await self._create_new_user(user_info)
+        return user, tokens, frontend_redirect
 
     async def _link_google_identity(
         self,

@@ -15,10 +15,13 @@ import {
   logout as authLogout,
   getCurrentUser,
   getStoredUser,
+  setStoredUser,
   getStoredWorkspace,
+  setStoredWorkspace,
   isAuthenticated as checkAuth,
   hasValidAccessToken,
   clearStoredTokens,
+  setStoredTokens,
   getGoogleOAuthUrl,
   getStoredTokens,
 } from '../services/auth';
@@ -76,6 +79,74 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => {
       window.removeEventListener(AUTH_EVENTS.SESSION_EXPIRED, handleSessionExpired as EventListener);
     };
+  }, []);
+
+  // Handle OAuth tokens from URL (Google OAuth callback redirect)
+  useEffect(() => {
+    const handleOAuthCallback = () => {
+      const params = new URLSearchParams(window.location.search);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const expiresIn = params.get('expires_in');
+      const userId = params.get('user_id');
+      const email = params.get('email');
+      const displayName = params.get('display_name');
+      const workspaceId = params.get('workspace_id');
+      const error = params.get('error');
+
+      // Check for OAuth error
+      if (error) {
+        console.error('[Auth] OAuth error:', error, params.get('error_description'));
+        // Clear URL parameters
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
+
+      // Check if we have OAuth tokens in URL
+      if (accessToken && refreshToken && userId && email) {
+        console.log('[Auth] Processing OAuth callback tokens');
+
+        // Store tokens
+        setStoredTokens({
+          accessToken,
+          refreshToken,
+          expiresAt: Date.now() + (parseInt(expiresIn || '900') * 1000),
+        });
+
+        // Store user info
+        const user: User = {
+          id: userId,
+          email,
+          displayName: displayName || email.split('@')[0],
+          emailVerified: true, // OAuth users are verified
+          createdAt: new Date().toISOString(),
+          workspace_id: workspaceId || undefined,
+        };
+        setStoredUser(user);
+        setUser(user);
+
+        // Store workspace if provided
+        if (workspaceId) {
+          const workspace: Workspace = {
+            workspace_id: workspaceId,
+            name: `${displayName}'s Workspace`,
+            slug: `ws-${workspaceId.substring(0, 8)}`,
+            role: 'owner',
+          };
+          setStoredWorkspace(workspace);
+          setWorkspace(workspace);
+        }
+
+        setIsAuthenticated(true);
+
+        // Clear URL parameters to clean up the URL
+        window.history.replaceState({}, '', window.location.pathname);
+
+        console.log('[Auth] OAuth login successful');
+      }
+    };
+
+    handleOAuthCallback();
   }, []);
 
   // Initialize auth state from storage on mount

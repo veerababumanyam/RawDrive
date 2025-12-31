@@ -10,6 +10,8 @@ import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import RedirectResponse
+from urllib.parse import urlencode
 
 from app.api.schemas import (
     AuthResponse,
@@ -289,25 +291,27 @@ async def oauth_google_start(
 
 @router.get(
     "/oauth/google/callback",
-    response_model=AuthResponse,
-    responses={400: {"model": ErrorResponse}},
     summary="Google OAuth callback",
-    description="Handle Google OAuth callback and authenticate user.",
+    description="Handle Google OAuth callback and redirect to frontend with tokens.",
 )
 async def oauth_google_callback(
     request_obj: Request,
     code: str = Query(..., description="Authorization code from Google"),
     state: str = Query(..., description="State parameter for CSRF protection"),
     oauth_service: OAuthServiceDep = None,
-) -> AuthResponse:
-    """Handle Google OAuth callback."""
+) -> RedirectResponse:
+    """Handle Google OAuth callback and redirect to frontend."""
     ip_address = request_obj.client.host if request_obj.client else None
     user_agent = request_obj.headers.get("user-agent")
-    
+
     if oauth_service is None:
         oauth_service = _get_oauth_service()
+
+    # Default frontend URL if none provided
+    default_frontend = "https://rawdrive.ai/workspace"
+
     try:
-        user, tokens = await oauth_service.handle_callback(code=code, state=state)
+        user, tokens, frontend_redirect = await oauth_service.handle_callback(code=code, state=state)
         # Log successful OAuth login
         await log_auth_event(
             event_type=AuditEventType.AUTH_OAUTH_CALLBACK,
@@ -325,23 +329,25 @@ async def oauth_google_callback(
             user_agent=user_agent,
             details={"provider": "google", "outcome": "failure", "reason": e.code},
         )
-        raise UnauthorizedError(message=str(e), code=e.code)
+        # Redirect to frontend with error
+        error_redirect = frontend_redirect if 'frontend_redirect' in dir() else default_frontend
+        error_params = urlencode({"error": e.code, "error_description": str(e)})
+        return RedirectResponse(url=f"{error_redirect}?{error_params}", status_code=302)
 
-    return AuthResponse(
-        user=UserResponse(
-            user_id=user.user_id,
-            email=user.email,
-            display_name=user.display_name,
-            email_verified=user.email_verified,
-            workspace_id=user.workspace_id,
-        ),
-        tokens=TokenResponse(
-            access_token=tokens.access_token,
-            refresh_token=tokens.refresh_token,
-            token_type=tokens.token_type,
-            expires_in=tokens.expires_in,
-        ),
-    )
+    # Build redirect URL with tokens
+    redirect_url = frontend_redirect or default_frontend
+    params = urlencode({
+        "access_token": tokens.access_token,
+        "refresh_token": tokens.refresh_token,
+        "token_type": tokens.token_type,
+        "expires_in": tokens.expires_in,
+        "user_id": str(user.user_id),
+        "email": user.email,
+        "display_name": user.display_name,
+        "workspace_id": str(user.workspace_id) if user.workspace_id else "",
+    })
+
+    return RedirectResponse(url=f"{redirect_url}?{params}", status_code=302)
 
 
 # ---------------------------------------------------------------------------
