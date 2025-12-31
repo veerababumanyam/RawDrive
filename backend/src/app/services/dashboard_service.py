@@ -30,9 +30,10 @@ class DashboardService:
                 FROM gallery_assets ga
                 JOIN assets a ON ga.asset_id = a.asset_id
                 JOIN galleries g ON ga.gallery_id = g.gallery_id
-                WHERE ga.workspace_id = $1 
-                AND ga.visible = TRUE 
+                WHERE ga.workspace_id = $1
+                AND ga.visible = TRUE
                 AND a.deleted = FALSE
+                AND a.status = 'available'
                 AND a.type = 'photo'
                 AND g.deleted = FALSE
                 """,

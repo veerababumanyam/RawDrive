@@ -443,10 +443,13 @@ class AvatarService:
                 SELECT ga.asset_id, ga.gallery_id
                 FROM gallery_assets ga
                 JOIN client_gallery_links cgl ON ga.gallery_id = cgl.gallery_id
+                JOIN assets a ON ga.asset_id = a.asset_id
                 WHERE ga.workspace_id = $1
                   AND ga.asset_id = $2
                   AND cgl.client_id = $3
                   AND ga.deleted = FALSE
+                  AND a.deleted = FALSE
+                  AND a.status = 'available'
                 """,
                 workspace_id,
                 asset_id,

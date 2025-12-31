@@ -650,7 +650,7 @@ class LibraryService:
                     lf.pin,
                     lf.created_at,
                     lf.updated_at,
-                    COUNT(a.asset_id) FILTER (WHERE a.deleted = FALSE) as asset_count,
+                    COUNT(a.asset_id) FILTER (WHERE a.deleted = FALSE AND a.status = 'available') as asset_count,
                     (SELECT COUNT(*) FROM library_folders sub WHERE sub.parent_folder_id = lf.folder_id) as subfolder_count
                 FROM library_folders lf
                 LEFT JOIN assets a ON a.folder_id = lf.folder_id
@@ -702,7 +702,7 @@ class LibraryService:
                     lf.cover_asset_id,
                     lf.created_at,
                     lf.updated_at,
-                    COUNT(a.asset_id) FILTER (WHERE a.deleted = FALSE) as asset_count
+                    COUNT(a.asset_id) FILTER (WHERE a.deleted = FALSE AND a.status = 'available') as asset_count
                 FROM library_folders lf
                 LEFT JOIN assets a ON a.folder_id = lf.folder_id
                 WHERE lf.folder_id = $1 AND lf.workspace_id = $2

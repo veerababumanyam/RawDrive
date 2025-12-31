@@ -212,6 +212,7 @@ class SearchService:
                 LEFT JOIN gallery_assets ga ON a.asset_id = ga.asset_id
                 WHERE a.workspace_id = $1
                 AND a.deleted = FALSE
+                AND a.status = 'available'
                 {gallery_filter}
                 AND (
                     a.file_name ILIKE $2
@@ -422,6 +423,7 @@ class SearchService:
                 WHERE a.workspace_id = $1
                 AND at.tag_id = $2
                 AND a.deleted = FALSE
+                AND a.status = 'available'
                 {tag_source_filter}
                 {gallery_filter}
             """
@@ -439,6 +441,7 @@ class SearchService:
                 WHERE a.workspace_id = $1
                 AND at.tag_id = $2
                 AND a.deleted = FALSE
+                AND a.status = 'available'
                 {tag_source_filter}
                 {gallery_filter}
                 ORDER BY a.asset_id, a.created_at DESC
@@ -506,6 +509,7 @@ class SearchService:
                 WHERE a.workspace_id = $1
                 AND (fd.person_id = $2 OR fg.person_id = $2)
                 AND a.deleted = FALSE
+                AND a.status = 'available'
                 {gallery_filter}
                 """,
                 *params[:2] if not gallery_id else params[:2] + [gallery_id],
@@ -524,6 +528,7 @@ class SearchService:
                 WHERE a.workspace_id = $1
                 AND (fd.person_id = $2 OR fg.person_id = $2)
                 AND a.deleted = FALSE
+                AND a.status = 'available'
                 {gallery_filter}
                 ORDER BY a.asset_id, a.created_at DESC
                 LIMIT $3 OFFSET $4
@@ -574,7 +579,8 @@ class SearchService:
             where_clauses = [
                 "a.workspace_id = $1",
                 "ga.gallery_id = $2",
-                "a.deleted = FALSE"
+                "a.deleted = FALSE",
+                "a.status = 'available'"
             ]
             params = [workspace_id, gallery_id]
             param_index = 3

@@ -194,6 +194,7 @@ class GalleryService:
                         WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
                         AND ga.visible = TRUE
                         AND a.deleted = FALSE
+                        AND a.status = 'available'
                     ) as photo_count
                 FROM sub_galleries
                 WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
@@ -214,13 +215,13 @@ class GalleryService:
                         SELECT COUNT(DISTINCT ci.asset_id)
                         FROM client_interactions ci
                         JOIN assets a ON ci.asset_id = a.asset_id
-                        WHERE ci.gallery_id = $2 AND ci.type = 'favorite' AND a.deleted = FALSE
+                        WHERE ci.gallery_id = $2 AND ci.type = 'favorite' AND a.deleted = FALSE AND a.status = 'available'
                     ) as favorites_count,
                     (
                         SELECT COUNT(DISTINCT ci.asset_id)
                         FROM client_interactions ci
                         JOIN assets a ON ci.asset_id = a.asset_id
-                        WHERE ci.gallery_id = $2 AND ci.type = 'select' AND a.deleted = FALSE
+                        WHERE ci.gallery_id = $2 AND ci.type = 'select' AND a.deleted = FALSE AND a.status = 'available'
                     ) as selections_count
                 FROM gallery_assets ga
                 JOIN assets ON ga.asset_id = assets.asset_id
@@ -343,6 +344,7 @@ class GalleryService:
                         WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
                         AND ga.visible = TRUE
                         AND a.deleted = FALSE
+                        AND a.status = 'available'
                     ) as photo_count
                 FROM sub_galleries
                 WHERE gallery_id = $1 AND deleted = FALSE
@@ -505,6 +507,7 @@ class GalleryService:
                         WHERE ga.gallery_id = galleries.gallery_id
                         AND ga.visible = TRUE
                         AND a.deleted = FALSE
+                        AND a.status = 'available'
                     ) as photo_count,
                     -- Fallback to first asset if no explicit cover is set
                     COALESCE(
@@ -516,6 +519,7 @@ class GalleryService:
                             WHERE ga.gallery_id = galleries.gallery_id
                             AND ga.visible = TRUE
                             AND a.deleted = FALSE
+                            AND a.status = 'available'
                             ORDER BY ga.created_at ASC
                             LIMIT 1
                         )
@@ -891,14 +895,14 @@ class GalleryService:
                 raise GalleryNotFoundError(gallery_id)
 
             if publish:
-                # Validate gallery has at least one photo (exclude deleted assets)
+                # Validate gallery has at least one photo (exclude deleted and failed assets)
                 photo_count = await conn.fetchval(
                     """
                     SELECT COUNT(*)
                     FROM gallery_assets ga
                     JOIN assets a ON ga.asset_id = a.asset_id
                     WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
-                    AND ga.visible = TRUE AND a.deleted = FALSE
+                    AND ga.visible = TRUE AND a.deleted = FALSE AND a.status = 'available'
                     """,
                     workspace_id,
                     gallery_id,
@@ -1123,7 +1127,7 @@ class GalleryService:
                 sort_order,
             )
 
-            # Return sub-gallery data (photo_count excludes deleted assets)
+            # Return sub-gallery data (photo_count excludes deleted and failed assets)
             row = await conn.fetchrow(
                 """
                 SELECT
@@ -1135,6 +1139,7 @@ class GalleryService:
                         WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
                         AND ga.visible = TRUE
                         AND a.deleted = FALSE
+                        AND a.status = 'available'
                     ) as photo_count
                 FROM sub_galleries
                 WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
@@ -1222,7 +1227,7 @@ class GalleryService:
                 param_idx += 1
 
             if not set_clauses:
-                # No updates, return current data (photo_count excludes deleted assets)
+                # No updates, return current data (photo_count excludes deleted and failed assets)
                 row = await conn.fetchrow(
                     """
                     SELECT
@@ -1234,6 +1239,7 @@ class GalleryService:
                             WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
                             AND ga.visible = TRUE
                             AND a.deleted = FALSE
+                            AND a.status = 'available'
                         ) as photo_count
                     FROM sub_galleries
                     WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
@@ -1253,7 +1259,7 @@ class GalleryService:
                     *params,
                 )
 
-                # Fetch updated data (photo_count excludes deleted assets)
+                # Fetch updated data (photo_count excludes deleted and failed assets)
                 row = await conn.fetchrow(
                     """
                     SELECT
@@ -1265,6 +1271,7 @@ class GalleryService:
                             WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
                             AND ga.visible = TRUE
                             AND a.deleted = FALSE
+                            AND a.status = 'available'
                         ) as photo_count
                     FROM sub_galleries
                     WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3
@@ -1397,18 +1404,19 @@ class GalleryService:
                 # Only published galleries are publicly accessible
                 raise GalleryNotFoundError(gallery_id)
 
-            # Fetch visible assets
+            # Fetch visible assets (exclude deleted and failed)
             rows = await conn.fetch(
                 """
-                SELECT 
-                    a.asset_id, a.gallery_id, ga.sub_gallery_id, a.type, a.filename, 
-                    a.width, a.height, a.duration, a.size_bytes, a.metadata, 
+                SELECT
+                    a.asset_id, a.gallery_id, ga.sub_gallery_id, a.type, a.filename,
+                    a.width, a.height, a.duration, a.size_bytes, a.metadata,
                     a.created_at, ga.sort_order, ga.is_private
                 FROM gallery_assets ga
                 JOIN assets a ON ga.asset_id = a.asset_id
                 WHERE ga.gallery_id = $1
                 AND ga.visible = TRUE
                 AND a.deleted = FALSE
+                AND a.status = 'available'
                 ORDER BY ga.sort_order ASC
                 """,
                 gallery_id,
@@ -1460,10 +1468,11 @@ class GalleryService:
                 SELECT a.asset_id, a.filename, a.type
                 FROM gallery_assets ga
                 JOIN assets a ON ga.asset_id = a.asset_id
-                WHERE ga.gallery_id = $1 
+                WHERE ga.gallery_id = $1
                 AND ga.asset_id = $2
                 AND ga.visible = TRUE
                 AND a.deleted = FALSE
+                AND a.status = 'available'
                 """,
                 gallery_id,
                 asset_id,
