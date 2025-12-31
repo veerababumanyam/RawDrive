@@ -16,7 +16,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.services.digital_invitation_service import (
-    DigitalInvitationService,
     get_invitation_service,
     InvitationNotFoundError,
 )
@@ -26,7 +25,6 @@ from app.services.calendar_service import (
     CalendarServiceError,
 )
 from app.services.invitation_rsvp_service import (
-    InvitationRSVPService,
     get_rsvp_service,
     RSVPNotFoundError,
     RSVPDeadlinePassedError,
@@ -79,7 +77,6 @@ def get_services():
 async def access_invitation(
     slug: str,
     request: Request,
-    invitation_service: DigitalInvitationService = None,
 ):
     """
     Access a public invitation.
@@ -87,8 +84,7 @@ async def access_invitation(
     If the invitation is password/PIN protected, returns requirements
     without the full invitation data.
     """
-    if invitation_service is None:
-        invitation_service = get_invitation_service()
+    invitation_service = get_invitation_service()
 
     try:
         # Get invitation by slug
@@ -170,13 +166,11 @@ async def verify_access(
     slug: str,
     credentials: AccessInvitationRequest,
     request: Request,
-    invitation_service: DigitalInvitationService = None,
 ):
     """
     Verify password/PIN and access protected invitation.
     """
-    if invitation_service is None:
-        invitation_service = get_invitation_service()
+    invitation_service = get_invitation_service()
 
     try:
         # Verify credentials
@@ -260,16 +254,13 @@ class TurnstileConfigResponse(BaseModel):
     summary="Get Turnstile configuration",
     description="Get Turnstile CAPTCHA configuration for public forms.",
 )
-async def get_turnstile_config(
-    turnstile_service: TurnstileService = None,
-):
+async def get_turnstile_config():
     """
     Get Turnstile CAPTCHA configuration.
 
     Returns whether Turnstile is enabled and the site key for rendering the widget.
     """
-    if turnstile_service is None:
-        turnstile_service = get_turnstile_service()
+    turnstile_service = get_turnstile_service()
 
     is_enabled = turnstile_service.is_configured()
     site_key = TurnstileService.get_site_key() if is_enabled else None
@@ -296,9 +287,6 @@ async def submit_rsvp(
     slug: str,
     data: RSVPCreate,
     request: Request,
-    invitation_service: DigitalInvitationService = None,
-    rsvp_service: InvitationRSVPService = None,
-    turnstile_service: TurnstileService = None,
 ):
     """
     Submit an RSVP response.
@@ -308,12 +296,9 @@ async def submit_rsvp(
     If Turnstile CAPTCHA is configured (CLOUDFLARE_TURNSTILE_SECRET_KEY env var),
     a valid turnstile_token must be provided in the request body.
     """
-    if invitation_service is None:
-        invitation_service = get_invitation_service()
-    if rsvp_service is None:
-        rsvp_service = get_rsvp_service()
-    if turnstile_service is None:
-        turnstile_service = get_turnstile_service()
+    invitation_service = get_invitation_service()
+    rsvp_service = get_rsvp_service()
+    turnstile_service = get_turnstile_service()
 
     try:
         # Get invitation by slug
@@ -397,13 +382,11 @@ async def submit_rsvp(
 )
 async def get_rsvp_by_token(
     edit_token: str,
-    rsvp_service: InvitationRSVPService = None,
 ):
     """
     Get RSVP details by edit token.
     """
-    if rsvp_service is None:
-        rsvp_service = get_rsvp_service()
+    rsvp_service = get_rsvp_service()
 
     try:
         return await rsvp_service.get_rsvp_by_token(edit_token)
@@ -423,13 +406,11 @@ async def get_rsvp_by_token(
 async def update_rsvp_by_token(
     edit_token: str,
     data: RSVPUpdate,
-    rsvp_service: InvitationRSVPService = None,
 ):
     """
     Update an RSVP using the edit token.
     """
-    if rsvp_service is None:
-        rsvp_service = get_rsvp_service()
+    rsvp_service = get_rsvp_service()
 
     try:
         return await rsvp_service.update_rsvp_by_token(edit_token, data)
@@ -463,15 +444,13 @@ async def update_rsvp_by_token(
 )
 async def get_invitation_ics(
     slug: str,
-    invitation_service: DigitalInvitationService = None,
 ):
     """
     Get ICS calendar data as JSON response.
 
     Use /calendar endpoint for direct file download.
     """
-    if invitation_service is None:
-        invitation_service = get_invitation_service()
+    invitation_service = get_invitation_service()
 
     try:
         invitation = await invitation_service.get_public_invitation(slug)
@@ -513,7 +492,6 @@ async def get_invitation_ics(
 )
 async def download_public_calendar(
     slug: str,
-    invitation_service: DigitalInvitationService = None,
 ):
     """
     Download an iCalendar file for the invitation event.
@@ -525,8 +503,7 @@ async def download_public_calendar(
     - Reminder alarms (1 day and 1 hour before)
     - Public URL link to invitation
     """
-    if invitation_service is None:
-        invitation_service = get_invitation_service()
+    invitation_service = get_invitation_service()
 
     try:
         invitation = await invitation_service.get_public_invitation(slug)
