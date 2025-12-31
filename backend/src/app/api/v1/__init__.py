@@ -73,11 +73,15 @@ router.include_router(
     prefix="/api/v1/workspaces/{workspace_id}/library",
     tags=["library"],
 )
+# Media router is intentionally mounted at two prefixes (route aliasing):
+# 1. /api/v1/media - Public media streaming (thumbnails, previews)
+# 2. /api/v1/workspaces/{workspace_id}/assets - Workspace-scoped asset operations
+# This allows semantic flexibility: public access via /media, scoped access via /assets
 router.include_router(media_router, prefix="/api/v1/media", tags=["media"])
 router.include_router(
     media_router,
     prefix="/api/v1/workspaces/{workspace_id}/assets",
-    tags=["media"],
+    tags=["workspace-assets"],
 )
 router.include_router(
     uploads_router,

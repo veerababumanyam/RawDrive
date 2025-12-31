@@ -5,6 +5,7 @@ import {
   Home,
   FolderOpen,
   Users,
+  Eye,
   Share2,
   Settings,
   HelpCircle,
@@ -84,7 +85,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     { id: 'invitations', label: t('nav.invitations', 'Invitations'), icon: <Mail size={20} />, path: '/workspace/invitations' },
     { id: 'people', label: t('nav.people', 'People'), icon: <UserCircle size={20} />, path: '/workspace/people' },
     { id: 'clients', label: t('nav.clients'), icon: <Users size={20} />, path: '/workspace/clients' },
-    { id: 'visitors', label: t('nav.visitors'), icon: <Users size={20} />, path: '/workspace/visitors' },
+    { id: 'visitors', label: t('nav.visitors'), icon: <Eye size={20} />, path: '/workspace/visitors' },
     { id: 'shared', label: t('nav.shared'), icon: <Share2 size={20} />, path: '/workspace/shared' },
   ], [t]);
 
@@ -100,6 +101,18 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     { id: 'myProfile', label: t('nav.myProfile', 'My Profile'), icon: <User size={20} />, path: '/settings' },
     { id: 'help', label: t('nav.help'), icon: <HelpCircle size={20} />, path: '/workspace/help' },
   ], [t]);
+
+  // Helper to check if a path is active using segment-based matching
+  // This prevents false positives like /workspace/galleries-archive matching /workspace/galleries
+  const isPathActive = React.useCallback((itemPath: string, current: string): boolean => {
+    if (itemPath === '/workspace') {
+      return current === '/workspace';
+    }
+    // Check if current path starts with itemPath followed by end, /, or ?
+    return current === itemPath ||
+           current.startsWith(itemPath + '/') ||
+           current.startsWith(itemPath + '?');
+  }, []);
 
   const handleNavigation = (path: string) => {
     navigate(path);
@@ -159,11 +172,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               id={item.path}
               label={item.label}
               icon={item.icon}
-              active={
-                item.path === '/workspace'
-                  ? currentPath === '/workspace'
-                  : currentPath.startsWith(item.path)
-              }
+              active={isPathActive(item.path, currentPath)}
               onClick={() => handleNavigation(item.path)}
             />
           ))}
@@ -179,7 +188,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               id={item.path}
               label={item.label}
               icon={item.icon}
-              active={currentPath.startsWith(item.path)}
+              active={isPathActive(item.path, currentPath)}
               onClick={() => handleNavigation(item.path)}
             />
           ))}
@@ -195,7 +204,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               id={item.path}
               label={item.label}
               icon={item.icon}
-              active={currentPath.startsWith(item.path)}
+              active={isPathActive(item.path, currentPath)}
               onClick={() => handleNavigation(item.path)}
             />
           ))}
@@ -225,7 +234,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               <AppButton
                 variant="gold"
                 size="sm"
-                onClick={() => navigate('/workspace/settings/billing')}
+                onClick={() => navigate('/settings?tab=subscription')}
                 fullWidth
                 leftIcon={<Crown size={14} />}
                 className="mt-3"

@@ -276,10 +276,8 @@ export const workspaceRoutes: RouteObject[] = [
         path: 'settings/profile',
         element: <LazyPage component={CompanyProfilePage} />,
       },
-      {
-        path: 'settings/*',
-        element: <LazyPage component={DashboardPage} />, // Placeholder
-      },
+      // Note: Additional workspace settings sub-routes can be added here as needed
+      // The catch-all was removed to prevent confusing redirects to dashboard
       {
         path: 'help',
         element: <LazyPage component={HelpSupportPage} />,
