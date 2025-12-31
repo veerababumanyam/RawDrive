@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import get_current_user, CurrentUser
@@ -259,6 +259,7 @@ async def update_invitation(
 @router.delete(
     "/{invitation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
     summary="Delete invitation",
     description="Soft-delete an invitation.",
 )
@@ -579,6 +580,7 @@ async def get_rsvp_stats(
 @router.delete(
     "/{invitation_id}/rsvps/{rsvp_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
     summary="Delete RSVP",
     description="Delete an RSVP (host action).",
 )
@@ -1035,6 +1037,7 @@ async def get_draft(
 @router.delete(
     "/drafts/{draft_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
     summary="Delete invitation draft",
     description="Delete a specific invitation draft.",
 )
