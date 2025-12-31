@@ -86,7 +86,7 @@ export function useInvitationDraft({
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   // Refs for debounce timer and pending data
-  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingDataRef = useRef<Record<string, unknown> | null>(null);
 
   // ---------------------------------------------------------------------------

@@ -288,7 +288,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
           <AppButton
             key={option.id}
             variant="outline"
-            size={size === 'sm' ? 'sm' : 'default'}
+            size={size === 'sm' ? 'sm' : 'md'}
             onClick={option.onClick}
             className="flex items-center gap-2"
           >

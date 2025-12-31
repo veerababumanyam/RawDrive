@@ -627,16 +627,15 @@ const InvitationDetailPage: React.FC = () => {
               </AppButton>
 
               {invitation.public_url && (
-                <AppButton
-                  variant="outline"
-                  as="a"
+                <a
                   href={invitation.public_url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg border border-border bg-surface text-text-primary hover:bg-surface-hover transition-colors"
                 >
                   <ExternalLink className="w-4 h-4 mr-2" />
                   View Public Page
-                </AppButton>
+                </a>
               )}
             </div>
           </div>

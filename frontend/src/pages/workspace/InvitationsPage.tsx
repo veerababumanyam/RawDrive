@@ -57,11 +57,11 @@ const EVENT_TYPE_CONFIG: Record<EventType, { label: string; emoji: string }> = {
 };
 
 // Status badge configuration
-const STATUS_CONFIG: Record<InvitationStatus, { variant: 'default' | 'success' | 'warning' | 'destructive'; label: string }> = {
+const STATUS_CONFIG: Record<InvitationStatus, { variant: 'default' | 'success' | 'warning' | 'error'; label: string }> = {
   draft: { variant: 'default', label: 'Draft' },
   published: { variant: 'success', label: 'Published' },
   archived: { variant: 'warning', label: 'Archived' },
-  deleted: { variant: 'destructive', label: 'Deleted' },
+  deleted: { variant: 'error', label: 'Deleted' },
 };
 
 interface InvitationCardProps {

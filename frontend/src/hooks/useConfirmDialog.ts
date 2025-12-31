@@ -14,6 +14,8 @@ export interface ConfirmDialogOptions {
   title: string;
   /** Description/message of the dialog */
   description?: string;
+  /** Alias for description */
+  message?: string;
   /** Text for the confirm button */
   confirmText?: string;
   /** Text for the cancel button */

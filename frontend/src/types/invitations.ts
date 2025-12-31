@@ -436,6 +436,10 @@ export interface RSVPStats {
 
 export interface RSVPListResponse {
   data: InvitationRSVP[];
+  /** Alias for data for convenience */
+  rsvps?: InvitationRSVP[];
+  /** Alias for meta.total for convenience */
+  total?: number;
   stats: RSVPStats;
   meta: {
     page: number;
@@ -487,6 +491,12 @@ export interface CheckinRequest {
 export interface CheckinStats {
   total_checked_in: number;
   total_party_size: number;
+  /** Alias for total_checked_in for convenience */
+  total_guests_checked_in?: number;
+  /** Expected total guests from RSVPs */
+  expected_guests?: number;
+  /** Check-in rate as percentage */
+  checkin_rate_percent?: number;
 }
 
 export interface CheckinListResponse {

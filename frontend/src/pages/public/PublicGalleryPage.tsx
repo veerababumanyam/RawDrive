@@ -400,6 +400,8 @@ const PublicGalleryPage: React.FC = () => {
                 is_favorited: localFavorites.has(publicAsset.asset_id),
                 is_selected: localSelections.has(publicAsset.asset_id),
                 favorites_count: publicAsset.favorites_count ?? 0,
+                client_favorites_count: publicAsset.favorites_count ?? 0,
+                client_picks_count: 0,
                 asset: {
                     type: publicAsset.type,
                     status: 'available' as const,

@@ -165,6 +165,7 @@ export class GalleryService {
       favorites_only?: boolean;
       selections_only?: boolean;
       search_query?: string;
+      sort_by?: 'sort_order' | 'created_at' | 'filename' | 'favorites_count';
     }
   ): Promise<GalleryAssetsResponse> {
     const params = new URLSearchParams();
@@ -177,6 +178,7 @@ export class GalleryService {
     if (options?.favorites_only) params.append('favorites_only', 'true');
     if (options?.selections_only) params.append('selections_only', 'true');
     if (options?.search_query) params.append('search_query', options.search_query);
+    if (options?.sort_by) params.append('sort_by', options.sort_by);
 
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets${query ? `?${query}` : ''}`;
@@ -696,6 +698,187 @@ export class GalleryService {
     const response = await apiClient.get<GalleryCredentialsResponse>(endpoint);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to get gallery credentials');
+    }
+    return response.data!;
+  }
+
+  // ==========================================================================
+  // Favorites Analytics (Feature: 012-client-favorites)
+  // ==========================================================================
+
+  /**
+   * Get favorites summary statistics for a gallery
+   */
+  async getFavoritesSummary(
+    workspaceId: string,
+    galleryId: string
+  ): Promise<{
+    total_visitors: number;
+    total_favorites: number;
+    avg_favorites_per_visitor: number;
+    most_favorited_count: number;
+    least_favorited_count: number;
+  }> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/summary`;
+    const response = await apiClient.get<{
+      total_visitors: number;
+      total_favorites: number;
+      avg_favorites_per_visitor: number;
+      most_favorited_count: number;
+      least_favorited_count: number;
+    }>(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to get favorites summary');
+    }
+    return response.data!;
+  }
+
+  /**
+   * Get favorites analytics with pagination
+   */
+  async getFavoritesAnalytics(
+    workspaceId: string,
+    galleryId: string,
+    options?: {
+      sort_by?: string;
+      order?: 'asc' | 'desc';
+      page?: number;
+      limit?: number;
+    }
+  ): Promise<{
+    data: Array<{
+      asset_id: string;
+      thumbnail_url: string | null;
+      filename: string;
+      favorite_count: number;
+      unique_visitors: number;
+    }>;
+    meta: {
+      page: number;
+      limit: number;
+      total: number;
+      total_pages: number;
+    };
+  }> {
+    const params = new URLSearchParams();
+    if (options?.sort_by) params.append('sort_by', options.sort_by);
+    if (options?.order) params.append('order', options.order);
+    if (options?.page) params.append('page', String(options.page));
+    if (options?.limit) params.append('limit', String(options.limit));
+
+    const query = params.toString();
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics${query ? `?${query}` : ''}`;
+    const response = await apiClient.get<{
+      data: Array<{
+        asset_id: string;
+        thumbnail_url: string | null;
+        filename: string;
+        favorite_count: number;
+        unique_visitors: number;
+      }>;
+      meta: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to get favorites analytics');
+    }
+    return response.data!;
+  }
+
+  /**
+   * Refresh favorites analytics
+   */
+  async refreshFavoritesAnalytics(
+    workspaceId: string,
+    galleryId: string
+  ): Promise<void> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/refresh`;
+    const response = await apiClient.post(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to refresh analytics');
+    }
+  }
+
+  /**
+   * Export favorites as CSV
+   */
+  async exportFavoritesCsv(
+    workspaceId: string,
+    galleryId: string
+  ): Promise<string> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/export`;
+    const response = await apiClient.get<string>(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to export favorites');
+    }
+    return response.data!;
+  }
+
+  // ==========================================================================
+  // Favorites Settings (Feature: 012-client-favorites)
+  // ==========================================================================
+
+  /**
+   * Get favorites settings for a gallery
+   */
+  async getFavoritesSettings(
+    workspaceId: string,
+    galleryId: string
+  ): Promise<{
+    favorites_enabled: boolean;
+    max_lists_per_client: number;
+    max_favorites_per_list: number;
+    sharing_enabled: boolean;
+    download_enabled: boolean;
+  }> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/settings`;
+    const response = await apiClient.get<{
+      favorites_enabled: boolean;
+      max_lists_per_client: number;
+      max_favorites_per_list: number;
+      sharing_enabled: boolean;
+      download_enabled: boolean;
+    }>(endpoint);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to get favorites settings');
+    }
+    return response.data!;
+  }
+
+  /**
+   * Update favorites settings for a gallery
+   */
+  async updateFavoritesSettings(
+    workspaceId: string,
+    galleryId: string,
+    settings: {
+      favorites_enabled?: boolean;
+      max_lists_per_client?: number;
+      max_favorites_per_list?: number;
+      sharing_enabled?: boolean;
+      download_enabled?: boolean;
+    }
+  ): Promise<{
+    favorites_enabled: boolean;
+    max_lists_per_client: number;
+    max_favorites_per_list: number;
+    sharing_enabled: boolean;
+    download_enabled: boolean;
+  }> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/settings`;
+    const response = await apiClient.patch<{
+      favorites_enabled: boolean;
+      max_lists_per_client: number;
+      max_favorites_per_list: number;
+      sharing_enabled: boolean;
+      download_enabled: boolean;
+    }>(endpoint, settings);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to update favorites settings');
     }
     return response.data!;
   }

@@ -35,7 +35,7 @@ import { AppInput } from '@/components/ui/AppInput';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { AppCard } from '@/components/ui/AppCard';
 import { invitationService } from '@/services/invitationService';
-import type { RSVPResponse, RSVPStatsResponse } from '@/types/invitations';
+import type { RSVPResponse, RSVPStatsResponse, InvitationRSVP } from '@/types/invitations';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useToast } from '@/hooks/useToast';
 
@@ -304,8 +304,8 @@ export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
   // Render
   // ---------------------------------------------------------------------------
 
-  const rsvps = rsvpsData?.rsvps || [];
-  const total = rsvpsData?.total || 0;
+  const rsvps: InvitationRSVP[] = rsvpsData?.rsvps || rsvpsData?.data || [];
+  const total = rsvpsData?.total ?? rsvpsData?.meta?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
 
   return (
