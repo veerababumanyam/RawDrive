@@ -17,7 +17,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import get_current_user, CurrentUser
+from app.api.dependencies import get_current_user, CurrentUser
 from app.api.invitation_schemas import (
     CreateInvitationRequest,
     UpdateInvitationRequest,
