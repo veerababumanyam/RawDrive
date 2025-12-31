@@ -2022,3 +2022,127 @@ class SetDefaultPaymentMethodRequest(BaseModel):
     """Request to set default payment method."""
 
     payment_method_id: UUID = Field(..., description="Payment method to set as default")
+
+
+# ---------------------------------------------------------------------------
+# Client Favorites Schemas (Feature: 012-client-favorites)
+# ---------------------------------------------------------------------------
+
+
+class ToggleFavoriteRequest(BaseModel):
+    """Toggle favorite status for a photo."""
+
+    asset_id: UUID = Field(..., description="Asset ID to toggle")
+    favorited: bool = Field(..., description="True to favorite, False to unfavorite")
+    list_id: Optional[UUID] = Field(None, description="Optional list ID")
+
+
+class ToggleFavoriteResponse(BaseModel):
+    """Response after toggling favorite."""
+
+    asset_id: UUID
+    is_favorited: bool
+    favorites_count: int
+    list_id: Optional[UUID] = None
+
+
+class FavoriteAssetResponse(BaseModel):
+    """A favorited asset with metadata."""
+
+    asset_id: UUID
+    thumbnail_url: str
+    filename: Optional[str] = None
+    favorited_at: datetime
+    list_id: Optional[UUID] = None
+
+
+class FavoritesListResponse(BaseModel):
+    """Paginated list of favorited photos."""
+
+    items: list[FavoriteAssetResponse]
+    total: int
+    page: int
+    limit: int
+    has_more: bool
+
+
+class FavoriteListResponse(BaseModel):
+    """A single favorite list."""
+
+    list_id: UUID
+    name: str
+    is_default: bool = False
+    photo_count: int = 0
+    sort_order: int = 0
+    created_at: datetime
+
+
+class FavoriteListsResponse(BaseModel):
+    """All favorite lists for a client."""
+
+    lists: list[FavoriteListResponse]
+    total_favorites: int = 0
+
+
+class CreateFavoriteListRequest(BaseModel):
+    """Create a new favorite list."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="List name")
+
+
+class UpdateFavoriteListRequest(BaseModel):
+    """Update a favorite list."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    sort_order: Optional[int] = Field(None, ge=0)
+
+
+class MoveToListRequest(BaseModel):
+    """Move photos to a different list."""
+
+    asset_ids: list[UUID] = Field(..., min_length=1, max_length=100)
+    target_list_id: UUID
+
+
+class CreateShareLinkRequest(BaseModel):
+    """Create a share link for favorites."""
+
+    list_id: Optional[UUID] = Field(None, description="List to share, None for all")
+    expires_in_hours: Optional[int] = Field(None, ge=1, le=168, description="Hours until expiry")
+
+
+class ShareLinkResponse(BaseModel):
+    """Share link details."""
+
+    share_id: UUID
+    share_url: str
+    list_id: Optional[UUID] = None
+    created_at: datetime
+    expires_at: Optional[datetime] = None
+    view_count: int = 0
+
+
+class ShareLinksListResponse(BaseModel):
+    """List of share links."""
+
+    items: list[ShareLinkResponse]
+
+
+class RequestDownloadRequest(BaseModel):
+    """Request download of favorites."""
+
+    list_id: Optional[UUID] = Field(None, description="List to download, None for all")
+    format: Literal["web", "original"] = Field("web", description="Download format")
+
+
+class DownloadStatusResponse(BaseModel):
+    """Download request status."""
+
+    download_id: UUID
+    status: Literal["pending", "processing", "ready", "expired", "failed"]
+    download_url: Optional[str] = None
+    file_count: int = 0
+    total_size_bytes: Optional[int] = None
+    created_at: datetime
+    ready_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
