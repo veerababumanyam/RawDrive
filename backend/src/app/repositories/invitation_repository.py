@@ -1484,3 +1484,15 @@ class InvitationRepository:
             )
 
             return result == "UPDATE 1"
+
+
+# Factory function for dependency injection
+_invitation_repository: InvitationRepository | None = None
+
+
+def get_invitation_repository() -> InvitationRepository:
+    """Get or create the invitation repository singleton."""
+    global _invitation_repository
+    if _invitation_repository is None:
+        _invitation_repository = InvitationRepository()
+    return _invitation_repository
