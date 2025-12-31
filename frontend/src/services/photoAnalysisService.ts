@@ -23,7 +23,7 @@ export class PhotoAnalysisService {
       request
     );
     if (!response.data) {
-      throw new Error('No data received from API');
+      throw new Error('No data returned from analysis');
     }
     return response.data;
   }

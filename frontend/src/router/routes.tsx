@@ -33,6 +33,7 @@ const HowItWorksPage = lazy(() => import('../pages/public/HowItWorksPage'));
 const ContactPage = lazy(() => import('../pages/public/ContactPage'));
 const PublicProfilePage = lazy(() => import('../pages/public/PublicProfilePage'));
 const PublicGalleryPage = lazy(() => import('../pages/public/PublicGalleryPage'));
+const PublicInvitationPage = lazy(() => import('../pages/public/PublicInvitationPage'));
 
 // Legal/Policy pages
 const TermsPage = lazy(() => import('../pages/public/legal/terms'));
@@ -69,6 +70,11 @@ const VisitorsPage = lazy(() => import('../pages/workspace/VisitorsPage'));
 const CompanyProfilePage = lazy(() => import('../pages/workspace/settings/CompanyProfilePage'));
 const GeneralSettingsPage = lazy(() => import('../pages/workspace/settings/GeneralSettingsPage'));
 const HelpSupportPage = lazy(() => import('../pages/workspace/settings/HelpSupportPage'));
+
+// Digital Invitations pages (016-save-the-date)
+const InvitationsPage = lazy(() => import('../pages/workspace/InvitationsPage'));
+const InvitationCreatePage = lazy(() => import('../pages/workspace/InvitationCreatePage'));
+const InvitationDetailPage = lazy(() => import('../pages/workspace/InvitationDetailPage'));
 
 // User Settings pages
 // Note: Individual settings pages are deprecated - use UserSettingsPage with tabs
@@ -141,6 +147,11 @@ export const publicRoutes: RouteObject[] = [
   {
     path: '/g/:galleryId',
     element: <LazyPage component={PublicGalleryPage} />,
+  },
+  // Public invitation view (016-save-the-date)
+  {
+    path: '/i/:slug',
+    element: <LazyPage component={PublicInvitationPage} />,
   },
   // Legal/Policy pages
   {
@@ -272,6 +283,19 @@ export const workspaceRoutes: RouteObject[] = [
       {
         path: 'help',
         element: <LazyPage component={HelpSupportPage} />,
+      },
+      // Digital Invitations routes (016-save-the-date)
+      {
+        path: 'invitations',
+        element: <CriticalLazyPage component={InvitationsPage} />,
+      },
+      {
+        path: 'invitations/new',
+        element: <CriticalLazyPage component={InvitationCreatePage} />,
+      },
+      {
+        path: 'invitations/:id',
+        element: <CriticalLazyPage component={InvitationDetailPage} />,
       },
     ],
   },

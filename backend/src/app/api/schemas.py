@@ -788,8 +788,7 @@ class PaginationMeta(BaseModel):
 class CreateMagicLinkRequest(BaseModel):
     """Request to create a magic link."""
 
-    album_title: str = Field(..., min_length=1, max_length=200, description="Client-facing album title for public display")
-    label: Optional[str] = Field(None, max_length=100, description="Internal label for organization")
+    label: Optional[str] = Field(None, max_length=100, description="User-friendly label")
     target_type: Literal["gallery", "sub_gallery", "photo"] = Field(
         "gallery", description="What the link provides access to"
     )
@@ -815,7 +814,6 @@ class MagicLinkResponse(BaseModel):
 
     link_id: UUID
     gallery_id: UUID
-    album_title: Optional[str] = None
     label: Optional[str] = None
     target_type: str
     target_id: Optional[UUID] = None
@@ -859,7 +857,6 @@ class ValidateMagicLinkResponse(BaseModel):
     gallery_id: UUID
     target_type: str
     target_id: Optional[UUID] = None
-    album_title: Optional[str] = None
     gallery: dict
     company_profile: Optional[dict] = None
 
@@ -1449,34 +1446,14 @@ class UserGeminiSettingsResponse(BaseModel):
     )
 
 
-class _Unset:
-    """Sentinel for distinguishing 'not provided' from 'explicitly null'."""
-
-    @classmethod
-    def __get_pydantic_core_schema__(cls, source_type, handler):
-        """Provide Pydantic core schema for the _Unset type."""
-        from pydantic_core import core_schema
-
-        return core_schema.is_instance_schema(cls)
-
-
-UNSET = _Unset()
-
-
 class UpdateGeminiSettingsRequest(BaseModel):
-    """Request to update Gemini settings.
-
-    Note: selected_model_id uses a special pattern to distinguish between:
-    - Field omitted from request: don't update the model
-    - Field explicitly set to null: use platform default
-    - Field set to UUID: select that model
-    """
+    """Request to update Gemini settings."""
 
     api_key: Optional[str] = Field(
         None, description="New Gemini API key (will be validated before saving)"
     )
-    selected_model_id: Optional[UUID] | _Unset = Field(
-        default=UNSET, description="Model to select (null to use platform default, omit to keep current)"
+    selected_model_id: Optional[UUID] = Field(
+        None, description="Model to select (null to use platform default)"
     )
 
 
@@ -1582,6 +1559,55 @@ class GeminiAdminStats(BaseModel):
     recent_ai_calls: int = Field(0, description="AI calls in last 24 hours")
     ai_success_rate: float = Field(
         0.0, ge=0, le=100, description="Percentage of successful AI calls"
+    )
+
+
+# ---------------------------------------------------------------------------
+# AI Feature Toggles Schemas (T080)
+# ---------------------------------------------------------------------------
+
+
+class AIFeatureToggles(BaseModel):
+    """AI feature toggle settings."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    photo_analysis: bool = Field(True, description="Enable AI photo analysis")
+    captions: bool = Field(True, description="Enable AI caption generation")
+    hashtags: bool = Field(True, description="Enable AI hashtag generation")
+    gallery_story: bool = Field(True, description="Enable AI gallery story generation")
+    smart_curation: bool = Field(True, description="Enable AI smart curation")
+
+
+class UpdateAIFeatureTogglesRequest(BaseModel):
+    """Request to update AI feature toggles."""
+
+    photo_analysis: Optional[bool] = Field(
+        None, description="Enable/disable AI photo analysis"
+    )
+    captions: Optional[bool] = Field(
+        None, description="Enable/disable AI caption generation"
+    )
+    hashtags: Optional[bool] = Field(
+        None, description="Enable/disable AI hashtag generation"
+    )
+    gallery_story: Optional[bool] = Field(
+        None, description="Enable/disable AI gallery story generation"
+    )
+    smart_curation: Optional[bool] = Field(
+        None, description="Enable/disable AI smart curation"
+    )
+
+
+class AIFeatureTogglesResponse(BaseModel):
+    """Response with AI feature toggles and status."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    toggles: AIFeatureToggles = Field(..., description="Current feature toggle settings")
+    has_api_key: bool = Field(..., description="Whether user has configured Gemini API key")
+    api_status: Literal["not_configured", "connected", "validation_failed"] = Field(
+        ..., description="API key configuration status"
     )
 
 
@@ -1996,159 +2022,3 @@ class SetDefaultPaymentMethodRequest(BaseModel):
     """Request to set default payment method."""
 
     payment_method_id: UUID = Field(..., description="Payment method to set as default")
-
-
-# ---------------------------------------------------------------------------
-# Client Favorites Schemas (012-client-favorites)
-# ---------------------------------------------------------------------------
-
-
-class ToggleFavoriteRequest(BaseModel):
-    """Request to toggle favorite status for a photo."""
-
-    asset_id: UUID = Field(..., description="Asset to favorite/unfavorite")
-    favorited: bool = Field(..., description="True to favorite, False to unfavorite")
-    list_id: Optional[UUID] = Field(
-        None, description="Target list ID (null = default list)"
-    )
-
-
-class ToggleFavoriteResponse(BaseModel):
-    """Response after toggling favorite status."""
-
-    asset_id: UUID
-    is_favorited: bool = Field(..., description="Current favorite status")
-    favorites_count: int = Field(..., description="Total favorites in the list")
-    list_id: Optional[UUID] = Field(None, description="List the favorite was added to")
-
-
-class FavoriteItemResponse(BaseModel):
-    """A single favorited photo."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    interaction_id: UUID = Field(..., description="Favorite interaction ID")
-    asset_id: UUID
-    list_id: UUID
-    thumbnail_url: Optional[str] = Field(None, description="Thumbnail URL for display")
-    filename: str = Field(..., description="Original filename")
-    width: int = Field(..., description="Photo width in pixels")
-    height: int = Field(..., description="Photo height in pixels")
-    favorited_at: datetime
-
-
-class FavoritesListMeta(BaseModel):
-    """Pagination metadata for favorites list."""
-
-    page: int
-    limit: int
-    total: int
-    total_pages: int
-
-
-class FavoritesListResponse(BaseModel):
-    """Response containing list of favorited photos."""
-
-    data: list[FavoriteItemResponse]
-    meta: FavoritesListMeta
-
-
-class FavoriteListResponse(BaseModel):
-    """A single favorite list (collection)."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    list_id: UUID
-    workspace_id: UUID
-    gallery_id: UUID
-    client_token: str
-    name: str = Field(..., max_length=50)
-    is_default: bool = Field(..., description="True for the undeletable default list")
-    sort_order: int
-    photo_count: int = Field(0, description="Number of photos in this list")
-    created_at: datetime
-    updated_at: datetime
-
-
-class FavoriteListsResponse(BaseModel):
-    """Response containing all favorite lists for a client."""
-
-    lists: list[FavoriteListResponse]
-    total_favorites: int = Field(..., description="Total favorites across all lists")
-
-
-class CreateFavoriteListRequest(BaseModel):
-    """Request to create a new favorite list."""
-
-    name: str = Field(..., min_length=1, max_length=50, description="List name")
-
-
-class UpdateFavoriteListRequest(BaseModel):
-    """Request to update a favorite list."""
-
-    name: Optional[str] = Field(None, min_length=1, max_length=50)
-    sort_order: Optional[int] = Field(None, ge=0)
-
-
-class MoveToListRequest(BaseModel):
-    """Request to move a favorite to another list."""
-
-    asset_id: UUID = Field(..., description="Asset to move")
-    target_list_id: UUID = Field(..., description="Destination list")
-
-
-class CreateShareLinkRequest(BaseModel):
-    """Request to create a share link for a favorites list."""
-
-    expires_in_days: Optional[int] = Field(
-        None, ge=1, le=365, description="Days until link expires (null = never)"
-    )
-
-
-class ShareLinkResponse(BaseModel):
-    """Response with share link details."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    share_id: UUID
-    share_token: str = Field(..., description="Token to append to share URL")
-    share_url: str = Field(..., description="Complete shareable URL")
-    expires_at: Optional[datetime] = Field(None, description="Expiration time")
-    access_count: int = Field(0, description="Number of times accessed")
-    created_at: datetime
-
-
-class ShareLinksListResponse(BaseModel):
-    """Response listing all share links for a list."""
-
-    shares: list[ShareLinkResponse]
-
-
-class RequestDownloadRequest(BaseModel):
-    """Request to generate a ZIP download of favorites."""
-
-    resolution: Literal["web", "original"] = Field(
-        "web", description="Download resolution"
-    )
-
-
-class DownloadStatusResponse(BaseModel):
-    """Download job status response."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    download_id: UUID
-    status: Literal["pending", "processing", "completed", "failed"] = Field(
-        ..., description="Current job status"
-    )
-    progress: int = Field(0, ge=0, le=100, description="Progress percentage")
-    file_size_bytes: Optional[int] = Field(
-        None, description="Final file size (when completed)"
-    )
-    download_url: Optional[str] = Field(
-        None, description="Presigned download URL (when completed)"
-    )
-    error_message: Optional[str] = Field(None, description="Error details (when failed)")
-    expires_at: Optional[datetime] = Field(
-        None, description="URL expiration (when completed)"
-    )

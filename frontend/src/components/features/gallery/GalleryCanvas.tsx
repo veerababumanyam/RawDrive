@@ -5,13 +5,11 @@ export type { GalleryCanvasProps };
 
 import { MasonryLayout } from './MasonryLayout';
 import { SignedUrlProvider } from '../../../contexts/SignedUrlContext';
-import { useFacesSummary } from '../../../hooks/useFacesSummary';
 
 // Placeholder for MasonryLayout - REMOVED
 
 export const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
   assets,
-  galleryId,
   viewMode,
   columns,
   gap,
@@ -35,20 +33,10 @@ export const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
   coverAssetId,
   isLoading,
   error,
-  showWatermark = false,
-  watermarkSettings,
-  showFaceDetection = false,
-  enableVirtualization = false,
-  rowHeight = 280,
   isPrivateUnlocked,
   onUnlockPrivate,
   className = '',
 }) => {
-  // Fetch face summaries for this gallery (only when enabled and galleryId is provided)
-  const { faceSummaries } = useFacesSummary({
-    galleryId: galleryId ?? '',
-    enabled: showFaceDetection && !!galleryId,
-  });
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center">
@@ -151,15 +139,10 @@ export const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
     onUnlockPrivate,
     isLoading,
     className,
-    // Watermark props (passed through to PhotoCard)
-    showWatermark,
-    watermarkSettings,
-    // Face detection props (from useFacesSummary hook)
-    faceSummaries: showFaceDetection ? faceSummaries : undefined,
   };
 
   const content = viewMode === 'masonry' ? (
-      <MasonryLayout
+      <MasonryLayout 
         {...commonProps}
         columns={columns}
         gap={gap}
@@ -172,8 +155,6 @@ export const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
       sortable={sortable}
       onSortOrderChange={onSortOrderChange}
       onMoveToSubGallery={onMoveToSubGallery}
-      enableVirtualization={enableVirtualization}
-      rowHeight={rowHeight}
     />
   );
 

@@ -104,10 +104,9 @@ async def list_face_groups(
     current_user: CurrentUserDep,
     group_repo: GroupRepoDep,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    limit: Annotated[int, Query(ge=1, le=200, description="Items per page")] = 50,
+    limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
     order_by: Annotated[str, Query(description="Sort field")] = "face_count",
     order_desc: Annotated[bool, Query(description="Sort descending")] = True,
-    min_faces: Annotated[Optional[int], Query(ge=0, description="Minimum face count filter")] = None,
 ):
     """List all face groups in a workspace."""
     offset = (page - 1) * limit
@@ -119,7 +118,6 @@ async def list_face_groups(
         offset=offset,
         order_by=order_by,
         order_desc=order_desc,
-        min_faces=min_faces,
     )
 
     # Generate signed URLs for thumbnails
@@ -167,13 +165,12 @@ async def list_face_groups(
 
 
 @router.get(
-    "/workspaces/{workspace_id}/galleries/{gallery_id}/face-groups",
+    "/galleries/{gallery_id}/face-groups",
     response_model=FaceGroupGalleryStatsListResponse,
     summary="List face groups in a gallery",
     description="Returns face groups that appear in a specific gallery, with gallery-specific statistics.",
 )
 async def list_gallery_face_groups(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
@@ -183,6 +180,7 @@ async def list_gallery_face_groups(
     search: Annotated[Optional[str], Query(description="Search by person name")] = None,
 ):
     """List face groups for a gallery."""
+    workspace_id = workspace_access["workspace_id"]
     offset = (page - 1) * limit
 
     # 1. Get groups with stats
@@ -272,13 +270,12 @@ async def create_face_group(
 
 
 @router.get(
-    "/workspaces/{workspace_id}/face-groups/{group_id}",
+    "/face-groups/{group_id}",
     response_model=FaceGroupDetailResponse,
     summary="Get face group",
     description="Returns detailed information about a face group.",
 )
 async def get_face_group(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     group_id: Annotated[UUID, Path(..., description="Face group ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
@@ -286,6 +283,8 @@ async def get_face_group(
     face_repo: FaceRepoDep,
 ):
     """Get face group details with sample faces."""
+    workspace_id = workspace_access["workspace_id"]
+    
     group = await group_repo.find_by_id(group_id, workspace_id)
     if not group:
         raise HTTPException(
@@ -294,26 +293,11 @@ async def get_face_group(
         )
     
     # Get sample faces from this group
-    raw_sample_faces = await face_repo.find_by_group_id(
+    sample_faces = await face_repo.find_by_group_id(
         group_id=group_id,
         workspace_id=workspace_id,
         limit=5,
     )
-    
-    # ensure sample faces are valid FaceResponse objects
-    sample_faces = []
-    for face in raw_sample_faces:
-        sample_faces.append(FaceResponse(
-            id=face["id"],
-            workspace_id=workspace_id,
-            photo_id=face.get("photo_id"),
-            bounding_box=face.get("bounding_box"),
-            confidence=face.get("confidence"),
-            provider=face.get("provider", "unknown"),
-            created_at=face.get("created_at"),
-            updated_at=face.get("updated_at", face.get("created_at")),
-            thumbnail_urls=face.get("thumbnail_urls"),
-        ))
     
     # Get representative thumbnail URL (signed)
     representative_thumbnail = None
@@ -341,13 +325,12 @@ async def get_face_group(
 
 
 @router.put(
-    "/workspaces/{workspace_id}/face-groups/{group_id}",
+    "/face-groups/{group_id}",
     response_model=FaceGroupResponse,
     summary="Update face group",
     description="Update face group metadata (name, representative face).",
 )
 async def update_face_group(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     group_id: Annotated[UUID, Path(..., description="Face group ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
@@ -355,6 +338,8 @@ async def update_face_group(
     group_repo: GroupRepoDep,
 ):
     """Update a face group."""
+    workspace_id = workspace_access["workspace_id"]
+    
     # Build update dict
     updates = {}
     if request.name is not None:
@@ -484,19 +469,20 @@ async def unname_face_group(
 
 
 @router.delete(
-    "/workspaces/{workspace_id}/face-groups/{group_id}",
+    "/face-groups/{group_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete face group",
     description="Delete a face group. Faces in the group become ungrouped.",
 )
 async def delete_face_group(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     group_id: Annotated[UUID, Path(..., description="Face group ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     group_repo: GroupRepoDep,
 ):
     """Delete a face group (faces become ungrouped)."""
+    workspace_id = workspace_access["workspace_id"]
+    
     deleted = await group_repo.delete(group_id, workspace_id)
     
     if not deleted:
@@ -519,19 +505,20 @@ async def delete_face_group(
 
 
 @router.post(
-    "/workspaces/{workspace_id}/face-groups/merge",
+    "/face-groups/merge",
     response_model=FaceGroupResponse,
     summary="Merge face groups",
     description="Merge source group into target group. Source is deleted.",
 )
 async def merge_face_groups(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     request: MergeFaceGroupsRequest,
     cluster_service: ClusterServiceDep,
 ):
     """Merge two face groups."""
+    workspace_id = workspace_access["workspace_id"]
+    
     try:
         merged_group = await cluster_service.merge_groups(
             source_group_id=request.source_group_id,
@@ -553,14 +540,13 @@ async def merge_face_groups(
 
 
 @router.post(
-    "/workspaces/{workspace_id}/face-groups/{group_id}/split",
+    "/face-groups/{group_id}/split",
     response_model=FaceGroupResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Split face group",
     description="Split specified faces from a group into a new group.",
 )
 async def split_face_group(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     group_id: Annotated[UUID, Path(..., description="Source group ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
@@ -568,6 +554,8 @@ async def split_face_group(
     cluster_service: ClusterServiceDep,
 ):
     """Split faces from a group into a new group."""
+    workspace_id = workspace_access["workspace_id"]
+
     try:
         new_group = await cluster_service.split_group(
             group_id=group_id,
@@ -650,7 +638,7 @@ async def multi_merge_face_groups(
     await audit_service.log_event(
         event_type=AuditEventType.FACE_GROUPS_MERGED,
         workspace_id=workspace_id,
-        actor_user_id=current_user.user_id,
+        actor_user_id=current_user.id,
         target_entity_type="face_group",
         target_entity_id=request.target_group_id,
         details={
@@ -988,14 +976,11 @@ async def get_faces_in_group(
 
         face_responses.append(FaceResponse(
             id=face["id"],
-            workspace_id=workspace_id,
             photo_id=face.get("photo_id"),
             bounding_box=face.get("bounding_box"),
             confidence=face.get("confidence"),
-            provider=face.get("provider", "unknown"),
             thumbnail_url=thumbnail_url,
             created_at=face.get("created_at"),
-            updated_at=face.get("updated_at", face.get("created_at")),
         ))
 
     total = group.get("face_count", len(faces))
@@ -1013,12 +998,11 @@ async def get_faces_in_group(
 
 
 @router.get(
-    "/workspaces/{workspace_id}/face-groups/{group_id}/photos",
+    "/face-groups/{group_id}/photos",
     summary="Get photos by face group",
     description="Returns photo IDs containing faces from this group.",
 )
 async def get_photos_by_face_group(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     group_id: Annotated[UUID, Path(..., description="Face group ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
@@ -1028,6 +1012,7 @@ async def get_photos_by_face_group(
     limit: Annotated[int, Query(ge=1, le=500, description="Items per page")] = 100,
 ):
     """Get all photo IDs containing faces from a specific face group."""
+    workspace_id = workspace_access["workspace_id"]
     offset = (page - 1) * limit
 
     # Verify group exists

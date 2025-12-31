@@ -24,7 +24,7 @@ export class StoryService {
       request
     );
     if (!response.data) {
-      throw new Error('No data received from API');
+      throw new Error('No data returned from story request');
     }
     return response.data;
   }
@@ -40,7 +40,7 @@ export class StoryService {
       `/workspaces/${workspaceId}${API_BASE}/jobs/${jobId}`
     );
     if (!response.data) {
-      throw new Error('No data received from API');
+      throw new Error('No data returned from job status');
     }
     return response.data;
   }

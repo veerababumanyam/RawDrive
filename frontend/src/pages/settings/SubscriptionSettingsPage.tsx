@@ -345,8 +345,8 @@ const SubscriptionSettingsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Usage Card - only render if usage data is available */}
-      {subscription.usage && <UsageCard usage={subscription.usage} />}
+      {/* Usage Card */}
+      <UsageCard usage={subscription.usage} />
 
       {/* Recent Invoices */}
       <div className="glass-card rounded-2xl p-4 sm:p-6">

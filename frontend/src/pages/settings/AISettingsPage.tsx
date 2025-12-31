@@ -2,11 +2,13 @@
  * AI Settings Page
  * User Story 1 & 2: Configure Gemini API Key and Select Model
  * Feature: 003-user-gemini-settings (T019, T028)
+ * Feature: 010-ai-powered-features (T080 - AI feature toggles)
  *
  * Allows users to:
  * - Configure their Gemini API key
  * - Select preferred model from admin-managed catalogue
  * - View connection status
+ * - Enable/disable specific AI features
  * - Revoke API key
  */
 
@@ -21,12 +23,14 @@ import {
   XCircle,
   ExternalLink,
   Trash2,
+  ToggleLeft,
 } from 'lucide-react';
-import { useGeminiSettingsPage } from '../../hooks/useGeminiSettings';
+import { useGeminiSettingsPage, useAIFeatureToggles } from '../../hooks/useGeminiSettings';
 import GeminiApiKeyForm from '../../components/settings/GeminiApiKeyForm';
 import GeminiModelSelector from '../../components/settings/GeminiModelSelector';
+import AIFeatureTogglesSection from '../../components/settings/AIFeatureTogglesSection';
 import { AppButton } from '../../components/ui/AppButton';
-import type { GeminiSettingsStatus } from '../../types/geminiSettings';
+import type { GeminiSettingsStatus, AIFeatureToggles } from '../../types/geminiSettings';
 
 /* =============================================================================
    Status Badge Component
@@ -123,15 +127,39 @@ const AISettingsPage: React.FC = () => {
     updateModelSelection,
   } = useGeminiSettingsPage();
 
+  const {
+    featureToggles,
+    loading: togglesLoading,
+    error: togglesError,
+    toggleFeature,
+    refetch: refetchToggles,
+  } = useAIFeatureToggles();
+
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [togglingFeature, setTogglingFeature] = useState<keyof AIFeatureToggles | null>(null);
+
+  // Handle feature toggle
+  const handleToggleFeature = useCallback(
+    async (feature: keyof AIFeatureToggles) => {
+      setTogglingFeature(feature);
+      try {
+        await toggleFeature(feature);
+      } finally {
+        setTogglingFeature(null);
+      }
+    },
+    [toggleFeature]
+  );
 
   // Handle saving API key
   const handleSaveKey = useCallback(
     async (apiKey: string) => {
       await updateSettings({ api_key: apiKey });
+      // Refetch feature toggles since they depend on API key status
+      await refetchToggles();
     },
-    [updateSettings]
+    [updateSettings, refetchToggles]
   );
 
   // Handle revoking API key
@@ -140,10 +168,12 @@ const AISettingsPage: React.FC = () => {
     try {
       await revokeKey();
       setShowRevokeConfirm(false);
+      // Refetch feature toggles since they depend on API key status
+      await refetchToggles();
     } finally {
       setRevoking(false);
     }
-  }, [revokeKey]);
+  }, [revokeKey, refetchToggles]);
 
   // Loading state
   if (settingsLoading && !settings) {
@@ -245,6 +275,21 @@ const AISettingsPage: React.FC = () => {
           loading={loading}
           modelsLoading={modelsLoading}
           disabled={!hasApiKey}
+        />
+      </SectionCard>
+
+      {/* AI Feature Toggles Section */}
+      <SectionCard
+        icon={<ToggleLeft className="w-5 h-5 text-primary" />}
+        title="AI Features"
+        description="Enable or disable specific AI-powered features"
+      >
+        <AIFeatureTogglesSection
+          featureToggles={featureToggles}
+          onToggle={handleToggleFeature}
+          loading={togglesLoading}
+          error={togglesError}
+          togglingFeature={togglingFeature}
         />
       </SectionCard>
 

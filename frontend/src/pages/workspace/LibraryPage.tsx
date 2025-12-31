@@ -22,20 +22,15 @@ import {
     Loader2,
     UserCircle,
     X,
-    CheckSquare,
-    Square,
 } from 'lucide-react';
 import { useUpload } from '../../hooks/useUpload';
 import MoveToGalleryModal from '../../components/workspace/library/MoveToGalleryModal';
 import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
 import CreateFolderModal from '../../components/features/library/CreateFolderModal';
 import EditFolderModal from '../../components/features/library/EditFolderModal';
-import { PinVerificationModal } from '../../components/features/gallery/PinVerificationModal';
 import LibraryFolderCard from '../../components/features/library/LibraryFolderCard';
 import MoveToLibraryFolderModal from '../../components/features/library/MoveToLibraryFolderModal';
 import { staggerContainer, staggerItem } from '../../components/landing/animations/presets';
-import { DuplicateDetectionDialog } from '../../components/features/upload/DuplicateDetectionDialog';
-import { DuplicateAssetResponse } from '../../types/gallery';
 
 const LibraryPage: React.FC = () => {
     const { t } = useTranslation();
@@ -68,10 +63,6 @@ const LibraryPage: React.FC = () => {
     const [showDeleteFolderConfirm, setShowDeleteFolderConfirm] = useState(false);
     const [deletingFolder, setDeletingFolder] = useState<LibraryFolder | null>(null);
 
-    // PIN Verification State
-    const [showPinModal, setShowPinModal] = useState(false);
-    const [pendingFolder, setPendingFolder] = useState<LibraryFolder | null>(null);
-
     // Lightbox state
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -101,12 +92,6 @@ const LibraryPage: React.FC = () => {
         setSearchParams(newParams);
         setFilterPerson(null);
     }, [searchParams, setSearchParams]);
-
-    // Clear selection when person filter or current folder changes to prevent stale selections
-    // This fixes Bug #1: Unintentional photo moves when filtering by person
-    useEffect(() => {
-        setSelectedIds(new Set());
-    }, [personFilter, currentFolder?.folder_id]);
 
     const fetchFolders = useCallback(async () => {
         if (!user?.workspace_id) return;
@@ -155,27 +140,9 @@ const LibraryPage: React.FC = () => {
         }
     }, [user?.workspace_id, page, filterType, searchQuery, currentFolder?.folder_id, personFilter, addToast]);
 
-
-    // Duplicate detection state
-    const [duplicateDialog, setDuplicateDialog] = useState<{
-        isOpen: boolean;
-        file: File;
-        duplicates: DuplicateAssetResponse[];
-    } | null>(null);
-
-    const handleDuplicateDetected = useCallback((file: File, duplicates: DuplicateAssetResponse[]) => {
-        setDuplicateDialog({
-            isOpen: true,
-            file,
-            duplicates,
-        });
-    }, []);
-
     const { addFiles, isUploading } = useUpload({
         workspaceId: user?.workspace_id || '',
         folderId: currentFolder?.folder_id || null,
-        enableDuplicateDetection: true,
-        onDuplicateDetected: handleDuplicateDetected,
         onComplete: () => {
             fetchAssets();
             fetchFolders();
@@ -194,24 +161,6 @@ const LibraryPage: React.FC = () => {
             });
         }
     });
-
-    const handleDuplicateSkip = useCallback(() => {
-        setDuplicateDialog(null);
-    }, []);
-
-    const handleDuplicateReplace = useCallback(async () => {
-        if (duplicateDialog) {
-            setDuplicateDialog(null);
-            await addFiles([duplicateDialog.file], true);
-        }
-    }, [duplicateDialog, addFiles]);
-
-    const handleDuplicateKeepBoth = useCallback(async () => {
-        if (duplicateDialog) {
-            setDuplicateDialog(null);
-            await addFiles([duplicateDialog.file], true);
-        }
-    }, [duplicateDialog, addFiles]);
 
     // Initial load and re-fetch when folder changes
     useEffect(() => {
@@ -245,34 +194,9 @@ const LibraryPage: React.FC = () => {
                 });
             }
         }
+        // Note: fetchFolders and fetchAssets will be called via useEffect
+        // when currentFolder state changes (they depend on currentFolder?.folder_id)
     }, [user?.workspace_id, addToast]);
-
-    // Handle protected folder click
-    const handleFolderClick = (folder: LibraryFolder) => {
-        if (folder.is_protected) {
-            setPendingFolder(folder);
-            setShowPinModal(true);
-        } else {
-            navigateToFolder(folder.folder_id);
-        }
-    };
-
-    const handlePinVerify = async (pin: string): Promise<boolean> => {
-        if (!user?.workspace_id || !pendingFolder) return false;
-        try {
-            const response = await libraryService.verifyFolderPin(user.workspace_id, pendingFolder.folder_id, pin);
-            if (response.valid) {
-                 setShowPinModal(false);
-                 navigateToFolder(pendingFolder.folder_id);
-                 setPendingFolder(null);
-                 return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('PIN verification failed:', error);
-            return false;
-        }
-    };
 
     // Create folder handler
     const handleCreateFolder = async (name: string, color?: string, description?: string) => {
@@ -287,15 +211,13 @@ const LibraryPage: React.FC = () => {
     };
 
     // Edit folder handler
-    const handleEditFolder = async (name: string, color?: string, description?: string, pin?: string | null) => {
+    const handleEditFolder = async (name: string, color?: string, description?: string) => {
         if (!user?.workspace_id || !editingFolder) return;
         await libraryService.updateFolder(user.workspace_id, editingFolder.folder_id, {
             name,
             color,
             description,
-            pin: pin === null ? undefined : pin,
-            remove_pin: pin === null,
-        } as any);
+        });
         fetchFolders();
         // If we edited the current folder, refresh its details
         if (currentFolder?.folder_id === editingFolder.folder_id) {
@@ -323,44 +245,13 @@ const LibraryPage: React.FC = () => {
 
     // Move assets to folder
     const handleMoveToFolder = async (folderId: string | null) => {
-        if (!user?.workspace_id || selectedIds.size === 0) return;
-
-        try {
-            const result = await libraryService.moveAssetsToFolder(
-                user.workspace_id,
-                Array.from(selectedIds),
-                folderId
-            );
-
-            addToast({
-                title: 'Assets moved',
-                message: `Successfully moved ${result.count} asset${result.count !== 1 ? 's' : ''}`,
-                variant: 'success',
-            });
-            setSelectedIds(new Set());
-            setShowMoveToFolder(false);
-            await fetchAssets();
-            await fetchFolders();
-        } catch (error) {
-            console.error('Move to folder failed:', error);
-            addToast({
-                title: 'Move failed',
-                message: error instanceof Error ? error.message : 'Failed to move assets. Please try again.',
-                variant: 'error',
-            });
-        }
+        if (!user?.workspace_id) return;
+        await libraryService.moveAssetsToFolder(user.workspace_id, Array.from(selectedIds), folderId);
+        setSelectedIds(new Set());
+        setShowMoveToFolder(false);
+        fetchAssets();
+        fetchFolders();
     };
-
-    // Select all assets handler
-    const handleSelectAll = useCallback(() => {
-        if (selectedIds.size === assets.length && assets.length > 0) {
-            // Deselect all
-            setSelectedIds(new Set());
-        } else {
-            // Select all
-            setSelectedIds(new Set(assets.map((asset) => asset.asset_id)));
-        }
-    }, [assets, selectedIds.size]);
 
     // Map LibraryAsset to PhotoGrid Photo
     const gridPhotos: Photo[] = assets.map(asset => ({
@@ -566,25 +457,6 @@ const LibraryPage: React.FC = () => {
                             </button>
                         ))}
                     </div>
-
-                    {/* Select All Button */}
-                    {assets.length > 0 && (
-                        <AppButton
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleSelectAll}
-                            leftIcon={
-                                selectedIds.size === assets.length && assets.length > 0 ? (
-                                    <CheckSquare size={16} />
-                                ) : (
-                                    <Square size={16} />
-                                )
-                            }
-                            className="min-h-[44px]"
-                        >
-                            {selectedIds.size === assets.length && assets.length > 0 ? 'Deselect All' : 'Select All'}
-                        </AppButton>
-                    )}
                 </div>
             </motion.div>
 
@@ -635,35 +507,15 @@ const LibraryPage: React.FC = () => {
             )}
 
             {/* Modals */}
-            <MoveToGalleryModal
+            <MoveToGalleryModal 
                 isOpen={isMoveModalOpen}
                 onClose={() => setIsMoveModalOpen(false)}
                 selectedCount={selectedIds.size}
                 onMove={async (galleryId) => {
-                    if (!user?.workspace_id || selectedIds.size === 0) return;
-
-                    try {
-                        const result = await galleryService.addAssetsToGallery(
-                            user.workspace_id,
-                            galleryId,
-                            Array.from(selectedIds)
-                        );
-
-                        addToast({
-                            title: 'Added to gallery',
-                            message: `Successfully added ${result.count} asset${result.count !== 1 ? 's' : ''} to gallery`,
-                            variant: 'success',
-                        });
+                    if (user?.workspace_id) {
+                        await galleryService.addAssetsToGallery(user.workspace_id, galleryId, Array.from(selectedIds));
                         setSelectedIds(new Set());
-                        setIsMoveModalOpen(false);
-                        await fetchAssets();
-                    } catch (error) {
-                        console.error('Add to gallery failed:', error);
-                        addToast({
-                            title: 'Add to gallery failed',
-                            message: error instanceof Error ? error.message : 'Failed to add assets to gallery. Please try again.',
-                            variant: 'error',
-                        });
+                        fetchAssets();
                     }
                 }}
             />
@@ -709,16 +561,6 @@ const LibraryPage: React.FC = () => {
                 />
             )}
 
-            <PinVerificationModal
-                isOpen={showPinModal}
-                onCancel={() => {
-                    setShowPinModal(false);
-                    setPendingFolder(null);
-                }}
-                onVerify={handlePinVerify}
-                galleryTitle={pendingFolder?.name}
-            />
-
             <MoveToLibraryFolderModal
                 isOpen={showMoveToFolder}
                 onClose={() => setShowMoveToFolder(false)}
@@ -751,7 +593,7 @@ const LibraryPage: React.FC = () => {
                             <LibraryFolderCard
                                 key={folder.folder_id}
                                 folder={folder}
-                                onClick={() => handleFolderClick(folder)}
+                                onClick={() => navigateToFolder(folder.folder_id)}
                                 onEdit={() => {
                                     setEditingFolder(folder);
                                     setShowEditFolder(true);
@@ -912,18 +754,6 @@ const LibraryPage: React.FC = () => {
                         {assets[lightboxIndex].filename} • {lightboxIndex + 1} / {assets.length}
                     </div>
                 </div>
-            )}
-            {/* Duplicate Detection Dialog */}
-            {duplicateDialog && (
-                <DuplicateDetectionDialog
-                    isOpen={duplicateDialog.isOpen}
-                    onClose={handleDuplicateSkip}
-                    duplicates={duplicateDialog.duplicates}
-                    newFile={duplicateDialog.file}
-                    onSkip={handleDuplicateSkip}
-                    onReplace={handleDuplicateReplace}
-                    onKeepBoth={handleDuplicateKeepBoth}
-                />
             )}
         </motion.div>
     );

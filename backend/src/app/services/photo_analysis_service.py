@@ -2,6 +2,7 @@
 
 Uses AI to analyze photos for metadata, quality scoring, colors, lighting, mood, and suggestions.
 Feature: AI-powered photo analysis
+Tasks: T009-T020, T077
 """
 
 from __future__ import annotations
@@ -14,8 +15,7 @@ from uuid import UUID
 from app.config.settings import get_settings
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
-from app.services.ai_cache_service import get_ai_cache_service
-from app.utils.image_fetch import fetch_image_base64, ImageFetchError
+from app.services.ai_request_deduplication import get_ai_deduplication_service
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class PhotoAnalysisService:
         self.settings = get_settings()
         self.gemini_client = get_gemini_client_service()
         self.ai_usage = get_ai_usage_service()
-        self.ai_cache = get_ai_cache_service()
+        self.dedup = get_ai_deduplication_service()
 
     async def analyze_photo(
         self,
@@ -94,7 +94,6 @@ class PhotoAnalysisService:
         workspace_id: UUID,
         photo_url: str,
         photo_id: Optional[UUID] = None,
-        asset_sha256: Optional[str] = None,
     ) -> PhotoAnalysis:
         """Analyze a photo using AI.
 
@@ -103,7 +102,6 @@ class PhotoAnalysisService:
             workspace_id: The workspace context
             photo_url: URL to the photo to analyze
             photo_id: Optional photo ID for logging
-            asset_sha256: Optional SHA256 hash for caching
 
         Returns:
             PhotoAnalysis result
@@ -112,26 +110,29 @@ class PhotoAnalysisService:
             AIConfigurationError: If AI is not configured
             AIRuntimeError: If analysis fails
         """
-        # Check cache first if SHA256 provided
-        if asset_sha256:
-            cached = await self.ai_cache.get_photo_analysis(asset_sha256)
-            if cached:
-                logger.debug(f"Returning cached analysis for {asset_sha256[:16]}...")
-                return PhotoAnalysis(
-                    description=cached.get("description", ""),
-                    tags=cached.get("tags", []),
-                    hashtags=cached.get("hashtags", []),
-                    quality_score=cached.get("quality_score", 50),
-                    sharpness=cached.get("sharpness", 50),
-                    exposure=cached.get("exposure", 50),
-                    composition=cached.get("composition", 50),
-                    dominant_colors=cached.get("dominant_colors", []),
-                    lighting=cached.get("lighting", "unknown"),
-                    mood=cached.get("mood", "neutral"),
-                    improvements=cached.get("improvements", []),
-                    best_for=cached.get("best_for", []),
-                )
+        # Generate deduplication key
+        cache_key = self.dedup.generate_request_key(
+            operation="analysis",
+            user_id=user_id,
+            photo_id=photo_id,
+        )
 
+        # Use deduplication to prevent duplicate concurrent requests
+        return await self.dedup.deduplicated_call(
+            cache_key=cache_key,
+            operation=lambda: self._analyze_photo_impl(
+                user_id, workspace_id, photo_url, photo_id
+            ),
+        )
+
+    async def _analyze_photo_impl(
+        self,
+        user_id: UUID,
+        workspace_id: UUID,
+        photo_url: str,
+        photo_id: Optional[UUID],
+    ) -> PhotoAnalysis:
+        """Internal implementation of photo analysis."""
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -139,13 +140,16 @@ class PhotoAnalysisService:
             # Build analysis prompt
             prompt = self._build_analysis_prompt()
 
+            # Fetch image data with caching
+            image_data = await self.dedup.fetch_image_data(photo_url)
+
             # Make API call
             response = await client.generate_content(
                 contents=[
                     {
                         "parts": [
                             {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": await fetch_image_base64(photo_url)}}
+                            {"inline_data": {"mime_type": "image/jpeg", "data": image_data}}
                         ]
                     }
                 ]
@@ -154,10 +158,6 @@ class PhotoAnalysisService:
             # Parse response
             result = self._parse_analysis_response(response.text)
 
-            # Cache the result if SHA256 provided
-            if asset_sha256:
-                await self.ai_cache.set_photo_analysis(asset_sha256, result.to_dict())
-
             # Log usage
             await self.ai_usage.log_ai_call(
                 user_id=user_id,
@@ -165,7 +165,7 @@ class PhotoAnalysisService:
                 model_identifier=client.model,
                 feature_type=AIFeatureType.PHOTO_ANALYSIS,
                 success=True,
-                metadata={"photo_id": str(photo_id), "cached": False} if photo_id else {"cached": False},
+                metadata={"photo_id": str(photo_id)} if photo_id else None,
             )
 
             return result
@@ -181,7 +181,6 @@ class PhotoAnalysisService:
                 error_code=str(type(e).__name__),
             )
             raise
-
 
     def _build_analysis_prompt(self) -> str:
         """Build the analysis prompt for Gemini."""

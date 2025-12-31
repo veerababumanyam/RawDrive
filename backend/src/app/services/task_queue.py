@@ -475,6 +475,51 @@ async def handle_send_email(payload: dict[str, Any]) -> dict[str, Any]:
     return {"sent": True}
 
 
+@register_task_handler("send_rsvp_confirmation")
+async def handle_rsvp_confirmation(payload: dict[str, Any]) -> dict[str, Any]:
+    """Send RSVP confirmation email to guest.
+
+    Feature: 016-save-the-date
+    Task: T048 - RSVP confirmation emails
+
+    Payload:
+        - guest_email: Email address to send to
+        - guest_name: Name for personalization
+        - invitation_title: Title of the invitation
+        - event_datetime: Event date/time for reference
+        - attendance_status: attending/not_attending/maybe
+        - edit_token: Token to edit RSVP
+        - invitation_slug: Slug for link generation
+    """
+    # TODO: Implement actual email sending via SendGrid/SES/etc.
+    # For now, log the email details
+    logger.info(
+        "RSVP confirmation email queued",
+        extra={
+            "to": payload.get("guest_email"),
+            "guest_name": payload.get("guest_name"),
+            "invitation_title": payload.get("invitation_title"),
+            "attendance_status": payload.get("attendance_status"),
+        },
+    )
+
+    # Simulate email content generation
+    email_content = {
+        "to": payload.get("guest_email"),
+        "subject": f"RSVP Confirmation: {payload.get('invitation_title')}",
+        "template": "rsvp_confirmation",
+        "template_data": {
+            "guest_name": payload.get("guest_name"),
+            "invitation_title": payload.get("invitation_title"),
+            "event_datetime": payload.get("event_datetime"),
+            "attendance_status": payload.get("attendance_status"),
+            "edit_link": f"/i/{payload.get('invitation_slug')}/rsvp/{payload.get('edit_token')}",
+        },
+    }
+
+    return {"sent": True, "email": email_content}
+
+
 @register_task_handler("cleanup_expired_tokens")
 async def handle_cleanup_tokens(payload: dict[str, Any]) -> dict[str, Any]:
     """Cleanup expired tokens."""
@@ -516,3 +561,195 @@ async def handle_refresh_tagging_stats(payload: dict[str, Any]) -> dict[str, Any
 
     logger.info("Refreshed gallery_tagging_stats materialized view")
     return {"refreshed": True}
+
+
+# ---------------------------------------------------------------------------
+# RSVP Host Notification Handlers (T108-T111)
+# ---------------------------------------------------------------------------
+
+
+@register_task_handler("send_rsvp_host_notification")
+async def handle_rsvp_host_notification(payload: dict[str, Any]) -> dict[str, Any]:
+    """Send immediate RSVP notification to host.
+
+    Feature: 016-save-the-date
+    Task: T108 - RSVP host notifications (immediate mode)
+
+    Payload:
+        - invitation_id: The invitation ID
+        - workspace_id: The workspace ID
+        - host_email: Host's email address
+        - invitation_title: Title of the invitation
+        - guest_name: Name of the guest who RSVP'd
+        - guest_email: Guest's email
+        - attending: Whether guest is attending
+        - party_size: Number of guests in party
+        - rsvp_id: The RSVP ID
+    """
+    host_email = payload.get("host_email")
+    guest_name = payload.get("guest_name")
+    invitation_title = payload.get("invitation_title")
+    attending = payload.get("attending", True)
+    party_size = payload.get("party_size", 1)
+
+    # Determine status text
+    if attending:
+        status_text = f"Yes, attending with {party_size} guest{'s' if party_size > 1 else ''}"
+    else:
+        status_text = "Not attending"
+
+    # TODO: Implement actual email sending via SendGrid/SES/etc.
+    logger.info(
+        "Host RSVP notification sent (immediate)",
+        extra={
+            "to": host_email,
+            "guest_name": guest_name,
+            "invitation_title": invitation_title,
+            "attending": attending,
+            "party_size": party_size,
+        },
+    )
+
+    email_content = {
+        "to": host_email,
+        "subject": f"New RSVP: {guest_name} - {invitation_title}",
+        "template": "rsvp_host_immediate",
+        "template_data": {
+            "guest_name": guest_name,
+            "invitation_title": invitation_title,
+            "status_text": status_text,
+            "party_size": party_size,
+            "dashboard_link": f"/workspace/invitations/{payload.get('invitation_id')}",
+        },
+    }
+
+    return {"sent": True, "email": email_content}
+
+
+@register_task_handler("queue_rsvp_for_digest")
+async def handle_queue_rsvp_for_digest(payload: dict[str, Any]) -> dict[str, Any]:
+    """Queue RSVP for daily digest aggregation.
+
+    Feature: 016-save-the-date
+    Task: T109 - Daily digest aggregation
+
+    Stores the RSVP data in Redis for batch processing.
+    The scheduler will collect all RSVPs at 9 AM and send digest emails.
+
+    Payload:
+        - invitation_id: The invitation ID
+        - workspace_id: The workspace ID
+        - host_email: Host's email address
+        - invitation_title: Title of the invitation
+        - guest_name: Name of the guest who RSVP'd
+        - guest_email: Guest's email
+        - attending: Whether guest is attending
+        - party_size: Number of guests in party
+        - rsvp_id: The RSVP ID
+    """
+    from app.db.redis import get_redis_client
+    import json
+
+    redis = await get_redis_client()
+    invitation_id = payload.get("invitation_id")
+
+    # Store RSVP in a list keyed by invitation for batch processing
+    digest_key = f"rsvp_digest:{invitation_id}"
+
+    rsvp_data = {
+        "guest_name": payload.get("guest_name"),
+        "guest_email": payload.get("guest_email"),
+        "attending": payload.get("attending"),
+        "party_size": payload.get("party_size"),
+        "rsvp_id": payload.get("rsvp_id"),
+        "host_email": payload.get("host_email"),
+        "invitation_title": payload.get("invitation_title"),
+        "workspace_id": payload.get("workspace_id"),
+    }
+
+    await redis.rpush(digest_key, json.dumps(rsvp_data))
+    # Set expiry to 48 hours (in case digest job fails, data persists)
+    await redis.expire(digest_key, 172800)
+
+    logger.info(
+        "RSVP queued for daily digest",
+        extra={
+            "invitation_id": invitation_id,
+            "guest_name": payload.get("guest_name"),
+        },
+    )
+
+    return {"queued": True, "digest_key": digest_key}
+
+
+@register_task_handler("send_rsvp_digest")
+async def handle_send_rsvp_digest(payload: dict[str, Any]) -> dict[str, Any]:
+    """Send daily RSVP digest email to host.
+
+    Feature: 016-save-the-date
+    Task: T109 - Daily digest email
+
+    Called by the scheduler at 9 AM to process all queued RSVPs.
+
+    Payload:
+        - invitation_id: The invitation ID to process
+    """
+    from app.db.redis import get_redis_client
+    import json
+
+    redis = await get_redis_client()
+    invitation_id = payload.get("invitation_id")
+    digest_key = f"rsvp_digest:{invitation_id}"
+
+    # Get all queued RSVPs
+    rsvps_raw = await redis.lrange(digest_key, 0, -1)
+    if not rsvps_raw:
+        logger.debug(f"No RSVPs to digest for invitation {invitation_id}")
+        return {"sent": False, "reason": "no_rsvps"}
+
+    rsvps = [json.loads(r) for r in rsvps_raw]
+
+    # Group by host email (should be same, but safety check)
+    host_email = rsvps[0].get("host_email") if rsvps else None
+    invitation_title = rsvps[0].get("invitation_title") if rsvps else "Your Event"
+
+    if not host_email:
+        logger.warning(f"No host email in digest data for invitation {invitation_id}")
+        return {"sent": False, "reason": "no_host_email"}
+
+    # Calculate summary stats
+    attending_count = sum(1 for r in rsvps if r.get("attending"))
+    not_attending_count = len(rsvps) - attending_count
+    total_party_size = sum(r.get("party_size", 1) for r in rsvps if r.get("attending"))
+
+    # TODO: Implement actual email sending via SendGrid/SES/etc.
+    logger.info(
+        "Daily RSVP digest sent",
+        extra={
+            "to": host_email,
+            "invitation_title": invitation_title,
+            "rsvp_count": len(rsvps),
+            "attending": attending_count,
+            "not_attending": not_attending_count,
+        },
+    )
+
+    email_content = {
+        "to": host_email,
+        "subject": f"Daily RSVP Summary: {len(rsvps)} new response{'s' if len(rsvps) > 1 else ''} - {invitation_title}",
+        "template": "rsvp_host_digest",
+        "template_data": {
+            "invitation_title": invitation_title,
+            "rsvp_count": len(rsvps),
+            "attending_count": attending_count,
+            "not_attending_count": not_attending_count,
+            "total_party_size": total_party_size,
+            "rsvps": rsvps,
+            "dashboard_link": f"/workspace/invitations/{invitation_id}",
+        },
+    }
+
+    # Clear the digest queue after sending
+    await redis.delete(digest_key)
+
+    return {"sent": True, "email": email_content, "rsvp_count": len(rsvps)}

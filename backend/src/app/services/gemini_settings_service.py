@@ -793,6 +793,188 @@ class GeminiSettingsService:
 
         return await self.get_user_settings(user_id, workspace_id)
 
+    # -------------------------------------------------------------------------
+    # AI Feature Toggles (T080)
+    # -------------------------------------------------------------------------
+
+    async def get_feature_toggles(self, user_id: UUID) -> dict:
+        """Get user's AI feature toggle settings.
+
+        Args:
+            user_id: User UUID
+
+        Returns:
+            Dict with feature toggles and API status
+        """
+        pool = await get_postgres_pool()
+
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    api_key_encrypted IS NOT NULL as has_api_key,
+                    status,
+                    COALESCE(feature_photo_analysis, TRUE) as photo_analysis,
+                    COALESCE(feature_captions, TRUE) as captions,
+                    COALESCE(feature_hashtags, TRUE) as hashtags,
+                    COALESCE(feature_gallery_story, TRUE) as gallery_story,
+                    COALESCE(feature_smart_curation, TRUE) as smart_curation
+                FROM user_gemini_settings
+                WHERE user_id = $1
+                """,
+                user_id,
+            )
+
+            if not row:
+                # Return defaults for users without settings
+                return {
+                    "toggles": {
+                        "photo_analysis": True,
+                        "captions": True,
+                        "hashtags": True,
+                        "gallery_story": True,
+                        "smart_curation": True,
+                    },
+                    "has_api_key": False,
+                    "api_status": "not_configured",
+                }
+
+            return {
+                "toggles": {
+                    "photo_analysis": row["photo_analysis"],
+                    "captions": row["captions"],
+                    "hashtags": row["hashtags"],
+                    "gallery_story": row["gallery_story"],
+                    "smart_curation": row["smart_curation"],
+                },
+                "has_api_key": row["has_api_key"],
+                "api_status": row["status"],
+            }
+
+    async def update_feature_toggles(
+        self,
+        user_id: UUID,
+        toggles: dict,
+    ) -> dict:
+        """Update user's AI feature toggle settings.
+
+        Args:
+            user_id: User UUID
+            toggles: Dict with feature toggle updates (only non-None values applied)
+
+        Returns:
+            Updated feature toggles dict
+        """
+        pool = await get_postgres_pool()
+        now = datetime.now(timezone.utc)
+
+        async with pool.acquire() as conn:
+            # Check if settings exist
+            existing = await conn.fetchval(
+                "SELECT user_id FROM user_gemini_settings WHERE user_id = $1",
+                user_id,
+            )
+
+            if existing:
+                # Build dynamic update query
+                updates = ["updated_at = $2"]
+                params: list = [user_id, now]
+                param_idx = 3
+
+                toggle_mapping = {
+                    "photo_analysis": "feature_photo_analysis",
+                    "captions": "feature_captions",
+                    "hashtags": "feature_hashtags",
+                    "gallery_story": "feature_gallery_story",
+                    "smart_curation": "feature_smart_curation",
+                }
+
+                for key, column in toggle_mapping.items():
+                    if key in toggles and toggles[key] is not None:
+                        updates.append(f"{column} = ${param_idx}")
+                        params.append(toggles[key])
+                        param_idx += 1
+
+                if param_idx > 3:  # Only update if there are changes
+                    await conn.execute(
+                        f"""
+                        UPDATE user_gemini_settings
+                        SET {', '.join(updates)}
+                        WHERE user_id = $1
+                        """,
+                        *params,
+                    )
+            else:
+                # Create settings with feature toggles
+                await conn.execute(
+                    """
+                    INSERT INTO user_gemini_settings (
+                        user_id,
+                        status,
+                        feature_photo_analysis,
+                        feature_captions,
+                        feature_hashtags,
+                        feature_gallery_story,
+                        feature_smart_curation,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES ($1, 'not_configured', $2, $3, $4, $5, $6, $7, $8)
+                    """,
+                    user_id,
+                    toggles.get("photo_analysis", True),
+                    toggles.get("captions", True),
+                    toggles.get("hashtags", True),
+                    toggles.get("gallery_story", True),
+                    toggles.get("smart_curation", True),
+                    now,
+                    now,
+                )
+
+        return await self.get_feature_toggles(user_id)
+
+    async def is_feature_enabled(
+        self,
+        user_id: UUID,
+        feature: str,
+    ) -> bool:
+        """Check if a specific AI feature is enabled for a user.
+
+        Args:
+            user_id: User UUID
+            feature: Feature name (photo_analysis, captions, hashtags, gallery_story, smart_curation)
+
+        Returns:
+            True if feature is enabled, False otherwise
+        """
+        feature_column_map = {
+            "photo_analysis": "feature_photo_analysis",
+            "captions": "feature_captions",
+            "hashtags": "feature_hashtags",
+            "gallery_story": "feature_gallery_story",
+            "smart_curation": "feature_smart_curation",
+        }
+
+        column = feature_column_map.get(feature)
+        if not column:
+            logger.warning(f"Unknown AI feature: {feature}")
+            return True  # Default to enabled for unknown features
+
+        pool = await get_postgres_pool()
+
+        async with pool.acquire() as conn:
+            result = await conn.fetchval(
+                f"""
+                SELECT COALESCE({column}, TRUE)
+                FROM user_gemini_settings
+                WHERE user_id = $1
+                """,
+                user_id,
+            )
+
+            # Default to True if no settings exist
+            return result if result is not None else True
+
 
 # ---------------------------------------------------------------------------
 # Singleton instance

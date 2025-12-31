@@ -23,7 +23,7 @@ export class HashtagService {
       request
     );
     if (!response.data) {
-      throw new Error('No data received from API');
+      throw new Error('No data returned from hashtag generation');
     }
     return response.data;
   }

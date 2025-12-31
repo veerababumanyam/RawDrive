@@ -1,20 +1,26 @@
-"""Smart Curation Service.
+"""Smart Photo Curation Service.
 
-Uses AI and quality scores to automatically select the best photos from a gallery.
-Feature: AI-powered photo curation (US5)
+Uses AI-powered analysis to select the best photos from galleries.
+Feature: 010-ai-powered-features
+Tasks: T059-T068
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from typing import Any, Optional
 from uuid import UUID
 
 from app.config.settings import get_settings
+from app.db.redis import get_redis_client
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
-from app.services.ai_cache_service import get_ai_cache_service
 
 logger = logging.getLogger(__name__)
+
+# Cache TTL for curation results (4 hours - shorter than stories since galleries change more)
+CURATION_CACHE_TTL = 14400
 
 
 # ---------------------------------------------------------------------------
@@ -27,26 +33,26 @@ class CurationResult:
 
     def __init__(
         self,
-        asset_ids: list[str],
-        criteria: dict[str, Any],
-        total_assets: int,
-        selected_count: int,
-        rankings: list[dict[str, Any]],
+        gallery_id: str,
+        selected_assets: list[dict[str, Any]],
+        total_candidates: int,
+        quality_threshold: float,
+        diversity_weight: float,
     ):
-        self.asset_ids = asset_ids
-        self.criteria = criteria
-        self.total_assets = total_assets
-        self.selected_count = selected_count
-        self.rankings = rankings  # List of {asset_id, score, reason}
+        self.gallery_id = gallery_id
+        self.selected_assets = selected_assets
+        self.total_candidates = total_candidates
+        self.quality_threshold = quality_threshold
+        self.diversity_weight = diversity_weight
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
-            "asset_ids": self.asset_ids,
-            "criteria": self.criteria,
-            "total_assets": self.total_assets,
-            "selected_count": self.selected_count,
-            "rankings": self.rankings,
+            "gallery_id": self.gallery_id,
+            "selected_assets": self.selected_assets,
+            "total_candidates": self.total_candidates,
+            "quality_threshold": self.quality_threshold,
+            "diversity_weight": self.diversity_weight,
         }
 
 
@@ -56,294 +62,338 @@ class CurationResult:
 
 
 class SmartCurationService:
-    """Service for AI-powered photo curation."""
+    """Service for AI-powered photo curation and selection."""
 
     def __init__(self):
         self.settings = get_settings()
         self.ai_usage = get_ai_usage_service()
-        self.ai_cache = get_ai_cache_service()
+
+    def _get_cache_key(
+        self,
+        gallery_id: UUID,
+        count: int,
+        quality_threshold: float,
+        diversity_weight: float,
+        prefer_people: bool,
+        exclude_ids: Optional[list[UUID]],
+    ) -> str:
+        """Generate a cache key for curation lookup."""
+        exclude_hash = ""
+        if exclude_ids:
+            exclude_hash = hashlib.md5(
+                ",".join(str(eid) for eid in sorted(exclude_ids)).encode()
+            ).hexdigest()[:8]
+        return f"curation:{gallery_id}:{count}:{quality_threshold:.2f}:{diversity_weight:.2f}:{prefer_people}:{exclude_hash}"
+
+    async def get_cached_curation(
+        self,
+        gallery_id: UUID,
+        count: int,
+        quality_threshold: float,
+        diversity_weight: float,
+        prefer_people: bool,
+        exclude_asset_ids: Optional[list[UUID]] = None,
+    ) -> Optional[CurationResult]:
+        """Get cached curation if available."""
+        try:
+            redis = await get_redis_client()
+            cache_key = self._get_cache_key(
+                gallery_id, count, quality_threshold, diversity_weight, prefer_people, exclude_asset_ids
+            )
+            cached = await redis.get(cache_key)
+            if cached:
+                data = json.loads(cached)
+                logger.info(f"Curation cache hit for gallery {gallery_id}")
+                return CurationResult(
+                    gallery_id=data["gallery_id"],
+                    selected_assets=data["selected_assets"],
+                    total_candidates=data["total_candidates"],
+                    quality_threshold=data["quality_threshold"],
+                    diversity_weight=data["diversity_weight"],
+                )
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to get cached curation: {e}")
+            return None
+
+    async def cache_curation(
+        self,
+        result: CurationResult,
+        count: int,
+        prefer_people: bool,
+        exclude_asset_ids: Optional[list[UUID]] = None,
+    ) -> None:
+        """Cache curation result."""
+        try:
+            redis = await get_redis_client()
+            cache_key = self._get_cache_key(
+                UUID(result.gallery_id),
+                count,
+                result.quality_threshold,
+                result.diversity_weight,
+                prefer_people,
+                exclude_asset_ids,
+            )
+            await redis.setex(cache_key, CURATION_CACHE_TTL, json.dumps(result.to_dict()))
+            logger.info(f"Cached curation for gallery {result.gallery_id}")
+        except Exception as e:
+            logger.warning(f"Failed to cache curation: {e}")
+
+    async def invalidate_curation_cache(self, gallery_id: UUID) -> None:
+        """Invalidate all cached curation results for a gallery."""
+        try:
+            redis = await get_redis_client()
+            pattern = f"curation:{gallery_id}:*"
+            keys = []
+            async for key in redis.scan_iter(match=pattern):
+                keys.append(key)
+            if keys:
+                await redis.delete(*keys)
+                logger.info(f"Invalidated {len(keys)} cached curations for gallery {gallery_id}")
+        except Exception as e:
+            logger.warning(f"Failed to invalidate curation cache: {e}")
 
     async def curate_gallery(
         self,
         user_id: UUID,
         workspace_id: UUID,
         gallery_id: UUID,
-        photo_analyses: list[dict[str, Any]],
-        quality_threshold: int = 70,
-        diversity_weight: float = 0.5,
-        max_photos: int = 20,
+        count: int = 10,
+        quality_threshold: float = 0.6,
+        diversity_weight: float = 0.3,
         prefer_people: bool = False,
+        exclude_asset_ids: Optional[list[UUID]] = None,
+        use_cache: bool = True,
     ) -> CurationResult:
-        """Select the best photos from a gallery based on AI analysis.
+        """Curate the best photos from a gallery.
 
         Args:
             user_id: The user requesting curation
             workspace_id: The workspace context
-            gallery_id: The gallery ID
-            photo_analyses: List of photo analysis results with asset_id
-            quality_threshold: Minimum quality score (0-100)
-            diversity_weight: Balance between quality and diversity (0-1)
-            max_photos: Maximum number of photos to select
-            prefer_people: Weight photos with detected faces higher
+            gallery_id: The gallery to curate
+            count: Number of photos to select
+            quality_threshold: Minimum quality score (0-1)
+            diversity_weight: Weight for diversity vs pure quality (0-1)
+            prefer_people: Whether to prioritize photos with people
+            exclude_asset_ids: Asset IDs to exclude from selection
+            use_cache: Whether to use/store cached results (default: True)
 
         Returns:
-            CurationResult with selected photos and rankings
+            CurationResult with selected photos and their scores
         """
-        if not photo_analyses:
-            return CurationResult(
-                asset_ids=[],
-                criteria={
-                    "quality_threshold": quality_threshold,
-                    "diversity_weight": diversity_weight,
-                    "max_photos": max_photos,
-                    "prefer_people": prefer_people,
-                },
-                total_assets=0,
-                selected_count=0,
-                rankings=[],
-            )
-
-        # Check cache first
-        cached = await self.ai_cache.get_curation(
-            gallery_id, quality_threshold, diversity_weight, max_photos
-        )
-        if cached:
-            logger.debug(f"Returning cached curation for gallery {gallery_id}")
-            return CurationResult(
-                asset_ids=cached.get("asset_ids", []),
-                criteria=cached.get("criteria", {}),
-                total_assets=cached.get("total_assets", 0),
-                selected_count=cached.get("selected_count", 0),
-                rankings=cached.get("rankings", []),
-            )
-
         try:
-            # Score and rank photos
-            scored_photos = self._score_photos(
-                photo_analyses,
-                quality_threshold,
-                prefer_people,
+            # Check cache first
+            if use_cache:
+                cached = await self.get_cached_curation(
+                    gallery_id, count, quality_threshold, diversity_weight, prefer_people, exclude_asset_ids
+                )
+                if cached:
+                    return cached
+
+            # Get gallery assets with their analysis data
+            from app.services.gallery_service import get_gallery_service
+            gallery_service = get_gallery_service()
+
+            assets_data = await gallery_service.get_gallery_assets(
+                gallery_id=gallery_id,
+                workspace_id=workspace_id,
+                limit=500,  # Get more to have a good selection pool
             )
 
-            # Apply diversity filtering
-            selected = self._apply_diversity_filter(
-                scored_photos,
-                diversity_weight,
-                max_photos,
-            )
+            assets = assets_data.get("assets", [])
+            total_candidates = len(assets)
 
-            # Build rankings with reasons
-            rankings = []
-            for photo in selected:
-                rankings.append({
-                    "asset_id": photo["asset_id"],
-                    "score": photo["score"],
-                    "reason": self._generate_selection_reason(photo),
-                })
+            if not assets:
+                return CurationResult(
+                    gallery_id=str(gallery_id),
+                    selected_assets=[],
+                    total_candidates=0,
+                    quality_threshold=quality_threshold,
+                    diversity_weight=diversity_weight,
+                )
 
-            result = CurationResult(
-                asset_ids=[p["asset_id"] for p in selected],
-                criteria={
-                    "quality_threshold": quality_threshold,
-                    "diversity_weight": diversity_weight,
-                    "max_photos": max_photos,
-                    "prefer_people": prefer_people,
-                },
-                total_assets=len(photo_analyses),
-                selected_count=len(selected),
-                rankings=rankings,
-            )
+            # Filter out excluded assets
+            exclude_ids = set(str(aid) for aid in (exclude_asset_ids or []))
+            assets = [a for a in assets if str(a.get("asset_id")) not in exclude_ids]
 
-            # Cache the result
-            await self.ai_cache.set_curation(
-                gallery_id, quality_threshold, diversity_weight, max_photos, result.to_dict()
-            )
+            # Score each asset
+            scored_assets = []
+            for asset in assets:
+                score = self._calculate_asset_score(
+                    asset=asset,
+                    quality_threshold=quality_threshold,
+                    diversity_weight=diversity_weight,
+                    prefer_people=prefer_people,
+                )
+                if score >= quality_threshold:
+                    scored_assets.append({
+                        "asset_id": str(asset.get("asset_id")),
+                        "score": round(score, 3),
+                        "quality_score": asset.get("quality_score", 0.5),
+                        "has_faces": asset.get("face_count", 0) > 0,
+                        "thumbnail_url": asset.get("thumbnail_url"),
+                    })
 
-            # Log usage
+            # Sort by score (descending) and apply diversity selection
+            scored_assets.sort(key=lambda x: x["score"], reverse=True)
+
+            # Apply diversity selection if weight > 0
+            if diversity_weight > 0:
+                selected = self._apply_diversity_selection(
+                    scored_assets=scored_assets,
+                    count=count,
+                    diversity_weight=diversity_weight,
+                )
+            else:
+                selected = scored_assets[:count]
+
+            # Log AI usage
             await self.ai_usage.log_ai_call(
                 user_id=user_id,
                 workspace_id=workspace_id,
-                model_identifier="smart_curation",
+                model_identifier="curation_algorithm",
                 feature_type=AIFeatureType.SMART_CURATION,
                 success=True,
                 metadata={
                     "gallery_id": str(gallery_id),
-                    "total_photos": len(photo_analyses),
-                    "selected_photos": len(selected),
+                    "selected_count": len(selected),
+                    "total_candidates": total_candidates,
+                    "quality_threshold": quality_threshold,
+                    "diversity_weight": diversity_weight,
                 },
             )
+
+            result = CurationResult(
+                gallery_id=str(gallery_id),
+                selected_assets=selected,
+                total_candidates=total_candidates,
+                quality_threshold=quality_threshold,
+                diversity_weight=diversity_weight,
+            )
+
+            # Cache the result
+            if use_cache:
+                await self.cache_curation(result, count, prefer_people, exclude_asset_ids)
 
             return result
 
         except Exception as e:
+            logger.error(f"Curation failed: {e}", exc_info=True)
             # Log failed usage
             await self.ai_usage.log_ai_call(
                 user_id=user_id,
                 workspace_id=workspace_id,
-                model_identifier="smart_curation",
+                model_identifier="curation_algorithm",
                 feature_type=AIFeatureType.SMART_CURATION,
                 success=False,
                 error_code=str(type(e).__name__),
             )
             raise
 
-    def _score_photos(
+    def _calculate_asset_score(
         self,
-        photo_analyses: list[dict[str, Any]],
-        quality_threshold: int,
-        prefer_people: bool,
-    ) -> list[dict[str, Any]]:
-        """Score photos based on analysis results."""
-        scored = []
-
-        for analysis in photo_analyses:
-            asset_id = analysis.get("asset_id")
-            if not asset_id:
-                continue
-
-            # Calculate composite score
-            quality_score = analysis.get("quality_score", 50)
-            sharpness = analysis.get("sharpness", 50)
-            exposure = analysis.get("exposure", 50)
-            composition = analysis.get("composition", 50)
-
-            # Weighted average of quality metrics
-            base_score = (
-                quality_score * 0.4 +
-                sharpness * 0.2 +
-                exposure * 0.2 +
-                composition * 0.2
-            )
-
-            # Apply people preference if enabled
-            face_count = analysis.get("face_count", 0)
-            if prefer_people and face_count > 0:
-                base_score *= 1.15  # 15% boost for photos with people
-                base_score = min(100, base_score)  # Cap at 100
-
-            # Filter by quality threshold
-            if base_score < quality_threshold:
-                continue
-
-            scored.append({
-                "asset_id": str(asset_id),
-                "score": round(base_score, 1),
-                "quality_score": quality_score,
-                "sharpness": sharpness,
-                "exposure": exposure,
-                "composition": composition,
-                "face_count": face_count,
-                "lighting": analysis.get("lighting", "unknown"),
-                "mood": analysis.get("mood", "neutral"),
-                "dominant_colors": analysis.get("dominant_colors", []),
-                "tags": analysis.get("tags", []),
-            })
-
-        # Sort by score descending
-        scored.sort(key=lambda x: x["score"], reverse=True)
-        return scored
-
-    def _apply_diversity_filter(
-        self,
-        scored_photos: list[dict[str, Any]],
+        asset: dict[str, Any],
+        quality_threshold: float,
         diversity_weight: float,
-        max_photos: int,
+        prefer_people: bool,
+    ) -> float:
+        """Calculate the curation score for an asset.
+
+        The score combines quality metrics with optional preferences.
+        """
+        # Base quality score (0-1)
+        quality_score = asset.get("quality_score", 0.5)
+
+        # Technical metrics (each 0-1, average them)
+        sharpness = asset.get("sharpness", 0.5)
+        exposure = asset.get("exposure", 0.5)
+        composition = asset.get("composition", 0.5)
+
+        technical_score = (sharpness + exposure + composition) / 3
+
+        # Combine quality and technical scores
+        base_score = (quality_score * 0.6) + (technical_score * 0.4)
+
+        # Apply people preference bonus
+        if prefer_people:
+            face_count = asset.get("face_count", 0)
+            if face_count > 0:
+                # Bonus for having faces, capped at 0.15
+                people_bonus = min(0.15, face_count * 0.05)
+                base_score += people_bonus
+
+        # Ensure score stays in 0-1 range
+        return min(1.0, max(0.0, base_score))
+
+    def _apply_diversity_selection(
+        self,
+        scored_assets: list[dict[str, Any]],
+        count: int,
+        diversity_weight: float,
     ) -> list[dict[str, Any]]:
-        """Filter for diversity to avoid selecting near-duplicate photos."""
-        if not scored_photos:
+        """Apply diversity-aware selection to avoid similar photos.
+
+        Uses a simple approach: alternate between top-scored and
+        different "types" of photos (with/without people, different moods).
+        """
+        if not scored_assets or count <= 0:
             return []
 
-        # If diversity weight is 0, just take top N
-        if diversity_weight <= 0:
-            return scored_photos[:max_photos]
+        selected = []
+        remaining = scored_assets.copy()
 
-        selected = [scored_photos[0]]  # Always include best photo
+        # First, always include the top-scored item
+        if remaining:
+            selected.append(remaining.pop(0))
 
-        for candidate in scored_photos[1:]:
-            if len(selected) >= max_photos:
-                break
+        # Alternate between pure quality and diversity picks
+        quality_turn = True
+        while len(selected) < count and remaining:
+            if quality_turn or diversity_weight < 0.1:
+                # Quality pick: just take the highest scored remaining
+                selected.append(remaining.pop(0))
+            else:
+                # Diversity pick: find something different from recent selections
+                diverse_pick = self._find_diverse_pick(selected, remaining)
+                if diverse_pick:
+                    remaining.remove(diverse_pick)
+                    selected.append(diverse_pick)
+                elif remaining:
+                    selected.append(remaining.pop(0))
 
-            # Check similarity with already selected photos
-            is_diverse = True
-            for selected_photo in selected:
-                similarity = self._calculate_similarity(candidate, selected_photo)
-
-                # If too similar and diversity weight is high, skip
-                if similarity > (1 - diversity_weight):
-                    is_diverse = False
-                    break
-
-            if is_diverse:
-                selected.append(candidate)
+            quality_turn = not quality_turn
 
         return selected
 
-    def _calculate_similarity(
+    def _find_diverse_pick(
         self,
-        photo1: dict[str, Any],
-        photo2: dict[str, Any],
-    ) -> float:
-        """Calculate similarity between two photos based on their attributes."""
-        similarity_score = 0.0
-        factors = 0
+        selected: list[dict[str, Any]],
+        remaining: list[dict[str, Any]],
+    ) -> Optional[dict[str, Any]]:
+        """Find a photo that adds diversity to the selection."""
+        if not remaining:
+            return None
 
-        # Compare lighting
-        if photo1.get("lighting") == photo2.get("lighting"):
-            similarity_score += 0.2
-        factors += 0.2
+        # Check what we already have
+        has_faces_count = sum(1 for a in selected if a.get("has_faces", False))
+        total_selected = len(selected)
 
-        # Compare mood
-        if photo1.get("mood") == photo2.get("mood"):
-            similarity_score += 0.2
-        factors += 0.2
+        # Determine what type to look for
+        if total_selected > 0:
+            faces_ratio = has_faces_count / total_selected
+            # If we have too many with faces, prefer one without, and vice versa
+            prefer_faces = faces_ratio < 0.4
+        else:
+            prefer_faces = True
 
-        # Compare dominant colors (overlap)
-        colors1 = set(photo1.get("dominant_colors", []))
-        colors2 = set(photo2.get("dominant_colors", []))
-        if colors1 and colors2:
-            color_overlap = len(colors1 & colors2) / max(len(colors1 | colors2), 1)
-            similarity_score += color_overlap * 0.3
-        factors += 0.3
+        # Find a matching photo
+        for asset in remaining:
+            asset_has_faces = asset.get("has_faces", False)
+            if asset_has_faces == prefer_faces:
+                return asset
 
-        # Compare tags (overlap)
-        tags1 = set(photo1.get("tags", []))
-        tags2 = set(photo2.get("tags", []))
-        if tags1 and tags2:
-            tag_overlap = len(tags1 & tags2) / max(len(tags1 | tags2), 1)
-            similarity_score += tag_overlap * 0.3
-        factors += 0.3
-
-        return similarity_score / factors if factors > 0 else 0.0
-
-    def _generate_selection_reason(self, photo: dict[str, Any]) -> str:
-        """Generate a human-readable reason for why a photo was selected."""
-        reasons = []
-
-        score = photo.get("score", 0)
-        if score >= 90:
-            reasons.append("Excellent overall quality")
-        elif score >= 80:
-            reasons.append("Very good quality")
-        elif score >= 70:
-            reasons.append("Good quality")
-
-        if photo.get("sharpness", 0) >= 85:
-            reasons.append("sharp focus")
-        if photo.get("exposure", 0) >= 85:
-            reasons.append("great exposure")
-        if photo.get("composition", 0) >= 85:
-            reasons.append("strong composition")
-        if photo.get("face_count", 0) > 0:
-            reasons.append(f"{photo['face_count']} face(s) detected")
-
-        lighting = photo.get("lighting", "")
-        if lighting in ("natural", "studio"):
-            reasons.append(f"{lighting} lighting")
-
-        if not reasons:
-            reasons.append("Selected for diversity")
-
-        return ", ".join(reasons[:3]).capitalize()
+        # If no matching preference, return the first remaining
+        return remaining[0] if remaining else None
 
 
 # ---------------------------------------------------------------------------

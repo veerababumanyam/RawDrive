@@ -133,7 +133,7 @@ class FaceGroupRepository:
                 extra={
                     "group_id": str(result["id"]),
                     "workspace_id": str(workspace_id),
-                    "group_name": name,
+                    "name": name,
                 },
             )
             
@@ -244,7 +244,6 @@ class FaceGroupRepository:
         offset: int = 0,
         order_by: str = "face_count",
         order_desc: bool = True,
-        min_faces: Optional[int] = None,
     ) -> list[dict[str, Any]]:
         """Find all face groups in a workspace with representative thumbnail info.
 
@@ -258,7 +257,6 @@ class FaceGroupRepository:
             offset: Number of results to skip
             order_by: Field to order by (face_count, name, created_at)
             order_desc: Whether to order descending
-            min_faces: Minimum face count filter (optional)
 
         Returns:
             List of face group records with rep_face_id, rep_thumbnail_urls,
@@ -270,17 +268,6 @@ class FaceGroupRepository:
             order_by = "face_count"
 
         order_dir = "DESC" if order_desc else "ASC"
-
-        # Build WHERE clause with optional min_faces filter
-        where_conditions = ["fg.workspace_id = $1"]
-        params: list = [workspace_id]
-
-        if min_faces is not None:
-            where_conditions.append(f"fg.face_count >= ${len(params) + 1}")
-            params.append(min_faces)
-
-        where_clause = " AND ".join(where_conditions)
-        params.extend([limit, offset])
 
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
@@ -295,11 +282,13 @@ class FaceGroupRepository:
                 FROM face_groups fg
                 LEFT JOIN faces f ON fg.representative_face_id = f.id
                 LEFT JOIN people p ON fg.person_id = p.person_id
-                WHERE {where_clause}
+                WHERE fg.workspace_id = $1
                 ORDER BY fg.{order_by} {order_dir}
-                LIMIT ${len(params) - 1} OFFSET ${len(params)}
+                LIMIT $2 OFFSET $3
                 """,
-                *params,
+                workspace_id,
+                limit,
+                offset,
             )
 
             result = []

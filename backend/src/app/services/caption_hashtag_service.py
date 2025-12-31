@@ -2,6 +2,7 @@
 
 Uses AI to generate captions and hashtags for photos.
 Feature: AI-powered caption and hashtag generation
+Tasks: T021-T044, T077
 """
 
 from __future__ import annotations
@@ -14,8 +15,7 @@ from uuid import UUID
 from app.config.settings import get_settings
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
-from app.services.ai_cache_service import get_ai_cache_service
-from app.utils.image_fetch import fetch_image_base64
+from app.services.ai_request_deduplication import get_ai_deduplication_service
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class CaptionHashtagService:
         self.settings = get_settings()
         self.gemini_client = get_gemini_client_service()
         self.ai_usage = get_ai_usage_service()
-        self.ai_cache = get_ai_cache_service()
+        self.dedup = get_ai_deduplication_service()
 
     async def generate_captions(
         self,
@@ -85,7 +85,6 @@ class CaptionHashtagService:
         style: str = "professional",
         count: int = 3,
         photo_id: Optional[UUID] = None,
-        asset_sha256: Optional[str] = None,
     ) -> CaptionResult:
         """Generate captions for a photo using AI.
 
@@ -96,21 +95,37 @@ class CaptionHashtagService:
             style: Caption style (professional, casual, poetic)
             count: Number of captions to generate
             photo_id: Optional photo ID for logging
-            asset_sha256: Optional SHA256 hash for caching
 
         Returns:
             CaptionResult with generated captions
         """
-        # Check cache first if SHA256 provided
-        if asset_sha256:
-            cached = await self.ai_cache.get_caption(asset_sha256, style)
-            if cached:
-                logger.debug(f"Returning cached captions for {asset_sha256[:16]}...")
-                return CaptionResult(
-                    captions=cached.get("captions", []),
-                    style=cached.get("style", style),
-                )
+        # Generate deduplication key
+        cache_key = self.dedup.generate_request_key(
+            operation="captions",
+            user_id=user_id,
+            photo_id=photo_id,
+            style=style,
+            count=count,
+        )
 
+        # Use deduplication to prevent duplicate concurrent requests
+        return await self.dedup.deduplicated_call(
+            cache_key=cache_key,
+            operation=lambda: self._generate_captions_impl(
+                user_id, workspace_id, photo_url, style, count, photo_id
+            ),
+        )
+
+    async def _generate_captions_impl(
+        self,
+        user_id: UUID,
+        workspace_id: UUID,
+        photo_url: str,
+        style: str,
+        count: int,
+        photo_id: Optional[UUID],
+    ) -> CaptionResult:
+        """Internal implementation of caption generation."""
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -118,13 +133,16 @@ class CaptionHashtagService:
             # Build caption prompt
             prompt = self._build_caption_prompt(style, count)
 
+            # Fetch image data with caching
+            image_data = await self.dedup.fetch_image_data(photo_url)
+
             # Make API call
             response = await client.generate_content(
                 contents=[
                     {
                         "parts": [
                             {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": await fetch_image_base64(photo_url)}}
+                            {"inline_data": {"mime_type": "image/jpeg", "data": image_data}}
                         ]
                     }
                 ]
@@ -133,10 +151,6 @@ class CaptionHashtagService:
             # Parse response
             result = self._parse_caption_response(response.text, style)
 
-            # Cache the result if SHA256 provided
-            if asset_sha256:
-                await self.ai_cache.set_caption(asset_sha256, style, result.to_dict())
-
             # Log usage
             await self.ai_usage.log_ai_call(
                 user_id=user_id,
@@ -144,7 +158,7 @@ class CaptionHashtagService:
                 model_identifier=client.model,
                 feature_type=AIFeatureType.CAPTION_GENERATION,
                 success=True,
-                metadata={"photo_id": str(photo_id), "style": style, "cached": False} if photo_id else {"style": style, "cached": False},
+                metadata={"photo_id": str(photo_id), "style": style} if photo_id else {"style": style},
             )
 
             return result
@@ -168,8 +182,6 @@ class CaptionHashtagService:
         photo_url: str,
         count: int = 15,
         photo_id: Optional[UUID] = None,
-        asset_sha256: Optional[str] = None,
-        category: str = "general",
     ) -> HashtagResult:
         """Generate hashtags for a photo using AI.
 
@@ -179,22 +191,35 @@ class CaptionHashtagService:
             photo_url: URL to the photo
             count: Number of hashtags to generate
             photo_id: Optional photo ID for logging
-            asset_sha256: Optional SHA256 hash for caching
-            category: Hashtag category for cache key (general, niche, trending)
 
         Returns:
             HashtagResult with generated hashtags
         """
-        # Check cache first if SHA256 provided
-        if asset_sha256:
-            cached = await self.ai_cache.get_hashtags(asset_sha256, category)
-            if cached:
-                logger.debug(f"Returning cached hashtags for {asset_sha256[:16]}...")
-                return HashtagResult(
-                    hashtags=cached.get("hashtags", []),
-                    categories=cached.get("categories", {}),
-                )
+        # Generate deduplication key
+        cache_key = self.dedup.generate_request_key(
+            operation="hashtags",
+            user_id=user_id,
+            photo_id=photo_id,
+            count=count,
+        )
 
+        # Use deduplication to prevent duplicate concurrent requests
+        return await self.dedup.deduplicated_call(
+            cache_key=cache_key,
+            operation=lambda: self._generate_hashtags_impl(
+                user_id, workspace_id, photo_url, count, photo_id
+            ),
+        )
+
+    async def _generate_hashtags_impl(
+        self,
+        user_id: UUID,
+        workspace_id: UUID,
+        photo_url: str,
+        count: int,
+        photo_id: Optional[UUID],
+    ) -> HashtagResult:
+        """Internal implementation of hashtag generation."""
         try:
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
@@ -202,13 +227,16 @@ class CaptionHashtagService:
             # Build hashtag prompt
             prompt = self._build_hashtag_prompt(count)
 
+            # Fetch image data with caching
+            image_data = await self.dedup.fetch_image_data(photo_url)
+
             # Make API call
             response = await client.generate_content(
                 contents=[
                     {
                         "parts": [
                             {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": await fetch_image_base64(photo_url)}}
+                            {"inline_data": {"mime_type": "image/jpeg", "data": image_data}}
                         ]
                     }
                 ]
@@ -217,10 +245,6 @@ class CaptionHashtagService:
             # Parse response
             result = self._parse_hashtag_response(response.text)
 
-            # Cache the result if SHA256 provided
-            if asset_sha256:
-                await self.ai_cache.set_hashtags(asset_sha256, category, result.to_dict())
-
             # Log usage
             await self.ai_usage.log_ai_call(
                 user_id=user_id,
@@ -228,7 +252,7 @@ class CaptionHashtagService:
                 model_identifier=client.model,
                 feature_type=AIFeatureType.AUTO_TAGGING,  # Using existing feature type
                 success=True,
-                metadata={"photo_id": str(photo_id), "count": count, "cached": False} if photo_id else {"count": count, "cached": False},
+                metadata={"photo_id": str(photo_id), "count": count} if photo_id else {"count": count},
             )
 
             return result

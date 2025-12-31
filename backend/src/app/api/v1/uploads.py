@@ -23,7 +23,6 @@ from app.api.schemas import (
 )
 from app.api.exceptions import ValidationAppError, InternalError, NotFoundError
 from app.services.content_detection_service import get_content_detection_service
-from app.services.upload_service import get_upload_service
 
 logger = logging.getLogger(__name__)
 
@@ -164,60 +163,7 @@ async def commit_upload(
         # Read file data if provided
         file_data = await file.read() if file else None
 
-        # If no file data, check if session is already committed (idempotent)
-        # This handles the case where PUT endpoint already processed the upload
-        if not file_data:
-            from app.db.postgres import get_postgres_pool
-            import asyncio
-            
-            pool = await get_postgres_pool()
-            async with pool.acquire() as conn:
-                # Check session state with retries (handle race condition)
-                for attempt in range(5):  # 5 retries, 300ms each = 1.5s max
-                    session = await conn.fetchrow(
-                        """
-                        SELECT state, asset_id FROM upload_sessions
-                        WHERE upload_id = $1 AND workspace_id = $2
-                        """,
-                        upload_id,
-                        workspace_id,
-                    )
-                    
-                    if not session:
-                        raise NotFoundError("Upload session", upload_id)
-                    
-                    if session["state"] == "committed" and session["asset_id"]:
-                        # Queue content detection
-                        content_detection_service = get_content_detection_service()
-                        try:
-                            job_id = await content_detection_service.queue_detection(
-                                asset_id=session["asset_id"],
-                                workspace_id=workspace_id,
-                            )
-                        except Exception:
-                            job_id = None
-                        
-                        return UploadCommitResponse(
-                            asset_id=str(session["asset_id"]),
-                            status="processing",
-                            analysis_queued=job_id is not None
-                        )
-                    
-                    # Session not committed yet, wait and retry
-                    if session["state"] in ("created", "uploading", "verifying"):
-                        await asyncio.sleep(0.3)
-                        continue
-                    
-                    # Session in unexpected state
-                    break
-                
-                # After retries, still not committed
-                raise InternalError(
-                    f"Upload session not committed. State: {session['state']}. "
-                    "The file upload may have failed."
-                )
-
-        # If file data provided, process it (legacy/fallback flow)
+        # Process or verify commit
         result = await upload_service.process_proxy_upload(
             workspace_id=workspace_id,
             upload_id=upload_id,
@@ -226,18 +172,17 @@ async def commit_upload(
             client_metadata=metadata_dict,
         )
 
-        # Queue content detection
+        # T039: After commit, create asset_analysis record and queue content detection job
         content_detection_service = get_content_detection_service()
         asset_id = result["asset_id"]
         
-        try:
-            job_id = await content_detection_service.queue_detection(
-                asset_id=asset_id,
-                workspace_id=workspace_id,
-            )
-        except Exception:
-            job_id = None
+        # Queue content detection (handles deduplication and tag inheritance)
+        job_id = await content_detection_service.queue_detection(
+            asset_id=asset_id,
+            workspace_id=workspace_id,
+        )
         
+        # Update response to indicate analysis was queued
         result["analysis_queued"] = job_id is not None
 
         return UploadCommitResponse(**result)
@@ -296,7 +241,6 @@ async def check_duplicate(
                 WHERE a.workspace_id = $1
                   AND a.sha256 = $2
                   AND a.status != 'deleted'
-                  AND (a.deleted IS NULL OR a.deleted = FALSE)
             """
             params = [workspace_id, request.sha256]
 

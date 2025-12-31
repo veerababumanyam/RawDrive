@@ -20,6 +20,12 @@ THUMBNAIL_QUALITY = 80
 PREVIEW_MAX_DIMENSION = 2048
 PREVIEW_QUALITY = 85
 
+# Open Graph (OG) image constants - optimized for social sharing
+OG_IMAGE_WIDTH = 1200
+OG_IMAGE_HEIGHT = 630
+OG_IMAGE_QUALITY = 85
+OG_IMAGE_ASPECT_RATIO = OG_IMAGE_WIDTH / OG_IMAGE_HEIGHT  # 1.905
+
 
 class ImageProcessingError(Exception):
     """Base image processing error."""
@@ -199,6 +205,107 @@ class ImageProcessingService:
         except Exception as e:
             raise ImageProcessingError(
                 f"Failed to read image dimensions: {e}", "DIMENSION_READ_FAILED"
+            ) from e
+
+    def generate_og_image(
+        self,
+        image_data: bytes,
+        workspace_id: UUID,
+        output_format: str = "JPEG",
+    ) -> Tuple[bytes, int, int]:
+        """Generate Open Graph optimized image (1200x630px) for social sharing.
+
+        This creates an image optimized for WhatsApp, Facebook, Twitter, etc.
+        The image is cropped and scaled to exactly 1200x630 (1.91:1 aspect ratio)
+        using center-crop to preserve the most important part of the image.
+
+        Args:
+            image_data: Original image bytes
+            workspace_id: Workspace UUID (for logging)
+            output_format: Output format - "JPEG" or "WEBP" (default: JPEG for compatibility)
+
+        Returns:
+            Tuple of (og_image_bytes, width, height)
+            Width and height will always be (1200, 630)
+
+        Raises:
+            ImageProcessingError: If processing fails
+        """
+        try:
+            # Open image
+            image = Image.open(io.BytesIO(image_data))
+
+            # Auto-rotate based on EXIF orientation
+            image = ImageOps.exif_transpose(image)
+
+            original_width, original_height = image.size
+            original_aspect = original_width / original_height
+
+            # Calculate crop box for center-crop to target aspect ratio
+            if original_aspect > OG_IMAGE_ASPECT_RATIO:
+                # Image is wider than target - crop sides
+                new_width = int(original_height * OG_IMAGE_ASPECT_RATIO)
+                left = (original_width - new_width) // 2
+                crop_box = (left, 0, left + new_width, original_height)
+            else:
+                # Image is taller than target - crop top/bottom
+                new_height = int(original_width / OG_IMAGE_ASPECT_RATIO)
+                top = (original_height - new_height) // 2
+                crop_box = (0, top, original_width, top + new_height)
+
+            # Crop to target aspect ratio
+            cropped = image.crop(crop_box)
+
+            # Resize to exact OG dimensions
+            og_image = cropped.resize(
+                (OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT), Image.Resampling.LANCZOS
+            )
+
+            # Convert to RGB for output (required for JPEG and better for OG images)
+            if og_image.mode in ("RGBA", "LA", "P"):
+                # Create white background for transparency
+                rgb_image = Image.new("RGB", og_image.size, (255, 255, 255))
+                if og_image.mode == "P":
+                    og_image = og_image.convert("RGBA")
+                rgb_image.paste(
+                    og_image, mask=og_image.split()[-1] if og_image.mode == "RGBA" else None
+                )
+                og_image = rgb_image
+            elif og_image.mode != "RGB":
+                og_image = og_image.convert("RGB")
+
+            # Save in the specified format
+            output = io.BytesIO()
+            if output_format.upper() == "WEBP":
+                og_image.save(
+                    output,
+                    format="WEBP",
+                    quality=OG_IMAGE_QUALITY,
+                    method=6,
+                )
+            else:
+                # Default to JPEG for maximum social media compatibility
+                og_image.save(
+                    output,
+                    format="JPEG",
+                    quality=OG_IMAGE_QUALITY,
+                    progressive=True,  # Better loading on slow connections
+                    optimize=True,
+                )
+            og_bytes = output.getvalue()
+
+            logger.debug(
+                f"Generated OG image: {OG_IMAGE_WIDTH}x{OG_IMAGE_HEIGHT} "
+                f"(workspace={workspace_id}, original={original_width}x{original_height}, "
+                f"format={output_format})"
+            )
+
+            return og_bytes, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT
+
+        except Exception as e:
+            logger.error(f"Failed to generate OG image: {e}")
+            raise ImageProcessingError(
+                f"OG image generation failed: {e}", "OG_IMAGE_FAILED"
             ) from e
 
 

@@ -21,9 +21,6 @@ boto3==1.35.0
 # Image processing (open-source)
 Pillow==10.4.0
 exifread==3.0.0
-
-# ZIP streaming for favorites download (012-client-favorites)
-zipstream-ng>=1.7.1
 # rawpy==0.25.1  # RAW file processing (requires LibRaw system library)
 pg8000==1.31.5
 
@@ -37,6 +34,10 @@ numpy>=1.24.0
 
 # Payment processing
 razorpay>=1.4.1
+
+# Calendar generation (016-save-the-date)
+icalendar>=5.0.0
+pytz>=2024.1
 
 # Monitoring
 prometheus-client>=0.20.0

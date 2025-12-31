@@ -1,7 +1,7 @@
 """Unit tests for SmartCurationService.
 
-Tests AI-powered photo curation and selection algorithm.
-Feature: 010-ai-powered-features (US5)
+Feature: 010-ai-powered-features
+Tasks: T069 - Unit tests for curation service
 """
 
 from __future__ import annotations
@@ -17,324 +17,462 @@ from app.services.smart_curation_service import (
 
 
 class TestSmartCurationService:
-    """Test SmartCurationService - T069."""
+    """Test smart curation functionality."""
 
     @pytest.fixture
     def service(self) -> SmartCurationService:
-        """Create a SmartCurationService instance with mocked dependencies."""
-        with patch("app.services.smart_curation_service.get_settings") as mock_settings, \
-             patch("app.services.smart_curation_service.get_ai_usage_service") as mock_usage, \
-             patch("app.services.smart_curation_service.get_ai_cache_service") as mock_cache:
-            mock_settings.return_value = MagicMock()
-            mock_usage.return_value = MagicMock()
-            mock_cache.return_value = MagicMock()
-            return SmartCurationService()
-
-    @pytest.mark.asyncio
-    async def test_curate_empty_gallery(self) -> None:
-        """Test curation with no photos returns empty result."""
-        user_id = uuid4()
-        workspace_id = uuid4()
-        gallery_id = uuid4()
-
-        with patch("app.services.smart_curation_service.get_settings"), \
-             patch("app.services.smart_curation_service.get_ai_usage_service"), \
-             patch("app.services.smart_curation_service.get_ai_cache_service"):
-
-            service = SmartCurationService()
-            result = await service.curate_gallery(
-                user_id=user_id,
-                workspace_id=workspace_id,
-                gallery_id=gallery_id,
-                photo_analyses=[],
-            )
-
-            assert result.asset_ids == []
-            assert result.selected_count == 0
-            assert result.total_assets == 0
-
-    @pytest.mark.asyncio
-    async def test_curate_cache_hit(self) -> None:
-        """Test that cached curation is returned."""
-        user_id = uuid4()
-        workspace_id = uuid4()
-        gallery_id = uuid4()
-
-        cached_data = {
-            "asset_ids": ["asset1", "asset2"],
-            "criteria": {"quality_threshold": 70},
-            "total_assets": 10,
-            "selected_count": 2,
-            "rankings": [],
-        }
-
-        with patch("app.services.smart_curation_service.get_settings"), \
-             patch("app.services.smart_curation_service.get_ai_usage_service"), \
-             patch("app.services.smart_curation_service.get_ai_cache_service") as mock_cache:
-
-            mock_cache_instance = AsyncMock()
-            mock_cache.return_value = mock_cache_instance
-            mock_cache_instance.get_curation.return_value = cached_data
-
-            service = SmartCurationService()
-            result = await service.curate_gallery(
-                user_id=user_id,
-                workspace_id=workspace_id,
-                gallery_id=gallery_id,
-                photo_analyses=[{"asset_id": "test"}],  # Non-empty to skip empty check
-            )
-
-            assert result.asset_ids == ["asset1", "asset2"]
-            assert result.selected_count == 2
-
-    @pytest.mark.asyncio
-    async def test_curate_quality_threshold_filtering(self) -> None:
-        """Test that photos below quality threshold are excluded."""
-        user_id = uuid4()
-        workspace_id = uuid4()
-        gallery_id = uuid4()
-
-        photos = [
-            {"asset_id": str(uuid4()), "quality_score": 90, "sharpness": 85, "exposure": 88, "composition": 85},
-            {"asset_id": str(uuid4()), "quality_score": 50, "sharpness": 45, "exposure": 55, "composition": 48},
-            {"asset_id": str(uuid4()), "quality_score": 80, "sharpness": 78, "exposure": 82, "composition": 75},
-        ]
-
-        with patch("app.services.smart_curation_service.get_settings"), \
-             patch("app.services.smart_curation_service.get_ai_usage_service") as mock_usage, \
-             patch("app.services.smart_curation_service.get_ai_cache_service") as mock_cache:
-
-            mock_cache_instance = AsyncMock()
-            mock_cache.return_value = mock_cache_instance
-            mock_cache_instance.get_curation.return_value = None
-
-            mock_usage_instance = AsyncMock()
-            mock_usage.return_value = mock_usage_instance
-
-            service = SmartCurationService()
-            result = await service.curate_gallery(
-                user_id=user_id,
-                workspace_id=workspace_id,
-                gallery_id=gallery_id,
-                photo_analyses=photos,
-                quality_threshold=70,  # Should exclude the 50-score photo
-            )
-
-            # Only 2 photos should pass the threshold
-            assert result.selected_count == 2
-            assert result.total_assets == 3
-
-
-class TestScorePhotos:
-    """Test photo scoring algorithm."""
+        """Create a SmartCurationService instance."""
+        return SmartCurationService()
 
     @pytest.fixture
-    def service(self) -> SmartCurationService:
-        with patch("app.services.smart_curation_service.get_settings"), \
-             patch("app.services.smart_curation_service.get_ai_usage_service"), \
-             patch("app.services.smart_curation_service.get_ai_cache_service"):
-            return SmartCurationService()
-
-    def test_score_calculation(self, service: SmartCurationService) -> None:
-        """Test composite score calculation."""
-        photos = [
+    def sample_assets(self) -> list[dict]:
+        """Sample asset data for curation testing."""
+        return [
             {
-                "asset_id": "test1",
-                "quality_score": 80,
-                "sharpness": 80,
-                "exposure": 80,
-                "composition": 80,
-            }
-        ]
-
-        result = service._score_photos(photos, quality_threshold=0, prefer_people=False)
-
-        # All scores are 80, so composite should be 80
-        # (80 * 0.4) + (80 * 0.2) + (80 * 0.2) + (80 * 0.2) = 80
-        assert len(result) == 1
-        assert result[0]["score"] == 80.0
-
-    def test_people_preference_boost(self, service: SmartCurationService) -> None:
-        """Test that prefer_people boosts photos with faces."""
-        photos = [
-            {
-                "asset_id": "no_faces",
-                "quality_score": 80,
-                "sharpness": 80,
-                "exposure": 80,
-                "composition": 80,
-                "face_count": 0,
-            },
-            {
-                "asset_id": "with_faces",
-                "quality_score": 80,
-                "sharpness": 80,
-                "exposure": 80,
-                "composition": 80,
+                "asset_id": str(uuid4()),
+                "quality_score": 0.9,
+                "sharpness": 0.85,
+                "exposure": 0.9,
+                "composition": 0.88,
                 "face_count": 2,
+                "thumbnail_url": "https://example.com/thumb1.jpg",
             },
-        ]
-
-        result = service._score_photos(photos, quality_threshold=0, prefer_people=True)
-
-        # Photo with faces should have higher score (15% boost)
-        no_faces = next(p for p in result if p["asset_id"] == "no_faces")
-        with_faces = next(p for p in result if p["asset_id"] == "with_faces")
-
-        assert with_faces["score"] > no_faces["score"]
-        assert with_faces["score"] == 92.0  # 80 * 1.15 = 92
-
-    def test_score_capped_at_100(self, service: SmartCurationService) -> None:
-        """Test that boosted scores don't exceed 100."""
-        photos = [
             {
-                "asset_id": "high_score",
-                "quality_score": 95,
-                "sharpness": 95,
-                "exposure": 95,
-                "composition": 95,
+                "asset_id": str(uuid4()),
+                "quality_score": 0.75,
+                "sharpness": 0.7,
+                "exposure": 0.8,
+                "composition": 0.75,
+                "face_count": 0,
+                "thumbnail_url": "https://example.com/thumb2.jpg",
+            },
+            {
+                "asset_id": str(uuid4()),
+                "quality_score": 0.85,
+                "sharpness": 0.8,
+                "exposure": 0.85,
+                "composition": 0.9,
+                "face_count": 1,
+                "thumbnail_url": "https://example.com/thumb3.jpg",
+            },
+            {
+                "asset_id": str(uuid4()),
+                "quality_score": 0.5,
+                "sharpness": 0.5,
+                "exposure": 0.5,
+                "composition": 0.5,
+                "face_count": 0,
+                "thumbnail_url": "https://example.com/thumb4.jpg",
+            },
+            {
+                "asset_id": str(uuid4()),
+                "quality_score": 0.95,
+                "sharpness": 0.95,
+                "exposure": 0.95,
+                "composition": 0.95,
                 "face_count": 3,
+                "thumbnail_url": "https://example.com/thumb5.jpg",
             },
         ]
 
-        result = service._score_photos(photos, quality_threshold=0, prefer_people=True)
+    @pytest.mark.asyncio
+    async def test_curate_gallery_success(
+        self,
+        service: SmartCurationService,
+        sample_assets: list[dict],
+    ) -> None:
+        """Test successful gallery curation."""
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
 
-        # 95 * 1.15 = 109.25, should be capped at 100
-        assert result[0]["score"] == 100
-
-
-class TestDiversityFilter:
-    """Test diversity filtering algorithm."""
-
-    @pytest.fixture
-    def service(self) -> SmartCurationService:
-        with patch("app.services.smart_curation_service.get_settings"), \
-             patch("app.services.smart_curation_service.get_ai_usage_service"), \
-             patch("app.services.smart_curation_service.get_ai_cache_service"):
-            return SmartCurationService()
-
-    def test_diversity_zero_returns_top_n(self, service: SmartCurationService) -> None:
-        """Test that diversity=0 just returns top N by score."""
-        photos = [
-            {"asset_id": "1", "score": 90, "lighting": "natural", "mood": "happy", "dominant_colors": [], "tags": []},
-            {"asset_id": "2", "score": 85, "lighting": "natural", "mood": "happy", "dominant_colors": [], "tags": []},
-            {"asset_id": "3", "score": 80, "lighting": "natural", "mood": "happy", "dominant_colors": [], "tags": []},
-        ]
-
-        result = service._apply_diversity_filter(photos, diversity_weight=0, max_photos=2)
-
-        assert len(result) == 2
-        assert result[0]["asset_id"] == "1"
-        assert result[1]["asset_id"] == "2"
-
-    def test_diversity_filters_similar_photos(self, service: SmartCurationService) -> None:
-        """Test that high diversity filters similar photos."""
-        photos = [
-            {"asset_id": "1", "score": 90, "lighting": "natural", "mood": "happy", "dominant_colors": ["#FF0000"], "tags": ["sunset"]},
-            {"asset_id": "2", "score": 88, "lighting": "natural", "mood": "happy", "dominant_colors": ["#FF0000"], "tags": ["sunset"]},
-            {"asset_id": "3", "score": 85, "lighting": "artificial", "mood": "calm", "dominant_colors": ["#0000FF"], "tags": ["indoor"]},
-        ]
-
-        result = service._apply_diversity_filter(photos, diversity_weight=0.8, max_photos=2)
-
-        # Should prefer diverse photo over similar one
-        assert len(result) == 2
-        assert result[0]["asset_id"] == "1"  # Best photo
-        # Second should be the diverse one, not the similar one
-        assert "3" in [r["asset_id"] for r in result]
-
-
-class TestSimilarityCalculation:
-    """Test photo similarity calculation."""
-
-    @pytest.fixture
-    def service(self) -> SmartCurationService:
-        with patch("app.services.smart_curation_service.get_settings"), \
-             patch("app.services.smart_curation_service.get_ai_usage_service"), \
-             patch("app.services.smart_curation_service.get_ai_cache_service"):
-            return SmartCurationService()
-
-    def test_identical_photos_high_similarity(self, service: SmartCurationService) -> None:
-        """Test that identical attributes result in high similarity."""
-        photo1 = {
-            "lighting": "natural",
-            "mood": "happy",
-            "dominant_colors": ["#FF0000"],
-            "tags": ["sunset", "beach"],
-        }
-        photo2 = {
-            "lighting": "natural",
-            "mood": "happy",
-            "dominant_colors": ["#FF0000"],
-            "tags": ["sunset", "beach"],
-        }
-
-        similarity = service._calculate_similarity(photo1, photo2)
-
-        assert similarity > 0.9  # Should be very similar
-
-    def test_different_photos_low_similarity(self, service: SmartCurationService) -> None:
-        """Test that different attributes result in low similarity."""
-        photo1 = {
-            "lighting": "natural",
-            "mood": "happy",
-            "dominant_colors": ["#FF0000"],
-            "tags": ["sunset", "beach"],
-        }
-        photo2 = {
-            "lighting": "artificial",
-            "mood": "sad",
-            "dominant_colors": ["#0000FF"],
-            "tags": ["indoor", "portrait"],
-        }
-
-        similarity = service._calculate_similarity(photo1, photo2)
-
-        assert similarity < 0.3  # Should be very different
-
-
-class TestSelectionReason:
-    """Test selection reason generation."""
-
-    @pytest.fixture
-    def service(self) -> SmartCurationService:
-        with patch("app.services.smart_curation_service.get_settings"), \
-             patch("app.services.smart_curation_service.get_ai_usage_service"), \
-             patch("app.services.smart_curation_service.get_ai_cache_service"):
-            return SmartCurationService()
-
-    def test_excellent_quality_reason(self, service: SmartCurationService) -> None:
-        """Test reason for high quality photo."""
-        photo = {"score": 95, "sharpness": 90, "exposure": 88, "composition": 92}
-
-        reason = service._generate_selection_reason(photo)
-
-        assert "Excellent" in reason
-
-    def test_face_detection_in_reason(self, service: SmartCurationService) -> None:
-        """Test that face count is mentioned in reason."""
-        photo = {"score": 80, "sharpness": 75, "exposure": 78, "composition": 72, "face_count": 3}
-
-        reason = service._generate_selection_reason(photo)
-
-        assert "3 face(s)" in reason
-
-
-class TestCurationResultModel:
-    """Test CurationResult data model."""
-
-    def test_to_dict(self) -> None:
-        """Test conversion to dictionary."""
-        result = CurationResult(
-            asset_ids=["id1", "id2"],
-            criteria={"quality_threshold": 70},
-            total_assets=10,
-            selected_count=2,
-            rankings=[{"asset_id": "id1", "score": 90, "reason": "High quality"}],
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": sample_assets}
         )
 
-        dict_result = result.to_dict()
+        with patch(
+            "app.services.smart_curation_service.get_gallery_service",
+            return_value=mock_gallery_service,
+        ), patch.object(
+            service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ):
+            result = await service.curate_gallery(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                count=3,
+                quality_threshold=0.6,
+                diversity_weight=0.3,
+            )
 
-        assert dict_result["asset_ids"] == ["id1", "id2"]
-        assert dict_result["selected_count"] == 2
-        assert len(dict_result["rankings"]) == 1
+        assert result is not None
+        assert isinstance(result, CurationResult)
+        assert len(result.selected_assets) == 3
+        assert result.total_candidates == 5
+        assert result.quality_threshold == 0.6
+
+    @pytest.mark.asyncio
+    async def test_curate_gallery_respects_count(
+        self,
+        service: SmartCurationService,
+        sample_assets: list[dict],
+    ) -> None:
+        """Test that curation respects the requested count."""
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": sample_assets}
+        )
+
+        for count in [1, 2, 3, 5]:
+            with patch(
+                "app.services.smart_curation_service.get_gallery_service",
+                return_value=mock_gallery_service,
+            ), patch.object(
+                service.ai_usage,
+                "log_ai_call",
+                new_callable=AsyncMock,
+            ):
+                result = await service.curate_gallery(
+                    user_id=user_id,
+                    workspace_id=workspace_id,
+                    gallery_id=gallery_id,
+                    count=count,
+                    quality_threshold=0.0,  # Accept all
+                    diversity_weight=0.0,
+                )
+
+            # Should get at most the requested count
+            assert len(result.selected_assets) <= count
+
+    @pytest.mark.asyncio
+    async def test_curate_gallery_quality_threshold(
+        self,
+        service: SmartCurationService,
+        sample_assets: list[dict],
+    ) -> None:
+        """Test that quality threshold filters out low-quality photos."""
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": sample_assets}
+        )
+
+        # High threshold should exclude lower quality photos
+        with patch(
+            "app.services.smart_curation_service.get_gallery_service",
+            return_value=mock_gallery_service,
+        ), patch.object(
+            service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ):
+            result = await service.curate_gallery(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                count=10,
+                quality_threshold=0.8,
+                diversity_weight=0.0,
+            )
+
+        # All selected assets should have score >= threshold
+        for asset in result.selected_assets:
+            assert asset["score"] >= 0.8
+
+    @pytest.mark.asyncio
+    async def test_curate_gallery_prefer_people(
+        self,
+        service: SmartCurationService,
+        sample_assets: list[dict],
+    ) -> None:
+        """Test that prefer_people option boosts photos with faces."""
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": sample_assets}
+        )
+
+        with patch(
+            "app.services.smart_curation_service.get_gallery_service",
+            return_value=mock_gallery_service,
+        ), patch.object(
+            service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ):
+            result = await service.curate_gallery(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                count=3,
+                quality_threshold=0.0,
+                diversity_weight=0.0,
+                prefer_people=True,
+            )
+
+        # Photos with faces should be prioritized
+        # At least one selected should have faces
+        has_faces = [a for a in result.selected_assets if a.get("has_faces", False)]
+        assert len(has_faces) > 0
+
+    @pytest.mark.asyncio
+    async def test_curate_gallery_exclude_assets(
+        self,
+        service: SmartCurationService,
+        sample_assets: list[dict],
+    ) -> None:
+        """Test that excluded assets are not selected."""
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        # Get the first asset's ID to exclude
+        exclude_id = uuid4()
+        sample_assets[0]["asset_id"] = str(exclude_id)
+
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": sample_assets}
+        )
+
+        with patch(
+            "app.services.smart_curation_service.get_gallery_service",
+            return_value=mock_gallery_service,
+        ), patch.object(
+            service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ):
+            result = await service.curate_gallery(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                count=10,
+                quality_threshold=0.0,
+                diversity_weight=0.0,
+                exclude_asset_ids=[exclude_id],
+            )
+
+        # Excluded asset should not be in results
+        selected_ids = [a["asset_id"] for a in result.selected_assets]
+        assert str(exclude_id) not in selected_ids
+
+    @pytest.mark.asyncio
+    async def test_curate_gallery_logs_usage(
+        self,
+        service: SmartCurationService,
+        sample_assets: list[dict],
+    ) -> None:
+        """Test that curation logs AI usage."""
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": sample_assets}
+        )
+
+        with patch(
+            "app.services.smart_curation_service.get_gallery_service",
+            return_value=mock_gallery_service,
+        ), patch.object(
+            service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ) as mock_log:
+            await service.curate_gallery(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                count=3,
+                quality_threshold=0.6,
+                diversity_weight=0.3,
+            )
+
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args.kwargs
+        assert call_kwargs["user_id"] == user_id
+        assert call_kwargs["workspace_id"] == workspace_id
+        assert call_kwargs["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_curate_empty_gallery(
+        self,
+        service: SmartCurationService,
+    ) -> None:
+        """Test curation of an empty gallery."""
+        user_id = uuid4()
+        workspace_id = uuid4()
+        gallery_id = uuid4()
+
+        mock_gallery_service = MagicMock()
+        mock_gallery_service.get_gallery_assets = AsyncMock(
+            return_value={"assets": []}
+        )
+
+        with patch(
+            "app.services.smart_curation_service.get_gallery_service",
+            return_value=mock_gallery_service,
+        ), patch.object(
+            service.ai_usage,
+            "log_ai_call",
+            new_callable=AsyncMock,
+        ):
+            result = await service.curate_gallery(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                count=10,
+            )
+
+        assert len(result.selected_assets) == 0
+        assert result.total_candidates == 0
+
+
+class TestCurationResult:
+    """Test CurationResult data model."""
+
+    def test_create_curation_result(self) -> None:
+        """Test creating CurationResult instance."""
+        result = CurationResult(
+            gallery_id="123",
+            selected_assets=[
+                {"asset_id": "a1", "score": 0.9},
+                {"asset_id": "a2", "score": 0.85},
+            ],
+            total_candidates=10,
+            quality_threshold=0.6,
+            diversity_weight=0.3,
+        )
+
+        assert result.gallery_id == "123"
+        assert len(result.selected_assets) == 2
+        assert result.total_candidates == 10
+        assert result.quality_threshold == 0.6
+        assert result.diversity_weight == 0.3
+
+    def test_curation_result_to_dict(self) -> None:
+        """Test CurationResult serialization."""
+        result = CurationResult(
+            gallery_id="456",
+            selected_assets=[{"asset_id": "a1", "score": 0.9}],
+            total_candidates=5,
+            quality_threshold=0.7,
+            diversity_weight=0.2,
+        )
+
+        data = result.to_dict()
+        assert data["gallery_id"] == "456"
+        assert len(data["selected_assets"]) == 1
+        assert data["total_candidates"] == 5
+        assert data["quality_threshold"] == 0.7
+        assert data["diversity_weight"] == 0.2
+
+
+class TestCurationAlgorithm:
+    """Test the curation scoring algorithm."""
+
+    @pytest.fixture
+    def service(self) -> SmartCurationService:
+        """Create a SmartCurationService instance."""
+        return SmartCurationService()
+
+    def test_calculate_asset_score_base(
+        self,
+        service: SmartCurationService,
+    ) -> None:
+        """Test base score calculation."""
+        asset = {
+            "quality_score": 0.8,
+            "sharpness": 0.7,
+            "exposure": 0.75,
+            "composition": 0.8,
+            "face_count": 0,
+        }
+
+        score = service._calculate_asset_score(
+            asset=asset,
+            quality_threshold=0.5,
+            diversity_weight=0.3,
+            prefer_people=False,
+        )
+
+        # Score should be between 0 and 1
+        assert 0 <= score <= 1
+        # Quality weight is 0.6, technical is 0.4
+        # Expected: 0.8 * 0.6 + ((0.7 + 0.75 + 0.8) / 3) * 0.4
+        expected = 0.8 * 0.6 + 0.75 * 0.4
+        assert abs(score - expected) < 0.01
+
+    def test_calculate_asset_score_with_people_bonus(
+        self,
+        service: SmartCurationService,
+    ) -> None:
+        """Test score calculation with people preference."""
+        asset = {
+            "quality_score": 0.7,
+            "sharpness": 0.7,
+            "exposure": 0.7,
+            "composition": 0.7,
+            "face_count": 2,
+        }
+
+        score_with_bonus = service._calculate_asset_score(
+            asset=asset,
+            quality_threshold=0.5,
+            diversity_weight=0.3,
+            prefer_people=True,
+        )
+
+        score_without_bonus = service._calculate_asset_score(
+            asset=asset,
+            quality_threshold=0.5,
+            diversity_weight=0.3,
+            prefer_people=False,
+        )
+
+        # With people preference, score should be higher
+        assert score_with_bonus > score_without_bonus
+
+    def test_diversity_selection(
+        self,
+        service: SmartCurationService,
+    ) -> None:
+        """Test diversity-aware selection."""
+        scored_assets = [
+            {"asset_id": "1", "score": 0.95, "has_faces": True},
+            {"asset_id": "2", "score": 0.9, "has_faces": True},
+            {"asset_id": "3", "score": 0.85, "has_faces": False},
+            {"asset_id": "4", "score": 0.8, "has_faces": True},
+            {"asset_id": "5", "score": 0.75, "has_faces": False},
+        ]
+
+        selected = service._apply_diversity_selection(
+            scored_assets=scored_assets,
+            count=4,
+            diversity_weight=0.5,
+        )
+
+        assert len(selected) == 4
+
+        # Should include some variety (not all faces or all no-faces)
+        has_faces = [a for a in selected if a["has_faces"]]
+        no_faces = [a for a in selected if not a["has_faces"]]
+
+        # With diversity weight 0.5, we should have some variety
+        assert len(has_faces) > 0
+        assert len(no_faces) > 0

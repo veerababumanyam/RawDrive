@@ -34,10 +34,6 @@ import {
   ShareDialog,
   PinVerificationModal,
 } from '../../components/features/gallery';
-import { SmartCurationPanel } from '../../components/features/ai/SmartCurationPanel';
-import { GalleryStoryPanel } from '../../components/features/ai/GalleryStoryPanel';
-import { GeminiSetupModal } from '../../components/settings/GeminiSetupModal';
-import { geminiSettingsService } from '../../services/geminiSettingsService';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
 import Modal, { ModalBody, ModalFooter } from '../../components/ui/Modal';
@@ -46,7 +42,7 @@ import { useToast } from '../../components/ui/Toast';
 import { useSearch } from '../../contexts/SearchContext';
 import { galleryService } from '../../services/galleryService';
 import { SignedUrlProvider } from '../../contexts/SignedUrlContext';
-import type { GalleryAssetItem, ViewMode, FilterType, GalleryAssetSortOption } from '../../types/gallery';
+import type { GalleryAssetItem, ViewMode, FilterType } from '../../types/gallery';
 import { PRIVATE_UNLOCKED_KEY_PREFIX } from '../../constants/gallery';
 
 const GalleryDetailPage: React.FC = () => {
@@ -75,7 +71,6 @@ const GalleryDetailPage: React.FC = () => {
     favorites?: boolean;
     selections?: boolean;
   }>({});
-  const [sortBy, setSortBy] = useState<GalleryAssetSortOption>('position');
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   const [activeSubGalleryId, setActiveSubGalleryId] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -93,13 +88,6 @@ const GalleryDetailPage: React.FC = () => {
   // Private photo unlock state (admin also needs PIN to see private photos)
   const [showPinModal, setShowPinModal] = useState(false);
   const [isPrivateUnlocked, setIsPrivateUnlocked] = useState(false);
-
-  // AI Features state
-  const [showSmartCurationPanel, setShowSmartCurationPanel] = useState(false);
-  const [showAIStoryPanel, setShowAIStoryPanel] = useState(false);
-  const [showGeminiSetupModal, setShowGeminiSetupModal] = useState(false);
-  const [pendingAIFeature, setPendingAIFeature] = useState<'curation' | 'story' | null>(null);
-  const [hasGeminiKey, setHasGeminiKey] = useState<boolean | null>(null);
 
   // Register search handler
   const { registerHandler, unregisterHandler } = useSearch();
@@ -145,54 +133,6 @@ const GalleryDetailPage: React.FC = () => {
     }
   }, [galleryId]);
 
-  // Check for Gemini API key and open AI feature
-  const checkGeminiAndOpenFeature = useCallback(async (feature: 'curation' | 'story') => {
-    try {
-      // Check if we already know the key status
-      if (hasGeminiKey === true) {
-        if (feature === 'curation') {
-          setShowSmartCurationPanel(true);
-        } else {
-          setShowAIStoryPanel(true);
-        }
-        return;
-      }
-
-      // Fetch settings to check for API key
-      const settings = await geminiSettingsService.getSettings();
-      setHasGeminiKey(settings.has_api_key);
-
-      if (settings.has_api_key) {
-        if (feature === 'curation') {
-          setShowSmartCurationPanel(true);
-        } else {
-          setShowAIStoryPanel(true);
-        }
-      } else {
-        // No API key - show setup modal
-        setPendingAIFeature(feature);
-        setShowGeminiSetupModal(true);
-      }
-    } catch (error) {
-      // On error, assume no key and show setup modal
-      setPendingAIFeature(feature);
-      setShowGeminiSetupModal(true);
-    }
-  }, [hasGeminiKey]);
-
-  // Handle Gemini setup complete - open the pending feature
-  const handleGeminiSetupComplete = useCallback(() => {
-    setHasGeminiKey(true);
-    setShowGeminiSetupModal(false);
-
-    if (pendingAIFeature === 'curation') {
-      setShowSmartCurationPanel(true);
-    } else if (pendingAIFeature === 'story') {
-      setShowAIStoryPanel(true);
-    }
-    setPendingAIFeature(null);
-  }, [pendingAIFeature]);
-
   // Fetch gallery details
   const {
     gallery,
@@ -223,7 +163,6 @@ const GalleryDetailPage: React.FC = () => {
     favoritesOnly: activeFilters.favorites || false,
     selectionsOnly: activeFilters.selections || false,
     searchQuery: searchQuery,
-    sortBy: sortBy,
     autoFetch: !!galleryId && !!workspace?.workspace_id,
   });
 
@@ -233,15 +172,12 @@ const GalleryDetailPage: React.FC = () => {
     const favoritesCount = assets.filter((a) => a.is_favorited).length;
     const selectionsCount = assets.filter((a) => a.is_selected).length;
     const privateCount = assets.filter((a) => a.is_private).length;
-    // Aggregate client picks count from all loaded assets
-    const clientPicksCount = assets.reduce((sum, a) => sum + (a.client_picks_count || 0), 0);
 
     return {
       totalItems,
       favoritesCount,
       selectionsCount,
       privateCount,
-      clientPicksCount,
     };
   }, [assets, meta?.total]);
 
@@ -840,8 +776,8 @@ const GalleryDetailPage: React.FC = () => {
             hasPhotos={(gallery.stats?.total_items || 0) > 0}
             onViewAsClient={() => window.open(`/g/${gallery.gallery_id}`, '_blank')}
             onFindPeople={() => setShowPeoplePanel(true)}
-            onAIStory={() => checkGeminiAndOpenFeature('story')}
-            onSmartCurate={() => checkGeminiAndOpenFeature('curation')}
+            onAIStory={() => addToast({ message: 'AI Story - Coming soon', variant: 'info' })}
+            onSmartCurate={() => addToast({ message: 'Smart Curate - Coming soon', variant: 'info' })}
             onShare={() => setShowShareDialog(true)}
             onSettings={() => setShowSettings(true)}
             onUpload={() => setShowUpload(!showUpload)}
@@ -884,9 +820,6 @@ const GalleryDetailPage: React.FC = () => {
               setSelectedAssetIds(new Set());
             }
           }}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-          showSortOptions
         />
 
         {/* Unlock Private Photos Button - show when private photos exist and not unlocked */}
@@ -1265,78 +1198,6 @@ const GalleryDetailPage: React.FC = () => {
           onVerify={handlePrivatePhotoUnlock}
           onCancel={() => setShowPinModal(false)}
           galleryTitle={gallery.title}
-        />
-
-        {/* AI Features - Smart Curation Panel */}
-        {showSmartCurationPanel && (
-          <Modal
-            isOpen={showSmartCurationPanel}
-            onClose={() => setShowSmartCurationPanel(false)}
-            title="Smart Curation"
-            size="lg"
-          >
-            <ModalBody padding="none">
-              <SmartCurationPanel
-                workspaceId={workspace?.workspace_id || ''}
-                galleryId={gallery.gallery_id}
-                totalPhotos={gallery.stats?.total_photos || 0}
-                onCurationComplete={(result) => {
-                  addToast({
-                    variant: 'success',
-                    message: `Found ${result.selected_count} recommended photos`,
-                  });
-                  setShowSmartCurationPanel(false);
-                  // Optionally select the recommended photos
-                  if (result.asset_ids?.length > 0) {
-                    setSelectedAssetIds(new Set(result.asset_ids));
-                  }
-                }}
-                onSelectPhotos={(assetIds) => {
-                  setSelectedAssetIds(new Set(assetIds));
-                  setShowSmartCurationPanel(false);
-                  addToast({
-                    variant: 'success',
-                    message: `Selected ${assetIds.length} photos`,
-                  });
-                }}
-              />
-            </ModalBody>
-          </Modal>
-        )}
-
-        {/* AI Features - Gallery Story Panel */}
-        {showAIStoryPanel && (
-          <Modal
-            isOpen={showAIStoryPanel}
-            onClose={() => setShowAIStoryPanel(false)}
-            title="Generate Gallery Story"
-            size="lg"
-          >
-            <ModalBody padding="none">
-              <GalleryStoryPanel
-                workspaceId={workspace?.workspace_id || ''}
-                galleryId={gallery.gallery_id}
-                photoCount={gallery.stats?.total_photos || 0}
-                onStoryGenerated={() => {
-                  addToast({
-                    variant: 'success',
-                    message: 'Gallery story generated successfully!',
-                  });
-                }}
-              />
-            </ModalBody>
-          </Modal>
-        )}
-
-        {/* Gemini API Key Setup Modal */}
-        <GeminiSetupModal
-          isOpen={showGeminiSetupModal}
-          onClose={() => {
-            setShowGeminiSetupModal(false);
-            setPendingAIFeature(null);
-          }}
-          onSetupComplete={handleGeminiSetupComplete}
-          featureName={pendingAIFeature === 'curation' ? 'Smart Curation' : 'AI Story Generation'}
         />
       </div>
     </div>

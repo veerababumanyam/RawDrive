@@ -46,6 +46,8 @@ from app.api.v1.gemini_settings import models_router as gemini_models_router
 from app.api.v1.admin_gemini_models import router as admin_gemini_models_router
 from app.api.v1.client_favorites import router as client_favorites_router
 from app.api.v1.favorites_analytics import router as favorites_analytics_router
+from app.api.v1.digital_invitations import router as digital_invitations_router
+from app.api.v1.public_invitations import router as public_invitations_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -215,4 +217,20 @@ router.include_router(
     favorites_analytics_router,
     prefix="/api/v1",
     tags=["favorites-analytics"],
+)
+
+# Digital Invitations routes (016-save-the-date)
+# Host endpoints for managing digital event invitations
+router.include_router(
+    digital_invitations_router,
+    prefix="/api/v1/workspaces/{workspace_id}/invitations",
+    tags=["digital-invitations"],
+)
+
+# Public Invitations routes (016-save-the-date)
+# Public endpoints for guest access to invitations and RSVP submission
+router.include_router(
+    public_invitations_router,
+    prefix="/api/v1/public/invitations",
+    tags=["public-invitations"],
 )

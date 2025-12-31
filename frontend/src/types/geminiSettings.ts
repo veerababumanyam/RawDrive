@@ -171,6 +171,87 @@ export interface GeminiAdminStats {
 }
 
 // ---------------------------------------------------------------------------
+// AI Feature Toggles Types (T080)
+// ---------------------------------------------------------------------------
+
+/**
+ * AI feature toggle settings
+ */
+export interface AIFeatureToggles {
+  photo_analysis: boolean;
+  captions: boolean;
+  hashtags: boolean;
+  gallery_story: boolean;
+  smart_curation: boolean;
+}
+
+/**
+ * Request to update AI feature toggles
+ */
+export interface UpdateAIFeatureTogglesRequest {
+  photo_analysis?: boolean;
+  captions?: boolean;
+  hashtags?: boolean;
+  gallery_story?: boolean;
+  smart_curation?: boolean;
+}
+
+/**
+ * Response with AI feature toggles and status
+ */
+export interface AIFeatureTogglesResponse {
+  toggles: AIFeatureToggles;
+  has_api_key: boolean;
+  api_status: GeminiSettingsStatus;
+}
+
+/**
+ * AI feature metadata for UI display
+ */
+export interface AIFeatureInfo {
+  key: keyof AIFeatureToggles;
+  name: string;
+  description: string;
+  icon: string;
+}
+
+/**
+ * Available AI features with metadata
+ */
+export const AI_FEATURES: AIFeatureInfo[] = [
+  {
+    key: 'photo_analysis',
+    name: 'Photo Analysis',
+    description: 'AI-powered quality assessment, tags, colors, lighting, and suggestions',
+    icon: 'Camera',
+  },
+  {
+    key: 'captions',
+    name: 'Caption Generation',
+    description: 'Generate professional, casual, or poetic captions for photos',
+    icon: 'FileText',
+  },
+  {
+    key: 'hashtags',
+    name: 'Hashtag Generation',
+    description: 'Generate categorized hashtags for social media optimization',
+    icon: 'Hash',
+  },
+  {
+    key: 'gallery_story',
+    name: 'Gallery Stories',
+    description: 'AI-written narratives and descriptions for photo galleries',
+    icon: 'BookOpen',
+  },
+  {
+    key: 'smart_curation',
+    name: 'Smart Curation',
+    description: 'AI-powered selection of best photos based on quality and diversity',
+    icon: 'Wand2',
+  },
+];
+
+// ---------------------------------------------------------------------------
 // UI Helper Types
 // ---------------------------------------------------------------------------
 

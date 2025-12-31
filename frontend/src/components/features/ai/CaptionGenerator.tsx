@@ -1,188 +1,350 @@
 /**
  * CaptionGenerator Component
- * Generate AI-powered captions with tone selection
- * Feature: AI-powered photo features (US2)
+ * Feature: 010-ai-powered-features
+ * Tasks: T026 - Create frontend CaptionGenerator component
+ *        T028 - Implement caption copy-to-clipboard functionality
+ *
+ * AI-powered caption generation with style options
  */
 
 import React, { useState, useCallback } from 'react';
-import { MessageSquare, Copy, Check, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
-import { AppButton } from '../../ui/AppButton';
-import { AppCard } from '../../ui/AppCard';
-import { useToast } from '../../ui/Toast';
-import { CaptionService } from '../../../services/captionService';
-import type { CaptionResult } from '../../../types/aiFeatures';
+import {
+  MessageSquare,
+  Wand2,
+  Copy,
+  Check,
+  RefreshCw,
+  ChevronDown,
+} from 'lucide-react';
+import { AppButton } from '@/components/ui/AppButton';
+import { AIErrorBoundary, AISpinner } from './index';
+import { CaptionService } from '@/services/captionService';
+import type { CaptionResult, GenerateCaptionsRequest } from '@/types/aiFeatures';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface CaptionGeneratorProps {
+  /** Workspace ID */
   workspaceId: string;
+  /** Asset ID to generate captions for */
   assetId: string;
-  onCaptionSelected?: (caption: string) => void;
+  /** Photo filename for display */
+  filename?: string;
+  /** Optional callback when captions are generated */
+  onCaptionsGenerated?: (result: CaptionResult) => void;
+  /** Optional custom class name */
+  className?: string;
+  /** Compact mode for inline usage */
+  compact?: boolean;
 }
 
 type CaptionStyle = 'professional' | 'casual' | 'poetic';
 
-const styleDescriptions: Record<CaptionStyle, string> = {
-  professional: 'Polished and business-appropriate',
-  casual: 'Friendly and conversational',
-  poetic: 'Artistic and evocative',
-};
+const STYLE_OPTIONS: { value: CaptionStyle; label: string; description: string; icon: string }[] = [
+  {
+    value: 'professional',
+    label: 'Professional',
+    description: 'Business-appropriate, polished language',
+    icon: '🎯',
+  },
+  {
+    value: 'casual',
+    label: 'Casual',
+    description: 'Friendly, conversational tone',
+    icon: '😊',
+  },
+  {
+    value: 'poetic',
+    label: 'Poetic',
+    description: 'Artistic, metaphorical language',
+    icon: '🌟',
+  },
+];
+
+const COUNT_OPTIONS = [1, 3, 5];
+
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export const CaptionGenerator: React.FC<CaptionGeneratorProps> = ({
   workspaceId,
   assetId,
-  onCaptionSelected,
+  filename,
+  onCaptionsGenerated,
+  className = '',
+  compact = false,
 }) => {
+  // Form state
   const [style, setStyle] = useState<CaptionStyle>('professional');
-  const [result, setResult] = useState<CaptionResult | null>(null);
+  const [count, setCount] = useState(3);
+
+  // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const { addToast } = useToast();
+  const [result, setResult] = useState<CaptionResult | null>(null);
 
+  // UI state
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [showStyleDropdown, setShowStyleDropdown] = useState(false);
+
+  // Generate captions
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true);
     setError(null);
 
     try {
-      const captionResult = await CaptionService.generateCaptions(workspaceId, assetId, {
-        style,
-        count: 3,
-      });
+      const request: GenerateCaptionsRequest = { style, count };
+      const captionResult = await CaptionService.generateCaptions(
+        workspaceId,
+        assetId,
+        request
+      );
 
       setResult(captionResult);
-      addToast({ message: 'Captions generated', variant: 'success' });
+      onCaptionsGenerated?.(captionResult);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate captions';
-
-      if (errorMessage.includes('API key') || errorMessage.includes('not configured')) {
-        setError('AI features require a Gemini API key. Configure it in Settings > AI & Gemini.');
-      } else {
-        setError(errorMessage);
-      }
-
-      addToast({ message: 'Generation failed', variant: 'error' });
+      const message = err instanceof Error ? err.message : 'Caption generation failed';
+      setError(message);
     } finally {
       setIsGenerating(false);
     }
-  }, [workspaceId, assetId, style, addToast]);
+  }, [workspaceId, assetId, style, count, onCaptionsGenerated]);
 
+  // Copy caption
   const handleCopy = useCallback(async (caption: string, index: number) => {
     try {
       await navigator.clipboard.writeText(caption);
       setCopiedIndex(index);
-      addToast({ message: 'Caption copied to clipboard', variant: 'success' });
-      onCaptionSelected?.(caption);
-
       setTimeout(() => setCopiedIndex(null), 2000);
     } catch {
-      addToast({ message: 'Failed to copy', variant: 'error' });
+      setError('Failed to copy');
     }
-  }, [addToast, onCaptionSelected]);
+  }, []);
+
+  // Copy all captions
+  const handleCopyAll = useCallback(async () => {
+    if (!result?.captions) return;
+    try {
+      await navigator.clipboard.writeText(result.captions.join('\n\n'));
+      setCopiedIndex(-1); // Use -1 to indicate "all"
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch {
+      setError('Failed to copy');
+    }
+  }, [result]);
+
+  // Regenerate
+  const handleRegenerate = useCallback(() => {
+    setResult(null);
+    handleGenerate();
+  }, [handleGenerate]);
 
   return (
-    <AppCard padding="md">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-text-primary flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-accent" />
-          Caption Generator
-        </h3>
-      </div>
-
-      {/* Style Selector */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-text-secondary mb-2">
-          Select Tone
-        </label>
-        <div className="grid grid-cols-3 gap-2">
-          {(['professional', 'casual', 'poetic'] as CaptionStyle[]).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStyle(s)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                style === s
-                  ? 'bg-accent text-white'
-                  : 'bg-surface-hover text-text-secondary hover:bg-border'
-              }`}
-              aria-pressed={style === s}
-            >
-              <span className="capitalize">{s}</span>
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-text-tertiary mt-1">
-          {styleDescriptions[style]}
-        </p>
-      </div>
-
-      {/* Generate Button */}
-      <AppButton
-        variant="primary"
-        onClick={handleGenerate}
-        disabled={isGenerating}
-        className="w-full mb-4"
-        leftIcon={
-          isGenerating ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <MessageSquare className="w-4 h-4" />
-          )
-        }
-      >
-        {isGenerating ? 'Generating...' : 'Generate Captions'}
-      </AppButton>
-
-      {/* Error State */}
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-error/10 rounded-lg text-error text-sm mb-4">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Results */}
-      {result && result.captions.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-text-tertiary">
-              Generated in <span className="capitalize">{result.style}</span> style
-            </span>
-            <AppButton
-              variant="ghost"
-              size="sm"
-              onClick={handleGenerate}
-              leftIcon={<RefreshCw className="w-3 h-3" />}
-            >
-              Regenerate
-            </AppButton>
+    <AIErrorBoundary featureName="Caption Generator">
+      <div className={`bg-surface rounded-card border border-border ${compact ? 'p-4' : 'p-6'} ${className}`}>
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-accent/10 text-accent">
+            <MessageSquare className="w-5 h-5" />
           </div>
+          <div className="flex-1 min-w-0">
+            <h3 className={`${compact ? 'text-base' : 'text-lg'} font-semibold text-text-primary`}>
+              Caption Generator
+            </h3>
+            {filename && (
+              <p className="text-sm text-text-secondary truncate">{filename}</p>
+            )}
+          </div>
+        </div>
 
-          {result.captions.map((caption, index) => (
-            <div
-              key={index}
-              className="group p-3 bg-surface-hover rounded-lg hover:bg-border transition-colors"
-            >
-              <p className="text-sm text-text-primary mb-2">{caption}</p>
+        {/* Options (when not showing results) */}
+        {!result && !isGenerating && (
+          <div className="space-y-4 mb-4">
+            {/* Style selector */}
+            <div className="relative">
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                Caption Style
+              </label>
               <button
-                onClick={() => handleCopy(caption, index)}
-                className="flex items-center gap-1.5 text-xs text-text-tertiary hover:text-accent transition-colors"
-                aria-label={`Copy caption ${index + 1}`}
+                onClick={() => setShowStyleDropdown(!showStyleDropdown)}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-background border border-border rounded-lg text-text-primary hover:border-accent transition-colors"
+                aria-expanded={showStyleDropdown}
+                aria-haspopup="listbox"
               >
-                {copiedIndex === index ? (
+                <span>
+                  {STYLE_OPTIONS.find((o) => o.value === style)?.icon}{' '}
+                  {STYLE_OPTIONS.find((o) => o.value === style)?.label}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform ${showStyleDropdown ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {showStyleDropdown && (
+                <ul
+                  role="listbox"
+                  className="absolute z-10 w-full mt-1 ai-dropdown py-1"
+                >
+                  {STYLE_OPTIONS.map((option) => (
+                    <li
+                      key={option.value}
+                      role="option"
+                      aria-selected={style === option.value}
+                      onClick={() => {
+                        setStyle(option.value);
+                        setShowStyleDropdown(false);
+                      }}
+                      className={`ai-dropdown-item ${
+                        style === option.value ? 'selected' : 'text-text-primary'
+                      }`}
+                    >
+                      <div>
+                        <span className="font-medium">
+                          {option.icon} {option.label}
+                        </span>
+                        <p className="text-xs text-text-secondary mt-0.5">
+                          {option.description}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Count selector */}
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                Number of Captions
+              </label>
+              <div className="flex gap-2">
+                {COUNT_OPTIONS.map((num) => (
+                  <button
+                    key={num}
+                    onClick={() => setCount(num)}
+                    className={`flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      count === num
+                        ? 'bg-accent/10 border-accent text-accent'
+                        : 'bg-background border-border text-text-primary hover:border-accent'
+                    }`}
+                    aria-pressed={count === num}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading state */}
+        {isGenerating && (
+          <div className="mb-4">
+            <AISpinner featureType="caption" />
+          </div>
+        )}
+
+        {/* Error state */}
+        {error && (
+          <div
+            className="mb-4 p-3 bg-error/10 border border-error/20 rounded-lg text-error text-sm"
+            role="alert"
+          >
+            <p className="font-medium">Generation failed</p>
+            <p className="opacity-80 mt-0.5">{error}</p>
+          </div>
+        )}
+
+        {/* Results */}
+        {result && !isGenerating && (
+          <div className="space-y-3 mb-4">
+            {/* Style badge */}
+            <div className="flex items-center justify-between">
+              <span className="ai-tag ai-tag-accent">
+                {STYLE_OPTIONS.find((o) => o.value === result.style)?.icon}{' '}
+                {result.style}
+              </span>
+              <button
+                onClick={handleCopyAll}
+                className="text-xs text-accent hover:text-accent-hover flex items-center gap-1"
+                aria-label="Copy all captions"
+              >
+                {copiedIndex === -1 ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-success" />
-                    <span className="text-success">Copied!</span>
+                    <Check className="w-3 h-3" /> Copied All
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copy</span>
+                    <Copy className="w-3 h-3" /> Copy All
                   </>
                 )}
               </button>
             </div>
-          ))}
-        </div>
-      )}
-    </AppCard>
+
+            {/* Captions list */}
+            {result.captions.map((caption, index) => (
+              <div
+                key={index}
+                className="ai-result-card p-4 group"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-text-primary leading-relaxed flex-1">
+                    {caption}
+                  </p>
+                  <button
+                    onClick={() => handleCopy(caption, index)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-surface-hover text-text-secondary hover:text-accent transition-all"
+                    aria-label={`Copy caption ${index + 1}`}
+                  >
+                    {copiedIndex === index ? (
+                      <Check className="w-4 h-4 text-success" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Action buttons */}
+            <div className="flex gap-2 pt-2">
+              <AppButton
+                variant="ghost"
+                size="sm"
+                leftIcon={<RefreshCw className="w-4 h-4" />}
+                onClick={handleRegenerate}
+                className="flex-1"
+              >
+                Regenerate
+              </AppButton>
+              <AppButton
+                variant="outline"
+                size="sm"
+                onClick={() => setResult(null)}
+                className="flex-1"
+              >
+                New Style
+              </AppButton>
+            </div>
+          </div>
+        )}
+
+        {/* Generate button (initial state) */}
+        {!result && !isGenerating && (
+          <AppButton
+            variant="primary"
+            fullWidth
+            leftIcon={<Wand2 className="w-4 h-4" />}
+            onClick={handleGenerate}
+          >
+            Generate Captions
+          </AppButton>
+        )}
+      </div>
+    </AIErrorBoundary>
   );
 };
 

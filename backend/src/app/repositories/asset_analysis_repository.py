@@ -134,15 +134,6 @@ class AssetAnalysisRepository:
 
             return self._row_to_dict(row) if row else None
 
-    # Alias for compatibility with ContentDetectionService
-    async def get_by_asset_id(
-        self,
-        asset_id: UUID,
-        workspace_id: UUID,
-    ) -> Optional[dict[str, Any]]:
-        """Alias for find_by_asset_id for API consistency."""
-        return await self.find_by_asset_id(asset_id, workspace_id)
-
     async def find_pending_vision(
         self,
         workspace_id: UUID,

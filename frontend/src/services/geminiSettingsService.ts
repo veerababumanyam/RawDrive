@@ -10,6 +10,8 @@ import type {
   UpdateGeminiSettingsRequest,
   KeyValidationResult,
   GeminiModelsListResponse,
+  AIFeatureTogglesResponse,
+  UpdateAIFeatureTogglesRequest,
 } from '../types/geminiSettings';
 
 export class GeminiSettingsService {
@@ -84,6 +86,39 @@ export class GeminiSettingsService {
    */
   async updateModelSelection(modelId: string | null): Promise<UserGeminiSettings> {
     return this.updateSettings({ selected_model_id: modelId });
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI Feature Toggles endpoints (T080)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get current user's AI feature toggle settings
+   */
+  async getFeatureToggles(): Promise<AIFeatureTogglesResponse> {
+    const response = await apiClient.get<AIFeatureTogglesResponse>(
+      '/api/v1/users/me/gemini-settings/feature-toggles'
+    );
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to fetch feature toggles');
+    }
+    return response.data!;
+  }
+
+  /**
+   * Update AI feature toggle settings
+   */
+  async updateFeatureToggles(
+    data: UpdateAIFeatureTogglesRequest
+  ): Promise<AIFeatureTogglesResponse> {
+    const response = await apiClient.patch<AIFeatureTogglesResponse>(
+      '/api/v1/users/me/gemini-settings/feature-toggles',
+      data
+    );
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to update feature toggles');
+    }
+    return response.data!;
   }
 }
 

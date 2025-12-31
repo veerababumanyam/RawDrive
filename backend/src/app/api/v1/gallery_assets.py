@@ -82,7 +82,6 @@ async def list_gallery_assets(
     face_group_ids: list[UUID] | None = Query(None, description="Filter by face groups (OR logic)"),
     tag_ids: list[UUID] | None = Query(None, description="Filter by tag IDs (OR logic)"),
     tag_source: str | None = Query(None, description="Filter by tag source (manual, ai_vision, ai_gemini, ai_local)"),
-    sort_by: str | None = Query(None, description="Sort by: position (default), favorites, picks"),
 ) -> dict:
     """List assets in a gallery with pagination and filtering."""
     # Extract workspace_id from workspace_access tuple
@@ -103,7 +102,6 @@ async def list_gallery_assets(
         face_group_ids=face_group_ids,
         tag_ids=tag_ids,
         tag_source=tag_source,
-        sort_by=sort_by,
     )
 
 

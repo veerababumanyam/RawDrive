@@ -1,54 +1,115 @@
 /**
  * PhotoAnalysisPanel Component
- * Displays AI-powered photo analysis results with quality scoring and suggestions
- * Feature: AI-powered photo features (US1)
+ * Feature: 010-ai-powered-features
+ * Tasks: T014 - Create frontend PhotoAnalysisPanel component with loading states
+ *        T016 - Implement quality badge display based on analysis scores
+ *
+ * AI-powered photo analysis with quality scoring, metadata, and suggestions
  */
 
 import React, { useState, useCallback } from 'react';
-import { Sparkles, Star, Palette, Sun, Heart, Lightbulb, Target, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
-import { AppButton } from '../../ui/AppButton';
-import { AppCard } from '../../ui/AppCard';
-import { useToast } from '../../ui/Toast';
-import { PhotoAnalysisService } from '../../../services/photoAnalysisService';
-import type { PhotoAnalysisResult } from '../../../types/aiFeatures';
+import {
+  Camera,
+  Sparkles,
+  Star,
+  Palette,
+  Sun,
+  Heart,
+  Lightbulb,
+  Target,
+  Hash,
+  RefreshCw,
+  Copy,
+  Check,
+} from 'lucide-react';
+import { AppButton } from '@/components/ui/AppButton';
+import { AIErrorBoundary, AISpinner } from './index';
+import { PhotoAnalysisService } from '@/services/photoAnalysisService';
+import type { PhotoAnalysisResult } from '@/types/aiFeatures';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface PhotoAnalysisPanelProps {
+  /** Workspace ID */
   workspaceId: string;
+  /** Asset ID to analyze */
   assetId: string;
-  photoUrl: string;
+  /** Photo URL for display */
+  photoUrl?: string;
+  /** Photo filename for display */
+  filename?: string;
+  /** Optional callback when analysis completes */
   onAnalysisComplete?: (result: PhotoAnalysisResult) => void;
-  initialAnalysis?: PhotoAnalysisResult | null;
+  /** Optional custom class name */
+  className?: string;
+  /** Compact mode for inline usage */
+  compact?: boolean;
 }
 
-const QualityBadge: React.FC<{ score: number }> = ({ score }) => {
-  const getQualityLabel = (score: number) => {
-    if (score >= 90) return { label: 'Excellent', color: 'text-success bg-success/10' };
-    if (score >= 75) return { label: 'Good', color: 'text-accent bg-accent/10' };
-    if (score >= 60) return { label: 'Fair', color: 'text-warning bg-warning/10' };
-    if (score >= 40) return { label: 'Needs Work', color: 'text-orange-500 bg-orange-500/10' };
-    return { label: 'Poor', color: 'text-error bg-error/10' };
+// Quality badge configuration
+const QUALITY_BADGES = [
+  { min: 90, stars: 5, label: 'Excellent', color: 'text-gold' },
+  { min: 75, stars: 4, label: 'Good', color: 'text-success' },
+  { min: 60, stars: 3, label: 'Fair', color: 'text-accent' },
+  { min: 40, stars: 2, label: 'Poor', color: 'text-warning' },
+  { min: 0, stars: 1, label: 'Very Poor', color: 'text-error' },
+];
+
+// ---------------------------------------------------------------------------
+// Quality Badge Component
+// ---------------------------------------------------------------------------
+
+interface QualityBadgeProps {
+  score: number;
+  size?: 'sm' | 'md' | 'lg';
+}
+
+export const QualityBadge: React.FC<QualityBadgeProps> = ({ score, size = 'md' }) => {
+  const badge = QUALITY_BADGES.find((b) => score >= b.min) || QUALITY_BADGES[4];
+
+  const sizeClasses = {
+    sm: 'text-xs gap-0.5',
+    md: 'text-sm gap-1',
+    lg: 'text-base gap-1.5',
   };
 
-  const { label, color } = getQualityLabel(score);
-  const stars = Math.round(score / 20);
+  const starSizes = {
+    sm: 'w-3 h-3',
+    md: 'w-4 h-4',
+    lg: 'w-5 h-5',
+  };
 
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${color}`}>
-      <div className="flex">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <Star
-            key={i}
-            className={`w-4 h-4 ${i <= stars ? 'fill-current' : 'opacity-30'}`}
-          />
-        ))}
-      </div>
-      <span className="text-sm font-medium">{label}</span>
+    <div
+      className={`inline-flex items-center ${sizeClasses[size]} ${badge.color}`}
+      aria-label={`Quality score: ${score}/100 - ${badge.label}`}
+      title={`${badge.label} (${score}/100)`}
+    >
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Star
+          key={i}
+          className={`${starSizes[size]} ${i < badge.stars ? 'fill-current' : 'opacity-30'}`}
+        />
+      ))}
+      <span className="ml-1 font-medium">{score}</span>
     </div>
   );
 };
 
-const ScoreBar: React.FC<{ label: string; value: number; icon: React.ReactNode }> = ({ label, value, icon }) => {
-  const getColor = (value: number) => {
+// ---------------------------------------------------------------------------
+// Score Bar Component
+// ---------------------------------------------------------------------------
+
+interface ScoreBarProps {
+  label: string;
+  score: number;
+  icon: React.ReactNode;
+}
+
+const ScoreBar: React.FC<ScoreBarProps> = ({ label, score, icon }) => {
+  const getBarColor = (value: number) => {
     if (value >= 80) return 'bg-success';
     if (value >= 60) return 'bg-accent';
     if (value >= 40) return 'bg-warning';
@@ -62,254 +123,345 @@ const ScoreBar: React.FC<{ label: string; value: number; icon: React.ReactNode }
           {icon}
           {label}
         </span>
-        <span className="font-medium text-text-primary">{value}%</span>
+        <span className="font-medium text-text-primary">{score}%</span>
       </div>
-      <div className="h-2 bg-surface-hover rounded-full overflow-hidden">
+      <div className="h-1.5 bg-border rounded-full overflow-hidden">
         <div
-          className={`h-full ${getColor(value)} transition-all duration-500`}
-          style={{ width: `${value}%` }}
+          className={`h-full rounded-full transition-all duration-500 ${getBarColor(score)}`}
+          style={{ width: `${score}%` }}
+          role="progressbar"
+          aria-valuenow={score}
+          aria-valuemin={0}
+          aria-valuemax={100}
         />
       </div>
     </div>
   );
 };
 
-const ColorSwatch: React.FC<{ color: string }> = ({ color }) => (
-  <div
-    className="w-8 h-8 rounded-lg border border-border shadow-sm"
-    style={{ backgroundColor: color }}
-    title={color}
-  />
-);
+// ---------------------------------------------------------------------------
+// Main Component
+// ---------------------------------------------------------------------------
 
 export const PhotoAnalysisPanel: React.FC<PhotoAnalysisPanelProps> = ({
   workspaceId,
   assetId,
   photoUrl,
+  filename,
   onAnalysisComplete,
-  initialAnalysis,
+  className = '',
+  compact = false,
 }) => {
-  const [analysis, setAnalysis] = useState<PhotoAnalysisResult | null>(initialAnalysis || null);
+  // Analysis state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { addToast } = useToast();
+  const [result, setResult] = useState<PhotoAnalysisResult | null>(null);
 
+  // UI state
+  const [copiedTags, setCopiedTags] = useState(false);
+  const [copiedHashtags, setCopiedHashtags] = useState(false);
+
+  // Analyze photo
   const handleAnalyze = useCallback(async () => {
     setIsAnalyzing(true);
     setError(null);
 
     try {
-      const result = await PhotoAnalysisService.analyzePhoto(workspaceId, assetId, {
-        photo_url: photoUrl,
-      });
+      const analysisResult = await PhotoAnalysisService.analyzePhoto(
+        workspaceId,
+        assetId,
+        { photo_url: photoUrl || '' }
+      );
 
-      setAnalysis(result);
-      onAnalysisComplete?.(result);
-      addToast({ message: 'Photo analyzed successfully', variant: 'success' });
+      setResult(analysisResult);
+      onAnalysisComplete?.(analysisResult);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to analyze photo';
-
-      // Check for AI not configured error
-      if (errorMessage.includes('API key') || errorMessage.includes('not configured')) {
-        setError('AI features require a Gemini API key. Configure it in Settings > AI & Gemini.');
-      } else {
-        setError(errorMessage);
-      }
-
-      addToast({ message: 'Analysis failed', variant: 'error' });
+      const message = err instanceof Error ? err.message : 'Analysis failed';
+      setError(message);
     } finally {
       setIsAnalyzing(false);
     }
-  }, [workspaceId, assetId, photoUrl, onAnalysisComplete, addToast]);
+  }, [workspaceId, assetId, photoUrl, onAnalysisComplete]);
 
-  // Not analyzed yet - show CTA
-  if (!analysis && !isAnalyzing && !error) {
-    return (
-      <AppCard padding="md" className="text-center">
-        <Sparkles className="w-12 h-12 mx-auto mb-4 text-accent opacity-60" />
-        <h3 className="text-lg font-semibold text-text-primary mb-2">
-          AI Photo Analysis
-        </h3>
-        <p className="text-sm text-text-secondary mb-4">
-          Get quality scores, color analysis, mood detection, and improvement suggestions
-        </p>
-        <AppButton
-          variant="primary"
-          onClick={handleAnalyze}
-          leftIcon={<Sparkles className="w-4 h-4" />}
-        >
-          Analyze Photo
-        </AppButton>
-      </AppCard>
-    );
-  }
+  // Reanalyze
+  const handleReanalyze = useCallback(() => {
+    setResult(null);
+    handleAnalyze();
+  }, [handleAnalyze]);
 
-  // Loading state
-  if (isAnalyzing) {
-    return (
-      <AppCard padding="md" className="text-center">
-        <Loader2 className="w-12 h-12 mx-auto mb-4 text-accent animate-spin" />
-        <h3 className="text-lg font-semibold text-text-primary mb-2">
-          Analyzing Photo...
-        </h3>
-        <p className="text-sm text-text-secondary">
-          This may take a few seconds
-        </p>
-      </AppCard>
-    );
-  }
+  // Copy tags
+  const handleCopyTags = useCallback(async () => {
+    if (!result?.tags) return;
+    try {
+      await navigator.clipboard.writeText(result.tags.join(', '));
+      setCopiedTags(true);
+      setTimeout(() => setCopiedTags(false), 2000);
+    } catch {
+      setError('Failed to copy');
+    }
+  }, [result]);
 
-  // Error state
-  if (error) {
-    return (
-      <AppCard padding="md" className="text-center">
-        <AlertCircle className="w-12 h-12 mx-auto mb-4 text-error opacity-60" />
-        <h3 className="text-lg font-semibold text-text-primary mb-2">
-          Analysis Failed
-        </h3>
-        <p className="text-sm text-text-secondary mb-4">{error}</p>
-        <AppButton
-          variant="outline"
-          onClick={handleAnalyze}
-          leftIcon={<RefreshCw className="w-4 h-4" />}
-        >
-          Try Again
-        </AppButton>
-      </AppCard>
-    );
-  }
+  // Copy hashtags
+  const handleCopyHashtags = useCallback(async () => {
+    if (!result?.hashtags) return;
+    try {
+      await navigator.clipboard.writeText(result.hashtags.join(' '));
+      setCopiedHashtags(true);
+      setTimeout(() => setCopiedHashtags(false), 2000);
+    } catch {
+      setError('Failed to copy');
+    }
+  }, [result]);
 
-  // Guard for null analysis
-  if (!analysis) {
-    return null;
-  }
-
-  // Analysis results
   return (
-    <div className="space-y-4">
-      {/* Header with Quality Badge */}
-      <AppCard padding="md">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-text-primary flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-accent" />
-            Photo Analysis
-          </h3>
-          <QualityBadge score={analysis.quality_score} />
-        </div>
-
-        {/* Description */}
-        <p className="text-sm text-text-secondary mb-4">
-          {analysis.description}
-        </p>
-
-        {/* Quality Scores */}
-        <div className="space-y-3">
-          <ScoreBar
-            label="Sharpness"
-            value={analysis.sharpness}
-            icon={<Target className="w-4 h-4" />}
-          />
-          <ScoreBar
-            label="Exposure"
-            value={analysis.exposure}
-            icon={<Sun className="w-4 h-4" />}
-          />
-          <ScoreBar
-            label="Composition"
-            value={analysis.composition}
-            icon={<Star className="w-4 h-4" />}
-          />
-        </div>
-      </AppCard>
-
-      {/* Colors & Mood */}
-      <AppCard padding="md">
-        <div className="grid grid-cols-2 gap-4">
-          {/* Dominant Colors */}
-          <div>
-            <h4 className="text-sm font-medium text-text-primary mb-2 flex items-center gap-1.5">
-              <Palette className="w-4 h-4 text-accent" />
-              Dominant Colors
-            </h4>
-            <div className="flex gap-2 flex-wrap">
-              {analysis.dominant_colors.map((color, i) => (
-                <ColorSwatch key={i} color={color} />
-              ))}
-            </div>
+    <AIErrorBoundary featureName="Photo Analysis">
+      <div className={`bg-surface rounded-card border border-border ${compact ? 'p-4' : 'p-6'} ${className}`}>
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-accent/10 text-accent">
+            <Camera className="w-5 h-5" />
           </div>
+          <div className="flex-1 min-w-0">
+            <h3 className={`${compact ? 'text-base' : 'text-lg'} font-semibold text-text-primary`}>
+              Photo Analysis
+            </h3>
+            {filename && (
+              <p className="text-sm text-text-secondary truncate">{filename}</p>
+            )}
+          </div>
+          {result && (
+            <QualityBadge score={result.quality_score} size={compact ? 'sm' : 'md'} />
+          )}
+        </div>
 
-          {/* Lighting & Mood */}
-          <div>
-            <h4 className="text-sm font-medium text-text-primary mb-2 flex items-center gap-1.5">
-              <Heart className="w-4 h-4 text-accent" />
-              Mood & Lighting
-            </h4>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Sun className="w-4 h-4 text-text-tertiary" />
-                <span className="text-sm text-text-secondary capitalize">{analysis.lighting}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Heart className="w-4 h-4 text-text-tertiary" />
-                <span className="text-sm text-text-secondary capitalize">{analysis.mood}</span>
+        {/* Loading state */}
+        {isAnalyzing && (
+          <div className="mb-4">
+            <AISpinner featureType="analysis" />
+          </div>
+        )}
+
+        {/* Error state */}
+        {error && (
+          <div
+            className="mb-4 p-3 bg-error/10 border border-error/20 rounded-lg text-error text-sm"
+            role="alert"
+          >
+            <p className="font-medium">Analysis failed</p>
+            <p className="opacity-80 mt-0.5">{error}</p>
+          </div>
+        )}
+
+        {/* Results */}
+        {result && !isAnalyzing && (
+          <div className="space-y-4">
+            {/* Description */}
+            <div>
+              <p className="text-text-primary leading-relaxed">{result.description}</p>
+            </div>
+
+            {/* Quality Scores */}
+            <div className="ai-result-card p-4 space-y-3">
+              <h4 className="text-sm font-medium text-text-primary flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-accent" />
+                Quality Metrics
+              </h4>
+              <div className="space-y-2.5">
+                <ScoreBar
+                  label="Sharpness"
+                  score={result.sharpness}
+                  icon={<Target className="w-3.5 h-3.5" />}
+                />
+                <ScoreBar
+                  label="Exposure"
+                  score={result.exposure}
+                  icon={<Sun className="w-3.5 h-3.5" />}
+                />
+                <ScoreBar
+                  label="Composition"
+                  score={result.composition}
+                  icon={<Camera className="w-3.5 h-3.5" />}
+                />
               </div>
             </div>
-          </div>
-        </div>
-      </AppCard>
 
-      {/* Improvements */}
-      {analysis.improvements.length > 0 && (
-        <AppCard padding="md">
-          <h4 className="text-sm font-medium text-text-primary mb-3 flex items-center gap-1.5">
-            <Lightbulb className="w-4 h-4 text-warning" />
-            Suggestions for Improvement
-          </h4>
-          <ul className="space-y-2">
-            {analysis.improvements.map((suggestion, i) => (
-              <li key={i} className="text-sm text-text-secondary flex items-start gap-2">
-                <span className="w-5 h-5 flex-shrink-0 rounded-full bg-warning/10 text-warning text-xs flex items-center justify-center">
-                  {i + 1}
+            {/* Metadata Grid */}
+            <div className={`grid ${compact ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
+              {/* Lighting */}
+              <div className="ai-result-card p-3">
+                <span className="flex items-center gap-1.5 text-xs text-text-secondary mb-1">
+                  <Sun className="w-3.5 h-3.5" />
+                  Lighting
                 </span>
-                {suggestion}
-              </li>
-            ))}
-          </ul>
-        </AppCard>
-      )}
+                <p className="text-sm font-medium text-text-primary capitalize">
+                  {result.lighting}
+                </p>
+              </div>
 
-      {/* Best For */}
-      {analysis.best_for.length > 0 && (
-        <AppCard padding="md">
-          <h4 className="text-sm font-medium text-text-primary mb-3 flex items-center gap-1.5">
-            <Target className="w-4 h-4 text-success" />
-            Best For
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {analysis.best_for.map((use, i) => (
-              <span
-                key={i}
-                className="px-2 py-1 bg-success/10 text-success text-xs rounded-full capitalize"
-              >
-                {use}
-              </span>
-            ))}
+              {/* Mood */}
+              <div className="ai-result-card p-3">
+                <span className="flex items-center gap-1.5 text-xs text-text-secondary mb-1">
+                  <Heart className="w-3.5 h-3.5" />
+                  Mood
+                </span>
+                <p className="text-sm font-medium text-text-primary capitalize">
+                  {result.mood}
+                </p>
+              </div>
+            </div>
+
+            {/* Dominant Colors */}
+            {result.dominant_colors.length > 0 && (
+              <div className="ai-result-card p-3">
+                <span className="flex items-center gap-1.5 text-xs text-text-secondary mb-2">
+                  <Palette className="w-3.5 h-3.5" />
+                  Dominant Colors
+                </span>
+                <div className="flex gap-2">
+                  {result.dominant_colors.map((color, i) => (
+                    <div
+                      key={i}
+                      className="w-8 h-8 rounded-lg border border-border shadow-sm"
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tags */}
+            {result.tags.length > 0 && (
+              <div className="ai-result-card p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+                    <Hash className="w-3.5 h-3.5" />
+                    Tags
+                  </span>
+                  <button
+                    onClick={handleCopyTags}
+                    className="text-xs text-accent hover:text-accent-hover flex items-center gap-1"
+                    aria-label="Copy tags"
+                  >
+                    {copiedTags ? (
+                      <>
+                        <Check className="w-3 h-3" /> Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" /> Copy
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.tags.map((tag, i) => (
+                    <span key={i} className="ai-tag ai-tag-primary">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Hashtags */}
+            {result.hashtags.length > 0 && (
+              <div className="ai-result-card p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+                    <Hash className="w-3.5 h-3.5" />
+                    Hashtags
+                  </span>
+                  <button
+                    onClick={handleCopyHashtags}
+                    className="text-xs text-accent hover:text-accent-hover flex items-center gap-1"
+                    aria-label="Copy hashtags"
+                  >
+                    {copiedHashtags ? (
+                      <>
+                        <Check className="w-3 h-3" /> Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" /> Copy
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.hashtags.map((hashtag, i) => (
+                    <span key={i} className="ai-tag ai-tag-accent">
+                      {hashtag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Improvements */}
+            {result.improvements.length > 0 && (
+              <div className="ai-result-card p-3">
+                <span className="flex items-center gap-1.5 text-xs text-text-secondary mb-2">
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  Suggestions
+                </span>
+                <ul className="space-y-1.5">
+                  {result.improvements.map((improvement, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-2 text-sm text-text-primary"
+                    >
+                      <span className="text-accent mt-0.5">•</span>
+                      {improvement}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Best For */}
+            {result.best_for.length > 0 && (
+              <div className="ai-result-card p-3">
+                <span className="flex items-center gap-1.5 text-xs text-text-secondary mb-2">
+                  <Target className="w-3.5 h-3.5" />
+                  Best For
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.best_for.map((use, i) => (
+                    <span key={i} className="ai-tag ai-tag-success">
+                      {use}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reanalyze button */}
+            <AppButton
+              variant="ghost"
+              size="sm"
+              leftIcon={<RefreshCw className="w-4 h-4" />}
+              onClick={handleReanalyze}
+              className="w-full"
+            >
+              Reanalyze
+            </AppButton>
           </div>
-        </AppCard>
-      )}
+        )}
 
-      {/* Re-analyze Button */}
-      <div className="flex justify-end">
-        <AppButton
-          variant="ghost"
-          size="sm"
-          onClick={handleAnalyze}
-          leftIcon={<RefreshCw className="w-4 h-4" />}
-        >
-          Re-analyze
-        </AppButton>
+        {/* Analyze button (initial state) */}
+        {!result && !isAnalyzing && (
+          <AppButton
+            variant="primary"
+            fullWidth
+            leftIcon={<Sparkles className="w-4 h-4" />}
+            onClick={handleAnalyze}
+          >
+            Analyze Photo
+          </AppButton>
+        )}
       </div>
-    </div>
+    </AIErrorBoundary>
   );
 };
 

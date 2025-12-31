@@ -43,17 +43,12 @@ type WorkflowTab = 'all' | 'favorites' | 'selections';
 
 const PublicGalleryPage: React.FC = () => {
     // Note: Parameter name must match route definition
-    // This can be either a UUID (direct gallery access) or a magic link token
-    const { galleryId: galleryIdOrToken } = useParams<{ galleryId: string }>();
+    const { galleryId } = useParams<{ galleryId: string }>();
     const navigate = useNavigate();
     const [gallery, setGallery] = useState<GalleryDetailData | null>(null);
     const [assets, setAssets] = useState<PublicGalleryAsset[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    // The actual gallery UUID - derived from gallery data after loading
-    // Use this for all API calls instead of the URL param
-    const actualGalleryId = gallery?.gallery_id;
 
     // Visitor Registration State
     const [showEmailModal, setShowEmailModal] = useState(false);
@@ -85,8 +80,6 @@ const PublicGalleryPage: React.FC = () => {
     const [lightboxIndex, setLightboxIndex] = useState<number>(0);
     const [showExif, setShowExif] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
-    const [lightboxImageLoading, setLightboxImageLoading] = useState(true);
-    const [lightboxImageError, setLightboxImageError] = useState(false);
 
     // Sub-gallery filter state
     const [activeSubGallery, setActiveSubGallery] = useState<string | null>(null);
@@ -102,46 +95,27 @@ const PublicGalleryPage: React.FC = () => {
     // Toast notifications
     const { addToast } = useToast();
 
-    // Compute gradient CSS for hero section - MUST be before any early returns (React hooks rule)
-    const heroGradientStyle = useMemo(() => {
-        if (!gallery) {
-            return 'linear-gradient(135deg, #1f2937 0%, #111827 100%)';
-        }
-        if (gallery.gradient_config && isValidGradientConfig(gallery.gradient_config)) {
-            return gradientToCss(gallery.gradient_config);
-        }
-        // Fallback to primary color or default gradient
-        const activeColor = gallery.primary_color || gallery.company_profile?.brand_color || '#6366f1';
-        if (activeColor && activeColor !== '#6366f1') {
-            return `linear-gradient(135deg, ${activeColor} 0%, ${activeColor}dd 100%)`;
-        }
-        return 'linear-gradient(135deg, #1f2937 0%, #111827 100%)';
-    }, [gallery]);
-
-    // Load visitor ID from storage (using actual gallery ID after it's available)
+    // Load visitor ID from storage
     useEffect(() => {
-        if (actualGalleryId) {
-            const storedVisitorId = localStorage.getItem(`${VISITOR_ID_KEY_PREFIX}${actualGalleryId}`);
+        if (galleryId) {
+            const storedVisitorId = localStorage.getItem(`${VISITOR_ID_KEY_PREFIX}${galleryId}`);
             if (storedVisitorId) {
                 setVisitorId(storedVisitorId);
             }
         }
-    }, [actualGalleryId]);
+    }, [galleryId]);
 
     useEffect(() => {
         const fetchGalleryData = async () => {
-            if (!galleryIdOrToken) return;
+            if (!galleryId) return;
             setIsLoading(true);
             try {
-                // Fetch gallery details - this handles both UUIDs and magic link tokens
-                const galleryData = await galleryService.getPublicGallery(galleryIdOrToken);
+                // Fetch gallery details
+                const galleryData = await galleryService.getPublicGallery(galleryId);
                 setGallery(galleryData);
 
-                // Use the actual gallery ID for localStorage keys
-                const realGalleryId = galleryData.gallery_id;
-
                 // Check registration requirement
-                const isRegistered = localStorage.getItem(`${VISITOR_STORAGE_KEY_PREFIX}${realGalleryId}`);
+                const isRegistered = localStorage.getItem(`${VISITOR_STORAGE_KEY_PREFIX}${galleryId}`);
 
                 if (galleryData.email_registration_required && !isRegistered) {
                     setShowEmailModal(true);
@@ -149,7 +123,7 @@ const PublicGalleryPage: React.FC = () => {
                     setIsVisitorAuthenticated(true);
 
                     // Check Password protection first
-                    const passwordVerified = localStorage.getItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${realGalleryId}`);
+                    const passwordVerified = localStorage.getItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${galleryId}`);
                     if (galleryData.password_protected && !passwordVerified) {
                          setShowPasswordModal(true);
                          // Don't check PIN yet if password is needed
@@ -158,14 +132,15 @@ const PublicGalleryPage: React.FC = () => {
                     setIsPasswordVerified(true);
 
                     // Check PIN protection
-                    const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${realGalleryId}`);
+
+                    const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
                     if (galleryData.pin_protected && !pinVerified) {
                         setPinModalMode('gallery');
                         setShowPinModal(true);
                     } else {
                         setIsPinVerified(true);
                         // Check if private photos were previously unlocked
-                        const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${realGalleryId}`);
+                        const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
                         if (privateUnlocked) {
                             setIsPrivateUnlocked(true);
                         }
@@ -177,8 +152,6 @@ const PublicGalleryPage: React.FC = () => {
                 console.error(err);
                 if (err.message && err.message.includes('404')) {
                     setError('Gallery not found or is not public.');
-                } else if (err.message && (err.message.includes('expired') || err.message.includes('revoked'))) {
-                    setError('This link is no longer valid.');
                 } else {
                     setError('Failed to load gallery.');
                 }
@@ -187,15 +160,15 @@ const PublicGalleryPage: React.FC = () => {
             }
         };
         fetchGalleryData();
-    }, [galleryIdOrToken]);
+    }, [galleryId]);
 
     // Fetch assets with current filter
     const fetchAssets = useCallback(async () => {
-        if (!actualGalleryId) return;
+        if (!galleryId) return;
         try {
             // Use filtered endpoint to get client interaction data
             const filterType = activeTab === 'all' ? undefined : activeTab;
-            const assetsData = await galleryService.getPublicGalleryAssetsFiltered(actualGalleryId, filterType);
+            const assetsData = await galleryService.getPublicGalleryAssetsFiltered(galleryId, filterType);
             setAssets(assetsData);
 
             // Initialize local state from server data
@@ -210,36 +183,36 @@ const PublicGalleryPage: React.FC = () => {
         } catch (err) {
             console.error('Failed to fetch assets:', err);
         }
-    }, [actualGalleryId, activeTab]);
+    }, [galleryId, activeTab]);
 
     // Refetch when tab changes
     useEffect(() => {
-        if (isVisitorAuthenticated && isPinVerified && isPasswordVerified && actualGalleryId) {
+        if (isVisitorAuthenticated && isPinVerified && isPasswordVerified && galleryId) {
             fetchAssets();
         }
-    }, [activeTab, isVisitorAuthenticated, isPinVerified, isPasswordVerified, actualGalleryId, fetchAssets]);
+    }, [activeTab, isVisitorAuthenticated, isPinVerified, isPasswordVerified, galleryId, fetchAssets]);
 
     const handleVisitorSubmit = async (data: { email: string; first_name: string; last_name: string; phone: string; address?: string }) => {
-        if (!actualGalleryId) return;
+        if (!galleryId) return;
         setIsRegistering(true);
         try {
-            const result = await galleryService.registerVisitor(actualGalleryId, data);
-            localStorage.setItem(`${VISITOR_STORAGE_KEY_PREFIX}${actualGalleryId}`, 'true');
-            localStorage.setItem(`${VISITOR_ID_KEY_PREFIX}${actualGalleryId}`, result.visitor_id);
+            const result = await galleryService.registerVisitor(galleryId, data);
+            localStorage.setItem(`${VISITOR_STORAGE_KEY_PREFIX}${galleryId}`, 'true');
+            localStorage.setItem(`${VISITOR_ID_KEY_PREFIX}${galleryId}`, result.visitor_id);
             setVisitorId(result.visitor_id);
             setShowEmailModal(false);
             setIsVisitorAuthenticated(true);
 
             // Check PIN after email registration
             if (gallery?.pin_protected) {
-                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${actualGalleryId}`);
+                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
                 if (!pinVerified) {
                     setPinModalMode('gallery');
                     setShowPinModal(true);
                     return;
                 }
                 // Check if private photos were previously unlocked (separate from PIN)
-                const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${actualGalleryId}`);
+                const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
                 if (privateUnlocked) {
                     setIsPrivateUnlocked(true);
                 }
@@ -257,11 +230,11 @@ const PublicGalleryPage: React.FC = () => {
     };
 
     const handlePinVerify = async (pin: string): Promise<boolean> => {
-        if (!actualGalleryId) return false;
+        if (!galleryId) return false;
         try {
-            const isValid = await galleryService.verifyPin(actualGalleryId, pin);
+            const isValid = await galleryService.verifyPin(galleryId, pin);
             if (isValid) {
-                localStorage.setItem(`${PIN_VERIFIED_KEY_PREFIX}${actualGalleryId}`, 'true');
+                localStorage.setItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`, 'true');
                 setShowPinModal(false);
                 setIsPinVerified(true);
                 // NOTE: Do NOT auto-unlock private content here
@@ -279,11 +252,11 @@ const PublicGalleryPage: React.FC = () => {
 
     // Handler for unlocking private photos (uses same gallery PIN)
     const handlePrivatePhotoUnlock = async (pin: string): Promise<boolean> => {
-        if (!actualGalleryId) return false;
+        if (!galleryId) return false;
         try {
-            const isValid = await galleryService.verifyPin(actualGalleryId, pin);
+            const isValid = await galleryService.verifyPin(galleryId, pin);
             if (isValid) {
-                localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${actualGalleryId}`, 'true');
+                localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
                 setShowPinModal(false);
                 setIsPrivateUnlocked(true);
             }
@@ -307,7 +280,7 @@ const PublicGalleryPage: React.FC = () => {
 
     // Client interaction handlers
     const handleFavorite = useCallback(async (assetId: string) => {
-        if (!actualGalleryId) return;
+        if (!galleryId) return;
 
         const currentlyFavorited = localFavorites.has(assetId);
         const newFavorited = !currentlyFavorited;
@@ -324,7 +297,7 @@ const PublicGalleryPage: React.FC = () => {
         });
 
         try {
-            await galleryService.togglePublicFavorite(actualGalleryId, assetId, newFavorited, visitorId || undefined);
+            await galleryService.togglePublicFavorite(galleryId, assetId, newFavorited, visitorId || undefined);
         } catch (err) {
             console.error('Failed to toggle favorite:', err);
             addToast({
@@ -342,10 +315,10 @@ const PublicGalleryPage: React.FC = () => {
                 return next;
             });
         }
-    }, [actualGalleryId, visitorId, localFavorites]);
+    }, [galleryId, visitorId, localFavorites]);
 
     const handleSelection = useCallback(async (assetId: string) => {
-        if (!actualGalleryId) return;
+        if (!galleryId) return;
 
         const currentlySelected = localSelections.has(assetId);
         const newSelected = !currentlySelected;
@@ -362,7 +335,7 @@ const PublicGalleryPage: React.FC = () => {
         });
 
         try {
-            await galleryService.togglePublicSelection(actualGalleryId, assetId, newSelected, visitorId || undefined);
+            await galleryService.togglePublicSelection(galleryId, assetId, newSelected, visitorId || undefined);
         } catch (err) {
             console.error('Failed to toggle selection:', err);
             addToast({
@@ -380,7 +353,7 @@ const PublicGalleryPage: React.FC = () => {
                 return next;
             });
         }
-    }, [actualGalleryId, visitorId, localSelections]);
+    }, [galleryId, visitorId, localSelections]);
 
     // Compute counts for tabs
     const favoriteCount = localFavorites.size;
@@ -414,9 +387,9 @@ const PublicGalleryPage: React.FC = () => {
         return displayedAssets.map(publicAsset => {
             // Construct public URLs for the assets
             // This ensures meaningful thumbnails are available even without signed URLs
-            const publicThumbnailUrl = `/api/v1/public/galleries/${actualGalleryId}/assets/${publicAsset.asset_id}/thumbnail`;
-            const publicPreviewUrl = `/api/v1/public/galleries/${actualGalleryId}/assets/${publicAsset.asset_id}/preview`;
-
+            const publicThumbnailUrl = `/api/v1/public/galleries/${galleryId}/assets/${publicAsset.asset_id}/thumbnail`;
+            const publicPreviewUrl = `/api/v1/public/galleries/${galleryId}/assets/${publicAsset.asset_id}/preview`;
+            
             return {
                 gallery_asset_id: publicAsset.asset_id, // Use same ID for simplicity
                 asset_id: publicAsset.asset_id,
@@ -427,8 +400,6 @@ const PublicGalleryPage: React.FC = () => {
                 is_favorited: localFavorites.has(publicAsset.asset_id),
                 is_selected: localSelections.has(publicAsset.asset_id),
                 favorites_count: publicAsset.favorites_count ?? 0,
-                client_favorites_count: 0, // Not shown in public gallery view
-                client_picks_count: 0,     // Not shown in public gallery view
                 asset: {
                     type: publicAsset.type,
                     status: 'available' as const,
@@ -445,7 +416,7 @@ const PublicGalleryPage: React.FC = () => {
                 },
             };
         });
-    }, [displayedAssets, localFavorites, localSelections, actualGalleryId]);
+    }, [displayedAssets, localFavorites, localSelections, galleryId]);
 
     // Map layout_style to GalleryCanvas viewMode
     const canvasViewMode: 'grid' | 'masonry' = useMemo(() => {
@@ -458,8 +429,6 @@ const PublicGalleryPage: React.FC = () => {
         setLightboxIndex(index >= 0 ? index : 0);
         setLightboxAsset(asset);
         setShowExif(false);
-        setLightboxImageLoading(true);
-        setLightboxImageError(false);
     }, [displayedAssets]);
 
     const navigateLightbox = useCallback((direction: 'prev' | 'next') => {
@@ -474,8 +443,6 @@ const PublicGalleryPage: React.FC = () => {
 
         setLightboxIndex(newIndex);
         setLightboxAsset(displayedAssets[newIndex]);
-        setLightboxImageLoading(true);
-        setLightboxImageError(false);
     }, [lightboxAsset, lightboxIndex, displayedAssets]);
 
     const closeLightbox = useCallback(() => {
@@ -485,7 +452,7 @@ const PublicGalleryPage: React.FC = () => {
 
     // Download handler (defined before keyboard navigation useEffect)
     const handleDownload = useCallback(async (asset: PublicGalleryAsset) => {
-        if (!gallery || !actualGalleryId) return;
+        if (!gallery || !galleryId) return;
 
         // Check download policy
         if (gallery.download_policy === 'view_only') return;
@@ -494,7 +461,7 @@ const PublicGalleryPage: React.FC = () => {
         try {
             // Determine which variant to download based on policy
             const variant = gallery.download_policy === 'original_allowed' ? 'original' : 'preview';
-            const url = `/api/v1/public/galleries/${actualGalleryId}/assets/${asset.asset_id}/${variant}`;
+            const url = `/api/v1/public/galleries/${galleryId}/assets/${asset.asset_id}/${variant}`;
 
             const response = await fetch(url);
             if (!response.ok) throw new Error('Download failed');
@@ -517,47 +484,7 @@ const PublicGalleryPage: React.FC = () => {
         } finally {
             setIsDownloading(false);
         }
-    }, [gallery, actualGalleryId, addToast]);
-
-    // Share handler
-    const handleShare = useCallback(async (asset: PublicGalleryAsset) => {
-        if (!gallery || !actualGalleryId) return;
-
-        const shareUrl = `${window.location.origin}/gallery/${actualGalleryId}?photo=${asset.asset_id}`;
-        const shareData = {
-            title: asset.filename || 'Photo',
-            text: `Check out this photo from ${gallery.title}`,
-            url: shareUrl,
-        };
-
-        try {
-            // Try Web Share API first (works on mobile and some desktop browsers)
-            if (navigator.share && navigator.canShare?.(shareData)) {
-                await navigator.share(shareData);
-                return;
-            }
-        } catch (err) {
-            // User cancelled or share failed, fall through to clipboard
-            if ((err as Error).name !== 'AbortError') {
-                console.error('Share failed:', err);
-            }
-        }
-
-        // Fallback: copy to clipboard
-        try {
-            await navigator.clipboard.writeText(shareUrl);
-            addToast({
-                message: 'Link copied to clipboard!',
-                variant: 'success',
-            });
-        } catch (err) {
-            console.error('Copy to clipboard failed:', err);
-            addToast({
-                message: 'Failed to copy link. Please try again.',
-                variant: 'error',
-            });
-        }
-    }, [gallery, actualGalleryId, addToast]);
+    }, [gallery, galleryId, addToast]);
 
     // Keyboard navigation for lightbox
     useEffect(() => {
@@ -617,7 +544,7 @@ const PublicGalleryPage: React.FC = () => {
 
     // Bulk download handler
     const handleBulkDownload = useCallback(async () => {
-        if (!gallery || !actualGalleryId) return;
+        if (!gallery || !galleryId) return;
         if (gallery.download_policy === 'view_only') return;
 
         const assetsToDownload = activeTab === 'selections'
@@ -638,7 +565,7 @@ const PublicGalleryPage: React.FC = () => {
             // Download files sequentially to avoid overwhelming the browser
             for (const asset of assetsToDownload) {
                 try {
-                    const url = `/api/v1/public/galleries/${actualGalleryId}/assets/${asset.asset_id}/${variant}`;
+                    const url = `/api/v1/public/galleries/${galleryId}/assets/${asset.asset_id}/${variant}`;
                     const response = await fetch(url);
                     if (!response.ok) continue;
 
@@ -667,7 +594,7 @@ const PublicGalleryPage: React.FC = () => {
             setIsBulkDownloading(false);
             setBulkDownloadProgress(0);
         }
-    }, [gallery, actualGalleryId, activeTab, displayedAssets, localSelections, localFavorites]);
+    }, [gallery, galleryId, activeTab, displayedAssets, localSelections, localFavorites]);
 
     // Show expired state
     if (isExpired && gallery) {
@@ -722,11 +649,22 @@ const PublicGalleryPage: React.FC = () => {
     const activeColor = gallery.primary_color || company_profile?.brand_color || '#6366f1';
     const fontFamily = gallery.font_family || 'inherit';
 
-    // Construct cover URL with fallback to first asset
-    const coverAssetId = gallery.cover_asset_id || assets[0]?.asset_id;
-    const coverUrl = coverAssetId
-        ? `/api/v1/public/galleries/${gallery.gallery_id}/assets/${coverAssetId}/preview`
+    // Construct cover URL
+    const coverUrl = gallery.cover_asset_id
+        ? `/api/v1/public/galleries/${gallery.gallery_id}/assets/${gallery.cover_asset_id}/preview`
         : null;
+
+    // Compute gradient CSS for hero section
+    const heroGradientStyle = useMemo(() => {
+        if (gallery.gradient_config && isValidGradientConfig(gallery.gradient_config)) {
+            return gradientToCss(gallery.gradient_config);
+        }
+        // Fallback to primary color or default gradient
+        if (activeColor && activeColor !== '#6366f1') {
+            return `linear-gradient(135deg, ${activeColor} 0%, ${activeColor}dd 100%)`;
+        }
+        return 'linear-gradient(135deg, #1f2937 0%, #111827 100%)';
+    }, [gallery.gradient_config, activeColor]);
 
     return (
         <div
@@ -771,17 +709,17 @@ const PublicGalleryPage: React.FC = () => {
             <PasswordVerificationModal
                 isOpen={showPasswordModal}
                 onVerify={async (password) => {
-                    if (!actualGalleryId) return false;
+                    if (!galleryId) return false;
                     try {
-                        const isValid = await galleryService.verifyPassword(actualGalleryId, password);
+                        const isValid = await galleryService.verifyPassword(galleryId, password);
                         if (isValid) {
-                            localStorage.setItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${actualGalleryId}`, 'true');
+                            localStorage.setItem(`${PASSWORD_VERIFIED_KEY_PREFIX}${galleryId}`, 'true');
                             setShowPasswordModal(false);
                             setIsPasswordVerified(true);
-
+                            
                             // Check PIN after Password
                             if (gallery?.pin_protected) {
-                                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${actualGalleryId}`);
+                                const pinVerified = localStorage.getItem(`${PIN_VERIFIED_KEY_PREFIX}${galleryId}`);
                                 if (!pinVerified) {
                                     setShowPinModal(true);
                                     return true;
@@ -809,7 +747,7 @@ const PublicGalleryPage: React.FC = () => {
                 isOpen={showFaceDiscovery}
                 onClose={() => setShowFaceDiscovery(false)}
                 onFacesFound={handleFacesFound}
-                galleryId={actualGalleryId || ''}
+                galleryId={galleryId || ''}
                 galleryTitle={gallery.title}
             />
 
@@ -900,54 +838,13 @@ const PublicGalleryPage: React.FC = () => {
 
                     {/* Main image with watermark */}
                     <div className="relative" onClick={(e) => e.stopPropagation()}>
-                        {/* Loading indicator */}
-                        {lightboxImageLoading && !lightboxImageError && (
-                            <div className="absolute inset-0 flex items-center justify-center min-w-[300px] min-h-[300px]">
-                                <div className="flex flex-col items-center gap-3">
-                                    <Loader2 className="w-10 h-10 text-white animate-spin" />
-                                    <span className="text-white/70 text-sm">Loading image...</span>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Error state with retry button */}
-                        {lightboxImageError && (
-                            <div className="flex flex-col items-center justify-center min-w-[300px] min-h-[300px] gap-4">
-                                <AlertTriangle className="w-12 h-12 text-amber-400" />
-                                <p className="text-white/80 text-center">Failed to load image</p>
-                                <AppButton
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        setLightboxImageError(false);
-                                        setLightboxImageLoading(true);
-                                    }}
-                                    className="text-white border-white/30 hover:bg-white/10"
-                                >
-                                    Try Again
-                                </AppButton>
-                            </div>
-                        )}
-
-                        {/* Main image */}
-                        {!lightboxImageError && (
-                            <img
-                                key={lightboxAsset.asset_id}
-                                src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${lightboxAsset.asset_id}/preview`}
-                                alt={lightboxAsset.filename}
-                                className={`max-w-[90vw] max-h-[85vh] object-contain transition-opacity duration-300 ${
-                                    lightboxImageLoading ? 'opacity-0' : 'opacity-100'
-                                }`}
-                                onLoad={() => setLightboxImageLoading(false)}
-                                onError={() => {
-                                    setLightboxImageLoading(false);
-                                    setLightboxImageError(true);
-                                }}
-                            />
-                        )}
-
+                        <img
+                            src={`/api/v1/public/galleries/${gallery.gallery_id}/assets/${lightboxAsset.asset_id}/preview`}
+                            alt={lightboxAsset.filename}
+                            className="max-w-[90vw] max-h-[85vh] object-contain"
+                        />
                         {/* Watermark overlay for restricted downloads */}
-                        {!lightboxImageError && !lightboxImageLoading && (gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only') && (
+                        {(gallery.download_policy === 'view_only' || gallery.download_policy === 'watermarked_only') && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                                 <div
                                     className="text-white/15 text-4xl md:text-6xl font-bold uppercase tracking-widest rotate-[-25deg] whitespace-nowrap"
@@ -1075,17 +972,13 @@ const PublicGalleryPage: React.FC = () => {
             <header className="sticky top-0 z-50 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 transition-all">
                 <div className="max-w-7xl mx-auto px-4 md:px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        {/* Company branding: show logo and/or name */}
-                        {(company_profile?.logo_url || company_profile?.name) && (
-                            <div className="flex items-center gap-3">
-                                {company_profile.logo_url && (
-                                    <img src={company_profile.logo_url} alt={company_profile.name || 'Company logo'} className="h-10 w-auto object-contain" />
-                                )}
-                                {company_profile.name && (
-                                    <span className="text-lg font-bold font-heading hidden sm:inline">{company_profile.name}</span>
-                                )}
-                            </div>
+                        {company_profile?.logo_url ? (
+                            <img src={company_profile.logo_url} alt={company_profile.name} className="h-10 w-auto object-contain" />
+                        ) : (
+                            company_profile?.name && <span className="text-lg font-bold font-heading">{company_profile.name}</span>
                         )}
+                        <div className="w-px h-8 bg-gray-200 dark:bg-gray-800 mx-2 hidden sm:block"></div>
+                        <h1 className="text-lg font-medium hidden sm:block truncate max-w-md" title={gallery.title}>{gallery.title}</h1>
                     </div>
 
                     <div className="flex items-center gap-2 sm:gap-3">
@@ -1175,10 +1068,14 @@ const PublicGalleryPage: React.FC = () => {
 
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end justify-center pb-12 p-4 text-center">
                     <div className="max-w-3xl">
-                        <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 drop-shadow-lg font-heading">{gallery.album_title || gallery.title}</h2>
+                        <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 drop-shadow-lg font-heading">{gallery.title}</h2>
                         {gallery.description && (
                             <p className="text-white/90 text-lg md:text-xl drop-shadow-md max-w-2xl mx-auto">{gallery.description}</p>
                         )}
+                        <div className="mt-6 flex flex-wrap justify-center gap-4 text-white/80 text-sm font-medium">
+                            <span className="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">{new Date(gallery.created_at).toLocaleDateString()}</span>
+                            {!showEmailModal && <span className="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">{gallery.stats.total_photos} Photos</span>}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1237,7 +1134,7 @@ const PublicGalleryPage: React.FC = () => {
                                 <LayoutGrid size={16} />
                                 All Photos
                                 <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-black/10 dark:bg-white/10">
-                                    {assets.length}
+                                    {gallery.stats.total_photos}
                                 </span>
                             </button>
                             <button
@@ -1403,10 +1300,6 @@ const PublicGalleryPage: React.FC = () => {
                                     const pubAsset = displayedAssets.find(a => a.asset_id === assetId);
                                     if (pubAsset) handleDownload(pubAsset);
                                 } : undefined}
-                                onAssetShare={(assetId) => {
-                                    const pubAsset = displayedAssets.find(a => a.asset_id === assetId);
-                                    if (pubAsset) handleShare(pubAsset);
-                                }}
                                 isClientView={true}
                                 downloadPolicy={gallery?.download_policy}
                                 showWatermark={gallery?.download_policy === 'view_only' || gallery?.download_policy === 'watermarked_only'}

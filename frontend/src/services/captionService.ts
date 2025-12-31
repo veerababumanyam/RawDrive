@@ -23,7 +23,7 @@ export class CaptionService {
       request
     );
     if (!response.data) {
-      throw new Error('No data received from API');
+      throw new Error('No data returned from caption generation');
     }
     return response.data;
   }

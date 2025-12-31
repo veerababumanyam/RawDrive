@@ -38,6 +38,8 @@ from app.services.gallery_service import (
     SubGalleryNotFoundError,
     get_gallery_service,
 )
+from app.services.gallery_story_service import get_gallery_story_service
+from app.services.smart_curation_service import get_smart_curation_service
 from app.utils.security import hash_password
 from app.services.deletion_service import (
     DeletionError,
@@ -574,6 +576,14 @@ async def add_assets_to_gallery(
             gallery_id=gallery_id,
             asset_ids=request.asset_ids,
         )
+
+        # Invalidate AI caches when gallery content changes
+        if result["added_count"] > 0:
+            story_service = get_gallery_story_service()
+            curation_service = get_smart_curation_service()
+            await story_service.invalidate_story_cache(gallery_id)
+            await curation_service.invalidate_curation_cache(gallery_id)
+
         return BatchAssetOperationResponse(count=result["added_count"])
     except GalleryNotFoundError as e:
         raise NotFoundError("Gallery", str(gallery_id))
@@ -607,6 +617,14 @@ async def remove_assets_from_gallery(
             gallery_id=gallery_id,
             asset_ids=request.asset_ids,
         )
+
+        # Invalidate AI caches when gallery content changes
+        if result["removed_count"] > 0:
+            story_service = get_gallery_story_service()
+            curation_service = get_smart_curation_service()
+            await story_service.invalidate_story_cache(gallery_id)
+            await curation_service.invalidate_curation_cache(gallery_id)
+
         return BatchAssetOperationResponse(count=result["removed_count"])
     except GalleryNotFoundError as e:
         raise NotFoundError("Gallery", str(gallery_id))

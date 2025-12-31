@@ -14,18 +14,13 @@ import {
   Lock,
   Play,
   Image,
-  Bookmark,
 } from 'lucide-react';
 
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { GalleryAssetItem } from '../../../types/gallery';
-import type { WatermarkSettings } from '../../../types/canvas';
 import { HoverOverlay } from './HoverOverlay';
 import { InlineEditForm } from './InlineEditForm';
-import { WatermarkOverlay } from './WatermarkOverlay';
-import { FaceIndicatorBadge } from './FaceIndicatorBadge';
-import { ClientActivityBadge } from './ClientActivityBadge';
 
 export interface PhotoCardProps {
   asset: GalleryAssetItem;
@@ -57,14 +52,6 @@ export interface PhotoCardProps {
   aspectRatio?: 'square' | 'auto';
   isPrivateUnlocked?: boolean;
   onUnlockPrivate?: () => void;
-  /** Show watermark overlay on the photo */
-  showWatermark?: boolean;
-  /** Watermark configuration settings */
-  watermarkSettings?: WatermarkSettings;
-  /** Face count for this photo (from useFacesSummary) */
-  faceCount?: number;
-  /** Person names detected in this photo */
-  personNames?: string[];
 }
 
 export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
@@ -89,10 +76,6 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   aspectRatio: aspectRatioMode = 'auto',
   isPrivateUnlocked,
   onUnlockPrivate,
-  showWatermark = false,
-  watermarkSettings,
-  faceCount,
-  personNames,
 }) => {
   const isLocked = asset.is_private && !isPrivateUnlocked;
   const { workspace } = useAuth();
@@ -281,21 +264,6 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         </div>
       )}
 
-      {/* Watermark Overlay - Visible when configured and image is loaded */}
-      {showWatermark && watermarkSettings && !isLocked && displayUrl && !imageError && (
-        <WatermarkOverlay settings={watermarkSettings} />
-      )}
-
-      {/* Client Activity Badge - Top Right (Favorites & Picks counts) */}
-      {!isLocked && (asset.client_favorites_count > 0 || asset.client_picks_count > 0) && (
-        <div className="absolute top-3 right-3 z-10">
-          <ClientActivityBadge
-            favoritesCount={asset.client_favorites_count}
-            picksCount={asset.client_picks_count}
-          />
-        </div>
-      )}
-
       {/* Status Badges - Top Left (Cover, Private, Video) */}
       <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
         {/* Cover Badge */}
@@ -333,26 +301,6 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
                 {Math.floor(asset.asset.duration_ms / 1000)}s
               </span>
             )}
-          </div>
-        )}
-
-        {/* Face Detection Badge */}
-        {faceCount !== undefined && faceCount > 0 && (
-          <FaceIndicatorBadge
-            faceCount={faceCount}
-            personNames={personNames}
-          />
-        )}
-
-        {/* Client Pick Badge */}
-        {asset.is_selected && (
-          <div
-            className="px-2 py-1 rounded-full bg-success/90 backdrop-blur-sm flex items-center gap-1"
-            aria-label="Client Pick"
-            title="Client Pick"
-          >
-            <Bookmark size={12} className="text-white fill-white" />
-            <span className="text-[10px] font-semibold text-white uppercase tracking-wide">Pick</span>
           </div>
         )}
       </div>

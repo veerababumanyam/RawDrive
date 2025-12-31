@@ -31,7 +31,6 @@ class AIFeatureType:
     CAPTION_GENERATION = "caption_generation"
     STORY_GENERATION = "story_generation"
     SMART_CURATION = "smart_curation"
-    HASHTAG_GENERATION = "hashtag_generation"
     OTHER = "other"
 
 

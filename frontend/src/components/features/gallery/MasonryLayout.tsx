@@ -6,7 +6,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { GalleryAssetItem } from '../../../types/gallery';
-import { ResponsiveColumns, WatermarkSettings, FaceSummary } from '../../../types/canvas';
+import { ResponsiveColumns } from '../../../types/canvas';
 import { PhotoCard } from './PhotoCard';
 
 export interface MasonryLayoutProps {
@@ -33,12 +33,6 @@ export interface MasonryLayoutProps {
   className?: string;
   isPrivateUnlocked?: boolean;
   onUnlockPrivate?: () => void;
-  /** Show watermark overlay on photos */
-  showWatermark?: boolean;
-  /** Watermark configuration settings */
-  watermarkSettings?: WatermarkSettings;
-  /** Map of asset IDs to face summaries for face detection badges */
-  faceSummaries?: Map<string, FaceSummary>;
   // Masonry doesn't support DnD sortable in this version
 }
 
@@ -64,9 +58,6 @@ export const MasonryLayout: React.FC<MasonryLayoutProps> = ({
   className = '',
   isPrivateUnlocked,
   onUnlockPrivate,
-  showWatermark = false,
-  watermarkSettings,
-  faceSummaries,
 }) => {
   // Column calculation
   const [columnCount, setColumnCount] = useState(3);
@@ -187,10 +178,6 @@ export const MasonryLayout: React.FC<MasonryLayoutProps> = ({
                     aspectRatio="auto" // Preserves original aspect ratio
                     isPrivateUnlocked={isPrivateUnlocked}
                     onUnlockPrivate={onUnlockPrivate}
-                    showWatermark={showWatermark}
-                    watermarkSettings={watermarkSettings}
-                    faceCount={faceSummaries?.get(asset.asset_id)?.faceCount}
-                    personNames={faceSummaries?.get(asset.asset_id)?.personNames}
                 />
              </div>
           ))}

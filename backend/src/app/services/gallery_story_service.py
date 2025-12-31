@@ -1,22 +1,35 @@
-"""Gallery Story Service.
+"""Gallery Story Generation Service.
 
-Uses AI to generate written narratives about photo galleries.
-Feature: AI-powered gallery story generation (US4)
+Uses AI to generate narrative stories for photo galleries based on their content.
+Feature: 010-ai-powered-features
+Tasks: T045-T055
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from app.config.settings import get_settings
+from app.db.redis import get_redis_client
 from app.services.gemini_client_service import get_gemini_client_service
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
-from app.services.ai_cache_service import get_ai_cache_service
 
 logger = logging.getLogger(__name__)
+
+# Cache TTL for generated stories (24 hours)
+STORY_CACHE_TTL = 86400
+
+
+# ---------------------------------------------------------------------------
+# Type Aliases
+# ---------------------------------------------------------------------------
+
+StoryLength = Literal["short", "medium", "long"]
+StoryTone = Literal["professional", "casual", "poetic", "journalistic"]
 
 
 # ---------------------------------------------------------------------------
@@ -29,23 +42,35 @@ class StoryResult:
 
     def __init__(
         self,
+        gallery_id: str,
         story: str,
-        length: str,
-        tone: str,
+        title: str,
+        length: StoryLength,
+        tone: StoryTone,
         word_count: int,
+        photo_count: int,
+        themes: list[str],
     ):
+        self.gallery_id = gallery_id
         self.story = story
+        self.title = title
         self.length = length
         self.tone = tone
         self.word_count = word_count
+        self.photo_count = photo_count
+        self.themes = themes
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
+            "gallery_id": self.gallery_id,
             "story": self.story,
+            "title": self.title,
             "length": self.length,
             "tone": self.tone,
             "word_count": self.word_count,
+            "photo_count": self.photo_count,
+            "themes": self.themes,
         }
 
 
@@ -57,86 +82,144 @@ class StoryResult:
 class GalleryStoryService:
     """Service for AI-powered gallery story generation."""
 
-    # Word count targets for each length option
-    LENGTH_TARGETS = {
-        "short": (100, 150),
-        "medium": (250, 350),
-        "long": (500, 700),
+    # Word count ranges by length
+    LENGTH_WORD_COUNTS = {
+        "short": (50, 100),
+        "medium": (150, 300),
+        "long": (400, 600),
     }
 
     def __init__(self):
         self.settings = get_settings()
         self.gemini_client = get_gemini_client_service()
         self.ai_usage = get_ai_usage_service()
-        self.ai_cache = get_ai_cache_service()
+
+    def _get_cache_key(
+        self,
+        gallery_id: UUID,
+        length: StoryLength,
+        tone: StoryTone,
+        custom_context: Optional[str],
+    ) -> str:
+        """Generate a cache key for story lookup."""
+        context_hash = hashlib.md5(
+            (custom_context or "").encode()
+        ).hexdigest()[:8]
+        return f"story:{gallery_id}:{length}:{tone}:{context_hash}"
+
+    async def get_cached_story(
+        self,
+        gallery_id: UUID,
+        length: StoryLength,
+        tone: StoryTone,
+        custom_context: Optional[str] = None,
+    ) -> Optional[StoryResult]:
+        """Get a cached story if available."""
+        try:
+            redis = await get_redis_client()
+            cache_key = self._get_cache_key(gallery_id, length, tone, custom_context)
+            cached = await redis.get(cache_key)
+            if cached:
+                data = json.loads(cached)
+                logger.info(f"Story cache hit for gallery {gallery_id}")
+                return StoryResult(**data)
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to get cached story: {e}")
+            return None
+
+    async def cache_story(self, story: StoryResult, custom_context: Optional[str] = None) -> None:
+        """Cache a generated story."""
+        try:
+            redis = await get_redis_client()
+            cache_key = self._get_cache_key(
+                UUID(story.gallery_id), story.length, story.tone, custom_context
+            )
+            await redis.setex(cache_key, STORY_CACHE_TTL, json.dumps(story.to_dict()))
+            logger.info(f"Cached story for gallery {story.gallery_id}")
+        except Exception as e:
+            logger.warning(f"Failed to cache story: {e}")
+
+    async def invalidate_story_cache(self, gallery_id: UUID) -> None:
+        """Invalidate all cached stories for a gallery."""
+        try:
+            redis = await get_redis_client()
+            pattern = f"story:{gallery_id}:*"
+            keys = []
+            async for key in redis.scan_iter(match=pattern):
+                keys.append(key)
+            if keys:
+                await redis.delete(*keys)
+                logger.info(f"Invalidated {len(keys)} cached stories for gallery {gallery_id}")
+        except Exception as e:
+            logger.warning(f"Failed to invalidate story cache: {e}")
 
     async def generate_story(
         self,
         user_id: UUID,
         workspace_id: UUID,
         gallery_id: UUID,
-        photo_analyses: list[dict[str, Any]],
-        length: str = "medium",
-        tone: str = "professional",
+        gallery_name: str,
+        photo_descriptions: list[dict[str, Any]],
+        length: StoryLength = "medium",
+        tone: StoryTone = "professional",
+        custom_context: Optional[str] = None,
+        use_cache: bool = True,
     ) -> StoryResult:
-        """Generate a story for a gallery based on analyzed photos.
+        """Generate a narrative story for a gallery.
 
         Args:
             user_id: The user requesting generation
             workspace_id: The workspace context
             gallery_id: The gallery ID
-            photo_analyses: List of photo analysis results (from photo_analysis_service)
-            length: Story length - 'short', 'medium', 'long'
-            tone: Story tone - 'professional', 'casual', 'poetic', 'journalistic'
+            gallery_name: Name of the gallery
+            photo_descriptions: List of photo metadata/descriptions
+            length: Story length (short, medium, long)
+            tone: Story tone (professional, casual, poetic, journalistic)
+            custom_context: Optional additional context for the story
+            use_cache: Whether to use/store cached results (default: True)
 
         Returns:
             StoryResult with generated story
-
-        Raises:
-            ValueError: If fewer than 5 photos provided
-            AIConfigurationError: If AI is not configured
-            AIRuntimeError: If generation fails
         """
-        # Validate minimum photos
-        if len(photo_analyses) < 5:
-            raise ValueError("At least 5 analyzed photos are required for story generation")
-
-        # Check cache first
-        cached = await self.ai_cache.get_gallery_story(gallery_id, length, tone)
-        if cached:
-            logger.debug(f"Returning cached story for gallery {gallery_id}")
-            return StoryResult(
-                story=cached.get("story", ""),
-                length=cached.get("length", length),
-                tone=cached.get("tone", tone),
-                word_count=cached.get("word_count", 0),
-            )
-
         try:
+            # Validate inputs
+            if length not in self.LENGTH_WORD_COUNTS:
+                raise ValueError(f"Invalid length: {length}. Must be short, medium, or long.")
+            if tone not in ["professional", "casual", "poetic", "journalistic"]:
+                raise ValueError(f"Invalid tone: {tone}.")
+
+            # Check cache first
+            if use_cache:
+                cached = await self.get_cached_story(gallery_id, length, tone, custom_context)
+                if cached:
+                    return cached
+
             # Get user's Gemini client
             client = await self.gemini_client.get_client_for_user(user_id)
 
             # Build story prompt
-            prompt = self._build_story_prompt(photo_analyses, length, tone)
+            prompt = self._build_story_prompt(
+                gallery_name=gallery_name,
+                photo_descriptions=photo_descriptions,
+                length=length,
+                tone=tone,
+                custom_context=custom_context,
+            )
 
-            # Make API call
+            # Make API call (text-only, no images for performance)
             response = await client.generate_content(
                 contents=[{"parts": [{"text": prompt}]}]
             )
 
             # Parse response
-            story_text = self._parse_story_response(response.text)
-            word_count = len(story_text.split())
-
-            result = StoryResult(
-                story=story_text,
+            result = self._parse_story_response(
+                response.text,
+                gallery_id=str(gallery_id),
                 length=length,
                 tone=tone,
-                word_count=word_count,
+                photo_count=len(photo_descriptions),
             )
-
-            # Cache the result
-            await self.ai_cache.set_gallery_story(gallery_id, length, tone, result.to_dict())
 
             # Log usage
             await self.ai_usage.log_ai_call(
@@ -147,15 +230,20 @@ class GalleryStoryService:
                 success=True,
                 metadata={
                     "gallery_id": str(gallery_id),
-                    "photo_count": len(photo_analyses),
                     "length": length,
                     "tone": tone,
+                    "photo_count": len(photo_descriptions),
                 },
             )
+
+            # Cache the result
+            if use_cache:
+                await self.cache_story(result, custom_context)
 
             return result
 
         except Exception as e:
+            logger.error(f"Story generation failed: {e}", exc_info=True)
             # Log failed usage
             await self.ai_usage.log_ai_call(
                 user_id=user_id,
@@ -169,70 +257,162 @@ class GalleryStoryService:
 
     def _build_story_prompt(
         self,
-        photo_analyses: list[dict[str, Any]],
-        length: str,
-        tone: str,
+        gallery_name: str,
+        photo_descriptions: list[dict[str, Any]],
+        length: StoryLength,
+        tone: StoryTone,
+        custom_context: Optional[str],
     ) -> str:
         """Build the story generation prompt."""
-        min_words, max_words = self.LENGTH_TARGETS.get(length, (250, 350))
+        min_words, max_words = self.LENGTH_WORD_COUNTS[length]
 
-        # Summarize photo analyses for context
-        photo_summaries = []
-        for i, analysis in enumerate(photo_analyses[:20], 1):  # Limit to 20 photos
-            desc = analysis.get("description", "A photo")
-            mood = analysis.get("mood", "neutral")
-            lighting = analysis.get("lighting", "unknown")
-            tags = ", ".join(analysis.get("tags", [])[:5])
-
-            photo_summaries.append(
-                f"Photo {i}: {desc} (mood: {mood}, lighting: {lighting}, tags: {tags})"
-            )
-
-        photos_context = "\n".join(photo_summaries)
-
-        tone_instructions = {
-            "professional": "Write in a polished, business-appropriate tone suitable for portfolios and client presentations. Use sophisticated vocabulary and maintain a formal register.",
-            "casual": "Write in a friendly, conversational tone as if telling a friend about these photos. Keep it warm and engaging but not too formal.",
-            "poetic": "Write in an artistic, evocative style with metaphors and imagery. Focus on emotions, atmosphere, and the beauty captured in the photos.",
-            "journalistic": "Write in a clear, objective style like a photo essay or magazine article. Focus on the story and context behind the photos.",
+        tone_guidelines = {
+            "professional": "Use polished, business-appropriate language. Focus on quality, craftsmanship, and the significance of captured moments.",
+            "casual": "Use friendly, conversational language. Make it feel like you're sharing the story with a friend.",
+            "poetic": "Use artistic, evocative language with metaphors and imagery. Create an emotional, dreamy narrative.",
+            "journalistic": "Use clear, informative language. Report on the event/occasion with attention to details and significance.",
         }
 
-        return f"""You are a skilled writer creating a narrative about a photo gallery.
+        # Summarize photo descriptions
+        photo_summaries = []
+        for i, photo in enumerate(photo_descriptions[:20], 1):  # Limit to 20 photos
+            summary_parts = []
+            if "description" in photo:
+                summary_parts.append(photo["description"])
+            if "tags" in photo and photo["tags"]:
+                summary_parts.append(f"Tags: {', '.join(photo['tags'][:5])}")
+            if "mood" in photo:
+                summary_parts.append(f"Mood: {photo['mood']}")
+            if summary_parts:
+                photo_summaries.append(f"Photo {i}: {' | '.join(summary_parts)}")
 
-Based on the following {len(photo_analyses)} photos, write a cohesive story that captures the essence of this collection.
+        photos_context = "\n".join(photo_summaries) if photo_summaries else "Various photographs"
 
-PHOTOS IN THE GALLERY:
+        custom_section = f"\n\nAdditional context: {custom_context}" if custom_context else ""
+
+        return f"""Create a narrative story for a photo gallery titled "{gallery_name}".
+
+Gallery Information:
+- Number of photos: {len(photo_descriptions)}
+- Photo details:
 {photos_context}
+{custom_section}
 
-WRITING REQUIREMENTS:
-- Length: {min_words}-{max_words} words
-- Tone: {tone_instructions.get(tone, tone_instructions["professional"])}
-- Create a narrative that flows naturally and connects the photos thematically
-- Reference specific photos when appropriate (use descriptions, not numbers)
-- Include an engaging opening and a satisfying conclusion
-- Focus on emotions, atmosphere, and the story the photos tell together
+Story Requirements:
+- Tone: {tone} ({tone_guidelines[tone]})
+- Length: {length} ({min_words}-{max_words} words)
+- Create a cohesive narrative that ties the photos together
+- Include a compelling title for the story
+- Identify 3-5 key themes from the photos
 
-Write only the story text, no additional commentary or formatting.
+Return your response in this exact JSON format:
+{{
+  "title": "Story Title",
+  "story": "The narrative story text...",
+  "themes": ["theme1", "theme2", "theme3"]
+}}
+
+Important: Return ONLY the JSON object, no additional text."""
+
+    def _parse_story_response(
+        self,
+        response_text: str,
+        gallery_id: str,
+        length: StoryLength,
+        tone: StoryTone,
+        photo_count: int,
+    ) -> StoryResult:
+        """Parse story generation response."""
+        try:
+            # Extract JSON object
+            json_start = response_text.find("{")
+            json_end = response_text.rfind("}") + 1
+            if json_start == -1 or json_end == 0:
+                raise ValueError("No JSON object found")
+
+            json_str = response_text[json_start:json_end]
+            data = json.loads(json_str)
+
+            if not isinstance(data, dict):
+                raise ValueError("Response is not a dict")
+
+            story = data.get("story", "")
+            title = data.get("title", "Untitled Story")
+            themes = data.get("themes", [])
+
+            # Count words
+            word_count = len(story.split())
+
+            return StoryResult(
+                gallery_id=gallery_id,
+                story=story,
+                title=title,
+                length=length,
+                tone=tone,
+                word_count=word_count,
+                photo_count=photo_count,
+                themes=themes if isinstance(themes, list) else [],
+            )
+
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Failed to parse story response: {e}")
+            return StoryResult(
+                gallery_id=gallery_id,
+                story="Story generation failed. Please try again.",
+                title="Error",
+                length=length,
+                tone=tone,
+                word_count=0,
+                photo_count=photo_count,
+                themes=[],
+            )
+
+    async def export_story(
+        self,
+        story_result: StoryResult,
+        format: Literal["text", "markdown", "html"] = "text",
+    ) -> str:
+        """Export a story in the specified format.
+
+        Args:
+            story_result: The generated story
+            format: Export format (text, markdown, html)
+
+        Returns:
+            Formatted story string
+        """
+        if format == "text":
+            return f"{story_result.title}\n\n{story_result.story}"
+
+        elif format == "markdown":
+            themes_md = ", ".join(f"*{t}*" for t in story_result.themes)
+            return f"""# {story_result.title}
+
+{story_result.story}
+
+---
+
+**Themes:** {themes_md}
+**Photos:** {story_result.photo_count}
+**Words:** {story_result.word_count}
 """
 
-    def _parse_story_response(self, response_text: str) -> str:
-        """Parse and clean the story response."""
-        # Remove any markdown formatting if present
-        story = response_text.strip()
+        elif format == "html":
+            themes_html = ", ".join(f"<em>{t}</em>" for t in story_result.themes)
+            return f"""<article class="gallery-story">
+  <h1>{story_result.title}</h1>
+  <div class="story-content">
+    {story_result.story}
+  </div>
+  <footer class="story-meta">
+    <p><strong>Themes:</strong> {themes_html}</p>
+    <p><strong>Photos:</strong> {story_result.photo_count}</p>
+    <p><strong>Words:</strong> {story_result.word_count}</p>
+  </footer>
+</article>"""
 
-        # Remove potential JSON wrapper if AI returns structured data
-        if story.startswith("{") and story.endswith("}"):
-            try:
-                data = json.loads(story)
-                story = data.get("story", data.get("text", story))
-            except json.JSONDecodeError:
-                pass
-
-        # Remove quotes if wrapped
-        if story.startswith('"') and story.endswith('"'):
-            story = story[1:-1]
-
-        return story.strip()
+        else:
+            raise ValueError(f"Unsupported export format: {format}")
 
 
 # ---------------------------------------------------------------------------

@@ -165,28 +165,7 @@ class GalleryService:
                     pin_hash IS NOT NULL as pin_protected,
                     email_registration_required, expires_at, custom_domain,
                     primary_color, gradient_config, font_family, custom_links,
-                    -- Only return cover_asset_id if it points to a valid, non-deleted asset
-                    COALESCE(
-                        (
-                            SELECT a.asset_id
-                            FROM assets a
-                            WHERE a.asset_id = galleries.cover_asset_id
-                            AND a.deleted = FALSE
-                            AND a.status = 'available'
-                        ),
-                        (
-                            SELECT ga.asset_id
-                            FROM gallery_assets ga
-                            JOIN assets a ON ga.asset_id = a.asset_id
-                            WHERE ga.gallery_id = galleries.gallery_id
-                            AND ga.visible = TRUE
-                            AND a.deleted = FALSE
-                            AND a.status = 'available'
-                            ORDER BY ga.created_at ASC
-                            LIMIT 1
-                        )
-                    ) as cover_asset_id,
-                    created_by_user_id, published_at,
+                    cover_asset_id, created_by_user_id, published_at,
                     created_at, updated_at, deleted, pinned_at, last_accessed_at
                 FROM galleries
                 WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
@@ -527,17 +506,9 @@ class GalleryService:
                         AND ga.visible = TRUE
                         AND a.deleted = FALSE
                     ) as photo_count,
-                    -- Fallback to first asset if cover is not set or points to deleted asset
+                    -- Fallback to first asset if no explicit cover is set
                     COALESCE(
-                        -- Only use cover_asset_id if it points to a non-deleted, available asset
-                        (
-                            SELECT a.asset_id
-                            FROM assets a
-                            WHERE a.asset_id = galleries.cover_asset_id
-                            AND a.deleted = FALSE
-                            AND a.status = 'available'
-                        ),
-                        -- Fallback: first available asset in gallery
+                        cover_asset_id,
                         (
                             SELECT ga.asset_id
                             FROM gallery_assets ga
@@ -545,7 +516,6 @@ class GalleryService:
                             WHERE ga.gallery_id = galleries.gallery_id
                             AND ga.visible = TRUE
                             AND a.deleted = FALSE
-                            AND a.status = 'available'
                             ORDER BY ga.created_at ASC
                             LIMIT 1
                         )
@@ -604,13 +574,8 @@ class GalleryService:
         face_group_ids: list[UUID] | None = None,
         tag_ids: list[UUID] | None = None,
         tag_source: str | None = None,
-        sort_by: str | None = None,
     ) -> dict:
-        """List assets in a gallery with pagination and filtering.
-
-        Args:
-            sort_by: Optional sort order - 'position' (default), 'favorites', 'picks'
-        """
+        """List assets in a gallery with pagination and filtering."""
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             # Verify gallery exists (exclude deleted)
@@ -711,15 +676,6 @@ class GalleryService:
             limit_param_num = len(params) - 1
             offset_param_num = len(params)
 
-            # Determine sort order based on sort_by parameter
-            if sort_by == "favorites":
-                order_clause = "COALESCE(gfs.unique_favorite_count, 0) DESC, ga.sort_order ASC"
-            elif sort_by == "picks":
-                order_clause = "COALESCE(gps.unique_pick_count, 0) DESC, ga.sort_order ASC"
-            else:
-                # Default: position-based sorting
-                order_clause = "ga.sort_order ASC, ga.gallery_asset_id ASC"
-
             assets_query = f"""
                 SELECT
                     ga.gallery_asset_id,
@@ -737,8 +693,6 @@ class GalleryService:
                         AND ci.asset_id = ga.asset_id
                         AND ci.type = 'favorite'
                     ) AS favorites_count,
-                    COALESCE(gfs.unique_favorite_count, 0) AS client_favorites_count,
-                    COALESCE(gps.unique_pick_count, 0) AS client_picks_count,
                     a.type,
                     a.status,
                     a.mime_type,
@@ -750,12 +704,8 @@ class GalleryService:
                     a.exif
                 FROM gallery_assets ga
                 INNER JOIN assets a ON ga.asset_id = a.asset_id
-                LEFT JOIN gallery_favorites_summary gfs
-                    ON ga.gallery_id = gfs.gallery_id AND ga.asset_id = gfs.asset_id
-                LEFT JOIN gallery_picks_summary gps
-                    ON ga.gallery_id = gps.gallery_id AND ga.asset_id = gps.asset_id
                 WHERE {where_sql}
-                ORDER BY {order_clause}
+                ORDER BY ga.sort_order ASC, ga.gallery_asset_id ASC
                 LIMIT ${limit_param_num} OFFSET ${offset_param_num}
             """
 
@@ -774,8 +724,6 @@ class GalleryService:
                     "is_favorited": row["is_favorited"],
                     "is_selected": row["is_selected"],
                     "favorites_count": row["favorites_count"] or 0,
-                    "client_favorites_count": row["client_favorites_count"] or 0,
-                    "client_picks_count": row["client_picks_count"] or 0,
                     "asset": {
                         "type": row["type"],
                         "status": row["status"],
@@ -1452,14 +1400,9 @@ class GalleryService:
             # Fetch visible assets
             rows = await conn.fetch(
                 """
-                SELECT
-                    a.asset_id, ga.gallery_id, ga.sub_gallery_id, a.type,
-                    COALESCE(regexp_replace(a.original_object_key, '^.*/', ''), a.asset_id::text) AS filename,
-                    (a.exif->>'ImageWidth')::int AS width,
-                    (a.exif->>'ImageHeight')::int AS height,
-                    NULL::int AS duration,
-                    a.original_bytes AS size_bytes,
-                    a.exif AS metadata,
+                SELECT 
+                    a.asset_id, a.gallery_id, ga.sub_gallery_id, a.type, a.filename, 
+                    a.width, a.height, a.duration, a.size_bytes, a.metadata, 
                     a.created_at, ga.sort_order, ga.is_private
                 FROM gallery_assets ga
                 JOIN assets a ON ga.asset_id = a.asset_id
@@ -1488,7 +1431,7 @@ class GalleryService:
                     "created_at": row["created_at"].isoformat(),
                     "is_private": row["is_private"],
                 })
-
+            
             return results
 
     async def get_public_asset_content(
@@ -1514,12 +1457,10 @@ class GalleryService:
             # 2. Verify asset exists, is part of this gallery, and is visible
             asset = await conn.fetchrow(
                 """
-                SELECT a.asset_id,
-                       COALESCE(regexp_replace(a.original_object_key, '^.*/', ''), a.asset_id::text) AS filename,
-                       a.type
+                SELECT a.asset_id, a.filename, a.type
                 FROM gallery_assets ga
                 JOIN assets a ON ga.asset_id = a.asset_id
-                WHERE ga.gallery_id = $1
+                WHERE ga.gallery_id = $1 
                 AND ga.asset_id = $2
                 AND ga.visible = TRUE
                 AND a.deleted = FALSE
@@ -1544,41 +1485,41 @@ class GalleryService:
             
             from app.services.r2_storage_service import get_r2_storage_service, StorageError
             storage = get_r2_storage_service()
+            
+            try:
+                content = await storage.download_encrypted_file(
+                    workspace_id=workspace_id,
+                    gallery_id=gallery_id,
+                    asset_id=asset_id,
+                    variant=variant,
+                    filename=asset["filename"],
+                )
+                
+                # Determine mime type
+                content_type = "application/octet-stream"
+                if variant in ("thumbnail", "preview") or asset["type"] == "photo":
+                    # Assume JPEG for generated variants, or based on filename
+                    if asset["filename"].lower().endswith(".png"):
+                        content_type = "image/png"
+                    elif asset["filename"].lower().endswith(".webp"):
+                         content_type = "image/webp"
+                    else:
+                        content_type = "image/jpeg"
 
-            # Try requested variant first, then fallback to original if variant not found
-            variants_to_try = [variant]
-            if variant in ("thumbnail", "preview"):
-                variants_to_try.append("original")
+                return content, content_type
+            except StorageError:
+                raise GalleryError("Failed to retrieve asset content", "STORAGE_ERROR", 500)
+# Export singleton instance
+_gallery_service: Optional[GalleryService] = None
 
-            content = None
-            for try_variant in variants_to_try:
-                try:
-                    content = await storage.download_encrypted_file(
-                        workspace_id=workspace_id,
-                        gallery_id=gallery_id,
-                        asset_id=asset_id,
-                        variant=try_variant,
-                        filename=asset["filename"],
-                    )
-                    break  # Success
-                except StorageError:
-                    if try_variant == variants_to_try[-1]:
-                        # Last variant failed, raise error
-                        raise GalleryError("Failed to retrieve asset content", "STORAGE_ERROR", 500)
-                    continue  # Try next variant
 
-            # Determine mime type
-            content_type = "application/octet-stream"
-            if variant in ("thumbnail", "preview") or asset["type"] == "photo":
-                # Assume JPEG for generated variants, or based on filename
-                if asset["filename"].lower().endswith(".png"):
-                    content_type = "image/png"
-                elif asset["filename"].lower().endswith(".webp"):
-                    content_type = "image/webp"
-                else:
-                    content_type = "image/jpeg"
+def get_gallery_service() -> GalleryService:
+    """Get singleton gallery service instance."""
+    global _gallery_service
+    if _gallery_service is None:
+        _gallery_service = GalleryService()
+    return _gallery_service
 
-            return content, content_type
 
     async def add_assets(
         self,
@@ -1638,9 +1579,9 @@ class GalleryService:
                 result = await conn.execute(
                     """
                     INSERT INTO gallery_assets (
-                        gallery_id, asset_id, workspace_id, sort_order,
-                        visible, is_selected, is_favorited, created_at
-                    ) VALUES ($1, $2, $3, $4, TRUE, FALSE, FALSE, NOW())
+                        gallery_id, asset_id, workspace_id, sort_order, 
+                        visible, is_selected, is_favorited, created_at, updated_at
+                    ) VALUES ($1, $2, $3, $4, TRUE, FALSE, FALSE, NOW(), NOW())
                     ON CONFLICT (gallery_id, asset_id) DO NOTHING
                     """,
                     gallery_id,
@@ -2040,17 +1981,12 @@ class GalleryService:
                     ga.gallery_id,
                     ga.sub_gallery_id,
                     a.type,
-                    -- Extract filename from original_object_key (last segment after /)
-                    COALESCE(
-                        regexp_replace(a.original_object_key, '^.*/', ''),
-                        a.asset_id::text
-                    ) AS filename,
-                    -- Extract dimensions from exif JSON if available
-                    (a.exif->>'ImageWidth')::int AS width,
-                    (a.exif->>'ImageHeight')::int AS height,
-                    NULL::int AS duration,
-                    a.original_bytes AS size_bytes,
-                    a.exif AS metadata,
+                    a.original_filename AS filename,
+                    a.width,
+                    a.height,
+                    a.duration_ms AS duration,
+                    a.size_bytes,
+                    a.metadata,
                     ga.sort_order,
                     ga.is_favorited,
                     ga.is_selected,
@@ -2076,7 +2012,7 @@ class GalleryService:
                     "height": row["height"],
                     "duration": row["duration"],
                     "size_bytes": row["size_bytes"],
-                    "metadata": row["metadata"] if row["metadata"] else {},
+                    "metadata": row["metadata"],
                     "sort_order": row["sort_order"],
                     "is_favorited": row["is_favorited"],
                     "is_selected": row["is_selected"],
@@ -2086,15 +2022,3 @@ class GalleryService:
                 }
                 for row in rows
             ]
-
-
-# Export singleton instance
-_gallery_service: Optional[GalleryService] = None
-
-
-def get_gallery_service() -> GalleryService:
-    """Get singleton gallery service instance."""
-    global _gallery_service
-    if _gallery_service is None:
-        _gallery_service = GalleryService()
-    return _gallery_service
