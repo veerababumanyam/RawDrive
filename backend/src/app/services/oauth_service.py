@@ -104,6 +104,39 @@ class GoogleOAuthService:
         self._settings = settings or get_settings()
         self._auth_service = AuthService(self._settings)
 
+    def _validate_redirect_uri(self, redirect_uri: str | None) -> str | None:
+        """Validate redirect_uri against allowed origins to prevent open redirect attacks.
+
+        Security: Prevents attackers from using our OAuth flow to redirect users
+        to malicious sites with valid tokens.
+
+        Returns:
+            Validated redirect_uri or None if invalid/not provided.
+        """
+        if not redirect_uri:
+            return None
+
+        # Parse the redirect URI to get the origin
+        from urllib.parse import urlparse
+        parsed = urlparse(redirect_uri)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        # Check against allowed CORS origins (same trust boundary)
+        allowed_origins = list(self._settings.allowed_cors_origins)
+
+        # In production, also allow the public_url
+        if self._settings.public_url:
+            allowed_origins.append(self._settings.public_url)
+
+        if origin not in allowed_origins:
+            logger.warning(
+                "Rejected OAuth redirect to untrusted origin",
+                extra={"origin": origin, "redirect_uri": redirect_uri},
+            )
+            return None
+
+        return redirect_uri
+
     async def get_authorization_url(self, frontend_redirect: str | None = None) -> tuple[str, str]:
         """Generate Google OAuth authorization URL with state parameter.
 
@@ -116,12 +149,15 @@ class GoogleOAuthService:
         """
         state = secrets.token_urlsafe(32)
 
+        # Validate frontend redirect to prevent open redirect attacks
+        validated_redirect = self._validate_redirect_uri(frontend_redirect)
+
         # Store state in Redis for validation (5 minute TTL)
-        # Also store the frontend redirect URL if provided
+        # Also store the validated frontend redirect URL if provided
         redis = await get_redis_client()
         state_data = {
             "status": "pending",
-            "frontend_redirect": frontend_redirect or "",
+            "frontend_redirect": validated_redirect or "",
         }
         await redis.setex(f"oauth:state:{state}", 300, json.dumps(state_data))
 

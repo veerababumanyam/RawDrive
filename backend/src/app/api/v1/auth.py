@@ -6,12 +6,18 @@ Implements Requirements: 3.1, 3.2, 3.4, 4.1, 4.2, 22.1, 22.2
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import RedirectResponse
 from urllib.parse import urlencode
+
+
+def _hash_email_for_audit(email: str) -> str:
+    """Hash email for audit logs to comply with GDPR/SOC2 - no PII in logs."""
+    return hashlib.sha256(email.lower().encode()).hexdigest()[:16]
 
 from app.api.schemas import (
     AuthResponse,
@@ -97,7 +103,7 @@ async def signup(
             user_id=user.user_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            details={"email": user.email, "outcome": "success"},
+            details={"email_hash": _hash_email_for_audit(user.email), "outcome": "success"},
         )
     except UserExistsError as e:
         # Log failed signup attempt
@@ -106,7 +112,7 @@ async def signup(
             user_id=None,
             ip_address=ip_address,
             user_agent=user_agent,
-            details={"email": request.email, "outcome": "failure", "reason": "user_exists"},
+            details={"email_hash": _hash_email_for_audit(request.email), "outcome": "failure", "reason": "user_exists"},
         )
         raise ConflictError(message=str(e), code=e.code)
 
@@ -156,7 +162,7 @@ async def login(
                 user_id=user.user_id,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                details={"email": user.email, "outcome": "success", "workspace_id": str(user.workspace_id)},
+                details={"email_hash": _hash_email_for_audit(user.email), "outcome": "success", "workspace_id": str(user.workspace_id)},
             )
         except Exception as log_error:
             logger.warning(f"Failed to log auth event: {log_error}")
@@ -168,7 +174,7 @@ async def login(
                 user_id=None,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                details={"email": request.email, "outcome": "failure", "reason": e.code},
+                details={"email_hash": _hash_email_for_audit(request.email), "outcome": "failure", "reason": e.code},
             )
         except Exception:
             pass  # Don't fail on audit log errors
@@ -316,7 +322,7 @@ async def oauth_google_callback(
             user_id=user.user_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            details={"provider": "google", "email": user.email, "outcome": "success"},
+            details={"provider": "google", "email_hash": _hash_email_for_audit(user.email), "outcome": "success"},
         )
     except (OAuthStateMismatchError, OAuthCodeExchangeError, OAuthUserInfoError, AuthError) as e:
         # Log failed OAuth attempt
