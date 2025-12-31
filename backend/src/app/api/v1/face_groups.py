@@ -107,6 +107,7 @@ async def list_face_groups(
     limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
     order_by: Annotated[str, Query(description="Sort field")] = "face_count",
     order_desc: Annotated[bool, Query(description="Sort descending")] = True,
+    min_faces: Annotated[Optional[int], Query(ge=1, description="Minimum faces in group")] = None,
 ):
     """List all face groups in a workspace."""
     offset = (page - 1) * limit
@@ -118,6 +119,7 @@ async def list_face_groups(
         offset=offset,
         order_by=order_by,
         order_desc=order_desc,
+        min_faces=min_faces,
     )
 
     # Generate signed URLs for thumbnails
@@ -150,7 +152,7 @@ async def list_face_groups(
             person_name=g.get("person_name"),
         ))
 
-    total = await group_repo.count_by_workspace(workspace_id)
+    total = await group_repo.count_by_workspace(workspace_id, min_faces=min_faces)
     total_pages = (total + limit - 1) // limit if total > 0 else 1
 
     return FaceGroupListResponse(

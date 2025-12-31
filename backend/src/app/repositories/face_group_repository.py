@@ -244,6 +244,7 @@ class FaceGroupRepository:
         offset: int = 0,
         order_by: str = "face_count",
         order_desc: bool = True,
+        min_faces: int | None = None,
     ) -> list[dict[str, Any]]:
         """Find all face groups in a workspace with representative thumbnail info.
 
@@ -257,6 +258,7 @@ class FaceGroupRepository:
             offset: Number of results to skip
             order_by: Field to order by (face_count, name, created_at)
             order_desc: Whether to order descending
+            min_faces: Minimum number of faces required in group (optional)
 
         Returns:
             List of face group records with rep_face_id, rep_thumbnail_urls,
@@ -268,6 +270,19 @@ class FaceGroupRepository:
             order_by = "face_count"
 
         order_dir = "DESC" if order_desc else "ASC"
+
+        # Build WHERE clause with optional min_faces filter
+        where_clauses = ["fg.workspace_id = $1"]
+        params: list = [workspace_id]
+        param_idx = 2
+
+        if min_faces is not None and min_faces > 0:
+            where_clauses.append(f"fg.face_count >= ${param_idx}")
+            params.append(min_faces)
+            param_idx += 1
+
+        params.extend([limit, offset])
+        where_sql = " AND ".join(where_clauses)
 
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
@@ -282,13 +297,11 @@ class FaceGroupRepository:
                 FROM face_groups fg
                 LEFT JOIN faces f ON fg.representative_face_id = f.id
                 LEFT JOIN people p ON fg.person_id = p.person_id
-                WHERE fg.workspace_id = $1
+                WHERE {where_sql}
                 ORDER BY fg.{order_by} {order_dir}
-                LIMIT $2 OFFSET $3
+                LIMIT ${param_idx} OFFSET ${param_idx + 1}
                 """,
-                workspace_id,
-                limit,
-                offset,
+                *params,
             )
 
             result = []
@@ -1236,10 +1249,23 @@ class FaceGroupRepository:
     # STATISTICS
     # =========================================================================
 
-    async def count_by_workspace(self, workspace_id: UUID) -> int:
-        """Count total face groups in a workspace."""
+    async def count_by_workspace(
+        self, workspace_id: UUID, min_faces: int | None = None
+    ) -> int:
+        """Count total face groups in a workspace.
+
+        Args:
+            workspace_id: Workspace ID
+            min_faces: Optional minimum face count filter
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
+            if min_faces is not None and min_faces > 0:
+                return await conn.fetchval(
+                    "SELECT COUNT(*) FROM face_groups WHERE workspace_id = $1 AND face_count >= $2",
+                    workspace_id,
+                    min_faces,
+                )
             return await conn.fetchval(
                 "SELECT COUNT(*) FROM face_groups WHERE workspace_id = $1",
                 workspace_id,
