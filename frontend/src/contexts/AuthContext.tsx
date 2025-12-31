@@ -27,6 +27,15 @@ import {
 } from '../services/auth';
 import { refreshAccessToken, AUTH_EVENTS } from '../services/api';
 
+// OAuth error codes to user-friendly messages
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  OAUTH_STATE_MISMATCH: 'Login session expired. Please try signing in again.',
+  OAUTH_CODE_EXCHANGE_FAILED: 'Unable to complete sign in with Google. Please try again.',
+  OAUTH_USERINFO_FAILED: 'Unable to retrieve your Google account information. Please try again.',
+  AUTH_NO_WORKSPACE: 'Your account does not have an active workspace. Please contact support.',
+  OAUTH_ERROR: 'An error occurred during sign in. Please try again.',
+};
+
 // Context types
 interface AuthContextType {
   user: User | null;
@@ -34,7 +43,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   sessionExpiredRedirect: string | null;
+  oauthError: { code: string; message: string } | null;
   clearSessionExpiredRedirect: () => void;
+  clearOAuthError: () => void;
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
   signup: (data: SignupData) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -61,6 +72,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Track if session expired event was triggered to prevent multiple redirects
   const [sessionExpiredRedirect, setSessionExpiredRedirect] = useState<string | null>(null);
+
+  // Track OAuth errors for display to user
+  const [oauthError, setOAuthError] = useState<{ code: string; message: string } | null>(null);
 
   // Listen for session expired events from API client
   useEffect(() => {
@@ -96,7 +110,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Check for OAuth error
       if (error) {
-        console.error('[Auth] OAuth error:', error, params.get('error_description'));
+        const errorDescription = params.get('error_description') || '';
+        console.error('[Auth] OAuth error:', error, errorDescription);
+
+        // Set user-friendly error message for display
+        const friendlyMessage = OAUTH_ERROR_MESSAGES[error] || OAUTH_ERROR_MESSAGES.OAUTH_ERROR;
+        setOAuthError({
+          code: error,
+          message: friendlyMessage,
+        });
+
         // Clear URL parameters
         window.history.replaceState({}, '', window.location.pathname);
         return;
@@ -326,6 +349,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setSessionExpiredRedirect(null);
   }, []);
 
+  // Clear OAuth error after display
+  const clearOAuthError = useCallback(() => {
+    setOAuthError(null);
+  }, []);
+
   // Context value
   const value: AuthContextType = {
     user,
@@ -333,7 +361,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated,
     isLoading,
     sessionExpiredRedirect,
+    oauthError,
     clearSessionExpiredRedirect,
+    clearOAuthError,
     login,
     signup,
     logout,

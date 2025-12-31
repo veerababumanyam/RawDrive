@@ -19,6 +19,7 @@ from app.middleware.request_id import RequestIdMiddleware  # type: ignore
 from app.services.audit_service import start_audit_worker, stop_audit_worker  # type: ignore
 from app.services.scheduler import get_scheduler  # type: ignore
 from app.services.task_queue import get_task_queue  # type: ignore
+from app.services.oauth_service import close_http_client  # type: ignore
 
 settings = ensure_settings_loaded()
 logger = logging.getLogger("rawdrive")
@@ -95,6 +96,7 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
             logger.info("Background task worker and scheduler stopped")
 
         await stop_audit_worker()  # Flush remaining audit logs
+        await close_http_client()  # Close OAuth HTTP client connection pool
         await close_redis_client()
         await close_postgres_pool()
 

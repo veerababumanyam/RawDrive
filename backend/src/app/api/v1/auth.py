@@ -30,6 +30,7 @@ from app.api.schemas import (
     TokenResponse,
     UserResponse,
 )
+from app.config.settings import get_settings
 from app.services.auth_service import (
     AuthError,
     AuthService,
@@ -311,8 +312,12 @@ async def oauth_google_callback(
     if oauth_service is None:
         oauth_service = _get_oauth_service()
 
-    # Default frontend URL if none provided
-    default_frontend = "https://rawdrive.ai/workspace"
+    # Get default frontend URL from config (uses public_url setting)
+    settings = get_settings()
+    default_frontend = f"{settings.public_url}/workspace"
+
+    # Initialize frontend_redirect before try block to fix variable scope
+    frontend_redirect: str = ""
 
     try:
         user, tokens, frontend_redirect = await oauth_service.handle_callback(code=code, state=state)
@@ -333,8 +338,8 @@ async def oauth_google_callback(
             user_agent=user_agent,
             details={"provider": "google", "outcome": "failure", "reason": e.code},
         )
-        # Redirect to frontend with error
-        error_redirect = frontend_redirect if 'frontend_redirect' in dir() else default_frontend
+        # Redirect to frontend with error (use stored redirect or default)
+        error_redirect = frontend_redirect if frontend_redirect else default_frontend
         error_params = urlencode({"error": e.code, "error_description": str(e)})
         return RedirectResponse(url=f"{error_redirect}?{error_params}", status_code=302)
 

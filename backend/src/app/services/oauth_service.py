@@ -24,6 +24,42 @@ from urllib.parse import urlencode
 import httpx
 
 from app.config.settings import AppSettings, get_settings
+
+
+# ---------------------------------------------------------------------------
+# Shared HTTP Client (Connection Pooling)
+# ---------------------------------------------------------------------------
+# Using a module-level client for connection pooling reduces latency by reusing
+# TCP connections across OAuth requests. The client is lazily initialized and
+# configured with reasonable timeouts for external API calls.
+
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    """Get shared HTTP client with connection pooling.
+
+    Returns a lazily-initialized httpx.AsyncClient configured with:
+    - Connection pooling (default: 100 max connections)
+    - 30s timeout for slow external APIs
+    - HTTP/2 support where available
+    """
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+            http2=True,
+        )
+    return _http_client
+
+
+async def close_http_client() -> None:
+    """Close the shared HTTP client. Call during application shutdown."""
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
 from app.db.postgres import get_postgres_pool
 from app.db.redis import get_redis_client
 from app.services.auth_service import AuthService, TokenPair, AuthUser, AuthError
@@ -219,42 +255,42 @@ class GoogleOAuthService:
             "redirect_uri": redirect_uri or str(self._settings.google_redirect_uri),
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(GOOGLE_TOKEN_URL, data=data)
+        client = _get_http_client()
+        response = await client.post(GOOGLE_TOKEN_URL, data=data)
 
-            if response.status_code != 200:
-                logger.error(
-                    "OAuth code exchange failed",
-                    extra={"status": response.status_code, "body": response.text},
-                )
-                raise OAuthCodeExchangeError()
+        if response.status_code != 200:
+            logger.error(
+                "OAuth code exchange failed",
+                extra={"status": response.status_code, "body": response.text},
+            )
+            raise OAuthCodeExchangeError()
 
-            return response.json()
+        return response.json()
 
     async def get_user_info(self, access_token: str) -> GoogleUserInfo:
         """Fetch user info from Google using access token."""
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                GOOGLE_USERINFO_URL,
-                headers={"Authorization": f"Bearer {access_token}"},
+        client = _get_http_client()
+        response = await client.get(
+            GOOGLE_USERINFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        if response.status_code != 200:
+            logger.error(
+                "OAuth userinfo fetch failed",
+                extra={"status": response.status_code},
             )
+            raise OAuthUserInfoError()
 
-            if response.status_code != 200:
-                logger.error(
-                    "OAuth userinfo fetch failed",
-                    extra={"status": response.status_code},
-                )
-                raise OAuthUserInfoError()
+        data = response.json()
 
-            data = response.json()
-
-            return GoogleUserInfo(
-                sub=data["sub"],
-                email=data["email"],
-                email_verified=data.get("email_verified", False),
-                name=data.get("name", data["email"].split("@")[0]),
-                picture=data.get("picture"),
-            )
+        return GoogleUserInfo(
+            sub=data["sub"],
+            email=data["email"],
+            email_verified=data.get("email_verified", False),
+            name=data.get("name", data["email"].split("@")[0]),
+            picture=data.get("picture"),
+        )
 
     async def handle_callback(
         self,
