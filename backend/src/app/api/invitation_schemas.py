@@ -775,6 +775,10 @@ class InvitationRSVPResponse(BaseModel):
     updated_at: datetime
 
 
+# Alias for backward compatibility
+RSVPResponse = InvitationRSVPResponse
+
+
 class RSVPStatsResponse(BaseModel):
     """RSVP statistics for an invitation."""
 
