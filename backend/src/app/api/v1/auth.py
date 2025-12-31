@@ -19,7 +19,6 @@ from app.api.schemas import (
     LoginRequest,
     LogoutRequest,
     MessageResponse,
-    OAuthStartResponse,
     RefreshTokenRequest,
     SignupRequest,
     TokenResponse,
@@ -276,17 +275,16 @@ async def logout(
 
 @router.get(
     "/oauth/google/start",
-    response_model=OAuthStartResponse,
     summary="Start Google OAuth",
-    description="Get Google OAuth authorization URL.",
+    description="Redirect to Google OAuth authorization URL.",
 )
 async def oauth_google_start(
     oauth_service: OAuthServiceDep,
-    redirect_uri: Optional[str] = Query(None, description="Override redirect URI"),
-) -> OAuthStartResponse:
-    """Generate Google OAuth authorization URL."""
+    redirect_uri: Optional[str] = Query(None, description="Frontend URL to redirect to after OAuth"),
+) -> RedirectResponse:
+    """Redirect to Google OAuth authorization URL."""
     url, state = await oauth_service.get_authorization_url(redirect_uri)
-    return OAuthStartResponse(authorization_url=url, state=state)
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.get(
