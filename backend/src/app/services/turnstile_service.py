@@ -6,15 +6,15 @@ Provides bot protection for public forms (RSVPs, etc.) via Cloudflare Turnstile.
 Feature: 016-save-the-date (T124)
 """
 
+import logging
 import os
 from typing import Optional
 
 import httpx
 from pydantic import BaseModel
 
-from app.core.logging import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
