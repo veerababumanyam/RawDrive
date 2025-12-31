@@ -35,6 +35,10 @@ numpy>=1.24.0
 # Payment processing
 razorpay>=1.4.1
 
+# Calendar generation (016-save-the-date)
+icalendar>=5.0.0
+pytz>=2024.1
+
 # Monitoring
 prometheus-client>=0.20.0
 opentelemetry-distro>=0.47b0

@@ -42,6 +42,7 @@ RATE_LIMIT_ROUTES = {
     "/api/v1/search": RateLimitType.SEARCH,
     "/api/v1/public/profiles/": RateLimitType.PUBLIC,  # Public profile endpoints
     "/api/v1/public/galleries/": RateLimitType.PUBLIC,  # Public gallery endpoints (SOC2: rate limit PIN verify, favorites, selections)
+    "/api/v1/public/invitations/": RateLimitType.PUBLIC,  # Public invitation endpoints (016-save-the-date: RSVP submissions)
     "/api/": RateLimitType.API,
 }
 

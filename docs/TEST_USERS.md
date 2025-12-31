@@ -85,3 +85,6 @@ POST /api/v1/auth/login
 - `33333333-...-333333333001–004` → Workspace role users
 - `44444444-...-444444444000` → Shared test-roles-workspace
 - `aaaaaaaa-...-aaaaaaaaa001–005` → Subscription plans
+
+
+openai: (root/123456

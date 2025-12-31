@@ -1,0 +1,1757 @@
+openapi: 3.1.0
+info:
+  title: Save The Date - Digital Invitation API
+  description: |
+    API specification for the Save The Date digital invitation system.
+    Enables invitation creation, template management, RSVP handling, QR code generation,
+    and calendar integration for Indian cultural events.
+  version: 1.0.0
+  contact:
+    name: RawDrive API Support
+    email: api@rawdrive.com
+
+servers:
+  - url: https://api.rawdrive.com/v1
+    description: Production API
+  - url: https://staging-api.rawdrive.com/v1
+    description: Staging API
+  - url: http://localhost:8000/v1
+    description: Local Development
+
+tags:
+  - name: Templates
+    description: Invitation template management
+  - name: Invitations
+    description: Invitation CRUD operations
+  - name: RSVP
+    description: Guest RSVP management
+  - name: QR Codes
+    description: QR code generation
+  - name: Calendar
+    description: Calendar integration
+  - name: Check-In
+    description: Event day check-in
+  - name: Public Portal
+    description: Guest-facing public endpoints
+
+paths:
+  # ============================================================================
+  # TEMPLATE ENDPOINTS
+  # ============================================================================
+  /workspaces/{workspace_id}/invitation-templates:
+    get:
+      tags: [Templates]
+      summary: List invitation templates
+      description: |
+        Returns available invitation templates including system templates and
+        workspace-specific custom templates.
+      operationId: listInvitationTemplates
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: category
+          in: query
+          description: Filter by template category
+          schema:
+            $ref: '#/components/schemas/EventType'
+        - name: language
+          in: query
+          description: Filter by supported language
+          schema:
+            type: string
+            example: hi-IN
+        - name: include_system
+          in: query
+          description: Include system-wide templates
+          schema:
+            type: boolean
+            default: true
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InvitationTemplate'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /workspaces/{workspace_id}/invitation-templates/{template_id}:
+    get:
+      tags: [Templates]
+      summary: Get template details
+      operationId: getInvitationTemplate
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/TemplateId'
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationTemplate'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # INVITATION ENDPOINTS
+  # ============================================================================
+  /workspaces/{workspace_id}/invitations:
+    get:
+      tags: [Invitations]
+      summary: List invitations
+      description: List all invitations for the workspace
+      operationId: listInvitations
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: status
+          in: query
+          description: Filter by invitation status
+          schema:
+            $ref: '#/components/schemas/InvitationStatus'
+        - name: event_type
+          in: query
+          description: Filter by event type
+          schema:
+            $ref: '#/components/schemas/EventType'
+        - name: upcoming
+          in: query
+          description: Only show upcoming events
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: List of invitations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invitations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InvitationSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Invitations]
+      summary: Create invitation
+      description: Create a new invitation (starts as draft)
+      operationId: createInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+      responses:
+        '201':
+          description: Invitation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}:
+    get:
+      tags: [Invitations]
+      summary: Get invitation details
+      operationId: getInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: Invitation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Invitations]
+      summary: Update invitation
+      operationId: updateInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInvitationRequest'
+      responses:
+        '200':
+          description: Invitation updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Invitations]
+      summary: Delete invitation
+      description: Soft delete an invitation
+      operationId: deleteInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '204':
+          description: Invitation deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/publish:
+    post:
+      tags: [Invitations]
+      summary: Publish invitation
+      description: |
+        Publish invitation to make it publicly accessible.
+        Creates a share link and generates the public URL.
+      operationId: publishInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: Invitation published
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invitation:
+                    $ref: '#/components/schemas/Invitation'
+                  public_url:
+                    type: string
+                    format: uri
+                    example: https://rawdrive.com/invite/rahul-priya-wedding-2025
+                  share_link:
+                    $ref: '#/components/schemas/ShareLink'
+        '400':
+          description: Cannot publish (missing required fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/unpublish:
+    post:
+      tags: [Invitations]
+      summary: Unpublish invitation
+      description: Unpublish invitation (revoke public access)
+      operationId: unpublishInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: Invitation unpublished
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/archive:
+    post:
+      tags: [Invitations]
+      summary: Archive invitation
+      description: Archive invitation after event completion
+      operationId: archiveInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: Invitation archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/duplicate:
+    post:
+      tags: [Invitations]
+      summary: Duplicate invitation
+      description: Create a copy of an existing invitation
+      operationId: duplicateInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Title for the duplicate
+      responses:
+        '201':
+          description: Invitation duplicated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+
+  # ============================================================================
+  # RSVP ENDPOINTS (Host-facing)
+  # ============================================================================
+  /workspaces/{workspace_id}/invitations/{invitation_id}/rsvps:
+    get:
+      tags: [RSVP]
+      summary: List RSVPs
+      description: Get all RSVPs for an invitation
+      operationId: listRSVPs
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - name: attending
+          in: query
+          description: Filter by attending status
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          description: Search by name or email
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: List of RSVPs with stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RSVPListResponse'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/rsvps/{rsvp_id}:
+    get:
+      tags: [RSVP]
+      summary: Get RSVP details
+      operationId: getRSVP
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/RSVPId'
+      responses:
+        '200':
+          description: RSVP details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationRSVP'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [RSVP]
+      summary: Delete RSVP
+      description: Remove an RSVP (host action)
+      operationId: deleteRSVP
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/RSVPId'
+      responses:
+        '204':
+          description: RSVP deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/rsvps/export:
+    get:
+      tags: [RSVP]
+      summary: Export RSVPs
+      description: Export RSVPs as CSV or PDF
+      operationId: exportRSVPs
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [csv, pdf]
+      responses:
+        '200':
+          description: Export file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  # ============================================================================
+  # QR CODE ENDPOINTS
+  # ============================================================================
+  /workspaces/{workspace_id}/invitations/{invitation_id}/qr:
+    get:
+      tags: [QR Codes]
+      summary: Get invitation QR code
+      description: Generate QR code for the invitation public URL
+      operationId: getInvitationQR
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - name: format
+          in: query
+          description: Output format
+          schema:
+            type: string
+            enum: [png, svg, pdf]
+            default: png
+        - name: size
+          in: query
+          description: Size in pixels (PNG/PDF) or viewBox (SVG)
+          schema:
+            type: integer
+            minimum: 256
+            maximum: 2048
+            default: 512
+        - name: include_logo
+          in: query
+          description: Include invitation cover image as logo overlay
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: QR code image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/svg+xml:
+              schema:
+                type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # CALENDAR ENDPOINTS
+  # ============================================================================
+  /workspaces/{workspace_id}/invitations/{invitation_id}/calendar:
+    get:
+      tags: [Calendar]
+      summary: Get calendar file
+      description: Generate .ics calendar file for the event
+      operationId: getInvitationCalendar
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: iCalendar file
+          content:
+            text/calendar:
+              schema:
+                type: string
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="event.ics"
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # CHECK-IN ENDPOINTS
+  # ============================================================================
+  /workspaces/{workspace_id}/invitations/{invitation_id}/checkins:
+    get:
+      tags: [Check-In]
+      summary: List check-ins
+      description: Get all check-ins for an invitation
+      operationId: listCheckins
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: List of check-ins
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkins:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InvitationCheckin'
+                  stats:
+                    type: object
+                    properties:
+                      total_checked_in:
+                        type: integer
+                      total_party_checked_in:
+                        type: integer
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags: [Check-In]
+      summary: Record check-in
+      description: Record a guest check-in at the event
+      operationId: createCheckin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckinRequest'
+      responses:
+        '201':
+          description: Check-in recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationCheckin'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/checkins/verify:
+    post:
+      tags: [Check-In]
+      summary: Verify check-in QR
+      description: Verify a check-in QR code token
+      operationId: verifyCheckinQR
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: QR code token
+      responses:
+        '200':
+          description: Token verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  rsvp:
+                    $ref: '#/components/schemas/InvitationRSVP'
+                  already_checked_in:
+                    type: boolean
+                  checkin:
+                    $ref: '#/components/schemas/InvitationCheckin'
+        '400':
+          description: Invalid token
+
+  # ============================================================================
+  # DRAFT/AUTO-SAVE ENDPOINTS
+  # ============================================================================
+  /workspaces/{workspace_id}/invitations/drafts:
+    get:
+      tags: [Invitations]
+      summary: List auto-saved drafts
+      description: List auto-saved invitation drafts from Redis
+      operationId: listDrafts
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: List of drafts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  drafts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InvitationDraft'
+
+  /workspaces/{workspace_id}/invitations/drafts/{draft_id}:
+    get:
+      tags: [Invitations]
+      summary: Get draft
+      operationId: getDraft
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Draft data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationDraft'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Invitations]
+      summary: Save draft
+      description: Auto-save invitation draft to Redis
+      operationId: saveDraft
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationDraftData'
+      responses:
+        '200':
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  draft_id:
+                    type: string
+                    format: uuid
+                  saved_at:
+                    type: string
+                    format: date-time
+                  expires_at:
+                    type: string
+                    format: date-time
+
+    delete:
+      tags: [Invitations]
+      summary: Delete draft
+      operationId: deleteDraft
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Draft deleted
+
+  # ============================================================================
+  # PUBLIC PORTAL ENDPOINTS (Guest-facing)
+  # ============================================================================
+  /portal/invitations/{slug}:
+    get:
+      tags: [Public Portal]
+      summary: View public invitation
+      description: |
+        Get public invitation details by slug.
+        No authentication required. Rate limited.
+      operationId: getPublicInvitation
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          description: Invitation slug
+          schema:
+            type: string
+        - name: password
+          in: query
+          description: Password for protected invitations
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicInvitation'
+        '401':
+          description: Password required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: PASSWORD_REQUIRED
+                  password_protected:
+                    type: boolean
+                    example: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Invitation expired or deleted
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /portal/i/{token}:
+    get:
+      tags: [Public Portal]
+      summary: View invitation by token
+      description: Access invitation via share link token
+      operationId: getInvitationByToken
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicInvitation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /portal/invitations/{slug}/rsvp:
+    post:
+      tags: [Public Portal]
+      summary: Submit RSVP
+      description: |
+        Submit guest RSVP response.
+        Rate limited to 100 requests/hour per IP.
+      operationId: submitRSVP
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cf-turnstile-response
+          in: header
+          description: Cloudflare Turnstile token (if enabled)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitRSVPRequest'
+      responses:
+        '201':
+          description: RSVP submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rsvp_id:
+                    type: string
+                    format: uuid
+                  message:
+                    type: string
+                    example: Thank you for your RSVP! A confirmation email has been sent.
+                  edit_url:
+                    type: string
+                    description: URL to edit RSVP (sent via email)
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Already RSVP'd with this email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: ALREADY_RSVPD
+                  message:
+                    type: string
+                    example: You have already RSVP'd. Check your email for the edit link.
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /portal/invitations/{slug}/rsvp/{rsvp_id}:
+    patch:
+      tags: [Public Portal]
+      summary: Update RSVP
+      description: Update existing RSVP using edit token
+      operationId: updateRSVPPublic
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: rsvp_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: edit_token
+          in: query
+          required: true
+          description: Edit token from confirmation email
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRSVPRequest'
+      responses:
+        '200':
+          description: RSVP updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationRSVP'
+        '401':
+          description: Invalid or expired edit token
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /portal/invitations/{slug}/calendar:
+    get:
+      tags: [Public Portal]
+      summary: Download calendar file
+      description: Download .ics calendar file for the event
+      operationId: downloadPublicCalendar
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: iCalendar file
+          content:
+            text/calendar:
+              schema:
+                type: string
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ==============================================================================
+# COMPONENTS
+# ==============================================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      description: Workspace UUID
+      schema:
+        type: string
+        format: uuid
+
+    InvitationId:
+      name: invitation_id
+      in: path
+      required: true
+      description: Invitation UUID
+      schema:
+        type: string
+        format: uuid
+
+    TemplateId:
+      name: template_id
+      in: path
+      required: true
+      description: Template UUID
+      schema:
+        type: string
+        format: uuid
+
+    RSVPId:
+      name: rsvp_id
+      in: path
+      required: true
+      description: RSVP UUID
+      schema:
+        type: string
+        format: uuid
+
+    Page:
+      name: page
+      in: query
+      description: Page number (1-indexed)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    Limit:
+      name: limit
+      in: query
+      description: Items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    # Enums
+    InvitationStatus:
+      type: string
+      enum: [draft, published, archived, deleted]
+
+    EventType:
+      type: string
+      enum: [wedding, birthday, anniversary, baby_shower, engagement, festival, corporate, other]
+
+    RSVPStatus:
+      type: string
+      enum: [pending, confirmed, declined, maybe, cancelled]
+
+    RSVPSource:
+      type: string
+      enum: [web, qr_code, whatsapp, email_link, personal_link]
+
+    # Template
+    TemplateLayout:
+      type: object
+      properties:
+        sections:
+          type: array
+          items:
+            type: string
+        fonts:
+          type: object
+          additionalProperties:
+            type: string
+        colors:
+          type: object
+          additionalProperties:
+            type: string
+        positions:
+          type: object
+        assets:
+          type: object
+          additionalProperties:
+            type: string
+
+    InvitationTemplate:
+      type: object
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        category:
+          $ref: '#/components/schemas/EventType'
+        subcategory:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        layout:
+          $ref: '#/components/schemas/TemplateLayout'
+        content_i18n:
+          type: object
+          additionalProperties:
+            type: object
+        supported_languages:
+          type: array
+          items:
+            type: string
+        preview_image_url:
+          type: string
+          format: uri
+        thumbnail_url:
+          type: string
+          format: uri
+        is_active:
+          type: boolean
+        is_premium:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    # Venue
+    VenueInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+          default: India
+        postal_code:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        map_url:
+          type: string
+          format: uri
+
+    # RSVP Settings
+    RSVPSettings:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        deadline:
+          type: string
+          format: date-time
+        max_party_size:
+          type: integer
+          default: 10
+        collect_dietary:
+          type: boolean
+          default: false
+        collect_phone:
+          type: boolean
+          default: false
+        custom_questions:
+          type: array
+          items:
+            type: object
+            properties:
+              question:
+                type: string
+              type:
+                type: string
+                enum: [text, select, checkbox]
+              options:
+                type: array
+                items:
+                  type: string
+              required:
+                type: boolean
+
+    # Invitation
+    Invitation:
+      type: object
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        template_id:
+          type: string
+          format: uuid
+        customization:
+          type: object
+        title:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        event_type:
+          $ref: '#/components/schemas/EventType'
+        event_datetime:
+          type: string
+          format: date-time
+        event_end_datetime:
+          type: string
+          format: date-time
+        event_timezone:
+          type: string
+          default: Asia/Kolkata
+        venue:
+          $ref: '#/components/schemas/VenueInfo'
+        host_names:
+          type: array
+          items:
+            type: string
+        host_contact_phone:
+          type: string
+        host_contact_email:
+          type: string
+          format: email
+        rsvp_settings:
+          $ref: '#/components/schemas/RSVPSettings'
+        cover_image_url:
+          type: string
+          format: uri
+        primary_language:
+          type: string
+          default: en-IN
+        secondary_language:
+          type: string
+        share_link_id:
+          type: string
+          format: uuid
+        public_url:
+          type: string
+          format: uri
+        password_protected:
+          type: boolean
+        pin_protected:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/InvitationStatus'
+        published_at:
+          type: string
+          format: date-time
+        auto_delete_enabled:
+          type: boolean
+        auto_delete_days:
+          type: integer
+        view_count:
+          type: integer
+        rsvp_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        created_by_user_id:
+          type: string
+          format: uuid
+
+    InvitationSummary:
+      type: object
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        event_type:
+          $ref: '#/components/schemas/EventType'
+        event_datetime:
+          type: string
+          format: date-time
+        venue_city:
+          type: string
+        cover_image_url:
+          type: string
+          format: uri
+        status:
+          $ref: '#/components/schemas/InvitationStatus'
+        public_url:
+          type: string
+          format: uri
+        view_count:
+          type: integer
+        rsvp_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    PublicInvitation:
+      type: object
+      description: Public-facing invitation (limited fields)
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        event_type:
+          $ref: '#/components/schemas/EventType'
+        event_datetime:
+          type: string
+          format: date-time
+        event_end_datetime:
+          type: string
+          format: date-time
+        event_timezone:
+          type: string
+        venue:
+          $ref: '#/components/schemas/VenueInfo'
+        host_names:
+          type: array
+          items:
+            type: string
+        cover_image_url:
+          type: string
+          format: uri
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+                format: uri
+              thumbnail_url:
+                type: string
+                format: uri
+        template:
+          $ref: '#/components/schemas/InvitationTemplate'
+        customization:
+          type: object
+        primary_language:
+          type: string
+        secondary_language:
+          type: string
+        rsvp_enabled:
+          type: boolean
+        rsvp_deadline:
+          type: string
+          format: date-time
+        rsvp_collect_dietary:
+          type: boolean
+        rsvp_collect_phone:
+          type: boolean
+        rsvp_custom_questions:
+          type: array
+          items:
+            type: object
+
+    # Request/Response schemas
+    CreateInvitationRequest:
+      type: object
+      required: [title, event_datetime]
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 300
+        description:
+          type: string
+        event_type:
+          $ref: '#/components/schemas/EventType'
+        event_datetime:
+          type: string
+          format: date-time
+        event_end_datetime:
+          type: string
+          format: date-time
+        event_timezone:
+          type: string
+          default: Asia/Kolkata
+        venue:
+          $ref: '#/components/schemas/VenueInfo'
+        host_names:
+          type: array
+          items:
+            type: string
+        host_contact_phone:
+          type: string
+        host_contact_email:
+          type: string
+          format: email
+        rsvp_settings:
+          $ref: '#/components/schemas/RSVPSettings'
+        primary_language:
+          type: string
+          default: en-IN
+        secondary_language:
+          type: string
+
+    UpdateInvitationRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 300
+        description:
+          type: string
+        event_datetime:
+          type: string
+          format: date-time
+        event_end_datetime:
+          type: string
+          format: date-time
+        event_timezone:
+          type: string
+        venue:
+          $ref: '#/components/schemas/VenueInfo'
+        host_names:
+          type: array
+          items:
+            type: string
+        host_contact_phone:
+          type: string
+        host_contact_email:
+          type: string
+          format: email
+        rsvp_settings:
+          $ref: '#/components/schemas/RSVPSettings'
+        customization:
+          type: object
+        cover_image_url:
+          type: string
+          format: uri
+        primary_language:
+          type: string
+        secondary_language:
+          type: string
+        password_protected:
+          type: boolean
+        password:
+          type: string
+        pin_protected:
+          type: boolean
+        pin:
+          type: string
+        auto_delete_enabled:
+          type: boolean
+        auto_delete_days:
+          type: integer
+          minimum: 1
+          maximum: 365
+
+    # RSVP
+    InvitationRSVP:
+      type: object
+      properties:
+        rsvp_id:
+          type: string
+          format: uuid
+        invitation_id:
+          type: string
+          format: uuid
+        guest_name:
+          type: string
+        guest_email:
+          type: string
+          format: email
+        guest_phone:
+          type: string
+        attending:
+          type: boolean
+        party_size:
+          type: integer
+        party_names:
+          type: array
+          items:
+            type: string
+        dietary_preferences:
+          type: string
+        message:
+          type: string
+        custom_answers:
+          type: object
+        source:
+          $ref: '#/components/schemas/RSVPSource'
+        status:
+          $ref: '#/components/schemas/RSVPStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SubmitRSVPRequest:
+      type: object
+      required: [guest_name, guest_email, attending]
+      properties:
+        guest_name:
+          type: string
+          maxLength: 200
+        guest_email:
+          type: string
+          format: email
+        guest_phone:
+          type: string
+        attending:
+          type: boolean
+        party_size:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 1
+        party_names:
+          type: array
+          items:
+            type: string
+        dietary_preferences:
+          type: string
+        message:
+          type: string
+          maxLength: 1000
+        custom_answers:
+          type: object
+
+    UpdateRSVPRequest:
+      type: object
+      properties:
+        attending:
+          type: boolean
+        party_size:
+          type: integer
+          minimum: 1
+          maximum: 20
+        party_names:
+          type: array
+          items:
+            type: string
+        dietary_preferences:
+          type: string
+        message:
+          type: string
+          maxLength: 1000
+        custom_answers:
+          type: object
+
+    RSVPListResponse:
+      type: object
+      properties:
+        rsvps:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvitationRSVP'
+        stats:
+          type: object
+          properties:
+            total:
+              type: integer
+            attending:
+              type: integer
+            not_attending:
+              type: integer
+            pending:
+              type: integer
+            total_party_size:
+              type: integer
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    # Check-in
+    InvitationCheckin:
+      type: object
+      properties:
+        checkin_id:
+          type: string
+          format: uuid
+        invitation_id:
+          type: string
+          format: uuid
+        rsvp_id:
+          type: string
+          format: uuid
+        guest_name:
+          type: string
+        party_size_checked_in:
+          type: integer
+        verification_method:
+          type: string
+        checked_in_by_user_id:
+          type: string
+          format: uuid
+        checked_in_at:
+          type: string
+          format: date-time
+        notes:
+          type: string
+
+    CreateCheckinRequest:
+      type: object
+      required: [guest_name]
+      properties:
+        rsvp_id:
+          type: string
+          format: uuid
+        guest_name:
+          type: string
+        party_size_checked_in:
+          type: integer
+          default: 1
+        verification_method:
+          type: string
+          enum: [qr_scan, manual, name_lookup, token]
+          default: manual
+        qr_token:
+          type: string
+        notes:
+          type: string
+
+    # Draft
+    InvitationDraft:
+      type: object
+      properties:
+        draft_id:
+          type: string
+          format: uuid
+        data:
+          $ref: '#/components/schemas/InvitationDraftData'
+        saved_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    InvitationDraftData:
+      type: object
+      properties:
+        template_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        event_type:
+          $ref: '#/components/schemas/EventType'
+        event_datetime:
+          type: string
+          format: date-time
+        venue:
+          $ref: '#/components/schemas/VenueInfo'
+        host_names:
+          type: array
+          items:
+            type: string
+        customization:
+          type: object
+        wizard_step:
+          type: integer
+          description: Current step in creation wizard
+
+    # Share Link
+    ShareLink:
+      type: object
+      properties:
+        link_id:
+          type: string
+          format: uuid
+        token:
+          type: string
+        slug:
+          type: string
+        url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+
+    # Common
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total_pages:
+          type: integer
+        total_items:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: UNAUTHORIZED
+            message: Authentication required
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: FORBIDDEN
+            message: You don't have permission to perform this action
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: NOT_FOUND
+            message: The requested resource was not found
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: VALIDATION_ERROR
+            message: Please correct the errors below
+            details:
+              - field: title
+                message: Title is required
+              - field: event_datetime
+                message: Event date must be in the future
+
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: RATE_LIMITED
+            message: Too many requests. Please try again later.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying

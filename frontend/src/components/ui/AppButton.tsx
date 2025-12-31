@@ -154,22 +154,23 @@ const variantStyles: Record<ButtonVariant, string> = {
   `,
 };
 
+// T131: WCAG 2.5.5 Target Size - minimum 44px for touch targets
 const sizeStyles: Record<ButtonSize, string> = {
   xs: 'btn-xs min-h-[28px]',
   sm: 'btn-sm min-h-[34px]',
   md: 'min-h-[42px]', // Default size from .btn
   lg: 'btn-lg min-h-[50px]',
   xl: 'btn-xl min-h-[58px]',
-  icon: 'btn-icon min-h-[42px] min-w-[42px]',
+  icon: 'btn-icon min-h-[44px] min-w-[44px]',
 };
 
 const iconSizeStyles: Record<ButtonSize, string> = {
   xs: 'btn-icon btn-xs min-h-[28px] min-w-[28px]',
   sm: 'btn-icon btn-sm min-h-[34px] min-w-[34px]',
-  md: 'btn-icon min-h-[42px] min-w-[42px]',
+  md: 'btn-icon min-h-[44px] min-w-[44px]',
   lg: 'btn-icon btn-lg min-h-[50px] min-w-[50px]',
   xl: 'btn-icon min-h-[58px] min-w-[58px]',
-  icon: 'btn-icon min-h-[42px] min-w-[42px]',
+  icon: 'btn-icon min-h-[44px] min-w-[44px]',
 };
 
 export const AppButton = forwardRef<HTMLButtonElement, AppButtonProps>(

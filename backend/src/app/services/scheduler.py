@@ -43,6 +43,7 @@ class SchedulerService:
         last_cleanup = datetime.min.replace(tzinfo=timezone.utc)
         last_trial_check = datetime.min.replace(tzinfo=timezone.utc)
         last_tagging_stats_refresh = datetime.min.replace(tzinfo=timezone.utc)
+        last_invitation_deletion = datetime.min.replace(tzinfo=timezone.utc)
 
         while self._running:
             try:
@@ -63,6 +64,14 @@ class SchedulerService:
                 if (now - last_tagging_stats_refresh).total_seconds() >= 300:
                     await self._schedule_tagging_stats_refresh()
                     last_tagging_stats_refresh = now
+
+                # Invitation auto-deletion: every 6 hours (T128, T129)
+                # - Deletes expired invitations past scheduled_deletion_at
+                # - Sends 3-day and 1-day warning notifications
+                if (now - last_invitation_deletion).total_seconds() >= 21600:
+                    await self._schedule_invitation_auto_deletion()
+                    await self._schedule_invitation_deletion_warnings()
+                    last_invitation_deletion = now
 
                 # Sleep for 1 minute between checks
                 await asyncio.sleep(60)
@@ -103,6 +112,45 @@ class SchedulerService:
             priority=TaskPriority.LOW,
         )
         logger.info("Scheduled tagging stats refresh", extra={"task_id": task_id})
+
+    async def _schedule_invitation_auto_deletion(self) -> None:
+        """Schedule invitation auto-deletion task.
+
+        Feature: 016-save-the-date
+        Task: T128 - Auto-deletion scheduler
+
+        Deletes invitations where scheduled_deletion_at has passed.
+        """
+        task_id = await enqueue_task(
+            task_type="auto_delete_expired_invitations",
+            payload={},
+            priority=TaskPriority.LOW,
+        )
+        logger.info("Scheduled invitation auto-deletion check", extra={"task_id": task_id})
+
+    async def _schedule_invitation_deletion_warnings(self) -> None:
+        """Schedule invitation pre-deletion warning tasks.
+
+        Feature: 016-save-the-date
+        Task: T129 - Pre-deletion warning notifications
+
+        FR-039: Sends 3-day and 1-day warnings before auto-deletion.
+        """
+        # 3-day warning
+        task_id_3d = await enqueue_task(
+            task_type="send_auto_delete_warnings",
+            payload={"days_until_deletion": 3},
+            priority=TaskPriority.NORMAL,
+        )
+        logger.info("Scheduled 3-day deletion warning check", extra={"task_id": task_id_3d})
+
+        # 1-day warning
+        task_id_1d = await enqueue_task(
+            task_type="send_auto_delete_warnings",
+            payload={"days_until_deletion": 1},
+            priority=TaskPriority.NORMAL,
+        )
+        logger.info("Scheduled 1-day deletion warning check", extra={"task_id": task_id_1d})
 
 
 # Global instance

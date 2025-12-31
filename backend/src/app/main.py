@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
     # This must happen before starting the worker
     import app.services.asset_processing_worker  # noqa: F401
     import app.services.face_detection_worker  # noqa: F401
+    import app.services.invitation_auto_deletion_service  # noqa: F401 (T128, T129)
 
     # Start background task worker and scheduler (only if not disabled)
     enable_worker = os.getenv("DISABLE_TASK_WORKER", "false").lower() != "true"

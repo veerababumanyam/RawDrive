@@ -418,6 +418,31 @@ class R2StorageService:
             # Re-raise other errors
             raise StorageError(f"Failed to check file existence: {e}", "CHECK_FAILED") from e
 
+    async def delete_object(self, object_key: str) -> None:
+        """Delete an object from R2 by key.
+
+        This generic delete method works with any object key.
+
+        Args:
+            object_key: Full object key path in R2
+
+        Raises:
+            StorageError: If deletion fails
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                self.executor,
+                lambda: self.s3_client.delete_object(
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                ),
+            )
+            logger.debug(f"Deleted object from R2: {object_key}")
+        except (ClientError, BotoCoreError) as e:
+            logger.error(f"Failed to delete object from R2: {e}")
+            raise StorageError(f"Deletion failed: {e}", "DELETE_FAILED") from e
+
 
 # Export singleton instance
 _r2_storage_service: Optional[R2StorageService] = None

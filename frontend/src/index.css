@@ -13,6 +13,20 @@
 @tailwind utilities;
 
 /* =============================================================================
+   GOOGLE FONTS - Regional Language Support for Digital Invitations
+   Feature: 016-save-the-date (Phase 9: Multi-Language Support)
+
+   Languages supported:
+   - English (Inter - default)
+   - Hindi (Noto Sans Devanagari)
+   - Tamil (Noto Sans Tamil)
+   - Telugu (Noto Sans Telugu)
+   - Kannada (Noto Sans Kannada)
+   - Malayalam (Noto Sans Malayalam)
+   ============================================================================= */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+Kannada:wght@400;500;600;700&family=Noto+Sans+Malayalam:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;500;600;700&display=swap');
+
+/* =============================================================================
    1. DESIGN TOKENS - CSS Custom Properties
    ============================================================================= */
 
@@ -160,6 +174,13 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-serif: 'Playfair Display', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
   --font-mono: 'Roboto Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* Regional Language Fonts - Feature: 016-save-the-date */
+  --font-hindi: 'Noto Sans Devanagari', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-tamil: 'Noto Sans Tamil', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-telugu: 'Noto Sans Telugu', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-kannada: 'Noto Sans Kannada', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-malayalam: 'Noto Sans Malayalam', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
   /* Font Sizes */
   --text-xs: 0.75rem;      /* 12px */
@@ -468,6 +489,22 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* Regional Language Font Classes - Feature: 016-save-the-date */
+.font-lang-en { font-family: var(--font-sans); }
+.font-lang-hi { font-family: var(--font-hindi); }
+.font-lang-ta { font-family: var(--font-tamil); }
+.font-lang-te { font-family: var(--font-telugu); }
+.font-lang-kn { font-family: var(--font-kannada); }
+.font-lang-ml { font-family: var(--font-malayalam); }
+
+/* Language-specific container for invitations */
+[data-lang="en"] { font-family: var(--font-sans); }
+[data-lang="hi"] { font-family: var(--font-hindi); }
+[data-lang="ta"] { font-family: var(--font-tamil); }
+[data-lang="te"] { font-family: var(--font-telugu); }
+[data-lang="kn"] { font-family: var(--font-kannada); }
+[data-lang="ml"] { font-family: var(--font-malayalam); }
 
 /* Heading Styles */
 .heading-1 {
