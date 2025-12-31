@@ -23,6 +23,8 @@ import type { InvitationTemplate, TemplateCategory } from '@/types/invitations';
 // ---------------------------------------------------------------------------
 
 interface TemplateGalleryProps {
+  /** Workspace ID for API calls */
+  workspaceId: string;
   /** Currently selected template ID */
   selectedTemplateId?: string;
   /** Callback when a template is selected */
@@ -143,6 +145,7 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
 // ---------------------------------------------------------------------------
 
 export const TemplateGallery: React.FC<TemplateGalleryProps> = ({
+  workspaceId,
   selectedTemplateId,
   onSelect,
   initialCategory,
@@ -156,14 +159,15 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({
 
   // Fetch templates
   const { data: templatesData, isLoading, error } = useQuery({
-    queryKey: ['templates', category === 'all' ? undefined : category],
+    queryKey: ['templates', workspaceId, category === 'all' ? undefined : category],
     queryFn: () =>
-      invitationService.listTemplates({
+      invitationService.listTemplates(workspaceId, {
         category: category === 'all' ? undefined : category,
         includeSystem: true,
         includePremium: showPremium,
         limit: 100,
       }),
+    enabled: !!workspaceId,
   });
 
   // Filter templates by search

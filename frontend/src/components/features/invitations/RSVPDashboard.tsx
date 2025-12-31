@@ -44,6 +44,7 @@ import { useToast } from '@/hooks/useToast';
 // ---------------------------------------------------------------------------
 
 interface RSVPDashboardProps {
+  workspaceId: string;
   invitationId: string;
   className?: string;
 }
@@ -190,6 +191,7 @@ const RSVPRow: React.FC<RSVPRowProps> = ({ rsvp, onDelete, isDeleting }) => {
 // ---------------------------------------------------------------------------
 
 export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
+  workspaceId,
   invitationId,
   className = '',
 }) => {
@@ -207,15 +209,15 @@ export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
   // Queries
   // ---------------------------------------------------------------------------
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['invitation-rsvp-stats', invitationId],
-    queryFn: () => invitationService.getRSVPStats(invitationId),
+  const { data: stats } = useQuery({
+    queryKey: ['invitation-rsvp-stats', workspaceId, invitationId],
+    queryFn: () => invitationService.getRSVPStats(workspaceId, invitationId),
   });
 
   // Check-in stats (T119)
   const { data: checkinStats } = useQuery({
-    queryKey: ['checkin-stats', invitationId],
-    queryFn: () => invitationService.getCheckinStats(invitationId),
+    queryKey: ['checkin-stats', workspaceId, invitationId],
+    queryFn: () => invitationService.getCheckinStats(workspaceId, invitationId),
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
@@ -226,9 +228,9 @@ export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
   }, [statusFilter]);
 
   const { data: rsvpsData, isLoading: rsvpsLoading, refetch } = useQuery({
-    queryKey: ['invitation-rsvps', invitationId, page, searchQuery, statusFilter],
+    queryKey: ['invitation-rsvps', workspaceId, invitationId, page, searchQuery, statusFilter],
     queryFn: () =>
-      invitationService.listRSVPs(invitationId, {
+      invitationService.listRSVPs(workspaceId, invitationId, {
         page,
         limit,
         attending: attendingFilter,
@@ -242,10 +244,10 @@ export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
 
   const deleteMutation = useMutation({
     mutationFn: (rsvpId: string) =>
-      invitationService.deleteRSVP(invitationId, rsvpId),
+      invitationService.deleteRSVP(workspaceId, invitationId, rsvpId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invitation-rsvps', invitationId] });
-      queryClient.invalidateQueries({ queryKey: ['invitation-rsvp-stats', invitationId] });
+      queryClient.invalidateQueries({ queryKey: ['invitation-rsvps', workspaceId, invitationId] });
+      queryClient.invalidateQueries({ queryKey: ['invitation-rsvp-stats', workspaceId, invitationId] });
       showToast('RSVP deleted successfully', 'success');
     },
     onError: () => {
@@ -280,7 +282,7 @@ export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
 
   const handleExportCSV = async () => {
     try {
-      const blob = await invitationService.exportRSVPsToCSV(invitationId);
+      const blob = await invitationService.exportRSVPsToCSV(workspaceId, invitationId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

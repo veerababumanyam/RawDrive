@@ -70,6 +70,7 @@ export interface WizardData {
 }
 
 interface InvitationWizardProps {
+  workspaceId: string;
   currentStep: number;
   data: WizardData;
   onNext: (stepData: Partial<WizardData>) => void;
@@ -546,6 +547,7 @@ const Step1EventDetails: React.FC<Step1Props> = ({
 // ---------------------------------------------------------------------------
 
 interface Step2Props {
+  workspaceId: string;
   data: WizardData;
   onChange: (data: Partial<WizardData>) => void;
   onNext: () => void;
@@ -553,6 +555,7 @@ interface Step2Props {
 }
 
 const Step2TemplateSelection: React.FC<Step2Props> = ({
+  workspaceId,
   data,
   onChange,
   onNext,
@@ -564,14 +567,15 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
 
   // Fetch templates
   const { data: templatesData, isLoading } = useQuery({
-    queryKey: ['templates', selectedCategory],
+    queryKey: ['templates', workspaceId, selectedCategory],
     queryFn: () =>
-      invitationService.listTemplates({
+      invitationService.listTemplates(workspaceId, {
         category: selectedCategory,
         includeSystem: true,
         includePremium: true,
         limit: 50,
       }),
+    enabled: !!workspaceId,
   });
 
   const templates = templatesData?.data || [];
@@ -1140,6 +1144,7 @@ const Step3RSVPSettings: React.FC<Step3Props> = ({
 // ---------------------------------------------------------------------------
 
 export const InvitationWizard: React.FC<InvitationWizardProps> = ({
+  workspaceId,
   currentStep,
   data,
   onNext,
@@ -1240,6 +1245,7 @@ export const InvitationWizard: React.FC<InvitationWizardProps> = ({
       case 2:
         return (
           <Step2TemplateSelection
+            workspaceId={workspaceId}
             data={data}
             onChange={onDataChange}
             onNext={handleStep2Next}
@@ -1261,6 +1267,7 @@ export const InvitationWizard: React.FC<InvitationWizardProps> = ({
     }
   }, [
     currentStep,
+    workspaceId,
     data,
     onDataChange,
     handleStep1Next,

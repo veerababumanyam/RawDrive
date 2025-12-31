@@ -7,7 +7,7 @@
  * Feature: 016-save-the-date
  */
 
-import apiClient from './api';
+import apiClient, { ApiResponse } from './api';
 import type {
   Invitation,
   InvitationListResponse,
@@ -47,7 +47,6 @@ import type {
   AccessInvitationResponse,
   GenerateICSRequest,
   ICSResponse,
-  InvitationEvent,
   // Check-in scanner types (T118)
   ScanCheckinRequest,
   ManualCheckinRequest,
@@ -57,6 +56,20 @@ import type {
 } from '@/types/invitations';
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Helper to unwrap API responses and throw on errors
+ */
+function unwrapResponse<T>(response: ApiResponse<T>, errorMessage: string): T {
+  if (response.error) {
+    throw new Error(response.error.message || errorMessage);
+  }
+  return response.data!;
+}
+
+// ============================================================================
 // Template Operations
 // ============================================================================
 
@@ -64,13 +77,16 @@ import type {
  * List available templates for the workspace.
  * Includes system templates and workspace-specific templates.
  */
-export async function listTemplates(params?: {
-  category?: string;
-  includeSystem?: boolean;
-  includePremium?: boolean;
-  page?: number;
-  limit?: number;
-}): Promise<TemplateListResponse> {
+export async function listTemplates(
+  workspaceId: string,
+  params?: {
+    category?: string;
+    includeSystem?: boolean;
+    includePremium?: boolean;
+    page?: number;
+    limit?: number;
+  }
+): Promise<TemplateListResponse> {
   const queryParams = new URLSearchParams();
   if (params?.category) queryParams.set('category', params.category);
   if (params?.includeSystem !== undefined)
@@ -81,40 +97,61 @@ export async function listTemplates(params?: {
   if (params?.limit) queryParams.set('limit', String(params.limit));
 
   const query = queryParams.toString();
-  return apiClient.get(`/v1/invitations/templates${query ? `?${query}` : ''}`);
+  const response = await apiClient.get<TemplateListResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/templates${query ? `?${query}` : ''}`
+  );
+  return unwrapResponse(response, 'Failed to fetch templates');
 }
 
 /**
  * Get a specific template by ID.
  */
-export async function getTemplate(templateId: string): Promise<InvitationTemplate> {
-  return apiClient.get(`/v1/invitations/templates/${templateId}`);
+export async function getTemplate(workspaceId: string, templateId: string): Promise<InvitationTemplate> {
+  const response = await apiClient.get<InvitationTemplate>(
+    `/v1/workspaces/${workspaceId}/invitations/templates/${templateId}`
+  );
+  return unwrapResponse(response, 'Failed to fetch template');
 }
 
 /**
  * Create a custom template for the workspace.
  */
 export async function createTemplate(
+  workspaceId: string,
   data: CreateTemplateRequest
 ): Promise<InvitationTemplate> {
-  return apiClient.post('/v1/invitations/templates', data);
+  const response = await apiClient.post<InvitationTemplate>(
+    `/v1/workspaces/${workspaceId}/invitations/templates`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to create template');
 }
 
 /**
  * Update a workspace template.
  */
 export async function updateTemplate(
+  workspaceId: string,
   templateId: string,
   data: UpdateTemplateRequest
 ): Promise<InvitationTemplate> {
-  return apiClient.patch(`/v1/invitations/templates/${templateId}`, data);
+  const response = await apiClient.patch<InvitationTemplate>(
+    `/v1/workspaces/${workspaceId}/invitations/templates/${templateId}`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to update template');
 }
 
 /**
  * Delete a workspace template.
  */
-export async function deleteTemplate(templateId: string): Promise<void> {
-  return apiClient.delete(`/v1/invitations/templates/${templateId}`);
+export async function deleteTemplate(workspaceId: string, templateId: string): Promise<void> {
+  const response = await apiClient.delete<void>(
+    `/v1/workspaces/${workspaceId}/invitations/templates/${templateId}`
+  );
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to delete template');
+  }
 }
 
 // ============================================================================
@@ -124,103 +161,151 @@ export async function deleteTemplate(templateId: string): Promise<void> {
 /**
  * List invitations for the current workspace.
  */
-export async function listInvitations(params?: {
-  status?: string;
-  eventType?: string;
-  upcomingOnly?: boolean;
-  page?: number;
-  limit?: number;
-}): Promise<InvitationListResponse> {
+export async function listInvitations(
+  workspaceId: string,
+  params?: {
+    status?: string;
+    event_type?: string;
+    search?: string;
+    upcomingOnly?: boolean;
+    page?: number;
+    limit?: number;
+  }
+): Promise<InvitationListResponse> {
   const queryParams = new URLSearchParams();
   if (params?.status) queryParams.set('status', params.status);
-  if (params?.eventType) queryParams.set('event_type', params.eventType);
+  if (params?.event_type) queryParams.set('event_type', params.event_type);
+  if (params?.search) queryParams.set('search', params.search);
   if (params?.upcomingOnly) queryParams.set('upcoming_only', 'true');
   if (params?.page) queryParams.set('page', String(params.page));
   if (params?.limit) queryParams.set('limit', String(params.limit));
 
   const query = queryParams.toString();
-  return apiClient.get(`/v1/invitations${query ? `?${query}` : ''}`);
+  const response = await apiClient.get<InvitationListResponse>(
+    `/v1/workspaces/${workspaceId}/invitations${query ? `?${query}` : ''}`
+  );
+  return unwrapResponse(response, 'Failed to fetch invitations');
 }
 
 /**
  * Get a specific invitation by ID.
  */
-export async function getInvitation(invitationId: string): Promise<Invitation> {
-  return apiClient.get(`/v1/invitations/${invitationId}`);
+export async function getInvitation(workspaceId: string, invitationId: string): Promise<Invitation> {
+  const response = await apiClient.get<Invitation>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}`
+  );
+  return unwrapResponse(response, 'Failed to fetch invitation');
 }
 
 /**
  * Create a new invitation.
  */
 export async function createInvitation(
+  workspaceId: string,
   data: CreateInvitationRequest
 ): Promise<Invitation> {
-  return apiClient.post('/v1/invitations', data);
+  const response = await apiClient.post<Invitation>(
+    `/v1/workspaces/${workspaceId}/invitations`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to create invitation');
 }
 
 /**
  * Update an invitation.
  */
 export async function updateInvitation(
+  workspaceId: string,
   invitationId: string,
   data: UpdateInvitationRequest
 ): Promise<Invitation> {
-  return apiClient.patch(`/v1/invitations/${invitationId}`, data);
+  const response = await apiClient.patch<Invitation>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to update invitation');
 }
 
 /**
  * Publish an invitation (make it publicly accessible).
  */
-export async function publishInvitation(invitationId: string): Promise<Invitation> {
-  return apiClient.post(`/v1/invitations/${invitationId}/publish`, {});
+export async function publishInvitation(workspaceId: string, invitationId: string): Promise<Invitation> {
+  const response = await apiClient.post<Invitation>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/publish`,
+    {}
+  );
+  return unwrapResponse(response, 'Failed to publish invitation');
 }
 
 /**
  * Unpublish an invitation (back to draft).
  */
-export async function unpublishInvitation(invitationId: string): Promise<Invitation> {
-  return apiClient.post(`/v1/invitations/${invitationId}/unpublish`, {});
+export async function unpublishInvitation(workspaceId: string, invitationId: string): Promise<Invitation> {
+  const response = await apiClient.post<Invitation>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/unpublish`,
+    {}
+  );
+  return unwrapResponse(response, 'Failed to unpublish invitation');
 }
 
 /**
  * Archive an invitation.
  */
-export async function archiveInvitation(invitationId: string): Promise<Invitation> {
-  return apiClient.post(`/v1/invitations/${invitationId}/archive`, {});
+export async function archiveInvitation(workspaceId: string, invitationId: string): Promise<Invitation> {
+  const response = await apiClient.post<Invitation>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/archive`,
+    {}
+  );
+  return unwrapResponse(response, 'Failed to archive invitation');
 }
 
 /**
  * Delete an invitation (soft delete).
  */
-export async function deleteInvitation(invitationId: string): Promise<void> {
-  return apiClient.delete(`/v1/invitations/${invitationId}`);
+export async function deleteInvitation(workspaceId: string, invitationId: string): Promise<void> {
+  const response = await apiClient.delete<void>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}`
+  );
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to delete invitation');
+  }
 }
 
 /**
  * Duplicate an invitation.
  * Creates a copy with all content except RSVPs and guests.
+ * @param workspaceId - The workspace ID
  * @param invitationId - The source invitation to duplicate
  * @param title - Optional custom title (defaults to "Copy of <original>")
  */
 export async function duplicateInvitation(
+  workspaceId: string,
   invitationId: string,
   title?: string
 ): Promise<Invitation> {
-  return apiClient.post(`/v1/invitations/${invitationId}/duplicate`, title ? { title } : {});
+  const response = await apiClient.post<Invitation>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/duplicate`,
+    title ? { title } : {}
+  );
+  return unwrapResponse(response, 'Failed to duplicate invitation');
 }
 
 /**
  * Update notification settings for an invitation.
+ * @param workspaceId - The workspace ID
  * @param invitationId - The invitation ID
  * @param notificationPreference - One of 'immediate', 'daily_digest', 'disabled'
  */
 export async function updateNotificationSettings(
+  workspaceId: string,
   invitationId: string,
   notificationPreference: 'immediate' | 'daily_digest' | 'disabled'
 ): Promise<{ notification_preference: string; message: string }> {
-  return apiClient.patch(`/v1/invitations/${invitationId}/notification-settings`, {
-    notification_preference: notificationPreference,
-  });
+  const response = await apiClient.patch<{ notification_preference: string; message: string }>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/notification-settings`,
+    { notification_preference: notificationPreference }
+  );
+  return unwrapResponse(response, 'Failed to update notification settings');
 }
 
 // ============================================================================
@@ -231,11 +316,15 @@ export async function updateNotificationSettings(
  * List images for an invitation.
  */
 export async function listInvitationImages(
+  workspaceId: string,
   invitationId: string,
   purpose?: string
 ): Promise<InvitationImagesResponse> {
   const query = purpose ? `?purpose=${purpose}` : '';
-  return apiClient.get(`/v1/invitations/${invitationId}/images${query}`);
+  const response = await apiClient.get<InvitationImagesResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/images${query}`
+  );
+  return unwrapResponse(response, 'Failed to fetch invitation images');
 }
 
 /**
@@ -243,6 +332,7 @@ export async function listInvitationImages(
  * Returns presigned URL for direct upload.
  */
 export async function createImageUpload(
+  workspaceId: string,
   invitationId: string,
   data: UploadInvitationImageRequest & {
     filename: string;
@@ -254,37 +344,60 @@ export async function createImageUpload(
   uploadUrl: string;
   headers: Record<string, string>;
 }> {
-  return apiClient.post(`/v1/invitations/${invitationId}/images/upload`, data);
+  const response = await apiClient.post<{
+    imageId: string;
+    uploadUrl: string;
+    headers: Record<string, string>;
+  }>(`/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/upload`, data);
+  return unwrapResponse(response, 'Failed to create image upload');
 }
 
 /**
  * Commit an image upload after direct upload completes.
  */
 export async function commitImageUpload(
+  workspaceId: string,
   invitationId: string,
   imageId: string
 ): Promise<InvitationImage> {
-  return apiClient.post(`/v1/invitations/${invitationId}/images/${imageId}/commit`, {});
+  const response = await apiClient.post<InvitationImage>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/${imageId}/commit`,
+    {}
+  );
+  return unwrapResponse(response, 'Failed to commit image upload');
 }
 
 /**
  * Delete an image from an invitation.
  */
 export async function deleteInvitationImage(
+  workspaceId: string,
   invitationId: string,
   imageId: string
 ): Promise<void> {
-  return apiClient.delete(`/v1/invitations/${invitationId}/images/${imageId}`);
+  const response = await apiClient.delete<void>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/${imageId}`
+  );
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to delete image');
+  }
 }
 
 /**
  * Reorder images for an invitation.
  */
 export async function reorderInvitationImages(
+  workspaceId: string,
   invitationId: string,
   data: ReorderImagesRequest
 ): Promise<void> {
-  return apiClient.post(`/v1/invitations/${invitationId}/images/reorder`, data);
+  const response = await apiClient.post<void>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/reorder`,
+    data
+  );
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to reorder images');
+  }
 }
 
 // ============================================================================
@@ -295,6 +408,7 @@ export async function reorderInvitationImages(
  * List guests for an invitation.
  */
 export async function listGuests(
+  workspaceId: string,
   invitationId: string,
   params?: {
     groupName?: string;
@@ -308,82 +422,114 @@ export async function listGuests(
   if (params?.limit) queryParams.set('limit', String(params.limit));
 
   const query = queryParams.toString();
-  return apiClient.get(`/v1/invitations/${invitationId}/guests${query ? `?${query}` : ''}`);
+  const response = await apiClient.get<GuestListResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests${query ? `?${query}` : ''}`
+  );
+  return unwrapResponse(response, 'Failed to fetch guests');
 }
 
 /**
  * Add a single guest to the invitation.
  */
 export async function addGuest(
+  workspaceId: string,
   invitationId: string,
   data: AddGuestRequest
 ): Promise<InvitationGuest> {
-  return apiClient.post(`/v1/invitations/${invitationId}/guests`, data);
+  const response = await apiClient.post<InvitationGuest>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to add guest');
 }
 
 /**
  * Add multiple guests at once.
  */
 export async function bulkAddGuests(
+  workspaceId: string,
   invitationId: string,
   data: BulkAddGuestsRequest
 ): Promise<{ guests: InvitationGuest[]; addedCount: number }> {
-  return apiClient.post(`/v1/invitations/${invitationId}/guests/bulk`, data);
+  const response = await apiClient.post<{ guests: InvitationGuest[]; addedCount: number }>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/bulk`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to add guests');
 }
 
 /**
  * Update a guest.
  */
 export async function updateGuest(
+  workspaceId: string,
   invitationId: string,
   guestId: string,
   data: UpdateGuestRequest
 ): Promise<InvitationGuest> {
-  return apiClient.patch(`/v1/invitations/${invitationId}/guests/${guestId}`, data);
+  const response = await apiClient.patch<InvitationGuest>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/${guestId}`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to update guest');
 }
 
 /**
  * Delete a guest from the list.
  */
-export async function deleteGuest(invitationId: string, guestId: string): Promise<void> {
-  return apiClient.delete(`/v1/invitations/${invitationId}/guests/${guestId}`);
+export async function deleteGuest(workspaceId: string, invitationId: string, guestId: string): Promise<void> {
+  const response = await apiClient.delete<void>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/${guestId}`
+  );
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to delete guest');
+  }
 }
 
 /**
  * Send invitations to guests.
  */
 export async function sendInvitations(
+  workspaceId: string,
   invitationId: string,
   data: SendInvitationsRequest
 ): Promise<SendInvitationsResponse> {
-  return apiClient.post(`/v1/invitations/${invitationId}/guests/send`, data);
+  const response = await apiClient.post<SendInvitationsResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/send`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to send invitations');
 }
 
 /**
  * Import guests from CSV file.
  */
 export async function importGuestsFromCSV(
+  workspaceId: string,
   invitationId: string,
   file: File
 ): Promise<{ guests: InvitationGuest[]; addedCount: number; errors: string[] }> {
   const formData = new FormData();
   formData.append('file', file);
 
-  return apiClient.post(`/v1/invitations/${invitationId}/guests/import`, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  const response = await apiClient.upload<{ guests: InvitationGuest[]; addedCount: number; errors: string[] }>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/import`,
+    formData
+  );
+  return unwrapResponse(response, 'Failed to import guests');
 }
 
 /**
  * Export guests to CSV.
  */
-export async function exportGuestsToCSV(invitationId: string): Promise<Blob> {
-  const response = await apiClient.get(`/v1/invitations/${invitationId}/guests/export`, {
-    responseType: 'blob',
-  });
-  return response;
+export async function exportGuestsToCSV(workspaceId: string, invitationId: string): Promise<Blob> {
+  const response = await apiClient.fetchRaw(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/export`
+  );
+  if (!response.ok) {
+    throw new Error('Failed to export guests');
+  }
+  return response.blob();
 }
 
 // ============================================================================
@@ -394,6 +540,7 @@ export async function exportGuestsToCSV(invitationId: string): Promise<Blob> {
  * List RSVPs for an invitation.
  */
 export async function listRSVPs(
+  workspaceId: string,
   invitationId: string,
   params?: {
     attending?: boolean;
@@ -410,49 +557,71 @@ export async function listRSVPs(
   if (params?.limit) queryParams.set('limit', String(params.limit));
 
   const query = queryParams.toString();
-  return apiClient.get(`/v1/invitations/${invitationId}/rsvps${query ? `?${query}` : ''}`);
+  const response = await apiClient.get<RSVPListResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps${query ? `?${query}` : ''}`
+  );
+  return unwrapResponse(response, 'Failed to fetch RSVPs');
 }
 
 /**
  * Get RSVP statistics for an invitation.
  */
-export async function getRSVPStats(invitationId: string): Promise<RSVPStats> {
-  return apiClient.get(`/v1/invitations/${invitationId}/rsvps/stats`);
+export async function getRSVPStats(workspaceId: string, invitationId: string): Promise<RSVPStats> {
+  const response = await apiClient.get<RSVPStats>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/stats`
+  );
+  return unwrapResponse(response, 'Failed to fetch RSVP stats');
 }
 
 /**
  * Get a specific RSVP by ID.
  */
-export async function getRSVP(invitationId: string, rsvpId: string): Promise<InvitationRSVP> {
-  return apiClient.get(`/v1/invitations/${invitationId}/rsvps/${rsvpId}`);
+export async function getRSVP(workspaceId: string, invitationId: string, rsvpId: string): Promise<InvitationRSVP> {
+  const response = await apiClient.get<InvitationRSVP>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/${rsvpId}`
+  );
+  return unwrapResponse(response, 'Failed to fetch RSVP');
 }
 
 /**
  * Update an RSVP (admin action).
  */
 export async function updateRSVP(
+  workspaceId: string,
   invitationId: string,
   rsvpId: string,
   data: UpdateRSVPRequest
 ): Promise<InvitationRSVP> {
-  return apiClient.patch(`/v1/invitations/${invitationId}/rsvps/${rsvpId}`, data);
+  const response = await apiClient.patch<InvitationRSVP>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/${rsvpId}`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to update RSVP');
 }
 
 /**
  * Delete an RSVP.
  */
-export async function deleteRSVP(invitationId: string, rsvpId: string): Promise<void> {
-  return apiClient.delete(`/v1/invitations/${invitationId}/rsvps/${rsvpId}`);
+export async function deleteRSVP(workspaceId: string, invitationId: string, rsvpId: string): Promise<void> {
+  const response = await apiClient.delete<void>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/${rsvpId}`
+  );
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to delete RSVP');
+  }
 }
 
 /**
  * Export RSVPs to CSV.
  */
-export async function exportRSVPsToCSV(invitationId: string): Promise<Blob> {
-  const response = await apiClient.get(`/v1/invitations/${invitationId}/rsvps/export`, {
-    responseType: 'blob',
-  });
-  return response;
+export async function exportRSVPsToCSV(workspaceId: string, invitationId: string): Promise<Blob> {
+  const response = await apiClient.fetchRaw(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/export`
+  );
+  if (!response.ok) {
+    throw new Error('Failed to export RSVPs');
+  }
+  return response.blob();
 }
 
 // ============================================================================
@@ -463,6 +632,7 @@ export async function exportRSVPsToCSV(invitationId: string): Promise<Blob> {
  * List check-ins for an invitation.
  */
 export async function listCheckins(
+  workspaceId: string,
   invitationId: string,
   params?: {
     page?: number;
@@ -474,66 +644,95 @@ export async function listCheckins(
   if (params?.limit) queryParams.set('limit', String(params.limit));
 
   const query = queryParams.toString();
-  return apiClient.get(
-    `/v1/invitations/${invitationId}/checkins${query ? `?${query}` : ''}`
+  const response = await apiClient.get<CheckinListResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins${query ? `?${query}` : ''}`
   );
+  return unwrapResponse(response, 'Failed to fetch check-ins');
 }
 
 /**
  * Get check-in statistics.
  */
-export async function getCheckinStats(invitationId: string): Promise<CheckinStats> {
-  return apiClient.get(`/v1/invitations/${invitationId}/checkins/stats`);
+export async function getCheckinStats(workspaceId: string, invitationId: string): Promise<CheckinStats> {
+  const response = await apiClient.get<CheckinStats>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/stats`
+  );
+  return unwrapResponse(response, 'Failed to fetch check-in stats');
 }
 
 /**
  * Create a check-in record.
  */
 export async function createCheckin(
+  workspaceId: string,
   invitationId: string,
   data: CheckinRequest
 ): Promise<InvitationCheckin> {
-  return apiClient.post(`/v1/invitations/${invitationId}/checkins`, data);
+  const response = await apiClient.post<InvitationCheckin>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to create check-in');
 }
 
 /**
  * Validate a QR code token for check-in (verify only, no check-in recorded).
  */
 export async function validateQRToken(
+  workspaceId: string,
   invitationId: string,
   data: QRTokenValidateRequest
 ): Promise<QRTokenValidateResponse> {
-  return apiClient.post(`/v1/invitations/${invitationId}/checkins/validate-qr`, data);
+  const response = await apiClient.post<QRTokenValidateResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/validate-qr`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to validate QR token');
 }
 
 /**
  * Verify check-in token and get guest info (T115).
  */
 export async function verifyCheckinToken(
+  workspaceId: string,
   invitationId: string,
   token: string
 ): Promise<CheckinVerifyResponse> {
-  return apiClient.post(`/v1/invitations/${invitationId}/checkins/verify`, { token });
+  const response = await apiClient.post<CheckinVerifyResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/verify`,
+    { token }
+  );
+  return unwrapResponse(response, 'Failed to verify check-in token');
 }
 
 /**
  * Scan QR code and record check-in (T116).
  */
 export async function scanAndCheckin(
+  workspaceId: string,
   invitationId: string,
   data: ScanCheckinRequest
 ): Promise<CheckinResultResponse> {
-  return apiClient.post(`/v1/invitations/${invitationId}/checkins`, data);
+  const response = await apiClient.post<CheckinResultResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to record check-in');
 }
 
 /**
  * Manual check-in by guest name lookup.
  */
 export async function manualCheckin(
+  workspaceId: string,
   invitationId: string,
   data: ManualCheckinRequest
 ): Promise<CheckinResultResponse> {
-  return apiClient.post(`/v1/invitations/${invitationId}/checkins/manual`, data);
+  const response = await apiClient.post<CheckinResultResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/manual`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to record manual check-in');
 }
 
 // ============================================================================
@@ -543,21 +742,28 @@ export async function manualCheckin(
 /**
  * Get comprehensive stats for an invitation.
  */
-export async function getInvitationStats(invitationId: string): Promise<InvitationStats> {
-  return apiClient.get(`/v1/invitations/${invitationId}/stats`);
+export async function getInvitationStats(workspaceId: string, invitationId: string): Promise<InvitationStats> {
+  const response = await apiClient.get<InvitationStats>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/stats`
+  );
+  return unwrapResponse(response, 'Failed to fetch invitation stats');
 }
 
 /**
  * Get workspace-level invitation statistics.
  */
-export async function getWorkspaceInvitationStats(): Promise<WorkspaceInvitationStats> {
-  return apiClient.get('/v1/invitations/stats');
+export async function getWorkspaceInvitationStats(workspaceId: string): Promise<WorkspaceInvitationStats> {
+  const response = await apiClient.get<WorkspaceInvitationStats>(
+    `/v1/workspaces/${workspaceId}/invitations/stats`
+  );
+  return unwrapResponse(response, 'Failed to fetch workspace invitation stats');
 }
 
 /**
  * List audit events for an invitation.
  */
 export async function listInvitationEvents(
+  workspaceId: string,
   invitationId: string,
   params?: {
     eventType?: string;
@@ -571,7 +777,10 @@ export async function listInvitationEvents(
   if (params?.limit) queryParams.set('limit', String(params.limit));
 
   const query = queryParams.toString();
-  return apiClient.get(`/v1/invitations/${invitationId}/events${query ? `?${query}` : ''}`);
+  const response = await apiClient.get<InvitationEventListResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/events${query ? `?${query}` : ''}`
+  );
+  return unwrapResponse(response, 'Failed to fetch invitation events');
 }
 
 // ============================================================================
@@ -582,23 +791,31 @@ export async function listInvitationEvents(
  * Generate ICS calendar file for an invitation.
  */
 export async function generateICS(
+  workspaceId: string,
   invitationId: string,
   data?: GenerateICSRequest
 ): Promise<ICSResponse> {
-  return apiClient.post(`/v1/invitations/${invitationId}/ics`, data || {});
+  const response = await apiClient.post<ICSResponse>(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/ics`,
+    data || {}
+  );
+  return unwrapResponse(response, 'Failed to generate ICS');
 }
 
 /**
  * Download ICS file (triggers browser download).
  * Uses the /calendar endpoint for direct binary download.
  */
-export async function downloadICS(invitationId: string): Promise<void> {
+export async function downloadICS(workspaceId: string, invitationId: string): Promise<void> {
   try {
     // Try direct binary download first (more efficient)
-    const blob = await apiClient.get<Blob>(
-      `/v1/invitations/${invitationId}/calendar`,
-      { responseType: 'blob' }
+    const blobResponse = await apiClient.fetchRaw(
+      `/v1/workspaces/${workspaceId}/invitations/${invitationId}/calendar`
     );
+    if (!blobResponse.ok) {
+      throw new Error('Failed to download ICS');
+    }
+    const blob = await blobResponse.blob();
 
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -610,7 +827,7 @@ export async function downloadICS(invitationId: string): Promise<void> {
     window.URL.revokeObjectURL(url);
   } catch {
     // Fallback to JSON endpoint
-    const response = await generateICS(invitationId);
+    const response = await generateICS(workspaceId, invitationId);
 
     // Create blob and trigger download
     const blob = new Blob([response.ics_content], { type: 'text/calendar;charset=utf-8' });
@@ -638,9 +855,16 @@ export async function accessPublicInvitation(
   credentials?: AccessInvitationRequest
 ): Promise<AccessInvitationResponse> {
   if (credentials) {
-    return apiClient.post(`/v1/public/invitations/${slug}/access`, credentials);
+    const response = await apiClient.post<AccessInvitationResponse>(
+      `/v1/public/invitations/${slug}/access`,
+      credentials
+    );
+    return unwrapResponse(response, 'Failed to access invitation');
   }
-  return apiClient.get(`/v1/public/invitations/${slug}`);
+  const response = await apiClient.get<AccessInvitationResponse>(
+    `/v1/public/invitations/${slug}`
+  );
+  return unwrapResponse(response, 'Failed to access invitation');
 }
 
 /**
@@ -649,7 +873,10 @@ export async function accessPublicInvitation(
 export async function getPersonalizedInvitation(
   personalToken: string
 ): Promise<PublicInvitation & { guestName: string; personalMessage?: string }> {
-  return apiClient.get(`/v1/public/invitations/guest/${personalToken}`);
+  const response = await apiClient.get<
+    PublicInvitation & { guestName: string; personalMessage?: string }
+  >(`/v1/public/invitations/guest/${personalToken}`);
+  return unwrapResponse(response, 'Failed to get personalized invitation');
 }
 
 /**
@@ -659,7 +886,11 @@ export async function submitPublicRSVP(
   slug: string,
   data: SubmitRSVPRequest
 ): Promise<RSVPSubmitResponse> {
-  return apiClient.post(`/v1/public/invitations/${slug}/rsvp`, data);
+  const response = await apiClient.post<RSVPSubmitResponse>(
+    `/v1/public/invitations/${slug}/rsvp`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to submit RSVP');
 }
 
 // ============================================================================
@@ -683,7 +914,10 @@ export interface TurnstileConfig {
  * Call this before rendering RSVP forms to determine if CAPTCHA is needed.
  */
 export async function getTurnstileConfig(): Promise<TurnstileConfig> {
-  return apiClient.get('/v1/public/invitations/config/turnstile');
+  const response = await apiClient.get<TurnstileConfig>(
+    '/v1/public/invitations/config/turnstile'
+  );
+  return unwrapResponse(response, 'Failed to get Turnstile config');
 }
 
 /**
@@ -693,7 +927,11 @@ export async function updateRSVPByToken(
   editToken: string,
   data: UpdateRSVPRequest
 ): Promise<InvitationRSVP> {
-  return apiClient.patch(`/v1/public/rsvp/${editToken}`, data);
+  const response = await apiClient.patch<InvitationRSVP>(
+    `/v1/public/rsvp/${editToken}`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to update RSVP');
 }
 
 /**
@@ -702,7 +940,10 @@ export async function updateRSVPByToken(
 export async function getRSVPByToken(
   editToken: string
 ): Promise<InvitationRSVP & { invitationTitle: string; eventDatetime: string }> {
-  return apiClient.get(`/v1/public/rsvp/${editToken}`);
+  const response = await apiClient.get<
+    InvitationRSVP & { invitationTitle: string; eventDatetime: string }
+  >(`/v1/public/rsvp/${editToken}`);
+  return unwrapResponse(response, 'Failed to get RSVP');
 }
 
 /**
@@ -712,11 +953,15 @@ export async function getRSVPByToken(
 export async function downloadPublicICS(slug: string): Promise<void> {
   try {
     // Try direct binary download first (more efficient)
-    const blob = await apiClient.get<Blob>(
-      `/v1/public/invitations/${slug}/calendar`,
-      { responseType: 'blob' }
+    const fetchResponse = await apiClient.fetchRaw(
+      `/v1/public/invitations/${slug}/calendar`
     );
 
+    if (!fetchResponse.ok) {
+      throw new Error('Failed to download calendar');
+    }
+
+    const blob = await fetchResponse.blob();
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -730,12 +975,13 @@ export async function downloadPublicICS(slug: string): Promise<void> {
     const response = await apiClient.get<ICSResponse>(
       `/v1/public/invitations/${slug}/ics`
     );
+    const data = unwrapResponse(response, 'Failed to get ICS data');
 
-    const blob = new Blob([response.ics_content], { type: 'text/calendar;charset=utf-8' });
+    const blob = new Blob([data.ics_content], { type: 'text/calendar;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = response.filename;
+    link.download = data.filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -782,6 +1028,7 @@ export async function generateQRCodeDataURL(
  * Download QR code from backend in specified format.
  */
 export async function downloadInvitationQR(
+  workspaceId: string,
   invitationId: string,
   options?: {
     format?: 'png' | 'svg' | 'pdf';
@@ -799,15 +1046,22 @@ export async function downloadInvitationQR(
   if (options?.includeLogo) queryParams.set('include_logo', 'true');
 
   const query = queryParams.toString();
-  return apiClient.get(`/v1/invitations/${invitationId}/qr${query ? `?${query}` : ''}`, {
-    responseType: 'blob',
-  });
+  const fetchResponse = await apiClient.fetchRaw(
+    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/qr${query ? `?${query}` : ''}`
+  );
+
+  if (!fetchResponse.ok) {
+    throw new Error('Failed to download QR code');
+  }
+
+  return fetchResponse.blob();
 }
 
 /**
  * Get QR code URL for display (doesn't download, returns URL for img src).
  */
 export function getInvitationQRUrl(
+  workspaceId: string,
   invitationId: string,
   options?: {
     format?: 'png' | 'svg';
@@ -824,7 +1078,7 @@ export function getInvitationQRUrl(
   if (options?.backColor) queryParams.set('back_color', options.backColor);
   if (options?.includeLogo) queryParams.set('include_logo', 'true');
 
-  return `/api/v1/invitations/${invitationId}/qr?${queryParams.toString()}`;
+  return `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/qr?${queryParams.toString()}`;
 }
 
 // ============================================================================
@@ -853,10 +1107,14 @@ export async function saveDraft(
   data: Record<string, unknown>,
   draftId?: string | null
 ): Promise<{ draft_id: string; message: string }> {
-  return apiClient.post(`/v1/workspaces/${workspaceId}/invitations/drafts`, {
-    draft_id: draftId || null,
-    data,
-  });
+  const response = await apiClient.post<{ draft_id: string; message: string }>(
+    `/v1/workspaces/${workspaceId}/invitations/drafts`,
+    {
+      draft_id: draftId || null,
+      data,
+    }
+  );
+  return unwrapResponse(response, 'Failed to save draft');
 }
 
 /**
@@ -865,7 +1123,10 @@ export async function saveDraft(
 export async function listDrafts(
   workspaceId: string
 ): Promise<{ data: InvitationDraft[]; total: number }> {
-  return apiClient.get(`/v1/workspaces/${workspaceId}/invitations/drafts`);
+  const response = await apiClient.get<{ data: InvitationDraft[]; total: number }>(
+    `/v1/workspaces/${workspaceId}/invitations/drafts`
+  );
+  return unwrapResponse(response, 'Failed to list drafts');
 }
 
 /**
@@ -875,7 +1136,10 @@ export async function getDraft(
   workspaceId: string,
   draftId: string
 ): Promise<InvitationDraft> {
-  return apiClient.get(`/v1/workspaces/${workspaceId}/invitations/drafts/${draftId}`);
+  const response = await apiClient.get<InvitationDraft>(
+    `/v1/workspaces/${workspaceId}/invitations/drafts/${draftId}`
+  );
+  return unwrapResponse(response, 'Failed to get draft');
 }
 
 /**
@@ -885,7 +1149,13 @@ export async function deleteDraft(
   workspaceId: string,
   draftId: string
 ): Promise<void> {
-  return apiClient.delete(`/v1/workspaces/${workspaceId}/invitations/drafts/${draftId}`);
+  const response = await apiClient.delete<void>(
+    `/v1/workspaces/${workspaceId}/invitations/drafts/${draftId}`
+  );
+  // For delete operations, we don't need to return data
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to delete draft');
+  }
 }
 
 // ============================================================================

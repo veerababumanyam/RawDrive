@@ -33,6 +33,7 @@ import { useToast } from '@/hooks/useToast';
 // ---------------------------------------------------------------------------
 
 interface RSVPExportProps {
+  workspaceId: string;
   invitationId: string;
   invitationTitle?: string;
   className?: string;
@@ -343,6 +344,7 @@ const ExportCard: React.FC<{
 // ---------------------------------------------------------------------------
 
 export const RSVPExport: React.FC<RSVPExportProps> = ({
+  workspaceId,
   invitationId,
   invitationTitle,
   className = '',
@@ -362,12 +364,12 @@ export const RSVPExport: React.FC<RSVPExportProps> = ({
         let filename: string;
 
         if (format === 'csv') {
-          blob = await invitationService.exportRSVPsToCSV(invitationId);
+          blob = await invitationService.exportRSVPsToCSV(workspaceId, invitationId);
           filename = `rsvps-${invitationTitle || invitationId}.csv`;
         } else {
           // PDF export - call the PDF endpoint
           const response = await fetch(
-            `/api/v1/invitations/${invitationId}/rsvps/export?format=pdf`,
+            `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/export?format=pdf`,
             {
               method: 'GET',
               headers: {
@@ -407,7 +409,7 @@ export const RSVPExport: React.FC<RSVPExportProps> = ({
         setExportingFormat(null);
       }
     },
-    [invitationId, invitationTitle, showToast]
+    [workspaceId, invitationId, invitationTitle, showToast]
   );
 
   // Render based on variant

@@ -47,6 +47,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 interface CheckinScannerProps {
+  workspaceId: string;
   invitationId: string;
   className?: string;
   onClose?: () => void;
@@ -279,6 +280,7 @@ const SuccessAnimation: React.FC<SuccessAnimationProps> = ({ result, onDismiss }
 // ---------------------------------------------------------------------------
 
 export const CheckinScanner: React.FC<CheckinScannerProps> = ({
+  workspaceId,
   invitationId,
   className = '',
   onClose,
@@ -300,15 +302,15 @@ export const CheckinScanner: React.FC<CheckinScannerProps> = ({
 
   // Query: Check-in stats (T119)
   const { data: stats, refetch: refetchStats } = useQuery({
-    queryKey: ['checkin-stats', invitationId],
-    queryFn: () => invitationService.getCheckinStats(invitationId),
+    queryKey: ['checkin-stats', workspaceId, invitationId],
+    queryFn: () => invitationService.getCheckinStats(workspaceId, invitationId),
     refetchInterval: 10000, // Auto-refresh every 10s
   });
 
   // Mutation: Verify QR token
   const verifyMutation = useMutation({
     mutationFn: (token: string) =>
-      invitationService.verifyCheckinToken(invitationId, token),
+      invitationService.verifyCheckinToken(workspaceId, invitationId, token),
     onSuccess: (data) => {
       if (data.valid) {
         setVerifiedGuest(data);
@@ -327,12 +329,12 @@ export const CheckinScanner: React.FC<CheckinScannerProps> = ({
   const checkinMutation = useMutation({
     mutationFn: (data: { token?: string; partySize?: number; guestName?: string }) => {
       if (data.token) {
-        return invitationService.scanAndCheckin(invitationId, {
+        return invitationService.scanAndCheckin(workspaceId, invitationId, {
           token: data.token,
           party_size_override: data.partySize,
         });
       } else if (data.guestName) {
-        return invitationService.manualCheckin(invitationId, {
+        return invitationService.manualCheckin(workspaceId, invitationId, {
           guest_name: data.guestName,
           party_size_checked_in: data.partySize || 1,
         });
@@ -352,7 +354,7 @@ export const CheckinScanner: React.FC<CheckinScannerProps> = ({
       setManualName('');
 
       // Refresh stats
-      queryClient.invalidateQueries({ queryKey: ['checkin-stats', invitationId] });
+      queryClient.invalidateQueries({ queryKey: ['checkin-stats', workspaceId, invitationId] });
 
       playSound(result.already_checked_in ? 'error' : 'success');
     },

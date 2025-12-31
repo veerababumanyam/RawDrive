@@ -35,6 +35,7 @@ import { useToast } from '@/hooks/useToast';
 // ---------------------------------------------------------------------------
 
 interface InvitationQRModalProps {
+  workspaceId: string;
   invitationId: string;
   invitationTitle: string;
   publicUrl: string;
@@ -98,6 +99,7 @@ const COLOR_PRESETS = [
 // ---------------------------------------------------------------------------
 
 export const InvitationQRModal: React.FC<InvitationQRModalProps> = ({
+  workspaceId,
   invitationId,
   invitationTitle,
   publicUrl,
@@ -129,20 +131,20 @@ export const InvitationQRModal: React.FC<InvitationQRModalProps> = ({
 
   // Generate preview URL
   const previewUrl = useMemo(() => {
-    return invitationService.getInvitationQRUrl(invitationId, {
+    return invitationService.getInvitationQRUrl(workspaceId, invitationId, {
       format: 'png', // Always preview as PNG
       size: 512, // Preview at smaller size
       fillColor,
       backColor,
       includeLogo,
     });
-  }, [invitationId, fillColor, backColor, includeLogo]);
+  }, [workspaceId, invitationId, fillColor, backColor, includeLogo]);
 
   // Handle download
   const handleDownload = useCallback(async () => {
     setIsDownloading(true);
     try {
-      const blob = await invitationService.downloadInvitationQR(invitationId, {
+      const blob = await invitationService.downloadInvitationQR(workspaceId, invitationId, {
         format,
         size,
         fillColor,

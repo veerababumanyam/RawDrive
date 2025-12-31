@@ -116,24 +116,24 @@ const InvitationDetailPage: React.FC = () => {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['invitation', id],
-    queryFn: () => invitationService.getInvitation(id!),
-    enabled: !!id,
+    queryKey: ['invitation', workspaceId, id],
+    queryFn: () => invitationService.getInvitation(workspaceId!, id!),
+    enabled: !!id && !!workspaceId,
   });
 
   // Fetch RSVP stats
   const { data: rsvpStats } = useQuery({
-    queryKey: ['invitation-rsvp-stats', id],
-    queryFn: () => invitationService.getRSVPStats(id!),
-    enabled: !!id && invitation?.status === 'published',
+    queryKey: ['invitation-rsvp-stats', workspaceId, id],
+    queryFn: () => invitationService.getRSVPStats(workspaceId!, id!),
+    enabled: !!id && !!workspaceId && invitation?.status === 'published',
   });
 
   // Publish mutation
   const publishMutation = useMutation({
-    mutationFn: () => invitationService.publishInvitation(id!),
+    mutationFn: () => invitationService.publishInvitation(workspaceId!, id!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invitation', id] });
-      queryClient.invalidateQueries({ queryKey: ['invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['invitation', workspaceId, id] });
+      queryClient.invalidateQueries({ queryKey: ['invitations', workspaceId] });
       showToast('Invitation published successfully!', 'success');
     },
     onError: (error: Error) => {
@@ -143,10 +143,10 @@ const InvitationDetailPage: React.FC = () => {
 
   // Unpublish mutation
   const unpublishMutation = useMutation({
-    mutationFn: () => invitationService.unpublishInvitation(id!),
+    mutationFn: () => invitationService.unpublishInvitation(workspaceId!, id!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invitation', id] });
-      queryClient.invalidateQueries({ queryKey: ['invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['invitation', workspaceId, id] });
+      queryClient.invalidateQueries({ queryKey: ['invitations', workspaceId] });
       showToast('Invitation unpublished', 'success');
     },
     onError: (error: Error) => {
@@ -156,9 +156,9 @@ const InvitationDetailPage: React.FC = () => {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: () => invitationService.deleteInvitation(id!),
+    mutationFn: () => invitationService.deleteInvitation(workspaceId!, id!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['invitations', workspaceId] });
       showToast('Invitation deleted', 'success');
       navigate('/workspace/invitations');
     },
@@ -169,9 +169,9 @@ const InvitationDetailPage: React.FC = () => {
 
   // Duplicate mutation
   const duplicateMutation = useMutation({
-    mutationFn: () => invitationService.duplicateInvitation(id!),
+    mutationFn: () => invitationService.duplicateInvitation(workspaceId!, id!),
     onSuccess: (newInvitation) => {
-      queryClient.invalidateQueries({ queryKey: ['invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['invitations', workspaceId] });
       showToast('Invitation duplicated! Opening copy...', 'success');
       // Navigate to the new invitation
       navigate(`/workspace/invitations/${newInvitation.invitation_id}`);
@@ -184,9 +184,9 @@ const InvitationDetailPage: React.FC = () => {
   // Notification settings mutation
   const notificationMutation = useMutation({
     mutationFn: (preference: 'immediate' | 'daily_digest' | 'disabled') =>
-      invitationService.updateNotificationSettings(id!, preference),
+      invitationService.updateNotificationSettings(workspaceId!, id!, preference),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invitation', id] });
+      queryClient.invalidateQueries({ queryKey: ['invitation', workspaceId, id] });
       showToast('Notification settings updated', 'success');
     },
     onError: (error: Error) => {
@@ -211,12 +211,12 @@ const InvitationDetailPage: React.FC = () => {
   // Download ICS
   const downloadICS = useCallback(async () => {
     try {
-      await invitationService.downloadICS(id!);
+      await invitationService.downloadICS(workspaceId!, id!);
       showToast('Calendar event downloaded', 'success');
     } catch {
       showToast('Failed to download calendar event', 'error');
     }
-  }, [id, showToast]);
+  }, [workspaceId, id, showToast]);
 
   // Confirm delete
   const handleDelete = useCallback(() => {
