@@ -334,7 +334,7 @@ class InvitationRepository:
 
             row = await conn.fetchrow(
                 """
-                INSERT INTO invitations (
+                INSERT INTO digital_invitations (
                     workspace_id, template_id, title, slug, description,
                     event_type, event_datetime, event_end_datetime, event_timezone,
                     venue_name, venue_address, venue_city, venue_state,
@@ -419,7 +419,7 @@ class InvitationRepository:
             row = await conn.fetchrow(
                 """
                 SELECT i.*, t.name as template_name, t.layout as template_layout
-                FROM invitations i
+                FROM digital_invitations i
                 LEFT JOIN invitation_templates t ON t.template_id = i.template_id
                 WHERE i.invitation_id = $1 AND i.workspace_id = $2
                   AND i.status != 'deleted'
@@ -449,7 +449,7 @@ class InvitationRepository:
             if workspace_id:
                 row = await conn.fetchrow(
                     """
-                    SELECT * FROM invitations
+                    SELECT * FROM digital_invitations
                     WHERE slug = $1 AND workspace_id = $2 AND status != 'deleted'
                     """,
                     slug,
@@ -458,7 +458,7 @@ class InvitationRepository:
             else:
                 row = await conn.fetchrow(
                     """
-                    SELECT * FROM invitations
+                    SELECT * FROM digital_invitations
                     WHERE slug = $1 AND status = 'published'
                     """,
                     slug,
@@ -513,7 +513,7 @@ class InvitationRepository:
 
             # Count
             count_row = await conn.fetchrow(
-                f"SELECT COUNT(*) FROM invitations WHERE {where_clause}",
+                f"SELECT COUNT(*) FROM digital_invitations WHERE {where_clause}",
                 *params,
             )
             total = count_row["count"]
@@ -526,7 +526,7 @@ class InvitationRepository:
                        (SELECT url FROM invitation_images
                         WHERE invitation_id = i.invitation_id AND purpose = 'cover'
                         ORDER BY position LIMIT 1) as cover_image_url
-                FROM invitations i
+                FROM digital_invitations i
                 WHERE {where_clause}
                 ORDER BY event_datetime DESC
                 LIMIT ${param_idx} OFFSET ${param_idx + 1}
@@ -576,7 +576,7 @@ class InvitationRepository:
 
             row = await conn.fetchrow(
                 f"""
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET {set_clause}
                 WHERE invitation_id = ${param_idx}
                   AND workspace_id = ${param_idx + 1}
@@ -621,7 +621,7 @@ class InvitationRepository:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET status = 'published',
                     published_at = NOW(),
                     magic_link_id = COALESCE($3, magic_link_id),
@@ -655,7 +655,7 @@ class InvitationRepository:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET status = 'draft',
                     published_at = NULL,
                     updated_at = NOW()
@@ -679,7 +679,7 @@ class InvitationRepository:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET status = 'archived',
                     archived_at = NOW(),
                     updated_at = NOW()
@@ -703,7 +703,7 @@ class InvitationRepository:
         async with pool.acquire() as conn:
             result = await conn.execute(
                 """
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET status = 'deleted', updated_at = NOW()
                 WHERE invitation_id = $1 AND workspace_id = $2
                   AND status != 'deleted'
@@ -737,7 +737,7 @@ class InvitationRepository:
             if unique:
                 await conn.execute(
                     """
-                    UPDATE invitations
+                    UPDATE digital_invitations
                     SET view_count = view_count + 1,
                         unique_view_count = unique_view_count + 1
                     WHERE invitation_id = $1
@@ -748,7 +748,7 @@ class InvitationRepository:
             else:
                 await conn.execute(
                     """
-                    UPDATE invitations
+                    UPDATE digital_invitations
                     SET view_count = view_count + 1
                     WHERE invitation_id = $1
                       AND status = 'published'
@@ -1041,7 +1041,7 @@ class InvitationRepository:
                 """
                 SELECT g.*, i.title as invitation_title, i.status as invitation_status
                 FROM invitation_guests g
-                JOIN invitations i ON i.invitation_id = g.invitation_id
+                JOIN digital_invitations i ON i.invitation_id = g.invitation_id
                 WHERE g.personal_token = $1
                 """,
                 personal_token,
@@ -1217,7 +1217,7 @@ class InvitationRepository:
         while True:
             existing = await conn.fetchrow(
                 """
-                SELECT 1 FROM invitations
+                SELECT 1 FROM digital_invitations
                 WHERE workspace_id = $1 AND slug = $2 AND status != 'deleted'
                 """,
                 workspace_id,
@@ -1278,7 +1278,7 @@ class InvitationRepository:
 
             result = await conn.execute(
                 """
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET password_protected = TRUE,
                     password_hash = $3,
                     updated_at = NOW()
@@ -1317,7 +1317,7 @@ class InvitationRepository:
             row = await conn.fetchrow(
                 """
                 SELECT password_hash
-                FROM invitations
+                FROM digital_invitations
                 WHERE invitation_id = $1
                   AND password_protected = TRUE
                   AND status = 'published'
@@ -1358,7 +1358,7 @@ class InvitationRepository:
         async with pool.acquire() as conn:
             result = await conn.execute(
                 """
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET password_protected = FALSE,
                     password_hash = NULL,
                     updated_at = NOW()
@@ -1395,7 +1395,7 @@ class InvitationRepository:
 
             result = await conn.execute(
                 """
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET pin_hash = $3,
                     updated_at = NOW()
                 WHERE invitation_id = $1
@@ -1432,7 +1432,7 @@ class InvitationRepository:
             row = await conn.fetchrow(
                 """
                 SELECT pin_hash
-                FROM invitations
+                FROM digital_invitations
                 WHERE invitation_id = $1
                   AND status = 'published'
                 """,
@@ -1472,7 +1472,7 @@ class InvitationRepository:
         async with pool.acquire() as conn:
             result = await conn.execute(
                 """
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET pin_hash = NULL,
                     updated_at = NOW()
                 WHERE invitation_id = $1

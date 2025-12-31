@@ -445,6 +445,9 @@ export interface RSVPListResponse {
   };
 }
 
+/** Alias for a single RSVP response (same as InvitationRSVP) */
+export type RSVPResponse = InvitationRSVP;
+
 export interface RSVPSubmitResponse {
   rsvp_id: string;
   edit_token?: string;
@@ -552,6 +555,11 @@ export interface CheckinResultResponse {
   already_checked_in: boolean;
   existing_checkin?: InvitationCheckin;
   message: string;
+}
+
+/** Stats response for RSVPs (used in check-in stats) */
+export interface RSVPStatsResponse extends RSVPStats {
+  // Extends base RSVPStats with potential additional fields
 }
 
 export interface CheckinStatsResponse {

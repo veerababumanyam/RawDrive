@@ -62,7 +62,7 @@ def upgrade() -> None:
     # =========================================================================
     op.execute(
         """
-        CREATE TABLE IF NOT EXISTS invitations (
+        CREATE TABLE digital_invitations (
             -- Primary key
             invitation_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -152,9 +152,9 @@ def upgrade() -> None:
             created_by_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
 
             -- Constraints
-            CONSTRAINT invitations_slug_workspace_unique UNIQUE (workspace_id, slug),
-            CONSTRAINT invitations_rsvp_max_party_size_positive CHECK (rsvp_max_party_size > 0 AND rsvp_max_party_size <= 50),
-            CONSTRAINT invitations_auto_delete_days_valid CHECK (auto_delete_days > 0 AND auto_delete_days <= 365)
+            CONSTRAINT digital_invitations_slug_workspace_unique UNIQUE (workspace_id, slug),
+            CONSTRAINT digital_invitations_rsvp_max_party_size_positive CHECK (rsvp_max_party_size > 0 AND rsvp_max_party_size <= 50),
+            CONSTRAINT digital_invitations_auto_delete_days_valid CHECK (auto_delete_days > 0 AND auto_delete_days <= 365)
         );
         """
     )
@@ -164,60 +164,60 @@ def upgrade() -> None:
     # =========================================================================
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_invitations_workspace
-        ON invitations(workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_digital_invitations_workspace
+        ON digital_invitations(workspace_id);
         """
     )
 
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_invitations_workspace_status
-        ON invitations(workspace_id, status);
+        CREATE INDEX IF NOT EXISTS idx_digital_invitations_workspace_status
+        ON digital_invitations(workspace_id, status);
         """
     )
 
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_invitations_slug
-        ON invitations(slug)
+        CREATE INDEX IF NOT EXISTS idx_digital_invitations_slug
+        ON digital_invitations(slug)
         WHERE slug IS NOT NULL;
         """
     )
 
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_invitations_event_datetime
-        ON invitations(event_datetime);
+        CREATE INDEX IF NOT EXISTS idx_digital_invitations_event_datetime
+        ON digital_invitations(event_datetime);
         """
     )
 
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_invitations_scheduled_deletion
-        ON invitations(scheduled_deletion_at)
+        CREATE INDEX IF NOT EXISTS idx_digital_invitations_scheduled_deletion
+        ON digital_invitations(scheduled_deletion_at)
         WHERE auto_delete_enabled = TRUE AND status != 'deleted';
         """
     )
 
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_invitations_magic_link
-        ON invitations(magic_link_id)
+        CREATE INDEX IF NOT EXISTS idx_digital_invitations_magic_link
+        ON digital_invitations(magic_link_id)
         WHERE magic_link_id IS NOT NULL;
         """
     )
 
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_invitations_created_by
-        ON invitations(created_by_user_id);
+        CREATE INDEX IF NOT EXISTS idx_digital_invitations_created_by
+        ON digital_invitations(created_by_user_id);
         """
     )
 
     op.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_invitations_template
-        ON invitations(template_id)
+        CREATE INDEX IF NOT EXISTS idx_digital_invitations_template
+        ON digital_invitations(template_id)
         WHERE template_id IS NOT NULL;
         """
     )
@@ -252,7 +252,7 @@ def upgrade() -> None:
     # =========================================================================
     op.execute(
         """
-        COMMENT ON TABLE invitations IS
+        COMMENT ON TABLE digital_invitations IS
         'Core Save The Date digital invitations with event details, RSVP settings, and customization';
         """
     )
@@ -286,14 +286,14 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS update_invitations_updated_at();")
 
     # Drop indexes
-    op.execute("DROP INDEX IF EXISTS idx_invitations_template;")
-    op.execute("DROP INDEX IF EXISTS idx_invitations_created_by;")
-    op.execute("DROP INDEX IF EXISTS idx_invitations_magic_link;")
-    op.execute("DROP INDEX IF EXISTS idx_invitations_scheduled_deletion;")
-    op.execute("DROP INDEX IF EXISTS idx_invitations_event_datetime;")
-    op.execute("DROP INDEX IF EXISTS idx_invitations_slug;")
-    op.execute("DROP INDEX IF EXISTS idx_invitations_workspace_status;")
-    op.execute("DROP INDEX IF EXISTS idx_invitations_workspace;")
+    op.execute("DROP INDEX IF EXISTS idx_digital_invitations_template;")
+    op.execute("DROP INDEX IF EXISTS idx_digital_invitations_created_by;")
+    op.execute("DROP INDEX IF EXISTS idx_digital_invitations_magic_link;")
+    op.execute("DROP INDEX IF EXISTS idx_digital_invitations_scheduled_deletion;")
+    op.execute("DROP INDEX IF EXISTS idx_digital_invitations_event_datetime;")
+    op.execute("DROP INDEX IF EXISTS idx_digital_invitations_slug;")
+    op.execute("DROP INDEX IF EXISTS idx_digital_invitations_workspace_status;")
+    op.execute("DROP INDEX IF EXISTS idx_digital_invitations_workspace;")
 
     # Drop table
     op.execute("DROP TABLE IF EXISTS invitations;")

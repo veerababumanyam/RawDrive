@@ -68,7 +68,7 @@ def upgrade() -> None:
             event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
             -- Foreign keys
-            invitation_id UUID NOT NULL REFERENCES invitations(invitation_id) ON DELETE CASCADE,
+            invitation_id UUID NOT NULL REFERENCES digital_invitations(invitation_id) ON DELETE CASCADE,
             workspace_id UUID NOT NULL REFERENCES workspaces(workspace_id) ON DELETE CASCADE,
 
             -- Event type
@@ -146,7 +146,7 @@ def upgrade() -> None:
             COALESCE(SUM(r.party_size) FILTER (WHERE r.attending = TRUE), 0) AS total_party_size,
             COUNT(c.checkin_id) AS checked_in_count,
             COALESCE(SUM(c.party_size_checked_in), 0) AS total_checked_in
-        FROM invitations i
+        FROM digital_invitations i
         LEFT JOIN invitation_rsvps r ON i.invitation_id = r.invitation_id
         LEFT JOIN invitation_checkins c ON i.invitation_id = c.invitation_id
         GROUP BY i.invitation_id;

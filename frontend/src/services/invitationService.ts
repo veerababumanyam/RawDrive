@@ -892,7 +892,8 @@ export async function deleteDraft(
 // Export all functions as named exports (for tree-shaking)
 // ============================================================================
 
-export default {
+// Also export as named constant for `import { invitationService }` syntax
+export const invitationService = {
   // Templates
   listTemplates,
   getTemplate,
@@ -976,3 +977,5 @@ export default {
   getDraft,
   deleteDraft,
 };
+
+export default invitationService;

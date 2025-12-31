@@ -51,7 +51,7 @@ def upgrade() -> None:
             image_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
             -- Foreign keys
-            invitation_id UUID NOT NULL REFERENCES invitations(invitation_id) ON DELETE CASCADE,
+            invitation_id UUID NOT NULL REFERENCES digital_invitations(invitation_id) ON DELETE CASCADE,
             workspace_id UUID NOT NULL REFERENCES workspaces(workspace_id) ON DELETE CASCADE,
 
             -- Storage

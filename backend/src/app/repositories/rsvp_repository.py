@@ -198,7 +198,7 @@ class RSVPRepository:
                 """
                 SELECT r.*, i.title as invitation_title, i.event_datetime
                 FROM invitation_rsvps r
-                JOIN invitations i ON i.invitation_id = r.invitation_id
+                JOIN digital_invitations i ON i.invitation_id = r.invitation_id
                 WHERE r.edit_token_hash = $1
                   AND r.token_expires_at > NOW()
                 """,
