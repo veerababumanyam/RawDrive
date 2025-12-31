@@ -471,6 +471,7 @@ class InvitationRepository:
         workspace_id: UUID,
         status: Optional[str] = None,
         event_type: Optional[str] = None,
+        search: Optional[str] = None,
         upcoming_only: bool = False,
         page: int = 1,
         limit: int = 20,
@@ -481,6 +482,7 @@ class InvitationRepository:
             workspace_id: Workspace ID
             status: Filter by status
             event_type: Filter by event type
+            search: Search in title (case-insensitive)
             upcoming_only: Only show future events
             page: Page number
             limit: Items per page
@@ -502,6 +504,11 @@ class InvitationRepository:
             if event_type:
                 conditions.append(f"event_type = ${param_idx}")
                 params.append(event_type)
+                param_idx += 1
+
+            if search:
+                conditions.append(f"title ILIKE ${param_idx}")
+                params.append(f"%{search}%")
                 param_idx += 1
 
             if upcoming_only:

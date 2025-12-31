@@ -594,7 +594,7 @@ class DigitalInvitationService:
         Returns:
             Paginated list with items and metadata
         """
-        return await self.invitation_repo.list_invitations(
+        items, total = await self.invitation_repo.list_invitations(
             workspace_id=workspace_id,
             status=status,
             event_type=event_type,
@@ -602,6 +602,16 @@ class DigitalInvitationService:
             page=page,
             limit=limit,
         )
+        total_pages = (total + limit - 1) // limit if total > 0 else 1
+        return {
+            "data": items,
+            "meta": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "total_pages": total_pages,
+            },
+        }
 
     # =========================================================================
     # PUBLISHING
