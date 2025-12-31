@@ -1217,3 +1217,7 @@ class DigitalInvitationService:
 def get_digital_invitation_service() -> DigitalInvitationService:
     """Get a DigitalInvitationService instance."""
     return DigitalInvitationService()
+
+
+# Alias for backward compatibility with public_invitations.py
+get_invitation_service = get_digital_invitation_service
