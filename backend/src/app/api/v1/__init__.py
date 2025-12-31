@@ -221,9 +221,11 @@ router.include_router(
 
 # Digital Invitations routes (016-save-the-date)
 # Host endpoints for managing digital event invitations
+# NOTE: Using /digital-invitations to avoid conflict with workspace member invitations
+# in workspaces.py which uses /{workspace_id}/invitations
 router.include_router(
     digital_invitations_router,
-    prefix="/api/v1/workspaces/{workspace_id}/invitations",
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
     tags=["digital-invitations"],
 )
 
