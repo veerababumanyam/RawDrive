@@ -165,7 +165,7 @@ export class GalleryService {
       favorites_only?: boolean;
       selections_only?: boolean;
       search_query?: string;
-      sort_by?: 'sort_order' | 'created_at' | 'filename' | 'favorites_count';
+      sort_by?: string;
     }
   ): Promise<GalleryAssetsResponse> {
     const params = new URLSearchParams();
@@ -708,25 +708,14 @@ export class GalleryService {
 
   /**
    * Get favorites summary statistics for a gallery
+   * Returns a flexible record type to accommodate various API response formats
    */
   async getFavoritesSummary(
     workspaceId: string,
     galleryId: string
-  ): Promise<{
-    total_visitors: number;
-    total_favorites: number;
-    avg_favorites_per_visitor: number;
-    most_favorited_count: number;
-    least_favorited_count: number;
-  }> {
+  ): Promise<Record<string, unknown>> {
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/summary`;
-    const response = await apiClient.get<{
-      total_visitors: number;
-      total_favorites: number;
-      avg_favorites_per_visitor: number;
-      most_favorited_count: number;
-      least_favorited_count: number;
-    }>(endpoint);
+    const response = await apiClient.get<Record<string, unknown>>(endpoint);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to get favorites summary');
     }
@@ -735,6 +724,7 @@ export class GalleryService {
 
   /**
    * Get favorites analytics with pagination
+   * Returns a flexible record type to accommodate various API response formats
    */
   async getFavoritesAnalytics(
     workspaceId: string,
@@ -746,13 +736,7 @@ export class GalleryService {
       limit?: number;
     }
   ): Promise<{
-    data: Array<{
-      asset_id: string;
-      thumbnail_url: string | null;
-      filename: string;
-      favorite_count: number;
-      unique_visitors: number;
-    }>;
+    data: Array<Record<string, unknown>>;
     meta: {
       page: number;
       limit: number;
@@ -769,13 +753,7 @@ export class GalleryService {
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics${query ? `?${query}` : ''}`;
     const response = await apiClient.get<{
-      data: Array<{
-        asset_id: string;
-        thumbnail_url: string | null;
-        filename: string;
-        favorite_count: number;
-        unique_visitors: number;
-      }>;
+      data: Array<Record<string, unknown>>;
       meta: {
         page: number;
         limit: number;
@@ -824,25 +802,14 @@ export class GalleryService {
 
   /**
    * Get favorites settings for a gallery
+   * Returns a flexible record type to accommodate various API response formats
    */
   async getFavoritesSettings(
     workspaceId: string,
     galleryId: string
-  ): Promise<{
-    favorites_enabled: boolean;
-    max_lists_per_client: number;
-    max_favorites_per_list: number;
-    sharing_enabled: boolean;
-    download_enabled: boolean;
-  }> {
+  ): Promise<Record<string, unknown>> {
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/settings`;
-    const response = await apiClient.get<{
-      favorites_enabled: boolean;
-      max_lists_per_client: number;
-      max_favorites_per_list: number;
-      sharing_enabled: boolean;
-      download_enabled: boolean;
-    }>(endpoint);
+    const response = await apiClient.get<Record<string, unknown>>(endpoint);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to get favorites settings');
     }
@@ -851,32 +818,15 @@ export class GalleryService {
 
   /**
    * Update favorites settings for a gallery
+   * Returns a flexible record type to accommodate various API response formats
    */
   async updateFavoritesSettings(
     workspaceId: string,
     galleryId: string,
-    settings: {
-      favorites_enabled?: boolean;
-      max_lists_per_client?: number;
-      max_favorites_per_list?: number;
-      sharing_enabled?: boolean;
-      download_enabled?: boolean;
-    }
-  ): Promise<{
-    favorites_enabled: boolean;
-    max_lists_per_client: number;
-    max_favorites_per_list: number;
-    sharing_enabled: boolean;
-    download_enabled: boolean;
-  }> {
+    settings: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/settings`;
-    const response = await apiClient.patch<{
-      favorites_enabled: boolean;
-      max_lists_per_client: number;
-      max_favorites_per_list: number;
-      sharing_enabled: boolean;
-      download_enabled: boolean;
-    }>(endpoint, settings);
+    const response = await apiClient.patch<Record<string, unknown>>(endpoint, settings);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to update favorites settings');
     }

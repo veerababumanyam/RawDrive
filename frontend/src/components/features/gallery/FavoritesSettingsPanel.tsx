@@ -108,7 +108,7 @@ export const FavoritesSettingsPanel: React.FC<FavoritesSettingsPanelProps> = ({
     setError(null);
     try {
       const data = await galleryService.getFavoritesSettings(workspaceId, galleryId);
-      setSettings(data);
+      setSettings(data as unknown as FavoritesSettings);
     } catch (err) {
       setError('Failed to load settings');
       console.error('Failed to fetch settings:', err);
@@ -140,9 +140,10 @@ export const FavoritesSettingsPanel: React.FC<FavoritesSettingsPanelProps> = ({
           galleryId,
           { [key]: value }
         );
-        setSettings(updated);
+        const typedUpdated = updated as unknown as FavoritesSettings;
+        setSettings(typedUpdated);
         setIsDirty(false);
-        onSettingsChange?.(updated);
+        onSettingsChange?.(typedUpdated);
         addToast({ variant: 'success', message: 'Setting saved' });
       } catch (err) {
         // Rollback on error

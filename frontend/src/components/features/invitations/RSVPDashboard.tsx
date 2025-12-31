@@ -263,9 +263,9 @@ export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
     async (rsvpId: string) => {
       const confirmed = await confirm({
         title: 'Delete RSVP?',
-        message: 'This action cannot be undone. The guest will need to submit a new RSVP.',
+        description: 'This action cannot be undone. The guest will need to submit a new RSVP.',
         confirmText: 'Delete',
-        confirmVariant: 'destructive',
+        variant: 'destructive',
       });
 
       if (confirmed) {
@@ -360,7 +360,7 @@ export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
       </div>
 
       {/* Check-in Rate Bar (T119) */}
-      {checkinStats && checkinStats.expected_guests > 0 && (
+      {checkinStats && (checkinStats.expected_guests ?? 0) > 0 && (
         <div className="flex items-center gap-4 p-4 rounded-lg bg-surface border border-border">
           <div className="flex items-center gap-2">
             <QrCode className="w-5 h-5 text-primary" />
@@ -375,7 +375,7 @@ export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
             </div>
           </div>
           <div className="text-sm font-medium text-text-secondary whitespace-nowrap">
-            {checkinStats.total_guests_checked_in || 0} / {checkinStats.expected_guests}
+            {checkinStats.total_guests_checked_in ?? 0} / {checkinStats.expected_guests ?? 0}
             <span className="text-text-tertiary ml-1">
               ({(checkinStats.checkin_rate_percent || 0).toFixed(0)}%)
             </span>

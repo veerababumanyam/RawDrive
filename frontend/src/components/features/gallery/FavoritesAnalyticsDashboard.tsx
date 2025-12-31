@@ -291,7 +291,7 @@ export const FavoritesAnalyticsDashboard: React.FC<FavoritesAnalyticsDashboardPr
   const fetchSummary = useCallback(async () => {
     try {
       const data = await galleryService.getFavoritesSummary(workspaceId, galleryId);
-      setSummary(data);
+      setSummary(data as unknown as AnalyticsSummary);
     } catch (error) {
       console.error('Failed to fetch summary:', error);
     }
@@ -310,7 +310,7 @@ export const FavoritesAnalyticsDashboard: React.FC<FavoritesAnalyticsDashboardPr
           limit,
         }
       );
-      setPhotos(result.data);
+      setPhotos(result.data as unknown as PhotoAnalytics[]);
       setTotalPages(result.meta.total_pages);
     } catch (error) {
       console.error('Failed to fetch photos:', error);
