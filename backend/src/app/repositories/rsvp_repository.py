@@ -793,3 +793,15 @@ class RSVPRepository:
                     pass
 
         return result
+
+
+# Factory function for dependency injection
+_rsvp_repository: RSVPRepository | None = None
+
+
+def get_rsvp_repository() -> RSVPRepository:
+    """Get or create the RSVP repository singleton."""
+    global _rsvp_repository
+    if _rsvp_repository is None:
+        _rsvp_repository = RSVPRepository()
+    return _rsvp_repository

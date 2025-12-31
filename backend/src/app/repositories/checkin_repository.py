@@ -420,3 +420,15 @@ class CheckinRepository:
                 result[key] = result[key].isoformat()
 
         return result
+
+
+# Factory function for dependency injection
+_checkin_repository: CheckinRepository | None = None
+
+
+def get_checkin_repository() -> CheckinRepository:
+    """Get or create the check-in repository singleton."""
+    global _checkin_repository
+    if _checkin_repository is None:
+        _checkin_repository = CheckinRepository()
+    return _checkin_repository
