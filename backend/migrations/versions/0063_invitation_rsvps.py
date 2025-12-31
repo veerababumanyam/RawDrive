@@ -195,11 +195,11 @@ def upgrade() -> None:
         RETURNS TRIGGER AS $$
         BEGIN
             IF TG_OP = 'INSERT' THEN
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET rsvp_count = rsvp_count + 1, updated_at = NOW()
                 WHERE invitation_id = NEW.invitation_id;
             ELSIF TG_OP = 'DELETE' THEN
-                UPDATE invitations
+                UPDATE digital_invitations
                 SET rsvp_count = rsvp_count - 1, updated_at = NOW()
                 WHERE invitation_id = OLD.invitation_id;
             END IF;

@@ -227,7 +227,7 @@ def upgrade() -> None:
     # =========================================================================
     op.execute(
         """
-        CREATE OR REPLACE FUNCTION update_invitations_updated_at()
+        CREATE OR REPLACE FUNCTION update_digital_invitations_updated_at()
         RETURNS TRIGGER AS $$
         BEGIN
             NEW.updated_at = NOW();
@@ -239,11 +239,11 @@ def upgrade() -> None:
 
     op.execute(
         """
-        DROP TRIGGER IF EXISTS trigger_invitations_updated_at ON invitations;
-        CREATE TRIGGER trigger_invitations_updated_at
-            BEFORE UPDATE ON invitations
+        DROP TRIGGER IF EXISTS trigger_digital_invitations_updated_at ON digital_invitations;
+        CREATE TRIGGER trigger_digital_invitations_updated_at
+            BEFORE UPDATE ON digital_invitations
             FOR EACH ROW
-            EXECUTE FUNCTION update_invitations_updated_at();
+            EXECUTE FUNCTION update_digital_invitations_updated_at();
         """
     )
 
@@ -259,21 +259,21 @@ def upgrade() -> None:
 
     op.execute(
         """
-        COMMENT ON COLUMN invitations.customization IS
+        COMMENT ON COLUMN digital_invitations.customization IS
         'JSONB overlay on template layout: colors, fonts, custom content';
         """
     )
 
     op.execute(
         """
-        COMMENT ON COLUMN invitations.rsvp_custom_questions IS
+        COMMENT ON COLUMN digital_invitations.rsvp_custom_questions IS
         'Array of custom RSVP questions: [{"question": "...", "type": "text|select|checkbox", "required": bool}]';
         """
     )
 
     op.execute(
         """
-        COMMENT ON COLUMN invitations.scheduled_deletion_at IS
+        COMMENT ON COLUMN digital_invitations.scheduled_deletion_at IS
         'Computed: event_datetime + auto_delete_days. Used by cleanup scheduler.';
         """
     )
@@ -282,8 +282,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Remove invitations table and related enums."""
     # Drop trigger first
-    op.execute("DROP TRIGGER IF EXISTS trigger_invitations_updated_at ON invitations;")
-    op.execute("DROP FUNCTION IF EXISTS update_invitations_updated_at();")
+    op.execute("DROP TRIGGER IF EXISTS trigger_digital_invitations_updated_at ON digital_invitations;")
+    op.execute("DROP FUNCTION IF EXISTS update_digital_invitations_updated_at();")
 
     # Drop indexes
     op.execute("DROP INDEX IF EXISTS idx_digital_invitations_template;")
@@ -296,7 +296,7 @@ def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS idx_digital_invitations_workspace;")
 
     # Drop table
-    op.execute("DROP TABLE IF EXISTS invitations;")
+    op.execute("DROP TABLE IF EXISTS digital_invitations;")
 
     # Drop enum types
     op.execute("DROP TYPE IF EXISTS invitation_event_type;")
