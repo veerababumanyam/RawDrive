@@ -163,6 +163,146 @@ async def list_invitations(
     return InvitationListResponse(**result)
 
 
+# ---------------------------------------------------------------------------
+# Draft Endpoints (T093-T096: Save Draft and Auto-Save)
+# IMPORTANT: These static routes must be defined BEFORE /{invitation_id} routes
+# to prevent FastAPI from matching "/drafts" as an invitation_id parameter.
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/drafts",
+    response_model=SaveDraftResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Save invitation draft",
+    description="Save or update an invitation draft. Creates new draft if draft_id not provided.",
+)
+async def save_draft(
+    workspace_id: UUID,
+    request: SaveDraftRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    draft_service: InvitationDraftService = Depends(get_invitation_draft_service),
+) -> SaveDraftResponse:
+    """Save invitation draft for auto-save and resume functionality.
+
+    If draft_id is provided, updates existing draft.
+    If draft_id is None, creates a new draft.
+    Drafts expire after 7 days of inactivity.
+    """
+    try:
+        draft_id = await draft_service.save_or_create(
+            workspace_id=workspace_id,
+            user_id=current_user.user_id,
+            draft_id=request.draft_id,
+            data=request.data,
+        )
+        return SaveDraftResponse(
+            draft_id=draft_id,
+            message="Draft saved successfully",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Error saving draft: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save draft",
+        )
+
+
+@router.get(
+    "/drafts",
+    response_model=DraftListResponse,
+    summary="List invitation drafts",
+    description="Get all invitation drafts for the current user.",
+)
+async def list_drafts(
+    workspace_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    draft_service: InvitationDraftService = Depends(get_invitation_draft_service),
+) -> DraftListResponse:
+    """List all invitation drafts for the current user.
+
+    Drafts are sorted by updated_at descending (most recent first).
+    Expired drafts are automatically cleaned up.
+    """
+    drafts = await draft_service.list_drafts(
+        workspace_id=workspace_id,
+        user_id=current_user.user_id,
+    )
+    return DraftListResponse(
+        data=[DraftResponse.from_redis(d) for d in drafts],
+        total=len(drafts),
+    )
+
+
+@router.get(
+    "/drafts/{draft_id}",
+    response_model=DraftResponse,
+    summary="Get invitation draft",
+    description="Get a specific invitation draft by ID.",
+)
+async def get_draft(
+    workspace_id: UUID,
+    draft_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    draft_service: InvitationDraftService = Depends(get_invitation_draft_service),
+) -> DraftResponse:
+    """Get a specific invitation draft.
+
+    Only the draft owner can access their drafts.
+    """
+    draft = await draft_service.get_draft(
+        workspace_id=workspace_id,
+        user_id=current_user.user_id,
+        draft_id=draft_id,
+    )
+    if not draft:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Draft not found or has expired",
+        )
+    return DraftResponse.from_redis(draft)
+
+
+@router.delete(
+    "/drafts/{draft_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    summary="Delete invitation draft",
+    description="Delete a specific invitation draft.",
+)
+async def delete_draft(
+    workspace_id: UUID,
+    draft_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    draft_service: InvitationDraftService = Depends(get_invitation_draft_service),
+) -> Response:
+    """Delete a specific invitation draft.
+
+    Only the draft owner can delete their drafts.
+    """
+    deleted = await draft_service.delete_draft(
+        workspace_id=workspace_id,
+        user_id=current_user.user_id,
+        draft_id=draft_id,
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Draft not found or has expired",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Individual Invitation Endpoints
+# ---------------------------------------------------------------------------
+
+
 @router.get(
     "/{invitation_id}",
     response_model=InvitationResponse,
@@ -931,139 +1071,6 @@ async def download_calendar(
             "Content-Type": "text/calendar; charset=utf-8",
         },
     )
-
-
-# ---------------------------------------------------------------------------
-# Draft Endpoints (T093-T096: Save Draft and Auto-Save)
-# ---------------------------------------------------------------------------
-
-
-@router.post(
-    "/drafts",
-    response_model=SaveDraftResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Save invitation draft",
-    description="Save or update an invitation draft. Creates new draft if draft_id not provided.",
-)
-async def save_draft(
-    workspace_id: UUID,
-    request: SaveDraftRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-    draft_service: InvitationDraftService = Depends(get_invitation_draft_service),
-) -> SaveDraftResponse:
-    """Save invitation draft for auto-save and resume functionality.
-
-    If draft_id is provided, updates existing draft.
-    If draft_id is None, creates a new draft.
-    Drafts expire after 7 days of inactivity.
-    """
-    try:
-        draft_id = await draft_service.save_or_create(
-            workspace_id=workspace_id,
-            user_id=current_user.user_id,
-            draft_id=request.draft_id,
-            data=request.data,
-        )
-        return SaveDraftResponse(
-            draft_id=draft_id,
-            message="Draft saved successfully",
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
-    except Exception as e:
-        logger.error(f"Error saving draft: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save draft",
-        )
-
-
-@router.get(
-    "/drafts",
-    response_model=DraftListResponse,
-    summary="List invitation drafts",
-    description="Get all invitation drafts for the current user.",
-)
-async def list_drafts(
-    workspace_id: UUID,
-    current_user: CurrentUser = Depends(get_current_user),
-    draft_service: InvitationDraftService = Depends(get_invitation_draft_service),
-) -> DraftListResponse:
-    """List all invitation drafts for the current user.
-
-    Drafts are sorted by updated_at descending (most recent first).
-    Expired drafts are automatically cleaned up.
-    """
-    drafts = await draft_service.list_drafts(
-        workspace_id=workspace_id,
-        user_id=current_user.user_id,
-    )
-    return DraftListResponse(
-        data=[DraftResponse.from_redis(d) for d in drafts],
-        total=len(drafts),
-    )
-
-
-@router.get(
-    "/drafts/{draft_id}",
-    response_model=DraftResponse,
-    summary="Get invitation draft",
-    description="Get a specific invitation draft by ID.",
-)
-async def get_draft(
-    workspace_id: UUID,
-    draft_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
-    draft_service: InvitationDraftService = Depends(get_invitation_draft_service),
-) -> DraftResponse:
-    """Get a specific invitation draft.
-
-    Only the draft owner can access their drafts.
-    """
-    draft = await draft_service.get_draft(
-        workspace_id=workspace_id,
-        user_id=current_user.user_id,
-        draft_id=draft_id,
-    )
-    if not draft:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Draft not found or has expired",
-        )
-    return DraftResponse.from_redis(draft)
-
-
-@router.delete(
-    "/drafts/{draft_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-    summary="Delete invitation draft",
-    description="Delete a specific invitation draft.",
-)
-async def delete_draft(
-    workspace_id: UUID,
-    draft_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
-    draft_service: InvitationDraftService = Depends(get_invitation_draft_service),
-) -> Response:
-    """Delete a specific invitation draft.
-
-    Only the draft owner can delete their drafts.
-    """
-    deleted = await draft_service.delete_draft(
-        workspace_id=workspace_id,
-        user_id=current_user.user_id,
-        draft_id=draft_id,
-    )
-    if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Draft not found or has expired",
-        )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------
