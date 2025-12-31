@@ -98,7 +98,7 @@ export async function listTemplates(
 
   const query = queryParams.toString();
   const response = await apiClient.get<TemplateListResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/templates${query ? `?${query}` : ''}`
+    `/api/v1/workspaces/${workspaceId}/invitations/templates${query ? `?${query}` : ''}`
   );
   return unwrapResponse(response, 'Failed to fetch templates');
 }
@@ -108,7 +108,7 @@ export async function listTemplates(
  */
 export async function getTemplate(workspaceId: string, templateId: string): Promise<InvitationTemplate> {
   const response = await apiClient.get<InvitationTemplate>(
-    `/v1/workspaces/${workspaceId}/invitations/templates/${templateId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/templates/${templateId}`
   );
   return unwrapResponse(response, 'Failed to fetch template');
 }
@@ -121,7 +121,7 @@ export async function createTemplate(
   data: CreateTemplateRequest
 ): Promise<InvitationTemplate> {
   const response = await apiClient.post<InvitationTemplate>(
-    `/v1/workspaces/${workspaceId}/invitations/templates`,
+    `/api/v1/workspaces/${workspaceId}/invitations/templates`,
     data
   );
   return unwrapResponse(response, 'Failed to create template');
@@ -136,7 +136,7 @@ export async function updateTemplate(
   data: UpdateTemplateRequest
 ): Promise<InvitationTemplate> {
   const response = await apiClient.patch<InvitationTemplate>(
-    `/v1/workspaces/${workspaceId}/invitations/templates/${templateId}`,
+    `/api/v1/workspaces/${workspaceId}/invitations/templates/${templateId}`,
     data
   );
   return unwrapResponse(response, 'Failed to update template');
@@ -147,7 +147,7 @@ export async function updateTemplate(
  */
 export async function deleteTemplate(workspaceId: string, templateId: string): Promise<void> {
   const response = await apiClient.delete<void>(
-    `/v1/workspaces/${workspaceId}/invitations/templates/${templateId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/templates/${templateId}`
   );
   if (response.error) {
     throw new Error(response.error.message || 'Failed to delete template');
@@ -182,7 +182,7 @@ export async function listInvitations(
 
   const query = queryParams.toString();
   const response = await apiClient.get<InvitationListResponse>(
-    `/v1/workspaces/${workspaceId}/invitations${query ? `?${query}` : ''}`
+    `/api/v1/workspaces/${workspaceId}/invitations${query ? `?${query}` : ''}`
   );
   return unwrapResponse(response, 'Failed to fetch invitations');
 }
@@ -192,7 +192,7 @@ export async function listInvitations(
  */
 export async function getInvitation(workspaceId: string, invitationId: string): Promise<Invitation> {
   const response = await apiClient.get<Invitation>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}`
   );
   return unwrapResponse(response, 'Failed to fetch invitation');
 }
@@ -205,7 +205,7 @@ export async function createInvitation(
   data: CreateInvitationRequest
 ): Promise<Invitation> {
   const response = await apiClient.post<Invitation>(
-    `/v1/workspaces/${workspaceId}/invitations`,
+    `/api/v1/workspaces/${workspaceId}/invitations`,
     data
   );
   return unwrapResponse(response, 'Failed to create invitation');
@@ -220,7 +220,7 @@ export async function updateInvitation(
   data: UpdateInvitationRequest
 ): Promise<Invitation> {
   const response = await apiClient.patch<Invitation>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}`,
     data
   );
   return unwrapResponse(response, 'Failed to update invitation');
@@ -231,7 +231,7 @@ export async function updateInvitation(
  */
 export async function publishInvitation(workspaceId: string, invitationId: string): Promise<Invitation> {
   const response = await apiClient.post<Invitation>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/publish`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/publish`,
     {}
   );
   return unwrapResponse(response, 'Failed to publish invitation');
@@ -242,7 +242,7 @@ export async function publishInvitation(workspaceId: string, invitationId: strin
  */
 export async function unpublishInvitation(workspaceId: string, invitationId: string): Promise<Invitation> {
   const response = await apiClient.post<Invitation>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/unpublish`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/unpublish`,
     {}
   );
   return unwrapResponse(response, 'Failed to unpublish invitation');
@@ -253,7 +253,7 @@ export async function unpublishInvitation(workspaceId: string, invitationId: str
  */
 export async function archiveInvitation(workspaceId: string, invitationId: string): Promise<Invitation> {
   const response = await apiClient.post<Invitation>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/archive`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/archive`,
     {}
   );
   return unwrapResponse(response, 'Failed to archive invitation');
@@ -264,7 +264,7 @@ export async function archiveInvitation(workspaceId: string, invitationId: strin
  */
 export async function deleteInvitation(workspaceId: string, invitationId: string): Promise<void> {
   const response = await apiClient.delete<void>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}`
   );
   if (response.error) {
     throw new Error(response.error.message || 'Failed to delete invitation');
@@ -284,7 +284,7 @@ export async function duplicateInvitation(
   title?: string
 ): Promise<Invitation> {
   const response = await apiClient.post<Invitation>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/duplicate`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/duplicate`,
     title ? { title } : {}
   );
   return unwrapResponse(response, 'Failed to duplicate invitation');
@@ -302,7 +302,7 @@ export async function updateNotificationSettings(
   notificationPreference: 'immediate' | 'daily_digest' | 'disabled'
 ): Promise<{ notification_preference: string; message: string }> {
   const response = await apiClient.patch<{ notification_preference: string; message: string }>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/notification-settings`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/notification-settings`,
     { notification_preference: notificationPreference }
   );
   return unwrapResponse(response, 'Failed to update notification settings');
@@ -322,7 +322,7 @@ export async function listInvitationImages(
 ): Promise<InvitationImagesResponse> {
   const query = purpose ? `?purpose=${purpose}` : '';
   const response = await apiClient.get<InvitationImagesResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/images${query}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/images${query}`
   );
   return unwrapResponse(response, 'Failed to fetch invitation images');
 }
@@ -348,7 +348,7 @@ export async function createImageUpload(
     imageId: string;
     uploadUrl: string;
     headers: Record<string, string>;
-  }>(`/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/upload`, data);
+  }>(`/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/upload`, data);
   return unwrapResponse(response, 'Failed to create image upload');
 }
 
@@ -361,7 +361,7 @@ export async function commitImageUpload(
   imageId: string
 ): Promise<InvitationImage> {
   const response = await apiClient.post<InvitationImage>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/${imageId}/commit`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/${imageId}/commit`,
     {}
   );
   return unwrapResponse(response, 'Failed to commit image upload');
@@ -376,7 +376,7 @@ export async function deleteInvitationImage(
   imageId: string
 ): Promise<void> {
   const response = await apiClient.delete<void>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/${imageId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/${imageId}`
   );
   if (response.error) {
     throw new Error(response.error.message || 'Failed to delete image');
@@ -392,7 +392,7 @@ export async function reorderInvitationImages(
   data: ReorderImagesRequest
 ): Promise<void> {
   const response = await apiClient.post<void>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/reorder`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/images/reorder`,
     data
   );
   if (response.error) {
@@ -423,7 +423,7 @@ export async function listGuests(
 
   const query = queryParams.toString();
   const response = await apiClient.get<GuestListResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests${query ? `?${query}` : ''}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests${query ? `?${query}` : ''}`
   );
   return unwrapResponse(response, 'Failed to fetch guests');
 }
@@ -437,7 +437,7 @@ export async function addGuest(
   data: AddGuestRequest
 ): Promise<InvitationGuest> {
   const response = await apiClient.post<InvitationGuest>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests`,
     data
   );
   return unwrapResponse(response, 'Failed to add guest');
@@ -452,7 +452,7 @@ export async function bulkAddGuests(
   data: BulkAddGuestsRequest
 ): Promise<{ guests: InvitationGuest[]; addedCount: number }> {
   const response = await apiClient.post<{ guests: InvitationGuest[]; addedCount: number }>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/bulk`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/bulk`,
     data
   );
   return unwrapResponse(response, 'Failed to add guests');
@@ -468,7 +468,7 @@ export async function updateGuest(
   data: UpdateGuestRequest
 ): Promise<InvitationGuest> {
   const response = await apiClient.patch<InvitationGuest>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/${guestId}`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/${guestId}`,
     data
   );
   return unwrapResponse(response, 'Failed to update guest');
@@ -479,7 +479,7 @@ export async function updateGuest(
  */
 export async function deleteGuest(workspaceId: string, invitationId: string, guestId: string): Promise<void> {
   const response = await apiClient.delete<void>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/${guestId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/${guestId}`
   );
   if (response.error) {
     throw new Error(response.error.message || 'Failed to delete guest');
@@ -495,7 +495,7 @@ export async function sendInvitations(
   data: SendInvitationsRequest
 ): Promise<SendInvitationsResponse> {
   const response = await apiClient.post<SendInvitationsResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/send`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/send`,
     data
   );
   return unwrapResponse(response, 'Failed to send invitations');
@@ -513,7 +513,7 @@ export async function importGuestsFromCSV(
   formData.append('file', file);
 
   const response = await apiClient.upload<{ guests: InvitationGuest[]; addedCount: number; errors: string[] }>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/import`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/import`,
     formData
   );
   return unwrapResponse(response, 'Failed to import guests');
@@ -524,7 +524,7 @@ export async function importGuestsFromCSV(
  */
 export async function exportGuestsToCSV(workspaceId: string, invitationId: string): Promise<Blob> {
   const response = await apiClient.fetchRaw(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/export`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/guests/export`
   );
   if (!response.ok) {
     throw new Error('Failed to export guests');
@@ -558,7 +558,7 @@ export async function listRSVPs(
 
   const query = queryParams.toString();
   const response = await apiClient.get<RSVPListResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps${query ? `?${query}` : ''}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps${query ? `?${query}` : ''}`
   );
   return unwrapResponse(response, 'Failed to fetch RSVPs');
 }
@@ -568,7 +568,7 @@ export async function listRSVPs(
  */
 export async function getRSVPStats(workspaceId: string, invitationId: string): Promise<RSVPStats> {
   const response = await apiClient.get<RSVPStats>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/stats`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/stats`
   );
   return unwrapResponse(response, 'Failed to fetch RSVP stats');
 }
@@ -578,7 +578,7 @@ export async function getRSVPStats(workspaceId: string, invitationId: string): P
  */
 export async function getRSVP(workspaceId: string, invitationId: string, rsvpId: string): Promise<InvitationRSVP> {
   const response = await apiClient.get<InvitationRSVP>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/${rsvpId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/${rsvpId}`
   );
   return unwrapResponse(response, 'Failed to fetch RSVP');
 }
@@ -593,7 +593,7 @@ export async function updateRSVP(
   data: UpdateRSVPRequest
 ): Promise<InvitationRSVP> {
   const response = await apiClient.patch<InvitationRSVP>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/${rsvpId}`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/${rsvpId}`,
     data
   );
   return unwrapResponse(response, 'Failed to update RSVP');
@@ -604,7 +604,7 @@ export async function updateRSVP(
  */
 export async function deleteRSVP(workspaceId: string, invitationId: string, rsvpId: string): Promise<void> {
   const response = await apiClient.delete<void>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/${rsvpId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/${rsvpId}`
   );
   if (response.error) {
     throw new Error(response.error.message || 'Failed to delete RSVP');
@@ -616,7 +616,7 @@ export async function deleteRSVP(workspaceId: string, invitationId: string, rsvp
  */
 export async function exportRSVPsToCSV(workspaceId: string, invitationId: string): Promise<Blob> {
   const response = await apiClient.fetchRaw(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/export`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/rsvps/export`
   );
   if (!response.ok) {
     throw new Error('Failed to export RSVPs');
@@ -645,7 +645,7 @@ export async function listCheckins(
 
   const query = queryParams.toString();
   const response = await apiClient.get<CheckinListResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins${query ? `?${query}` : ''}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins${query ? `?${query}` : ''}`
   );
   return unwrapResponse(response, 'Failed to fetch check-ins');
 }
@@ -655,7 +655,7 @@ export async function listCheckins(
  */
 export async function getCheckinStats(workspaceId: string, invitationId: string): Promise<CheckinStats> {
   const response = await apiClient.get<CheckinStats>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/stats`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/stats`
   );
   return unwrapResponse(response, 'Failed to fetch check-in stats');
 }
@@ -669,7 +669,7 @@ export async function createCheckin(
   data: CheckinRequest
 ): Promise<InvitationCheckin> {
   const response = await apiClient.post<InvitationCheckin>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins`,
     data
   );
   return unwrapResponse(response, 'Failed to create check-in');
@@ -684,7 +684,7 @@ export async function validateQRToken(
   data: QRTokenValidateRequest
 ): Promise<QRTokenValidateResponse> {
   const response = await apiClient.post<QRTokenValidateResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/validate-qr`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/validate-qr`,
     data
   );
   return unwrapResponse(response, 'Failed to validate QR token');
@@ -699,7 +699,7 @@ export async function verifyCheckinToken(
   token: string
 ): Promise<CheckinVerifyResponse> {
   const response = await apiClient.post<CheckinVerifyResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/verify`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/verify`,
     { token }
   );
   return unwrapResponse(response, 'Failed to verify check-in token');
@@ -714,7 +714,7 @@ export async function scanAndCheckin(
   data: ScanCheckinRequest
 ): Promise<CheckinResultResponse> {
   const response = await apiClient.post<CheckinResultResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins`,
     data
   );
   return unwrapResponse(response, 'Failed to record check-in');
@@ -729,7 +729,7 @@ export async function manualCheckin(
   data: ManualCheckinRequest
 ): Promise<CheckinResultResponse> {
   const response = await apiClient.post<CheckinResultResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/manual`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/checkins/manual`,
     data
   );
   return unwrapResponse(response, 'Failed to record manual check-in');
@@ -744,7 +744,7 @@ export async function manualCheckin(
  */
 export async function getInvitationStats(workspaceId: string, invitationId: string): Promise<InvitationStats> {
   const response = await apiClient.get<InvitationStats>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/stats`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/stats`
   );
   return unwrapResponse(response, 'Failed to fetch invitation stats');
 }
@@ -754,7 +754,7 @@ export async function getInvitationStats(workspaceId: string, invitationId: stri
  */
 export async function getWorkspaceInvitationStats(workspaceId: string): Promise<WorkspaceInvitationStats> {
   const response = await apiClient.get<WorkspaceInvitationStats>(
-    `/v1/workspaces/${workspaceId}/invitations/stats`
+    `/api/v1/workspaces/${workspaceId}/invitations/stats`
   );
   return unwrapResponse(response, 'Failed to fetch workspace invitation stats');
 }
@@ -778,7 +778,7 @@ export async function listInvitationEvents(
 
   const query = queryParams.toString();
   const response = await apiClient.get<InvitationEventListResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/events${query ? `?${query}` : ''}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/events${query ? `?${query}` : ''}`
   );
   return unwrapResponse(response, 'Failed to fetch invitation events');
 }
@@ -796,7 +796,7 @@ export async function generateICS(
   data?: GenerateICSRequest
 ): Promise<ICSResponse> {
   const response = await apiClient.post<ICSResponse>(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/ics`,
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/ics`,
     data || {}
   );
   return unwrapResponse(response, 'Failed to generate ICS');
@@ -810,7 +810,7 @@ export async function downloadICS(workspaceId: string, invitationId: string): Pr
   try {
     // Try direct binary download first (more efficient)
     const blobResponse = await apiClient.fetchRaw(
-      `/v1/workspaces/${workspaceId}/invitations/${invitationId}/calendar`
+      `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/calendar`
     );
     if (!blobResponse.ok) {
       throw new Error('Failed to download ICS');
@@ -856,13 +856,13 @@ export async function accessPublicInvitation(
 ): Promise<AccessInvitationResponse> {
   if (credentials) {
     const response = await apiClient.post<AccessInvitationResponse>(
-      `/v1/public/invitations/${slug}/access`,
+      `/api/v1/public/invitations/${slug}/access`,
       credentials
     );
     return unwrapResponse(response, 'Failed to access invitation');
   }
   const response = await apiClient.get<AccessInvitationResponse>(
-    `/v1/public/invitations/${slug}`
+    `/api/v1/public/invitations/${slug}`
   );
   return unwrapResponse(response, 'Failed to access invitation');
 }
@@ -875,7 +875,7 @@ export async function getPersonalizedInvitation(
 ): Promise<PublicInvitation & { guestName: string; personalMessage?: string }> {
   const response = await apiClient.get<
     PublicInvitation & { guestName: string; personalMessage?: string }
-  >(`/v1/public/invitations/guest/${personalToken}`);
+  >(`/api/v1/public/invitations/guest/${personalToken}`);
   return unwrapResponse(response, 'Failed to get personalized invitation');
 }
 
@@ -887,7 +887,7 @@ export async function submitPublicRSVP(
   data: SubmitRSVPRequest
 ): Promise<RSVPSubmitResponse> {
   const response = await apiClient.post<RSVPSubmitResponse>(
-    `/v1/public/invitations/${slug}/rsvp`,
+    `/api/v1/public/invitations/${slug}/rsvp`,
     data
   );
   return unwrapResponse(response, 'Failed to submit RSVP');
@@ -915,7 +915,7 @@ export interface TurnstileConfig {
  */
 export async function getTurnstileConfig(): Promise<TurnstileConfig> {
   const response = await apiClient.get<TurnstileConfig>(
-    '/v1/public/invitations/config/turnstile'
+    '/api/v1/public/invitations/config/turnstile'
   );
   return unwrapResponse(response, 'Failed to get Turnstile config');
 }
@@ -928,7 +928,7 @@ export async function updateRSVPByToken(
   data: UpdateRSVPRequest
 ): Promise<InvitationRSVP> {
   const response = await apiClient.patch<InvitationRSVP>(
-    `/v1/public/rsvp/${editToken}`,
+    `/api/v1/public/rsvp/${editToken}`,
     data
   );
   return unwrapResponse(response, 'Failed to update RSVP');
@@ -942,7 +942,7 @@ export async function getRSVPByToken(
 ): Promise<InvitationRSVP & { invitationTitle: string; eventDatetime: string }> {
   const response = await apiClient.get<
     InvitationRSVP & { invitationTitle: string; eventDatetime: string }
-  >(`/v1/public/rsvp/${editToken}`);
+  >(`/api/v1/public/rsvp/${editToken}`);
   return unwrapResponse(response, 'Failed to get RSVP');
 }
 
@@ -954,7 +954,7 @@ export async function downloadPublicICS(slug: string): Promise<void> {
   try {
     // Try direct binary download first (more efficient)
     const fetchResponse = await apiClient.fetchRaw(
-      `/v1/public/invitations/${slug}/calendar`
+      `/api/v1/public/invitations/${slug}/calendar`
     );
 
     if (!fetchResponse.ok) {
@@ -973,7 +973,7 @@ export async function downloadPublicICS(slug: string): Promise<void> {
   } catch {
     // Fallback to JSON endpoint
     const response = await apiClient.get<ICSResponse>(
-      `/v1/public/invitations/${slug}/ics`
+      `/api/v1/public/invitations/${slug}/ics`
     );
     const data = unwrapResponse(response, 'Failed to get ICS data');
 
@@ -1047,7 +1047,7 @@ export async function downloadInvitationQR(
 
   const query = queryParams.toString();
   const fetchResponse = await apiClient.fetchRaw(
-    `/v1/workspaces/${workspaceId}/invitations/${invitationId}/qr${query ? `?${query}` : ''}`
+    `/api/v1/workspaces/${workspaceId}/invitations/${invitationId}/qr${query ? `?${query}` : ''}`
   );
 
   if (!fetchResponse.ok) {
@@ -1108,7 +1108,7 @@ export async function saveDraft(
   draftId?: string | null
 ): Promise<{ draft_id: string; message: string }> {
   const response = await apiClient.post<{ draft_id: string; message: string }>(
-    `/v1/workspaces/${workspaceId}/invitations/drafts`,
+    `/api/v1/workspaces/${workspaceId}/invitations/drafts`,
     {
       draft_id: draftId || null,
       data,
@@ -1124,7 +1124,7 @@ export async function listDrafts(
   workspaceId: string
 ): Promise<{ data: InvitationDraft[]; total: number }> {
   const response = await apiClient.get<{ data: InvitationDraft[]; total: number }>(
-    `/v1/workspaces/${workspaceId}/invitations/drafts`
+    `/api/v1/workspaces/${workspaceId}/invitations/drafts`
   );
   return unwrapResponse(response, 'Failed to list drafts');
 }
@@ -1137,7 +1137,7 @@ export async function getDraft(
   draftId: string
 ): Promise<InvitationDraft> {
   const response = await apiClient.get<InvitationDraft>(
-    `/v1/workspaces/${workspaceId}/invitations/drafts/${draftId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/drafts/${draftId}`
   );
   return unwrapResponse(response, 'Failed to get draft');
 }
@@ -1150,7 +1150,7 @@ export async function deleteDraft(
   draftId: string
 ): Promise<void> {
   const response = await apiClient.delete<void>(
-    `/v1/workspaces/${workspaceId}/invitations/drafts/${draftId}`
+    `/api/v1/workspaces/${workspaceId}/invitations/drafts/${draftId}`
   );
   // For delete operations, we don't need to return data
   if (response.error) {

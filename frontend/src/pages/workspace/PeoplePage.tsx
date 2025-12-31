@@ -70,7 +70,7 @@ const PeoplePage: React.FC = () => {
     try {
       const result = await faceApiService.getFaceGroups(workspace.workspace_id, {
         minFaces: 1,
-        limit: 200,
+        limit: 100,
       });
       setGroups(result.groups);
       setTotal(result.total);
