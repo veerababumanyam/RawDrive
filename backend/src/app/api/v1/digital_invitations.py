@@ -25,7 +25,7 @@ from app.api.invitation_schemas import (
     InvitationListResponse,
     InvitationStatsResponse,
     PublishInvitationRequest,
-    RSVPResponse,
+    InvitationRSVPResponse,
     RSVPListResponse,
     RSVPStatsResponse,
     RSVPStatus,
