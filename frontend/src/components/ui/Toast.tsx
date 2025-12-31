@@ -36,6 +36,8 @@ interface ToastContextType {
   addToast: (toast: Omit<ToastData, 'id'>) => string;
   removeToast: (id: string) => void;
   removeAllToasts: () => void;
+  /** Convenience method: showToast(message, variant) for quick toasts */
+  showToast: (message: string, variant?: ToastVariant) => string;
 }
 
 const ToastContext = createContext<ToastContextType | null>(null);
@@ -107,6 +109,14 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
     setToasts([]);
   }, []);
 
+  // Convenience method for quick toasts: showToast(message, variant)
+  const showToast = useCallback(
+    (message: string, variant: ToastVariant = 'default') => {
+      return addToast({ message, variant });
+    },
+    [addToast]
+  );
+
   const positionStyles: Record<ToastPosition, string> = {
     'top-right': 'top-4 right-4',
     'top-left': 'top-4 left-4',
@@ -119,7 +129,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
   const isBottom = position.startsWith('bottom');
 
   return (
-    <ToastContext.Provider value={{ toasts, addToast, removeToast, removeAllToasts }}>
+    <ToastContext.Provider value={{ toasts, addToast, removeToast, removeAllToasts, showToast }}>
       {children}
       {typeof document !== 'undefined' &&
         createPortal(
