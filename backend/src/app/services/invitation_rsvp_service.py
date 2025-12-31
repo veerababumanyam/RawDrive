@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
 
-from app.db.database import get_db_session
 from app.repositories.rsvp_repository import RSVPRepository, get_rsvp_repository
 from app.repositories.invitation_repository import InvitationRepository, get_invitation_repository
 from app.api.invitation_schemas import (
