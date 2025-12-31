@@ -945,7 +945,7 @@ class DigitalInvitationService:
         # Increment view count
         await self.invitation_repo.increment_view_count(
             invitation_id=invitation_id,
-            ip_address=ip_address,
+            unique=True,  # Track unique views based on validated access
         )
 
         # Log view event

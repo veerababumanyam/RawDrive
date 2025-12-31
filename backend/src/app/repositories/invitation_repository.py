@@ -16,12 +16,23 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
+import argon2
+
 from app.db.postgres import get_postgres_pool
+
+
+# Password hasher configuration per CLAUDE.md security requirements
+_password_hasher = argon2.PasswordHasher(
+    time_cost=3,
+    memory_cost=65536,
+    parallelism=4,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -715,7 +726,12 @@ class InvitationRepository:
         invitation_id: UUID,
         unique: bool = False,
     ) -> None:
-        """Increment view counter for an invitation."""
+        """Increment view counter for an invitation.
+
+        Note: This method is called after the invitation has been fetched
+        and validated (including workspace check for authenticated access,
+        or public access validation). The invitation_id is already verified.
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             if unique:
@@ -725,6 +741,7 @@ class InvitationRepository:
                     SET view_count = view_count + 1,
                         unique_view_count = unique_view_count + 1
                     WHERE invitation_id = $1
+                      AND status = 'published'
                     """,
                     invitation_id,
                 )
@@ -734,6 +751,7 @@ class InvitationRepository:
                     UPDATE invitations
                     SET view_count = view_count + 1
                     WHERE invitation_id = $1
+                      AND status = 'published'
                     """,
                     invitation_id,
                 )
@@ -1232,3 +1250,237 @@ class InvitationRepository:
                     pass
 
         return result
+
+    # =========================================================================
+    # PASSWORD/PIN PROTECTION METHODS
+    # =========================================================================
+
+    async def set_password(
+        self,
+        invitation_id: UUID,
+        workspace_id: UUID,
+        password: str,
+    ) -> bool:
+        """Set password protection for an invitation.
+
+        Args:
+            invitation_id: Invitation UUID
+            workspace_id: Workspace UUID for tenant isolation
+            password: Plaintext password to hash and store
+
+        Returns:
+            True if password was set successfully
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Hash password with argon2
+            password_hash = _password_hasher.hash(password)
+
+            result = await conn.execute(
+                """
+                UPDATE invitations
+                SET password_protected = TRUE,
+                    password_hash = $3,
+                    updated_at = NOW()
+                WHERE invitation_id = $1
+                  AND workspace_id = $2
+                  AND status != 'deleted'
+                """,
+                invitation_id,
+                workspace_id,
+                password_hash,
+            )
+
+            return result == "UPDATE 1"
+
+    async def verify_password(
+        self,
+        invitation_id: UUID,
+        password: str,
+    ) -> bool:
+        """Verify password for an invitation.
+
+        Args:
+            invitation_id: Invitation UUID
+            password: Plaintext password to verify
+
+        Returns:
+            True if password matches
+
+        Note:
+            This method is used for public access verification,
+            so it doesn't require workspace_id (the invitation
+            was already fetched and validated).
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT password_hash
+                FROM invitations
+                WHERE invitation_id = $1
+                  AND password_protected = TRUE
+                  AND status = 'published'
+                """,
+                invitation_id,
+            )
+
+            if not row or not row["password_hash"]:
+                return False
+
+            try:
+                _password_hasher.verify(row["password_hash"], password)
+                return True
+            except argon2.exceptions.VerifyMismatchError:
+                return False
+            except argon2.exceptions.VerificationError:
+                logger.warning(
+                    "Password verification error for invitation %s",
+                    invitation_id,
+                )
+                return False
+
+    async def remove_password(
+        self,
+        invitation_id: UUID,
+        workspace_id: UUID,
+    ) -> bool:
+        """Remove password protection from an invitation.
+
+        Args:
+            invitation_id: Invitation UUID
+            workspace_id: Workspace UUID for tenant isolation
+
+        Returns:
+            True if password was removed successfully
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE invitations
+                SET password_protected = FALSE,
+                    password_hash = NULL,
+                    updated_at = NOW()
+                WHERE invitation_id = $1
+                  AND workspace_id = $2
+                  AND status != 'deleted'
+                """,
+                invitation_id,
+                workspace_id,
+            )
+
+            return result == "UPDATE 1"
+
+    async def set_pin(
+        self,
+        invitation_id: UUID,
+        workspace_id: UUID,
+        pin: str,
+    ) -> bool:
+        """Set PIN protection for an invitation.
+
+        Args:
+            invitation_id: Invitation UUID
+            workspace_id: Workspace UUID for tenant isolation
+            pin: Plaintext PIN to hash and store (typically 4-6 digits)
+
+        Returns:
+            True if PIN was set successfully
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Hash PIN with argon2 (same as password)
+            pin_hash = _password_hasher.hash(pin)
+
+            result = await conn.execute(
+                """
+                UPDATE invitations
+                SET pin_hash = $3,
+                    updated_at = NOW()
+                WHERE invitation_id = $1
+                  AND workspace_id = $2
+                  AND status != 'deleted'
+                """,
+                invitation_id,
+                workspace_id,
+                pin_hash,
+            )
+
+            return result == "UPDATE 1"
+
+    async def verify_pin(
+        self,
+        invitation_id: UUID,
+        pin: str,
+    ) -> bool:
+        """Verify PIN for an invitation.
+
+        Args:
+            invitation_id: Invitation UUID
+            pin: Plaintext PIN to verify
+
+        Returns:
+            True if PIN matches
+
+        Note:
+            This method is used for public access verification,
+            so it doesn't require workspace_id.
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT pin_hash
+                FROM invitations
+                WHERE invitation_id = $1
+                  AND status = 'published'
+                """,
+                invitation_id,
+            )
+
+            if not row or not row["pin_hash"]:
+                return False
+
+            try:
+                _password_hasher.verify(row["pin_hash"], pin)
+                return True
+            except argon2.exceptions.VerifyMismatchError:
+                return False
+            except argon2.exceptions.VerificationError:
+                logger.warning(
+                    "PIN verification error for invitation %s",
+                    invitation_id,
+                )
+                return False
+
+    async def remove_pin(
+        self,
+        invitation_id: UUID,
+        workspace_id: UUID,
+    ) -> bool:
+        """Remove PIN protection from an invitation.
+
+        Args:
+            invitation_id: Invitation UUID
+            workspace_id: Workspace UUID for tenant isolation
+
+        Returns:
+            True if PIN was removed successfully
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE invitations
+                SET pin_hash = NULL,
+                    updated_at = NOW()
+                WHERE invitation_id = $1
+                  AND workspace_id = $2
+                  AND status != 'deleted'
+                """,
+                invitation_id,
+                workspace_id,
+            )
+
+            return result == "UPDATE 1"
