@@ -268,7 +268,7 @@ async def delete_invitation(
     invitation_id: UUID,
     current_user: CurrentUser = Depends(get_current_user),
     service: DigitalInvitationService = Depends(get_digital_invitation_service),
-) -> None:
+) -> Response:
     """Delete an invitation."""
     try:
         await service.delete_invitation(
@@ -276,6 +276,7 @@ async def delete_invitation(
             workspace_id=workspace_id,
             deleted_by_user_id=current_user.user_id,
         )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except InvitationNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -590,7 +591,7 @@ async def delete_rsvp(
     rsvp_id: UUID,
     current_user: CurrentUser = Depends(get_current_user),
     invitation_service: DigitalInvitationService = Depends(get_digital_invitation_service),
-) -> None:
+) -> Response:
     """Delete an RSVP."""
     # Verify invitation exists
     try:
@@ -611,6 +612,7 @@ async def delete_rsvp(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
         )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except RSVPNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1046,7 +1048,7 @@ async def delete_draft(
     draft_id: str,
     current_user: CurrentUser = Depends(get_current_user),
     draft_service: InvitationDraftService = Depends(get_invitation_draft_service),
-) -> None:
+) -> Response:
     """Delete a specific invitation draft.
 
     Only the draft owner can delete their drafts.
@@ -1061,6 +1063,7 @@ async def delete_draft(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Draft not found or has expired",
         )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ---------------------------------------------------------------------------
