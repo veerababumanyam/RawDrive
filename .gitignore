@@ -212,3 +212,6 @@ backend/venv/
 
 backend/buffalo_l.zip
 backend/credentials/
+
+# Allow backend source models
+!backend/src/app/models/

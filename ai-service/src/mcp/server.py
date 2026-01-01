@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 MCP_PORT = int(os.getenv("MCP_PORT", "8001"))
 MCP_HOST = os.getenv("MCP_HOST", "0.0.0.0")
 
+# CDN and Gallery URLs for mock data
+# Default to example.com to make it clear these are placeholders
+# In production, set these via environment variables
+CDN_BASE_URL = os.getenv("CDN_BASE_URL", "https://cdn.example.com")
+GALLERY_SHARE_BASE_URL = os.getenv("GALLERY_SHARE_BASE_URL", "https://gallery.example.com")
+
 
 # ---------------------------------------------------------------------------
 # MCP Error Classes
@@ -318,10 +324,10 @@ async def get_gallery(
         gallery_id=gallery_id,
         name="Wedding Photos",
         description="Smith-Jones Wedding 2024",
-        cover_photo_url="https://cdn.rawdrive.in/thumb/cover_001.jpg",
+        cover_photo_url=f"{CDN_BASE_URL}/thumb/cover_001.jpg",
         photo_count=250,
         is_published=True,
-        share_link="https://gallery.rawdrive.in/s/abc123",
+        share_link=f"{GALLERY_SHARE_BASE_URL}/s/abc123",
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
         settings={
@@ -359,7 +365,7 @@ async def list_photos(
         PhotoItem(
             photo_id="photo_001",
             filename="IMG_0001.jpg",
-            thumbnail_url="https://cdn.rawdrive.in/thumb/photo_001.jpg",
+            thumbnail_url=f"{CDN_BASE_URL}/thumb/photo_001.jpg",
             width=4000,
             height=3000,
             file_size=8500000,
@@ -368,7 +374,7 @@ async def list_photos(
         PhotoItem(
             photo_id="photo_002",
             filename="IMG_0002.jpg",
-            thumbnail_url="https://cdn.rawdrive.in/thumb/photo_002.jpg",
+            thumbnail_url=f"{CDN_BASE_URL}/thumb/photo_002.jpg",
             width=4000,
             height=3000,
             file_size=7200000,
@@ -414,7 +420,7 @@ async def search_photos(
             photo=PhotoItem(
                 photo_id="photo_001",
                 filename="IMG_0001.jpg",
-                thumbnail_url="https://cdn.rawdrive.in/thumb/photo_001.jpg",
+                thumbnail_url=f"{CDN_BASE_URL}/thumb/photo_001.jpg",
                 width=4000,
                 height=3000,
                 file_size=8500000,

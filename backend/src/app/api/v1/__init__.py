@@ -240,3 +240,45 @@ router.include_router(
     prefix="/api/v1/public/invitations",
     tags=["public-invitations"],
 )
+
+from app.api.v1.invitation_media import router as invitation_media_router
+router.include_router(
+    invitation_media_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
+    tags=["invitation-media"],
+)
+
+from app.api.v1.invitation_ai import router as invitation_ai_router
+router.include_router(
+    invitation_ai_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
+    tags=["invitation-ai"],
+)
+
+from app.api.v1.invitation_sub_events import router as invitation_sub_events_router
+router.include_router(
+    invitation_sub_events_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/sub-events",
+    tags=["invitation-sub-events"],
+)
+
+from app.api.v1.image_generation import router as image_generation_router
+router.include_router(
+    image_generation_router,
+    prefix="/api/v1/image-generation",
+    tags=["image-generation"],
+)
+
+from app.api.v1.invitation_exports import router as invitation_exports_router
+router.include_router(
+    invitation_exports_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/exports",
+    tags=["invitation-exports"],
+)
+
+from app.api.v1.invitation_analytics import router as invitation_analytics_router
+router.include_router(
+    invitation_analytics_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/analytics",
+    tags=["invitation-analytics"],
+)

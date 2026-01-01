@@ -1,15 +1,23 @@
 import requests
+import sys
+from pathlib import Path
+
+# Add backend src to path for importing test constants
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend" / "src"))
+
+from app.config.test_constants import AdminUsers
 
 BASE_URL = "http://localhost:4000"
 DEFAULT_ROOT_USER = "root"
 DEFAULT_ROOT_PASS = "123456"
 
+# Use centralized admin user definitions
 ADMIN_EMAILS = [
-    "superadmin@test.rawdrive.in",
-    "platformadmin@test.rawdrive.in", # If it exists
-    "supportadmin@test.rawdrive.in",
-    "billingadmin@test.rawdrive.in",
-    "contentmod@test.rawdrive.in"
+    AdminUsers.SUPER_ADMIN.email,
+    AdminUsers.PLATFORM_ADMIN.email,
+    AdminUsers.SUPPORT_ADMIN.email,
+    AdminUsers.BILLING_ADMIN.email,
+    AdminUsers.CONTENT_MOD.email,
 ]
 
 def login_root():

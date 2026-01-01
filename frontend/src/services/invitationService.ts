@@ -53,6 +53,10 @@ import type {
   CheckinVerifyResponse,
   CheckinResultResponse,
   InvitationEventListResponse,
+  SubEvent,
+  InvitationMedia,
+  GenerateContentRequest,
+  GenerateContentResponse,
 } from '@/types/invitations';
 
 // ============================================================================
@@ -736,6 +740,116 @@ export async function manualCheckin(
 }
 
 // ============================================================================
+// Sub-events (T126)
+// ============================================================================
+
+export async function createSubEvent(
+  workspaceId: string,
+  invitationId: string,
+  data: Partial<SubEvent>
+): Promise<SubEvent> {
+  const response = await apiClient.post<SubEvent>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/sub-events`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to create sub-event');
+}
+
+export async function updateSubEvent(
+  workspaceId: string,
+  invitationId: string,
+  subEventId: string,
+  data: Partial<SubEvent>
+): Promise<SubEvent> {
+  const response = await apiClient.patch<SubEvent>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/sub-events/${subEventId}`,
+    data
+  );
+  return unwrapResponse(response, 'Failed to update sub-event');
+}
+
+export async function deleteSubEvent(
+  workspaceId: string,
+  invitationId: string,
+  subEventId: string
+): Promise<void> {
+  const response = await apiClient.delete<void>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/sub-events/${subEventId}`
+  );
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to delete sub-event');
+  }
+}
+
+export async function listSubEvents(
+  workspaceId: string,
+  invitationId: string
+): Promise<SubEvent[]> {
+  const response = await apiClient.get<SubEvent[]>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/sub-events`
+  );
+  return unwrapResponse(response, 'Failed to fetch sub-events');
+}
+
+export async function reorderSubEvents(
+  workspaceId: string,
+  invitationId: string,
+  subEventIds: string[]
+): Promise<void> {
+  const response = await apiClient.post<void>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/sub-events/reorder`,
+    { sub_event_ids: subEventIds }
+  );
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to reorder sub-events');
+  }
+}
+
+// ============================================================================
+// Media (Video/Audio)
+// ============================================================================
+
+export async function uploadMedia(
+  workspaceId: string,
+  invitationId: string,
+  file: File,
+  purpose: 'content' | 'background' | 'effect' = 'content'
+): Promise<InvitationMedia> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('purpose', purpose);
+
+  const response = await apiClient.upload<InvitationMedia>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media`,
+    formData
+  );
+  return unwrapResponse(response, 'Failed to upload media');
+}
+
+export async function deleteMedia(
+  workspaceId: string,
+  invitationId: string,
+  mediaId: string
+): Promise<void> {
+  const response = await apiClient.delete<void>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media/${mediaId}`
+  );
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to delete media');
+  }
+}
+
+export async function listMedia(
+  workspaceId: string,
+  invitationId: string
+): Promise<InvitationMedia[]> {
+  const response = await apiClient.get<InvitationMedia[]>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media`
+  );
+  return unwrapResponse(response, 'Failed to fetch media');
+}
+
+// ============================================================================
 // Statistics & Analytics
 // ============================================================================
 
@@ -1159,6 +1273,21 @@ export async function deleteDraft(
 }
 
 // ============================================================================
+// AI Content (Phase 7)
+// ============================================================================
+
+export async function generateAIContent(
+  workspaceId: string,
+  request: GenerateContentRequest
+): Promise<GenerateContentResponse> {
+  const response = await apiClient.post<GenerateContentResponse>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/ai/generate`,
+    request
+  );
+  return unwrapResponse(response, 'Failed to generate content');
+}
+
+// ============================================================================
 // Export all functions as named exports (for tree-shaking)
 // ============================================================================
 
@@ -1246,6 +1375,9 @@ export const invitationService = {
   listDrafts,
   getDraft,
   deleteDraft,
+
+  // AI
+  generateAIContent,
 };
 
 export default invitationService;

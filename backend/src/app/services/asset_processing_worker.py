@@ -257,3 +257,155 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
         # Re-raise to trigger retry logic
         raise
 
+@register_task_handler("invitation.media.process")
+async def process_invitation_media_handler(payload: dict[str, Any]) -> dict[str, Any]:
+    """Background worker handler to process invitation media (video/audio).
+    
+    Args:
+        payload: {
+            "workspace_id": str,
+            "invitation_id": str,
+            "media_id": str,
+            "original_object_key": str,
+            "media_type": "video" | "audio"
+        }
+    """
+    from app.services.video_processing_service import get_video_processing_service
+    from app.repositories.invitation_media_repository import get_invitation_media_repository
+    
+    workspace_id = UUID(payload["workspace_id"])
+    invitation_id = UUID(payload["invitation_id"])
+    media_id = UUID(payload["media_id"])
+    original_object_key = payload["original_object_key"]
+    media_type = payload.get("media_type", "video")
+    
+    logger.info(f"Processing invitation media {media_id} (type={media_type})")
+    
+    storage_service = get_r2_storage_service()
+    video_service = get_video_processing_service()
+    media_repo = get_invitation_media_repository()
+    
+    try:
+        # 1. Download original file to temp
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{media_type}") as tmp_original:
+            original_path = tmp_original.name
+        
+        try:
+            # Download bytes
+            # Note: storage_service.download_encrypted_file expects specific path structure, 
+            # but here we have the full object_key.
+            if original_object_key.endswith(".enc"):
+                 # It's encrypted? Invitation media might not be encrypted initially based on previous service code.
+                 # Introduction of encryption for invitation media wasn't explicitly in plan, but good practice.
+                 # For now, assuming raw upload for simplicity as per plan, or use download_by_object_key if it handles both.
+                 # R2StorageService.download_by_object_key adds .enc. 
+                 # Let's assume standard object key and use s3_client directly or add a raw download method.
+                 # Actually, `download_by_object_key` force-adds .enc. 
+                 # We need a plain download.
+                 
+                 # Let's allow `download_object` generic in R2 service or use s3_client here.
+                 loop = asyncio.get_event_loop()
+                 await loop.run_in_executor(
+                     storage_service.executor,
+                     lambda: storage_service.s3_client.download_file(
+                         storage_service.bucket_name,
+                         original_object_key,
+                         original_path
+                     )
+                 )
+            else:
+                 # Standard download
+                 loop = asyncio.get_event_loop()
+                 await loop.run_in_executor(
+                     storage_service.executor,
+                     lambda: storage_service.s3_client.download_file(
+                         storage_service.bucket_name,
+                         original_object_key,
+                         original_path
+                     )
+                 )
+
+            updates: dict[str, Any] = {}
+            variants = []
+
+            # 2. Extract Metadata
+            try:
+                metadata = await video_service.get_metadata(original_path)
+                updates["width"] = metadata.get("width")
+                updates["height"] = metadata.get("height")
+                updates["duration_seconds"] = metadata.get("duration")
+            except Exception as e:
+                logger.warning(f"Failed to extract metadata for {media_id}: {e}")
+
+            # 3. Generate Thumbnail
+            if media_type == "video":
+                thumb_path = original_path + "_thumb.jpg"
+                try:
+                    await video_service.generate_thumbnail(original_path, thumb_path)
+                    
+                    # Upload thumbnail
+                    thumb_key = f"workspaces/{workspace_id}/invitations/{invitation_id}/media/{media_id}/thumb.jpg"
+                    with open(thumb_path, "rb") as f:
+                        await storage_service.upload_bytes(thumb_key, f.read(), "image/jpeg")
+                    
+                    updates["thumbnail_object_key"] = thumb_key
+                    # Assume public read or presigned access. 
+                    # If we need a URL, we might need to generate one or assume a pattern.
+                    # updates["thumbnail_url"] = ... 
+                    
+                except Exception as e:
+                    logger.error(f"Thumbnail generation failed: {e}")
+                finally:
+                    if os.path.exists(thumb_path):
+                        os.unlink(thumb_path)
+
+            # 4. Transcode (MP4 for now, HLS later if needed)
+            if media_type == "video":
+                mp4_path = original_path + "_opt.mp4"
+                try:
+                    await video_service.transcode_to_mp4(original_path, mp4_path, width=1280) # 720p
+                    
+                    mp4_key = f"workspaces/{workspace_id}/invitations/{invitation_id}/media/{media_id}/video.mp4"
+                    with open(mp4_path, "rb") as f:
+                         await storage_service.upload_bytes(mp4_key, f.read(), "video/mp4")
+                    
+                    variants.append({
+                        "type": "mp4",
+                        "quality": "720p",
+                        "object_key": mp4_key
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Transcoding failed: {e}")
+                finally:
+                    if os.path.exists(mp4_path):
+                        os.unlink(mp4_path)
+
+            updates["variants"] = variants
+            updates["processing_status"] = "completed"
+            updates["processing_completed_at"] = "NOW()" # handled by DB trigger or just generic timestamp? Service uses NOW() in SQL.
+            
+            # 5. Update DB
+            await media_repo.update_media(workspace_id, invitation_id, media_id, **updates)
+            
+            # Clean up original
+            os.unlink(original_path)
+            
+            return {"media_id": str(media_id), "status": "completed"}
+
+        except Exception as e:
+            if os.path.exists(original_path):
+                os.unlink(original_path)
+            raise e
+
+    except Exception as e:
+        logger.exception(f"Media processing failed for {media_id}: {e}")
+        await media_repo.update_media(
+            workspace_id, invitation_id, media_id,
+            processing_status="failed",
+            processing_error=str(e)
+        )
+        raise

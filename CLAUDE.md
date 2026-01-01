@@ -2092,6 +2092,10 @@ asset_ingest_latency_seconds_bucket               // Histogram
 - PostgreSQL 16 with pgvector extension, Redis 7 (for caching) (008-face-group-merge)
 - TypeScript 5.2+ (Frontend React 18.3) + React 18.3, React Router DOM 6.21, TailwindCSS 3.3, Lucide React (icons) (009-profile-tabs-redesign)
 - N/A (frontend-only, uses existing API endpoints) (009-profile-tabs-redesign)
+- Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 19, SQLAlchemy 2.0+, asyncpg 0.29+, BullMQ, FFmpeg, Puppeteer (017-digital-wedding-invitations)
+- PostgreSQL 16 (new tables), Redis 7 (job queues), Cloudflare R2 (media storage) (017-digital-wedding-invitations)
+- Python 3.11 (matching existing microservice) + FastAPI 0.115+, asyncpg 0.29+, redis 5.0+, celery 5.3+, sendgrid 6.11+ (018-invitations-production-readiness)
+- PostgreSQL 16 (existing), Redis 7 (existing) (018-invitations-production-readiness)
 
 ## Recent Changes
 - 001-admin-microservice: Added Python 3.11+ (matching main backend) + FastAPI 0.115+, SQLAlchemy 2.0+, asyncpg 0.29+, Redis 5.0+, Pydantic 2.7+, python-jose (JWT)

@@ -25,9 +25,14 @@ except ImportError:
 
 from PIL import Image
 
+# Add backend src to path for importing test constants
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+from app.config.test_constants import TEST_PASSWORD, TierUsers
+
 # Test configuration
-TEST_USER_EMAIL = "professional@test.rawdrive.in"
-TEST_USER_PASSWORD = "Test@123"
+TEST_USER_EMAIL = TierUsers.PROFESSIONAL.email
+TEST_USER_PASSWORD = TEST_PASSWORD
 FRONTEND_URL = "http://localhost:5173"  # Vite default port
 BACKEND_URL = "http://localhost:8000"
 

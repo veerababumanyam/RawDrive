@@ -1,0 +1,970 @@
+openapi: 3.0.3
+info:
+  title: Digital Invitations Enhancement API
+  description: |
+    API contracts for the Digital Invitations Enhancement feature (017-digital-wedding-invitations).
+
+    These endpoints extend the existing invitation API with:
+    - Multi-event (sub-event) management
+    - Video/audio media handling
+    - AI text and image generation
+    - Enhanced analytics
+    - Export functionality
+  version: 1.0.0
+  contact:
+    name: RawDrive API Team
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+tags:
+  - name: Sub-Events
+    description: Multi-event management within invitations
+  - name: Media
+    description: Video and audio media handling
+  - name: AI Generation
+    description: AI-powered text and image generation
+  - name: Analytics
+    description: Enhanced view and engagement analytics
+  - name: Export
+    description: PDF and video export
+
+paths:
+  # ===========================================================================
+  # SUB-EVENTS
+  # ===========================================================================
+  /workspaces/{workspace_id}/invitations/{invitation_id}/sub-events:
+    get:
+      tags: [Sub-Events]
+      summary: List sub-events for an invitation
+      operationId: listSubEvents
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: List of sub-events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sub_events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SubEvent'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Sub-Events]
+      summary: Add a sub-event to an invitation
+      operationId: createSubEvent
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubEventRequest'
+      responses:
+        '201':
+          description: Sub-event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubEvent'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/sub-events/{sub_event_id}:
+    patch:
+      tags: [Sub-Events]
+      summary: Update a sub-event
+      operationId: updateSubEvent
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/SubEventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubEventRequest'
+      responses:
+        '200':
+          description: Sub-event updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubEvent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Sub-Events]
+      summary: Delete a sub-event
+      operationId: deleteSubEvent
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/SubEventId'
+      responses:
+        '204':
+          description: Sub-event deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/sub-events/reorder:
+    post:
+      tags: [Sub-Events]
+      summary: Reorder sub-events
+      operationId: reorderSubEvents
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sub_event_ids]
+              properties:
+                sub_event_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Ordered list of sub-event IDs
+      responses:
+        '200':
+          description: Sub-events reordered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  # ===========================================================================
+  # MEDIA (Video/Audio)
+  # ===========================================================================
+  /workspaces/{workspace_id}/invitations/{invitation_id}/media:
+    get:
+      tags: [Media]
+      summary: List media attachments
+      operationId: listMedia
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - name: media_type
+          in: query
+          schema:
+            type: string
+            enum: [video, audio]
+      responses:
+        '200':
+          description: List of media
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  media:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Media'
+                  total:
+                    type: integer
+
+    post:
+      tags: [Media]
+      summary: Upload video or audio
+      operationId: uploadMedia
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, media_type]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Video (max 100MB) or audio (max 10MB) file
+                media_type:
+                  type: string
+                  enum: [video, audio]
+                purpose:
+                  type: string
+                  default: content
+                autoplay:
+                  type: boolean
+                  default: true
+                loop:
+                  type: boolean
+                  default: false
+      responses:
+        '202':
+          description: Upload accepted, processing started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '413':
+          description: File too large
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/media/{media_id}:
+    get:
+      tags: [Media]
+      summary: Get media status and URLs
+      operationId: getMedia
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/MediaId'
+      responses:
+        '200':
+          description: Media details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+
+    delete:
+      tags: [Media]
+      summary: Delete media
+      operationId: deleteMedia
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/MediaId'
+      responses:
+        '204':
+          description: Media deleted
+
+  # ===========================================================================
+  # AI GENERATION
+  # ===========================================================================
+  /workspaces/{workspace_id}/invitations/{invitation_id}/ai/generate-text:
+    post:
+      tags: [AI Generation]
+      summary: Generate invitation text with AI
+      operationId: generateText
+      description: |
+        Uses the user's configured Gemini API key to generate invitation copy.
+        Returns 3-5 options for the specified field.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateTextRequest'
+      responses:
+        '200':
+          description: Generated text options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateTextResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '402':
+          description: AI API key not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: AI service unavailable
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/ai/generate-background:
+    post:
+      tags: [AI Generation]
+      summary: Generate custom background image with AI
+      operationId: generateBackground
+      description: |
+        Uses the user's configured image generation API key (Imagen, Nano Banana, etc.)
+        to create a custom background image from a text prompt.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateBackgroundRequest'
+      responses:
+        '202':
+          description: Generation started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateBackgroundResponse'
+        '402':
+          description: Image generation API key not configured
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/ai/generations:
+    get:
+      tags: [AI Generation]
+      summary: List AI generation history
+      operationId: listAIGenerations
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - name: generation_type
+          in: query
+          schema:
+            type: string
+            enum: [text, image]
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: AI generation history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIGenerationsListResponse'
+
+  # ===========================================================================
+  # ANALYTICS
+  # ===========================================================================
+  /workspaces/{workspace_id}/invitations/{invitation_id}/analytics:
+    get:
+      tags: [Analytics]
+      summary: Get detailed invitation analytics
+      operationId: getAnalytics
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [7d, 30d, 90d, all]
+            default: 30d
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationAnalytics'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/analytics/views:
+    get:
+      tags: [Analytics]
+      summary: Get view timeline
+      operationId: getViewTimeline
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [7d, 30d, 90d]
+            default: 7d
+        - name: group_by
+          in: query
+          schema:
+            type: string
+            enum: [hour, day]
+            default: day
+      responses:
+        '200':
+          description: View timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data_points:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        views:
+                          type: integer
+                        unique_views:
+                          type: integer
+
+  # ===========================================================================
+  # EXPORT
+  # ===========================================================================
+  /workspaces/{workspace_id}/invitations/{invitation_id}/export/pdf:
+    post:
+      tags: [Export]
+      summary: Export invitation as PDF
+      operationId: exportPDF
+      description: |
+        Generates a high-resolution PDF suitable for printing.
+        Returns a job ID for polling status.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paper_size:
+                  type: string
+                  enum: [a4, a5, letter, custom]
+                  default: a4
+                include_rsvp_section:
+                  type: boolean
+                  default: false
+      responses:
+        '202':
+          description: Export job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/export/video:
+    post:
+      tags: [Export]
+      summary: Export invitation as animated video
+      operationId: exportVideo
+      description: |
+        Generates an animated MP4 video of the invitation.
+        Returns a job ID for polling status.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:
+                  type: string
+                  enum: [mp4, webm]
+                  default: mp4
+                resolution:
+                  type: string
+                  enum: ['1080x1920', '1200x630', '1080x1080']
+                  default: '1200x630'
+                  description: Story (9:16), Feed (1.91:1), or Square (1:1)
+                duration_seconds:
+                  type: integer
+                  minimum: 5
+                  maximum: 30
+                  default: 15
+      responses:
+        '202':
+          description: Export job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+
+  /workspaces/{workspace_id}/invitations/{invitation_id}/export/{job_id}:
+    get:
+      tags: [Export]
+      summary: Get export job status
+      operationId: getExportStatus
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Export job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobStatus'
+
+components:
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    InvitationId:
+      name: invitation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    SubEventId:
+      name: sub_event_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    MediaId:
+      name: media_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    # Sub-Events
+    SubEvent:
+      type: object
+      properties:
+        sub_event_id:
+          type: string
+          format: uuid
+        invitation_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Mehndi Ceremony"
+        event_type:
+          type: string
+          example: "pre_wedding"
+        event_datetime:
+          type: string
+          format: date-time
+        event_end_datetime:
+          type: string
+          format: date-time
+        event_timezone:
+          type: string
+          example: "Asia/Kolkata"
+        venue_name:
+          type: string
+        venue_address:
+          type: string
+        venue_map_url:
+          type: string
+        description:
+          type: string
+        display_order:
+          type: integer
+        show_countdown:
+          type: boolean
+        enable_individual_rsvp:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    CreateSubEventRequest:
+      type: object
+      required: [name, event_datetime]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        event_type:
+          type: string
+        event_datetime:
+          type: string
+          format: date-time
+        event_end_datetime:
+          type: string
+          format: date-time
+        event_timezone:
+          type: string
+          default: "Asia/Kolkata"
+        venue_name:
+          type: string
+        venue_address:
+          type: string
+        venue_map_url:
+          type: string
+        description:
+          type: string
+        show_countdown:
+          type: boolean
+          default: true
+
+    UpdateSubEventRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        event_datetime:
+          type: string
+          format: date-time
+        event_end_datetime:
+          type: string
+          format: date-time
+        venue_name:
+          type: string
+        venue_address:
+          type: string
+        description:
+          type: string
+        display_order:
+          type: integer
+
+    # Media
+    Media:
+      type: object
+      properties:
+        media_id:
+          type: string
+          format: uuid
+        invitation_id:
+          type: string
+          format: uuid
+        media_type:
+          type: string
+          enum: [video, audio]
+        purpose:
+          type: string
+        original_url:
+          type: string
+        original_filename:
+          type: string
+        original_size_bytes:
+          type: integer
+        duration_seconds:
+          type: number
+        width:
+          type: integer
+        height:
+          type: integer
+        thumbnail_url:
+          type: string
+        variants:
+          type: array
+          items:
+            type: object
+            properties:
+              format:
+                type: string
+              resolution:
+                type: string
+              url:
+                type: string
+        processing_status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        autoplay:
+          type: boolean
+        loop:
+          type: boolean
+        muted:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    # AI Generation
+    GenerateTextRequest:
+      type: object
+      required: [field, prompt]
+      properties:
+        field:
+          type: string
+          enum: [headline, couple_bio, rsvp_message, custom]
+          description: Target field for generated text
+        prompt:
+          type: string
+          maxLength: 500
+          example: "romantic beach wedding in Mumbai for Priya and Arjun"
+        language:
+          type: string
+          default: "en-IN"
+        tone:
+          type: string
+          enum: [romantic, elegant, casual, formal, playful]
+          default: romantic
+        max_length:
+          type: integer
+          description: Max characters per option
+          default: 200
+
+    GenerateTextResponse:
+      type: object
+      properties:
+        generation_id:
+          type: string
+          format: uuid
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              text:
+                type: string
+              confidence:
+                type: number
+              tokens_used:
+                type: integer
+        field:
+          type: string
+        latency_ms:
+          type: integer
+
+    GenerateBackgroundRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+          maxLength: 500
+          example: "floral mandala pattern in pastel pink and gold"
+        style:
+          type: string
+          enum: [realistic, artistic, abstract, pattern]
+          default: artistic
+        aspect_ratio:
+          type: string
+          enum: ['16:9', '4:3', '1:1', '9:16']
+          default: '16:9'
+
+    GenerateBackgroundResponse:
+      type: object
+      properties:
+        generation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, generating, completed, failed]
+        estimated_seconds:
+          type: integer
+        poll_url:
+          type: string
+
+    AIGenerationsListResponse:
+      type: object
+      properties:
+        generations:
+          type: array
+          items:
+            type: object
+            properties:
+              generation_id:
+                type: string
+                format: uuid
+              generation_type:
+                type: string
+                enum: [text, image]
+              prompt:
+                type: string
+              status:
+                type: string
+              was_used:
+                type: boolean
+              created_at:
+                type: string
+                format: date-time
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # Analytics
+    InvitationAnalytics:
+      type: object
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+        period:
+          type: string
+        total_views:
+          type: integer
+        unique_views:
+          type: integer
+        device_breakdown:
+          type: object
+          properties:
+            phone:
+              type: integer
+            tablet:
+              type: integer
+            desktop:
+              type: integer
+        geo_breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              country_code:
+                type: string
+              views:
+                type: integer
+              percentage:
+                type: number
+        referrer_breakdown:
+          type: object
+          properties:
+            direct:
+              type: integer
+            social:
+              type: integer
+            search:
+              type: integer
+            email:
+              type: integer
+            other:
+              type: integer
+        rsvp_stats:
+          type: object
+          properties:
+            total:
+              type: integer
+            attending:
+              type: integer
+            not_attending:
+              type: integer
+            pending:
+              type: integer
+            conversion_rate:
+              type: number
+              description: RSVPs / Unique views
+
+    # Export
+    ExportJobResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, processing]
+        estimated_seconds:
+          type: integer
+        poll_url:
+          type: string
+
+    ExportJobStatus:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        progress_percent:
+          type: integer
+        download_url:
+          type: string
+          description: Presigned URL, available when completed
+        expires_at:
+          type: string
+          format: date-time
+        error:
+          type: string
+
+    # Common
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []

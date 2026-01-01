@@ -20,57 +20,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Check, Save, Cloud, CloudOff, Loader2 } from 'lucide-react';
 
 import { AppButton } from '@/components/ui/AppButton';
-import { InvitationWizard } from '@/components/features/invitations/InvitationWizard';
+import { InvitationWizard, type WizardData } from '@/components/features/invitations/InvitationWizard';
 import { invitationService } from '@/services/invitationService';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { useToast } from '@/hooks/useToast';
 import { useInvitationDraft, type DraftSaveStatus } from '@/hooks/useInvitationDraft';
 import type { CreateInvitationRequest } from '@/types/invitations';
 
-interface WizardData {
-  // Step 1: Event Details
-  title: string;
-  description?: string;
-  event_type: string;
-  event_datetime: string;
-  event_end_datetime?: string;
-  event_timezone: string;
-  venue: {
-    name?: string;
-    address?: string;
-    city?: string;
-    state?: string;
-    country: string;
-    postal_code?: string;
-    latitude?: number;
-    longitude?: number;
-    map_url?: string;
-  };
-  host_names: string[];
-  host_contact_phone?: string;
-  host_contact_email?: string;
-  primary_language: string;
-  secondary_language?: string;
-
-  // Step 2: Template
-  template_id?: string;
-  customization: Record<string, unknown>;
-
-  // Step 3: RSVP Settings
-  rsvp_settings: {
-    enabled: boolean;
-    deadline?: string;
-    max_party_size: number;
-    collect_dietary: boolean;
-    collect_phone: boolean;
-    custom_questions: Array<{
-      question: string;
-      type: 'text' | 'select' | 'checkbox';
-      options?: string[];
-      required: boolean;
-    }>;
-  };
-}
 
 const INITIAL_DATA: WizardData = {
   title: '',
@@ -227,6 +183,9 @@ const InvitationCreatePage: React.FC = () => {
         secondary_language: data.secondary_language,
         template_id: data.template_id,
         customization: data.customization,
+        font_heading: data.font_heading,
+        font_body: data.font_body,
+        layout_density: data.layout_density,
       };
 
       return invitationService.createInvitation(workspaceId, request);

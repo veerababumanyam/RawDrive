@@ -317,6 +317,13 @@ class InvitationRepository:
         content_i18n: Optional[dict] = None,
         auto_delete_enabled: bool = True,
         auto_delete_days: int = 7,
+        video_object_key: Optional[str] = None,
+        audio_object_key: Optional[str] = None,
+        layout_density: str = "normal",
+        font_heading: str = "Playfair Display",
+        font_body: str = "Lora",
+        ai_generated_content: Optional[dict] = None,
+        has_sub_events: bool = False,
     ) -> dict[str, Any]:
         """Create a new invitation.
 
@@ -343,13 +350,15 @@ class InvitationRepository:
                     rsvp_enabled, rsvp_deadline, rsvp_max_party_size,
                     rsvp_collect_dietary, rsvp_collect_phone, rsvp_custom_questions,
                     primary_language, secondary_language, customization, content_i18n,
-                    auto_delete_enabled, auto_delete_days, created_by_user_id
+                    auto_delete_enabled, auto_delete_days, created_by_user_id,
+                    video_object_key, audio_object_key, layout_density,
+                    font_heading, font_body, ai_generated_content, has_sub_events
                 )
                 VALUES (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                     $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                     $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                    $31, $32, $33, $34
+                    $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41
                 )
                 RETURNING *
                 """,
@@ -387,6 +396,13 @@ class InvitationRepository:
                 auto_delete_enabled,
                 auto_delete_days,
                 created_by_user_id,
+                video_object_key,
+                audio_object_key,
+                layout_density,
+                font_heading,
+                font_body,
+                json.dumps(ai_generated_content or {}),
+                has_sub_events,
             )
 
             logger.info(
@@ -571,7 +587,7 @@ class InvitationRepository:
             param_idx = 1
 
             for key, value in updates.items():
-                if key in ("customization", "content_i18n", "rsvp_custom_questions"):
+                if key in ("customization", "content_i18n", "rsvp_custom_questions", "ai_generated_content"):
                     if isinstance(value, (dict, list)):
                         value = json.dumps(value)
                 set_parts.append(f"{key} = ${param_idx}")
@@ -1249,7 +1265,16 @@ class InvitationRepository:
         result = dict(row)
 
         # Parse JSONB fields
-        for key in ("layout", "content_i18n", "customization", "rsvp_custom_questions", "qr_config"):
+        for key in (
+            "layout",
+            "content_i18n",
+            "customization",
+            "rsvp_custom_questions",
+            "qr_config",
+            "gradient_config",
+            "animation_config",
+            "ai_generated_content",
+        ):
             if key in result and isinstance(result[key], str):
                 try:
                     result[key] = json.loads(result[key])

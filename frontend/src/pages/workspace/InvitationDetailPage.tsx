@@ -45,6 +45,7 @@ import { AppCard } from '@/components/ui/AppCard';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { InvitationPreview } from '@/components/features/invitations/InvitationPreview';
 import { ShareMenu } from '@/components/features/invitations/ShareMenu';
+import { RSVPDashboard } from '@/components/features/invitations/RSVPDashboard';
 import * as invitationService from '@/services/invitationService';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { useToast } from '@/hooks/useToast';
@@ -109,6 +110,7 @@ const InvitationDetailPage: React.FC = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [previewMode, setPreviewMode] = useState<'mobile' | 'desktop'>('mobile');
+  const [activeTab, setActiveTab] = useState<'overview' | 'rsvps'>('overview');
 
   // Fetch invitation details
   const {
@@ -363,6 +365,42 @@ const InvitationDetailPage: React.FC = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
+        
+        {/* Tabs */}
+        <div className="flex border-b border-border mb-8">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'overview'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('rsvps')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === 'rsvps'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            RSVPs
+            {invitation.rsvp_count > 0 && (
+              <AppBadge variant="default" size="sm">
+                {invitation.rsvp_count}
+              </AppBadge>
+            )}
+          </button>
+        </div>
+
+        {activeTab === 'rsvps' ? (
+           <RSVPDashboard
+             workspaceId={workspaceId!}
+             invitationId={id!}
+           />
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Details & Stats */}
           <div className="lg:col-span-2 space-y-6">
@@ -528,13 +566,13 @@ const InvitationDetailPage: React.FC = () => {
 
               {invitation.status === 'published' && invitation.rsvp_count > 0 && (
                 <div className="mt-4 pt-4 border-t border-border">
-                  <Link
-                    to={`/workspace/invitations/${id}/rsvps`}
+                  <button
+                    onClick={() => setActiveTab('rsvps')}
                     className="inline-flex items-center gap-2 text-primary hover:underline"
                   >
                     <Users className="w-4 h-4" />
                     View All RSVPs ({invitation.rsvp_count})
-                  </Link>
+                  </button>
                 </div>
               )}
             </AppCard>
@@ -664,6 +702,7 @@ const InvitationDetailPage: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Share Modal (T081-T084) */}

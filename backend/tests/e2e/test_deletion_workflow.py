@@ -28,15 +28,21 @@ import io
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import aiohttp
 from PIL import Image
 
+# Add backend src to path for importing test constants
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+from app.config.test_constants import TEST_PASSWORD, TierUsers
+
 # Test configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-TEST_USER_EMAIL = "professional@test.rawdrive.in"
-TEST_USER_PASSWORD = "Test@123"
+TEST_USER_EMAIL = TierUsers.PROFESSIONAL.email
+TEST_USER_PASSWORD = TEST_PASSWORD
 
 
 class Colors:

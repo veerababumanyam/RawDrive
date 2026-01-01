@@ -1,0 +1,71 @@
+version: '3.8'
+
+# This docker-compose is for local development only.
+# In production, use the main infrastructure/docker/docker-compose.yml
+# which includes this service as part of the full stack.
+
+services:
+  # Invitations API Service
+  invitations-api:
+    build: .
+    container_name: invitations-api
+    ports:
+      - "8001:8000"
+    environment:
+      # Database - Use the main RawDrive PostgreSQL
+      - DATABASE_URL=${DATABASE_URL:-postgresql://rawdrive:rawdrive@host.docker.internal:5432/rawdrive}
+      # Redis - Use the main RawDrive Redis
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
+      # Celery
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://host.docker.internal:6379/1}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://host.docker.internal:6379/2}
+      # JWT - Must match main backend
+      - JWT_SECRET=${JWT_SECRET}
+      # Email
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+      # Storage
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      # Service config
+      - DEBUG=${DEBUG:-false}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    # For local development, use host network to access main DB/Redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Celery Worker for background tasks
+  invitations-worker:
+    build: .
+    container_name: invitations-worker
+    command: celery -A src.workers.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://rawdrive:rawdrive@host.docker.internal:5432/rawdrive}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://host.docker.internal:6379/1}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://host.docker.internal:6379/2}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+    depends_on:
+      invitations-api:
+        condition: service_healthy
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+# Note: This service uses the main RawDrive PostgreSQL and Redis.
+# Make sure the main services are running:
+#   npm run docker:dev:up
+#
+# Then start this service:
+#   cd services/invitations-service
+#   docker-compose up -d
+#
+# The service will be available at:
+#   http://localhost:8001/docs
