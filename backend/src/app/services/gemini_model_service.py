@@ -607,7 +607,7 @@ class GeminiModelService:
                         COUNT(ugs.user_id) as user_count
                     FROM gemini_models gm
                     LEFT JOIN user_gemini_settings ugs ON ugs.selected_model_id = gm.model_id
-                    LEFT JOIN workspace_members wm ON wm.user_id = ugs.user_id
+                    LEFT JOIN workspace_memberships wm ON wm.user_id = ugs.user_id
                     WHERE gm.is_active = TRUE AND (wm.workspace_id = $1 OR wm.workspace_id IS NULL)
                     GROUP BY gm.model_id, gm.identifier, gm.display_name
                     ORDER BY user_count DESC

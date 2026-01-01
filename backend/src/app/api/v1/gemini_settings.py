@@ -58,7 +58,7 @@ async def _get_user_workspace_id(user_id: UUID) -> UUID:
     pool = await get_postgres_pool()
     workspace_id = await pool.fetchval(
         """
-        SELECT workspace_id FROM workspace_members
+        SELECT workspace_id FROM workspace_memberships
         WHERE user_id = $1
         ORDER BY created_at ASC
         LIMIT 1
