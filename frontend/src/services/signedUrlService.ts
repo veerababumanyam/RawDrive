@@ -70,7 +70,10 @@ class SignedUrlService {
     const signedUrl = response.data!;
 
     // Prepend API base URL to the relative signed URL
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    // Use VITE_API_URL if set (even if empty for relative URLs), otherwise default to localhost
+    const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined
+      ? import.meta.env.VITE_API_URL
+      : 'http://localhost:8000';
     const url = signedUrl.url.startsWith('http')
       ? signedUrl.url
       : `${API_BASE_URL}${signedUrl.url}`;

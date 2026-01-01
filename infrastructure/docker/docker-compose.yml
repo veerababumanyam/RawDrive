@@ -110,6 +110,8 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-https://rawdrive.ai}
       # Disable embedded face detection worker (now separate service)
       DISABLE_FACE_WORKER: "true"
+      # Invitations microservice URL for proxy routing
+      INVITATIONS_SERVICE_URL: http://invitations-api:8000
     ports:
       # Bind to localhost only - accessible via nginx reverse proxy, not directly from internet
       - "127.0.0.1:8000:8000"
@@ -295,6 +297,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Celery worker health check - verify Redis broker connectivity
+    # Python slim doesn't have ps/pgrep, so use redis-cli via Python
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import redis; r=redis.from_url('redis://redis:6379/3'); r.ping()\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:

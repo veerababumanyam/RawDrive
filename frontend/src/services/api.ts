@@ -37,7 +37,10 @@ export function isApiError(error: unknown): error is ApiError {
 }
 
 // Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
+const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined
+  ? import.meta.env.VITE_API_URL
+  : 'http://localhost:8000';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second
 const TIMEOUT_MS = 30000; // 30 seconds

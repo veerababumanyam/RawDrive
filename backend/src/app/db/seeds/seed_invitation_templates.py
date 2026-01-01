@@ -355,7 +355,7 @@ CORPORATE_I18N = {
 TEMPLATES: list[Template] = [
     # Wedding Templates (5)
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0001"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110001"),
         name="Elegant Gold",
         slug="wedding-elegant-gold",
         description="A timeless wedding invitation with elegant gold accents and floral decorations",
@@ -368,7 +368,7 @@ TEMPLATES: list[Template] = [
         is_premium=False,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0002"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110002"),
         name="Modern Minimalist",
         slug="wedding-modern-minimalist",
         description="Clean, modern design with a focus on beautiful typography",
@@ -381,7 +381,7 @@ TEMPLATES: list[Template] = [
         is_premium=False,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0003"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110003"),
         name="Royal Traditional",
         slug="wedding-royal-traditional",
         description="Rich traditional design with deep maroon and gold, featuring Indian motifs",
@@ -394,7 +394,7 @@ TEMPLATES: list[Template] = [
         is_premium=True,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0004"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110004"),
         name="Garden Romance",
         slug="wedding-garden-romance",
         description="Romantic garden-inspired design with soft florals and natural tones",
@@ -416,7 +416,7 @@ TEMPLATES: list[Template] = [
         is_premium=False,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0005"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110005"),
         name="Destination Beach",
         slug="wedding-destination-beach",
         description="Perfect for beach and destination weddings with tropical vibes",
@@ -440,7 +440,7 @@ TEMPLATES: list[Template] = [
 
     # Birthday Templates (5)
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0006"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110006"),
         name="Colorful Celebration",
         slug="birthday-colorful-celebration",
         description="Bright and cheerful design perfect for any birthday party",
@@ -453,7 +453,7 @@ TEMPLATES: list[Template] = [
         is_premium=False,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0007"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110007"),
         name="Kids Magic",
         slug="birthday-kids-magic",
         description="Magical and playful design for children's birthday parties",
@@ -466,7 +466,7 @@ TEMPLATES: list[Template] = [
         is_premium=False,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0008"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110008"),
         name="Milestone Birthday",
         slug="birthday-milestone",
         description="Elegant design for milestone birthdays (30th, 40th, 50th, etc.)",
@@ -493,7 +493,7 @@ TEMPLATES: list[Template] = [
         is_premium=False,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0009"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110009"),
         name="Neon Glow",
         slug="birthday-neon-glow",
         description="Trendy neon-themed design for teen and adult parties",
@@ -515,7 +515,7 @@ TEMPLATES: list[Template] = [
         is_premium=True,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0010"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110010"),
         name="First Birthday",
         slug="birthday-first",
         description="Adorable design for baby's first birthday celebration",
@@ -539,7 +539,7 @@ TEMPLATES: list[Template] = [
 
     # Festival & Corporate Templates (5)
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0011"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110011"),
         name="Diwali Lights",
         slug="festival-diwali-lights",
         description="Vibrant Diwali celebration invitation with diyas and rangoli",
@@ -552,7 +552,7 @@ TEMPLATES: list[Template] = [
         is_premium=False,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0012"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110012"),
         name="Holi Colors",
         slug="festival-holi-colors",
         description="Colorful Holi celebration invitation with splashes of color",
@@ -589,7 +589,7 @@ TEMPLATES: list[Template] = [
         is_premium=False,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0013"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110013"),
         name="Professional Conference",
         slug="corporate-professional-conference",
         description="Clean and professional design for corporate events and conferences",
@@ -602,7 +602,7 @@ TEMPLATES: list[Template] = [
         is_premium=False,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0014"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110014"),
         name="Product Launch",
         slug="corporate-product-launch",
         description="Dynamic design for product launches and tech events",
@@ -624,7 +624,7 @@ TEMPLATES: list[Template] = [
         is_premium=True,
     ),
     Template(
-        template_id=uuid.UUID("tttttttt-tttt-tttt-tttt-tttttttt0015"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111110015"),
         name="Team Celebration",
         slug="corporate-team-celebration",
         description="Fun corporate design for team building and celebration events",

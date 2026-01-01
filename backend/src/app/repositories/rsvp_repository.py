@@ -794,6 +794,100 @@ class RSVPRepository:
 
         return result
 
+    # =========================================================================
+    # ALIASES for backward compatibility with RSVP service
+    # =========================================================================
+
+    async def find_by_email(
+        self,
+        invitation_id: UUID,
+        email: str,
+    ):
+        """Alias for get_rsvp_by_email."""
+        return await self.get_rsvp_by_email(invitation_id, email)
+
+    async def create(self, rsvp_data: dict):
+        """Alias for create_rsvp - accepts dict and extracts parameters."""
+        rsvp, edit_token = await self.create_rsvp(
+            invitation_id=rsvp_data["invitation_id"],
+            workspace_id=rsvp_data["workspace_id"],
+            guest_name=rsvp_data["guest_name"],
+            guest_email=rsvp_data["guest_email"],
+            attending=rsvp_data.get("attending", True),
+            guest_id=rsvp_data.get("guest_id"),
+            guest_phone=rsvp_data.get("guest_phone"),
+            party_size=rsvp_data.get("party_size", 1),
+            party_names=rsvp_data.get("party_names"),
+            dietary_preferences=rsvp_data.get("dietary_preferences"),
+            message=rsvp_data.get("message"),
+            custom_answers=rsvp_data.get("custom_answers"),
+            source=rsvp_data.get("source", "web"),
+            ip_address=rsvp_data.get("ip_address"),
+            user_agent=rsvp_data.get("user_agent"),
+        )
+        # Add edit_token to response for service compatibility
+        rsvp["edit_token"] = edit_token
+        return rsvp
+
+    async def find_by_edit_token_hash(self, hashed_token: str):
+        """Find RSVP by pre-hashed edit token."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT * FROM invitation_rsvps
+                WHERE edit_token_hash = $1
+                  AND (token_expires_at IS NULL OR token_expires_at > NOW())
+                """,
+                hashed_token,
+            )
+            return self._row_to_dict(row) if row else None
+
+    async def update(self, rsvp_id: UUID, update_data: dict):
+        """Alias for update_rsvp."""
+        return await self.update_rsvp(rsvp_id, **update_data)
+
+    async def get_stats(self, invitation_id: UUID, workspace_id: UUID):
+        """Alias for get_rsvp_stats."""
+        return await self.get_rsvp_stats(invitation_id, workspace_id)
+
+    async def list_by_invitation(
+        self,
+        invitation_id: UUID,
+        workspace_id: UUID,
+        status_filter: str | None = None,
+        page: int = 1,
+        limit: int = 50,
+    ):
+        """Alias for list_rsvps that returns (items, total) tuple."""
+        items = await self.list_rsvps(
+            invitation_id=invitation_id,
+            workspace_id=workspace_id,
+            status=status_filter,
+            offset=(page - 1) * limit,
+            limit=limit,
+        )
+        # Get total count
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            total = await conn.fetchval(
+                """
+                SELECT COUNT(*) FROM invitation_rsvps
+                WHERE invitation_id = $1 AND workspace_id = $2
+                """,
+                invitation_id,
+                workspace_id,
+            )
+        return items, total
+
+    async def get_by_id(self, rsvp_id: UUID, workspace_id: UUID):
+        """Alias for get_rsvp_by_id."""
+        return await self.get_rsvp_by_id(rsvp_id, workspace_id)
+
+    async def delete(self, rsvp_id: UUID):
+        """Alias for delete_rsvp without workspace_id."""
+        return await self.delete_rsvp(rsvp_id)
+
 
 # Factory function for dependency injection
 _rsvp_repository: RSVPRepository | None = None

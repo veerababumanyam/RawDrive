@@ -282,3 +282,31 @@ router.include_router(
     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/analytics",
     tags=["invitation-analytics"],
 )
+
+# Invitation Templates routes (016-save-the-date)
+# CRUD endpoints for managing invitation templates
+from app.api.v1.invitation_templates import router as invitation_templates_router
+router.include_router(
+    invitation_templates_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
+    tags=["invitation-templates"],
+)
+
+# Invitations Microservice Proxy Routes (018-invitations-production-readiness)
+# Proxies requests to the dedicated invitations microservice for production-ready features:
+# - Guest management with rate limiting
+# - RSVP with HMAC-signed edit tokens
+# - Analytics with Redis caching
+# - Bulk invite with Celery workers
+from app.api.v1.invitations_microservice_proxy import router as invitations_microservice_proxy_router
+router.include_router(
+    invitations_microservice_proxy_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/microservice",
+    tags=["invitations-microservice"],
+)
+# Also add public RSVP proxy routes
+router.include_router(
+    invitations_microservice_proxy_router,
+    prefix="/api/v1/invitations-microservice",
+    tags=["invitations-microservice-public"],
+)

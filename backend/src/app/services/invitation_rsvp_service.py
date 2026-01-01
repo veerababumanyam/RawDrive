@@ -112,15 +112,16 @@ class InvitationRSVPService:
         if not invitation:
             raise RSVPNotFoundError("Invitation not found")
 
-        if invitation.status != "published":
+        if invitation.get("status") != "published":
             raise RSVPServiceError("This invitation is not accepting RSVPs")
 
         # Check if RSVP is enabled
-        if not invitation.rsvp_settings.get("enabled", True):
+        rsvp_settings = invitation.get("rsvp_settings", {}) or {}
+        if not rsvp_settings.get("enabled", True):
             raise RSVPServiceError("RSVP is not enabled for this invitation")
 
         # Check deadline
-        deadline = invitation.rsvp_settings.get("deadline")
+        deadline = rsvp_settings.get("deadline")
         if deadline:
             deadline_dt = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
             if datetime.now(timezone.utc) > deadline_dt:
@@ -139,7 +140,7 @@ class InvitationRSVPService:
             )
 
         # Validate party size
-        max_party_size = invitation.rsvp_settings.get("max_party_size", 1)
+        max_party_size = rsvp_settings.get("max_party_size", 1)
         if data.party_size > max_party_size:
             data.party_size = max_party_size
 
@@ -170,34 +171,36 @@ class InvitationRSVPService:
         await self.invitation_repo.increment_rsvp_count(invitation_id)
 
         # Queue confirmation email to guest (T048)
+        rsvp_id = rsvp.get("rsvp_id") if isinstance(rsvp, dict) else rsvp.rsvp_id
         try:
+            event_dt = invitation.get("event_datetime")
             await enqueue_task(
                 task_type="send_rsvp_confirmation",
                 payload={
                     "guest_email": data.guest_email,
                     "guest_name": data.guest_name,
-                    "invitation_title": invitation.title,
-                    "event_datetime": invitation.event_datetime.isoformat() if invitation.event_datetime else None,
+                    "invitation_title": invitation.get("title", "Event"),
+                    "event_datetime": event_dt.isoformat() if event_dt else None,
                     "attendance_status": "attending" if data.attending else "not_attending",
                     "edit_token": plain_token,
-                    "invitation_slug": invitation.slug,
+                    "invitation_slug": invitation.get("slug"),
                 },
             )
             logger.info(
                 "RSVP confirmation email queued",
-                extra={"rsvp_id": str(rsvp.rsvp_id), "email": data.guest_email},
+                extra={"rsvp_id": str(rsvp_id), "email": data.guest_email},
             )
         except Exception as e:
             # Don't fail the RSVP if email queueing fails
             logger.warning(
                 "Failed to queue RSVP confirmation email",
-                extra={"rsvp_id": str(rsvp.rsvp_id), "error": str(e)},
+                extra={"rsvp_id": str(rsvp_id), "error": str(e)},
             )
 
         # Queue host notification based on notification_preference (T108)
         await self._queue_host_notification(
             invitation=invitation,
-            rsvp_id=str(rsvp.rsvp_id),
+            rsvp_id=str(rsvp_id),
             guest_name=data.guest_name,
             guest_email=data.guest_email,
             attending=data.attending,
@@ -205,7 +208,7 @@ class InvitationRSVPService:
         )
 
         return RSVPSubmitResponse(
-            rsvp_id=rsvp.rsvp_id,
+            rsvp_id=rsvp_id,
             edit_token=plain_token,
             message="Thank you for your RSVP! A confirmation has been sent to your email.",
             can_edit_until=deadline,
@@ -236,15 +239,16 @@ class InvitationRSVPService:
 
         # Check if invitation still accepts edits
         invitation = await self.invitation_repo.get_by_id(
-            rsvp.invitation_id,
-            rsvp.workspace_id,
+            rsvp.get("invitation_id") if isinstance(rsvp, dict) else rsvp.invitation_id,
+            rsvp.get("workspace_id") if isinstance(rsvp, dict) else rsvp.workspace_id,
         )
 
-        if not invitation or invitation.status != "published":
+        if not invitation or invitation.get("status") != "published":
             raise RSVPServiceError("This invitation is no longer accepting updates")
 
         # Check deadline
-        deadline = invitation.rsvp_settings.get("deadline")
+        rsvp_settings = invitation.get("rsvp_settings", {}) or {}
+        deadline = rsvp_settings.get("deadline")
         if deadline:
             deadline_dt = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
             if datetime.now(timezone.utc) > deadline_dt:
@@ -258,7 +262,7 @@ class InvitationRSVPService:
                 RSVPStatus.CONFIRMED.value if data.attending else RSVPStatus.DECLINED.value
             )
         if data.party_size is not None:
-            max_party_size = invitation.rsvp_settings.get("max_party_size", 1)
+            max_party_size = rsvp_settings.get("max_party_size", 1)
             update_data["party_size"] = min(data.party_size, max_party_size)
         if data.party_names is not None:
             update_data["party_names"] = data.party_names
@@ -380,22 +384,31 @@ class InvitationRSVPService:
             attending: Whether guest is attending
             party_size: Number of guests in party
         """
+        # Helper to get invitation field regardless of dict or object
+        def get_inv(key, default=None):
+            if isinstance(invitation, dict):
+                return invitation.get(key, default)
+            return getattr(invitation, key, default)
+
         # Get notification preference (default to immediate)
-        notification_preference = getattr(invitation, "notification_preference", "immediate")
+        notification_preference = get_inv("notification_preference", "immediate")
+        invitation_id = get_inv("invitation_id")
+        workspace_id = get_inv("workspace_id")
+        invitation_title = get_inv("title", "Event")
 
         if notification_preference == "disabled":
             logger.debug(
                 "Host notifications disabled for invitation",
-                extra={"invitation_id": str(invitation.invitation_id)},
+                extra={"invitation_id": str(invitation_id)},
             )
             return
 
         # Get host email from invitation
-        host_email = invitation.host_contact_email
+        host_email = get_inv("host_contact_email")
         if not host_email:
             logger.debug(
                 "No host email configured, skipping host notification",
-                extra={"invitation_id": str(invitation.invitation_id)},
+                extra={"invitation_id": str(invitation_id)},
             )
             return
 
@@ -405,10 +418,10 @@ class InvitationRSVPService:
                 await enqueue_task(
                     task_type="send_rsvp_host_notification",
                     payload={
-                        "invitation_id": str(invitation.invitation_id),
-                        "workspace_id": str(invitation.workspace_id),
+                        "invitation_id": str(invitation_id),
+                        "workspace_id": str(workspace_id),
                         "host_email": host_email,
-                        "invitation_title": invitation.title,
+                        "invitation_title": invitation_title,
                         "guest_name": guest_name,
                         "guest_email": guest_email,
                         "attending": attending,
@@ -418,7 +431,7 @@ class InvitationRSVPService:
                 )
                 logger.info(
                     "Host notification queued (immediate)",
-                    extra={"invitation_id": str(invitation.invitation_id), "host_email": host_email},
+                    extra={"invitation_id": str(invitation_id), "host_email": host_email},
                 )
 
             elif notification_preference == "daily_digest":
@@ -426,10 +439,10 @@ class InvitationRSVPService:
                 await enqueue_task(
                     task_type="queue_rsvp_for_digest",
                     payload={
-                        "invitation_id": str(invitation.invitation_id),
-                        "workspace_id": str(invitation.workspace_id),
+                        "invitation_id": str(invitation_id),
+                        "workspace_id": str(workspace_id),
                         "host_email": host_email,
-                        "invitation_title": invitation.title,
+                        "invitation_title": invitation_title,
                         "guest_name": guest_name,
                         "guest_email": guest_email,
                         "attending": attending,
@@ -439,14 +452,14 @@ class InvitationRSVPService:
                 )
                 logger.info(
                     "RSVP queued for daily digest",
-                    extra={"invitation_id": str(invitation.invitation_id), "host_email": host_email},
+                    extra={"invitation_id": str(invitation_id), "host_email": host_email},
                 )
 
         except Exception as e:
             # Don't fail the RSVP if notification queueing fails
             logger.warning(
                 "Failed to queue host notification",
-                extra={"invitation_id": str(invitation.invitation_id), "error": str(e)},
+                extra={"invitation_id": str(invitation_id), "error": str(e)},
             )
 
     async def delete_rsvp(

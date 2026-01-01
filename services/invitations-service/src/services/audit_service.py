@@ -5,6 +5,7 @@ Provides append-only audit logging for SOC2/GDPR compliance.
 All data modifications are recorded with actor, timestamp, and context.
 """
 
+import json
 from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
@@ -55,6 +56,11 @@ class AuditService:
         """
         pool = await get_pool()
 
+        # Serialize dicts to JSON strings for JSONB columns
+        # asyncpg requires explicit JSON serialization
+        changes_json = json.dumps(changes) if changes else None
+        metadata_json = json.dumps(metadata) if metadata else None
+
         try:
             async with pool.acquire() as conn:
                 result = await conn.fetchrow(
@@ -62,7 +68,7 @@ class AuditService:
                     INSERT INTO audit_events
                         (workspace_id, actor_id, action, resource_type, resource_id,
                          changes, metadata, ip_address, user_agent)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
                     RETURNING event_id
                     """,
                     UUID(workspace_id),
@@ -70,8 +76,8 @@ class AuditService:
                     action,
                     resource_type,
                     UUID(resource_id),
-                    changes,
-                    metadata,
+                    changes_json,
+                    metadata_json,
                     ip_address,
                     user_agent,
                 )

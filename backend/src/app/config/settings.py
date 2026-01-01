@@ -214,6 +214,13 @@ class AppSettings(BaseSettings):
                 return [origin.strip() for origin in v.split(",") if origin.strip()]
         return []
 
+    # Microservices
+    invitations_service_url: Optional[str] = Field(
+        default=None,
+        alias="INVITATIONS_SERVICE_URL",
+        description="URL for invitations microservice (e.g., http://invitations-api:8000)",
+    )
+
     # Observability
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     sentry_dsn: Optional[SecretStr] = Field(None, alias="SENTRY_DSN")

@@ -446,6 +446,37 @@ class InvitationRepository:
 
             return self._row_to_dict(row) if row else None
 
+    # Alias for backward compatibility with RSVP service
+    get_by_id = get_invitation_by_id
+
+    async def increment_rsvp_count(self, invitation_id: UUID) -> None:
+        """Increment the RSVP count for an invitation."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE digital_invitations
+                SET rsvp_count = COALESCE(rsvp_count, 0) + 1,
+                    updated_at = NOW()
+                WHERE invitation_id = $1
+                """,
+                invitation_id,
+            )
+
+    async def decrement_rsvp_count(self, invitation_id: UUID) -> None:
+        """Decrement the RSVP count for an invitation."""
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE digital_invitations
+                SET rsvp_count = GREATEST(COALESCE(rsvp_count, 0) - 1, 0),
+                    updated_at = NOW()
+                WHERE invitation_id = $1
+                """,
+                invitation_id,
+            )
+
     async def get_invitation_by_slug(
         self,
         slug: str,

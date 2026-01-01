@@ -8,6 +8,7 @@ Feature: 016-save-the-date
 
 import io
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Optional
 from uuid import UUID
 
@@ -88,17 +89,20 @@ async def access_invitation(
 
     try:
         # Get invitation by slug
-        invitation = await invitation_service.get_public_invitation(slug)
+        invitation_dict = await invitation_service.get_public_invitation(slug)
 
-        if not invitation:
+        if not invitation_dict:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Invitation not found",
             )
 
+        # Convert dict to object for attribute access
+        invitation = SimpleNamespace(**invitation_dict)
+
         # Check protection status
-        requires_password = invitation.password_protected
-        requires_pin = invitation.pin_protected
+        requires_password = getattr(invitation, 'password_protected', False)
+        requires_pin = getattr(invitation, 'pin_protected', False)
 
         if requires_password or requires_pin:
             return AccessInvitationResponse(
@@ -108,38 +112,32 @@ async def access_invitation(
                 error=None,
             )
 
-        # Track view
-        client_ip = request.client.host if request.client else None
-        await invitation_service.track_view(
-            invitation.invitation_id,
-            invitation.workspace_id,
-            ip_address=client_ip,
-        )
+        # Note: View tracking is handled internally by get_public_invitation
 
         # Return full invitation
         public_data = PublicInvitationResponse(
             invitation_id=invitation.invitation_id,
             title=invitation.title,
-            description=invitation.description,
+            description=getattr(invitation, 'description', None),
             event_type=invitation.event_type,
-            event_datetime=invitation.event_datetime.isoformat() if invitation.event_datetime else None,
-            event_end_datetime=invitation.event_end_datetime.isoformat() if invitation.event_end_datetime else None,
-            event_timezone=invitation.event_timezone,
-            venue=invitation.venue,
-            host_names=invitation.host_names,
-            cover_image_url=invitation.cover_image_url,
-            gallery_images=[],  # TODO: Fetch from invitation_images
-            rsvp_enabled=invitation.rsvp_settings.get("enabled", True),
-            rsvp_deadline=invitation.rsvp_settings.get("deadline"),
-            max_party_size=invitation.rsvp_settings.get("max_party_size", 1),
-            collect_dietary=invitation.rsvp_settings.get("collect_dietary", False),
-            collect_phone=invitation.rsvp_settings.get("collect_phone", False),
-            custom_questions=invitation.rsvp_settings.get("custom_questions", []),
-            primary_language=invitation.primary_language,
-            secondary_language=invitation.secondary_language,
-            content_i18n=invitation.content_i18n,
-            template_layout=invitation.template_layout if hasattr(invitation, 'template_layout') else None,
-            customization=invitation.customization,
+            event_datetime=invitation.event_datetime.isoformat() if getattr(invitation, 'event_datetime', None) else None,
+            event_end_datetime=invitation.event_end_datetime.isoformat() if getattr(invitation, 'event_end_datetime', None) else None,
+            event_timezone=getattr(invitation, 'event_timezone', 'UTC'),
+            venue=getattr(invitation, 'venue', {}),
+            host_names=getattr(invitation, 'host_names', None) or [],
+            cover_image_url=getattr(invitation, 'cover_image_url', None),
+            gallery_images=getattr(invitation, 'gallery_images', []) or [],
+            rsvp_enabled=getattr(invitation, 'rsvp_settings', {}).get("enabled", True),
+            rsvp_deadline=getattr(invitation, 'rsvp_settings', {}).get("deadline"),
+            max_party_size=getattr(invitation, 'rsvp_settings', {}).get("max_party_size", 1),
+            collect_dietary=getattr(invitation, 'rsvp_settings', {}).get("collect_dietary", False),
+            collect_phone=getattr(invitation, 'rsvp_settings', {}).get("collect_phone", False),
+            custom_questions=getattr(invitation, 'rsvp_settings', {}).get("custom_questions", []),
+            primary_language=getattr(invitation, 'primary_language', 'en'),
+            secondary_language=getattr(invitation, 'secondary_language', None),
+            content_i18n=getattr(invitation, 'content_i18n', {}),
+            template_layout=getattr(invitation, 'template_layout', None),
+            customization=getattr(invitation, 'customization', {}),
         )
 
         return AccessInvitationResponse(
@@ -174,13 +172,13 @@ async def verify_access(
 
     try:
         # Verify credentials
-        invitation = await invitation_service.verify_and_get_invitation(
+        invitation_dict = await invitation_service.verify_and_get_invitation(
             slug=slug,
             password=credentials.password,
             pin=credentials.pin,
         )
 
-        if not invitation:
+        if not invitation_dict:
             return AccessInvitationResponse(
                 access_granted=False,
                 requires_password=True,
@@ -188,38 +186,35 @@ async def verify_access(
                 error="Invalid password or PIN",
             )
 
-        # Track view
-        client_ip = request.client.host if request.client else None
-        await invitation_service.track_view(
-            invitation.invitation_id,
-            invitation.workspace_id,
-            ip_address=client_ip,
-        )
+        # Convert dict to object for attribute access
+        invitation = SimpleNamespace(**invitation_dict)
+
+        # Note: View tracking is handled internally by verify_and_get_invitation
 
         # Return full invitation
         public_data = PublicInvitationResponse(
             invitation_id=invitation.invitation_id,
             title=invitation.title,
-            description=invitation.description,
+            description=getattr(invitation, 'description', None),
             event_type=invitation.event_type,
-            event_datetime=invitation.event_datetime.isoformat() if invitation.event_datetime else None,
-            event_end_datetime=invitation.event_end_datetime.isoformat() if invitation.event_end_datetime else None,
-            event_timezone=invitation.event_timezone,
-            venue=invitation.venue,
-            host_names=invitation.host_names,
-            cover_image_url=invitation.cover_image_url,
-            gallery_images=[],
-            rsvp_enabled=invitation.rsvp_settings.get("enabled", True),
-            rsvp_deadline=invitation.rsvp_settings.get("deadline"),
-            max_party_size=invitation.rsvp_settings.get("max_party_size", 1),
-            collect_dietary=invitation.rsvp_settings.get("collect_dietary", False),
-            collect_phone=invitation.rsvp_settings.get("collect_phone", False),
-            custom_questions=invitation.rsvp_settings.get("custom_questions", []),
-            primary_language=invitation.primary_language,
-            secondary_language=invitation.secondary_language,
-            content_i18n=invitation.content_i18n,
-            template_layout=invitation.template_layout if hasattr(invitation, 'template_layout') else None,
-            customization=invitation.customization,
+            event_datetime=invitation.event_datetime.isoformat() if getattr(invitation, 'event_datetime', None) else None,
+            event_end_datetime=invitation.event_end_datetime.isoformat() if getattr(invitation, 'event_end_datetime', None) else None,
+            event_timezone=getattr(invitation, 'event_timezone', 'UTC'),
+            venue=getattr(invitation, 'venue', {}),
+            host_names=getattr(invitation, 'host_names', None) or [],
+            cover_image_url=getattr(invitation, 'cover_image_url', None),
+            gallery_images=getattr(invitation, 'gallery_images', []) or [],
+            rsvp_enabled=getattr(invitation, 'rsvp_settings', {}).get("enabled", True),
+            rsvp_deadline=getattr(invitation, 'rsvp_settings', {}).get("deadline"),
+            max_party_size=getattr(invitation, 'rsvp_settings', {}).get("max_party_size", 1),
+            collect_dietary=getattr(invitation, 'rsvp_settings', {}).get("collect_dietary", False),
+            collect_phone=getattr(invitation, 'rsvp_settings', {}).get("collect_phone", False),
+            custom_questions=getattr(invitation, 'rsvp_settings', {}).get("custom_questions", []),
+            primary_language=getattr(invitation, 'primary_language', 'en'),
+            secondary_language=getattr(invitation, 'secondary_language', None),
+            content_i18n=getattr(invitation, 'content_i18n', {}),
+            template_layout=getattr(invitation, 'template_layout', None),
+            customization=getattr(invitation, 'customization', {}),
         )
 
         return AccessInvitationResponse(
@@ -302,8 +297,8 @@ async def submit_rsvp(
 
     try:
         # Get invitation by slug
-        invitation = await invitation_service.get_public_invitation(slug)
-        if not invitation:
+        invitation_dict = await invitation_service.get_public_invitation(slug)
+        if not invitation_dict:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Invitation not found",
@@ -338,8 +333,8 @@ async def submit_rsvp(
 
         # Submit RSVP
         result = await rsvp_service.submit_rsvp(
-            invitation_id=invitation.invitation_id,
-            workspace_id=invitation.workspace_id,
+            invitation_id=invitation_dict["invitation_id"],
+            workspace_id=invitation_dict["workspace_id"],
             data=data,
             source=RSVPSource.WEB,
             ip_address=client_ip,
@@ -470,7 +465,9 @@ async def get_invitation_ics(
         else:
             # Fallback to simple ICS generation
             ics_content = _generate_simple_ics(invitation)
-            filename = f"{invitation.slug or invitation.invitation_id}.ics"
+            slug_val = invitation.get("slug") if isinstance(invitation, dict) else invitation.slug
+            inv_id = invitation.get("invitation_id") if isinstance(invitation, dict) else invitation.invitation_id
+            filename = f"{slug_val or inv_id}.ics"
 
         return ICSResponse(
             ics_content=ics_content,
@@ -514,7 +511,8 @@ async def download_public_calendar(
             )
 
         # Check if event datetime is set
-        if not invitation.event_datetime:
+        event_datetime = invitation.get("event_datetime") if isinstance(invitation, dict) else invitation.event_datetime
+        if not event_datetime:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Event date not set for this invitation.",
@@ -530,12 +528,16 @@ async def download_public_calendar(
                 # Fallback to simple ICS
                 ics_content = _generate_simple_ics(invitation)
                 ics_bytes = ics_content.encode("utf-8")
-                filename = f"{invitation.slug or invitation.invitation_id}.ics"
+                slug_val = invitation.get("slug") if isinstance(invitation, dict) else invitation.slug
+                inv_id = invitation.get("invitation_id") if isinstance(invitation, dict) else invitation.invitation_id
+                filename = f"{slug_val or inv_id}.ics"
         else:
             # Fallback to simple ICS generation
             ics_content = _generate_simple_ics(invitation)
             ics_bytes = ics_content.encode("utf-8")
-            filename = f"{invitation.slug or invitation.invitation_id}.ics"
+            slug_val = invitation.get("slug") if isinstance(invitation, dict) else invitation.slug
+            inv_id = invitation.get("invitation_id") if isinstance(invitation, dict) else invitation.invitation_id
+            filename = f"{slug_val or inv_id}.ics"
 
         return StreamingResponse(
             io.BytesIO(ics_bytes),
@@ -554,27 +556,39 @@ async def download_public_calendar(
 
 
 def _invitation_to_dict(invitation) -> dict:
-    """Convert invitation object to dict for CalendarService."""
-    venue = invitation.venue or {}
+    """Convert invitation object/dict to dict for CalendarService."""
+    # Handle both dict and object access patterns
+    def get_val(key, default=None):
+        if isinstance(invitation, dict):
+            return invitation.get(key, default)
+        return getattr(invitation, key, default)
+
+    venue = get_val("venue") or {}
     return {
-        "invitation_id": str(invitation.invitation_id),
-        "title": invitation.title,
-        "description": invitation.description,
-        "event_datetime": invitation.event_datetime,
-        "event_end_datetime": invitation.event_end_datetime,
-        "event_timezone": invitation.event_timezone or "Asia/Kolkata",
+        "invitation_id": str(get_val("invitation_id")),
+        "title": get_val("title"),
+        "description": get_val("description"),
+        "event_datetime": get_val("event_datetime"),
+        "event_end_datetime": get_val("event_end_datetime"),
+        "event_timezone": get_val("event_timezone") or "Asia/Kolkata",
         "venue": venue,
-        "host_names": invitation.host_names,
-        "host_contact_email": getattr(invitation, "host_contact_email", None),
-        "public_url": invitation.public_url,
+        "host_names": get_val("host_names"),
+        "host_contact_email": get_val("host_contact_email"),
+        "public_url": get_val("public_url"),
     }
 
 
 def _generate_simple_ics(invitation) -> str:
     """Generate simple ICS calendar content (fallback when icalendar not installed)."""
+    # Handle both dict and object access patterns
+    def get_val(key, default=None):
+        if isinstance(invitation, dict):
+            return invitation.get(key, default)
+        return getattr(invitation, key, default)
+
     # Format dates
-    start_dt = invitation.event_datetime
-    end_dt = invitation.event_end_datetime or start_dt
+    start_dt = get_val("event_datetime")
+    end_dt = get_val("event_end_datetime") or start_dt
 
     # Format for ICS (YYYYMMDDTHHMMSSZ)
     def format_ics_date(dt):
@@ -587,7 +601,7 @@ def _generate_simple_ics(invitation) -> str:
     now_str = format_ics_date(datetime.now(timezone.utc))
 
     # Build location string
-    venue = invitation.venue or {}
+    venue = get_val("venue") or {}
     location_parts = []
     if venue.get("name"):
         location_parts.append(venue["name"])
@@ -601,6 +615,11 @@ def _generate_simple_ics(invitation) -> str:
         location_parts.append(venue["country"])
     location = ", ".join(location_parts)
 
+    invitation_id = get_val("invitation_id")
+    title = get_val("title")
+    description = get_val("description")
+    public_url = get_val("public_url")
+
     # Generate ICS
     ics_lines = [
         "BEGIN:VCALENDAR",
@@ -609,23 +628,23 @@ def _generate_simple_ics(invitation) -> str:
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
         "BEGIN:VEVENT",
-        f"UID:{invitation.invitation_id}@rawdrive.ai",
+        f"UID:{invitation_id}@rawdrive.ai",
         f"DTSTAMP:{now_str}",
         f"DTSTART:{start_str}",
         f"DTEND:{end_str}",
-        f"SUMMARY:{invitation.title}",
+        f"SUMMARY:{title}",
     ]
 
-    if invitation.description:
+    if description:
         # Escape special characters in description
-        desc = invitation.description.replace("\n", "\\n").replace(",", "\\,")
+        desc = description.replace("\n", "\\n").replace(",", "\\,")
         ics_lines.append(f"DESCRIPTION:{desc}")
 
     if location:
         ics_lines.append(f"LOCATION:{location}")
 
-    if invitation.public_url:
-        ics_lines.append(f"URL:{invitation.public_url}")
+    if public_url:
+        ics_lines.append(f"URL:{public_url}")
 
     # Add alarm (1 day before)
     ics_lines.extend([

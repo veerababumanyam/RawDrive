@@ -734,7 +734,7 @@ class DigitalInvitationService:
         updated = await self.invitation_repo.publish_invitation(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
-            magic_link_id=UUID(magic_link["link_id"]),
+            magic_link_id=UUID(str(magic_link["link_id"])),
             public_url=magic_link["url"],
         )
 
@@ -1002,7 +1002,8 @@ class DigitalInvitationService:
         if invitation.get("status") != "published":
             raise InvitationNotFoundError()
 
-        invitation_id = UUID(invitation["invitation_id"])
+        # asyncpg returns UUID as native type, convert to Python UUID
+        invitation_id = UUID(str(invitation["invitation_id"]))
 
         # Check password protection
         if invitation.get("password_protected"):
@@ -1018,6 +1019,9 @@ class DigitalInvitationService:
             if not await self.verify_pin(invitation_id, pin):
                 raise InvitationPinIncorrectError()
 
+        # Convert workspace_id once for reuse
+        workspace_id = UUID(str(invitation["workspace_id"]))
+
         # Increment view count
         await self.invitation_repo.increment_view_count(
             invitation_id=invitation_id,
@@ -1025,9 +1029,9 @@ class DigitalInvitationService:
         )
 
         # Log view event
-        await self.rsvp_repo.create_event(
+        await self.rsvp_repo.log_event(
             invitation_id=invitation_id,
-            workspace_id=UUID(invitation["workspace_id"]),
+            workspace_id=workspace_id,
             event_type="viewed",
             actor_type="guest",
             actor_ip_address=ip_address,
@@ -1035,11 +1039,17 @@ class DigitalInvitationService:
         )
 
         # Get gallery images
-        images = await self.invitation_repo.list_images(invitation_id=invitation_id)
+        images = await self.invitation_repo.list_images(
+            invitation_id=invitation_id,
+            workspace_id=workspace_id,
+        )
 
-        # Build public response (omit sensitive fields)
+        # Build public response (omit sensitive fields like password hashes)
+        # Note: workspace_id is included for RSVP routing but is not sensitive
         public_invitation = {
             "invitation_id": invitation["invitation_id"],
+            "workspace_id": invitation["workspace_id"],
+            "slug": invitation.get("slug"),
             "title": invitation["title"],
             "description": invitation.get("description"),
             "event_type": invitation["event_type"],
@@ -1202,7 +1212,7 @@ class DigitalInvitationService:
             created_by_user_id=duplicated_by_user_id,
         )
 
-        new_invitation_id = UUID(new_invitation["invitation_id"])
+        new_invitation_id = UUID(str(new_invitation["invitation_id"]))
 
         # Copy images (reference the same storage objects)
         for img in source_images:

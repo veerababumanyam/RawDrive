@@ -114,6 +114,9 @@ class RSVPService:
         """
         Look up an invitation by its public slug.
 
+        Uses digital_invitations table which stores event invitations (Save the Date, etc.)
+        Not to be confused with 'invitations' table which is for workspace member invites.
+
         Args:
             slug: The public slug for the invitation
 
@@ -122,11 +125,10 @@ class RSVPService:
         """
         row = await fetchrow(
             """
-            SELECT invitation_id, workspace_id, slug, status, expires_at
-            FROM invitations
+            SELECT invitation_id, workspace_id, slug, status
+            FROM digital_invitations
             WHERE slug = $1
-              AND status = 'active'
-              AND (expires_at IS NULL OR expires_at > NOW())
+              AND status = 'published'
             """,
             slug,
         )
@@ -211,8 +213,8 @@ class RSVPService:
         await self.audit_service.log_rsvp_submit(
             workspace_id=workspace_id,
             actor_id=guest_id,  # Guest is their own actor for RSVP
-            rsvp_id=guest_id,
-            status=submission.get("status", "unknown"),
+            guest_id=guest_id,
+            rsvp_data=submission,
             ip_address=ip_address,
         )
 
@@ -320,29 +322,41 @@ class RSVPService:
             logger.info("rsvp_update_expired_token", guest_id=guest_id)
             return None
 
-        # Capture changes for audit
-        old_status = record.get("status")
-        new_status = updates.get("status", old_status)
+        # Capture state before update for audit
+        before_state = {
+            "status": record.get("status"),
+            "plus_ones": record.get("plus_ones"),
+            "dietary_restrictions": record.get("dietary_restrictions"),
+            "message": record.get("message"),
+        }
 
         # Perform the update
         updated = await self._update_guest_record(guest_id, updates)
+
+        # Capture state after update for audit
+        after_state = {
+            "status": updated.get("status") if updated else before_state["status"],
+            "plus_ones": updated.get("plus_ones") if updated else before_state["plus_ones"],
+            "dietary_restrictions": updated.get("dietary_restrictions") if updated else before_state["dietary_restrictions"],
+            "message": updated.get("message") if updated else before_state["message"],
+        }
 
         # Audit log the update
         workspace_id = record.get("workspace_id", "")
         await self.audit_service.log_rsvp_update(
             workspace_id=workspace_id,
             actor_id=guest_id,
-            rsvp_id=guest_id,
-            old_status=old_status,
-            new_status=new_status,
+            guest_id=guest_id,
+            before=before_state,
+            after=after_state,
             ip_address=ip_address,
         )
 
         logger.info(
             "rsvp_updated",
             guest_id=guest_id,
-            old_status=old_status,
-            new_status=new_status,
+            old_status=before_state["status"],
+            new_status=after_state["status"],
         )
 
         # Mask email in response
@@ -363,6 +377,8 @@ class RSVPService:
         """
         Create a guest record in the database.
 
+        Uses invitation_guests table which stores RSVP guests for digital invitations.
+
         Args:
             guest_id: Unique guest identifier
             workspace_id: Workspace UUID
@@ -374,16 +390,25 @@ class RSVPService:
         Returns:
             Created guest record
         """
+        # Map RSVP status to guest_status enum values
+        # Enum: pending, invited, viewed, rsvp_yes, rsvp_no, rsvp_maybe
+        rsvp_status = submission.get("status", "pending")
+        guest_status = {
+            "yes": "rsvp_yes",
+            "no": "rsvp_no",
+            "maybe": "rsvp_maybe",
+        }.get(rsvp_status, "pending")
+
         await execute(
             """
-            INSERT INTO guests (
+            INSERT INTO invitation_guests (
                 guest_id, workspace_id, invitation_id,
                 name, email, phone, status, plus_ones,
-                dietary_restrictions, message,
+                dietary_restrictions, notes,
                 edit_token, edit_token_expires_at,
-                created_at, updated_at
+                rsvp_at, created_at, updated_at
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW()
+                $1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW(), NOW()
             )
             """,
             guest_id,
@@ -392,10 +417,10 @@ class RSVPService:
             submission.get("name"),
             submission.get("email"),
             submission.get("phone"),
-            submission.get("status"),
+            guest_status,
             submission.get("plus_ones", 0),
             submission.get("dietary_restrictions"),
-            submission.get("message"),
+            submission.get("message"),  # Store message in notes field
             edit_token,
             expires_at,
         )
@@ -413,6 +438,8 @@ class RSVPService:
         """
         Retrieve a guest record from the database.
 
+        Uses invitation_guests table.
+
         Args:
             guest_id: Guest UUID
 
@@ -424,17 +451,29 @@ class RSVPService:
             SELECT
                 guest_id, workspace_id, invitation_id,
                 name, email, phone, status, plus_ones,
-                dietary_restrictions, message,
+                dietary_restrictions, notes,
                 edit_token, edit_token_expires_at,
                 created_at, updated_at
-            FROM guests
-            WHERE guest_id = $1
+            FROM invitation_guests
+            WHERE guest_id = $1::uuid
             """,
             guest_id,
         )
 
         if not row:
             return None
+
+        # Map guest_status enum back to RSVP status
+        # Enum: pending, invited, viewed, rsvp_yes, rsvp_no, rsvp_maybe
+        guest_status = row["status"]
+        rsvp_status = {
+            "rsvp_yes": "yes",
+            "rsvp_no": "no",
+            "rsvp_maybe": "maybe",
+            "pending": "pending",
+            "invited": "pending",
+            "viewed": "pending",
+        }.get(guest_status, guest_status)
 
         return {
             "guest_id": str(row["guest_id"]),
@@ -443,10 +482,10 @@ class RSVPService:
             "name": row["name"],
             "email": row["email"],
             "phone": row["phone"],
-            "status": row["status"],
+            "status": rsvp_status,
             "plus_ones": row["plus_ones"],
             "dietary_restrictions": row["dietary_restrictions"],
-            "message": row["message"],
+            "message": row["notes"],  # notes stores the message
             "edit_token": row["edit_token"],
             "edit_token_expires_at": row["edit_token_expires_at"],
             "created_at": row["created_at"],
@@ -459,6 +498,8 @@ class RSVPService:
         """
         Update a guest record in the database.
 
+        Uses invitation_guests table.
+
         Args:
             guest_id: Guest UUID
             updates: Fields to update
@@ -467,14 +508,30 @@ class RSVPService:
             Updated guest record dict or None if not found
         """
         # Build dynamic UPDATE query based on provided fields
-        allowed_fields = {"status", "plus_ones", "dietary_restrictions", "message"}
+        # Map RSVP fields to database fields
+        field_mapping = {
+            "status": "status",
+            "plus_ones": "plus_ones",
+            "dietary_restrictions": "dietary_restrictions",
+            "message": "notes",  # message is stored in notes
+        }
+
         set_clauses = []
         values = []
         param_idx = 1
 
         for field, value in updates.items():
-            if field in allowed_fields:
-                set_clauses.append(f"{field} = ${param_idx}")
+            if field in field_mapping:
+                db_field = field_mapping[field]
+                # Map RSVP status to guest_status enum for status field
+                # Enum: pending, invited, viewed, rsvp_yes, rsvp_no, rsvp_maybe
+                if field == "status":
+                    value = {
+                        "yes": "rsvp_yes",
+                        "no": "rsvp_no",
+                        "maybe": "rsvp_maybe",
+                    }.get(value, value)
+                set_clauses.append(f"{db_field} = ${param_idx}")
                 values.append(value)
                 param_idx += 1
 
@@ -489,13 +546,13 @@ class RSVPService:
         values.append(guest_id)
 
         query = f"""
-            UPDATE guests
+            UPDATE invitation_guests
             SET {", ".join(set_clauses)}
-            WHERE guest_id = ${param_idx}
+            WHERE guest_id = ${param_idx}::uuid
             RETURNING
                 guest_id, workspace_id, invitation_id,
                 name, email, phone, status, plus_ones,
-                dietary_restrictions, message,
+                dietary_restrictions, notes,
                 created_at, updated_at
         """
 
@@ -504,6 +561,18 @@ class RSVPService:
         if not row:
             return None
 
+        # Map guest_status enum back to RSVP status
+        # Enum: pending, invited, viewed, rsvp_yes, rsvp_no, rsvp_maybe
+        guest_status = row["status"]
+        rsvp_status = {
+            "rsvp_yes": "yes",
+            "rsvp_no": "no",
+            "rsvp_maybe": "maybe",
+            "pending": "pending",
+            "invited": "pending",
+            "viewed": "pending",
+        }.get(guest_status, guest_status)
+
         return {
             "guest_id": str(row["guest_id"]),
             "workspace_id": str(row["workspace_id"]),
@@ -511,10 +580,10 @@ class RSVPService:
             "name": row["name"],
             "email": row["email"],
             "phone": row["phone"],
-            "status": row["status"],
+            "status": rsvp_status,
             "plus_ones": row["plus_ones"],
             "dietary_restrictions": row["dietary_restrictions"],
-            "message": row["message"],
+            "message": row["notes"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
