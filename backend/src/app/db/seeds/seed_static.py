@@ -9,7 +9,15 @@ from typing import Iterable
 import asyncpg
 from argon2 import PasswordHasher
 
-PASSWORD = "Test@123"
+from app.config.test_constants import (
+    TEST_PASSWORD,
+    AdminUsers,
+    TierUsers,
+    WorkspaceUsers,
+)
+
+# Use centralized password constant
+PASSWORD = TEST_PASSWORD
 
 ph = PasswordHasher(memory_cost=65536, time_cost=3, parallelism=4)
 
@@ -49,32 +57,12 @@ PLATFORM_ROLES = [
     ("product_admin", ["platform:feature_flags:write", "platform:feature_flags:read"]),
 ]
 
-TIER_USERS = [
-    (uuid.UUID("11111111-1111-1111-1111-111111111001"), "free@test.rawdrive.in", "Free User", "free"),
-    (uuid.UUID("11111111-1111-1111-1111-111111111002"), "starter@test.rawdrive.in", "Starter User", "starter"),
-    (uuid.UUID("11111111-1111-1111-1111-111111111003"), "professional@test.rawdrive.in", "Professional User", "professional"),
-    (uuid.UUID("11111111-1111-1111-1111-111111111004"), "business@test.rawdrive.in", "Business User", "business"),
-    (uuid.UUID("11111111-1111-1111-1111-111111111005"), "enterprise@test.rawdrive.in", "Enterprise User", "enterprise"),
-]
+# Use centralized test user definitions (converted to tuple format for seeding)
+TIER_USERS = [user.as_tuple() for user in TierUsers.all()]
 
-ADMIN_USERS = [
-    (uuid.UUID("22222222-2222-2222-2222-222222222001"), "superadmin@test.rawdrive.in", "Super Admin", "super_admin"),
-    (uuid.UUID("22222222-2222-2222-2222-222222222002"), "platformadmin@test.rawdrive.in", "Platform Admin", "platform_admin"),
-    (uuid.UUID("22222222-2222-2222-2222-222222222003"), "supportadmin@test.rawdrive.in", "Support Admin", "support_admin"),
-    (uuid.UUID("22222222-2222-2222-2222-222222222004"), "billingadmin@test.rawdrive.in", "Billing Admin", "billing_admin"),
-    (uuid.UUID("22222222-2222-2222-2222-222222222005"), "contentmod@test.rawdrive.in", "Content Moderator", "content_moderator"),
-    (uuid.UUID("22222222-2222-2222-2222-222222222006"), "securityadmin@test.rawdrive.in", "Security Admin", "security_admin"),
-    (uuid.UUID("22222222-2222-2222-2222-222222222007"), "observabilityadmin@test.rawdrive.in", "Observability Admin", "observability_admin"),
-    (uuid.UUID("22222222-2222-2222-2222-222222222008"), "auditor@test.rawdrive.in", "Auditor", "auditor_readonly"),
-    (uuid.UUID("22222222-2222-2222-2222-222222222009"), "productadmin@test.rawdrive.in", "Product Admin", "product_admin"),
-]
+ADMIN_USERS = [user.as_tuple() for user in AdminUsers.all()]
 
-WORKSPACE_ROLE_USERS = [
-    (uuid.UUID("33333333-3333-3333-3333-333333333001"), "workspaceowner@test.rawdrive.in", "Workspace Owner", "owner"),
-    (uuid.UUID("33333333-3333-3333-3333-333333333002"), "workspaceadmin@test.rawdrive.in", "Workspace Admin", "admin"),
-    (uuid.UUID("33333333-3333-3333-3333-333333333003"), "staffuser@test.rawdrive.in", "Staff User", "editor"),
-    (uuid.UUID("33333333-3333-3333-3333-333333333004"), "clientviewer@test.rawdrive.in", "Client Viewer", "viewer"),
-]
+WORKSPACE_ROLE_USERS = [user.as_tuple() for user in WorkspaceUsers.all()]
 
 DEFAULT_WS_ROLES = [
     ("owner", ["workspace:*", "members:*", "roles:*", "galleries:*", "assets:*", "billing:*", "audit:read"], True),

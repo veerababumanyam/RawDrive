@@ -87,6 +87,43 @@ router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+ALLOWED_FONTS = {
+    "Inter",
+    "Playfair Display",
+    "Lora",
+    "Roboto",
+    "Open Sans",
+    "Montserrat",
+    "Lato",
+    "Merriweather",
+    "Oswald",
+    "Source Sans Pro",
+    "Slabo 27px",
+    "Raleway",
+    "PT Sans",
+    "Great Vibes",
+    "Dancing Script",
+    "Parisienne",
+    "Allura",
+    "Sacramento",
+    "Satisfy",
+    "Cookie",
+}
+
+
+def validate_font(font_name: Optional[str]) -> None:
+    """Validate that the font is in the allowed list."""
+    if font_name and font_name not in ALLOWED_FONTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid font: {font_name}. Allowed fonts: {', '.join(sorted(ALLOWED_FONTS))}",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Invitation CRUD Endpoints
 # ---------------------------------------------------------------------------
 
@@ -381,6 +418,24 @@ async def update_invitation(
             update_kwargs["auto_delete_enabled"] = request.auto_delete_enabled
         if request.auto_delete_days is not None:
             update_kwargs["auto_delete_days"] = request.auto_delete_days
+
+        # Design & Media
+        if request.video_object_key is not None:
+            update_kwargs["video_object_key"] = request.video_object_key
+        if request.audio_object_key is not None:
+            update_kwargs["audio_object_key"] = request.audio_object_key
+        if request.layout_density is not None:
+            update_kwargs["layout_density"] = request.layout_density
+        if request.font_heading is not None:
+            validate_font(request.font_heading)
+            update_kwargs["font_heading"] = request.font_heading
+        if request.font_body is not None:
+            validate_font(request.font_body)
+            update_kwargs["font_body"] = request.font_body
+        if request.ai_generated_content is not None:
+            update_kwargs["ai_generated_content"] = request.ai_generated_content
+        if request.has_sub_events is not None:
+            update_kwargs["has_sub_events"] = request.has_sub_events
 
         invitation = await service.update_invitation(
             invitation_id=invitation_id,
@@ -874,56 +929,18 @@ async def export_rsvps(
 
     else:
         # CSV Export (default)
-        output = io.StringIO()
-        writer = csv.writer(output)
+        csv_content = await rsvp_service.export_rsvps(
+            invitation_id=invitation_id,
+            workspace_id=workspace_id,
+        )
 
-        # Header row
-        writer.writerow([
-            "Guest Name",
-            "Email",
-            "Phone",
-            "Status",
-            "Party Size",
-            "Party Names",
-            "Dietary Preferences",
-            "Message",
-            "RSVP Date",
-        ])
+        filename = f"{safe_title}-rsvps-{timestamp}.csv"
 
-        # Data rows
-        for rsvp in rsvps:
-            status_text = "Attending" if rsvp.attending is True else (
-                "Not Attending" if rsvp.attending is False else "Maybe"
-            )
-            party_names = ", ".join(rsvp.party_names) if rsvp.party_names else ""
-            created_at = rsvp.created_at
-            if isinstance(created_at, datetime):
-                created_at = created_at.strftime("%Y-%m-%d %H:%M")
-            elif isinstance(created_at, str):
-                try:
-                    dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    created_at = dt.strftime("%Y-%m-%d %H:%M")
-                except Exception:
-                    pass
-
-            writer.writerow([
-                rsvp.guest_name,
-                rsvp.guest_email,
-                rsvp.guest_phone or "",
-                status_text,
-                rsvp.party_size,
-                party_names,
-                rsvp.dietary_preferences or "",
-                rsvp.message or "",
-                created_at,
-            ])
-
-        output.seek(0)
         return StreamingResponse(
-            io.BytesIO(output.getvalue().encode("utf-8")),
+            io.BytesIO(csv_content.encode("utf-8")),
             media_type="text/csv",
             headers={
-                "Content-Disposition": f'attachment; filename="{safe_title}-rsvps-{timestamp}.csv"'
+                "Content-Disposition": f'attachment; filename="{filename}"'
             },
         )
 

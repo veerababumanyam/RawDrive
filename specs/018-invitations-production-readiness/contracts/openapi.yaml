@@ -1,0 +1,703 @@
+openapi: 3.1.0
+info:
+  title: Digital Invitations Microservice API
+  description: |
+    API for managing digital wedding invitations, guest lists, RSVPs, and analytics.
+
+    ## Authentication
+    All endpoints except public RSVP require JWT authentication via Bearer token
+    or internal service headers (X-User-ID, X-Workspace-ID).
+
+    ## Rate Limits
+    - Default: 100 requests/minute
+    - CSV Import: 5 requests/hour
+    - Bulk Invite: 10 requests/hour
+    - RSVP Submit: 10 requests/minute per IP
+  version: 2.0.0
+  contact:
+    name: RawDrive Engineering
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+tags:
+  - name: guests
+    description: Guest management endpoints
+  - name: rsvp
+    description: Public RSVP endpoints
+  - name: analytics
+    description: Analytics and reporting
+  - name: health
+    description: Service health checks
+
+paths:
+  # ============ RSVP Endpoints (Public) ============
+
+  /invitations/{slug}/rsvp:
+    post:
+      tags: [rsvp]
+      summary: Submit RSVP response
+      description: |
+        Public endpoint for guests to submit their RSVP response.
+        Rate limited to 10 submissions per minute per IP.
+      operationId: submitRsvp
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public invitation slug
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RSVPSubmission'
+      responses:
+        '200':
+          description: RSVP submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RSVPResponse'
+        '400':
+          description: Invalid request data
+        '404':
+          description: Invitation not found or expired
+        '429':
+          description: Rate limit exceeded
+
+  /invitations/{slug}/rsvp/{rsvpId}:
+    get:
+      tags: [rsvp]
+      summary: Get RSVP status
+      operationId: getRsvpStatus
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: rsvpId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: edit_token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Edit token for verification
+      responses:
+        '200':
+          description: RSVP details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RSVPDetails'
+        '403':
+          description: Invalid edit token
+        '404':
+          description: RSVP not found
+
+    patch:
+      tags: [rsvp]
+      summary: Update RSVP response
+      operationId: updateRsvp
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: rsvpId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: edit_token
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RSVPSubmission'
+      responses:
+        '200':
+          description: RSVP updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RSVPResponse'
+        '403':
+          description: Invalid or expired edit token
+        '404':
+          description: RSVP not found
+
+  # ============ Analytics Endpoints ============
+
+  /workspaces/{workspaceId}/invitations/{invitationId}/analytics:
+    get:
+      tags: [analytics]
+      summary: Get analytics summary
+      description: Comprehensive analytics including views, RSVP stats, and device breakdown. Cached for 10 minutes.
+      operationId: getAnalyticsSummary
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/invitationId'
+      responses:
+        '200':
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /workspaces/{workspaceId}/invitations/{invitationId}/analytics/views:
+    get:
+      tags: [analytics]
+      summary: Get view statistics
+      operationId: getViewStats
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/invitationId'
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, all]
+            default: week
+      responses:
+        '200':
+          description: View statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewStats'
+
+  /workspaces/{workspaceId}/invitations/{invitationId}/analytics/rsvp:
+    get:
+      tags: [analytics]
+      summary: Get RSVP statistics
+      operationId: getRsvpStats
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/invitationId'
+      responses:
+        '200':
+          description: RSVP statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RSVPStats'
+
+  # ============ Bulk Operations ============
+
+  /workspaces/{workspaceId}/invitations/{invitationId}/guests/bulk-invite:
+    post:
+      tags: [guests]
+      summary: Send bulk invitations
+      description: |
+        Queue email invitations for multiple guests.
+        Rate limited to 10 requests per hour.
+      operationId: bulkInviteGuests
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/invitationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkInviteRequest'
+      responses:
+        '202':
+          description: Bulk invite queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkInviteResult'
+        '429':
+          description: Rate limit exceeded
+
+  /workspaces/{workspaceId}/bulk-invite/{batchId}/status:
+    get:
+      tags: [guests]
+      summary: Get bulk invite status
+      operationId: getBulkInviteStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Batch status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkInviteStatus'
+
+  # ============ Audit Endpoints ============
+
+  /workspaces/{workspaceId}/audit-log:
+    get:
+      tags: [analytics]
+      summary: Get audit log
+      description: Retrieve audit events for compliance reporting.
+      operationId: getAuditLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/workspaceId'
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+            enum: [guest, invitation, rsvp]
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        '200':
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+
+  # ============ Health Endpoints ============
+
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /ready:
+    get:
+      tags: [health]
+      summary: Readiness check
+      operationId: readinessCheck
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+
+  /metrics:
+    get:
+      tags: [health]
+      summary: Prometheus metrics
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    workspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Workspace identifier
+    invitationId:
+      name: invitationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Invitation identifier
+
+  responses:
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Access denied to this workspace
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    # ============ RSVP Schemas ============
+
+    RSVPSubmission:
+      type: object
+      required: [name, status]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          maxLength: 50
+        status:
+          type: string
+          enum: [yes, no, maybe]
+        plus_ones:
+          type: integer
+          minimum: 0
+          maximum: 10
+          default: 0
+        dietary_restrictions:
+          type: string
+          maxLength: 500
+        message:
+          type: string
+          maxLength: 1000
+
+    RSVPResponse:
+      type: object
+      properties:
+        rsvp_id:
+          type: string
+          format: uuid
+        invitation_slug:
+          type: string
+        status:
+          type: string
+          enum: [yes, no, maybe]
+        edit_token:
+          type: string
+          description: Token to edit this RSVP (only returned on first submission)
+        message:
+          type: string
+
+    RSVPDetails:
+      type: object
+      properties:
+        rsvp_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [yes, no, maybe]
+        plus_ones:
+          type: integer
+        dietary_restrictions:
+          type: string
+        message:
+          type: string
+        submitted_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ============ Analytics Schemas ============
+
+    AnalyticsSummary:
+      type: object
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+        views:
+          $ref: '#/components/schemas/ViewStats'
+        devices:
+          $ref: '#/components/schemas/DeviceStats'
+        rsvp:
+          $ref: '#/components/schemas/RSVPStats'
+        generated_at:
+          type: string
+          format: date-time
+
+    ViewStats:
+      type: object
+      properties:
+        total_views:
+          type: integer
+        unique_visitors:
+          type: integer
+        views_today:
+          type: integer
+        views_this_week:
+          type: integer
+        views_this_month:
+          type: integer
+        peak_hour:
+          type: integer
+          description: Hour with most views (0-23)
+        peak_day:
+          type: string
+          description: Day with most views
+
+    DeviceStats:
+      type: object
+      properties:
+        desktop:
+          type: integer
+        mobile:
+          type: integer
+        tablet:
+          type: integer
+        unknown:
+          type: integer
+        browsers:
+          type: object
+          additionalProperties:
+            type: integer
+        operating_systems:
+          type: object
+          additionalProperties:
+            type: integer
+
+    RSVPStats:
+      type: object
+      properties:
+        total_guests:
+          type: integer
+        responded:
+          type: integer
+        attending:
+          type: integer
+        not_attending:
+          type: integer
+        maybe:
+          type: integer
+        pending:
+          type: integer
+        response_rate:
+          type: number
+          format: float
+        total_plus_ones:
+          type: integer
+        expected_attendance:
+          type: integer
+          description: attending + total_plus_ones
+
+    # ============ Bulk Invite Schemas ============
+
+    BulkInviteRequest:
+      type: object
+      properties:
+        guest_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Specific guests to invite. If empty, invites all pending guests.
+        include_pending:
+          type: boolean
+          default: true
+        include_not_responded:
+          type: boolean
+          default: false
+        email_template_id:
+          type: string
+        schedule_at:
+          type: string
+          format: date-time
+          description: Schedule for future delivery
+
+    BulkInviteResult:
+      type: object
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        total_queued:
+          type: integer
+        failed:
+          type: integer
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkError'
+
+    BulkInviteStatus:
+      type: object
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed]
+        total:
+          type: integer
+        sent:
+          type: integer
+        failed:
+          type: integer
+        pending:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    BulkError:
+      type: object
+      properties:
+        guest_id:
+          type: string
+          format: uuid
+        error:
+          type: string
+
+    # ============ Audit Schemas ============
+
+    AuditLogResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        total:
+          type: integer
+        has_more:
+          type: boolean
+
+    AuditEvent:
+      type: object
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+        changes:
+          type: object
+        metadata:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    # ============ Health Schemas ============
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy]
+        service:
+          type: string
+        version:
+          type: string
+
+    ReadinessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ready, degraded]
+        checks:
+          type: object
+          properties:
+            redis:
+              type: string
+              enum: [connected, disconnected]
+            database:
+              type: string
+              enum: [connected, disconnected]
+
+    # ============ Error Schema ============
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string

@@ -24,13 +24,15 @@ from uuid import UUID
 import aiohttp
 from PIL import Image
 
-# Note: This test uses HTTP API calls only, no direct backend imports
-# to avoid dependency issues when running outside the backend container
+# Add backend src to path for importing test constants
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+from app.config.test_constants import TEST_PASSWORD, TierUsers
 
 # Test configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-TEST_USER_EMAIL = "professional@test.rawdrive.in"
-TEST_USER_PASSWORD = "Test@123"
+TEST_USER_EMAIL = TierUsers.PROFESSIONAL.email
+TEST_USER_PASSWORD = TEST_PASSWORD
 
 
 class Colors:

@@ -413,6 +413,15 @@ class UpdateInvitationRequest(BaseModel):
         None, description="How to notify host about new RSVPs"
     )
 
+    # Design & Media
+    video_object_key: Optional[str] = None
+    audio_object_key: Optional[str] = None
+    layout_density: Optional[Literal["compact", "normal", "spacious"]] = None
+    font_heading: Optional[str] = Field(None, max_length=100)
+    font_body: Optional[str] = Field(None, max_length=100)
+    ai_generated_content: Optional[dict] = None
+    has_sub_events: Optional[bool] = None
+
 
 class PublishInvitationRequest(BaseModel):
     """Request to publish/unpublish an invitation."""
@@ -448,6 +457,9 @@ class InvitationResponse(BaseModel):
     cover_image_url: Optional[str] = None
     # OG image (1200x630px optimized for social sharing)
     og_image_url: Optional[str] = None
+    # Media URLs (resolved from object keys)
+    video_url: Optional[str] = None
+    audio_url: Optional[str] = None
     # Languages
     primary_language: str = "en-IN"
     secondary_language: Optional[str] = None
@@ -471,6 +483,16 @@ class InvitationResponse(BaseModel):
     rsvp_count: int = 0
     # Notification preferences
     notification_preference: str = "immediate"
+
+    # Design & Media
+    video_object_key: Optional[str] = None
+    audio_object_key: Optional[str] = None
+    layout_density: str = "normal"
+    font_heading: str = "Playfair Display"
+    font_body: str = "Lora"
+    ai_generated_content: dict = Field(default_factory=dict)
+    has_sub_events: bool = False
+
     # Audit
     created_at: datetime
     updated_at: datetime
@@ -980,6 +1002,15 @@ class PublicInvitationResponse(BaseModel):
     content_i18n: dict = Field(default_factory=dict)
     template_layout: Optional[dict] = None
     customization: dict = Field(default_factory=dict)
+
+    # Design & Media
+    video_object_key: Optional[str] = None
+    audio_object_key: Optional[str] = None
+    layout_density: str = "normal"
+    font_heading: str = "Playfair Display"
+    font_body: str = "Lora"
+    ai_generated_content: dict = Field(default_factory=dict)
+    has_sub_events: bool = False
 
 
 class AccessInvitationRequest(BaseModel):

@@ -31,7 +31,15 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Verify compliance with RawDrive Constitution (`.specify/memory/constitution.md`):
+
+- [ ] **I. Security**: No hardcoded secrets, parameterized queries, input validation
+- [ ] **II. Accessibility**: WCAG 2.1 AA compliance, keyboard nav, screen reader support
+- [ ] **III. Design System**: Uses design tokens, no hardcoded colors, standard UI components
+- [ ] **IV. Multi-Tenant Isolation**: All queries include workspace_id, RBAC enforced
+- [ ] **V. Testing**: Coverage targets defined (95% security, 85% services, 70% UI)
+- [ ] **VI. Clean Code**: SOLID principles, max file lengths, no over-engineering
+- [ ] **VII. Observability**: Structured logging, metrics, audit trail for sensitive ops
 
 ## Project Structure
 

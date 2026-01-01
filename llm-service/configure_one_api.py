@@ -1,6 +1,13 @@
 import requests
 import os
 import json
+import sys
+from pathlib import Path
+
+# Add backend src to path for importing test constants
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend" / "src"))
+
+from app.config.test_constants import TEST_PASSWORD, AdminUsers
 
 BASE_URL = "http://localhost:4000"
 DEFAULT_ROOT_USER = "root"
@@ -34,12 +41,16 @@ def parse_env_file():
 if not GOOGLE_CLIENT_ID:
     parse_env_file()
 
+# Use centralized admin user definitions
 ADMIN_USERS = [
-    {"username": "superadmin", "display_name": "Super Admin", "email": "superadmin@test.rawdrive.in", "password": "Test@123", "role": 10},
-    {"username": "platformadmin", "display_name": "Platform Admin", "email": "platformadmin@test.rawdrive.in", "password": "Test@123", "role": 10},
-    {"username": "supportadmin", "display_name": "Support Admin", "email": "supportadmin@test.rawdrive.in", "password": "Test@123", "role": 10},
-    {"username": "billingadmin", "display_name": "Billing Admin", "email": "billingadmin@test.rawdrive.in", "password": "Test@123", "role": 10},
-    {"username": "contentmod", "display_name": "Content Mod", "email": "contentmod@test.rawdrive.in", "password": "Test@123", "role": 10},
+    {"username": user.email_prefix, "display_name": user.display_name, "email": user.email, "password": TEST_PASSWORD, "role": 10}
+    for user in [
+        AdminUsers.SUPER_ADMIN,
+        AdminUsers.PLATFORM_ADMIN,
+        AdminUsers.SUPPORT_ADMIN,
+        AdminUsers.BILLING_ADMIN,
+        AdminUsers.CONTENT_MOD,
+    ]
 ]
 
 def login_root():

@@ -17,15 +17,25 @@ import {
   Users,
   Palette,
   Settings,
-  ChevronRight,
-  AlertCircle,
   Loader2,
   Languages,
+  ChevronRight,
+  Video,
+  Music,
+  Wand2,
 } from 'lucide-react';
 
 import { AppButton } from '@/components/ui/AppButton';
-import { AppInput } from '@/components/ui/AppInput';
+import { AppInput, AppTextarea } from '@/components/ui/AppInput';
 import { AppCard } from '@/components/ui/AppCard';
+import { DateTimePicker } from '@/components/invitations/DateTimePicker';
+import { VenueInput } from '@/components/invitations/VenueInput';
+import { ColorPicker } from '@/components/invitations/ColorPicker';
+import { FontSelector } from '@/components/invitations/FontSelector';
+import { LayoutDensitySelector } from '@/components/invitations/LayoutDensitySelector';
+import { MediaUploader } from '@/components/features/media/MediaUploader';
+import { RSVPQuestionBuilder } from '@/components/features/invitations/RSVPQuestionBuilder';
+import { AITextGenerator } from '@/components/features/invitations/AITextGenerator';
 import {
   Select,
   Checkbox,
@@ -40,6 +50,7 @@ import type {
   RSVPSettings,
   RSVPCustomQuestion,
   InvitationTemplate,
+  InvitationMedia,
 } from '@/types/invitations';
 
 // ---------------------------------------------------------------------------
@@ -61,12 +72,23 @@ export interface WizardData {
   primary_language: string;
   secondary_language?: string;
 
-  // Step 2: Template
+  // Metadata
+  invitation_id?: string;
+
+  // Step 2: Template & Design
   template_id?: string;
   customization: Record<string, unknown>;
+  font_heading?: string;
+  font_body?: string;
+  layout_density?: 'compact' | 'normal' | 'spacious';
+  video_object_key?: string;
+  video_url?: string;
+  audio_object_key?: string;
+  audio_url?: string;
 
   // Step 3: RSVP Settings
   rsvp_settings: RSVPSettings;
+  notification_preference?: 'immediate' | 'daily_digest' | 'disabled';
 }
 
 interface InvitationWizardProps {
@@ -142,7 +164,7 @@ const getLanguagePreviewText = (langCode: string): string => {
     ta: 'நீங்கள் அன்புடன் அழைக்கப்படுகிறீர்கள்',
     te: 'మీకు ఆహ్వానం పంపబడుతోంది',
     kn: 'ನಿಮ್ಮನ್ನು ಪ್ರೀತಿಯಿಂದ ಆಹ್ವಾನಿಸಲಾಗಿದೆ',
-    ml: 'നിങ്ങളെ സ്നേഹപൂർവ്വം ക്ഷണിക്കുന്നു',
+    ml: 'നിങ്ങളെ സ്നേಹപൂർവ്വം ക്ഷണിക്കുന്നു',
   };
   return previews[langCode] || previews.en;
 };
@@ -156,6 +178,7 @@ interface Step1Props {
   onChange: (data: Partial<WizardData>) => void;
   onNext: () => void;
   errors: Record<string, string>;
+  workspaceId: string;
 }
 
 const Step1EventDetails: React.FC<Step1Props> = ({
@@ -163,8 +186,10 @@ const Step1EventDetails: React.FC<Step1Props> = ({
   onChange,
   onNext,
   errors,
+  workspaceId,
 }) => {
   const [hostInput, setHostInput] = useState('');
+  const [showAIModal, setShowAIModal] = useState(false);
 
   const addHost = useCallback(() => {
     const trimmed = hostInput.trim();
@@ -219,11 +244,39 @@ const Step1EventDetails: React.FC<Step1Props> = ({
             />
           </div>
 
-          <AppInput
-            label="Description (Optional)"
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-text-primary">
+              Description <span className="text-text-tertiary font-normal">(Optional)</span>
+            </label>
+            <AppButton
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAIModal(true)}
+              className="text-primary h-7 px-2 -mr-2"
+              leftIcon={<Wand2 className="w-3.5 h-3.5" />}
+            >
+              Magic Write
+            </AppButton>
+          </div>
+          <AppTextarea
             placeholder="Share a brief message about your event..."
             value={data.description || ''}
             onChange={(e) => onChange({ description: e.target.value })}
+            rows={4}
+          />
+
+          <AITextGenerator
+            isOpen={showAIModal}
+            onClose={() => setShowAIModal(false)}
+            onApply={(title, description) => {
+              onChange({ 
+                title: title || data.title, 
+                description 
+              });
+            }}
+            workspaceId={workspaceId}
+            initialEventType={data.event_type}
+            initialLanguage={data.primary_language}
           />
         </div>
       </section>
@@ -340,20 +393,17 @@ const Step1EventDetails: React.FC<Step1Props> = ({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AppInput
+          <DateTimePicker
             label="Event Date & Time"
-            type="datetime-local"
             value={data.event_datetime}
-            onChange={(e) => onChange({ event_datetime: e.target.value })}
+            onChange={(date) => onChange({ event_datetime: date })}
             error={errors.event_datetime}
-            isRequired
           />
 
-          <AppInput
+          <DateTimePicker
             label="End Date & Time (Optional)"
-            type="datetime-local"
-            value={data.event_end_datetime || ''}
-            onChange={(e) => onChange({ event_end_datetime: e.target.value })}
+            value={data.event_end_datetime}
+            onChange={(date) => onChange({ event_end_datetime: date })}
           />
         </div>
 
@@ -374,86 +424,10 @@ const Step1EventDetails: React.FC<Step1Props> = ({
           Venue Details
         </h3>
 
-        <div className="space-y-4">
-          <AppInput
-            label="Venue Name"
-            placeholder="e.g., The Grand Ballroom"
-            value={data.venue.name || ''}
-            onChange={(e) =>
-              onChange({
-                venue: { ...data.venue, name: e.target.value },
-              })
-            }
-          />
-
-          <AppInput
-            label="Address"
-            placeholder="Street address"
-            value={data.venue.address || ''}
-            onChange={(e) =>
-              onChange({
-                venue: { ...data.venue, address: e.target.value },
-              })
-            }
-          />
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <AppInput
-              label="City"
-              placeholder="City"
-              value={data.venue.city || ''}
-              onChange={(e) =>
-                onChange({
-                  venue: { ...data.venue, city: e.target.value },
-                })
-              }
-            />
-
-            <AppInput
-              label="State/Province"
-              placeholder="State"
-              value={data.venue.state || ''}
-              onChange={(e) =>
-                onChange({
-                  venue: { ...data.venue, state: e.target.value },
-                })
-              }
-            />
-
-            <Select
-              label="Country"
-              options={COUNTRIES}
-              value={data.venue.country}
-              onChange={(e) =>
-                onChange({
-                  venue: { ...data.venue, country: e.target.value },
-                })
-              }
-            />
-
-            <AppInput
-              label="Postal Code"
-              placeholder="Postal code"
-              value={data.venue.postal_code || ''}
-              onChange={(e) =>
-                onChange({
-                  venue: { ...data.venue, postal_code: e.target.value },
-                })
-              }
-            />
-          </div>
-
-          <AppInput
-            label="Google Maps Link (Optional)"
-            placeholder="https://maps.google.com/..."
-            value={data.venue.map_url || ''}
-            onChange={(e) =>
-              onChange({
-                venue: { ...data.venue, map_url: e.target.value },
-              })
-            }
-          />
-        </div>
+        <VenueInput
+          value={data.venue}
+          onChange={(venue) => onChange({ venue })}
+        />
       </section>
 
       {/* Host Info */}
@@ -552,6 +526,7 @@ interface Step2Props {
   onChange: (data: Partial<WizardData>) => void;
   onNext: () => void;
   onBack: () => void;
+  onCreateDraft: () => Promise<void>;
 }
 
 const Step2TemplateSelection: React.FC<Step2Props> = ({
@@ -560,6 +535,7 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
   onChange,
   onNext,
   onBack,
+  onCreateDraft,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>(
     data.event_type || 'wedding'
@@ -584,15 +560,31 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
     (template: InvitationTemplate) => {
       onChange({
         template_id: template.template_id,
+        font_heading: template.layout.fonts.heading,
+        font_body: template.layout.fonts.body,
+        layout_density: 'normal',
         customization: {
           ...data.customization,
           colors: template.layout.colors,
-          fonts: template.layout.fonts,
         },
       });
     },
     [data.customization, onChange]
   );
+
+  const colors = (data.customization.colors as Record<string, string>) || {};
+
+  const handleColorChange = (key: string, value: string) => {
+    onChange({
+      customization: {
+        ...data.customization,
+        colors: {
+          ...colors,
+          [key]: value,
+        },
+      },
+    });
+  };
 
   return (
     <div className="space-y-8">
@@ -702,125 +694,110 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
         )}
       </section>
 
-      {/* Customization Preview (if template selected) */}
+      {/* Design Customization (if template selected) */}
       {data.template_id && (
-        <section className="bg-surface-hover rounded-lg p-6">
-          <h4 className="text-base font-medium text-text-primary mb-4">
-            Customize Colors
-          </h4>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">
-                Primary Color
-              </label>
-              <input
-                type="color"
-                value={
-                  (data.customization.colors as Record<string, string>)
-                    ?.primary || '#6366f1'
-                }
-                onChange={(e) =>
-                  onChange({
-                    customization: {
-                      ...data.customization,
-                      colors: {
-                        ...(data.customization.colors as Record<
-                          string,
-                          string
-                        >),
-                        primary: e.target.value,
-                      },
-                    },
-                  })
-                }
-                className="w-full h-10 rounded cursor-pointer"
+        <section className="bg-surface-hover rounded-lg p-6 space-y-8">
+          <div>
+            <h4 className="text-base font-medium text-text-primary mb-4 flex items-center gap-2">
+              <Palette className="w-4 h-4 text-primary" />
+              Customize Colors
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <ColorPicker
+                label="Primary Color"
+                value={colors.primary || '#6366f1'}
+                onChange={(c) => handleColorChange('primary', c)}
+              />
+              <ColorPicker
+                label="Secondary Color"
+                value={colors.secondary || '#8b5cf6'}
+                onChange={(c) => handleColorChange('secondary', c)}
+              />
+              <ColorPicker
+                label="Accent Color"
+                value={colors.accent || '#f59e0b'}
+                onChange={(c) => handleColorChange('accent', c)}
+              />
+              <ColorPicker
+                label="Background"
+                value={colors.background || '#ffffff'}
+                onChange={(c) => handleColorChange('background', c)}
               />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">
-                Secondary Color
-              </label>
-              <input
-                type="color"
-                value={
-                  (data.customization.colors as Record<string, string>)
-                    ?.secondary || '#8b5cf6'
-                }
-                onChange={(e) =>
-                  onChange({
-                    customization: {
-                      ...data.customization,
-                      colors: {
-                        ...(data.customization.colors as Record<
-                          string,
-                          string
-                        >),
-                        secondary: e.target.value,
-                      },
-                    },
-                  })
-                }
-                className="w-full h-10 rounded cursor-pointer"
+          <div className="border-t border-border pt-6">
+            <h4 className="text-base font-medium text-text-primary mb-4 flex items-center gap-2">
+              <span className="text-primary font-serif">Aa</span>
+              Typography
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FontSelector
+                label="Heading Font"
+                value={data.font_heading || 'Playfair Display'}
+                onChange={(font) => onChange({ font_heading: font })}
+              />
+              <FontSelector
+                label="Body Font"
+                value={data.font_body || 'Inter'}
+                onChange={(font) => onChange({ font_body: font })}
               />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">
-                Accent Color
-              </label>
-              <input
-                type="color"
-                value={
-                  (data.customization.colors as Record<string, string>)
-                    ?.accent || '#f59e0b'
-                }
-                onChange={(e) =>
-                  onChange({
-                    customization: {
-                      ...data.customization,
-                      colors: {
-                        ...(data.customization.colors as Record<
-                          string,
-                          string
-                        >),
-                        accent: e.target.value,
-                      },
-                    },
-                  })
-                }
-                className="w-full h-10 rounded cursor-pointer"
-              />
-            </div>
+          <div className="border-t border-border pt-6">
+             <LayoutDensitySelector
+               value={data.layout_density || 'normal'}
+               onChange={(density) => onChange({ layout_density: density })}
+             />
+          </div>
 
-            <div>
-              <label className="block text-sm text-text-secondary mb-2">
-                Background
-              </label>
-              <input
-                type="color"
-                value={
-                  (data.customization.colors as Record<string, string>)
-                    ?.background || '#ffffff'
-                }
-                onChange={(e) =>
-                  onChange({
-                    customization: {
-                      ...data.customization,
-                      colors: {
-                        ...(data.customization.colors as Record<
-                          string,
-                          string
-                        >),
-                        background: e.target.value,
-                      },
-                    },
-                  })
-                }
-                className="w-full h-10 rounded cursor-pointer"
-              />
-            </div>
+          <div className="border-t border-border pt-6">
+            <h4 className="text-base font-medium text-text-primary mb-4 flex items-center gap-2">
+              <Video className="w-4 h-4 text-primary" />
+              Hero Media
+            </h4>
+            
+            {!data.invitation_id ? (
+               <div className="bg-surface p-4 rounded-lg border border-border text-center">
+                 <p className="text-sm text-text-secondary mb-3">
+                   Save a draft to upload videos or audio for your invitation.
+                 </p>
+                 <AppButton variant="outline" size="sm" onClick={onCreateDraft}>
+                   Enable Media Upload
+                 </AppButton>
+               </div>
+            ) : (
+              <div className="space-y-6">
+                 <div>
+                   <label className="block text-sm font-medium text-text-primary mb-2">
+                     Hero Video / Background Music
+                   </label>
+                   <MediaUploader
+                     workspaceId={workspaceId}
+                     invitationId={data.invitation_id}
+                     onUploadComplete={(media: InvitationMedia) => {
+                        const updates: Partial<WizardData> = {};
+                        if (media.media_type === 'video') {
+                          updates.video_object_key = media.object_key;
+                          updates.video_url = media.url; // Use resolved URL for preview
+                        } else if (media.media_type === 'audio') {
+                          updates.audio_object_key = media.object_key;
+                          updates.audio_url = media.url;
+                        }
+                        onChange(updates);
+                     }}
+                   />
+                 </div>
+
+                 {(data.video_url || data.audio_url) && (
+                   <div className="bg-surface p-3 rounded-lg border border-border text-xs text-text-secondary">
+                      {data.video_url && <div className="flex items-center gap-2"><Video size={14}/> Video uploaded</div>}
+                      {data.audio_url && <div className="flex items-center gap-2 mt-1"><Music size={14}/> Audio uploaded</div>}
+                   </div>
+                 )}
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -862,11 +839,6 @@ const Step3RSVPSettings: React.FC<Step3Props> = ({
   onBack,
   isSubmitting,
 }) => {
-  const [newQuestion, setNewQuestion] = useState('');
-  const [newQuestionType, setNewQuestionType] = useState<
-    'text' | 'select' | 'checkbox'
-  >('text');
-
   const updateRSVPSettings = useCallback(
     (updates: Partial<RSVPSettings>) => {
       onChange({
@@ -874,39 +846,6 @@ const Step3RSVPSettings: React.FC<Step3Props> = ({
       });
     },
     [data.rsvp_settings, onChange]
-  );
-
-  const addCustomQuestion = useCallback(() => {
-    if (!newQuestion.trim()) return;
-
-    const question: RSVPCustomQuestion = {
-      question: newQuestion.trim(),
-      type: newQuestionType,
-      required: false,
-      options: newQuestionType === 'select' ? ['Option 1', 'Option 2'] : undefined,
-    };
-
-    updateRSVPSettings({
-      custom_questions: [...data.rsvp_settings.custom_questions, question],
-    });
-
-    setNewQuestion('');
-  }, [
-    newQuestion,
-    newQuestionType,
-    data.rsvp_settings.custom_questions,
-    updateRSVPSettings,
-  ]);
-
-  const removeCustomQuestion = useCallback(
-    (index: number) => {
-      updateRSVPSettings({
-        custom_questions: data.rsvp_settings.custom_questions.filter(
-          (_, i) => i !== index
-        ),
-      });
-    },
-    [data.rsvp_settings.custom_questions, updateRSVPSettings]
   );
 
   return (
@@ -995,73 +934,38 @@ const Step3RSVPSettings: React.FC<Step3Props> = ({
             </div>
           </section>
 
-          {/* Custom Questions */}
-          <section>
-            <h4 className="text-base font-medium text-text-primary mb-4">
-              Custom Questions
-            </h4>
+            {/* Custom Questions */}
+            <RSVPQuestionBuilder
+              questions={data.rsvp_settings.custom_questions}
+              onChange={(questions) => updateRSVPSettings({ custom_questions: questions })}
+            />
 
-            {/* Existing Questions */}
-            {data.rsvp_settings.custom_questions.length > 0 && (
-              <div className="space-y-3 mb-4">
-                {data.rsvp_settings.custom_questions.map((q, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 bg-surface-hover rounded-lg"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-text-primary">
-                        {q.question}
-                      </p>
-                      <p className="text-xs text-text-tertiary capitalize">
-                        {q.type} • {q.required ? 'Required' : 'Optional'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeCustomQuestion(index)}
-                      className="text-text-tertiary hover:text-error p-1"
-                      aria-label="Remove question"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Add New Question */}
-            <div className="flex gap-2">
-              <AppInput
-                placeholder="Add a custom question..."
-                value={newQuestion}
-                onChange={(e) => setNewQuestion(e.target.value)}
-                containerClassName="flex-1"
-              />
-              <Select
-                options={[
-                  { value: 'text', label: 'Text' },
-                  { value: 'select', label: 'Choice' },
-                  { value: 'checkbox', label: 'Yes/No' },
-                ]}
-                value={newQuestionType}
-                onChange={(e) =>
-                  setNewQuestionType(
-                    e.target.value as 'text' | 'select' | 'checkbox'
-                  )
-                }
-                fullWidth={false}
-                className="w-32"
-              />
-              <AppButton
-                variant="outline"
-                onClick={addCustomQuestion}
-                disabled={!newQuestion.trim()}
+            <div className="pt-6 border-t border-border mt-6">
+              <h4 className="text-base font-medium text-text-primary mb-4">
+                Host Notifications
+              </h4>
+              <RadioGroup
+                name="notification_preference"
+                value={data.notification_preference || 'immediate'}
+                onChange={(val) => onChange({ notification_preference: val as any })}
               >
-                Add
-              </AppButton>
+                <Radio
+                  value="immediate"
+                  label="Immediate"
+                  description="Receive an email as soon as someone RSVPs"
+                />
+                <Radio
+                  value="daily_digest"
+                  label="Daily Digest"
+                  description="Receive a summary of all RSVPs once a day"
+                />
+                <Radio
+                  value="disabled"
+                  label="Disabled"
+                  description="Don't send email notifications"
+                />
+              </RadioGroup>
             </div>
-          </section>
         </>
       )}
 
@@ -1187,6 +1091,7 @@ export const InvitationWizard: React.FC<InvitationWizardProps> = ({
         host_contact_email: data.host_contact_email,
         primary_language: data.primary_language,
         secondary_language: data.secondary_language,
+        notification_preference: data.notification_preference,
       });
     }
   }, [
@@ -1204,6 +1109,7 @@ export const InvitationWizard: React.FC<InvitationWizardProps> = ({
     data.host_contact_email,
     data.primary_language,
     data.secondary_language,
+    data.notification_preference,
   ]);
 
   // Handle Step 2 Next
@@ -1240,6 +1146,7 @@ export const InvitationWizard: React.FC<InvitationWizardProps> = ({
             onChange={onDataChange}
             onNext={handleStep1Next}
             errors={errors}
+            workspaceId={workspaceId}
           />
         );
       case 2:
@@ -1250,6 +1157,34 @@ export const InvitationWizard: React.FC<InvitationWizardProps> = ({
             onChange={onDataChange}
             onNext={handleStep2Next}
             onBack={handleBack}
+            onCreateDraft={async () => {
+              try {
+                // Determine a template ID if not yet selected (or require it? Invitation needs template?)
+                // Actually create_invitation schema makes template_id optional? Let's check.
+                // Yes, schema says template_id optional.
+                
+                const draft = await invitationService.createInvitation(workspaceId, {
+                  title: data.title,
+                  description: data.description,
+                  event_type: data.event_type as any, // Cast if needed
+                  event_datetime: data.event_datetime,
+                  event_end_datetime: data.event_end_datetime,
+                  event_timezone: data.event_timezone,
+                  venue: data.venue,
+                  host_names: data.host_names,
+                  rsvp_settings: data.rsvp_settings,
+                  primary_language: data.primary_language,
+                  secondary_language: data.secondary_language,
+                  template_id: data.template_id, // Might be undefined, which is OK
+                  customization: data.customization,
+                  notification_preference: data.notification_preference,
+                });
+                onDataChange({ invitation_id: draft.invitation_id });
+              } catch (e) {
+                console.error("Failed to create draft", e);
+                // Optionally set error state
+              }
+            }}
           />
         );
       case 3:

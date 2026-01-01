@@ -443,6 +443,65 @@ class R2StorageService:
             logger.error(f"Failed to delete object from R2: {e}")
             raise StorageError(f"Deletion failed: {e}", "DELETE_FAILED") from e
 
+    async def generate_presigned_put_url(
+        self,
+        object_key: str,
+        content_type: str,
+        expiry_seconds: int = 3600,
+    ) -> str:
+        """Generate a presigned URL for uploading (PUT) an object.
+
+        Args:
+            object_key: R2 object key
+            content_type: Content-Type header value (must match client upload)
+            expiry_seconds: URL expiry time in seconds
+
+        Returns:
+            Presigned URL for PUT request
+        """
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(
+            self.executor,
+            lambda: self.s3_client.generate_presigned_url(
+                "put_object",
+                Params={
+                    "Bucket": self.bucket_name,
+                    "Key": object_key,
+                    "ContentType": content_type,
+                },
+                ExpiresIn=expiry_seconds,
+            ),
+        )
+        return url
+
+    async def generate_presigned_get_url(
+        self,
+        object_key: str,
+        expiry_seconds: int = 3600,
+    ) -> str:
+        """Generate a presigned URL for downloading (GET) an object.
+
+        Args:
+            object_key: R2 object key
+            expiry_seconds: URL expiry time in seconds
+
+        Returns:
+            Presigned URL for GET request
+        """
+        loop = asyncio.get_event_loop()
+        url = await loop.run_in_executor(
+            self.executor,
+            lambda: self.s3_client.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": self.bucket_name,
+                    "Key": object_key,
+                },
+                ExpiresIn=expiry_seconds,
+            ),
+        )
+        return url
+
 
 # Export singleton instance
 _r2_storage_service: Optional[R2StorageService] = None

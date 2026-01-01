@@ -12,6 +12,8 @@ import secrets
 from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
+import csv
+import io
 
 from app.repositories.rsvp_repository import RSVPRepository, get_rsvp_repository
 from app.repositories.invitation_repository import InvitationRepository, get_invitation_repository
@@ -475,6 +477,78 @@ class InvitationRSVPService:
         await self.invitation_repo.decrement_rsvp_count(invitation_id)
 
         return True
+
+
+    async def export_rsvps(
+        self,
+        invitation_id: UUID,
+        workspace_id: UUID,
+    ) -> str:
+        """
+        Export RSVPs as CSV string.
+
+        Args:
+            invitation_id: The invitation ID
+            workspace_id: The workspace ID
+
+        Returns:
+            CSV content as string
+        """
+        # Get all RSVPs
+        rsvps, _ = await self.rsvp_repo.list_by_invitation(
+            invitation_id=invitation_id,
+            workspace_id=workspace_id,
+            limit=10000,  # Reasonable limit for export
+        )
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow([
+            "Guest Name",
+            "Email",
+            "Phone",
+            "Status",
+            "Party Size",
+            "Additional Guests",
+            "Dietary Preferences",
+            "Message",
+            "Source",
+            "Submission Date",
+            "Custom Answers",
+        ])
+
+        # Write rows
+        for rsvp in rsvps:
+            # Format status
+            status_text = rsvp.status
+            if rsvp.attending:
+                status_text = "Attending"
+            elif rsvp.attending is False:
+                status_text = "Declined"
+
+            # Format party names
+            party_names = ", ".join(rsvp.party_names) if rsvp.party_names else ""
+
+            # Format date
+            date_str = rsvp.created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+            writer.writerow([
+                rsvp.guest_name,
+                rsvp.guest_email,
+                rsvp.guest_phone or "",
+                status_text,
+                rsvp.party_size,
+                party_names,
+                rsvp.dietary_preferences or "",
+                rsvp.message or "",
+                rsvp.source,
+                date_str,
+                str(rsvp.custom_answers) if rsvp.custom_answers else "",
+            ])
+
+        return output.getvalue()
 
 
 # Singleton instance

@@ -56,6 +56,51 @@ export type ImagePurpose = 'cover' | 'gallery' | 'logo' | 'background' | 'patter
 // Embedded / Nested Types
 // ---------------------------------------------------------------------------
 
+export interface SubEvent {
+  sub_event_id: string;
+  invitation_id: string;
+  workspace_id: string;
+  name: string;
+  event_type?: string;
+  event_datetime: string;
+  event_end_datetime?: string;
+  event_timezone: string;
+  description?: string;
+  venue_name?: string;
+  venue_address?: string;
+  venue_city?: string;
+  venue_map_url?: string;
+  display_order: number;
+  show_countdown: boolean;
+  enable_individual_rsvp: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MediaType = 'video' | 'audio';
+export type MediaPurpose = 'content' | 'background' | 'effect';
+export type MediaProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface InvitationMedia {
+  media_id: string;
+  invitation_id: string;
+  media_type: MediaType;
+  purpose: MediaPurpose;
+  object_key: string;
+  url: string;
+  original_url?: string;
+  thumbnail_url?: string;
+  width?: number;
+  height?: number;
+  duration_seconds?: number;
+  processing_status: MediaProcessingStatus;
+  position: number;
+  autoplay: boolean;
+  loop: boolean;
+  muted: boolean;
+  created_at: string;
+}
+
 export interface TemplateLayout {
   sections: string[];
   fonts: Record<string, string>;
@@ -196,6 +241,18 @@ export interface Invitation {
   rsvp_count: number;
   /** Notification preference for RSVP alerts: 'immediate', 'daily_digest', or 'disabled' */
   notification_preference: 'immediate' | 'daily_digest' | 'disabled';
+
+  // Design & Media
+  video_object_key?: string;
+  video_url?: string;
+  audio_object_key?: string;
+  audio_url?: string;
+  layout_density?: 'compact' | 'normal' | 'spacious';
+  font_heading?: string;
+  font_body?: string;
+  ai_generated_content?: Record<string, unknown>;
+  has_sub_events: boolean;
+  
   created_at: string;
   updated_at: string;
   created_by_user_id: string;
@@ -217,11 +274,22 @@ export interface CreateInvitationRequest {
   primary_language?: string;
   secondary_language?: string;
   customization?: Record<string, unknown>;
+  notification_preference?: 'immediate' | 'daily_digest' | 'disabled';
+  
+  // Design & Media
+  video_object_key?: string;
+  audio_object_key?: string;
+  layout_density?: 'compact' | 'normal' | 'spacious';
+  font_heading?: string;
+  font_body?: string;
+  ai_generated_content?: Record<string, unknown>;
+  has_sub_events?: boolean;
 }
 
 export interface UpdateInvitationRequest {
   title?: string;
   description?: string;
+  template_id?: string;
   event_type?: EventType;
   event_datetime?: string;
   event_end_datetime?: string;
@@ -245,6 +313,15 @@ export interface UpdateInvitationRequest {
   auto_delete_days?: number;
   /** Notification preference for RSVP alerts */
   notification_preference?: 'immediate' | 'daily_digest' | 'disabled';
+  
+  // Design & Media
+  video_object_key?: string;
+  audio_object_key?: string;
+  layout_density?: 'compact' | 'normal' | 'spacious';
+  font_heading?: string;
+  font_body?: string;
+  ai_generated_content?: Record<string, unknown>;
+  has_sub_events?: boolean;
 }
 
 export interface InvitationListItem {
@@ -613,6 +690,21 @@ export interface WorkspaceInvitationStats {
   upcoming_events: number;
 }
 
+export interface InvitationViewAnalytics {
+  view_id: string;
+  invitation_id: string;
+  device_type: 'phone' | 'tablet' | 'desktop' | 'unknown';
+  browser?: string;
+  os?: string;
+  country_code?: string;
+  city?: string;
+  referrer_type: 'direct' | 'social' | 'search' | 'email' | 'other';
+  duration_seconds?: number;
+  scrolled_to_rsvp: boolean;
+  interacted_with_media: boolean;
+  viewed_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Calendar/ICS Types
 // ---------------------------------------------------------------------------
@@ -657,6 +749,15 @@ export interface PublicInvitation {
   content_i18n: Record<string, Record<string, string>>;
   template_layout?: TemplateLayout;
   customization: Record<string, unknown>;
+  video_object_key?: string;
+  video_url?: string;
+  audio_object_key?: string;
+  audio_url?: string;
+  layout_density?: 'compact' | 'normal' | 'spacious';
+  font_heading?: string;
+  font_body?: string;
+  ai_generated_content?: Record<string, unknown>;
+  has_sub_events?: boolean;
 }
 
 export interface AccessInvitationRequest {
@@ -697,4 +798,22 @@ export interface InvitationEventListResponse {
     total: number;
     total_pages: number;
   };
+}
+
+// ---------------------------------------------------------------------------
+// AI Content Generation Types (Phase 7)
+// ---------------------------------------------------------------------------
+
+export interface GenerateContentRequest {
+  event_type: string;
+  mood: string;
+  tone?: string;
+  language: string;
+  additional_details?: string;
+  host_names?: string[];
+}
+
+export interface GenerateContentResponse {
+  title: string;
+  description: string;
 }

@@ -44,10 +44,22 @@ class AppSettings(BaseSettings):
         alias="API_BASE_URL",
         description="Public base URL for API (e.g., https://rawdrive.in). Used for upload URLs. If not set, falls back to http://localhost:8000",
     )
-    public_url: str = Field(
-        "https://rawdrive.ai",
+    public_url: Optional[str] = Field(
+        None,
         alias="PUBLIC_URL",
-        description="Public base URL for profile pages (e.g., https://rawdrive.ai). Used for QR codes and public profile URLs.",
+        description="Public base URL for profile pages (e.g., https://rawdrive.ai). Used for QR codes and public profile URLs. Required in production.",
+    )
+
+    # CDN and Gallery URLs
+    cdn_base_url: str = Field(
+        "http://localhost:8000/media",
+        alias="CDN_BASE_URL",
+        description="Base URL for CDN assets (thumbnails, images). In production, use your CDN domain.",
+    )
+    gallery_share_base_url: str = Field(
+        "http://localhost:3000/g",
+        alias="GALLERY_SHARE_BASE_URL",
+        description="Base URL for public gallery share links. In production, use your gallery domain.",
     )
 
     # Database and cache (Requirements 1, 2, 19)

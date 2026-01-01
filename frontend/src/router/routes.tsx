@@ -74,6 +74,7 @@ const HelpSupportPage = lazy(() => import('../pages/workspace/settings/HelpSuppo
 // Digital Invitations pages (016-save-the-date)
 const InvitationsPage = lazy(() => import('../pages/workspace/InvitationsPage'));
 const InvitationCreatePage = lazy(() => import('../pages/workspace/InvitationCreatePage'));
+const InvitationEditPage = lazy(() => import('../pages/workspace/InvitationEditPage'));
 const InvitationDetailPage = lazy(() => import('../pages/workspace/InvitationDetailPage'));
 
 // User Settings pages
@@ -294,6 +295,10 @@ export const workspaceRoutes: RouteObject[] = [
       {
         path: 'invitations/:id',
         element: <CriticalLazyPage component={InvitationDetailPage} />,
+      },
+      {
+        path: 'invitations/:id/edit',
+        element: <CriticalLazyPage component={InvitationEditPage} />,
       },
     ],
   },

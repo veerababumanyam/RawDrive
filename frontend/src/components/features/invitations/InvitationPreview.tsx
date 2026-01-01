@@ -10,7 +10,7 @@
  * Feature: 016-save-the-date
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   Calendar,
   MapPin,
@@ -19,9 +19,12 @@ import {
   Smartphone,
   Monitor,
   ExternalLink,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 import { AppButton } from '@/components/ui/AppButton';
+import { VideoPlayer } from '@/components/features/media/VideoPlayer';
 import type { VenueInfo, RSVPSettings, TemplateLayout } from '@/types/invitations';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +50,10 @@ interface InvitationPreviewProps {
   hostNames: string[];
   /** Cover image URL */
   coverImageUrl?: string;
+  /** Video URL for hero section */
+  videoUrl?: string;
+  /** Audio URL for background music */
+  audioUrl?: string;
   /** Template layout configuration */
   templateLayout?: TemplateLayout;
   /** Custom colors/fonts */
@@ -186,10 +193,27 @@ export const InvitationPreview: React.FC<InvitationPreviewProps> = ({
   coverImageUrl,
   customization,
   rsvpSettings,
+  videoUrl,
+  audioUrl,
   viewMode = 'mobile',
   onViewModeChange,
   className = '',
 }) => {
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Handle audio playback
+  useEffect(() => {
+    if (audioRef.current) {
+      if (isAudioPlaying) {
+        audioRef.current.play().catch(e => console.warn('Audio play failed:', e));
+      } else {
+        audioRef.current.pause();
+      }
+    }
+  }, [isAudioPlaying]);
+
+  const toggleAudio = () => setIsAudioPlaying(!isAudioPlaying);
   // Extract colors with fallbacks
   const colors = {
     primary: customization.colors?.primary || '#6366f1',
@@ -256,8 +280,18 @@ export const InvitationPreview: React.FC<InvitationPreviewProps> = ({
         style={{ backgroundColor: colors.background }}
       >
         {/* Cover Image / Hero */}
-        <div className="relative aspect-[16/9] overflow-hidden">
-          {coverImageUrl ? (
+        <div className="relative aspect-[16/9] overflow-hidden group">
+          {videoUrl ? (
+            <VideoPlayer
+              src={videoUrl}
+              poster={coverImageUrl}
+              autoPlay={true}
+              loop={true}
+              muted={true}
+              controls={false} // Hero video usually background-like
+              className="w-full h-full object-cover"
+            />
+          ) : coverImageUrl ? (
             <img
               src={coverImageUrl}
               alt={title}
@@ -270,6 +304,21 @@ export const InvitationPreview: React.FC<InvitationPreviewProps> = ({
                 background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
               }}
             />
+          )}
+
+          {/* Audio Control */}
+          {audioUrl && (
+            <div className="absolute top-4 right-4 z-20">
+              <audio ref={audioRef} src={audioUrl} loop />
+              <button
+                type="button"
+                onClick={toggleAudio}
+                className="p-2 rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors"
+                aria-label={isAudioPlaying ? 'Mute audio' : 'Play audio'}
+              >
+                {isAudioPlaying ? <Volume2 size={20} /> : <VolumeX size={20} />}
+              </button>
+            </div>
           )}
 
           {/* Overlay with title */}

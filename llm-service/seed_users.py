@@ -1,17 +1,25 @@
 import requests
 import os
+import sys
 import json
+from pathlib import Path
+
+# Add backend src to path for importing test constants
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend" / "src"))
+
+from app.config.test_constants import TEST_PASSWORD, AdminUsers
 
 # Configuration
 BASE_URL = "http://localhost:4000"
 MASTER_KEY = "sk-1234" # Default local master key from docker-compose
 
+# Use centralized admin user definitions
 USERS = [
-    {"email": "superadmin@test.rawdrive.in", "role": "admin_user", "password": "Test@123"},
-    {"email": "platformadmin@test.rawdrive.in", "role": "admin_user", "password": "Test@123"},
-    {"email": "supportadmin@test.rawdrive.in", "role": "admin_user", "password": "Test@123"},
-    {"email": "billingadmin@test.rawdrive.in", "role": "admin_user", "password": "Test@123"},
-    {"email": "contentmod@test.rawdrive.in", "role": "admin_user", "password": "Test@123"},
+    {"email": AdminUsers.SUPER_ADMIN.email, "role": "admin_user", "password": TEST_PASSWORD},
+    {"email": AdminUsers.PLATFORM_ADMIN.email, "role": "admin_user", "password": TEST_PASSWORD},
+    {"email": AdminUsers.SUPPORT_ADMIN.email, "role": "admin_user", "password": TEST_PASSWORD},
+    {"email": AdminUsers.BILLING_ADMIN.email, "role": "admin_user", "password": TEST_PASSWORD},
+    {"email": AdminUsers.CONTENT_MOD.email, "role": "admin_user", "password": TEST_PASSWORD},
 ]
 
 def seed_users():
