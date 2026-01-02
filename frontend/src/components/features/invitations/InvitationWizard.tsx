@@ -44,6 +44,7 @@ import {
   Radio,
 } from '@/components/ui/FormControls';
 import * as invitationService from '@/services/invitationService';
+import { SUPPORTED_LANGUAGES } from '@/i18n/config';
 import type {
   EventType,
   VenueInfo,
@@ -133,15 +134,16 @@ const TIMEZONES = [
 /**
  * Supported languages with native script labels.
  * Font CSS classes are in index.css (font-lang-{code}).
+ * Derived from centralized SUPPORTED_LANGUAGES in i18n/config.ts
+ * Feature: 019-invitation-indian-languages
  */
-const LANGUAGES = [
-  { value: 'en', label: 'English', nativeLabel: 'English', fontClass: 'font-lang-en' },
-  { value: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी', fontClass: 'font-lang-hi' },
-  { value: 'ta', label: 'Tamil', nativeLabel: 'தமிழ்', fontClass: 'font-lang-ta' },
-  { value: 'te', label: 'Telugu', nativeLabel: 'తెలుగు', fontClass: 'font-lang-te' },
-  { value: 'kn', label: 'Kannada', nativeLabel: 'ಕನ್ನಡ', fontClass: 'font-lang-kn' },
-  { value: 'ml', label: 'Malayalam', nativeLabel: 'മലയാളം', fontClass: 'font-lang-ml' },
-];
+const LANGUAGES = SUPPORTED_LANGUAGES.map((lang) => ({
+  value: lang.code,
+  label: lang.name,
+  nativeLabel: lang.nativeName,
+  fontClass: `font-lang-${lang.code}`,
+  dir: lang.dir,
+}));
 
 const COUNTRIES = [
   { value: 'India', label: 'India' },

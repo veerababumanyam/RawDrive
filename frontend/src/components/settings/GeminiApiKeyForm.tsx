@@ -85,11 +85,55 @@ export const GeminiApiKeyForm: React.FC<GeminiApiKeyFormProps> = ({
   }, [apiKey, onValidate]);
 
   const handleSave = useCallback(async () => {
-    if (!validated) {
-      await handleValidate();
-      return;
+    // If not validated and not empty, try to validate first
+    if (!validated && apiKey.trim()) {
+      setValidating(true);
+      setError(null);
+      setValidated(false);
+
+      try {
+        const result = await onValidate(apiKey.trim());
+
+        if (result.valid) {
+          setValidated(true);
+          // Continue to save
+        } else {
+            // Validation failed, show error and stop
+            if (result.error) {
+              const errorInfo = GEMINI_ERROR_MESSAGES[result.error.error as GeminiErrorCode] || {
+                message: result.error.message,
+                hint: result.error.hint,
+              };
+              setError({
+                code: result.error.error as GeminiErrorCode,
+                message: errorInfo.message || result.error.message,
+                hint: errorInfo.hint || result.error.hint,
+              });
+            } else {
+               // Fallback error
+               setError({
+                code: 'INVALID_KEY',
+                message: 'Invalid API key',
+               });
+            }
+            setValidating(false);
+            return;
+        }
+      } catch {
+        setError({
+          code: 'NETWORK_ERROR',
+          message: GEMINI_ERROR_MESSAGES.NETWORK_ERROR.message,
+          hint: GEMINI_ERROR_MESSAGES.NETWORK_ERROR.hint,
+        });
+        setValidating(false);
+        return;
+      }
+      setValidating(false);
+    } else if (!apiKey.trim()) {
+        return;
     }
 
+    // Proceed to save
     setSaving(true);
     try {
       await onSave(apiKey.trim());
@@ -104,7 +148,7 @@ export const GeminiApiKeyForm: React.FC<GeminiApiKeyFormProps> = ({
     } finally {
       setSaving(false);
     }
-  }, [apiKey, validated, onSave, handleValidate]);
+  }, [apiKey, validated, onSave, onValidate]);
 
   const handleKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setApiKey(e.target.value);
@@ -199,39 +243,37 @@ export const GeminiApiKeyForm: React.FC<GeminiApiKeyFormProps> = ({
 
       {/* Actions */}
       <div className="flex items-center gap-3">
-        {!validated ? (
-          <AppButton
-            type="button"
-            variant="outline"
-            onClick={handleValidate}
-            disabled={!apiKey.trim() || isLoading}
-          >
-            {validating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Validating...
-              </>
-            ) : (
-              'Validate Key'
-            )}
-          </AppButton>
-        ) : (
-          <AppButton
-            type="button"
-            variant="primary"
-            onClick={handleSave}
-            disabled={isLoading}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Saving...
-              </>
-            ) : (
-              'Save API Key'
-            )}
-          </AppButton>
-        )}
+        <AppButton
+          type="button"
+          variant="outline"
+          onClick={handleValidate}
+          disabled={!apiKey.trim() || isLoading}
+        >
+          {validating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              Validating...
+            </>
+          ) : (
+            'Validate Key'
+          )}
+        </AppButton>
+
+        <AppButton
+          type="button"
+          variant="primary"
+          onClick={handleSave}
+          disabled={!apiKey.trim() || isLoading}
+        >
+          {saving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              Saving...
+            </>
+          ) : (
+            'Save API Key'
+          )}
+        </AppButton>
       </div>
 
       {/* Help link */}

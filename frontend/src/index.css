@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+Kannada:wght@400;500;600;700&family=Noto+Sans+Malayalam:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+Gujarati:wght@400;500;600;700&family=Noto+Sans+Gurmukhi:wght@400;500;600;700&family=Noto+Sans+Kannada:wght@400;500;600;700&family=Noto+Sans+Malayalam:wght@400;500;600;700&family=Noto+Sans+Oriya:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;500;600;700&display=swap');
 
 /* =============================================================================
    RawDrive Global Design System v1.0
@@ -16,15 +16,22 @@
 
 /* =============================================================================
    GOOGLE FONTS - Regional Language Support for Digital Invitations
-   Feature: 016-save-the-date (Phase 9: Multi-Language Support)
+   Features: 016-save-the-date, 019-invitation-indian-languages
 
-   Languages supported:
+   Languages supported (12 Indian + English):
    - English (Inter - default)
    - Hindi (Noto Sans Devanagari)
+   - Marathi (Noto Sans Devanagari - shared with Hindi)
    - Tamil (Noto Sans Tamil)
    - Telugu (Noto Sans Telugu)
    - Kannada (Noto Sans Kannada)
    - Malayalam (Noto Sans Malayalam)
+   - Bengali (Noto Sans Bengali)
+   - Assamese (Noto Sans Bengali - shared with Bengali)
+   - Gujarati (Noto Sans Gujarati)
+   - Odia (Noto Sans Oriya)
+   - Punjabi (Noto Sans Gurmukhi)
+   - Urdu (Noto Nastaliq Urdu - RTL)
    ============================================================================= */
 
 /* =============================================================================
@@ -176,12 +183,19 @@
   --font-serif: 'Playfair Display', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
   --font-mono: 'Roboto Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
-  /* Regional Language Fonts - Feature: 016-save-the-date */
+  /* Regional Language Fonts - Features: 016-save-the-date, 019-invitation-indian-languages */
   --font-hindi: 'Noto Sans Devanagari', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-marathi: 'Noto Sans Devanagari', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-tamil: 'Noto Sans Tamil', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-telugu: 'Noto Sans Telugu', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-kannada: 'Noto Sans Kannada', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-malayalam: 'Noto Sans Malayalam', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-bengali: 'Noto Sans Bengali', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-assamese: 'Noto Sans Bengali', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-gujarati: 'Noto Sans Gujarati', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-odia: 'Noto Sans Oriya', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-punjabi: 'Noto Sans Gurmukhi', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-urdu: 'Noto Nastaliq Urdu', 'Inter', ui-sans-serif, system-ui, serif;
 
   /* Font Sizes */
   --text-xs: 0.75rem;      /* 12px */
@@ -491,21 +505,74 @@ body {
   background-clip: text;
 }
 
-/* Regional Language Font Classes - Feature: 016-save-the-date */
+/* Regional Language Font Classes - Features: 016-save-the-date, 019-invitation-indian-languages */
 .font-lang-en { font-family: var(--font-sans); }
 .font-lang-hi { font-family: var(--font-hindi); }
+.font-lang-mr { font-family: var(--font-marathi); }
 .font-lang-ta { font-family: var(--font-tamil); }
 .font-lang-te { font-family: var(--font-telugu); }
 .font-lang-kn { font-family: var(--font-kannada); }
 .font-lang-ml { font-family: var(--font-malayalam); }
+.font-lang-bn { font-family: var(--font-bengali); }
+.font-lang-as { font-family: var(--font-assamese); }
+.font-lang-gu { font-family: var(--font-gujarati); }
+.font-lang-or { font-family: var(--font-odia); }
+.font-lang-pa { font-family: var(--font-punjabi); }
+.font-lang-ur {
+  font-family: var(--font-urdu);
+  direction: rtl;
+  text-align: right;
+}
 
 /* Language-specific container for invitations */
 [data-lang="en"] { font-family: var(--font-sans); }
 [data-lang="hi"] { font-family: var(--font-hindi); }
+[data-lang="mr"] { font-family: var(--font-marathi); }
 [data-lang="ta"] { font-family: var(--font-tamil); }
 [data-lang="te"] { font-family: var(--font-telugu); }
 [data-lang="kn"] { font-family: var(--font-kannada); }
 [data-lang="ml"] { font-family: var(--font-malayalam); }
+[data-lang="bn"] { font-family: var(--font-bengali); }
+[data-lang="as"] { font-family: var(--font-assamese); }
+[data-lang="gu"] { font-family: var(--font-gujarati); }
+[data-lang="or"] { font-family: var(--font-odia); }
+[data-lang="pa"] { font-family: var(--font-punjabi); }
+[data-lang="ur"] {
+  font-family: var(--font-urdu);
+  direction: rtl;
+  text-align: right;
+}
+
+/* RTL-specific utility classes for Urdu and future RTL languages */
+.rtl-container {
+  direction: rtl;
+  text-align: right;
+}
+
+.rtl-container .text-left {
+  text-align: right;
+}
+
+.rtl-container .text-right {
+  text-align: left;
+}
+
+/* Logical properties for better RTL support */
+.rtl-safe-margin-left {
+  margin-inline-start: 1rem;
+}
+
+.rtl-safe-margin-right {
+  margin-inline-end: 1rem;
+}
+
+.rtl-safe-padding-left {
+  padding-inline-start: 1rem;
+}
+
+.rtl-safe-padding-right {
+  padding-inline-end: 1rem;
+}
 
 /* Heading Styles */
 .heading-1 {

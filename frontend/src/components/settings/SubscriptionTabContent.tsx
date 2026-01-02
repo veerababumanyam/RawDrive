@@ -346,7 +346,7 @@ export function SubscriptionTabContent({ className }: TabContentProps) {
       )}
 
       {/* Usage Card */}
-      <UsageCard usage={subscription.usage} />
+      {subscription.usage && <UsageCard usage={subscription.usage} />}
 
       {/* Recent Invoices */}
       <div className="glass-card rounded-2xl p-4 sm:p-6">

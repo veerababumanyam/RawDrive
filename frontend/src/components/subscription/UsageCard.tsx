@@ -19,7 +19,7 @@ import {
 import type { UsageStats } from '../../services/subscriptionService';
 
 interface UsageCardProps {
-  usage: UsageStats;
+  usage: UsageStats | undefined;
   className?: string;
 }
 
@@ -116,6 +116,11 @@ const UsageItem: React.FC<UsageItemProps> = ({
  * UsageCard - Displays all subscription usage metrics
  */
 export const UsageCard: React.FC<UsageCardProps> = ({ usage, className = '' }) => {
+  // Defensive check - return null if usage data is not yet loaded
+  if (!usage) {
+    return null;
+  }
+
   const storagePercentage = Math.round(
     (usage.storage_used_bytes / usage.storage_limit_bytes) * 100
   );
