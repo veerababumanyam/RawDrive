@@ -88,6 +88,7 @@ export interface InvitationMedia {
   purpose: MediaPurpose;
   object_key?: string; // legacy field (some APIs return original_object_key instead)
   original_object_key?: string;
+  original_filename?: string;
   url?: string;
   media_url?: string; // fallback if backend returns media_url
   upload_url?: string; // available on initiation responses
