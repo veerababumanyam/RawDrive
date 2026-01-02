@@ -92,6 +92,13 @@ class InvitationAIService:
                 code="INTERNAL_ERROR",
             )
 
+    # Languages that require cultural context guidance
+    # Feature: 019-invitation-indian-languages
+    INDIAN_REGIONAL_LANGUAGES = {
+        "Hindi", "Telugu", "Tamil", "Kannada", "Malayalam",
+        "Bengali", "Assamese", "Gujarati", "Marathi", "Odia", "Punjabi", "Urdu"
+    }
+
     def _build_prompt(
         self,
         event_type: str,
@@ -101,10 +108,13 @@ class InvitationAIService:
         additional_details: Optional[str],
         host_names: Optional[list[str]],
     ) -> str:
-        """Build the prompt for the AI model."""
-        
+        """Build the prompt for the AI model.
+
+        Features: 016-save-the-date, 019-invitation-indian-languages
+        Enhanced to include cultural context for Indian regional languages.
+        """
         parts = [
-            f"You are a professional copywriter for digital invitations.",
+            "You are a professional copywriter for digital invitations.",
             f"Please generate a Title and a Description for a {event_type} invitation.",
             f"Language: {language}",
             f"Mood: {mood}",
@@ -112,16 +122,59 @@ class InvitationAIService:
 
         if tone:
             parts.append(f"Tone: {tone}")
-        
+
         if host_names:
             parts.append(f"Hosts: {', '.join(host_names)}")
 
+        # Add cultural context for Indian regional languages
+        # Feature: 019-invitation-indian-languages
+        if language in self.INDIAN_REGIONAL_LANGUAGES:
+            parts.append(f"\nCultural guidelines for {language}:")
+            parts.append(
+                f"- Write the entire content in authentic {language} script "
+                "(not transliteration)."
+            )
+            parts.append(
+                f"- Use culturally appropriate phrasing and expressions "
+                f"common in {language}-speaking regions."
+            )
+
+            # Event-specific cultural guidance
+            if event_type.lower() == "wedding":
+                parts.append(
+                    f"- For weddings, use traditional blessings and "
+                    f"auspicious phrases common in {language} culture."
+                )
+                parts.append(
+                    "- If appropriate for the mood, include references "
+                    "to traditional customs or values."
+                )
+
+            # Formality guidance for Indian languages
+            if mood == "Formal":
+                parts.append(
+                    f"- Use respectful honorifics and formal language "
+                    f"registers appropriate in {language}."
+                )
+
+            # Special handling for Urdu (RTL language)
+            if language == "Urdu":
+                parts.append(
+                    "- Use poetic and elegant Urdu vocabulary "
+                    "(Rekhta style where appropriate)."
+                )
+                parts.append(
+                    "- The text will be displayed right-to-left; "
+                    "ensure natural flow."
+                )
+
         if additional_details:
-            parts.append(f"Additional details: {additional_details}")
+            parts.append(f"\nAdditional details: {additional_details}")
 
         parts.append(
             "\nOutput must be a valid JSON object with keys 'title' and 'description'."
-            "\nDo not include markdown formatting or code blocks in the output, just the raw JSON string."
+            "\nDo not include markdown formatting or code blocks in the output, "
+            "just the raw JSON string."
             "\nThe title should be catchy and short."
             "\nThe description should be warm and inviting, around 2-3 sentences."
         )

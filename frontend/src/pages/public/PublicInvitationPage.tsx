@@ -44,26 +44,55 @@ import type {
   RSVPSubmitResponse,
   AccessInvitationResponse,
 } from '@/types/invitations';
+import { SUPPORTED_LANGUAGES } from '@/i18n/config';
 
 // ---------------------------------------------------------------------------
 // Helper Functions
 // ---------------------------------------------------------------------------
 
 /**
- * Map language codes to BCP 47 locale tags and font CSS classes.
- * Feature: 016-save-the-date (Phase 9: Multi-Language Support)
+ * Map language codes to BCP 47 locale tags, font CSS classes, and date scripts.
+ * Features: 016-save-the-date, 019-invitation-indian-languages
+ *
+ * Unicode script codes for date formatting:
+ * - Deva (Devanagari): Hindi, Marathi
+ * - Beng (Bengali): Bengali, Assamese
+ * - Telu (Telugu), Taml (Tamil), Knda (Kannada), Mlym (Malayalam)
+ * - Gujr (Gujarati), Orya (Oriya), Guru (Gurmukhi), Arab (Arabic/Urdu)
+ */
+const DATE_SCRIPT_MAP: Record<string, string> = {
+  hi: 'Deva',
+  mr: 'Deva',
+  ta: 'Taml',
+  te: 'Telu',
+  kn: 'Knda',
+  ml: 'Mlym',
+  bn: 'Beng',
+  as: 'Beng',
+  gu: 'Gujr',
+  or: 'Orya',
+  pa: 'Guru',
+  ur: 'Arab',
+};
+
+/**
+ * Build LANGUAGE_CONFIG from centralized SUPPORTED_LANGUAGES.
+ * Automatically includes all 12 Indian languages + English.
  */
 const LANGUAGE_CONFIG: Record<
   string,
-  { locale: string; fontClass: string; dateScript?: string }
-> = {
-  en: { locale: 'en-IN', fontClass: 'font-lang-en' },
-  hi: { locale: 'hi-IN', fontClass: 'font-lang-hi', dateScript: 'Deva' },
-  ta: { locale: 'ta-IN', fontClass: 'font-lang-ta', dateScript: 'Taml' },
-  te: { locale: 'te-IN', fontClass: 'font-lang-te', dateScript: 'Telu' },
-  kn: { locale: 'kn-IN', fontClass: 'font-lang-kn', dateScript: 'Knda' },
-  ml: { locale: 'ml-IN', fontClass: 'font-lang-ml', dateScript: 'Mlym' },
-};
+  { locale: string; fontClass: string; dateScript?: string; dir: 'ltr' | 'rtl' }
+> = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map((lang) => [
+    lang.code,
+    {
+      locale: lang.code === 'ur' ? 'ur-PK' : `${lang.code}-IN`,
+      fontClass: `font-lang-${lang.code}`,
+      dateScript: DATE_SCRIPT_MAP[lang.code],
+      dir: lang.dir,
+    },
+  ])
+);
 
 /**
  * Get locale string from language code.
@@ -77,6 +106,14 @@ function getLocaleForLanguage(langCode: string): string {
  */
 function getFontClassForLanguage(langCode: string): string {
   return LANGUAGE_CONFIG[langCode]?.fontClass || 'font-lang-en';
+}
+
+/**
+ * Get text direction for a language code.
+ * Returns 'rtl' for Urdu, 'ltr' for all other supported languages.
+ */
+function getDirectionForLanguage(langCode: string): 'ltr' | 'rtl' {
+  return LANGUAGE_CONFIG[langCode]?.dir || 'ltr';
 }
 
 function formatEventDate(
@@ -821,9 +858,11 @@ const PublicInvitationPage: React.FC = () => {
     body: (invitation.customization as Record<string, Record<string, string>>)?.fonts?.body || 'Inter',
   };
 
-  // Language configuration for i18n (Phase 9)
+  // Language configuration for i18n (Phase 9, enhanced for 019-invitation-indian-languages)
   const primaryLang = invitation.primary_language || 'en';
   const primaryFontClass = getFontClassForLanguage(primaryLang);
+  const primaryDirection = getDirectionForLanguage(primaryLang);
+  const isRTL = primaryDirection === 'rtl';
 
   const formattedDate = formatEventDate(
     invitation.event_datetime,
@@ -901,8 +940,9 @@ const PublicInvitationPage: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen ${primaryFontClass}`}
+      className={`min-h-screen ${primaryFontClass} ${isRTL ? 'rtl-container' : ''}`}
       data-lang={primaryLang}
+      dir={primaryDirection}
       style={{
         backgroundColor: colors.background,
       }}
