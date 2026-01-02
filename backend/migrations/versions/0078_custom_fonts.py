@@ -1,7 +1,7 @@
 """Custom fonts table for invitation font uploads.
 
-Revision ID: 0078_custom_fonts
-Revises: 0077_email_send_log
+Revision ID: 0078
+Revises: 0077
 Create Date: 2026-01-02
 
 Feature: 019-invitation-indian-languages (Font Enhancement)
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers
-revision = '0078_custom_fonts'
-down_revision = '0077_email_send_log'
+revision = '0078'
+down_revision = '0077'
 branch_labels = None
 depends_on = None
 
