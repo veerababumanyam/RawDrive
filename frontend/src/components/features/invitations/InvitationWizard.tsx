@@ -557,7 +557,7 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
   onCreateDraft,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [showLanguageCompatibleOnly, setShowLanguageCompatibleOnly] = useState(true);
+  const [showLanguageCompatibleOnly, setShowLanguageCompatibleOnly] = useState(false);
 
   // Fetch templates
   const { data: templatesData, isLoading } = useQuery({
