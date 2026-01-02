@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/FormControls';
 import { useToast } from '@/hooks/useToast';
 import { generateAIContent } from '@/services/invitationService';
 import { GenerateContentRequest } from '@/types/invitations';
+import { Alert } from '@/components/ui/Alert';
 
 interface AITextGeneratorProps {
   isOpen: boolean;
@@ -104,13 +105,10 @@ export const AITextGenerator: React.FC<AITextGeneratorProps> = ({
       size="lg"
     >
       <div className="space-y-6">
-          <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg text-sm text-text-secondary dark:text-primary-100 flex gap-3">
-           <Wand2 className="w-5 h-5 text-primary flex-shrink-0" />
-           <p>
-             Generate catchy titles and warm descriptions for your {initialEventType} invitation. 
-             Just tell us the mood and any extra details!
-           </p>
-        </div>
+        <Alert variant="info" icon={<Wand2 className="h-5 w-5" />}>
+           Generate catchy titles and warm descriptions for your {initialEventType} invitation. 
+           Just tell us the mood and any extra details!
+        </Alert>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select

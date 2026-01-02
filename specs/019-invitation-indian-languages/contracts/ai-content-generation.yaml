@@ -1,0 +1,147 @@
+openapi: 3.0.3
+info:
+  title: Invitation AI Content Generation API
+  description: API for generating AI-powered invitation content in regional languages
+  version: 1.0.0
+
+paths:
+  /v1/workspaces/{workspace_id}/invitations/ai/generate:
+    post:
+      summary: Generate AI invitation content
+      description: |
+        Generates a title and description for an invitation using AI.
+        Supports all 12 Indian regional languages plus English.
+      operationId: generateInvitationContent
+      tags:
+        - Invitation AI
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateContentRequest'
+      responses:
+        '200':
+          description: Successfully generated content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateContentResponse'
+        '400':
+          description: Invalid request (unsupported language, missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: AI not configured for workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: AI service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SupportedLanguage:
+      type: string
+      enum:
+        - en   # English
+        - hi   # Hindi
+        - te   # Telugu
+        - ta   # Tamil
+        - kn   # Kannada
+        - ml   # Malayalam
+        - as   # Assamese
+        - bn   # Bengali
+        - gu   # Gujarati
+        - mr   # Marathi
+        - or   # Odia
+        - pa   # Punjabi
+        - ur   # Urdu
+      description: ISO 639-1 language codes for supported languages
+
+    GenerateContentRequest:
+      type: object
+      required:
+        - event_type
+        - mood
+        - language
+      properties:
+        event_type:
+          type: string
+          description: Type of event (e.g., wedding, birthday)
+          example: wedding
+        mood:
+          type: string
+          description: Desired mood/tone of the content
+          enum:
+            - Formal
+            - Casual
+            - Fun
+            - Romantic
+            - Excited
+            - Serious
+          example: Formal
+        tone:
+          type: string
+          description: Additional tone guidance
+          example: Poetic
+        language:
+          $ref: '#/components/schemas/SupportedLanguage'
+        additional_details:
+          type: string
+          description: Extra context for content generation
+          example: "Outdoor garden wedding, dress code is semi-formal"
+        host_names:
+          type: array
+          items:
+            type: string
+          description: Names of hosts to include in content
+          example: ["Priya", "Rahul"]
+
+    GenerateContentResponse:
+      type: object
+      required:
+        - title
+        - description
+      properties:
+        title:
+          type: string
+          description: Generated invitation title in the requested language
+          example: "ప్రియా & రాహుల్ వివాహ వేడుక"
+        description:
+          type: string
+          description: Generated invitation description in the requested language
+          example: "మీ ఆశీర్వాదాలతో మా ప్రేమ కథ నూతన అధ్యాయం ప్రారంభం..."
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: AI_NOT_CONFIGURED
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Gemini API key is not configured"
+        code:
+          type: string
+          description: Specific error code for programmatic handling
+          example: KEY_UNAUTHORIZED
