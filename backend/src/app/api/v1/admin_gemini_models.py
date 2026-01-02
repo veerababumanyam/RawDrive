@@ -201,6 +201,37 @@ async def get_stats(
     )
 
 
+@router.patch(
+    "/reorder",
+    response_model=list[GeminiModelAdmin],
+    summary="Reorder Gemini models",
+    description="Update model sort order. Requires admin role.",
+    responses={
+        401: {"model": ErrorResponse, "description": "Authentication required"},
+        403: {"model": ErrorResponse, "description": "Admin role required"},
+    },
+)
+async def reorder_models(
+    current_user: CurrentUserDep,
+    service: GeminiModelServiceDep,
+    request: ReorderGeminiModelsRequest,
+) -> list[GeminiModelAdmin]:
+    """Reorder models by providing list of model IDs in new order."""
+    models = await service.reorder_models(request.model_ids)
+
+    # Audit log
+    await AuditService().log_event(
+        event_type=AuditEventType.SETTINGS_CHANGED,
+        actor_user_id=current_user.user_id,
+        workspace_id=None,
+        target_entity_type="gemini_models",
+        target_entity_id=None,  # Bulk reorder, no single entity
+        details={"action": "models_reordered"},
+    )
+
+    return [_to_admin_model(m) for m in models]
+
+
 @router.get(
     "/{model_id}",
     response_model=GeminiModelAdmin,
@@ -336,35 +367,7 @@ async def delete_model(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.patch(
-    "/reorder",
-    response_model=list[GeminiModelAdmin],
-    summary="Reorder Gemini models",
-    description="Update model sort order. Requires admin role.",
-    responses={
-        401: {"model": ErrorResponse, "description": "Authentication required"},
-        403: {"model": ErrorResponse, "description": "Admin role required"},
-    },
-)
-async def reorder_models(
-    current_user: CurrentUserDep,
-    service: GeminiModelServiceDep,
-    request: ReorderGeminiModelsRequest,
-) -> list[GeminiModelAdmin]:
-    """Reorder models by providing list of model IDs in new order."""
-    models = await service.reorder_models(request.model_ids)
 
-    # Audit log
-    await AuditService().log_event(
-        event_type=AuditEventType.SETTINGS_CHANGED,
-        actor_user_id=current_user.user_id,
-        workspace_id=None,
-        target_entity_type="gemini_models",
-        target_entity_id=None,  # Bulk reorder, no single entity
-        details={"action": "models_reordered"},
-    )
-
-    return [_to_admin_model(m) for m in models]
 
 
 @router.patch(

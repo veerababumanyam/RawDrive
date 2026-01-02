@@ -223,15 +223,7 @@ router.include_router(
     tags=["favorites-analytics"],
 )
 
-# Digital Invitations routes (016-save-the-date)
-# Host endpoints for managing digital event invitations
-# NOTE: Using /digital-invitations to avoid conflict with workspace member invitations
-# in workspaces.py which uses /{workspace_id}/invitations
-router.include_router(
-    digital_invitations_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
-    tags=["digital-invitations"],
-)
+
 
 # Public Invitations routes (016-save-the-date)
 # Public endpoints for guest access to invitations and RSVP submission
@@ -318,4 +310,14 @@ router.include_router(
     invitation_fonts_router,
     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/fonts",
     tags=["invitation-fonts"],
+)
+
+# Digital Invitations routes (016-save-the-date)
+# Host endpoints for managing digital event invitations
+# NOTE: Using /digital-invitations to avoid conflict with workspace member invitations
+# in workspaces.py which uses /{workspace_id}/invitations
+router.include_router(
+    digital_invitations_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
+    tags=["digital-invitations"],
 )
