@@ -7,17 +7,16 @@ Fonts are stored in workspace-scoped storage and can be reused across invitation
 Feature: 019-invitation-indian-languages (Font Enhancement)
 """
 
-from typing import Any
 from uuid import UUID, uuid4
 import re
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Form
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, UploadFile, File, status, Form
+from pydantic import BaseModel
 
-from app.api.dependencies import get_current_user
-from app.core.database import get_db
-from app.services.storage_service import StorageService, get_storage_service
+from app.api.dependencies.auth import CurrentUserDep
+from app.db.postgres import get_postgres_pool
+from app.services.storage_service import get_storage_service
 
 router = APIRouter(prefix="/fonts", tags=["invitation-fonts"])
 
@@ -83,11 +82,9 @@ def generate_font_family(font_id: str, name: str) -> str:
 )
 async def upload_custom_font(
     workspace_id: UUID,
+    current_user: CurrentUserDep,
     name: str = Form(..., description="Display name for the font"),
     file: UploadFile = File(..., description="Font file (TTF, OTF, WOFF, WOFF2)"),
-    current_user: Any = Depends(get_current_user),
-    storage: StorageService = Depends(get_storage_service),
-    db = Depends(get_db),
 ) -> CustomFontResponse:
     """
     Upload a custom font for invitations.
@@ -141,7 +138,8 @@ async def upload_custom_font(
     # Read file content
     file_content = await file.read()
 
-    # Upload to storage
+    # Get storage service and upload
+    storage = await get_storage_service()
     try:
         await storage.upload_file(
             key=storage_path,
@@ -164,7 +162,8 @@ async def upload_custom_font(
     created_at = datetime.now(timezone.utc).isoformat()
 
     # Insert into database
-    async with db.acquire() as conn:
+    pool = await get_postgres_pool()
+    async with pool.acquire() as conn:
         await conn.execute(
             """
             INSERT INTO custom_fonts (
@@ -196,11 +195,11 @@ async def upload_custom_font(
 )
 async def list_custom_fonts(
     workspace_id: UUID,
-    current_user: Any = Depends(get_current_user),
-    db = Depends(get_db),
+    current_user: CurrentUserDep,
 ) -> FontListResponse:
     """List all custom fonts for the workspace."""
-    async with db.acquire() as conn:
+    pool = await get_postgres_pool()
+    async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT font_id, name, family, url, file_size, format, created_at, workspace_id
@@ -237,12 +236,11 @@ async def list_custom_fonts(
 async def delete_custom_font(
     workspace_id: UUID,
     font_id: str,
-    current_user: Any = Depends(get_current_user),
-    storage: StorageService = Depends(get_storage_service),
-    db = Depends(get_db),
+    current_user: CurrentUserDep,
 ) -> None:
     """Soft delete a custom font."""
-    async with db.acquire() as conn:
+    pool = await get_postgres_pool()
+    async with pool.acquire() as conn:
         # Get font info
         row = await conn.fetchrow(
             """
@@ -269,6 +267,7 @@ async def delete_custom_font(
         )
 
     # Optionally delete from storage (or let lifecycle policies handle it)
+    # storage = await get_storage_service()
     # await storage.delete_file(row["storage_path"])
 
 
@@ -281,11 +280,11 @@ async def delete_custom_font(
 async def get_custom_font(
     workspace_id: UUID,
     font_id: str,
-    current_user: Any = Depends(get_current_user),
-    db = Depends(get_db),
+    current_user: CurrentUserDep,
 ) -> CustomFontResponse:
     """Get details of a specific font."""
-    async with db.acquire() as conn:
+    pool = await get_postgres_pool()
+    async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT font_id, name, family, url, file_size, format, created_at, workspace_id
