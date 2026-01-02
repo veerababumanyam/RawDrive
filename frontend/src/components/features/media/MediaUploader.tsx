@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, X, FileVideo, FileAudio, CheckCircle, AlertCircle } from 'lucide-react';
 import { AppButton } from '@/components/ui/AppButton';
-
-// TODO: Import from a centralized API service
-const API_BASE_URL = '/api/v1';
+import {
+  initiateMediaUpload,
+  completeMediaUpload,
+} from '@/services/invitationService';
 
 import type { InvitationMedia } from '@/types/invitations';
 
@@ -93,30 +94,14 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
     try {
       setUploadState({ progress: 0, status: 'uploading' });
 
-      // 1. Initiate Upload
-      const initResponse = await fetch(
-        `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            filename: file.name,
-            content_type: file.type,
-            size_bytes: file.size,
-            media_type: file.type.startsWith('video/') ? 'video' : 'audio',
-          }),
-        }
+      // 1) Initiate upload to get presigned URL
+      const { media, upload_url } = await initiateMediaUpload(
+        workspaceId,
+        invitationId,
+        file,
       );
 
-      if (!initResponse.ok) {
-        throw new Error('Failed to initiate upload');
-      }
-
-      const { media, upload_url } = await initResponse.json();
-
-      // 2. Upload to R2
+      // 2) Upload to storage (presigned PUT)
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', upload_url, true);
       xhr.setRequestHeader('Content-Type', file.type);
@@ -140,23 +125,17 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
         xhr.send(file);
       });
 
-      // 3. Complete Upload
+      // 3) Complete upload + get resolved URL
       setUploadState((prev) => ({ ...prev, status: 'processing' }));
-      
-      const completeResponse = await fetch(
-        `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media/${media.media_id}/complete`,
-        {
-          method: 'PUT',
-        }
+      const completedMedia = await completeMediaUpload(
+        workspaceId,
+        invitationId,
+        media.media_id,
       );
-
-      if (!completeResponse.ok) {
-        throw new Error('Failed to complete upload');
-      }
 
       setUploadState({ progress: 100, status: 'completed' });
       if (onUploadComplete) {
-        onUploadComplete(media);
+        onUploadComplete(completedMedia);
       }
 
     } catch (err: any) {

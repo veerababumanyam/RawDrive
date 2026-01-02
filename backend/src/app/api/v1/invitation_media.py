@@ -52,7 +52,7 @@ async def initiate_media_upload(
         filename=request.filename,
         content_type=request.content_type,
         size_bytes=request.size_bytes,
-        user_id=current_user.id,
+        user_id=current_user.user_id,
     )
     return media
 

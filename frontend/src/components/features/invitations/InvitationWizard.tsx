@@ -9,7 +9,7 @@
  * Feature: 016-save-the-date
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Calendar,
@@ -545,7 +545,7 @@ interface Step2Props {
   onChange: (data: Partial<WizardData>) => void;
   onNext: () => void;
   onBack: () => void;
-  onCreateDraft: () => Promise<void>;
+  onCreateDraft: () => Promise<string | undefined>;
 }
 
 const Step2TemplateSelection: React.FC<Step2Props> = ({
@@ -558,6 +558,12 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showLanguageCompatibleOnly, setShowLanguageCompatibleOnly] = useState(false);
+  const [isCreatingInvitation, setIsCreatingInvitation] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [hasRequestedInvitation, setHasRequestedInvitation] = useState(false);
+  const [existingMedia, setExistingMedia] = useState<InvitationMedia[]>([]);
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
   // Fetch templates
   const { data: templatesData, isLoading } = useQuery({
@@ -628,6 +634,56 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
       },
     });
   };
+
+  // Ensure an invitation exists once the user reaches Step 2 so media uploads are immediately available
+  useEffect(() => {
+    if (!workspaceId || data.invitation_id || isCreatingInvitation || hasRequestedInvitation) return;
+
+    setHasRequestedInvitation(true);
+    setIsCreatingInvitation(true);
+    setCreateError(null);
+
+    onCreateDraft()
+      .catch((err) => {
+        console.error('Failed to auto-create invitation draft', err);
+        setCreateError(err?.message || 'Failed to create invitation draft');
+      })
+      .finally(() => setIsCreatingInvitation(false));
+  }, [workspaceId, data.invitation_id, isCreatingInvitation, hasRequestedInvitation, onCreateDraft]);
+
+  // Load existing media for gallery selection
+  useEffect(() => {
+    if (!workspaceId || !data.invitation_id) return;
+
+    setIsLoadingMedia(true);
+    invitationService
+      .listMedia(workspaceId, data.invitation_id)
+      .then((items) => setExistingMedia(items))
+      .catch((err) => {
+        console.error('Failed to load invitation media', err);
+      })
+      .finally(() => setIsLoadingMedia(false));
+  }, [workspaceId, data.invitation_id]);
+
+  const handleUploadComplete = useCallback(
+    (media: InvitationMedia) => {
+      const objectKey = media.object_key || media.original_object_key;
+      const resolvedUrl = media.url || media.media_url || media.original_url;
+      const updates: Partial<WizardData> = {};
+
+      if (media.media_type === 'video') {
+        updates.video_object_key = objectKey;
+        updates.video_url = resolvedUrl;
+      } else {
+        updates.audio_object_key = objectKey;
+        updates.audio_url = resolvedUrl;
+      }
+
+      onChange(updates);
+      setExistingMedia((prev) => [media, ...prev.filter((m) => m.media_id !== media.media_id)]);
+    },
+    [onChange]
+  );
 
   return (
     <div className="space-y-8">
@@ -849,45 +905,128 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
               <Video className="w-4 h-4 text-primary" />
               Hero Media
             </h4>
-            
-            {!data.invitation_id ? (
-               <div className="bg-surface p-4 rounded-lg border border-border text-center">
-                 <p className="text-sm text-text-secondary mb-3">
-                   Save a draft to upload videos or audio for your invitation.
-                 </p>
-                 <AppButton variant="outline" size="sm" onClick={onCreateDraft}>
-                   Enable Media Upload
-                 </AppButton>
-               </div>
+
+            {!data.invitation_id || isCreatingInvitation ? (
+              <div className="bg-surface p-4 rounded-lg border border-border text-center space-y-3">
+                {isCreatingInvitation ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto" />
+                    <p className="text-sm text-text-secondary">
+                      Preparing your invitation so media uploads are ready...
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-text-secondary">
+                      We need to create a draft to attach media. Click below to retry.
+                    </p>
+                    <AppButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setHasRequestedInvitation(true);
+                        setIsCreatingInvitation(true);
+                        setCreateError(null);
+                        onCreateDraft().catch((err) => {
+                          setCreateError(err?.message || 'Failed to create invitation draft');
+                        }).finally(() => setIsCreatingInvitation(false));
+                      }}
+                    >
+                      Enable Media Upload
+                    </AppButton>
+                  </>
+                )}
+                {createError && (
+                  <p className="text-xs text-destructive">{createError}</p>
+                )}
+              </div>
             ) : (
               <div className="space-y-6">
-                 <div>
-                   <label className="block text-sm font-medium text-text-primary mb-2">
-                     Hero Video / Background Music
-                   </label>
-                   <MediaUploader
-                     workspaceId={workspaceId}
-                     invitationId={data.invitation_id}
-                     onUploadComplete={(media: InvitationMedia) => {
-                        const updates: Partial<WizardData> = {};
-                        if (media.media_type === 'video') {
-                          updates.video_object_key = media.object_key;
-                          updates.video_url = media.url; // Use resolved URL for preview
-                        } else if (media.media_type === 'audio') {
-                          updates.audio_object_key = media.object_key;
-                          updates.audio_url = media.url;
-                        }
-                        onChange(updates);
-                     }}
-                   />
-                 </div>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-sm font-medium text-text-primary">
+                    Hero Video / Background Music
+                  </label>
+                  {existingMedia.length > 0 && (
+                    <AppButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowMediaLibrary((open) => !open)}
+                    >
+                      {showMediaLibrary ? 'Hide library' : 'Choose from gallery'}
+                    </AppButton>
+                  )}
+                </div>
 
-                 {(data.video_url || data.audio_url) && (
-                   <div className="bg-surface p-3 rounded-lg border border-border text-xs text-text-secondary">
-                      {data.video_url && <div className="flex items-center gap-2"><Video size={14}/> Video uploaded</div>}
-                      {data.audio_url && <div className="flex items-center gap-2 mt-1"><Music size={14}/> Audio uploaded</div>}
-                   </div>
-                 )}
+                <MediaUploader
+                  workspaceId={workspaceId}
+                  invitationId={data.invitation_id}
+                  onUploadComplete={handleUploadComplete}
+                />
+
+                {showMediaLibrary && (
+                  <div className="bg-surface p-4 rounded-lg border border-border space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-text-primary">Your media</p>
+                      {isLoadingMedia && (
+                        <Loader2 className="w-4 h-4 animate-spin text-text-secondary" />
+                      )}
+                    </div>
+                    {!isLoadingMedia && existingMedia.length === 0 && (
+                      <p className="text-sm text-text-secondary">No media uploaded yet.</p>
+                    )}
+                    {!isLoadingMedia && existingMedia.length > 0 && (
+                      <div className="space-y-3">
+                        {existingMedia.map((media) => {
+                          const label = media.original_filename || media.media_type.toUpperCase();
+                          const statusLabel = media.processing_status || 'pending';
+                          return (
+                            <div
+                              key={media.media_id}
+                              className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-lg bg-surface-hover flex items-center justify-center text-text-secondary">
+                                  {media.media_type === 'video' ? <Video className="w-4 h-4" /> : <Music className="w-4 h-4" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-text-primary truncate">{label}</p>
+                                  <p className="text-xs text-text-tertiary">{statusLabel}</p>
+                                </div>
+                              </div>
+                              <AppButton
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  handleUploadComplete(media);
+                                  setShowMediaLibrary(false);
+                                }}
+                              >
+                                Use
+                              </AppButton>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(data.video_url || data.audio_url) && (
+                  <div className="bg-surface p-3 rounded-lg border border-border text-xs text-text-secondary">
+                    {data.video_url && (
+                      <div className="flex items-center gap-2">
+                        <Video size={14} />
+                        Video ready
+                      </div>
+                    )}
+                    {data.audio_url && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <Music size={14} />
+                        Audio ready
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1272,9 +1411,10 @@ export const InvitationWizard: React.FC<InvitationWizardProps> = ({
                   notification_preference: data.notification_preference,
                 });
                 onDataChange({ invitation_id: draft.invitation_id });
+                return draft.invitation_id;
               } catch (e) {
                 console.error("Failed to create draft", e);
-                // Optionally set error state
+                throw e;
               }
             }}
           />

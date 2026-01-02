@@ -809,21 +809,70 @@ export async function reorderSubEvents(
 // Media (Video/Audio)
 // ============================================================================
 
+interface InitiateMediaUploadResponse {
+  media: InvitationMedia;
+  upload_url: string;
+}
+
+export async function initiateMediaUpload(
+  workspaceId: string,
+  invitationId: string,
+  file: File,
+  purpose: 'content' | 'background' | 'effect' = 'content'
+): Promise<InitiateMediaUploadResponse> {
+  const response = await apiClient.post<InitiateMediaUploadResponse>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media`,
+    {
+      filename: file.name,
+      content_type: file.type,
+      size_bytes: file.size,
+      media_type: file.type.startsWith('audio/') ? 'audio' : 'video',
+      purpose,
+    }
+  );
+
+  return unwrapResponse(response, 'Failed to initiate media upload');
+}
+
+export async function completeMediaUpload(
+  workspaceId: string,
+  invitationId: string,
+  mediaId: string
+): Promise<InvitationMedia> {
+  const response = await apiClient.put<InvitationMedia>(
+    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media/${mediaId}/complete`
+  );
+  const media = unwrapResponse(response, 'Failed to complete media upload');
+  // Normalize URL field for downstream consumers
+  return {
+    ...media,
+    url: media.url || media.media_url || media.original_url,
+  };
+}
+
 export async function uploadMedia(
   workspaceId: string,
   invitationId: string,
   file: File,
   purpose: 'content' | 'background' | 'effect' = 'content'
 ): Promise<InvitationMedia> {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('purpose', purpose);
-
-  const response = await apiClient.upload<InvitationMedia>(
-    `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media`,
-    formData
+  const { media, upload_url } = await initiateMediaUpload(
+    workspaceId,
+    invitationId,
+    file,
+    purpose
   );
-  return unwrapResponse(response, 'Failed to upload media');
+
+  // Direct PUT to presigned URL
+  await fetch(upload_url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': file.type,
+    },
+    body: file,
+  });
+
+  return completeMediaUpload(workspaceId, invitationId, media.media_id);
 }
 
 export async function deleteMedia(
@@ -846,7 +895,11 @@ export async function listMedia(
   const response = await apiClient.get<InvitationMedia[]>(
     `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media`
   );
-  return unwrapResponse(response, 'Failed to fetch media');
+  const items = unwrapResponse(response, 'Failed to fetch media');
+  return items.map((item) => ({
+    ...item,
+    url: item.url || item.media_url || item.original_url,
+  }));
 }
 
 // ============================================================================

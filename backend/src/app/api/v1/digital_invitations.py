@@ -50,6 +50,7 @@ from app.api.invitation_schemas import (
 )
 from app.services.digital_invitation_service import (
     DigitalInvitationService,
+    DigitalInvitationError,
     get_digital_invitation_service,
     InvitationNotFoundError,
     InvitationAlreadyPublishedError,
@@ -164,6 +165,12 @@ async def create_invitation(
             customization=request.customization,
         )
         return InvitationResponse(**invitation)
+    except DigitalInvitationError as e:
+        logger.warning(
+            "Invitation creation failed",
+            extra={"code": e.code, "status": e.status_code, "message": e.message},
+        )
+        raise HTTPException(status_code=e.status_code, detail=e.message)
     except Exception as e:
         logger.error(f"Error creating invitation: {e}")
         raise HTTPException(
