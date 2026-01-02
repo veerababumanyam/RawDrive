@@ -319,6 +319,7 @@ class InvitationRepository:
         title: str,
         event_datetime: datetime,
         created_by_user_id: UUID,
+        invitation_id: Optional[UUID] = None,
         template_id: Optional[UUID] = None,
         slug: Optional[str] = None,
         description: Optional[str] = None,
@@ -371,10 +372,13 @@ class InvitationRepository:
             # Ensure slug uniqueness within workspace
             slug = await self._ensure_unique_slug(conn, workspace_id, slug)
 
+            # Generate invitation_id if not provided
+            final_invitation_id = invitation_id or uuid.uuid4()
+
             row = await conn.fetchrow(
                 """
                 INSERT INTO digital_invitations (
-                    workspace_id, template_id, title, slug, description,
+                    invitation_id, workspace_id, template_id, title, slug, description,
                     event_type, event_datetime, event_end_datetime, event_timezone,
                     venue_name, venue_address, venue_city, venue_state,
                     venue_country, venue_postal_code, venue_latitude, venue_longitude,
@@ -390,10 +394,11 @@ class InvitationRepository:
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                     $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                     $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                    $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41
+                    $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42
                 )
                 RETURNING *
                 """,
+                final_invitation_id,
                 workspace_id,
                 template_id,
                 title,

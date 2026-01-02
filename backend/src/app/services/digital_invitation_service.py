@@ -336,9 +336,16 @@ class DigitalInvitationService:
         invitation_id = uuid4()
         now = datetime.now(timezone.utc)
 
+        # Extract venue fields from venue dict
+        venue_data = full_venue or {}
+        
+        # Extract rsvp settings
+        rsvp_data = final_rsvp_settings
+
         invitation = await self.invitation_repo.create_invitation(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
+            created_by_user_id=created_by_user_id,
             template_id=template_id,
             title=title,
             description=description,
@@ -346,18 +353,29 @@ class DigitalInvitationService:
             event_datetime=event_datetime,
             event_end_datetime=event_end_datetime,
             event_timezone=event_timezone,
-            venue=full_venue,
+            venue_name=venue_data.get("name"),
+            venue_address=venue_data.get("address"),
+            venue_city=venue_data.get("city"),
+            venue_state=venue_data.get("state"),
+            venue_country=venue_data.get("country", venue_country),
+            venue_postal_code=venue_data.get("postal_code"),
+            venue_latitude=venue_data.get("latitude"),
+            venue_longitude=venue_data.get("longitude"),
+            venue_map_url=venue_data.get("map_url"),
             host_names=host_names or [],
             host_contact_phone=host_contact_phone,
             host_contact_email=host_contact_email,
-            rsvp_settings=final_rsvp_settings,
+            rsvp_enabled=rsvp_data.get("enabled", True),
+            rsvp_deadline=rsvp_data.get("deadline"),
+            rsvp_max_party_size=rsvp_data.get("max_party_size", 4),
+            rsvp_collect_dietary=rsvp_data.get("collect_dietary", True),
+            rsvp_collect_phone=rsvp_data.get("collect_phone", False),
+            rsvp_custom_questions=rsvp_data.get("custom_questions"),
             primary_language=primary_language,
             secondary_language=secondary_language,
             customization=customization or {},
             auto_delete_enabled=auto_delete_enabled,
             auto_delete_days=auto_delete_days,
-            scheduled_deletion_at=scheduled_deletion_at,
-            created_by_user_id=created_by_user_id,
             video_object_key=video_object_key,
             audio_object_key=audio_object_key,
             layout_density=layout_density,
@@ -366,6 +384,7 @@ class DigitalInvitationService:
             ai_generated_content=ai_generated_content,
             has_sub_events=has_sub_events,
         )
+
 
         # Log audit event
         await self.rsvp_repo.create_event(
