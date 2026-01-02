@@ -134,6 +134,7 @@ async def list_templates(
     language: Optional[str] = Query(None, description="Filter by supported language"),
     tags: Optional[str] = Query(None, description="Comma-separated tags to filter by"),
     is_premium: Optional[bool] = Query(None, description="Filter by premium status"),
+    include_premium: Optional[bool] = Query(None, description="Include premium templates"),
     search: Optional[str] = Query(None, description="Search in name/description"),
     include_system: bool = Query(True, description="Include system templates"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -150,13 +151,23 @@ async def list_templates(
     # Parse tags if provided
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
+    # Handle premium filtering:
+    # - is_premium takes precedence if explicitly set
+    # - include_premium=True means don't filter by premium (show all)
+    # - include_premium=False means only show non-premium
+    effective_is_premium = is_premium
+    if effective_is_premium is None and include_premium is not None:
+        if not include_premium:
+            effective_is_premium = False
+        # include_premium=True means show all, so leave as None
+
     result = await template_service.list_templates(
         workspace_id=workspace_id if not include_system else None,
         category=category,
         subcategory=subcategory,
         language=language,
         tags=tag_list,
-        is_premium=is_premium,
+        is_premium=effective_is_premium,
         search=search,
         page=page,
         limit=limit,
