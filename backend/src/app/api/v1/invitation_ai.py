@@ -3,8 +3,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.dependencies import get_current_user
-from app.api.invitation_schemas import InvitationResponse 
+from app.api.dependencies.auth import CurrentUser, get_current_user
+from app.api.invitation_schemas import InvitationResponse
 from app.services.invitation_ai_service import get_invitation_ai_service, InvitationAIService, AIConfigurationError, AIRuntimeError
 from pydantic import BaseModel, Field
 
@@ -26,7 +26,7 @@ class GenerateContentResponse(BaseModel):
 async def generate_invitation_content(
     workspace_id: UUID,
     request: GenerateContentRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     ai_service: InvitationAIService = Depends(get_invitation_ai_service),
 ):
     """
@@ -34,7 +34,7 @@ async def generate_invitation_content(
     Requires user to have a configured Gemini API key.
     """
     try:
-        user_id = UUID(current_user["id"])
+        user_id = current_user.user_id
         
         result = await ai_service.generate_invitation_content(
             user_id=user_id,
