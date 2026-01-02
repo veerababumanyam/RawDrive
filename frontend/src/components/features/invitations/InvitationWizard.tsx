@@ -119,6 +119,15 @@ const EVENT_TYPES: Array<{ value: EventType; label: string }> = [
   { value: 'other', label: 'Other' },
 ];
 
+/** Template category filter includes 'all' option to show all templates */
+const TEMPLATE_CATEGORIES: Array<{ value: string; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'wedding', label: 'Wedding' },
+  { value: 'birthday', label: 'Birthday' },
+  { value: 'festival', label: 'Festival' },
+  { value: 'corporate', label: 'Corporate' },
+];
+
 const TIMEZONES = [
   { value: 'Asia/Kolkata', label: 'India (IST)' },
   { value: 'America/New_York', label: 'Eastern Time (ET)' },
@@ -547,9 +556,7 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
   onBack,
   onCreateDraft,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>(
-    data.event_type || 'wedding'
-  );
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showLanguageCompatibleOnly, setShowLanguageCompatibleOnly] = useState(true);
 
   // Fetch templates
@@ -557,7 +564,7 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
     queryKey: ['templates', workspaceId, selectedCategory],
     queryFn: () =>
       invitationService.listTemplates(workspaceId, {
-        category: selectedCategory,
+        category: selectedCategory === 'all' ? undefined : selectedCategory,
         includeSystem: true,
         includePremium: true,
         limit: 50,
@@ -654,7 +661,7 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
-          {EVENT_TYPES.map((type) => (
+          {TEMPLATE_CATEGORIES.map((type) => (
             <button
               key={type.value}
               type="button"
