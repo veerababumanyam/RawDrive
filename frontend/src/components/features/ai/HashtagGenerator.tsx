@@ -97,6 +97,7 @@ export const HashtagGenerator: React.FC<HashtagGeneratorProps> = ({
   const [showCategorized, setShowCategorized] = useState(true);
 
   // Generate hashtags
+  // Generate hashtags
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true);
     setError(null);
@@ -113,7 +114,14 @@ export const HashtagGenerator: React.FC<HashtagGeneratorProps> = ({
       onHashtagsGenerated?.(hashtagResult);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Hashtag generation failed';
-      setError(message);
+      
+      if (message.includes('AI_NOT_CONFIGURED')) {
+        setError('Gemini AI is not configured. Please set your API key in Settings > AI.');
+      } else if (message.includes('KEY_UNAUTHORIZED')) {
+        setError('Gemini API Key is invalid.');
+      } else {
+        setError(message);
+      }
     } finally {
       setIsGenerating(false);
     }

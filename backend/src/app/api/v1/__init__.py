@@ -310,3 +310,12 @@ router.include_router(
     prefix="/api/v1/invitations-microservice",
     tags=["invitations-microservice-public"],
 )
+
+# Invitation Custom Fonts routes (019-invitation-indian-languages)
+# Endpoints for uploading and managing custom fonts for invitations
+from app.api.v1.invitation_fonts import router as invitation_fonts_router
+router.include_router(
+    invitation_fonts_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/fonts",
+    tags=["invitation-fonts"],
+)

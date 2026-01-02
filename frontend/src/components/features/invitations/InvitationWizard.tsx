@@ -33,6 +33,7 @@ import { VenueInput } from '@/components/invitations/VenueInput';
 import { ColorPicker } from '@/components/invitations/ColorPicker';
 import { FontSelector } from '@/components/invitations/FontSelector';
 import { LayoutDensitySelector } from '@/components/invitations/LayoutDensitySelector';
+import { InvitationFontSelector, type CustomFont } from '@/components/features/invitations/InvitationFontSelector';
 import { MediaUploader } from '@/components/features/media/MediaUploader';
 import { RSVPQuestionBuilder } from '@/components/features/invitations/RSVPQuestionBuilder';
 import { AITextGenerator } from '@/components/features/invitations/AITextGenerator';
@@ -542,6 +543,7 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>(
     data.event_type || 'wedding'
   );
+  const [showLanguageCompatibleOnly, setShowLanguageCompatibleOnly] = useState(true);
 
   // Fetch templates
   const { data: templatesData, isLoading } = useQuery({
@@ -556,7 +558,32 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
     enabled: !!workspaceId,
   });
 
-  const templates = templatesData?.data || [];
+  /**
+   * Filter templates by language compatibility.
+   * A template is compatible if:
+   * 1. It has no supported_languages defined (universal template)
+   * 2. It includes the user's primary_language in supported_languages
+   * 3. If secondary_language is set, it should also include that
+   * Feature: 019-invitation-indian-languages (P3)
+   */
+  const templates = useMemo(() => {
+    const allTemplates = templatesData?.data || [];
+    if (!showLanguageCompatibleOnly) return allTemplates;
+
+    return allTemplates.filter((template) => {
+      // Universal templates (no supported_languages) work with all languages
+      if (!template.supported_languages || template.supported_languages.length === 0) {
+        return true;
+      }
+      // Check primary language compatibility
+      const hasPrimary = template.supported_languages.includes(data.primary_language);
+      // If secondary language is selected, check that too
+      if (data.secondary_language) {
+        return hasPrimary && template.supported_languages.includes(data.secondary_language);
+      }
+      return hasPrimary;
+    });
+  }, [templatesData?.data, showLanguageCompatibleOnly, data.primary_language, data.secondary_language]);
 
   const handleSelectTemplate = useCallback(
     (template: InvitationTemplate) => {
@@ -592,10 +619,32 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
     <div className="space-y-8">
       {/* Category Filter */}
       <section>
-        <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
-          <Palette className="w-5 h-5 text-primary" />
-          Choose a Template
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-text-primary flex items-center gap-2">
+            <Palette className="w-5 h-5 text-primary" />
+            Choose a Template
+          </h3>
+
+          {/* Language compatibility toggle - Feature: 019-invitation-indian-languages */}
+          <button
+            type="button"
+            onClick={() => setShowLanguageCompatibleOnly(!showLanguageCompatibleOnly)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
+              showLanguageCompatibleOnly
+                ? 'bg-primary/10 text-primary border border-primary/20'
+                : 'bg-surface-hover text-text-secondary hover:bg-surface-hover/80'
+            }`}
+            title={showLanguageCompatibleOnly
+              ? `Showing templates for ${data.primary_language}${data.secondary_language ? ` + ${data.secondary_language}` : ''}`
+              : 'Showing all templates'
+            }
+          >
+            <Languages className="w-4 h-4" />
+            <span className="hidden sm:inline">
+              {showLanguageCompatibleOnly ? 'Language Match' : 'All Templates'}
+            </span>
+          </button>
+        </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
           {EVENT_TYPES.map((type) => (
@@ -623,7 +672,25 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
           </div>
         ) : templates.length === 0 ? (
           <div className="text-center py-12 text-text-secondary">
-            <p>No templates found for this category.</p>
+            {showLanguageCompatibleOnly && (templatesData?.data?.length || 0) > 0 ? (
+              <>
+                <Languages className="w-10 h-10 mx-auto mb-3 text-text-tertiary" />
+                <p className="mb-2">No templates support your selected language(s).</p>
+                <p className="text-sm text-text-tertiary mb-4">
+                  {LANGUAGES.find(l => l.value === data.primary_language)?.nativeLabel}
+                  {data.secondary_language && ` + ${LANGUAGES.find(l => l.value === data.secondary_language)?.nativeLabel}`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowLanguageCompatibleOnly(false)}
+                  className="text-primary hover:underline text-sm"
+                >
+                  Show all templates anyway
+                </button>
+              </>
+            ) : (
+              <p>No templates found for this category.</p>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -733,16 +800,25 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
               <span className="text-primary font-serif">Aa</span>
               Typography
             </h4>
+            <p className="text-sm text-text-secondary mb-4">
+              Choose fonts that support your invitation language ({LANGUAGES.find(l => l.value === data.primary_language)?.nativeLabel || 'English'})
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FontSelector
+              <InvitationFontSelector
+                languageCode={data.primary_language || 'en'}
+                selectedFont={data.font_heading || ''}
+                onFontChange={(family, name) => onChange({ font_heading: family })}
                 label="Heading Font"
-                value={data.font_heading || 'Playfair Display'}
-                onChange={(font) => onChange({ font_heading: font })}
+                workspaceId={workspaceId}
+                allowCustomUpload={true}
               />
-              <FontSelector
+              <InvitationFontSelector
+                languageCode={data.primary_language || 'en'}
+                selectedFont={data.font_body || ''}
+                onFontChange={(family, name) => onChange({ font_body: family })}
                 label="Body Font"
-                value={data.font_body || 'Inter'}
-                onChange={(font) => onChange({ font_body: font })}
+                workspaceId={workspaceId}
+                allowCustomUpload={true}
               />
             </div>
           </div>

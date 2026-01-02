@@ -37,6 +37,7 @@ import { Select, Checkbox, Toggle, RadioGroup, Radio } from '@/components/ui/For
 import { Turnstile, useTurnstile } from '@/components/ui/Turnstile';
 import SEOHead from '@/components/landing/seo/SEOHead';
 import * as invitationService from '@/services/invitationService';
+import { loadInvitationFonts, preloadLanguageFonts } from '@/utils/fontLoader';
 import type { TurnstileConfig } from '@/services/invitationService';
 import type {
   PublicInvitation,
@@ -52,6 +53,7 @@ import type {
 /**
  * Map language codes to BCP 47 locale tags and font CSS classes.
  * Feature: 016-save-the-date (Phase 9: Multi-Language Support)
+ * Feature: 019-invitation-indian-languages (Font Enhancement)
  */
 const LANGUAGE_CONFIG: Record<
   string,
@@ -59,10 +61,17 @@ const LANGUAGE_CONFIG: Record<
 > = {
   en: { locale: 'en-IN', fontClass: 'font-lang-en' },
   hi: { locale: 'hi-IN', fontClass: 'font-lang-hi', dateScript: 'Deva' },
+  mr: { locale: 'mr-IN', fontClass: 'font-lang-mr', dateScript: 'Deva' },
   ta: { locale: 'ta-IN', fontClass: 'font-lang-ta', dateScript: 'Taml' },
   te: { locale: 'te-IN', fontClass: 'font-lang-te', dateScript: 'Telu' },
   kn: { locale: 'kn-IN', fontClass: 'font-lang-kn', dateScript: 'Knda' },
   ml: { locale: 'ml-IN', fontClass: 'font-lang-ml', dateScript: 'Mlym' },
+  bn: { locale: 'bn-IN', fontClass: 'font-lang-bn', dateScript: 'Beng' },
+  gu: { locale: 'gu-IN', fontClass: 'font-lang-gu', dateScript: 'Gujr' },
+  pa: { locale: 'pa-IN', fontClass: 'font-lang-pa', dateScript: 'Guru' },
+  or: { locale: 'or-IN', fontClass: 'font-lang-or', dateScript: 'Orya' },
+  ur: { locale: 'ur-IN', fontClass: 'font-lang-ur', dateScript: 'Arab' },
+  sa: { locale: 'sa-IN', fontClass: 'font-lang-sa', dateScript: 'Deva' },
 };
 
 /**
@@ -821,9 +830,32 @@ const PublicInvitationPage: React.FC = () => {
     body: (invitation.customization as Record<string, Record<string, string>>)?.fonts?.body || 'Inter',
   };
 
+  // Extract custom font IDs if present (for custom uploaded fonts)
+  const customFontHeadingId = (invitation as { custom_font_heading_id?: string }).custom_font_heading_id;
+  const customFontBodyId = (invitation as { custom_font_body_id?: string }).custom_font_body_id;
+
   // Language configuration for i18n (Phase 9)
   const primaryLang = invitation.primary_language || 'en';
   const primaryFontClass = getFontClassForLanguage(primaryLang);
+
+  // Load fonts dynamically when invitation is accessed
+  // Feature: 019-invitation-indian-languages (Font Enhancement)
+  useEffect(() => {
+    // Preload language-specific fonts
+    preloadLanguageFonts(primaryLang);
+
+    // Load the specific fonts selected for this invitation
+    // Custom fonts are embedded in the font family string as 'CustomFont-{id}'
+    const customFonts: Array<{ font_id: string; family: string; url: string; format?: string }> = [];
+
+    // If custom font URLs are in customization, add them
+    const customization = invitation.customization as Record<string, unknown>;
+    if (customization?.customFonts && Array.isArray(customization.customFonts)) {
+      customFonts.push(...(customization.customFonts as Array<{ font_id: string; family: string; url: string; format?: string }>));
+    }
+
+    loadInvitationFonts(fonts.heading, fonts.body, customFonts);
+  }, [primaryLang, fonts.heading, fonts.body, invitation.customization]);
 
   const formattedDate = formatEventDate(
     invitation.event_datetime,
