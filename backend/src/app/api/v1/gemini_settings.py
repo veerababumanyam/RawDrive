@@ -148,10 +148,10 @@ async def update_gemini_settings(
         if request.api_key:
             await AuditService().log_event(
                 event_type=AuditEventType.SETTINGS_CHANGED,
-                user_id=current_user.user_id,
+                actor_user_id=current_user.user_id,
                 workspace_id=workspace_id,
-                resource_type="gemini_settings",
-                resource_id=str(current_user.user_id),
+                target_entity_type="gemini_settings",
+                target_entity_id=current_user.user_id,
                 details={"action": "api_key_updated"},
             )
 
@@ -253,10 +253,10 @@ async def revoke_gemini_key(
     # Audit log for security
     await AuditService().log_event(
         event_type=AuditEventType.SETTINGS_CHANGED,
-        user_id=current_user.user_id,
+        actor_user_id=current_user.user_id,
         workspace_id=workspace_id,
-        resource_type="gemini_settings",
-        resource_id=str(current_user.user_id),
+        target_entity_type="gemini_settings",
+        target_entity_id=current_user.user_id,
         details={"action": "api_key_revoked"},
     )
 
@@ -350,10 +350,10 @@ async def update_feature_toggles(
     # Audit log for settings change
     await AuditService().log_event(
         event_type=AuditEventType.SETTINGS_CHANGED,
-        user_id=current_user.user_id,
+        actor_user_id=current_user.user_id,
         workspace_id=await _get_user_workspace_id(current_user.user_id),
-        resource_type="ai_feature_toggles",
-        resource_id=str(current_user.user_id),
+        target_entity_type="ai_feature_toggles",
+        target_entity_id=current_user.user_id,
         details={"updated_toggles": toggles},
     )
 

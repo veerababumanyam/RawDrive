@@ -140,10 +140,10 @@ async def create_model(
         # Audit log
         await AuditService().log_event(
             event_type=AuditEventType.SETTINGS_CHANGED,
-            user_id=current_user.user_id,
+            actor_user_id=current_user.user_id,
             workspace_id=None,  # Admin action, no workspace context
-            resource_type="gemini_model",
-            resource_id=str(model["model_id"]),
+            target_entity_type="gemini_model",
+            target_entity_id=model["model_id"],
             details={"action": "model_created", "identifier": request.identifier},
         )
 
@@ -261,10 +261,10 @@ async def update_model(
         # Audit log
         await AuditService().log_event(
             event_type=AuditEventType.SETTINGS_CHANGED,
-            user_id=current_user.user_id,
+            actor_user_id=current_user.user_id,
             workspace_id=None,
-            resource_type="gemini_model",
-            resource_id=str(model_id),
+            target_entity_type="gemini_model",
+            target_entity_id=model_id,
             details={"action": "model_updated"},
         )
 
@@ -313,10 +313,10 @@ async def delete_model(
         # Audit log
         await AuditService().log_event(
             event_type=AuditEventType.SETTINGS_CHANGED,
-            user_id=current_user.user_id,
+            actor_user_id=current_user.user_id,
             workspace_id=None,
-            resource_type="gemini_model",
-            resource_id=str(model_id),
+            target_entity_type="gemini_model",
+            target_entity_id=model_id,
             details={"action": "model_deleted"},
         )
 
@@ -357,10 +357,10 @@ async def reorder_models(
     # Audit log
     await AuditService().log_event(
         event_type=AuditEventType.SETTINGS_CHANGED,
-        user_id=current_user.user_id,
+        actor_user_id=current_user.user_id,
         workspace_id=None,
-        resource_type="gemini_models",
-        resource_id="reorder",
+        target_entity_type="gemini_models",
+        target_entity_id=None,  # Bulk reorder, no single entity
         details={"action": "models_reordered"},
     )
 
@@ -390,10 +390,10 @@ async def set_default_model(
         # Audit log
         await AuditService().log_event(
             event_type=AuditEventType.SETTINGS_CHANGED,
-            user_id=current_user.user_id,
+            actor_user_id=current_user.user_id,
             workspace_id=None,
-            resource_type="gemini_model",
-            resource_id=str(model_id),
+            target_entity_type="gemini_model",
+            target_entity_id=model_id,
             details={"action": "set_default"},
         )
 
