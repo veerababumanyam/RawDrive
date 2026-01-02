@@ -159,19 +159,25 @@ class InvitationRepository:
         self,
         workspace_id: Optional[UUID] = None,
         category: Optional[str] = None,
-        include_system: bool = True,
-        include_premium: bool = True,
+        subcategory: Optional[str] = None,
+        language: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+        is_premium: Optional[bool] = None,
+        search: Optional[str] = None,
         page: int = 1,
         limit: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
         """List templates with filtering.
 
         Args:
-            workspace_id: Filter by workspace (also includes system templates)
+            workspace_id: Filter by workspace (None includes system templates only if include_system is active logic)
             category: Filter by category
-            include_system: Include system-level templates
-            include_premium: Include premium templates
-            page: Page number (1-indexed)
+            subcategory: Filter by subcategory
+            language: Filter by supported language
+            tags: Filter by tags
+            is_premium: Filter by premium status
+            search: Search string
+            page: Page number
             limit: Items per page
 
         Returns:
@@ -184,23 +190,49 @@ class InvitationRepository:
             params: list[Any] = []
             param_idx = 1
 
+            # Logic for workspace_id and system templates is handled by caller passing appropriate workspace_id context
+            # or we can refine it. Based on existing code:
             if workspace_id:
-                if include_system:
-                    conditions.append(f"(workspace_id = ${param_idx} OR workspace_id IS NULL)")
-                else:
-                    conditions.append(f"workspace_id = ${param_idx}")
+                # If workspace_id is provided, we usually want system templates + workspace templates
+                conditions.append(f"(workspace_id = ${param_idx} OR workspace_id IS NULL)")
                 params.append(workspace_id)
                 param_idx += 1
-            elif not include_system:
-                conditions.append("workspace_id IS NOT NULL")
+            else:
+                # If no workspace_id, only show system templates (workspace_id IS NULL)
+                conditions.append("workspace_id IS NULL")
 
             if category:
                 conditions.append(f"category = ${param_idx}")
                 params.append(category)
                 param_idx += 1
 
-            if not include_premium:
-                conditions.append("is_premium = false")
+            if subcategory:
+                conditions.append(f"subcategory = ${param_idx}")
+                params.append(subcategory)
+                param_idx += 1
+
+            if language:
+                conditions.append(f"${param_idx} = ANY(supported_languages)")
+                params.append(language)
+                param_idx += 1
+
+            if tags:
+                conditions.append(f"tags @> ${param_idx}::text[]")
+                params.append(tags)
+                param_idx += 1
+
+            if is_premium is not None:
+                conditions.append(f"is_premium = ${param_idx}")
+                params.append(is_premium)
+                param_idx += 1
+
+            if search:
+                search_term = f"%{search.lower()}%"
+                conditions.append(
+                    f"(LOWER(name) LIKE ${param_idx} OR LOWER(description) LIKE ${param_idx})"
+                )
+                params.append(search_term)
+                param_idx += 1
 
             where_clause = " AND ".join(conditions)
 
