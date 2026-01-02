@@ -200,19 +200,30 @@ class InvitationAIService:
                 cleaned_text = cleaned_text[3:]
             if cleaned_text.endswith("```"):
                 cleaned_text = cleaned_text[:-3]
+            cleaned_text = cleaned_text.strip()
+
+            # Try to extract JSON if text contains extra content
+            # Sometimes LLMs return JSON with leading/trailing text
+            if not cleaned_text.startswith("{"):
+                # Try to find JSON object in the text
+                start_idx = cleaned_text.find("{")
+                end_idx = cleaned_text.rfind("}") + 1
+                if start_idx != -1 and end_idx > start_idx:
+                    cleaned_text = cleaned_text[start_idx:end_idx]
 
             data = json.loads(cleaned_text)
-            
+
             return {
                 "title": data.get("title", ""),
                 "description": data.get("description", ""),
             }
 
-        except json.JSONDecodeError:
-            logger.error("Failed to parse JSON from AI response")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from AI response: {e}. Raw text: {text_content[:500]}")
             raise AIRuntimeError(
-                message="Failed to parse AI response.",
+                message="Failed to parse AI response. Please try again.",
                 code="PARSE_ERROR",
+                hint="The AI generated an invalid response format. Retrying usually helps."
             )
         except Exception as e:
             logger.error(f"Error parsing AI response: {e}")
