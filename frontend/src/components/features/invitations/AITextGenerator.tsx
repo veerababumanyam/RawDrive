@@ -104,7 +104,7 @@ export const AITextGenerator: React.FC<AITextGeneratorProps> = ({
       size="lg"
     >
       <div className="space-y-6">
-        <div className="p-4 bg-primary-50 dark:bg-primary-900/10 rounded-lg text-sm text-text-secondary flex gap-3">
+          <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg text-sm text-text-secondary dark:text-primary-100 flex gap-3">
            <Wand2 className="w-5 h-5 text-primary flex-shrink-0" />
            <p>
              Generate catchy titles and warm descriptions for your {initialEventType} invitation. 
@@ -132,6 +132,7 @@ export const AITextGenerator: React.FC<AITextGeneratorProps> = ({
            placeholder="e.g., Witty, Poetic, Short & Sweet"
            value={tone}
            onChange={(e) => setTone(e.target.value)}
+           className="dark:placeholder:text-text-secondary"
         />
         
         <AppTextarea
@@ -140,6 +141,7 @@ export const AITextGenerator: React.FC<AITextGeneratorProps> = ({
            value={additionalDetails}
            onChange={(e) => setAdditionalDetails(e.target.value)}
            rows={3}
+           className="dark:placeholder:text-text-secondary"
         />
 
         {error && (
