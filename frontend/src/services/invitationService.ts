@@ -1378,6 +1378,98 @@ export const invitationService = {
 
   // AI
   generateAIContent,
+
+  // Custom Fonts
+  uploadCustomFont,
+  listCustomFonts,
+  deleteCustomFont,
+  getCustomFont,
 };
+
+// ---------------------------------------------------------------------------
+// Custom Font Types
+// ---------------------------------------------------------------------------
+
+export interface CustomFont {
+  font_id: string;
+  name: string;
+  family: string;
+  url: string;
+  file_size: number;
+  format: string;
+  created_at: string;
+  workspace_id: string;
+}
+
+export interface CustomFontListResponse {
+  fonts: CustomFont[];
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Custom Font Functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Upload a custom font for invitations.
+ * Feature: 019-invitation-indian-languages (Font Enhancement)
+ */
+export async function uploadCustomFont(
+  workspaceId: string,
+  file: File,
+  name: string
+): Promise<CustomFont> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('name', name);
+
+  const response = await apiClient.post<ApiResponse<CustomFont>>(
+    `/workspaces/${workspaceId}/digital-invitations/fonts`,
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }
+  );
+
+  if (!response.data?.data) {
+    throw new Error('Failed to upload font');
+  }
+  return response.data.data;
+}
+
+/**
+ * List all custom fonts for a workspace.
+ */
+export async function listCustomFonts(workspaceId: string): Promise<CustomFontListResponse> {
+  const response = await apiClient.get<ApiResponse<CustomFontListResponse>>(
+    `/workspaces/${workspaceId}/digital-invitations/fonts`
+  );
+  if (!response.data?.data) {
+    return { fonts: [], total: 0 };
+  }
+  return response.data.data;
+}
+
+/**
+ * Delete a custom font.
+ */
+export async function deleteCustomFont(workspaceId: string, fontId: string): Promise<void> {
+  await apiClient.delete(`/workspaces/${workspaceId}/digital-invitations/fonts/${fontId}`);
+}
+
+/**
+ * Get a specific custom font.
+ */
+export async function getCustomFont(workspaceId: string, fontId: string): Promise<CustomFont> {
+  const response = await apiClient.get<ApiResponse<CustomFont>>(
+    `/workspaces/${workspaceId}/digital-invitations/fonts/${fontId}`
+  );
+  if (!response.data?.data) {
+    throw new Error('Font not found');
+  }
+  return response.data.data;
+}
 
 export default invitationService;

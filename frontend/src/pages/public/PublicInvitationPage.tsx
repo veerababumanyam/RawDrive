@@ -37,6 +37,7 @@ import { Select, Checkbox, Toggle, RadioGroup, Radio } from '@/components/ui/For
 import { Turnstile, useTurnstile } from '@/components/ui/Turnstile';
 import SEOHead from '@/components/landing/seo/SEOHead';
 import * as invitationService from '@/services/invitationService';
+import { loadInvitationFonts, preloadLanguageFonts } from '@/utils/fontLoader';
 import type { TurnstileConfig } from '@/services/invitationService';
 import type {
   PublicInvitation,
@@ -858,11 +859,34 @@ const PublicInvitationPage: React.FC = () => {
     body: (invitation.customization as Record<string, Record<string, string>>)?.fonts?.body || 'Inter',
   };
 
+  // Extract custom font IDs if present (for custom uploaded fonts)
+  const customFontHeadingId = (invitation as { custom_font_heading_id?: string }).custom_font_heading_id;
+  const customFontBodyId = (invitation as { custom_font_body_id?: string }).custom_font_body_id;
+
   // Language configuration for i18n (Phase 9, enhanced for 019-invitation-indian-languages)
   const primaryLang = invitation.primary_language || 'en';
   const primaryFontClass = getFontClassForLanguage(primaryLang);
   const primaryDirection = getDirectionForLanguage(primaryLang);
   const isRTL = primaryDirection === 'rtl';
+
+  // Load fonts dynamically when invitation is accessed
+  // Feature: 019-invitation-indian-languages (Font Enhancement)
+  useEffect(() => {
+    // Preload language-specific fonts
+    preloadLanguageFonts(primaryLang);
+
+    // Load the specific fonts selected for this invitation
+    // Custom fonts are embedded in the font family string as 'CustomFont-{id}'
+    const customFonts: Array<{ font_id: string; family: string; url: string; format?: string }> = [];
+
+    // If custom font URLs are in customization, add them
+    const customization = invitation.customization as Record<string, unknown>;
+    if (customization?.customFonts && Array.isArray(customization.customFonts)) {
+      customFonts.push(...(customization.customFonts as Array<{ font_id: string; family: string; url: string; format?: string }>));
+    }
+
+    loadInvitationFonts(fonts.heading, fonts.body, customFonts);
+  }, [primaryLang, fonts.heading, fonts.body, invitation.customization]);
 
   const formattedDate = formatEventDate(
     invitation.event_datetime,

@@ -155,11 +155,25 @@ export const AssetTagPanel: React.FC<AssetTagPanelProps> = ({
       // Notify parent
       onReanalyze?.();
       onReanalyzeComplete?.();
-    } catch {
-      addToast({
-        message: 'Failed to queue asset for re-analysis',
-        variant: 'error',
-      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to queue asset for re-analysis';
+      
+      if (message.includes('AI_NOT_CONFIGURED')) {
+         addToast({ 
+           message: 'Gemini AI is not configured. Please check Settings > AI.', 
+           variant: 'error' 
+         });
+      } else if (message.includes('KEY_UNAUTHORIZED')) {
+         addToast({ 
+           message: 'Gemini API Key is invalid.', 
+           variant: 'error' 
+         });
+      } else {
+        addToast({
+          message: message,
+          variant: 'error',
+        });
+      }
     } finally {
       setIsReanalyzing(false);
     }
