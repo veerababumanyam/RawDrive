@@ -173,13 +173,15 @@ async def list_templates(
         limit=limit,
     )
 
+    templates_data, total = result
+    
     # Format response
     templates = [
         TemplateResponse(
             template_id=str(t["template_id"]),
             workspace_id=str(t["workspace_id"]) if t.get("workspace_id") else None,
             name=t["name"],
-            slug=t["slug"],
+            slug=t.get("slug", ""),
             description=t.get("description"),
             category=t["category"],
             subcategory=t.get("subcategory"),
@@ -191,19 +193,19 @@ async def list_templates(
             is_premium=t.get("is_premium", False),
             is_active=t.get("is_active", True),
             thumbnail_url=t.get("thumbnail_url"),
-            preview_url=t.get("preview_url"),
+            preview_url=t.get("preview_image_url"), # Note: repo uses preview_image_url
             created_at=t["created_at"].isoformat() if t.get("created_at") else None,
             updated_at=t["updated_at"].isoformat() if t.get("updated_at") else None,
         )
-        for t in result.get("templates", [])
+        for t in templates_data
     ]
 
     return TemplateListResponse(
         data=templates,
-        total=result.get("total", len(templates)),
+        total=total,
         page=page,
         limit=limit,
-        has_more=result.get("has_more", False),
+        has_more=(page * limit) < total,
     )
 
 
