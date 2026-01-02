@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/useToast';
 import { generateAIContent } from '@/services/invitationService';
 import { GenerateContentRequest } from '@/types/invitations';
 import { Alert } from '@/components/ui/Alert';
+import { SUPPORTED_LANGUAGES } from '@/i18n/config';
 
 interface AITextGeneratorProps {
   isOpen: boolean;
@@ -87,15 +88,16 @@ export const AITextGenerator: React.FC<AITextGeneratorProps> = ({
     { value: 'Serious', label: 'Serious' },
   ];
   
-  const languageOptions = [
-    { value: 'English', label: 'English' },
-    { value: 'Spanish', label: 'Spanish' },
-    { value: 'French', label: 'French' },
-    { value: 'German', label: 'German' },
-    { value: 'Italian', label: 'Italian' },
-    { value: 'Portuguese', label: 'Portuguese' },
-    // Add more as needed
-  ];
+  /**
+   * Language options derived from centralized SUPPORTED_LANGUAGES.
+   * AI service expects full language name (e.g., "Telugu"), not ISO code.
+   * Display shows native script for better UX.
+   * Feature: 019-invitation-indian-languages
+   */
+  const languageOptions = SUPPORTED_LANGUAGES.map((lang) => ({
+    value: lang.name, // AI service expects language name, not code
+    label: `${lang.nativeName} (${lang.name})`,
+  }));
 
   return (
     <AppModal
