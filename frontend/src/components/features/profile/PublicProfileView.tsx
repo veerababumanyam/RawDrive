@@ -16,7 +16,7 @@ import { Helmet } from 'react-helmet-async';
 import { PublicCompanyProfile } from '../../../types/companyProfile';
 import { companyProfileService } from '../../../services/companyProfileService';
 import { fontService } from '../../../services/fontService';
-import { ProfileCard } from './ProfileCard';
+import { PublicProfileLayout } from './public/PublicProfileLayout';
 import { AppButton } from '../../ui/AppButton';
 import {
     transformThemeForProfileCard,
@@ -188,49 +188,36 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
             </Helmet>
 
             {/* Mobile-first full-height layout */}
-            <div
-                className="min-h-screen flex flex-col items-center p-4 sm:py-12 sm:px-6 lg:px-8"
-                style={bgStyle}
-            >
-                {/* Main Card - Mobile: full width, Desktop: max-width */}
-                <div
-                    className={`w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-800 transition-all hover:shadow-2xl ${
-                        !fontsLoaded ? 'opacity-95' : 'opacity-100'
-                    }`}
-                >
-                    <ProfileCard
-                        profile={{
-                            name: profile.name,
-                            tagline: profile.tagline,
-                            // Use explicit public logo URL to ensure correct resolution
-                            // Backend may return relative path that needs proper base URL
-                            logo_url: profile.logo_url 
-                                ? (profile.logo_url.startsWith('/') 
-                                    ? companyProfileService.getPublicLogoUrl(slug)
-                                    : profile.logo_url)
-                                : undefined,
-                            email: profile.email,
-                            phone: profile.phone,
-                            website: profile.website,
-                            secondary_emails: profile.secondary_emails,
-                            secondary_phones: profile.secondary_phones,
-                            address_structured: profile.address_structured,
-                            socials: profile.socials,
-                            custom_links: profile.custom_links,
-                        }}
-                        visibility={profile.company_visibility}
-                        showActions={true}
-                        slug={slug}
-                        compact={false}
-                        themeColors={themeProps.themeColors}
-                        themeTypography={themeProps.themeTypography}
-                        themeLayout={themeProps.themeLayout}
-                        onDownloadVCard={handleDownloadVCard}
-                        onDownloadQr={handleDownloadQr}
-                        onShare={handleShare}
-                    />
-                </div>
-            </div>
+            <PublicProfileLayout
+                profile={{
+                    name: profile.name,
+                    tagline: profile.tagline,
+                    // Use explicit public logo URL to ensure correct resolution
+                    logo_url: profile.logo_url 
+                        ? (profile.logo_url.startsWith('/') 
+                            ? companyProfileService.getPublicLogoUrl(slug)
+                            : profile.logo_url)
+                        : undefined,
+                    email: profile.email,
+                    phone: profile.phone,
+                    website: profile.website,
+                    secondary_emails: profile.secondary_emails,
+                    secondary_phones: profile.secondary_phones,
+                    address_structured: profile.address_structured,
+                    socials: profile.socials,
+                    custom_links: profile.custom_links,
+                }}
+                visibility={profile.company_visibility}
+                showActions={true}
+                slug={slug}
+                compact={false}
+                themeColors={themeProps.themeColors}
+                themeTypography={themeProps.themeTypography}
+                themeLayout={themeProps.themeLayout}
+                onDownloadVCard={handleDownloadVCard}
+                onDownloadQr={handleDownloadQr}
+                onShare={handleShare}
+            />
         </>
     );
 };
