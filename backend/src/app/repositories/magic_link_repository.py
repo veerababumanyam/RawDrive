@@ -194,7 +194,7 @@ class MagicLinkRepository:
                     cp.website as company_website,
                     cp.brand_color as company_brand_color
                 FROM magic_links ml
-                JOIN galleries g ON g.gallery_id = ml.gallery_id
+                LEFT JOIN galleries g ON g.gallery_id = ml.gallery_id
                 LEFT JOIN company_profiles cp ON cp.workspace_id = ml.workspace_id
                 WHERE ml.token_hash = $1
                 """,
@@ -631,6 +631,7 @@ class MagicLinkRepository:
             "visitor_id",
             "access_id",
             "cover_asset_id",
+            "invitation_id",
         ]
         for field in uuid_fields:
             if field in result and result[field] is not None:
