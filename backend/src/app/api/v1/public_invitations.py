@@ -190,7 +190,8 @@ async def access_invitation_by_token(
         )
 
         invitation_id = link_data.get("invitation_id")
-        if not invitation_id:
+        workspace_id = link_data.get("workspace_id")
+        if not invitation_id or not workspace_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Invitation not found",
@@ -198,7 +199,8 @@ async def access_invitation_by_token(
 
         # Get the invitation by ID (not slug)
         invitation_dict = await invitation_service.get_public_invitation_by_id(
-            invitation_id=UUID(invitation_id)
+            invitation_id=UUID(invitation_id),
+            workspace_id=UUID(workspace_id),
         )
 
         if not invitation_dict:

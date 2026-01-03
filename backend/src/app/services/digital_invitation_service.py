@@ -1106,6 +1106,7 @@ class DigitalInvitationService:
     async def get_public_invitation_by_id(
         self,
         invitation_id: UUID,
+        workspace_id: UUID,
         password: Optional[str] = None,
         pin: Optional[str] = None,
         ip_address: Optional[str] = None,
@@ -1117,6 +1118,7 @@ class DigitalInvitationService:
 
         Args:
             invitation_id: Invitation UUID
+            workspace_id: Workspace ID (from magic link validation)
             password: Password if protected
             pin: PIN if protected
             ip_address: Viewer's IP for analytics
@@ -1131,7 +1133,10 @@ class DigitalInvitationService:
             InvitationPinRequiredError: PIN needed
             InvitationPinIncorrectError: Wrong PIN
         """
-        invitation = await self.invitation_repo.get_invitation_by_id(invitation_id)
+        invitation = await self.invitation_repo.get_invitation_by_id(
+            invitation_id=invitation_id,
+            workspace_id=workspace_id,
+        )
 
         if not invitation:
             raise InvitationNotFoundError()
