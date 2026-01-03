@@ -738,13 +738,11 @@ class DigitalInvitationService:
             pass
 
         # Create magic link for public access
-        # Note: We use target_type='invitation' which was added in migration 0059
-        # The database constraint requires target_id for non-gallery types
+        # Note: For invitations, we use invitation_id (not gallery_id) per migration 0079
         magic_link = await self.magic_link_service.create_link(
             workspace_id=workspace_id,
-            gallery_id=invitation_id,  # Using invitation_id as the gallery_id
             target_type="invitation",
-            target_id=invitation_id,  # Required for non-gallery target types
+            invitation_id=invitation_id,
             label=f"Invitation: {invitation.get('title', '')}",
             created_by_user_id=published_by_user_id,
             base_url=base_url,

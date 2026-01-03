@@ -210,7 +210,7 @@ class MagicLinkService:
     async def create_link(
         self,
         workspace_id: UUID,
-        gallery_id: UUID,
+        gallery_id: Optional[UUID] = None,
         target_type: str = "gallery",
         target_id: Optional[UUID] = None,
         album_title: Optional[str] = None,
@@ -220,6 +220,7 @@ class MagicLinkService:
         qr_config: Optional[dict[str, Any]] = None,
         created_by_user_id: Optional[UUID] = None,
         base_url: str = "https://rawdrive.ai",
+        invitation_id: Optional[UUID] = None,
     ) -> dict[str, Any]:
         """Create a new magic link.
 
@@ -228,9 +229,9 @@ class MagicLinkService:
 
         Args:
             workspace_id: Workspace ID for tenant isolation
-            gallery_id: Gallery to provide access to
-            target_type: What to scope access to ('gallery', 'sub_gallery', 'photo')
-            target_id: ID of sub_gallery or photo (required if not 'gallery')
+            gallery_id: Gallery to provide access to (required for gallery/sub_gallery/photo)
+            target_type: What to scope access to ('gallery', 'sub_gallery', 'photo', 'invitation')
+            target_id: ID of sub_gallery or photo (required if not 'gallery' or 'invitation')
             album_title: Client-facing album title for public display
             label: Internal label for organization
             expires_at: Optional expiration (UTC)
@@ -238,6 +239,7 @@ class MagicLinkService:
             qr_config: QR code generation settings
             created_by_user_id: User creating the link
             base_url: Base URL for link generation
+            invitation_id: Invitation ID (required for target_type='invitation')
 
         Returns:
             Created link with token (token is only returned here!)
@@ -262,6 +264,7 @@ class MagicLinkService:
             qr_config=qr_config,
             created_by_user_id=created_by_user_id,
             public_url=url,
+            invitation_id=invitation_id,
         )
 
         # Cache URL for QR code generation (token can't be recovered later)

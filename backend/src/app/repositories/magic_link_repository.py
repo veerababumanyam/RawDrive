@@ -40,8 +40,8 @@ class MagicLinkRepository:
     async def create(
         self,
         workspace_id: UUID,
-        gallery_id: UUID,
-        token_hash: str,
+        gallery_id: Optional[UUID] = None,
+        token_hash: str = "",
         target_type: str = "gallery",
         target_id: Optional[UUID] = None,
         album_title: Optional[str] = None,
@@ -51,15 +51,16 @@ class MagicLinkRepository:
         qr_config: Optional[dict[str, Any]] = None,
         created_by_user_id: Optional[UUID] = None,
         public_url: Optional[str] = None,
+        invitation_id: Optional[UUID] = None,
     ) -> dict[str, Any]:
         """Create a new magic link record.
 
         Args:
             workspace_id: Workspace ID for tenant isolation
-            gallery_id: ID of the gallery this link provides access to
+            gallery_id: ID of the gallery this link provides access to (optional for invitations)
             token_hash: SHA-256 hash of the access token
-            target_type: What the link targets ('gallery', 'sub_gallery', 'photo')
-            target_id: ID of sub_gallery or photo (NULL for gallery-level)
+            target_type: What the link targets ('gallery', 'sub_gallery', 'photo', 'invitation')
+            target_id: ID of sub_gallery or photo (NULL for gallery-level and invitations)
             album_title: Client-facing album title for public display (max 200 chars)
             label: User-friendly label for management
             expires_at: Optional expiration datetime (UTC)
@@ -67,6 +68,7 @@ class MagicLinkRepository:
             qr_config: QR code generation configuration
             created_by_user_id: User who created this link
             public_url: The shareable URL for this magic link
+            invitation_id: ID of the invitation (required for target_type='invitation')
 
         Returns:
             Created magic link record as dict
@@ -88,9 +90,9 @@ class MagicLinkRepository:
                 INSERT INTO magic_links (
                     workspace_id, gallery_id, token_hash, target_type, target_id,
                     album_title, label, expires_at, max_accesses, qr_config,
-                    created_by_user_id, public_url
+                    created_by_user_id, public_url, invitation_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING *
                 """,
                 workspace_id,
@@ -105,6 +107,7 @@ class MagicLinkRepository:
                 final_qr_config,
                 created_by_user_id,
                 public_url,
+                invitation_id,
             )
 
             result = self._row_to_dict(row)
@@ -114,7 +117,8 @@ class MagicLinkRepository:
                 extra={
                     "link_id": str(result["link_id"]),
                     "workspace_id": str(workspace_id),
-                    "gallery_id": str(gallery_id),
+                    "gallery_id": str(gallery_id) if gallery_id else None,
+                    "invitation_id": str(invitation_id) if invitation_id else None,
                     "target_type": target_type,
                 },
             )
