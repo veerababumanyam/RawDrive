@@ -67,6 +67,8 @@ interface InvitationPreviewProps {
   viewMode?: 'mobile' | 'desktop';
   /** Callback to change view mode */
   onViewModeChange?: (mode: 'mobile' | 'desktop') => void;
+  /** Compact mode for sidebar usage (constrains desktop width) */
+  compact?: boolean;
   /** Optional className */
   className?: string;
 }
@@ -197,6 +199,7 @@ export const InvitationPreview: React.FC<InvitationPreviewProps> = ({
   audioUrl,
   viewMode = 'mobile',
   onViewModeChange,
+  compact = false,
   className = '',
 }) => {
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
@@ -275,7 +278,11 @@ export const InvitationPreview: React.FC<InvitationPreviewProps> = ({
       {/* Preview Frame */}
       <div
         className={`mx-auto border border-border rounded-xl overflow-hidden shadow-lg transition-all duration-300 ${
-          viewMode === 'mobile' ? 'max-w-[375px]' : 'max-w-[768px]'
+          viewMode === 'mobile' 
+            ? 'max-w-[375px]' 
+            : compact 
+              ? 'w-full' 
+              : 'max-w-[768px]'
         }`}
         style={{ backgroundColor: colors.background }}
       >

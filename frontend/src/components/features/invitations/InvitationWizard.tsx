@@ -1095,6 +1095,18 @@ const Step3RSVPSettings: React.FC<Step3Props> = ({
             checked={data.rsvp_settings.enabled}
             onChange={(e) => updateRSVPSettings({ enabled: e.target.checked })}
           />
+          
+          {/* Invite-only mode hint */}
+          {!data.rsvp_settings.enabled && (
+            <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+              <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
+                📋 Invite-Only Mode
+              </p>
+              <p className="text-sm text-amber-600 dark:text-amber-500 mt-1">
+                Your invitation will be shared without collecting RSVPs. Guests can view the event details but won&apos;t be able to confirm their attendance. This is ideal for announcements or save-the-dates.
+              </p>
+            </div>
+          )}
         </AppCard>
       </section>
 
@@ -1230,10 +1242,18 @@ const Step3RSVPSettings: React.FC<Step3Props> = ({
               {data.venue.name || data.venue.city || 'Not specified'}
             </dd>
           </div>
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <dt className="text-text-secondary">RSVP:</dt>
-            <dd className="text-text-primary">
-              {data.rsvp_settings.enabled ? 'Enabled' : 'Disabled'}
+            <dd>
+              {data.rsvp_settings.enabled ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
+                  Enabled
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  Invite-Only
+                </span>
+              )}
             </dd>
           </div>
           <div className="flex justify-between">

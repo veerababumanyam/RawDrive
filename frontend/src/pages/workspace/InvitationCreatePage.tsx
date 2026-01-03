@@ -10,6 +10,7 @@
  * - Auto-save drafts every 30 seconds
  * - Manual save draft button
  * - Resume from draft via URL param
+ * - Live preview panel with mobile/desktop toggle
  *
  * Feature: 016-save-the-date
  */
@@ -17,10 +18,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Check, Save, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Save, Cloud, CloudOff, Loader2, Eye, EyeOff } from 'lucide-react';
 
 import { AppButton } from '@/components/ui/AppButton';
 import { InvitationWizard, type WizardData } from '@/components/features/invitations/InvitationWizard';
+import { InvitationPreview } from '@/components/features/invitations/InvitationPreview';
 import { invitationService } from '@/services/invitationService';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { useToast } from '@/hooks/useToast';
@@ -109,6 +111,8 @@ const InvitationCreatePage: React.FC = () => {
 
   const [wizardData, setWizardData] = useState<WizardData>(INITIAL_DATA);
   const [currentStep, setCurrentStep] = useState(1);
+  const [previewMode, setPreviewMode] = useState<'mobile' | 'desktop'>('mobile');
+  const [showPreview, setShowPreview] = useState(true);
 
   // ---------------------------------------------------------------------------
   // Draft auto-save hook (Phase 10)
@@ -248,7 +252,7 @@ const InvitationCreatePage: React.FC = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-surface border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-[1600px] mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <AppButton
               variant="ghost"
@@ -268,7 +272,7 @@ const InvitationCreatePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Right side: Auto-save indicator + Save button + Progress */}
+          {/* Right side: Auto-save indicator + Save button + Preview toggle + Progress */}
           <div className="flex items-center gap-4">
             {/* Auto-save indicator */}
             <AutoSaveIndicator
@@ -286,6 +290,26 @@ const InvitationCreatePage: React.FC = () => {
             >
               <Save className="w-4 h-4 mr-1.5" />
               Save Draft
+            </AppButton>
+
+            {/* Preview toggle button */}
+            <AppButton
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPreview(!showPreview)}
+              className="hidden lg:flex"
+            >
+              {showPreview ? (
+                <>
+                  <EyeOff className="w-4 h-4 mr-1.5" />
+                  Hide Preview
+                </>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4 mr-1.5" />
+                  Show Preview
+                </>
+              )}
             </AppButton>
 
             {/* Progress indicator */}
@@ -321,21 +345,63 @@ const InvitationCreatePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Wizard content */}
-      <div className="max-w-5xl mx-auto px-4 py-8">
-        <InvitationWizard
-          workspaceId={workspaceId!}
-          currentStep={currentStep}
-          data={wizardData}
-          onNext={handleNext}
-          onStepChange={handleStepChange}
-          onComplete={handleComplete}
-          onDataChange={handleDataChange}
-          isSubmitting={createMutation.isPending}
-        />
+      {/* Main Content - Two column layout on large screens */}
+      <div className="max-w-[1600px] mx-auto px-4 py-8">
+        <div className={`grid gap-8 ${showPreview ? 'lg:grid-cols-[1fr,400px]' : ''}`}>
+          {/* Wizard content */}
+          <div>
+            <InvitationWizard
+              workspaceId={workspaceId!}
+              currentStep={currentStep}
+              data={wizardData}
+              onNext={handleNext}
+              onStepChange={handleStepChange}
+              onComplete={handleComplete}
+              onDataChange={handleDataChange}
+              isSubmitting={createMutation.isPending}
+            />
+          </div>
+
+          {/* Live Preview Panel */}
+          {showPreview && (
+            <div className="hidden lg:block">
+              <div className="sticky top-24">
+                <h2 className="text-lg font-semibold text-text-primary mb-4">
+                  Live Preview
+                </h2>
+                <InvitationPreview
+                  title={wizardData.title || 'Your Event Title'}
+                  description={wizardData.description}
+                  eventType={wizardData.event_type}
+                  eventDatetime={wizardData.event_datetime}
+                  eventEndDatetime={wizardData.event_end_datetime}
+                  timezone={wizardData.event_timezone}
+                  venue={wizardData.venue}
+                  hostNames={wizardData.host_names}
+                  videoUrl={wizardData.video_url}
+                  audioUrl={wizardData.audio_url}
+                  customization={{
+                    colors: wizardData.customization?.colors as Record<string, string> | undefined,
+                    fonts: Object.fromEntries(
+                      Object.entries({
+                        heading: wizardData.font_heading,
+                        body: wizardData.font_body,
+                      }).filter(([_, v]) => v !== undefined)
+                    ) as Record<string, string>,
+                  }}
+                  rsvpSettings={wizardData.rsvp_settings}
+                  viewMode={previewMode}
+                  onViewModeChange={setPreviewMode}
+                  compact
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
 export default InvitationCreatePage;
+
