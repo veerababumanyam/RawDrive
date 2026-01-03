@@ -1,6 +1,9 @@
 /**
  * RecycleBinItemCard Component
  * Individual item card for deleted galleries and photos in the recycle bin
+ * 
+ * Uses centralized glassmorphism styles from index.css for consistency
+ * with other photo card components across the application.
  */
 
 import React from 'react';
@@ -11,7 +14,7 @@ import {
     FolderOpen,
     AlertTriangle,
     Trash2,
-    CheckSquare,
+    Check,
     Square,
 } from 'lucide-react';
 import { AppButton } from '../../../ui/AppButton';
@@ -48,28 +51,25 @@ const RecycleBinItemCardComponent: React.FC<RecycleBinItemCardProps> = ({
         <div
             className={`
                 group glass-card glass-card-hover rounded-2xl overflow-hidden transition-all duration-300
-                ${isSelected ? 'ring-2 ring-primary shadow-lg shadow-primary/10' : ''}
+                ${isSelected ? 'ring-3 ring-primary shadow-lg shadow-primary/20' : ''}
                 ${hasFailed ? 'ring-2 ring-error/50 bg-error/5' : ''}
             `}
         >
-            {/* Selection checkbox */}
+            {/* Selection checkbox - using centralized photo-card-top-btn styles */}
             <button
                 onClick={() => onSelect(item.id)}
-                className="
+                className={`
                     absolute top-3 left-3 z-10
-                    p-1.5 rounded-lg
-                    bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm
-                    shadow-md hover:shadow-lg
-                    hover:bg-white dark:hover:bg-slate-800
+                    photo-card-top-btn btn-management-select
+                    ${isSelected ? 'active always-visible' : ''}
                     transition-all duration-200
-                    border border-white/50 dark:border-slate-700/50
-                "
+                `}
                 aria-label={isSelected ? 'Deselect item' : 'Select item'}
             >
                 {isSelected ? (
-                    <CheckSquare size={20} className="text-primary" />
+                    <Check size={20} />
                 ) : (
-                    <Square size={20} className="text-text-tertiary group-hover:text-text-secondary" />
+                    <Square size={20} />
                 )}
             </button>
 

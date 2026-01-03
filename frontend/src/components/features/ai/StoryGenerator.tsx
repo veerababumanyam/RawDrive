@@ -6,7 +6,7 @@
  * AI-powered gallery story generation with length/tone options
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   BookOpen,
   Wand2,
@@ -22,7 +22,6 @@ import {
 import { AppButton } from '@/components/ui/AppButton';
 import { AIErrorBoundary, AISpinner } from './index';
 import { StoryService } from '@/services/storyService';
-import { useJobPolling } from '@/hooks/useJobPolling';
 import type { StoryResult, GenerateStoryRequest } from '@/types/aiFeatures';
 
 // ---------------------------------------------------------------------------
@@ -78,59 +77,35 @@ export const StoryGenerator: React.FC<StoryGeneratorProps> = ({
   const [length, setLength] = useState<StoryLength>('medium');
   const [tone, setTone] = useState<StoryTone>('professional');
 
-  // Store job ID for polling
-  const jobIdRef = useRef<string | null>(null);
-
-  // Job polling hook
-  const {
-    result: story,
-    error,
-    startPolling,
-    reset: resetPolling,
-    isPolling,
-  } = useJobPolling<StoryResult>({
-    fetchStatus: async () => {
-      if (!jobIdRef.current) {
-        return { status: 'failed', message: 'No job ID' };
-      }
-      const response = await StoryService.getStoryJobStatus(workspaceId, jobIdRef.current);
-      return {
-        status: response.status as 'pending' | 'processing' | 'completed' | 'failed',
-        result: response.result,
-        message: response.message,
-      };
-    },
-    onComplete: (result) => {
-      onStoryGenerated?.(result);
-    },
-  });
+  // Generation state
+  const [story, setStory] = useState<StoryResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // UI state
   const [copied, setCopied] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showLengthDropdown, setShowLengthDropdown] = useState(false);
   const [showToneDropdown, setShowToneDropdown] = useState(false);
-  const [initiatingJob, setInitiatingJob] = useState(false);
-
-  // Compute isGenerating from polling status
-  const isGenerating = initiatingJob || isPolling;
 
   // Generate story
   const handleGenerate = useCallback(async () => {
-    setInitiatingJob(true);
-    resetPolling();
+    setIsGenerating(true);
+    setError(null);
+    setStory(null);
 
     try {
       const request: GenerateStoryRequest = { length, tone };
-      const jobResponse = await StoryService.generateStory(workspaceId, galleryId, request);
-      jobIdRef.current = jobResponse.job_id;
-      setInitiatingJob(false);
-      startPolling();
+      const storyResult = await StoryService.generateStory(workspaceId, galleryId, request);
+      setStory(storyResult);
+      onStoryGenerated?.(storyResult);
     } catch (err) {
-      setInitiatingJob(false);
-      // Error will be captured by the polling hook
+      const message = err instanceof Error ? err.message : 'Failed to generate story';
+      setError(message);
+    } finally {
+      setIsGenerating(false);
     }
-  }, [workspaceId, galleryId, length, tone, startPolling, resetPolling]);
+  }, [workspaceId, galleryId, length, tone, onStoryGenerated]);
 
   // Copy to clipboard
   const handleCopy = useCallback(async () => {
@@ -193,9 +168,9 @@ export const StoryGenerator: React.FC<StoryGeneratorProps> = ({
 
   // Regenerate story
   const handleRegenerate = useCallback(() => {
-    resetPolling();
+    setStory(null);
     handleGenerate();
-  }, [handleGenerate, resetPolling]);
+  }, [handleGenerate]);
 
   return (
     <AIErrorBoundary featureName="Story Generator">

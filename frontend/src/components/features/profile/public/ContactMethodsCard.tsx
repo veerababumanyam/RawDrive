@@ -1,7 +1,7 @@
 import React from 'react';
-import { 
-  Mail, Phone, MapPin, QrCode, Download, 
-  Linkedin, Twitter, Instagram, Facebook, Youtube, 
+import {
+  Mail, Phone, MapPin, QrCode, Download,
+  Linkedin, Twitter, Instagram, Facebook, Youtube,
   Map as MapIcon, Globe
 } from 'lucide-react';
 import { AppButton } from '../../../ui/AppButton';
@@ -12,6 +12,8 @@ import type { CompanyAddress, SecondaryContact } from '../../../../types/company
 
    Displays contact information with prominent action buttons for vCard/QR.
    Mobile-first responsive design with dark mode support.
+
+   Feature: 021-public-profile-mobile-responsive-theme
    ============================================================================= */
 
 interface ContactMethodsCardProps {
@@ -36,91 +38,122 @@ export const ContactMethodsCard: React.FC<ContactMethodsCardProps> = ({
   className = ''
 }) => {
   const socialIcons: Record<string, React.ReactNode> = {
-    facebook: <Facebook size={20} />,
-    instagram: <Instagram size={20} />,
-    twitter: <Twitter size={20} />,
-    linkedin: <Linkedin size={20} />,
-    youtube: <Youtube size={20} />,
+    facebook: <Facebook size={18} />,
+    instagram: <Instagram size={18} />,
+    twitter: <Twitter size={18} />,
+    linkedin: <Linkedin size={18} />,
+    youtube: <Youtube size={18} />,
   };
 
   return (
-    <div 
+    <article
       className={`
-        p-4 sm:p-6 lg:p-8 
-        flex flex-col gap-4 sm:gap-6
+        p-4 sm:p-5 lg:p-6
+        flex flex-col gap-4 sm:gap-5
         rounded-2xl sm:rounded-3xl
-        
+
         /* Glass effect - theme aware */
-        bg-white/70 dark:bg-gray-900/50
+        bg-white/60 dark:bg-gray-900/40
         backdrop-blur-xl
-        border border-white/40 dark:border-white/10
-        shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)]
-        
+        border border-white/50 dark:border-white/10
+        shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.25)]
+
         ${className}
       `}
+      aria-label="Contact information"
     >
       {/* Header */}
-      <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
-        Contact Us
-      </h2>
+      <header>
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+          Get in Touch
+        </h2>
+      </header>
 
       {/* Primary Contact Grid - Email & Phone */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
         {/* Email Card */}
-        <a 
-          href={`mailto:${email}`} 
-          className="block min-h-[64px]"
-          aria-label={`Email ${email}`}
+        <a
+          href={`mailto:${email}`}
+          className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-xl"
+          aria-label={`Send email to ${email}`}
         >
-          <div 
+          <div
             className="
-              flex items-center gap-3 
-              p-3 sm:p-4 
-              rounded-xl sm:rounded-2xl 
-              bg-white/50 dark:bg-white/5 
-              hover:bg-white/80 dark:hover:bg-white/10 
-              border border-gray-200/50 dark:border-white/10
-              transition-all duration-300 
-              group
-              h-full
+              flex items-center gap-3
+              p-3 sm:p-3.5
+              rounded-xl
+              min-h-[60px]
+              bg-white/50 dark:bg-white/5
+              hover:bg-white/80 dark:hover:bg-white/10
+              border border-gray-100/80 dark:border-white/10
+              transition-all duration-200
+              group-hover:shadow-md dark:group-hover:shadow-[0_4px_20px_rgba(0,0,0,0.2)]
+              group-hover:-translate-y-0.5 motion-reduce:group-hover:translate-y-0
             "
           >
-            <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-primary-500/10 text-primary-500 group-hover:scale-110 transition-transform motion-reduce:group-hover:scale-100 flex-shrink-0">
-              <Mail size={18} className="sm:w-5 sm:h-5" />
+            <div
+              className="
+                p-2 rounded-lg
+                bg-primary-500/10 dark:bg-primary-500/20
+                text-primary-500
+                group-hover:bg-primary-500 group-hover:text-white
+                transition-colors duration-200
+                flex-shrink-0
+              "
+            >
+              <Mail size={16} />
             </div>
             <div className="flex flex-col overflow-hidden min-w-0">
-              <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Email</span>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{email}</span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">
+                Email
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                {email}
+              </span>
             </div>
           </div>
         </a>
 
         {/* Phone Card */}
         {phone && (
-          <a 
-            href={`tel:${phone}`} 
-            className="block min-h-[64px]"
+          <a
+            href={`tel:${phone}`}
+            className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 rounded-xl"
             aria-label={`Call ${phone}`}
           >
-            <div 
+            <div
               className="
-                flex items-center gap-3 
-                p-3 sm:p-4 
-                rounded-xl sm:rounded-2xl 
-                bg-white/50 dark:bg-white/5 
-                hover:bg-white/80 dark:hover:bg-white/10 
-                border border-gray-200/50 dark:border-white/10
-                transition-all duration-300 
-                group
-                h-full
+                flex items-center gap-3
+                p-3 sm:p-3.5
+                rounded-xl
+                min-h-[60px]
+                bg-white/50 dark:bg-white/5
+                hover:bg-white/80 dark:hover:bg-white/10
+                border border-gray-100/80 dark:border-white/10
+                transition-all duration-200
+                group-hover:shadow-md dark:group-hover:shadow-[0_4px_20px_rgba(0,0,0,0.2)]
+                group-hover:-translate-y-0.5 motion-reduce:group-hover:translate-y-0
               "
             >
-              <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-green-500/10 text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform motion-reduce:group-hover:scale-100 flex-shrink-0">
-                <Phone size={18} className="sm:w-5 sm:h-5" />
+              <div
+                className="
+                  p-2 rounded-lg
+                  bg-green-500/10 dark:bg-green-500/20
+                  text-green-600 dark:text-green-400
+                  group-hover:bg-green-500 group-hover:text-white
+                  transition-colors duration-200
+                  flex-shrink-0
+                "
+              >
+                <Phone size={16} />
               </div>
               <div className="flex flex-col overflow-hidden min-w-0">
-                <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Phone</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">{phone}</span>
+                <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">
+                  Phone
+                </span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {phone}
+                </span>
               </div>
             </div>
           </a>
@@ -129,33 +162,41 @@ export const ContactMethodsCard: React.FC<ContactMethodsCardProps> = ({
 
       {/* Address Card */}
       {address && (
-        <div 
+        <div
           className="
-            rounded-xl sm:rounded-2xl 
-            overflow-hidden 
-            border border-gray-200/50 dark:border-white/10 
+            rounded-xl
+            overflow-hidden
+            border border-gray-100/80 dark:border-white/10
             bg-white/40 dark:bg-white/5
           "
         >
-          <div className="p-3 sm:p-4 flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-red-500/10 text-red-500 dark:text-red-400 mt-0.5 flex-shrink-0">
-              <MapPin size={18} />
+          <div className="p-3 sm:p-3.5 flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-red-500/10 dark:bg-red-500/20 text-red-500 dark:text-red-400 flex-shrink-0">
+              <MapPin size={16} />
             </div>
-            <div className="min-w-0">
-              <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider block mb-1">Location</span>
-              <p className="text-sm text-gray-900 dark:text-white font-medium leading-relaxed">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider block mb-1">
+                Location
+              </span>
+              <address className="text-sm text-gray-900 dark:text-white font-medium leading-relaxed not-italic">
                 {address.line1}
                 {address.line2 && <><br />{address.line2}</>}
                 <br />
                 {address.city}, {address.state} {address.postal_code}
                 <br />
                 {address.country}
-              </p>
-              <a 
-                href={`https://maps.google.com/?q=${encodeURIComponent(`${address.line1}, ${address.city}, ${address.country}`)}`} 
-                target="_blank" 
+              </address>
+              <a
+                href={`https://maps.google.com/?q=${encodeURIComponent(`${address.line1}, ${address.city}, ${address.country}`)}`}
+                target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold text-primary-500 hover:text-primary-600 dark:hover:text-primary-400 hover:underline"
+                className="
+                  inline-flex items-center gap-1.5 mt-2.5
+                  text-xs font-semibold
+                  text-primary-500 hover:text-primary-600 dark:hover:text-primary-400
+                  hover:underline
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded
+                "
               >
                 <MapIcon size={12} />
                 Open in Maps
@@ -165,51 +206,61 @@ export const ContactMethodsCard: React.FC<ContactMethodsCardProps> = ({
         </div>
       )}
 
-      {/* ACTION BUTTONS - Prominent position */}
+      {/* ACTION BUTTONS - Prominent position with improved styling */}
       {(onDownloadVCard || onDownloadQr) && (
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 pt-1">
           {onDownloadVCard && (
-            <AppButton 
+            <AppButton
               variant="secondary"
               onClick={onDownloadVCard}
               className="
                 flex-1
-                min-h-[44px]
+                min-h-[46px]
                 rounded-xl
-                bg-white/60 dark:bg-white/10
-                hover:bg-white dark:hover:bg-white/20
-                border border-gray-200 dark:border-white/20
+                text-sm font-medium
+                bg-gradient-to-br from-white/80 to-white/60
+                dark:from-white/10 dark:to-white/5
+                hover:from-white hover:to-white/90
+                dark:hover:from-white/15 dark:hover:to-white/10
+                border border-gray-200/80 dark:border-white/15
                 text-gray-700 dark:text-gray-200
                 hover:text-gray-900 dark:hover:text-white
-                transition-all duration-300
-                active:scale-95 motion-reduce:active:scale-100
+                shadow-sm hover:shadow-md
+                transition-all duration-200
+                active:scale-[0.98] motion-reduce:active:scale-100
+                focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
               "
               aria-label="Download contact card"
             >
-              <Download size={18} className="mr-2" />
-              <span className="font-medium">Save Contact</span>
+              <Download size={16} className="mr-2" />
+              Save Contact
             </AppButton>
           )}
           {onDownloadQr && (
-            <AppButton 
+            <AppButton
               variant="secondary"
               onClick={onDownloadQr}
               className="
                 flex-1
-                min-h-[44px]
+                min-h-[46px]
                 rounded-xl
-                bg-white/60 dark:bg-white/10
-                hover:bg-white dark:hover:bg-white/20
-                border border-gray-200 dark:border-white/20
+                text-sm font-medium
+                bg-gradient-to-br from-white/80 to-white/60
+                dark:from-white/10 dark:to-white/5
+                hover:from-white hover:to-white/90
+                dark:hover:from-white/15 dark:hover:to-white/10
+                border border-gray-200/80 dark:border-white/15
                 text-gray-700 dark:text-gray-200
                 hover:text-gray-900 dark:hover:text-white
-                transition-all duration-300
-                active:scale-95 motion-reduce:active:scale-100
+                shadow-sm hover:shadow-md
+                transition-all duration-200
+                active:scale-[0.98] motion-reduce:active:scale-100
+                focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
               "
               aria-label="Download QR code"
             >
-              <QrCode size={18} className="mr-2" />
-              <span className="font-medium">QR Code</span>
+              <QrCode size={16} className="mr-2" />
+              QR Code
             </AppButton>
           )}
         </div>
@@ -217,11 +268,14 @@ export const ContactMethodsCard: React.FC<ContactMethodsCardProps> = ({
 
       {/* Social Media Strip */}
       {socials && Object.keys(socials).length > 0 && (
-        <div className="pt-2 border-t border-gray-200/50 dark:border-white/10">
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 pt-4">
+        <nav
+          className="pt-3 border-t border-gray-200/50 dark:border-white/10"
+          aria-label="Social media links"
+        >
+          <div className="flex flex-wrap justify-center gap-2">
             {Object.entries(socials).map(([platform, url]) => {
               if (!url) return null;
-              const Icon = socialIcons[platform] || <Globe size={20} />;
+              const Icon = socialIcons[platform] || <Globe size={18} />;
               return (
                 <a
                   key={platform}
@@ -229,28 +283,29 @@ export const ContactMethodsCard: React.FC<ContactMethodsCardProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="
-                    p-2.5 sm:p-3 
-                    min-w-[44px] min-h-[44px]
+                    w-10 h-10 sm:w-11 sm:h-11
                     flex items-center justify-center
-                    rounded-full 
-                    bg-white/50 dark:bg-white/5 
-                    hover:bg-white dark:hover:bg-white/15 
-                    text-gray-500 dark:text-gray-400 
-                    hover:text-primary-500 dark:hover:text-primary-400
-                    transition-all duration-300 
-                    hover:-translate-y-1 motion-reduce:hover:translate-y-0
-                    hover:shadow-md
-                    border border-gray-200/50 dark:border-white/10
+                    rounded-full
+                    bg-white/50 dark:bg-white/5
+                    hover:bg-primary-500 dark:hover:bg-primary-500
+                    text-gray-500 dark:text-gray-400
+                    hover:text-white
+                    border border-gray-100/80 dark:border-white/10
+                    hover:border-primary-500
+                    transition-all duration-200
+                    hover:-translate-y-0.5 motion-reduce:hover:translate-y-0
+                    hover:shadow-md hover:shadow-primary-500/25
+                    focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2
                   "
-                  aria-label={`Visit ${platform} profile`}
+                  aria-label={`Visit our ${platform} profile`}
                 >
                   {Icon}
                 </a>
               );
             })}
           </div>
-        </div>
+        </nav>
       )}
-    </div>
+    </article>
   );
 };

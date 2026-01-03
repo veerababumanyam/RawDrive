@@ -544,15 +544,14 @@ class FaceDetectionWorker:
         import json
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Use json.dumps but cast properly - asyncpg needs string for jsonb parameter
-            # The key is that we pass a JSON string that PostgreSQL casts to jsonb
+            # Cast the JSON string to jsonb type explicitly
             await conn.execute(
                 """
                 UPDATE faces
-                SET thumbnail_urls = $1, updated_at = NOW()
+                SET thumbnail_urls = $1::jsonb, updated_at = NOW()
                 WHERE id = $2 AND workspace_id = $3
                 """,
-                json.dumps(thumbnail_urls),  # This becomes a proper jsonb object
+                json.dumps(thumbnail_urls),
                 face_id,
                 workspace_id,
             )

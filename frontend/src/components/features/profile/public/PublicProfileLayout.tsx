@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
 import { GlassContainer } from './GlassContainer';
 import { HeroGlassCard } from './HeroGlassCard';
-import { StudioInfoCard } from './StudioInfoCard';
-import { ContactMethodsCard } from './ContactMethodsCard';
+import { ProfileBody } from './ProfileBody';
 import { ServicesGlassGrid } from './ServicesGlassGrid';
 import { FooterGlassStrip } from './FooterGlassStrip';
+import { companyProfileService } from '../../../../services/companyProfileService';
 import type { CompanyProfile, CompanyVisibilityConfig } from '../../../../types/companyProfile';
 
 /* =============================================================================
@@ -86,7 +86,7 @@ export const PublicProfileLayout: React.FC<PublicProfileLayoutProps> = ({
 
   return (
     <GlassContainer>
-      <div style={styleVariables} className="text-gray-900 dark:text-white">
+      <div style={styleVariables} className="text-gray-900 dark:text-white pb-20">
         
         {/* Skip Link for Accessibility */}
         <a 
@@ -109,69 +109,49 @@ export const PublicProfileLayout: React.FC<PublicProfileLayoutProps> = ({
           h1, h2, h3, h4, h5, h6 { font-family: var(--theme-font-heading, inherit); }
         `}</style>
 
-        {/* Hero Section */}
+        {/* Hero Section - Top Branding & Identity (Separated) */}
         <HeroGlassCard 
           name={profile.name || 'Company Name'}
           tagline={visibility.tagline ? profile.tagline : undefined}
           logoUrl={visibility.logo_url ? profile.logo_url : undefined}
-          onViewPortfolio={handleViewPortfolio}
-          onBookNow={handleBookNow}
         />
 
-        {/* Main Content - Mobile-first layout */}
-        <div 
-          id="profile-content" 
-          className="
-            container mx-auto 
-            px-4 sm:px-6 lg:px-8 
-            py-8 sm:py-12 lg:py-16
-            relative z-20
-          "
-        >
-          {/* Mobile: Single column stack | Desktop: Two column flex */}
-          <div className="flex flex-col lg:flex-row lg:gap-8 xl:gap-12">
-            
-            {/* Left Column: Website + Contact (narrower on desktop) */}
-            <div className="w-full lg:w-5/12 xl:w-4/12 space-y-4 sm:space-y-6">
-              
-              {/* Website Link Card - only shows if website exists */}
-              {hasWebsite && (
-                <StudioInfoCard 
-                  name={profile.name || ''}
-                  tagline={visibility.tagline ? profile.tagline : undefined}
-                  website={profile.website}
-                />
-              )}
-
-              {/* Contact Details */}
-              {hasContactInfo && (
-                <div id="contact-section">
-                  <ContactMethodsCard 
-                    email={visibility.email ? (profile.email || '') : ''}
-                    phone={visibility.phone && profile.phone ? profile.phone : undefined}
-                    address={visibility.address ? profile.address_structured : undefined}
-                    socials={profile.socials}
-                    onDownloadVCard={visibility.vcard ? onDownloadVCard : undefined}
-                    onDownloadQr={visibility.qr_code ? onDownloadQr : undefined}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Right Column: Services/Links (wider on desktop) */}
-            {hasServices && (
-              <div className="w-full lg:w-7/12 xl:w-8/12 mt-6 lg:mt-0">
-                <ServicesGlassGrid 
-                  links={profile.custom_links!} 
-                />
-              </div>
-            )}
-
-          </div>
+        {/* Body Section - Actions, Socials, Details (Separated) */}
+        <div className="relative z-20 px-4 mt-6">
+            <ProfileBody 
+                name={profile.name || 'Company Name'}
+                email={visibility.email ? profile.email : undefined}
+                phone={visibility.phone ? profile.phone : undefined}
+                address={visibility.address && profile.address_structured ? 
+                    `${profile.address_structured.line1 || ''} ${profile.address_structured.city || ''} ${profile.address_structured.state || ''} ${profile.address_structured.postal_code || ''} ${profile.address_structured.country || ''}`.trim() 
+                    : undefined}
+                websiteUrl={visibility.website ? profile.website : undefined}
+                socials={profile.socials}
+                qrCodeUrl={visibility.qr_code && profile.slug ? companyProfileService.getQrCodeUrl(profile.slug) : undefined}
+                profileUrl={profile.slug ? `${window.location.origin}/p/${profile.slug}` : undefined}
+                onDownloadQr={visibility.qr_code ? onDownloadQr : undefined}
+                onDownloadVCard={visibility.vcard ? onDownloadVCard : undefined}
+            />
         </div>
 
-        <FooterGlassStrip />
+        {/* Main Content - Only show services/links if they exist */}
+        {hasServices && (
+          <div 
+            id="profile-content" 
+            className="
+              container mx-auto 
+              px-4 sm:px-6 lg:px-8 
+              py-8 sm:py-12
+              relative z-20
+            "
+          >
+            <ServicesGlassGrid links={profile.custom_links!} />
+          </div>
+        )}
+
+        <FooterGlassStrip companyName={profile.name} />
       </div>
     </GlassContainer>
   );
 };
+

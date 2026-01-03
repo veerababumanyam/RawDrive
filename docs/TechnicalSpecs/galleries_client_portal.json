@@ -4,7 +4,7 @@
   "featureId": "galleries_client_portal",
   "name": "Galleries, Client Portal, and Sharing",
   "status": "draft",
-  "lastUpdated": "2025-01-27",
+  "lastUpdated": "2026-01-03",
   "sourceDocs": [
     "docs/Features/GalleryFeatures.md",
     "docs/Features/CLIENT_FACING_FEATURES.md",
@@ -941,7 +941,7 @@
             "name": "GalleryToolbar",
             "path": "frontend/src/components/features/gallery/GalleryToolbar.tsx",
             "features": [
-              "Action buttons (View as Client, Find People, AI Story, Share, Settings, Upload)",
+              "Action buttons (View as Client, Find People, AI Story, Smart Curate, Share, Settings, Upload) with AI Story/Smart Curate opening workspace-scoped modals backed by /smart-tagging when user AI API key + feature toggles are enabled",
               "Search input",
               "View mode toggle (grid/list)",
               "Filter buttons (Picks, Favorites)",

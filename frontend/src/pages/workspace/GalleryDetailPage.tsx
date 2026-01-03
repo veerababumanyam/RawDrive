@@ -42,8 +42,11 @@ import { useToast } from '../../components/ui/Toast';
 import { useSearch } from '../../contexts/SearchContext';
 import { galleryService } from '../../services/galleryService';
 import { SignedUrlProvider } from '../../contexts/SignedUrlContext';
+import { StoryGenerator, SmartCurationPanel } from '../../components/features/ai';
+import { useAIFeatureToggles } from '../../hooks/useGeminiSettings';
 import type { GalleryAssetItem, ViewMode, FilterType } from '../../types/gallery';
-import { PRIVATE_UNLOCKED_KEY_PREFIX } from '../../constants/gallery';
+import type { AIFeatureToggles } from '../../types/geminiSettings';
+import { ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX } from '../../constants/gallery';
 
 const GalleryDetailPage: React.FC = () => {
   const { id: galleryId } = useParams<{ id: string }>();
@@ -84,6 +87,8 @@ const GalleryDetailPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showPeoplePanel, setShowPeoplePanel] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showStoryModal, setShowStoryModal] = useState(false);
+  const [showSmartCurationModal, setShowSmartCurationModal] = useState(false);
   
   // Private photo unlock state (admin also needs PIN to see private photos)
   const [showPinModal, setShowPinModal] = useState(false);
@@ -109,7 +114,7 @@ const GalleryDetailPage: React.FC = () => {
   // Check localStorage for previous private unlock status
   useEffect(() => {
     if (galleryId) {
-      const privateUnlocked = localStorage.getItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
+      const privateUnlocked = localStorage.getItem(`${ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
       if (privateUnlocked) {
         setIsPrivateUnlocked(true);
       }
@@ -122,7 +127,7 @@ const GalleryDetailPage: React.FC = () => {
     try {
       const isValid = await galleryService.verifyPin(galleryId, pin);
       if (isValid) {
-        localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
+        localStorage.setItem(`${ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
         setShowPinModal(false);
         setIsPrivateUnlocked(true);
       }
@@ -166,6 +171,8 @@ const GalleryDetailPage: React.FC = () => {
     autoFetch: !!galleryId && !!workspace?.workspace_id,
   });
 
+  const { featureToggles } = useAIFeatureToggles({ autoFetch: true });
+
   // Compute filtered stats from currently loaded assets
   const filteredStats = useMemo(() => {
     const totalItems = meta?.total ?? assets.length;
@@ -180,6 +187,57 @@ const GalleryDetailPage: React.FC = () => {
       privateCount,
     };
   }, [assets, meta?.total]);
+
+  const isAIFeatureReady = useCallback(
+    (feature: keyof AIFeatureToggles) => {
+      if (!featureToggles) return true;
+
+      if (!featureToggles.has_api_key) {
+        addToast({
+          message: 'Add your AI API key in Profile > AI API key to use this feature.',
+          variant: 'warning',
+        });
+        return false;
+      }
+
+      if (!featureToggles.toggles[feature]) {
+        addToast({
+          message: 'Enable this AI feature in Settings > AI & Gemini.',
+          variant: 'info',
+        });
+        return false;
+      }
+
+      return true;
+    },
+    [featureToggles, addToast]
+  );
+
+  const handleOpenAIStory = useCallback(() => {
+    if (!workspace?.workspace_id || !gallery) return;
+    if (!isAIFeatureReady('gallery_story')) return;
+
+    const totalPhotos = gallery.stats?.total_photos ?? filteredStats.totalItems;
+    if (totalPhotos < 3) {
+      addToast({ message: 'Add at least 3 photos to generate an AI story.', variant: 'warning' });
+      return;
+    }
+
+    setShowStoryModal(true);
+  }, [workspace?.workspace_id, gallery, isAIFeatureReady, filteredStats.totalItems, addToast]);
+
+  const handleOpenSmartCurate = useCallback(() => {
+    if (!workspace?.workspace_id || !gallery) return;
+    if (!isAIFeatureReady('smart_curation')) return;
+
+    const totalPhotos = gallery.stats?.total_photos ?? filteredStats.totalItems;
+    if (totalPhotos === 0) {
+      addToast({ message: 'Upload photos before running Smart Curate.', variant: 'warning' });
+      return;
+    }
+
+    setShowSmartCurationModal(true);
+  }, [workspace?.workspace_id, gallery, isAIFeatureReady, filteredStats.totalItems, addToast]);
 
   // WebSocket for real-time updates
   useSocket({
@@ -776,8 +834,8 @@ const GalleryDetailPage: React.FC = () => {
             hasPhotos={(gallery.stats?.total_items || 0) > 0}
             onViewAsClient={() => window.open(`/g/${gallery.gallery_id}`, '_blank')}
             onFindPeople={() => setShowPeoplePanel(true)}
-            onAIStory={() => addToast({ message: 'AI Story - Coming soon', variant: 'info' })}
-            onSmartCurate={() => addToast({ message: 'Smart Curate - Coming soon', variant: 'info' })}
+            onAIStory={handleOpenAIStory}
+            onSmartCurate={handleOpenSmartCurate}
             onShare={() => setShowShareDialog(true)}
             onSettings={() => setShowSettings(true)}
             onUpload={() => setShowUpload(!showUpload)}
@@ -835,7 +893,7 @@ const GalleryDetailPage: React.FC = () => {
                 } else {
                   // No PIN protection - auto-unlock for admin
                   setIsPrivateUnlocked(true);
-                  localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
+                  localStorage.setItem(`${ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
                   addToast({ message: 'Private photos unlocked', variant: 'success' });
                 }
               }}
@@ -1002,7 +1060,7 @@ const GalleryDetailPage: React.FC = () => {
                 } else {
                   // No PIN protection - auto-unlock for admin
                   setIsPrivateUnlocked(true);
-                  localStorage.setItem(`${PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
+                  localStorage.setItem(`${ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
                   addToast({ message: 'Private photos unlocked', variant: 'success' });
                 }
               }}
@@ -1170,6 +1228,49 @@ const GalleryDetailPage: React.FC = () => {
           retentionDays={30}
           isLoading={isDeleting}
         />
+
+        {/* AI Story Modal */}
+        <Modal
+          isOpen={showStoryModal}
+          onClose={() => setShowStoryModal(false)}
+          title="AI Story Generator"
+          size="lg"
+        >
+          <ModalBody>
+            <StoryGenerator
+              workspaceId={workspace?.workspace_id || ''}
+              galleryId={gallery.gallery_id}
+              galleryName={gallery.title}
+              photoCount={gallery.stats?.total_photos ?? filteredStats.totalItems}
+            />
+          </ModalBody>
+        </Modal>
+
+        {/* Smart Curation Modal */}
+        <Modal
+          isOpen={showSmartCurationModal}
+          onClose={() => setShowSmartCurationModal(false)}
+          title="Smart Curate"
+          size="lg"
+        >
+          <ModalBody>
+            <SmartCurationPanel
+              workspaceId={workspace?.workspace_id || ''}
+              galleryId={gallery.gallery_id}
+              galleryName={gallery.title}
+              totalPhotos={gallery.stats?.total_photos ?? filteredStats.totalItems}
+              onCurationComplete={(result) => {
+                setSelectedAssetIds(new Set(result.selected_assets.map((asset) => asset.asset_id)));
+                addToast({
+                  message: `Selected ${result.selected_assets.length} best photos`,
+                  variant: 'success',
+                });
+              }}
+              onSelectionChange={(selectedIds) => setSelectedAssetIds(new Set(selectedIds))}
+              className="max-h-[70vh] overflow-y-auto"
+            />
+          </ModalBody>
+        </Modal>
 
         {/* People Panel */}
         <PeoplePanel

@@ -6,7 +6,7 @@
  * AI-powered photo selection with quality and diversity controls
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Sparkles,
   Wand2,
@@ -22,7 +22,6 @@ import {
 import { AppButton } from '@/components/ui/AppButton';
 import { AIErrorBoundary, AISpinner } from './index';
 import { CurationService } from '@/services/curationService';
-import { useJobPolling } from '@/hooks/useJobPolling';
 import type { CurationResult, SmartCurationRequest } from '@/types/aiFeatures';
 
 // ---------------------------------------------------------------------------
@@ -77,79 +76,56 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
   const [diversityWeight, setDiversityWeight] = useState(0.3);
   const [preferPeople, setPreferPeople] = useState(false);
 
-  // Store job ID for polling
-  const jobIdRef = useRef<string | null>(null);
-
-  // Curation result state (separate from polling result for photo selection)
+  // Curation state
   const [curatedPhotos, setCuratedPhotos] = useState<CuratedPhoto[]>([]);
-
-  // Job polling hook
-  const {
-    result,
-    error,
-    startPolling,
-    reset: resetPolling,
-    isPolling,
-  } = useJobPolling<CurationResult>({
-    fetchStatus: async () => {
-      if (!jobIdRef.current) {
-        return { status: 'failed', message: 'No job ID' };
-      }
-      const response = await CurationService.getCurationJobStatus(workspaceId, jobIdRef.current);
-      return {
-        status: response.status as 'pending' | 'processing' | 'completed' | 'failed',
-        result: response.result,
-        message: response.message,
-      };
-    },
-    onComplete: (curationResult) => {
-      setCuratedPhotos(
-        curationResult.selected_assets.map((asset) => ({
-          ...asset,
-          isSelected: true,
-        }))
-      );
-      onCurationComplete?.(curationResult);
-    },
-  });
+  const [curationResult, setCurationResult] = useState<CurationResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isCurating, setIsCurating] = useState(false);
 
   // UI state
   const [showSettings, setShowSettings] = useState(false);
   const [showCountDropdown, setShowCountDropdown] = useState(false);
-  const [initiatingJob, setInitiatingJob] = useState(false);
-
-  // Compute isCurating from polling status
-  const isCurating = initiatingJob || isPolling;
 
   // Run curation
   const handleCurate = useCallback(async () => {
-    setInitiatingJob(true);
-    resetPolling();
+    setIsCurating(true);
+    setError(null);
+    setCurationResult(null);
     setCuratedPhotos([]);
 
     try {
       const request: SmartCurationRequest = {
-        criteria: {
-          quality_threshold: qualityThreshold,
-          diversity_weight: diversityWeight,
-        },
+        count,
+        quality_threshold: qualityThreshold,
+        diversity_weight: diversityWeight,
+        prefer_people: preferPeople,
       };
 
-      const jobResponse = await CurationService.curateGallery(workspaceId, galleryId, request);
-      jobIdRef.current = jobResponse.job_id;
-      setInitiatingJob(false);
-      startPolling();
+      const result = await CurationService.curateGallery(workspaceId, galleryId, request);
+      setCurationResult(result);
+      setCuratedPhotos(
+        result.selected_assets.map((asset) => ({
+          ...asset,
+          isSelected: true,
+        }))
+      );
+      onCurationComplete?.(result);
+      onSelectionChange?.(result.selected_assets.map((asset) => asset.asset_id));
     } catch (err) {
-      setInitiatingJob(false);
-      // Error will be captured by the polling hook
+      const message = err instanceof Error ? err.message : 'Smart curation failed';
+      setError(message);
+    } finally {
+      setIsCurating(false);
     }
   }, [
     workspaceId,
     galleryId,
+    count,
     qualityThreshold,
     diversityWeight,
-    startPolling,
-    resetPolling,
+    preferPeople,
+    onCurationComplete,
+    onSelectionChange,
   ]);
 
   // Toggle photo selection
@@ -186,9 +162,8 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
 
   // Re-run curation
   const handleRecurate = useCallback(() => {
-    resetPolling();
     handleCurate();
-  }, [handleCurate, resetPolling]);
+  }, [handleCurate]);
 
   const selectedCount = curatedPhotos.filter((p) => p.isSelected).length;
 
@@ -208,7 +183,7 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
               </p>
             </div>
           </div>
-          {!isCurating && !result && (
+          {!isCurating && !curationResult && (
             <AppButton
               variant="ghost"
               size="sm"
@@ -224,7 +199,7 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
         </div>
 
         {/* Settings */}
-        {showSettings && !isCurating && !result && (
+        {showSettings && !isCurating && !curationResult && (
           <div className="space-y-4 mb-6 pb-6 border-b border-border">
             {/* Count selector */}
             <div className="relative">
@@ -336,7 +311,7 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
         )}
 
         {/* Gallery info */}
-        {!isCurating && !result && (
+        {!isCurating && !curationResult && (
           <div className="flex items-center gap-2 text-sm text-text-secondary bg-background rounded-lg px-4 py-2 mb-6">
             <ImageIcon className="w-4 h-4" />
             <span>
@@ -364,13 +339,13 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
         )}
 
         {/* Results */}
-        {result && (
+        {curationResult && (
           <div className="mb-6">
             {/* Stats */}
             <div className="flex items-center justify-between mb-4">
               <div className="text-sm text-text-secondary">
                 Selected <strong className="text-text-primary">{selectedCount}</strong> of{' '}
-                {result.total_candidates} photos
+                {curationResult.total_candidates} photos
               </div>
               <div className="flex gap-2">
                 <AppButton variant="ghost" size="sm" onClick={selectAll}>
@@ -450,7 +425,7 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
         )}
 
         {/* Curate button */}
-        {!result && (
+        {!curationResult && (
           <AppButton
             variant="primary"
             fullWidth

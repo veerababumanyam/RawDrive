@@ -702,3 +702,144 @@ async def unpin_gallery(
             status_code=500,
         )
 
+
+@router.post(
+    "/{gallery_id}/scan-faces",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger face detection for all photos in gallery",
+    description="Queues face detection jobs for all photos in the gallery that haven't been processed yet.",
+    responses={
+        202: {
+            "description": "Face detection jobs queued successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "jobs_queued": 42,
+                        "already_processed": 10,
+                        "message": "Face detection started for 42 photos"
+                    }
+                }
+            }
+        },
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def scan_gallery_faces(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+) -> dict:
+    """Trigger face detection for all photos in a gallery."""
+    from app.services.face_detection_service import get_face_detection_service
+    from app.db.postgres import get_postgres_pool
+    
+    service = get_gallery_service()
+    face_service = get_face_detection_service()
+    
+    try:
+        # Verify gallery exists and user has access
+        gallery = await service.get_gallery(workspace_id, gallery_id)
+        if not gallery:
+            raise NotFoundError(message="Gallery not found")
+        
+        # Get all asset IDs from gallery_assets join table
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT ga.asset_id 
+                FROM gallery_assets ga
+                JOIN assets a ON a.asset_id = ga.asset_id
+                WHERE ga.workspace_id = $1 
+                AND ga.gallery_id = $2 
+                AND ga.deleted_at IS NULL
+                AND a.deleted = FALSE
+                AND a.mime_type LIKE 'image/%'
+                """,
+                workspace_id,
+                gallery_id,
+            )
+        
+        photo_ids = [row["asset_id"] for row in rows]
+        
+        if not photo_ids:
+            return {
+                "jobs_queued": 0,
+                "already_processed": 0,
+                "pending": 0,
+                "message": "No photos found in gallery"
+            }
+        
+        # Check which photos already have jobs (completed, pending, or processing)
+        async with pool.acquire() as conn:
+            existing_jobs = await conn.fetch(
+                """
+                SELECT photo_id, status 
+                FROM face_detection_jobs 
+                WHERE workspace_id = $1 AND photo_id = ANY($2::uuid[])
+                """,
+                workspace_id,
+                photo_ids,
+            )
+        
+        # Create lookup of existing job statuses
+        job_status_map = {row["photo_id"]: row["status"] for row in existing_jobs}
+        
+        # Categorize photos
+        completed_count = 0
+        pending_count = 0
+        photos_to_scan = []
+        
+        for photo_id in photo_ids:
+            status = job_status_map.get(photo_id)
+            if status == "completed":
+                completed_count += 1
+            elif status in ("pending", "processing"):
+                pending_count += 1
+            else:
+                # No job or failed - needs scanning
+                photos_to_scan.append(photo_id)
+        
+        # Only create jobs for photos that haven't been processed
+        jobs_queued = 0
+        for photo_id in photos_to_scan:
+            try:
+                await face_service.create_detection_job(
+                    workspace_id=workspace_id,
+                    photo_id=photo_id,
+                    priority=1,  # Higher priority for user-initiated scans
+                )
+                jobs_queued += 1
+            except Exception as e:
+                logger.warning(f"Failed to create detection job for {photo_id}: {e}")
+        
+        # Build response message
+        if jobs_queued > 0:
+            message = f"Scanning {jobs_queued} new photo{'s' if jobs_queued != 1 else ''}"
+        elif pending_count > 0:
+            message = f"Scan in progress ({pending_count} pending)"
+        elif completed_count == len(photo_ids):
+            message = "All photos already scanned"
+        else:
+            message = "No new photos to scan"
+        
+        return {
+            "jobs_queued": jobs_queued,
+            "already_processed": completed_count,
+            "pending": pending_count,
+            "total_photos": len(photo_ids),
+            "message": message
+        }
+    
+    except GalleryError as e:
+        raise AppError(message=str(e), code=e.code, status_code=e.status)
+    except Exception as e:
+        logger.exception("Failed to scan gallery faces")
+        raise AppError(
+            message="Failed to start face detection",
+            code="INTERNAL_ERROR",
+            status_code=500,
+        )
+

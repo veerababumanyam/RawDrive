@@ -15,6 +15,24 @@ import {
 } from 'lucide-react';
 import { GalleryAssetItem } from '../../../types/gallery';
 
+/**
+ * HoverOverlay Component
+ * 
+ * Provides interactive overlay controls for photo cards with enhanced glassmorphism styling.
+ * Uses centralized CSS classes from index.css for consistency across:
+ * - Library page
+ * - Gallery pages
+ * - Recycle bin
+ * - Invitation photo uploads
+ * 
+ * CSS Classes (defined in index.css):
+ * - .photo-card-top-btn: Base glass button styling
+ * - .btn-favorite: Favorite button with heart icon
+ * - .btn-customer-select: Customer selection/pick button (green when active)
+ * - .btn-management-select: Management selection for bulk operations (blue when active)
+ * - .photo-card-action-bar: Bottom floating action bar
+ * - .photo-card-action-btn: Individual action buttons
+ */
 export interface HoverOverlayProps {
   asset: GalleryAssetItem;
   index: number;
@@ -72,7 +90,7 @@ export const HoverOverlay: React.FC<HoverOverlayProps> = ({
           <button
             className={`
               photo-card-top-btn btn-management-select
-              ${isManagementSelected ? 'active always-visible bg-primary text-white' : 'bg-black/40'}
+              ${isManagementSelected ? 'active always-visible' : ''}
               ${!isManagementSelected && !isHovered ? 'opacity-0' : 'opacity-100'}
               transition-all duration-200
             `}
@@ -90,7 +108,7 @@ export const HoverOverlay: React.FC<HoverOverlayProps> = ({
 
       {/* Top-Right Controls - Favorite & Customer Selection */}
       <div className="absolute top-3 right-3 flex flex-col gap-2 z-30">
-        {/* Favorite Button */}
+        {/* Favorite Button - Enhanced with glow effect when active */}
         {onFavorite && (
           <button
             className={`
@@ -110,12 +128,13 @@ export const HoverOverlay: React.FC<HoverOverlayProps> = ({
           </button>
         )}
 
-        {/* Customer Selection Toggle (for delivery workflow - persisted) */}
+        {/* Customer Selection Toggle (for delivery workflow - persisted) 
+            Enhanced with green glow for clear visibility */}
         {showCustomerSelection && onCustomerSelectionToggle && (
           <button
             className={`
               photo-card-top-btn btn-customer-select
-              ${asset.is_selected ? 'active always-visible bg-success text-white' : 'bg-black/40'}
+              ${asset.is_selected ? 'active always-visible' : ''}
               ${!asset.is_selected && !isHovered ? 'opacity-0' : 'opacity-100'}
               transition-all duration-200
             `}
@@ -125,7 +144,7 @@ export const HoverOverlay: React.FC<HoverOverlayProps> = ({
             title={asset.is_selected ? 'Remove from client picks' : 'Mark as client pick'}
             tabIndex={isHovered || asset.is_selected ? 0 : -1}
           >
-            <span className="photo-card-tooltip">{asset.is_selected ? 'Remove pick' : 'Client pick'}</span>
+            <span className="photo-card-tooltip">{asset.is_selected ? 'Remove Pick' : 'Client Pick'}</span>
             <Bookmark size={20} className={asset.is_selected ? "fill-current" : ""} />
           </button>
         )}

@@ -49,7 +49,14 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
       text: 'Connection Failed',
       className: 'bg-error/10 text-error border-error/20',
     },
+    unknown: {
+      icon: AlertCircle,
+      text: 'Unknown',
+      className: 'bg-surface-secondary/50 text-text-secondary border-border',
+    },
   }[status];
+
+  if (!config) return null;
 
   const Icon = config.icon;
 

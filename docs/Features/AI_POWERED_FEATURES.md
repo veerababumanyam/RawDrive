@@ -529,6 +529,7 @@ Settings > AI & Gemini Settings > AI Features section
 - Toggles require valid Gemini API key to be configured
 - Changes are audited for compliance
 - Toggles persist after API key revocation (preference preserved)
+- Gallery detail action bar surfaces **AI Story** and **Smart Curation** when toggles are enabled and an AI API key is present (Profile > AI API key)
 
 ## AI Usage Analytics
 
@@ -669,4 +670,4 @@ Ensure AI features are accessible.
 
 ## Last Updated
 
-2025-12-17
+2026-01-03

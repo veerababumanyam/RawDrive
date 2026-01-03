@@ -297,7 +297,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
         cursor-pointer
         bg-neutral-100 dark:bg-neutral-800
         transition-all duration-200 ease-out
-        ${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}
+        ${isSelected ? 'ring-3 ring-primary ring-offset-2 shadow-lg shadow-primary/20' : ''}
         hover:shadow-lg
       `}
       role="gridcell"
@@ -389,34 +389,31 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
         </div>
       )}
 
-      {/* Selection checkbox */}
+      {/* Selection checkbox - Using centralized photo-card-top-btn style */}
       {selectable && (
         <div
           className={`
             absolute top-2 left-2 z-10
-            transition-opacity duration-150
+            transition-opacity duration-200
             ${isSelected || isHovered ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
           `}
           onClick={(e) => e.stopPropagation()}
         >
-          <div
+          <button
             className={`
-              w-6 h-6
-              rounded-full
-              flex items-center justify-center
-              transition-all duration-150
-              ${isSelected
-                ? 'bg-primary text-white'
-                : 'bg-black/50 text-white hover:bg-black/70'}
+              photo-card-top-btn btn-management-select
+              ${isSelected ? 'active' : ''}
+              w-7 h-7
             `}
             onClick={(e) => onSelect(photo.id, e)}
+            aria-label={isSelected ? 'Deselect' : 'Select'}
           >
             {isSelected && <Check size={14} strokeWidth={3} />}
-          </div>
+          </button>
         </div>
       )}
 
-      {/* Hover overlay with actions */}
+      {/* Hover overlay with actions - Using centralized styles */}
       {showActions && (
         <div
           className={`
@@ -427,17 +424,15 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
             flex flex-col justify-end p-3
           `}
         >
-          {/* Default actions */}
+          {/* Default actions - Using centralized button styles */}
           {!actions && (
             <div className="flex items-center gap-2">
               {onFavorite && (
                 <button
                   className={`
-                    p-1.5 rounded-full
-                    ${photo.metadata?.isFavorite
-                      ? 'bg-red-500 text-white'
-                      : 'bg-white/20 hover:bg-white/30 text-white'}
-                    transition-colors
+                    photo-card-action-btn btn-favorite
+                    ${photo.metadata?.isFavorite ? 'active' : ''}
+                    w-8 h-8
                   `}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -450,12 +445,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
               )}
               {onDownload && (
                 <button
-                  className="
-                    p-1.5 rounded-full
-                    bg-white/20 hover:bg-white/30
-                    text-white
-                    transition-colors
-                  "
+                  className="photo-card-action-btn w-8 h-8"
                   onClick={(e) => {
                     e.stopPropagation();
                     onDownload(photo.id);
@@ -467,13 +457,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
               )}
               {onMore && (
                 <button
-                  className="
-                    p-1.5 rounded-full
-                    bg-white/20 hover:bg-white/30
-                    text-white
-                    transition-colors
-                    ml-auto
-                  "
+                  className="photo-card-action-btn w-8 h-8 ml-auto"
                   onClick={(e) => {
                     e.stopPropagation();
                     onMore(photo.id);

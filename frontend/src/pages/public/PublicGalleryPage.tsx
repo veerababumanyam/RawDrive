@@ -363,7 +363,7 @@ const PublicGalleryPage: React.FC = () => {
     const displayedAssets = useMemo(() => {
         let result = assets;
         
-        // Filter out private photos unless unlocked via PIN
+        // Hide private photos if not unlocked
         if (!isPrivateUnlocked) {
             result = result.filter(asset => !asset.is_private);
         }
@@ -598,6 +598,28 @@ const PublicGalleryPage: React.FC = () => {
         }
     }, [gallery, galleryId, activeTab, displayedAssets, localSelections, localFavorites]);
 
+    const company_profile = gallery?.company_profile;
+    // Priority: gallery override > company profile > default
+    const activeColor = gallery?.primary_color || company_profile?.brand_color || '#6366f1';
+    const fontFamily = gallery?.font_family || 'inherit';
+
+    // Construct cover URL
+    const coverUrl = gallery?.cover_asset_id
+        ? `/api/v1/public/galleries/${gallery.gallery_id}/assets/${gallery.cover_asset_id}/preview`
+        : null;
+
+    // Compute gradient CSS for hero section
+    const heroGradientStyle = useMemo(() => {
+        if (gallery?.gradient_config && isValidGradientConfig(gallery.gradient_config)) {
+            return gradientToCss(gallery.gradient_config);
+        }
+        // Fallback to primary color or default gradient
+        if (activeColor && activeColor !== '#6366f1') {
+            return `linear-gradient(135deg, ${activeColor} 0%, ${activeColor}dd 100%)`;
+        }
+        return 'linear-gradient(135deg, #1f2937 0%, #111827 100%)';
+    }, [gallery?.gradient_config, activeColor]);
+
     // Show expired state
     if (isExpired && gallery) {
         return (
@@ -645,28 +667,6 @@ const PublicGalleryPage: React.FC = () => {
             </div>
         );
     }
-
-    const { company_profile } = gallery;
-    // Priority: gallery override > company profile > default
-    const activeColor = gallery.primary_color || company_profile?.brand_color || '#6366f1';
-    const fontFamily = gallery.font_family || 'inherit';
-
-    // Construct cover URL
-    const coverUrl = gallery.cover_asset_id
-        ? `/api/v1/public/galleries/${gallery.gallery_id}/assets/${gallery.cover_asset_id}/preview`
-        : null;
-
-    // Compute gradient CSS for hero section
-    const heroGradientStyle = useMemo(() => {
-        if (gallery.gradient_config && isValidGradientConfig(gallery.gradient_config)) {
-            return gradientToCss(gallery.gradient_config);
-        }
-        // Fallback to primary color or default gradient
-        if (activeColor && activeColor !== '#6366f1') {
-            return `linear-gradient(135deg, ${activeColor} 0%, ${activeColor}dd 100%)`;
-        }
-        return 'linear-gradient(135deg, #1f2937 0%, #111827 100%)';
-    }, [gallery.gradient_config, activeColor]);
 
     return (
         <div
@@ -1307,17 +1307,10 @@ const PublicGalleryPage: React.FC = () => {
                                 showWatermark={gallery?.download_policy === 'view_only' || gallery?.download_policy === 'watermarked_only'}
                                 isPrivateUnlocked={isPrivateUnlocked}
                                 onUnlockPrivate={() => {
-                                    console.log('[PublicGalleryPage] onUnlockPrivate called!', { 
-                                        pin_protected: gallery?.pin_protected,
-                                        isPrivateUnlocked,
-                                        isPinVerified
-                                    });
                                     if (gallery?.pin_protected) {
-                                        console.log('[PublicGalleryPage] Opening PIN modal for private unlock...');
                                         setPinModalMode('private');
                                         setShowPinModal(true);
                                     } else {
-                                        console.log('[PublicGalleryPage] Gallery not PIN protected, showing toast');
                                         addToast({
                                             message: 'This photo is private. Please contact the photographer to view this content.',
                                             variant: 'info',

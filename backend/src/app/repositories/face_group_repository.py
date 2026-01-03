@@ -133,7 +133,7 @@ class FaceGroupRepository:
                 extra={
                     "group_id": str(result["id"]),
                     "workspace_id": str(workspace_id),
-                    "name": name,
+                    "group_name": name,
                 },
             )
             

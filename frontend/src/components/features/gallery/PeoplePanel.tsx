@@ -1,6 +1,7 @@
 /**
  * PeoplePanel Component
  * Displays detected faces grouped by person for a gallery
+ * Shows only people who appear in this specific gallery (gallery-scoped)
  * Allows filtering photos by person and managing face groups
  */
 
@@ -9,7 +10,7 @@ import { X, Users, Search, ChevronRight, Loader2, UserCircle, RefreshCw, CheckCi
 import { AppButton } from '../../ui/AppButton';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../ui/Toast';
-import { faceApiService, FaceGroup, MergeSuggestion } from '../../../services/faceApiService';
+import { faceApiService, FaceGroupWithGalleryStats, MergeSuggestion } from '../../../services/faceApiService';
 import { FaceGroupMergeModal } from './FaceGroupMergeModal';
 import { FaceGroupDetailPanel } from './FaceGroupDetailPanel';
 
@@ -28,7 +29,7 @@ interface PeoplePanelProps {
 }
 
 export const PeoplePanel: React.FC<PeoplePanelProps> = ({
-    galleryId: _galleryId, // Reserved for future gallery-specific filtering
+    galleryId,
     isOpen,
     onClose,
     onFilterByPerson,
@@ -36,8 +37,14 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
     const { workspace } = useAuth();
     const { addToast } = useToast();
 
-    const [groups, setGroups] = useState<FaceGroup[]>([]);
+    // Use gallery-scoped face groups with gallery-specific stats
+    const [groups, setGroups] = useState<FaceGroupWithGalleryStats[]>([]);
     const [loading, setLoading] = useState(false);
+    const [scanStatus, setScanStatus] = useState<{
+        scanning: boolean;
+        message?: string;
+        pending?: number;
+    }>({ scanning: false });
     const [searchQuery, setSearchQuery] = useState('');
     const [editingName, setEditingName] = useState<string | null>(null);
     const [newName, setNewName] = useState('');
@@ -51,16 +58,20 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
     const [mergeSuggestions, setMergeSuggestions] = useState<MergeSuggestion[]>([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
-    // Fetch face groups
+    // Fetch face groups for THIS GALLERY (gallery-scoped, not workspace-wide)
     const fetchGroups = useCallback(async () => {
-        if (!workspace?.workspace_id) return;
+        if (!workspace?.workspace_id || !galleryId) return;
 
         setLoading(true);
         try {
-            const result = await faceApiService.getFaceGroups(workspace.workspace_id, {
-                minFaces: 1,
-                limit: FACE_GROUPS_LIMIT,
-            });
+            // Use gallery-scoped API to only show people in this gallery
+            const result = await faceApiService.getGalleryFaceGroups(
+                workspace.workspace_id,
+                galleryId,
+                {
+                    limit: FACE_GROUPS_LIMIT,
+                }
+            );
             setGroups(result.groups);
         } catch (error) {
             console.error('Failed to fetch face groups:', error);
@@ -71,14 +82,90 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
         } finally {
             setLoading(false);
         }
-    }, [workspace?.workspace_id, addToast]);
+    }, [workspace?.workspace_id, galleryId, addToast]);
 
-    // Fetch on open
+    // Auto-scan gallery for new unscanned faces (smart incremental scan)
+    const autoScanGallery = useCallback(async () => {
+        if (!workspace?.workspace_id || !galleryId) return;
+
+        setScanStatus({ scanning: true, message: 'Checking for new photos...' });
+        try {
+            const result = await faceApiService.scanGalleryFaces(workspace.workspace_id, galleryId);
+            
+            // Update status based on response
+            if (result.jobs_queued > 0) {
+                setScanStatus({ 
+                    scanning: true, 
+                    message: result.message,
+                    pending: result.jobs_queued + (result.pending || 0)
+                });
+                // Poll for completion if jobs were queued
+                pollForCompletion();
+            } else if (result.pending > 0) {
+                setScanStatus({ 
+                    scanning: true, 
+                    message: `Processing ${result.pending} photo${result.pending !== 1 ? 's' : ''}...`,
+                    pending: result.pending
+                });
+                pollForCompletion();
+            } else {
+                // All photos already scanned
+                setScanStatus({ scanning: false });
+            }
+        } catch (error) {
+            console.error('Failed to auto-scan gallery:', error);
+            setScanStatus({ scanning: false });
+            // Don't show error toast for auto-scan - it's background operation
+        }
+    }, [workspace?.workspace_id, galleryId]);
+
+    // Poll for scan completion and refresh groups
+    const pollForCompletion = useCallback(() => {
+        let pollCount = 0;
+        const maxPolls = 60; // 5 minutes max (5 sec intervals)
+        
+        const pollInterval = setInterval(async () => {
+            pollCount++;
+            
+            if (!workspace?.workspace_id || pollCount > maxPolls) {
+                clearInterval(pollInterval);
+                setScanStatus({ scanning: false });
+                return;
+            }
+            
+            try {
+                // Check scan status
+                const result = await faceApiService.scanGalleryFaces(workspace.workspace_id, galleryId);
+                
+                if (result.jobs_queued === 0 && (result.pending || 0) === 0) {
+                    // Scanning complete - refresh groups
+                    clearInterval(pollInterval);
+                    setScanStatus({ scanning: false });
+                    fetchGroups();
+                } else {
+                    setScanStatus({
+                        scanning: true,
+                        message: `Processing ${result.pending || 0} photo${(result.pending || 0) !== 1 ? 's' : ''}...`,
+                        pending: result.pending || 0
+                    });
+                }
+            } catch (error) {
+                // Ignore polling errors
+            }
+        }, 5000); // Poll every 5 seconds
+        
+        // Cleanup on unmount
+        return () => clearInterval(pollInterval);
+    }, [workspace?.workspace_id, galleryId, fetchGroups]);
+
+    // Fetch on open and auto-trigger scan for new photos
     useEffect(() => {
         if (isOpen) {
             fetchGroups();
+            // Auto-scan for new unscanned photos (smart - only scans new ones)
+            autoScanGallery();
         }
-    }, [isOpen, fetchGroups]);
+    }, [isOpen, fetchGroups, autoScanGallery]);
 
     // Fetch merge suggestions when entering selection mode
     const fetchMergeSuggestions = useCallback(async () => {
@@ -331,6 +418,16 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                         </div>
                     )}
 
+                    {/* Scan Status Indicator */}
+                    {scanStatus.scanning && (
+                        <div className="mb-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                            <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>{scanStatus.message || 'Scanning for faces...'}</span>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Search */}
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
@@ -458,7 +555,7 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
 
 // PersonCard subcomponent
 interface PersonCardProps {
-    group: FaceGroup;
+    group: FaceGroupWithGalleryStats;
     index: number;
     isEditing: boolean;
     editName: string;
@@ -601,9 +698,9 @@ const PersonCard: React.FC<PersonCardProps> = memo(({
                 </span>
             )}
 
-            {/* Face count */}
+            {/* Face count - show gallery-specific count */}
             <span className="text-xs text-text-tertiary">
-                {group.face_count} {group.face_count === 1 ? 'photo' : 'photos'}
+                {group.gallery_photo_count ?? group.face_count} {(group.gallery_photo_count ?? group.face_count) === 1 ? 'photo' : 'photos'}
             </span>
 
             {/* Hover actions (when not in selection mode) */}

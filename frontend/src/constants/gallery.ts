@@ -37,6 +37,9 @@ export const PASSWORD_VERIFIED_KEY_PREFIX = 'password_verified_';
 /** Prefix for private photos unlock status in localStorage */
 export const PRIVATE_UNLOCKED_KEY_PREFIX = 'private_unlocked_';
 
+/** Prefix for private photos unlock status for ADMIN (workspace) in localStorage */
+export const ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX = 'admin_private_unlocked_';
+
 // =============================================================================
 // Gallery Grid Configuration
 // =============================================================================

@@ -288,8 +288,8 @@ class AppSettings(BaseSettings):
         self.api_port = self.validate_ports(self.api_port)
         _, _ = self.validate_pool_bounds(self.db_pool_min_size, self.db_pool_max_size)
         
-        # Set default CORS origins for development
-        if self.app_env == Environment.DEVELOPMENT and not self.allowed_cors_origins:
+        # Set default CORS origins for local development and tests when not explicitly configured
+        if self.app_env in {Environment.DEVELOPMENT, Environment.TEST} and not self.allowed_cors_origins:
             self.allowed_cors_origins = [
                 "http://localhost:5173",
                 "http://localhost:3000",

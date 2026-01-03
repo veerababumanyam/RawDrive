@@ -77,13 +77,15 @@ export interface GenerateHashtagsRequest {
 export interface GenerateStoryRequest {
   length: 'short' | 'medium' | 'long';
   tone: 'professional' | 'casual' | 'poetic' | 'journalistic';
+  custom_context?: string;
 }
 
 export interface SmartCurationRequest {
-  criteria?: {
-    quality_threshold?: number;
-    diversity_weight?: number;
-  };
+  count?: number;
+  quality_threshold?: number;
+  diversity_weight?: number;
+  prefer_people?: boolean;
+  exclude_asset_ids?: string[];
 }
 
 // Job Response for async operations

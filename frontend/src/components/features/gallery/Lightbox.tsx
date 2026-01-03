@@ -667,14 +667,20 @@ export const Lightbox: React.FC<LightboxProps> = ({
             </AppButton>
           </div>
 
-          {/* Right: Actions */}
+          {/* Right: Actions - Enhanced with glassmorphism styles for consistency */}
           <div className="flex items-center gap-2">
             {onFavorite && (
               <AppButton
                 variant="ghost"
                 size="icon"
                 onClick={() => onFavorite(currentAsset.asset_id, !isFavorite)}
-                className={`${isFavorite ? 'text-error' : 'text-white'} hover:bg-white/20 border-white/20`}
+                className={`
+                  ${isFavorite 
+                    ? 'bg-error/90 text-white hover:bg-error shadow-lg shadow-error/30' 
+                    : 'text-white hover:bg-white/20 border-white/20'
+                  }
+                  transition-all duration-200
+                `}
                 aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
               >
                 <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
@@ -688,7 +694,13 @@ export const Lightbox: React.FC<LightboxProps> = ({
                   // Toggle selection - onSelect expects assetId, parent handles toggle logic
                   onSelect(currentAsset.asset_id);
                 }}
-                className={`${isSelected ? 'text-primary' : 'text-white'} hover:bg-white/20 border-white/20`}
+                className={`
+                  ${isSelected 
+                    ? 'bg-success/90 text-white hover:bg-success shadow-lg shadow-success/30' 
+                    : 'text-white hover:bg-white/20 border-white/20'
+                  }
+                  transition-all duration-200
+                `}
                 aria-label={isSelected ? 'Deselect' : 'Select'}
               >
                 <CheckSquare size={20} fill={isSelected ? 'currentColor' : 'none'} />

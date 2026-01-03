@@ -4,7 +4,9 @@ import React, { ReactNode } from 'react';
    GlassContainer Component
 
    Container for public profile pages with animated gradient background orbs.
-   Supports both light and dark themes.
+   Supports both light and dark themes with backdrop-filter fallbacks.
+
+   Feature: 021-public-profile-mobile-responsive-theme
    ============================================================================= */
 
 interface GlassContainerProps {
@@ -13,76 +15,111 @@ interface GlassContainerProps {
   themeGradient?: string;
 }
 
-export const GlassContainer: React.FC<GlassContainerProps> = ({ 
-  children, 
+export const GlassContainer: React.FC<GlassContainerProps> = ({
+  children,
   className = '',
-  themeGradient 
+  themeGradient
 }) => {
   return (
-    <div 
+    <div
       className={`
         relative w-full min-h-screen overflow-x-hidden
-        bg-gradient-to-br from-blue-50 via-cyan-50 to-white
-        dark:from-gray-950 dark:via-gray-900 dark:to-gray-950
-        transition-colors duration-500
+        bg-gradient-to-br from-slate-50 via-blue-50/50 to-cyan-50/30
+        dark:from-gray-950 dark:via-slate-900 dark:to-gray-900
+        transition-colors duration-300
         ${className}
       `}
       style={themeGradient ? { background: themeGradient } : undefined}
     >
-      {/* Animated Background Orbs - Theme aware */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        {/* Primary orb */}
-        <div 
+      {/* Animated Background Orbs - Theme aware with mobile optimization */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0" aria-hidden="true">
+        {/* Primary orb - Reduced size on mobile for performance */}
+        <div
           className="
-            absolute top-[-10%] left-[-10%] 
-            w-[40vw] h-[40vw] sm:w-[50vw] sm:h-[50vw]
-            rounded-full filter blur-[60px] sm:blur-[80px]
+            absolute -top-[15%] -left-[15%]
+            w-[60vw] h-[60vw]
+            sm:w-[50vw] sm:h-[50vw]
+            lg:w-[40vw] lg:h-[40vw]
+            rounded-full
+            blur-[60px] sm:blur-[80px] lg:blur-[100px]
             animate-blob motion-reduce:animate-none
             mix-blend-multiply dark:mix-blend-screen
-            opacity-60 dark:opacity-30
+            opacity-50 dark:opacity-20
+            will-change-transform
           "
           style={{ backgroundColor: 'var(--theme-primary, #60A5FA)' }}
         />
         {/* Accent orb */}
-        <div 
+        <div
           className="
-            absolute top-[-10%] right-[-10%] 
-            w-[40vw] h-[40vw] sm:w-[50vw] sm:h-[50vw]
-            rounded-full filter blur-[60px] sm:blur-[80px]
+            absolute -top-[10%] -right-[15%]
+            w-[55vw] h-[55vw]
+            sm:w-[45vw] sm:h-[45vw]
+            lg:w-[35vw] lg:h-[35vw]
+            rounded-full
+            blur-[60px] sm:blur-[80px] lg:blur-[100px]
             animate-blob animation-delay-2000 motion-reduce:animate-none
             mix-blend-multiply dark:mix-blend-screen
-            opacity-60 dark:opacity-30
+            opacity-50 dark:opacity-20
+            will-change-transform
           "
           style={{ backgroundColor: 'var(--theme-accent, #22D3EE)' }}
         />
         {/* Secondary orb */}
-        <div 
+        <div
           className="
-            absolute bottom-[-10%] left-[20%] 
-            w-[40vw] h-[40vw] sm:w-[50vw] sm:h-[50vw]
-            rounded-full filter blur-[60px] sm:blur-[80px]
+            absolute -bottom-[20%] left-[10%]
+            w-[50vw] h-[50vw]
+            sm:w-[40vw] sm:h-[40vw]
+            lg:w-[35vw] lg:h-[35vw]
+            rounded-full
+            blur-[60px] sm:blur-[80px] lg:blur-[100px]
             animate-blob animation-delay-4000 motion-reduce:animate-none
             mix-blend-multiply dark:mix-blend-screen
-            opacity-60 dark:opacity-30
+            opacity-40 dark:opacity-15
+            will-change-transform
           "
-          style={{ backgroundColor: 'var(--theme-secondary, #94A3B8)' }}
+          style={{ backgroundColor: 'var(--theme-secondary, #A78BFA)' }}
+        />
+        {/* Subtle bottom-right accent */}
+        <div
+          className="
+            hidden sm:block
+            absolute -bottom-[10%] -right-[10%]
+            w-[30vw] h-[30vw]
+            rounded-full
+            blur-[80px]
+            animate-blob animation-delay-4000 motion-reduce:animate-none
+            mix-blend-multiply dark:mix-blend-screen
+            opacity-30 dark:opacity-10
+            will-change-transform
+          "
+          style={{ backgroundColor: 'var(--theme-primary, #60A5FA)' }}
         />
       </div>
 
-      {/* Glass Layer */}
-      <div className="relative z-10 w-full min-h-screen backdrop-blur-[2px]">
+      {/* Glass Overlay Layer - subtle blur for depth */}
+      <div className="relative z-10 w-full min-h-screen">
         {children}
       </div>
 
       <style>{`
         @keyframes blob {
-          0% { transform: translate(0px, 0px) scale(1); }
-          33% { transform: translate(30px, -50px) scale(1.1); }
-          66% { transform: translate(-20px, 20px) scale(0.9); }
-          100% { transform: translate(0px, 0px) scale(1); }
+          0%, 100% {
+            transform: translate(0, 0) scale(1);
+          }
+          25% {
+            transform: translate(20px, -30px) scale(1.05);
+          }
+          50% {
+            transform: translate(-15px, 15px) scale(0.95);
+          }
+          75% {
+            transform: translate(10px, 20px) scale(1.02);
+          }
         }
         .animate-blob {
-          animation: blob 7s infinite;
+          animation: blob 12s ease-in-out infinite;
         }
         .animation-delay-2000 {
           animation-delay: 2s;
@@ -92,8 +129,12 @@ export const GlassContainer: React.FC<GlassContainerProps> = ({
         }
         @media (prefers-reduced-motion: reduce) {
           .animate-blob {
-            animation: none;
+            animation: none !important;
           }
+        }
+        /* GPU acceleration hint */
+        .will-change-transform {
+          will-change: transform;
         }
       `}</style>
     </div>

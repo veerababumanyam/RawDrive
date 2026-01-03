@@ -37,7 +37,7 @@ export interface GeminiModelAdmin extends GeminiModel {
 /**
  * User's Gemini configuration status
  */
-export type GeminiSettingsStatus = 'not_configured' | 'connected' | 'validation_failed';
+export type GeminiSettingsStatus = 'not_configured' | 'connected' | 'validation_failed' | 'unknown';
 
 /**
  * User's Gemini settings response

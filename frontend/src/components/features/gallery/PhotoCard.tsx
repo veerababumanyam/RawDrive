@@ -181,6 +181,13 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   // Use signed URL if available, fallback to cached thumbnail_url
   const displayUrl = thumbnailUrl || asset.asset.thumbnail_url || undefined;
 
+  // Build dynamic class names for selection/favorite states
+  const selectionClasses = [
+    isManagementSelected ? 'photo-card-selected' : '',
+    asset.is_favorited ? 'photo-card-favorited' : '',
+    asset.is_selected ? 'photo-card-selected' : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <div
       className={`
@@ -189,9 +196,11 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         cursor-pointer
         bg-surface-hover
         transition-all duration-200 ease-out
-        ${isManagementSelected ? 'ring-2 ring-primary ring-offset-2' : ''}
+        ${isManagementSelected ? 'ring-3 ring-primary ring-offset-2 shadow-lg shadow-primary/20' : ''}
+        ${asset.is_selected ? 'ring-3 ring-success ring-offset-2 shadow-lg shadow-success/20' : ''}
         hover:shadow-card-hover
         select-none
+        ${selectionClasses}
         ${className}
       `}
       style={{ aspectRatio }}
@@ -208,8 +217,8 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           onClick?.(asset, index, syntheticEvent);
         }
       }}
-      aria-selected={isManagementSelected}
-      aria-label={`Photo ${index + 1}: ${asset.asset.filename || 'Untitled'}`}
+      aria-selected={isManagementSelected || asset.is_selected}
+      aria-label={`Photo ${index + 1}: ${asset.asset.filename || 'Untitled'}${asset.is_favorited ? ' (Favorited)' : ''}${asset.is_selected ? ' (Selected)' : ''}`}
     >
       {isEditing && (
         <InlineEditForm

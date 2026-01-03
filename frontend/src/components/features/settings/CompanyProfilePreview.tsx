@@ -384,28 +384,23 @@ export const CompanyProfilePreview: React.FC<CompanyProfilePreviewProps> = ({
     }
   }, [profile?._theme, profile?._themeCustomization?.custom_typography]);
 
-  // Generate CSS variables from theme and customization
-  const themeStyles = useMemo(() => {
+  // Generate theme colors object for PublicProfileLayout
+  const themeColors = useMemo(() => {
     const theme = profile?._theme;
     const customization = profile?._themeCustomization;
 
-    if (!theme) return {};
+    if (!theme) return undefined;
 
     // Get effective colors (customization overrides theme defaults)
     const colors = customization?.custom_colors || theme.base_colors;
-    const typography = customization?.custom_typography || theme.default_typography;
-
+    
     return {
-      '--theme-primary': colors?.primary || '#2563EB',
-      '--theme-secondary': colors?.secondary || '#64748B',
-      '--theme-accent': colors?.accent || '#06B6D4',
-      '--theme-font-heading': typography?.heading_font?.family
-        ? `"${typography.heading_font.family}", ${typography.heading_font.fallback?.join(', ') || 'sans-serif'}`
-        : '"Inter", sans-serif',
-      '--theme-font-body': typography?.body_font?.family
-        ? `"${typography.body_font.family}", ${typography.body_font.fallback?.join(', ') || 'sans-serif'}`
-        : '"Inter", sans-serif',
-    } as React.CSSProperties;
+      primary: colors?.primary || '#2563EB',
+      secondary: colors?.secondary || '#64748B',
+      accent: colors?.accent || '#06B6D4',
+      background: '#F8FAFC', // Default background, can be enhanced later if added to schema
+      text: '#0F172A', // Default or from theme if available
+    };
   }, [profile?._theme, profile?._themeCustomization]);
 
   // Generate QR code URL if slug exists
@@ -433,7 +428,6 @@ export const CompanyProfilePreview: React.FC<CompanyProfilePreviewProps> = ({
   const renderProfileContent = () => (
     <div
       className="h-full flex flex-col bg-gray-50 dark:bg-gray-950 overflow-y-auto"
-      style={themeStyles}
     >
       <div
         className="flex-1 flex flex-col h-full bg-white dark:bg-gray-900 overflow-hidden shadow-sm"
@@ -444,11 +438,7 @@ export const CompanyProfilePreview: React.FC<CompanyProfilePreviewProps> = ({
           showActions={false}
           slug={profile?.slug}
           compact={deviceMode === 'phone'}
-          themeColors={profile?._theme ? {
-            primary: (profile._themeCustomization?.custom_colors?.primary || profile._theme.base_colors.primary),
-            secondary: (profile._themeCustomization?.custom_colors?.secondary || profile._theme.base_colors.secondary),
-            accent: (profile._themeCustomization?.custom_colors?.accent || profile._theme.base_colors.accent),
-          } : undefined}
+          themeColors={themeColors} // Pass the computed theme styles directly
           themeTypography={profile?._theme ? {
             headingFont: profile._themeCustomization?.custom_typography?.heading_font?.family
               ? `"${profile._themeCustomization.custom_typography.heading_font.family}", ${profile._themeCustomization.custom_typography.heading_font.fallback?.join(', ') || 'sans-serif'}`

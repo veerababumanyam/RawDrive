@@ -47,29 +47,6 @@ export const GalleryStoryPanel: React.FC<GalleryStoryPanelProps> = ({
   const [length, setLength] = useState<StoryLength>('medium');
   const [tone, setTone] = useState<StoryTone>('professional');
 
-  const pollJobStatus = useCallback(async (jobId: string): Promise<StoryResult | null> => {
-    const maxAttempts = 60; // 5 minutes max
-    let attempts = 0;
-
-    while (attempts < maxAttempts) {
-      const status = await StoryService.getStoryJobStatus(workspaceId, jobId);
-
-      if (status.status === 'completed' && status.result) {
-        return status.result;
-      }
-
-      if (status.status === 'failed') {
-        throw new Error(status.message || 'Story generation failed');
-      }
-
-      // Wait 5 seconds before polling again
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      attempts++;
-    }
-
-    throw new Error('Story generation timed out');
-  }, [workspaceId]);
-
   const handleGenerate = useCallback(async () => {
     if (photoCount < 3) {
       addToast({ message: 'Need at least 3 photos to generate a story', variant: 'warning' });
@@ -78,19 +55,14 @@ export const GalleryStoryPanel: React.FC<GalleryStoryPanelProps> = ({
 
     setIsGenerating(true);
     setError(null);
+    setStory(null);
 
     try {
       const request: GenerateStoryRequest = { length, tone };
-      const job = await StoryService.generateStory(workspaceId, galleryId, request);
-
-      // Poll for completion
-      const result = await pollJobStatus(job.job_id);
-
-      if (result) {
-        setStory(result);
-        onStoryGenerated?.(result);
-        addToast({ message: 'Story generated successfully', variant: 'success' });
-      }
+      const result = await StoryService.generateStory(workspaceId, galleryId, request);
+      setStory(result);
+      onStoryGenerated?.(result);
+      addToast({ message: 'Story generated successfully', variant: 'success' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to generate story';
       setError(message);
@@ -98,7 +70,7 @@ export const GalleryStoryPanel: React.FC<GalleryStoryPanelProps> = ({
     } finally {
       setIsGenerating(false);
     }
-  }, [workspaceId, galleryId, length, tone, photoCount, pollJobStatus, onStoryGenerated, addToast]);
+  }, [workspaceId, galleryId, length, tone, photoCount, onStoryGenerated, addToast]);
 
   const handleCopy = useCallback(async () => {
     if (!story) return;
@@ -113,7 +85,7 @@ export const GalleryStoryPanel: React.FC<GalleryStoryPanelProps> = ({
     }
   }, [story, addToast]);
 
-  const wordCount = story ? story.story.split(/\s+/).length : 0;
+  const wordCount = story?.word_count ?? (story ? story.story.split(/\s+/).length : 0);
 
   return (
     <div className="bg-surface rounded-card border border-border p-6">

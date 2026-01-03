@@ -252,9 +252,9 @@ class ContentDetectionService:
         """
         # T040: Deduplication check - skip if already completed
         if not force:
-            analysis = await self.asset_analysis_repo.get_by_asset_id(
-                workspace_id=workspace_id,
+            analysis = await self.asset_analysis_repo.find_by_asset_id(
                 asset_id=asset_id,
+                workspace_id=workspace_id,
             )
             if analysis and analysis.get("vision_status") == "completed":
                 logger.debug(
@@ -301,12 +301,12 @@ class ContentDetectionService:
                 "Content detection job queued",
                 extra={
                     "asset_id": str(asset_id),
-                    "job_id": str(job["id"]),
+                    "job_id": str(job),
                     "priority": priority,
                     "force": force,
                 },
             )
-            return job["id"]
+            return job
 
         logger.debug(
             "Content detection job already exists",

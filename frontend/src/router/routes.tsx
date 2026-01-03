@@ -1,5 +1,5 @@
 /* @refresh reset */
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, ComponentType } from 'react';
 import { RouteObject } from 'react-router-dom';
 import { ProtectedRoute } from '../components/auth';
 import ErrorBoundary from '../components/error/ErrorBoundary';
@@ -12,6 +12,40 @@ import { RootLayout } from '../components/layout/RootLayout';
 
    Defines all application routes with lazy loading for code splitting.
    ============================================================================= */
+
+/**
+ * Lazy import with retry for chunk load failures.
+ * Retries failed dynamic imports up to 3 times with exponential backoff.
+ * This handles stale cache issues after deployments.
+ */
+function lazyWithRetry<T extends ComponentType<any>>(
+  importFn: () => Promise<{ default: T }>,
+  retries = 3,
+  interval = 1000
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        return await importFn();
+      } catch (error) {
+        // Only retry on chunk load errors
+        const isChunkError = error instanceof Error &&
+          (error.message.includes('Failed to fetch dynamically imported module') ||
+           error.message.includes('Loading chunk') ||
+           error.message.includes('Loading CSS chunk'));
+
+        if (!isChunkError || attempt === retries - 1) {
+          throw error;
+        }
+
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, interval * Math.pow(2, attempt)));
+      }
+    }
+    // This should never be reached, but TypeScript needs it
+    throw new Error('Import failed after retries');
+  });
+}
 
 // Loading fallback component
 const PageLoader: React.FC = () => (
@@ -45,10 +79,10 @@ const ForMarketingPage = lazy(() => import('../pages/public/solutions/ForMarketi
 const ForDeliveryPage = lazy(() => import('../pages/public/solutions/ForDeliveryPage'));
 const ForBusinessPage = lazy(() => import('../pages/public/solutions/ForBusinessPage'));
 
-// Auth pages
-const SignInPage = lazy(() => import('../pages/public/SignInPage'));
-const SignUpPage = lazy(() => import('../pages/public/SignUpPage'));
-const ForgotPasswordPage = lazy(() => import('../pages/public/ForgotPasswordPage'));
+// Auth pages - use lazyWithRetry for critical auth flows
+const SignInPage = lazyWithRetry(() => import('../pages/public/SignInPage'));
+const SignUpPage = lazyWithRetry(() => import('../pages/public/SignUpPage'));
+const ForgotPasswordPage = lazyWithRetry(() => import('../pages/public/ForgotPasswordPage'));
 
 // Workspace pages
 const DashboardPage = lazy(() => import('../pages/workspace/DashboardPage'));
@@ -182,19 +216,19 @@ export const publicRoutes: RouteObject[] = [
   },
 ];
 
-// Auth routes
+// Auth routes - use CriticalLazyPage to handle chunk load errors gracefully
 export const authRoutes: RouteObject[] = [
   {
     path: '/signin',
-    element: <LazyPage component={SignInPage} />,
+    element: <CriticalLazyPage component={SignInPage} />,
   },
   {
     path: '/signup',
-    element: <LazyPage component={SignUpPage} />,
+    element: <CriticalLazyPage component={SignUpPage} />,
   },
   {
     path: '/forgot-password',
-    element: <LazyPage component={ForgotPasswordPage} />,
+    element: <CriticalLazyPage component={ForgotPasswordPage} />,
   },
 ];
 

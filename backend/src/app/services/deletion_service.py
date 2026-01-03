@@ -1070,6 +1070,87 @@ class DeletionService:
                         asset_id,
                     )
 
+                    # Clean up faces for this photo and update face_group counts
+                    # First, get the face_group_ids affected
+                    affected_groups = await conn.fetch(
+                        """
+                        SELECT DISTINCT face_group_id 
+                        FROM faces 
+                        WHERE workspace_id = $1 AND photo_id = $2 AND face_group_id IS NOT NULL
+                        """,
+                        workspace_id,
+                        asset_id,
+                    )
+                    
+                    # Delete faces for this photo
+                    deleted_faces = await conn.fetchval(
+                        """
+                        DELETE FROM faces
+                        WHERE workspace_id = $1 AND photo_id = $2
+                        RETURNING COUNT(*)
+                        """,
+                        workspace_id,
+                        asset_id,
+                    )
+                    
+                    if deleted_faces and deleted_faces > 0:
+                        logger.info(f"Deleted {deleted_faces} faces for photo {asset_id}")
+                    
+                    # Update face_count for affected groups and clean up empty groups
+                    for row in affected_groups:
+                        group_id = row["face_group_id"]
+                        
+                        # Recalculate face_count
+                        new_count = await conn.fetchval(
+                            """
+                            SELECT COUNT(*) FROM faces 
+                            WHERE face_group_id = $1 AND workspace_id = $2
+                            """,
+                            group_id,
+                            workspace_id,
+                        )
+                        
+                        if new_count == 0:
+                            # Delete empty face group
+                            await conn.execute(
+                                """
+                                DELETE FROM face_groups
+                                WHERE id = $1 AND workspace_id = $2
+                                """,
+                                group_id,
+                                workspace_id,
+                            )
+                            logger.info(f"Deleted empty face group {group_id}")
+                        else:
+                            # Update face_count and clear representative if it was deleted
+                            await conn.execute(
+                                """
+                                UPDATE face_groups
+                                SET face_count = $3,
+                                    representative_face_id = CASE 
+                                        WHEN representative_face_id NOT IN (
+                                            SELECT id FROM faces WHERE face_group_id = $1
+                                        ) THEN NULL 
+                                        ELSE representative_face_id 
+                                    END,
+                                    updated_at = NOW()
+                                WHERE id = $1 AND workspace_id = $2
+                                """,
+                                group_id,
+                                workspace_id,
+                                new_count,
+                            )
+                    
+                    # Delete face detection jobs for this photo
+                    await conn.execute(
+                        """
+                        DELETE FROM face_detection_jobs
+                        WHERE workspace_id = $1 AND photo_id = $2
+                        """,
+                        workspace_id,
+                        asset_id,
+                    )
+
                     # Delete the asset
                     await conn.execute(
                         """

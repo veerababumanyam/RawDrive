@@ -8,8 +8,9 @@
  * - Countdown timer
  * - Add to calendar
  * - Responsive design
+ * - Dark/Light theme support with system preference detection
  *
- * Feature: 016-save-the-date
+ * Feature: 016-save-the-date, 022-invitation-theme-support
  */
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
@@ -19,10 +20,8 @@ import {
   Calendar,
   MapPin,
   Clock,
-  Users,
   CheckCircle,
   XCircle,
-  HelpCircle,
   ExternalLink,
   Download,
   Loader2,
@@ -32,10 +31,10 @@ import {
 
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
-import { AppCard } from '@/components/ui/AppCard';
-import { Select, Checkbox, Toggle, RadioGroup, Radio } from '@/components/ui/FormControls';
+import { Select, Checkbox } from '@/components/ui/FormControls';
 import { Turnstile, useTurnstile } from '@/components/ui/Turnstile';
 import SEOHead from '@/components/landing/seo/SEOHead';
+import { usePublicInvitationTheme } from '@/hooks/usePublicInvitationTheme';
 import * as invitationService from '@/services/invitationService';
 import { loadInvitationFonts, preloadLanguageFonts } from '@/utils/fontLoader';
 import type { TurnstileConfig } from '@/services/invitationService';
@@ -43,7 +42,6 @@ import type {
   PublicInvitation,
   SubmitRSVPRequest,
   RSVPSubmitResponse,
-  AccessInvitationResponse,
 } from '@/types/invitations';
 import { SUPPORTED_LANGUAGES } from '@/i18n/config';
 
@@ -52,14 +50,55 @@ import { SUPPORTED_LANGUAGES } from '@/i18n/config';
 // ---------------------------------------------------------------------------
 
 /**
+ * Calculate relative luminance of a color for WCAG contrast calculations.
+ * @see https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
+ */
+function getLuminance(hex: string): number {
+  const rgb = hex.replace('#', '').match(/.{2}/g)?.map((c) => {
+    const val = parseInt(c, 16) / 255;
+    return val <= 0.03928 ? val / 12.92 : Math.pow((val + 0.055) / 1.055, 2.4);
+  }) || [0, 0, 0];
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+
+/**
+ * Calculate WCAG contrast ratio between two colors.
+ * @see https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio
+ */
+function getContrastRatio(color1: string, color2: string): number {
+  const l1 = getLuminance(color1);
+  const l2 = getLuminance(color2);
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
+ * Check if a color meets WCAG AA contrast requirements against a background.
+ * Returns the color if it passes, or a WCAG-safe fallback if not.
+ * @param color - The color to check (hex)
+ * @param isDark - Whether we're in dark mode
+ * @param minRatio - Minimum contrast ratio (4.5 for normal text, 3 for large text)
+ */
+function getWCAGSafeColor(
+  color: string,
+  isDark: boolean,
+  minRatio: number = 4.5
+): string {
+  const background = isDark ? '#111827' : '#ffffff'; // gray-900 : white
+  const ratio = getContrastRatio(color, background);
+
+  if (ratio >= minRatio) {
+    return color;
+  }
+
+  // Return a safe fallback that meets contrast requirements
+  return isDark ? '#93C5FD' : '#1D4ED8'; // blue-300 (light on dark) : blue-700 (dark on light)
+}
+
+/**
  * Map language codes to BCP 47 locale tags, font CSS classes, and date scripts.
  * Features: 016-save-the-date, 019-invitation-indian-languages
- *
- * Unicode script codes for date formatting:
- * - Deva (Devanagari): Hindi, Marathi
- * - Beng (Bengali): Bengali, Assamese
- * - Telu (Telugu), Taml (Tamil), Knda (Kannada), Mlym (Malayalam)
- * - Gujr (Gujarati), Orya (Oriya), Guru (Gurmukhi), Arab (Arabic/Urdu)
  */
 const DATE_SCRIPT_MAP: Record<string, string> = {
   hi: 'Deva',
@@ -78,7 +117,6 @@ const DATE_SCRIPT_MAP: Record<string, string> = {
 
 /**
  * Build LANGUAGE_CONFIG from centralized SUPPORTED_LANGUAGES.
- * Automatically includes all 12 Indian languages + English.
  */
 const LANGUAGE_CONFIG: Record<
   string,
@@ -95,24 +133,14 @@ const LANGUAGE_CONFIG: Record<
   ])
 );
 
-/**
- * Get locale string from language code.
- */
 function getLocaleForLanguage(langCode: string): string {
   return LANGUAGE_CONFIG[langCode]?.locale || 'en-IN';
 }
 
-/**
- * Get font CSS class for a language code.
- */
 function getFontClassForLanguage(langCode: string): string {
   return LANGUAGE_CONFIG[langCode]?.fontClass || 'font-lang-en';
 }
 
-/**
- * Get text direction for a language code.
- * Returns 'rtl' for Urdu, 'ltr' for all other supported languages.
- */
 function getDirectionForLanguage(langCode: string): 'ltr' | 'rtl' {
   return LANGUAGE_CONFIG[langCode]?.dir || 'ltr';
 }
@@ -197,15 +225,16 @@ function getEventTypeEmoji(eventType: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Countdown Component
+// Countdown Component (with dark mode)
 // ---------------------------------------------------------------------------
 
 interface CountdownProps {
   datetime: string;
   colors: { primary: string; secondary: string };
+  isDark: boolean;
 }
 
-const Countdown: React.FC<CountdownProps> = ({ datetime, colors }) => {
+const Countdown: React.FC<CountdownProps> = ({ datetime, colors, isDark }) => {
   const [countdown, setCountdown] = useState(() => getCountdown(datetime));
 
   useEffect(() => {
@@ -219,7 +248,7 @@ const Countdown: React.FC<CountdownProps> = ({ datetime, colors }) => {
   if (countdown.isExpired) {
     return (
       <div className="text-center py-8">
-        <p className="text-lg" style={{ color: colors.secondary }}>
+        <p className="text-lg text-gray-600 dark:text-gray-400">
           This event has already taken place
         </p>
       </div>
@@ -227,7 +256,6 @@ const Countdown: React.FC<CountdownProps> = ({ datetime, colors }) => {
   }
 
   return (
-    // T131: Improved mobile responsiveness for countdown
     <div className="flex justify-center gap-2 sm:gap-4 py-8 px-2">
       {[
         { value: countdown.days, label: 'Days' },
@@ -235,17 +263,25 @@ const Countdown: React.FC<CountdownProps> = ({ datetime, colors }) => {
         { value: countdown.minutes, label: 'Min' },
         { value: countdown.seconds, label: 'Sec' },
       ].map(({ value, label }) => (
-        <div key={label} className="text-center min-w-[50px] sm:min-w-[60px]">
+        <div
+          key={label}
+          className="
+            text-center min-w-[50px] sm:min-w-[60px]
+            p-3 sm:p-4 rounded-xl
+            bg-white/60 dark:bg-gray-800/60
+            backdrop-blur-sm
+            border border-white/50 dark:border-white/10
+            shadow-sm
+          "
+        >
           <div
             className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 tabular-nums"
-            style={{ color: colors.primary }}
+            style={{ color: getWCAGSafeColor(colors.primary, isDark, 3) }}
+            aria-label={`${value} ${label}`}
           >
             {String(value).padStart(2, '0')}
           </div>
-          <div
-            className="text-[10px] sm:text-xs uppercase tracking-wider"
-            style={{ color: colors.secondary }}
-          >
+          <div className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 font-medium">
             {label}
           </div>
         </div>
@@ -255,7 +291,7 @@ const Countdown: React.FC<CountdownProps> = ({ datetime, colors }) => {
 };
 
 // ---------------------------------------------------------------------------
-// Password Protection Form
+// Password Protection Form (with dark mode)
 // ---------------------------------------------------------------------------
 
 interface PasswordFormProps {
@@ -264,6 +300,7 @@ interface PasswordFormProps {
   onSubmit: (password?: string, pin?: string) => void;
   isLoading: boolean;
   error?: string;
+  theme: 'light' | 'dark';
 }
 
 const PasswordForm: React.FC<PasswordFormProps> = ({
@@ -272,6 +309,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({
   onSubmit,
   isLoading,
   error,
+  theme,
 }) => {
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
@@ -285,16 +323,40 @@ const PasswordForm: React.FC<PasswordFormProps> = ({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary/10 to-accent/10">
-      <AppCard className="max-w-md w-full p-8">
+    <div
+      data-theme={theme}
+      className="
+        min-h-screen flex items-center justify-center p-4
+        bg-gradient-to-br from-slate-50 via-blue-50/50 to-cyan-50/30
+        dark:from-gray-950 dark:via-slate-900 dark:to-gray-900
+        transition-colors duration-300
+      "
+    >
+
+      <div
+        className="
+          max-w-md w-full p-8
+          rounded-2xl
+          bg-white/80 dark:bg-gray-900/60
+          backdrop-blur-xl
+          border border-white/50 dark:border-white/10
+          shadow-xl dark:shadow-[0_12px_40px_rgba(0,0,0,0.3)]
+        "
+      >
         <div className="text-center mb-6">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-            <Lock className="w-8 h-8 text-primary" />
+          <div
+            className="
+              w-16 h-16 rounded-full
+              bg-primary-100 dark:bg-primary-900/30
+              flex items-center justify-center mx-auto mb-4
+            "
+          >
+            <Lock className="w-8 h-8 text-primary-600 dark:text-primary-400" />
           </div>
-          <h1 className="text-2xl font-bold text-text-primary mb-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Protected Invitation
           </h1>
-          <p className="text-text-secondary">
+          <p className="text-gray-600 dark:text-gray-400">
             Enter the {requiresPassword && requiresPin ? 'password and PIN' : requiresPassword ? 'password' : 'PIN'} to view this invitation
           </p>
         </div>
@@ -325,10 +387,12 @@ const PasswordForm: React.FC<PasswordFormProps> = ({
           )}
 
           {error && (
-            <p className="text-sm text-error text-center">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400 text-center" role="alert">
+              {error}
+            </p>
           )}
 
-          <AppButton type="submit" className="w-full" disabled={isLoading}>
+          <AppButton type="submit" className="w-full min-h-[44px]" disabled={isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -339,13 +403,13 @@ const PasswordForm: React.FC<PasswordFormProps> = ({
             )}
           </AppButton>
         </form>
-      </AppCard>
+      </div>
     </div>
   );
 };
 
 // ---------------------------------------------------------------------------
-// RSVP Form Component
+// RSVP Form Component (with dark mode)
 // ---------------------------------------------------------------------------
 
 interface RSVPFormProps {
@@ -354,8 +418,8 @@ interface RSVPFormProps {
   onSubmit: (data: SubmitRSVPRequest) => void;
   isSubmitting: boolean;
   submitResult?: RSVPSubmitResponse;
-  /** T124: Turnstile CAPTCHA configuration */
   turnstileConfig?: TurnstileConfig | null;
+  isDark: boolean;
 }
 
 const RSVPForm: React.FC<RSVPFormProps> = ({
@@ -365,6 +429,7 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
   isSubmitting,
   submitResult,
   turnstileConfig,
+  isDark,
 }) => {
   const [formData, setFormData] = useState<SubmitRSVPRequest>({
     guest_name: '',
@@ -379,7 +444,6 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
   });
   const [partyNameInput, setPartyNameInput] = useState('');
 
-  // T124: Turnstile CAPTCHA integration
   const turnstile = useTurnstile();
   const isTurnstileRequired = turnstileConfig?.enabled && turnstileConfig?.site_key;
 
@@ -406,7 +470,6 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Include Turnstile token if required
     const submitData: SubmitRSVPRequest = {
       ...formData,
       ...(isTurnstileRequired && turnstile.token ? { turnstile_token: turnstile.token } : {}),
@@ -414,69 +477,92 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
     onSubmit(submitData);
   };
 
-  // Check if form can be submitted (including Turnstile verification)
   const canSubmit = formData.guest_name &&
     formData.guest_email &&
     !isSubmitting &&
     (!isTurnstileRequired || turnstile.token);
 
-  // Show success message after submission
+  // Success message
   if (submitResult) {
     return (
-      <AppCard className="p-8 text-center">
+      <div
+        className="
+          p-8 text-center rounded-2xl
+          bg-white/70 dark:bg-gray-900/50
+          backdrop-blur-xl
+          border border-white/50 dark:border-white/10
+          shadow-lg
+        "
+      >
         <div
           className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
           style={{ backgroundColor: `${colors.primary}20` }}
         >
-          <CheckCircle className="w-8 h-8" style={{ color: colors.primary }} />
+          <CheckCircle className="w-8 h-8" style={{ color: getWCAGSafeColor(colors.primary, isDark, 3) }} />
         </div>
-        <h3 className="text-xl font-bold text-text-primary mb-2">
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
           Thank You!
         </h3>
-        <p className="text-text-secondary mb-4">{submitResult.message}</p>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">{submitResult.message}</p>
         {submitResult.edit_token && (
-          <p className="text-sm text-text-tertiary">
+          <p className="text-sm text-gray-500 dark:text-gray-500">
             You can edit your response using the link sent to your email.
           </p>
         )}
-      </AppCard>
+      </div>
     );
   }
 
-  // Check if RSVP deadline has passed
+  // RSVP deadline passed
   if (invitation.rsvp_deadline) {
     const deadlineDate = new Date(invitation.rsvp_deadline);
     if (deadlineDate < new Date()) {
       return (
-        <AppCard className="p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle className="w-8 h-8 text-warning" />
+        <div
+          className="
+            p-8 text-center rounded-2xl
+            bg-white/70 dark:bg-gray-900/50
+            backdrop-blur-xl
+            border border-white/50 dark:border-white/10
+            shadow-lg
+          "
+        >
+          <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-8 h-8 text-amber-600 dark:text-amber-400" />
           </div>
-          <h3 className="text-xl font-bold text-text-primary mb-2">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
             RSVP Closed
           </h3>
-          <p className="text-text-secondary">
+          <p className="text-gray-600 dark:text-gray-400">
             The RSVP deadline has passed. Please contact the host directly.
           </p>
-        </AppCard>
+        </div>
       );
     }
   }
 
   return (
-    <AppCard className="p-6 md:p-8">
+    <div
+      className="
+        p-6 md:p-8 rounded-2xl
+        bg-white/70 dark:bg-gray-900/50
+        backdrop-blur-xl
+        border border-white/50 dark:border-white/10
+        shadow-lg
+      "
+    >
       <h3
         className="text-xl font-bold mb-6 text-center"
-        style={{ color: colors.primary }}
+        style={{ color: getWCAGSafeColor(colors.primary, isDark, 3) }}
       >
         RSVP
       </h3>
 
       <form onSubmit={handleSubmit} className="space-y-6" aria-label="RSVP form">
-        {/* Attendance - T131: Stack on mobile for better touch targets */}
+        {/* Attendance */}
         <fieldset>
           <legend className="sr-only">Will you be attending?</legend>
-          <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4" role="radiogroup" aria-label="Attendance selection">
+          <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4" role="radiogroup">
             {[
               { value: true, label: 'Attending', icon: CheckCircle },
               { value: false, label: 'Not Attending', icon: XCircle },
@@ -490,11 +576,11 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
                 className={`
                   flex items-center justify-center gap-2 px-6 py-4 sm:py-3 rounded-lg border-2 transition-all
                   min-h-[48px] text-base sm:text-sm
-                  focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none
+                  focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:outline-none
                   ${
                     formData.attending === value
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-text-secondary hover:border-primary/50'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-primary-300 dark:hover:border-primary-700'
                   }
                 `}
               >
@@ -532,7 +618,7 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
           )}
         </div>
 
-        {/* Party Size (only if attending) */}
+        {/* Party Size */}
         {formData.attending && invitation.max_party_size > 1 && (
           <div className="space-y-4">
             <Select
@@ -549,7 +635,7 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
 
             {(formData.party_size || 1) > 1 && (
               <div>
-                <label className="block text-sm font-medium text-text-primary mb-2">
+                <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
                   Names of Additional Guests
                 </label>
                 <div className="flex gap-2 mb-2">
@@ -570,6 +656,7 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
                     variant="outline"
                     onClick={addPartyName}
                     disabled={!partyNameInput.trim()}
+                    className="min-h-[44px]"
                   >
                     Add
                   </AppButton>
@@ -579,13 +666,18 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
                     {formData.party_names.map((name, index) => (
                       <span
                         key={index}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-surface-hover rounded-full text-sm"
+                        className="
+                          inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm
+                          bg-gray-100 dark:bg-gray-800
+                          text-gray-700 dark:text-gray-300
+                        "
                       >
                         {name}
                         <button
                           type="button"
                           onClick={() => removePartyName(index)}
-                          className="text-text-tertiary hover:text-error"
+                          className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 min-w-[24px] min-h-[24px]"
+                          aria-label={`Remove ${name}`}
                         >
                           ×
                         </button>
@@ -662,7 +754,7 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
 
         {/* Message */}
         <div>
-          <label className="block text-sm font-medium text-text-primary mb-2">
+          <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
             Message for the Host (Optional)
           </label>
           <textarea
@@ -670,11 +762,19 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
             onChange={(e) => updateForm({ message: e.target.value })}
             placeholder="Send your wishes or a note to the host..."
             rows={3}
-            className="w-full px-3 py-2 border border-border rounded-input bg-surface text-text-primary placeholder:text-text-tertiary focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+            className="
+              w-full px-3 py-2 rounded-lg
+              border border-gray-200 dark:border-gray-700
+              bg-white dark:bg-gray-800
+              text-gray-900 dark:text-gray-100
+              placeholder:text-gray-400 dark:placeholder:text-gray-500
+              focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20
+              outline-none transition-colors
+            "
           />
         </div>
 
-        {/* T124: Turnstile CAPTCHA */}
+        {/* Turnstile CAPTCHA */}
         {isTurnstileRequired && turnstileConfig?.site_key && (
           <div className="flex flex-col items-center gap-2">
             <Turnstile
@@ -686,7 +786,7 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
               size="normal"
             />
             {turnstile.error && (
-              <p className="text-sm text-error" role="alert">
+              <p className="text-sm text-red-600 dark:text-red-400" role="alert">
                 {turnstile.error}
               </p>
             )}
@@ -696,7 +796,7 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
         {/* Submit */}
         <AppButton
           type="submit"
-          className="w-full"
+          className="w-full min-h-[48px]"
           disabled={!canSubmit}
           style={{
             background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
@@ -712,7 +812,7 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
           )}
         </AppButton>
       </form>
-    </AppCard>
+    </div>
   );
 };
 
@@ -722,6 +822,7 @@ const RSVPForm: React.FC<RSVPFormProps> = ({
 
 const PublicInvitationPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
+  const { theme, isDark } = usePublicInvitationTheme();
   const [accessData, setAccessData] = useState<{
     password?: string;
     pin?: string;
@@ -729,13 +830,11 @@ const PublicInvitationPage: React.FC = () => {
   const [accessError, setAccessError] = useState<string>();
   const [submitResult, setSubmitResult] = useState<RSVPSubmitResponse>();
 
-  // Fetch invitation using magic link token
-  // The 'slug' URL parameter is actually the magic link token for /i/{token} routes
+  // Fetch invitation
   const {
     data: accessResponse,
     isLoading,
     error,
-    refetch,
   } = useQuery({
     queryKey: ['public-invitation', slug, accessData],
     queryFn: () =>
@@ -747,11 +846,11 @@ const PublicInvitationPage: React.FC = () => {
     retry: false,
   });
 
-  // T124: Fetch Turnstile CAPTCHA configuration
+  // Turnstile config
   const { data: turnstileConfig } = useQuery({
     queryKey: ['turnstile-config'],
     queryFn: () => invitationService.getTurnstileConfig(),
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 5 * 60 * 1000,
     retry: false,
   });
 
@@ -767,7 +866,6 @@ const PublicInvitationPage: React.FC = () => {
     },
   });
 
-  // Handle password/PIN submission
   const handleAccessSubmit = useCallback(
     (password?: string, pin?: string) => {
       setAccessData({ password, pin });
@@ -776,20 +874,43 @@ const PublicInvitationPage: React.FC = () => {
     []
   );
 
-  // Download calendar event - use token-based endpoint for magic link access
   const handleDownloadCalendar = useCallback(async () => {
     try {
       await invitationService.downloadPublicICSByToken(slug!);
     } catch {
-      // Silent fail - not critical
+      // Silent fail
     }
   }, [slug]);
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div
+        data-theme={theme}
+        className="
+          min-h-screen flex flex-col items-center justify-center
+          bg-gradient-to-br from-slate-50 via-blue-50/50 to-cyan-50/30
+          dark:from-gray-950 dark:via-slate-900 dark:to-gray-900
+          transition-colors duration-300
+        "
+      >
+        <div
+          role="status"
+          aria-label="Loading invitation"
+          className="
+            flex flex-col items-center gap-4
+            p-8 rounded-2xl
+            bg-white/60 dark:bg-gray-900/40
+            backdrop-blur-xl
+            border border-white/50 dark:border-white/10
+            shadow-lg dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)]
+          "
+        >
+          <Loader2 className="w-12 h-12 animate-spin text-primary-500" />
+          <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+            Loading invitation...
+          </p>
+        </div>
       </div>
     );
   }
@@ -797,18 +918,48 @@ const PublicInvitationPage: React.FC = () => {
   // Error state
   if (error || !accessResponse) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-error/10 to-warning/10">
-        <AppCard className="max-w-md w-full p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-error/10 flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle className="w-8 h-8 text-error" />
+      <div
+        data-theme={theme}
+        className="
+          min-h-screen flex flex-col items-center justify-center p-4
+          bg-gradient-to-br from-slate-50 via-blue-50/50 to-cyan-50/30
+          dark:from-gray-950 dark:via-slate-900 dark:to-gray-900
+          transition-colors duration-300
+        "
+      >
+        <div
+          className="
+            max-w-md w-full p-8 text-center rounded-2xl
+            bg-white/70 dark:bg-gray-900/50
+            backdrop-blur-xl
+            border border-white/50 dark:border-white/10
+            shadow-xl dark:shadow-[0_12px_40px_rgba(0,0,0,0.3)]
+          "
+          role="alert"
+        >
+          <div
+            className="
+              w-16 h-16 rounded-full mx-auto mb-4
+              bg-red-100 dark:bg-red-900/30
+              flex items-center justify-center
+            "
+          >
+            <AlertTriangle className="w-8 h-8 text-red-500 dark:text-red-400" />
           </div>
-          <h1 className="text-2xl font-bold text-text-primary mb-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Invitation Not Found
           </h1>
-          <p className="text-text-secondary">
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
             This invitation may have been removed or the link is invalid.
           </p>
-        </AppCard>
+          <AppButton
+            variant="primary"
+            onClick={() => window.location.href = '/'}
+            className="min-h-[44px]"
+          >
+            Go Home
+          </AppButton>
+        </div>
       </div>
     );
   }
@@ -825,6 +976,7 @@ const PublicInvitationPage: React.FC = () => {
         onSubmit={handleAccessSubmit}
         isLoading={isLoading}
         error={accessResponse.error || accessError}
+        theme={theme}
       />
     );
   }
@@ -832,20 +984,35 @@ const PublicInvitationPage: React.FC = () => {
   // Access denied
   if (!accessResponse.access_granted || !accessResponse.invitation) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-error/10 to-warning/10">
-        <AppCard className="max-w-md w-full p-8 text-center">
-          <h1 className="text-2xl font-bold text-text-primary mb-2">
+      <div
+        data-theme={theme}
+        className="
+          min-h-screen flex flex-col items-center justify-center p-4
+          bg-gradient-to-br from-slate-50 via-blue-50/50 to-cyan-50/30
+          dark:from-gray-950 dark:via-slate-900 dark:to-gray-900
+          transition-colors duration-300
+        "
+      >
+        <div
+          className="
+            max-w-md w-full p-8 text-center rounded-2xl
+            bg-white/70 dark:bg-gray-900/50
+            backdrop-blur-xl
+            border border-white/50 dark:border-white/10
+            shadow-xl
+          "
+        >
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Access Denied
           </h1>
-          <p className="text-text-secondary">
+          <p className="text-gray-600 dark:text-gray-400">
             {accessResponse.error || 'Unable to access this invitation.'}
           </p>
-        </AppCard>
+        </div>
       </div>
     );
   }
 
-  // Render invitation content in a separate component to ensure hooks are called consistently
   return (
     <InvitationContent
       invitation={accessResponse.invitation}
@@ -854,12 +1021,13 @@ const PublicInvitationPage: React.FC = () => {
       rsvpMutation={rsvpMutation}
       submitResult={submitResult}
       handleDownloadCalendar={handleDownloadCalendar}
+      theme={theme}
     />
   );
 };
 
 // ---------------------------------------------------------------------------
-// Invitation Content Component (extracted to ensure hooks are called consistently)
+// Invitation Content Component
 // ---------------------------------------------------------------------------
 
 interface InvitationContentProps {
@@ -869,6 +1037,7 @@ interface InvitationContentProps {
   rsvpMutation: ReturnType<typeof useMutation<RSVPSubmitResponse, Error, SubmitRSVPRequest>>;
   submitResult?: RSVPSubmitResponse;
   handleDownloadCalendar: () => void;
+  theme: 'light' | 'dark';
 }
 
 const InvitationContent: React.FC<InvitationContentProps> = ({
@@ -878,7 +1047,11 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
   rsvpMutation,
   submitResult,
   handleDownloadCalendar,
+  theme,
 }) => {
+  // Derive isDark from theme prop for WCAG color calculations
+  const isDark = theme === 'dark';
+
   // Extract colors with fallbacks
   const colors = {
     primary: (invitation.customization as Record<string, Record<string, string>>)?.colors?.primary || '#6366f1',
@@ -887,33 +1060,30 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
     background: (invitation.customization as Record<string, Record<string, string>>)?.colors?.background || '#ffffff',
   };
 
+  // Get WCAG-safe versions of colors for use in text
+  const safeColors = {
+    primary: getWCAGSafeColor(colors.primary, isDark, 4.5),
+    primaryLarge: getWCAGSafeColor(colors.primary, isDark, 3), // For large text (18px+)
+    accent: getWCAGSafeColor(colors.accent, isDark, 4.5),
+  };
+
   const fonts = {
     heading: (invitation.customization as Record<string, Record<string, string>>)?.fonts?.heading || 'Playfair Display',
     body: (invitation.customization as Record<string, Record<string, string>>)?.fonts?.body || 'Inter',
   };
 
-  // Language configuration for i18n (Phase 9, enhanced for 019-invitation-indian-languages)
   const primaryLang = invitation.primary_language || 'en';
   const primaryFontClass = getFontClassForLanguage(primaryLang);
   const primaryDirection = getDirectionForLanguage(primaryLang);
   const isRTL = primaryDirection === 'rtl';
 
-  // Load fonts dynamically when invitation is accessed
-  // Feature: 019-invitation-indian-languages (Font Enhancement)
   useEffect(() => {
-    // Preload language-specific fonts
     preloadLanguageFonts(primaryLang);
-
-    // Load the specific fonts selected for this invitation
-    // Custom fonts are embedded in the font family string as 'CustomFont-{id}'
-    const customFonts: Array<{ font_id: string; family: string; url: string; format?: string }> = [];
-
-    // If custom font URLs are in customization, add them
     const customization = invitation.customization as Record<string, unknown>;
+    const customFonts: Array<{ font_id: string; family: string; url: string; format?: string }> = [];
     if (customization?.customFonts && Array.isArray(customization.customFonts)) {
       customFonts.push(...(customization.customFonts as Array<{ font_id: string; family: string; url: string; format?: string }>));
     }
-
     loadInvitationFonts(fonts.heading, fonts.body, customFonts);
   }, [primaryLang, fonts.heading, fonts.body, invitation.customization]);
 
@@ -928,7 +1098,6 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
     primaryLang
   );
 
-  // Build SEO description
   const seoDescription = useMemo(() => {
     const parts = [];
     if (invitation.host_names.length > 0) {
@@ -944,7 +1113,6 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
     return parts.join('. ');
   }, [invitation, formattedDate, formattedTime]);
 
-  // Build structured data for SEO
   const structuredData = useMemo(() => ({
     '@context': 'https://schema.org',
     '@type': 'Event',
@@ -994,15 +1162,17 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
 
   return (
     <div
-      className={`min-h-screen ${primaryFontClass} ${isRTL ? 'rtl-container' : ''}`}
+      data-theme={theme}
+      className={`
+        min-h-screen ${primaryFontClass} ${isRTL ? 'rtl-container' : ''}
+        bg-gradient-to-br from-slate-50 via-blue-50/50 to-cyan-50/30
+        dark:from-gray-950 dark:via-slate-900 dark:to-gray-900
+        transition-colors duration-300
+      `}
       data-lang={primaryLang}
       dir={primaryDirection}
-      style={{
-        backgroundColor: colors.background,
-      }}
     >
-      {/* SEO Meta Tags for WhatsApp/Social Sharing (T078-T080) */}
-      {/* Use og_image_url (1200x630px optimized) when available, fallback to cover_image_url */}
+      {/* SEO */}
       <SEOHead
         title={invitation.title}
         description={seoDescription}
@@ -1022,7 +1192,6 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
 
       {/* Hero Section */}
       <div className="relative">
-        {/* Cover Image - T130: prioritize for LCP */}
         <div className="aspect-[16/9] md:aspect-[21/9] overflow-hidden">
           {invitation.cover_image_url ? (
             <img
@@ -1042,7 +1211,7 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
           )}
         </div>
 
-        {/* Overlay Content */}
+        {/* Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex flex-col justify-end p-6 md:p-12">
           <div className="max-w-4xl mx-auto w-full text-center">
             <p className="text-white/80 text-sm md:text-base mb-2">
@@ -1061,7 +1230,7 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-8 md:py-12">
         {/* Countdown */}
-        <Countdown datetime={invitation.event_datetime} colors={colors} />
+        <Countdown datetime={invitation.event_datetime} colors={colors} isDark={isDark} />
 
         {/* Divider */}
         <div
@@ -1073,10 +1242,7 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
 
         {/* Description */}
         {invitation.description && (
-          <p
-            className="text-center text-lg leading-relaxed mb-8"
-            style={{ color: colors.secondary }}
-          >
+          <p className="text-center text-lg leading-relaxed mb-8 text-gray-700 dark:text-gray-300">
             {invitation.description}
           </p>
         )}
@@ -1084,60 +1250,76 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
         {/* Event Details */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Date & Time Card */}
-          <AppCard className="p-6">
+          <div
+            className="
+              p-6 rounded-2xl
+              bg-white/70 dark:bg-gray-900/50
+              backdrop-blur-xl
+              border border-white/50 dark:border-white/10
+              shadow-lg
+            "
+          >
             <div className="flex items-start gap-4">
               <div
                 className="w-12 h-12 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: `${colors.primary}15` }}
               >
-                <Calendar className="w-6 h-6" style={{ color: colors.primary }} />
+                <Calendar className="w-6 h-6" style={{ color: safeColors.primary }} />
               </div>
               <div>
                 <h3
                   className="font-semibold text-lg"
-                  style={{ fontFamily: fonts.heading, color: colors.primary }}
+                  style={{ fontFamily: fonts.heading, color: safeColors.primaryLarge }}
                 >
                   When
                 </h3>
-                <p className="text-text-primary">{formattedDate}</p>
-                <p className="text-text-secondary flex items-center gap-1">
+                <p className="text-gray-900 dark:text-gray-100">{formattedDate}</p>
+                <p className="text-gray-600 dark:text-gray-400 flex items-center gap-1">
                   <Clock className="w-4 h-4" />
                   {formattedTime}
                   {endTime && ` - ${endTime}`}
                 </p>
               </div>
             </div>
-          </AppCard>
+          </div>
 
           {/* Venue Card */}
-          <AppCard className="p-6">
+          <div
+            className="
+              p-6 rounded-2xl
+              bg-white/70 dark:bg-gray-900/50
+              backdrop-blur-xl
+              border border-white/50 dark:border-white/10
+              shadow-lg
+            "
+          >
             <div className="flex items-start gap-4">
               <div
                 className="w-12 h-12 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: `${colors.primary}15` }}
               >
-                <MapPin className="w-6 h-6" style={{ color: colors.primary }} />
+                <MapPin className="w-6 h-6" style={{ color: safeColors.primary }} />
               </div>
               <div>
                 <h3
                   className="font-semibold text-lg"
-                  style={{ fontFamily: fonts.heading, color: colors.primary }}
+                  style={{ fontFamily: fonts.heading, color: safeColors.primaryLarge }}
                 >
                   Where
                 </h3>
                 {invitation.venue.name && (
-                  <p className="text-text-primary font-medium">
+                  <p className="text-gray-900 dark:text-gray-100 font-medium">
                     {invitation.venue.name}
                   </p>
                 )}
-                <p className="text-text-secondary text-sm">{venueAddress}</p>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">{venueAddress}</p>
                 {invitation.venue.map_url && (
                   <a
                     href={invitation.venue.map_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm mt-2 hover:underline"
-                    style={{ color: colors.accent }}
+                    className="inline-flex items-center gap-1 text-sm mt-2 hover:underline min-h-[44px]"
+                    style={{ color: safeColors.accent }}
                   >
                     View on Map
                     <ExternalLink className="w-4 h-4" />
@@ -1145,31 +1327,31 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
                 )}
               </div>
             </div>
-          </AppCard>
+          </div>
         </div>
 
         {/* Hosts */}
         {invitation.host_names.length > 0 && (
           <div className="text-center mb-8">
-            <p className="text-text-secondary text-sm uppercase tracking-wider mb-2">
+            <p className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider mb-2">
               Hosted by
             </p>
             <p
               className="text-xl"
-              style={{ fontFamily: fonts.heading, color: colors.primary }}
+              style={{ fontFamily: fonts.heading, color: safeColors.primaryLarge }}
             >
               {invitation.host_names.join(' & ')}
             </p>
           </div>
         )}
 
-        {/* Gallery Images - T130: lazy load below-fold images */}
+        {/* Gallery Images */}
         {invitation.gallery_images.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
             {invitation.gallery_images.map((url, index) => (
               <div
                 key={index}
-                className="aspect-square rounded-lg overflow-hidden bg-surface-hover"
+                className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800"
               >
                 <img
                   src={url}
@@ -1193,13 +1375,18 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
               isSubmitting={rsvpMutation.isPending}
               submitResult={submitResult}
               turnstileConfig={turnstileConfig}
+              isDark={isDark}
             />
           </div>
         )}
 
         {/* Add to Calendar */}
         <div className="mt-8 text-center">
-          <AppButton variant="outline" onClick={handleDownloadCalendar}>
+          <AppButton
+            variant="outline"
+            onClick={handleDownloadCalendar}
+            className="min-h-[44px]"
+          >
             <Download className="w-4 h-4 mr-2" />
             Add to Calendar
           </AppButton>
@@ -1208,11 +1395,12 @@ const InvitationContent: React.FC<InvitationContentProps> = ({
 
       {/* Footer */}
       <div
-        className="py-6 text-center text-sm"
-        style={{
-          backgroundColor: `${colors.primary}08`,
-          color: colors.secondary,
-        }}
+        className="
+          py-6 text-center text-sm
+          bg-white/30 dark:bg-gray-900/30
+          text-gray-600 dark:text-gray-400
+          backdrop-blur-sm
+        "
       >
         <p>Made with ❤️ on RawDrive</p>
       </div>

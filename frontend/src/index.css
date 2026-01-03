@@ -1404,34 +1404,99 @@ body {
 }
 
 /* -------------------------------------------------------------------------
-   PHOTO CARD OVERLAY - Glassmorphism Design
-   Modern 2025 floating buttons with blur effects
-   Matching screenshot style: circular buttons with glass effect
+   PHOTO CARD OVERLAY - Enhanced Glassmorphism Design 2026
+   Centralized styles for photo overlays across Library, Gallery, RecycleBin, Invitations
+   
+   USAGE:
+   - .photo-overlay-btn: Base glass button (top buttons for favorite/select)
+   - .photo-overlay-action-bar: Bottom floating action bar
+   - .photo-overlay-action-btn: Individual action buttons
+   - .photo-overlay-indicator: State indicator badges (selected, favorited, picked)
+   
+   STATES:
+   - .active: Button is in active state (favorited, selected, etc.)
+   - .always-visible: Button stays visible even when not hovered
+   ------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------
+   PHOTO OVERLAY VARIABLES - Centralized configuration for consistency
+   ------------------------------------------------------------------------- */
+:root {
+  /* Glass Background */
+  --photo-glass-bg: rgba(15, 23, 42, 0.6);
+  --photo-glass-bg-light: rgba(255, 255, 255, 0.85);
+  --photo-glass-bg-hover: rgba(15, 23, 42, 0.75);
+  --photo-glass-bg-hover-light: rgba(255, 255, 255, 0.95);
+  
+  /* Glass Blur */
+  --photo-glass-blur: 20px;
+  --photo-glass-blur-heavy: 24px;
+  --photo-glass-saturate: 180%;
+  
+  /* Glass Border */
+  --photo-glass-border: rgba(255, 255, 255, 0.2);
+  --photo-glass-border-light: rgba(0, 0, 0, 0.1);
+  --photo-glass-border-hover: rgba(255, 255, 255, 0.35);
+  
+  /* Glass Shadow */
+  --photo-glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  --photo-glass-shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --photo-glass-shadow-active: 0 6px 24px rgba(0, 0, 0, 0.4);
+  
+  /* State Colors */
+  --photo-state-favorite: rgba(239, 68, 68, 0.95);
+  --photo-state-favorite-glow: rgba(239, 68, 68, 0.5);
+  --photo-state-selected: rgba(34, 197, 94, 0.95);
+  --photo-state-selected-glow: rgba(34, 197, 94, 0.5);
+  --photo-state-picked: rgba(34, 197, 94, 0.95);
+  --photo-state-picked-glow: rgba(34, 197, 94, 0.5);
+  --photo-state-management-select: rgba(59, 130, 246, 0.95);
+  --photo-state-management-glow: rgba(59, 130, 246, 0.5);
+  
+  /* Button Sizing */
+  --photo-btn-size: 44px;
+  --photo-btn-size-sm: 38px;
+  --photo-btn-icon-size: 20px;
+  --photo-btn-icon-size-sm: 18px;
+  
+  /* Transitions */
+  --photo-transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --photo-transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* -------------------------------------------------------------------------
+   TOP CONTROL BUTTONS - Favorite, Select, Customer Pick
+   Enhanced visibility with stronger glass effect and glow states
    ------------------------------------------------------------------------- */
 
 /* Top-Right Control Buttons (Favorite, Select) */
 .photo-card-top-btn {
-  width: 44px;
-  height: 44px;
+  width: var(--photo-btn-size);
+  height: var(--photo-btn-size);
   border-radius: 50%;
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: var(--photo-transition);
   position: relative;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  
+  /* Enhanced glass effect - darker for better visibility on photos */
+  background: var(--photo-glass-bg);
+  backdrop-filter: blur(var(--photo-glass-blur)) saturate(var(--photo-glass-saturate));
+  -webkit-backdrop-filter: blur(var(--photo-glass-blur)) saturate(var(--photo-glass-saturate));
+  box-shadow: var(--photo-glass-shadow),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1.5px solid var(--photo-glass-border);
 }
 
 .photo-card-top-btn:hover {
   transform: scale(1.1);
-  background: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  background: var(--photo-glass-bg-hover);
+  box-shadow: var(--photo-glass-shadow-hover),
+              inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-color: var(--photo-glass-border-hover);
 }
 
 .photo-card-top-btn:active {
@@ -1439,18 +1504,19 @@ body {
 }
 
 .photo-card-top-btn svg {
-  width: 20px;
-  height: 20px;
+  width: var(--photo-btn-icon-size);
+  height: var(--photo-btn-icon-size);
   stroke: #ffffff;
   fill: none;
-  stroke-width: 2;
+  stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+  transition: var(--photo-transition-fast);
 }
 
 .photo-card-top-btn:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline: 2px solid rgba(255, 255, 255, 0.9);
   outline-offset: 2px;
 }
 
@@ -1459,48 +1525,111 @@ body {
   opacity: 1 !important;
 }
 
-/* Favorite Button Active State - Red filled heart, always visible */
+/* -------------------------------------------------------------------------
+   FAVORITE BUTTON - Enhanced with pulsing glow effect when active
+   ------------------------------------------------------------------------- */
 .photo-card-top-btn.btn-favorite.active {
-  background: rgba(239, 68, 68, 0.95);
+  background: var(--photo-state-favorite);
   border-color: rgba(239, 68, 68, 1);
-  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 4px 20px var(--photo-state-favorite-glow),
+              0 0 0 4px rgba(239, 68, 68, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  animation: favoriteGlow 2s ease-in-out infinite;
 }
 
 .photo-card-top-btn.btn-favorite.active svg {
   fill: #ffffff;
   stroke: #ffffff;
-  animation: heartBeat 0.3s ease;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+  animation: heartBeat 0.35s ease;
 }
 
 .photo-card-top-btn.btn-favorite.active:hover {
   background: rgba(220, 38, 38, 1);
-  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.5);
+  box-shadow: 0 6px 28px var(--photo-state-favorite-glow),
+              0 0 0 6px rgba(239, 68, 68, 0.25);
+  animation: none;
 }
 
-/* Select Button Active State - Blue checkmark, always visible */
-.photo-card-top-btn.btn-select.active {
-  background: rgba(59, 130, 246, 0.95);
+@keyframes favoriteGlow {
+  0%, 100% { box-shadow: 0 4px 20px var(--photo-state-favorite-glow), 0 0 0 4px rgba(239, 68, 68, 0.2); }
+  50% { box-shadow: 0 4px 24px var(--photo-state-favorite-glow), 0 0 0 6px rgba(239, 68, 68, 0.15); }
+}
+
+/* -------------------------------------------------------------------------
+   SELECT/PICK BUTTON - Enhanced selection state with clear green indicator
+   For customer selection / client picks - should be VERY clearly visible
+   ------------------------------------------------------------------------- */
+.photo-card-top-btn.btn-select.active,
+.photo-card-top-btn.btn-customer-select.active {
+  background: var(--photo-state-selected);
+  border-color: rgba(34, 197, 94, 1);
+  box-shadow: 0 4px 20px var(--photo-state-selected-glow),
+              0 0 0 4px rgba(34, 197, 94, 0.25),
+              inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  animation: selectGlow 2s ease-in-out infinite;
+}
+
+.photo-card-top-btn.btn-select.active svg,
+.photo-card-top-btn.btn-customer-select.active svg {
+  stroke: #ffffff;
+  fill: rgba(255, 255, 255, 0.3);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+}
+
+.photo-card-top-btn.btn-select.active:hover,
+.photo-card-top-btn.btn-customer-select.active:hover {
+  background: rgba(22, 163, 74, 1);
+  box-shadow: 0 6px 28px var(--photo-state-selected-glow),
+              0 0 0 6px rgba(34, 197, 94, 0.3);
+  animation: none;
+}
+
+@keyframes selectGlow {
+  0%, 100% { box-shadow: 0 4px 20px var(--photo-state-selected-glow), 0 0 0 4px rgba(34, 197, 94, 0.25); }
+  50% { box-shadow: 0 4px 24px var(--photo-state-selected-glow), 0 0 0 6px rgba(34, 197, 94, 0.2); }
+}
+
+/* -------------------------------------------------------------------------
+   MANAGEMENT SELECT BUTTON - Blue for bulk operations
+   ------------------------------------------------------------------------- */
+.photo-card-top-btn.btn-management-select.active {
+  background: var(--photo-state-management-select);
   border-color: rgba(59, 130, 246, 1);
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 20px var(--photo-state-management-glow),
+              0 0 0 4px rgba(59, 130, 246, 0.25),
+              inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  animation: managementGlow 2s ease-in-out infinite;
 }
 
-.photo-card-top-btn.btn-select.active svg {
+.photo-card-top-btn.btn-management-select.active svg {
   stroke: #ffffff;
   fill: rgba(255, 255, 255, 0.2);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
 }
 
-.photo-card-top-btn.btn-select.active:hover {
+.photo-card-top-btn.btn-management-select.active:hover {
   background: rgba(37, 99, 235, 1);
-  box-shadow: 0 6px 24px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 6px 28px var(--photo-state-management-glow),
+              0 0 0 6px rgba(59, 130, 246, 0.3);
+  animation: none;
+}
+
+@keyframes managementGlow {
+  0%, 100% { box-shadow: 0 4px 20px var(--photo-state-management-glow), 0 0 0 4px rgba(59, 130, 246, 0.25); }
+  50% { box-shadow: 0 4px 24px var(--photo-state-management-glow), 0 0 0 6px rgba(59, 130, 246, 0.2); }
 }
 
 @keyframes heartBeat {
   0%, 100% { transform: scale(1); }
-  25% { transform: scale(1.2); }
+  25% { transform: scale(1.25); }
   50% { transform: scale(0.95); }
 }
 
-/* Bottom Action Bar Container */
+/* -------------------------------------------------------------------------
+   BOTTOM ACTION BAR - Floating glassmorphism container
+   Enhanced visibility with stronger contrast
+   ------------------------------------------------------------------------- */
 .photo-card-action-bar {
   position: absolute;
   bottom: 16px;
@@ -1509,31 +1638,39 @@ body {
   display: flex;
   gap: 8px;
   padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  
+  /* Enhanced glass effect - darker backdrop for photo contrast */
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(var(--photo-glass-blur-heavy)) saturate(var(--photo-glass-saturate));
+  -webkit-backdrop-filter: blur(var(--photo-glass-blur-heavy)) saturate(var(--photo-glass-saturate));
   border-radius: 60px;
-  border: 1.5px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
   z-index: 40;
 }
 
-/* Bottom Action Buttons */
+/* -------------------------------------------------------------------------
+   ACTION BUTTONS - Individual buttons in the action bar
+   ------------------------------------------------------------------------- */
 .photo-card-action-btn {
-  width: 44px;
-  height: 44px;
+  width: var(--photo-btn-size);
+  height: var(--photo-btn-size);
   border-radius: 50%;
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: var(--photo-transition);
   position: relative;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  
+  /* Enhanced glass with better visibility */
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 /* Gradient border effect on hover */
@@ -1543,18 +1680,19 @@ body {
   inset: 0;
   border-radius: 50%;
   padding: 1.5px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.1));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.1));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease;
 }
 
 .photo-card-action-btn:hover {
   transform: translateY(-3px) scale(1.08);
-  background: rgba(255, 255, 255, 0.28);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35),
+              inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .photo-card-action-btn:hover::before {
@@ -1566,18 +1704,19 @@ body {
 }
 
 .photo-card-action-btn svg {
-  width: 20px;
-  height: 20px;
+  width: var(--photo-btn-icon-size);
+  height: var(--photo-btn-icon-size);
   stroke: #ffffff;
   fill: none;
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+  transition: var(--photo-transition-fast);
 }
 
 .photo-card-action-btn:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline: 2px solid rgba(255, 255, 255, 0.9);
   outline-offset: 2px;
 }
 
@@ -1670,25 +1809,31 @@ body {
   transform: translateY(50%) translateX(0);
 }
 
-/* Light Mode Adjustments */
+/* -------------------------------------------------------------------------
+   LIGHT MODE ADJUSTMENTS - Adapted glass for light backgrounds
+   ------------------------------------------------------------------------- */
 [data-theme="light"] .photo-card-action-bar {
-  background: rgba(255, 255, 255, 0.85);
-  border: 1.5px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  background: var(--photo-glass-bg-light);
+  border: 1.5px solid var(--photo-glass-border-light);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18),
+              inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 [data-theme="light"] .photo-card-action-btn {
   background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 [data-theme="light"] .photo-card-action-btn:hover {
   background: rgba(255, 255, 255, 1);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18),
+              inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
 [data-theme="light"] .photo-card-action-btn svg {
   stroke: #1f2937;
+  filter: none;
 }
 
 [data-theme="light"] .photo-card-action-btn.btn-view svg,
@@ -1697,24 +1842,30 @@ body {
   stroke: #ffffff;
 }
 
+/* Light mode top buttons - Use darker glass for photo visibility */
 [data-theme="light"] .photo-card-top-btn {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1.5px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  background: rgba(30, 41, 59, 0.75);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 [data-theme="light"] .photo-card-top-btn:hover {
-  background: rgba(255, 255, 255, 1);
+  background: rgba(30, 41, 59, 0.85);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
 [data-theme="light"] .photo-card-top-btn svg {
-  stroke: #1f2937;
+  stroke: #ffffff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
 }
 
-/* Light mode active favorite - red background with white heart */
+/* Light mode active favorite - Enhanced glow */
 [data-theme="light"] .photo-card-top-btn.btn-favorite.active {
-  background: rgba(239, 68, 68, 0.95);
+  background: var(--photo-state-favorite);
   border-color: rgba(239, 68, 68, 1);
+  box-shadow: 0 4px 20px var(--photo-state-favorite-glow),
+              0 0 0 4px rgba(239, 68, 68, 0.2);
 }
 
 [data-theme="light"] .photo-card-top-btn.btn-favorite.active svg {
@@ -1722,27 +1873,51 @@ body {
   stroke: #ffffff;
 }
 
-/* Light mode active select - blue background with white check */
-[data-theme="light"] .photo-card-top-btn.btn-select.active {
-  background: rgba(59, 130, 246, 0.95);
-  border-color: rgba(59, 130, 246, 1);
+/* Light mode active select - Enhanced green glow */
+[data-theme="light"] .photo-card-top-btn.btn-select.active,
+[data-theme="light"] .photo-card-top-btn.btn-customer-select.active {
+  background: var(--photo-state-selected);
+  border-color: rgba(34, 197, 94, 1);
+  box-shadow: 0 4px 20px var(--photo-state-selected-glow),
+              0 0 0 4px rgba(34, 197, 94, 0.25);
 }
 
-[data-theme="light"] .photo-card-top-btn.btn-select.active svg {
+[data-theme="light"] .photo-card-top-btn.btn-select.active svg,
+[data-theme="light"] .photo-card-top-btn.btn-customer-select.active svg {
+  stroke: #ffffff;
+  fill: rgba(255, 255, 255, 0.3);
+}
+
+/* Light mode management select - Blue glow */
+[data-theme="light"] .photo-card-top-btn.btn-management-select.active {
+  background: var(--photo-state-management-select);
+  border-color: rgba(59, 130, 246, 1);
+  box-shadow: 0 4px 20px var(--photo-state-management-glow),
+              0 0 0 4px rgba(59, 130, 246, 0.25);
+}
+
+[data-theme="light"] .photo-card-top-btn.btn-management-select.active svg {
   stroke: #ffffff;
   fill: rgba(255, 255, 255, 0.2);
 }
 
-/* Responsive - Smaller buttons on mobile */
+/* -------------------------------------------------------------------------
+   RESPONSIVE - Mobile adjustments using CSS variables
+   ------------------------------------------------------------------------- */
 @media (max-width: 640px) {
+  :root {
+    --photo-btn-size: var(--photo-btn-size-sm);
+    --photo-btn-icon-size: var(--photo-btn-icon-size-sm);
+  }
+  
   .photo-card-top-btn {
-    width: 38px;
-    height: 38px;
+    width: var(--photo-btn-size-sm);
+    height: var(--photo-btn-size-sm);
   }
 
   .photo-card-top-btn svg {
-    width: 18px;
-    height: 18px;
+    width: var(--photo-btn-icon-size-sm);
+    height: var(--photo-btn-icon-size-sm);
   }
 
   .photo-card-action-bar {
@@ -1752,14 +1927,55 @@ body {
   }
 
   .photo-card-action-btn {
-    width: 38px;
-    height: 38px;
+    width: var(--photo-btn-size-sm);
+    height: var(--photo-btn-size-sm);
   }
 
   .photo-card-action-btn svg {
-    width: 18px;
-    height: 18px;
+    width: var(--photo-btn-icon-size-sm);
+    height: var(--photo-btn-icon-size-sm);
   }
+}
+
+/* -------------------------------------------------------------------------
+   PHOTO CARD SELECTION RING - Visual feedback for selected photos
+   Applied to the card container when photo is selected
+   ------------------------------------------------------------------------- */
+.photo-card-selected {
+  position: relative;
+}
+
+.photo-card-selected::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(var(--radius-card) + 3px);
+  border: 3px solid var(--photo-state-selected);
+  pointer-events: none;
+  animation: selectionRing 2s ease-in-out infinite;
+  z-index: 5;
+}
+
+@keyframes selectionRing {
+  0%, 100% { border-color: var(--photo-state-selected); box-shadow: 0 0 0 0 var(--photo-state-selected-glow); }
+  50% { border-color: rgba(34, 197, 94, 0.8); box-shadow: 0 0 8px 2px var(--photo-state-selected-glow); }
+}
+
+/* Favorited card ring */
+.photo-card-favorited::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(var(--radius-card) + 3px);
+  border: 3px solid var(--photo-state-favorite);
+  pointer-events: none;
+  animation: favoriteRing 2.5s ease-in-out infinite;
+  z-index: 5;
+}
+
+@keyframes favoriteRing {
+  0%, 100% { border-color: var(--photo-state-favorite); box-shadow: 0 0 0 0 var(--photo-state-favorite-glow); }
+  50% { border-color: rgba(239, 68, 68, 0.8); box-shadow: 0 0 8px 2px var(--photo-state-favorite-glow); }
 }
 
 /* =============================================================================
@@ -5324,7 +5540,340 @@ body {
 }
 
 /* =============================================================================
-   19. PRINT STYLES
+   19. PUBLIC PROFILE STYLES (Feature: 021-public-profile-mobile-responsive-theme)
+   Mobile-first, responsive, theme-aware styles for public profile pages
+   ============================================================================= */
+
+/* -------------------------------------------------------------------------
+   PUBLIC PROFILE GLASS CARDS - Theme aware with solid fallbacks
+   ------------------------------------------------------------------------- */
+.public-profile-glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="dark"] .public-profile-glass {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Backdrop-filter fallback for older browsers */
+@supports not (backdrop-filter: blur(12px)) {
+  .public-profile-glass,
+  .backdrop-blur-xl,
+  .backdrop-blur-md {
+    background: rgba(255, 255, 255, 0.95) !important;
+  }
+
+  [data-theme="dark"] .public-profile-glass,
+  [data-theme="dark"] .backdrop-blur-xl,
+  [data-theme="dark"] .backdrop-blur-md {
+    background: rgba(15, 23, 42, 0.98) !important;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   PUBLIC PROFILE HERO SECTION - Mobile-first typography
+   ------------------------------------------------------------------------- */
+.public-profile-hero-title {
+  font-size: clamp(2rem, 8vw, 4.5rem);
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.public-profile-hero-tagline {
+  font-size: clamp(1rem, 3vw, 1.5rem);
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------------------------------
+   PUBLIC PROFILE BUTTONS - Consistent touch targets
+   ------------------------------------------------------------------------- */
+.public-profile-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.public-profile-btn:active {
+  transform: scale(0.95);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-profile-btn:active {
+    transform: none;
+  }
+}
+
+/* Primary CTA */
+.public-profile-btn-primary {
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  color: white;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+}
+
+.public-profile-btn-primary:hover {
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Secondary CTA */
+.public-profile-btn-secondary {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--color-text-primary);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+[data-theme="dark"] .public-profile-btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.public-profile-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .public-profile-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* -------------------------------------------------------------------------
+   PUBLIC PROFILE CONTACT CARDS - Responsive grid
+   ------------------------------------------------------------------------- */
+.public-profile-contact-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  min-height: 64px;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+[data-theme="dark"] .public-profile-contact-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.public-profile-contact-card:hover {
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .public-profile-contact-card:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* -------------------------------------------------------------------------
+   PUBLIC PROFILE SOCIAL ICONS - Touch-friendly sizing
+   ------------------------------------------------------------------------- */
+.public-profile-social-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  color: var(--color-text-secondary);
+  transition: all 0.3s ease;
+}
+
+[data-theme="dark"] .public-profile-social-icon {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-neutral-400);
+}
+
+.public-profile-social-icon:hover {
+  background: var(--color-primary-500);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+}
+
+/* -------------------------------------------------------------------------
+   PUBLIC PROFILE SERVICES GRID - Responsive columns
+   ------------------------------------------------------------------------- */
+.public-profile-services-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .public-profile-services-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .public-profile-services-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.public-profile-service-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  min-height: 72px;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+[data-theme="dark"] .public-profile-service-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.public-profile-service-card:hover {
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="dark"] .public-profile-service-card:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Sweep animation on hover */
+.public-profile-service-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+
+.public-profile-service-card:hover::after {
+  transform: translateX(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-profile-service-card::after {
+    display: none;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   PUBLIC PROFILE LAYOUT - Mobile-first container
+   ------------------------------------------------------------------------- */
+.public-profile-container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+@media (min-width: 640px) {
+  .public-profile-container {
+    padding: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .public-profile-container {
+    padding: 2rem;
+  }
+}
+
+.public-profile-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .public-profile-layout {
+    flex-direction: row;
+    gap: 2rem;
+  }
+
+  .public-profile-sidebar {
+    width: 38.2%; /* Golden ratio */
+    flex-shrink: 0;
+  }
+
+  .public-profile-main {
+    flex: 1;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   PUBLIC PROFILE ANIMATIONS - Respect reduced motion
+   ------------------------------------------------------------------------- */
+.public-profile-fade-in {
+  animation: publicProfileFadeIn 0.5s ease-out forwards;
+}
+
+@keyframes publicProfileFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-profile-fade-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Stagger children animations */
+.public-profile-stagger > * {
+  animation: publicProfileFadeIn 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+.public-profile-stagger > *:nth-child(1) { animation-delay: 0.1s; }
+.public-profile-stagger > *:nth-child(2) { animation-delay: 0.2s; }
+.public-profile-stagger > *:nth-child(3) { animation-delay: 0.3s; }
+.public-profile-stagger > *:nth-child(4) { animation-delay: 0.4s; }
+.public-profile-stagger > *:nth-child(5) { animation-delay: 0.5s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .public-profile-stagger > * {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* =============================================================================
+   20. PRINT STYLES
    ============================================================================= */
 
 @media print {

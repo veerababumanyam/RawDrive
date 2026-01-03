@@ -43,6 +43,12 @@ export interface FaceGroup {
     updated_at: string;
 }
 
+// Face group with gallery-specific statistics
+export interface FaceGroupWithGalleryStats extends FaceGroup {
+    gallery_photo_count: number;  // Number of photos in this gallery containing this person
+    gallery_face_count: number;   // Number of face instances in this gallery
+}
+
 // Summary version for merge suggestions (lightweight)
 export interface FaceGroupSummary {
     id: string;
@@ -154,6 +160,35 @@ class FaceApiService {
         const result = extractData(response);
 
         // Map backend format (data/meta) to frontend format (groups/total)
+        return {
+            groups: result.data || [],
+            total: result.meta?.total || 0,
+        };
+    }
+
+    /**
+     * Get face groups for a specific gallery (gallery-scoped)
+     * Only returns people who appear in photos within this gallery
+     */
+    async getGalleryFaceGroups(
+        workspaceId: string,
+        galleryId: string,
+        options?: {
+            search?: string;
+            limit?: number;
+            page?: number;
+        }
+    ): Promise<{ groups: FaceGroupWithGalleryStats[]; total: number }> {
+        const params = new URLSearchParams();
+        if (options?.search) params.set('search', options.search);
+        if (options?.limit) params.set('limit', String(options.limit));
+        if (options?.page) params.set('page', String(options.page));
+
+        const response = await apiClient.get<{ data: FaceGroupWithGalleryStats[]; meta: { total: number } }>(
+            `${this.baseUrl}/galleries/${galleryId}/face-groups?${params}`
+        );
+        const result = extractData(response);
+
         return {
             groups: result.data || [],
             total: result.meta?.total || 0,
@@ -530,6 +565,30 @@ class FaceApiService {
         const response = await apiClient.post<{ job_id: string }>(
             `${this.baseUrl}/workspaces/${workspaceId}/photos/${photoId}/detect-faces`
         );
+        return extractData(response);
+    }
+
+    /**
+     * Trigger face detection for all photos in a gallery
+     * Smart incremental scan - only scans new/unprocessed photos
+     */
+    async scanGalleryFaces(
+        workspaceId: string,
+        galleryId: string
+    ): Promise<{ 
+        jobs_queued: number; 
+        already_processed: number; 
+        pending?: number;
+        total_photos?: number;
+        message: string;
+    }> {
+        const response = await apiClient.post<{
+            jobs_queued: number;
+            already_processed: number;
+            pending?: number;
+            total_photos?: number;
+            message: string;
+        }>(`${this.baseUrl}/workspaces/${workspaceId}/galleries/${galleryId}/scan-faces`);
         return extractData(response);
     }
 

@@ -335,8 +335,22 @@ export const useAIFeatureToggles = ({
       const data = await geminiSettingsService.getFeatureToggles();
       setFeatureToggles(data);
     } catch (err) {
+      // On fetch failure, provide sensible defaults so AI features remain usable
+      // if the user has configured their API key elsewhere
+      console.warn('[useAIFeatureToggles] Failed to fetch toggles, using defaults:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch feature toggles'));
-      setFeatureToggles(null);
+      // Default to all features enabled with unknown API key status
+      setFeatureToggles({
+        toggles: {
+          photo_analysis: true,
+          captions: true,
+          hashtags: true,
+          gallery_story: true,
+          smart_curation: true,
+        },
+        has_api_key: false,
+        api_status: 'unknown',
+      });
     } finally {
       setLoading(false);
     }

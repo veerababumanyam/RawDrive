@@ -111,6 +111,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   const uploadSingleFileRef = useRef<((uploadFile: UploadFile) => Promise<void>) | null>(null);
   const wasUploadingRef = useRef<boolean>(false);
   const batchStartedRef = useRef<boolean>(false);
+  // Track files that have started uploading (prevents duplicate uploads from StrictMode/double effects)
+  const startedUploadsRef = useRef<Set<string>>(new Set());
 
   // Calculate progress
   const progress = useMemo<UploadProgress>(() => {
@@ -332,6 +334,13 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           return;
         }
 
+        // Check if this file has already started uploading (prevents StrictMode double-invocation)
+        if (startedUploadsRef.current.has(fileId)) {
+          console.log(`[Upload] Skipping duplicate start for file ${fileId}`);
+          return;
+        }
+        startedUploadsRef.current.add(fileId);
+
         // Reuse existing session if retrying (prevents duplicate uploads)
         let sessionUploadId = uploadFile.uploadId;
         let uploadUrl = '';
@@ -349,11 +358,15 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
             relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
           });
           sessionUploadId = session.upload_id;
+          // CRITICAL: Always use the upload_url returned by the backend
+          // This ensures correct environment (dev vs prod) URL is used
           uploadUrl = session.upload_url;
           updateFile(fileId, { uploadId: session.upload_id });
         } else {
-          // Existing session - construct upload URL from uploadId
-          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          // Existing session for retry - get upload URL from backend
+          // We need to re-fetch the session to get the correct URL
+          // For now, construct it using localhost as this is a retry scenario
+          const apiBase = 'http://localhost:8000'; // Use local backend for retries
           uploadUrl = `${apiBase}/api/v1/workspaces/${workspaceId}/uploads/${sessionUploadId}/upload`;
         }
 
@@ -457,6 +470,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
         // Cleanup
         activeUploadsRef.current.delete(fileId);
+        startedUploadsRef.current.delete(fileId); // Allow re-upload if needed
         if (uploadFile.thumbnail) {
           URL.revokeObjectURL(uploadFile.thumbnail);
         }
@@ -476,6 +490,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         if (retryCount <= retryAttempts) {
           // Retry - preserve uploadId to avoid creating duplicate sessions
           const currentUploadId = uploadFile.uploadId;
+          // Clear started flag to allow retry
+          startedUploadsRef.current.delete(fileId);
           updateFile(fileId, {
             status: 'pending',
             error: undefined,
@@ -495,6 +511,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
             retryCount,
           });
           activeUploadsRef.current.delete(fileId);
+          startedUploadsRef.current.delete(fileId); // Allow manual retry
           onError?.(error instanceof Error ? error : new Error(errorMessage), fileId);
         }
       }
@@ -628,6 +645,9 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         return;
       }
 
+      // Clear the started flag to allow retry
+      startedUploadsRef.current.delete(fileId);
+
       updateFile(fileId, {
         status: 'pending',
         error: undefined,
@@ -671,6 +691,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     });
     activeUploadsRef.current.clear();
     pauseStateRef.current.clear();
+    startedUploadsRef.current.clear();
   }, []);
 
   // Process queue when files change

@@ -145,6 +145,8 @@ services:
       # Worker-specific settings
       DB_POOL_MIN_SIZE: 1
       DB_POOL_MAX_SIZE: 5
+      # Encryption - ensure ENCRYPTION_MASTER_KEY is set (same as backend)
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
       # Google Cloud Vision credentials (mounted to /run/secrets/ to avoid nested mount conflict with /app)
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-credentials.json
     # Health check endpoint on port 8001

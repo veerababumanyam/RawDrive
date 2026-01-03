@@ -394,6 +394,13 @@ export default {
         '9/16': '9 / 16',
         '21/9': '21 / 9',
       },
+      
+      /* =======================================================================
+         RING WIDTH - Extended for selection states
+         ======================================================================= */
+      ringWidth: {
+        '3': '3px',
+      },
     },
   },
   plugins: [
@@ -417,7 +424,7 @@ export default {
         },
       });
 
-      // Glass effect utilities
+      // Glass effect utilities - Enhanced for photo overlays
       addUtilities({
         '.glass': {
           background: 'var(--glass-background)',
@@ -430,6 +437,13 @@ export default {
           'backdrop-filter': 'blur(var(--glass-blur))',
           '-webkit-backdrop-filter': 'blur(var(--glass-blur))',
           border: '1px solid var(--glass-border-light)',
+        },
+        '.glass-photo': {
+          background: 'var(--photo-glass-bg)',
+          'backdrop-filter': 'blur(var(--photo-glass-blur)) saturate(var(--photo-glass-saturate))',
+          '-webkit-backdrop-filter': 'blur(var(--photo-glass-blur)) saturate(var(--photo-glass-saturate))',
+          border: '1.5px solid var(--photo-glass-border)',
+          'box-shadow': 'var(--photo-glass-shadow)',
         },
       });
 
