@@ -387,7 +387,7 @@ class DigitalInvitationService:
 
 
         # Log audit event
-        await self.rsvp_repo.create_event(
+        await self.rsvp_repo.log_event(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
             event_type="created",
@@ -587,7 +587,7 @@ class DigitalInvitationService:
             raise InvitationNotFoundError(str(invitation_id))
 
         # Log audit event
-        await self.rsvp_repo.create_event(
+        await self.rsvp_repo.log_event(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
             event_type="updated",
@@ -638,7 +638,7 @@ class DigitalInvitationService:
             raise InvitationNotFoundError(str(invitation_id))
 
         # Log audit event
-        await self.rsvp_repo.create_event(
+        await self.rsvp_repo.log_event(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
             event_type="deleted",
@@ -761,7 +761,7 @@ class DigitalInvitationService:
             raise InvitationNotFoundError(str(invitation_id))
 
         # Log audit event
-        await self.rsvp_repo.create_event(
+        await self.rsvp_repo.log_event(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
             event_type="published",
@@ -839,7 +839,7 @@ class DigitalInvitationService:
             raise InvitationNotFoundError(str(invitation_id))
 
         # Log audit event
-        await self.rsvp_repo.create_event(
+        await self.rsvp_repo.log_event(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
             event_type="unpublished",
@@ -1254,7 +1254,7 @@ class DigitalInvitationService:
             )
 
         # Log audit event
-        await self.rsvp_repo.create_event(
+        await self.rsvp_repo.log_event(
             invitation_id=new_invitation_id,
             workspace_id=workspace_id,
             event_type="duplicated",
