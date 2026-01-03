@@ -55,6 +55,7 @@ import type {
   InvitationEventListResponse,
   SubEvent,
   InvitationMedia,
+  MediaPurpose,
   GenerateContentRequest,
   GenerateContentResponse,
 } from '@/types/invitations';
@@ -818,7 +819,7 @@ export async function initiateMediaUpload(
   workspaceId: string,
   invitationId: string,
   file: File,
-  purpose: 'content' | 'background' | 'effect' = 'content'
+  purpose: MediaPurpose = 'content'
 ): Promise<InitiateMediaUploadResponse> {
   const response = await apiClient.post<InitiateMediaUploadResponse>(
     `/api/v1/workspaces/${workspaceId}/digital-invitations/${invitationId}/media`,
@@ -826,7 +827,7 @@ export async function initiateMediaUpload(
       filename: file.name,
       content_type: file.type,
       size_bytes: file.size,
-      media_type: file.type.startsWith('audio/') ? 'audio' : 'video',
+      media_type: file.type.startsWith('audio/') ? 'audio' : file.type.startsWith('image/') ? 'image' : 'video',
       purpose,
     }
   );
@@ -854,7 +855,7 @@ export async function uploadMedia(
   workspaceId: string,
   invitationId: string,
   file: File,
-  purpose: 'content' | 'background' | 'effect' = 'content'
+  purpose: MediaPurpose = 'content'
 ): Promise<InvitationMedia> {
   const { media, upload_url } = await initiateMediaUpload(
     workspaceId,

@@ -385,8 +385,10 @@ const InvitationCreatePage: React.FC = () => {
                   hostNames={wizardData.host_names}
                   videoUrl={wizardData.video_url}
                   audioUrl={wizardData.audio_url}
+                  mainCardUrl={wizardData.main_card_url}
                   customization={{
                     colors: wizardData.customization?.colors as Record<string, string> | undefined,
+                    layout_config: wizardData.customization?.layout_config,
                     fonts: Object.fromEntries(
                       Object.entries({
                         heading: wizardData.font_heading,

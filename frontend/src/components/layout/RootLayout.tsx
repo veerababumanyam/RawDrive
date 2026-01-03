@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { SearchProvider, useAuth } from '../../contexts';
 import { useToast } from '../../hooks/useToast';
+import { ChunkLoadErrorNotification } from '../error/ChunkLoadErrorHandler';
 
 /**
  * RootLayout Component
@@ -29,6 +30,7 @@ export const RootLayout: React.FC = () => {
 
     return (
         <SearchProvider>
+            <ChunkLoadErrorNotification />
             <Outlet />
         </SearchProvider>
     );

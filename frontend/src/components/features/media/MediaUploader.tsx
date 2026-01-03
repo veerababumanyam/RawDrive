@@ -1,18 +1,20 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, X, FileVideo, FileAudio, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, X, FileVideo, FileAudio, FileImage, CheckCircle, AlertCircle } from 'lucide-react';
 import { AppButton } from '@/components/ui/AppButton';
 import {
   initiateMediaUpload,
   completeMediaUpload,
 } from '@/services/invitationService';
 
-import type { InvitationMedia } from '@/types/invitations';
+import type { InvitationMedia, MediaPurpose } from '@/types/invitations';
 
 interface MediaUploaderProps {
   workspaceId: string;
   invitationId: string;
   onUploadComplete?: (media: InvitationMedia) => void;
   className?: string;
+  purpose?: MediaPurpose;
+  label?: string;
 }
 
 interface UploadState {
@@ -26,6 +28,8 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
   invitationId,
   onUploadComplete,
   className = '',
+  purpose = 'content',
+  label,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -63,23 +67,27 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
 
   const handleFile = (file: File) => {
     // Validate file type
-    const validTypes = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/wav'];
+    const validTypes = [
+      'video/mp4', 'video/quicktime', 
+      'audio/mpeg', 'audio/mp4', 'audio/wav',
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif'
+    ];
     if (!validTypes.includes(file.type)) {
       setUploadState({
         progress: 0,
         status: 'error',
-        error: 'Invalid file type. Please upload MP4, MOV, MP3, or WAV.',
+        error: 'Invalid file type. Supported: MP4, MOV, MP3, WAV, JPG, PNG, WEBP.',
       });
       return;
     }
 
-    // Validate size (e.g., 100MB limit)
-    const maxSize = 100 * 1024 * 1024; // 100MB
+    // Validate size (500MB limit)
+    const maxSize = 500 * 1024 * 1024; // 500MB
     if (file.size > maxSize) {
       setUploadState({
         progress: 0,
         status: 'error',
-        error: 'File too large. Maximum size is 100MB.',
+        error: 'File too large. Maximum size is 500MB.',
       });
       return;
     }
@@ -99,6 +107,7 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
         workspaceId,
         invitationId,
         file,
+        purpose
       );
 
       // 2) Upload to storage (presigned PUT)
@@ -170,16 +179,18 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
                 type="file"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 onChange={handleChange}
-                accept="video/*,audio/*"
+                accept="video/*,audio/*,image/*"
             />
             
             <div className="flex flex-col items-center justify-center text-center">
                 {file ? (
                 <div className="flex flex-col items-center gap-2">
-                    {file.type.startsWith('video/') ? (
-                    <FileVideo className="w-10 h-10 text-primary" />
+                    {file.type.startsWith('image/') ? (
+                      <FileImage className="w-10 h-10 text-primary" />
+                    ) : file.type.startsWith('video/') ? (
+                      <FileVideo className="w-10 h-10 text-primary" />
                     ) : (
-                    <FileAudio className="w-10 h-10 text-primary" />
+                      <FileAudio className="w-10 h-10 text-primary" />
                     )}
                     <div>
                     <p className="font-medium text-text-primary">{file.name}</p>
@@ -192,10 +203,10 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
                 <>
                     <Upload className="w-10 h-10 text-text-tertiary mb-3" />
                     <p className="font-medium text-text-primary mb-1">
-                    Click to upload or drag and drop
+                    {label || 'Click to upload or drag and drop'}
                     </p>
                     <p className="text-sm text-text-secondary">
-                    MP4, MOV, MP3, WAV (max 100MB)
+                    Photos, Videos & Audio (max 500MB)
                     </p>
                 </>
                 )}

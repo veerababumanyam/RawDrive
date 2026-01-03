@@ -72,6 +72,8 @@ export const useStorageUsage = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const intervalRef = useRef<number | null>(null);
+  // Track if we should stop fetching (e.g., due to 401 auth error)
+  const shouldStopFetching = useRef(false);
 
   // Get cached data if available and not stale
   const getCachedStorage = useCallback(() => {
@@ -86,6 +88,9 @@ export const useStorageUsage = ({
   const fetchStorage = useCallback(
     async (forceRefresh = false) => {
       if (!workspaceId) return;
+      
+      // Don't fetch if we've encountered an auth error
+      if (shouldStopFetching.current) return;
 
       // Check cache first (unless force refresh)
       if (!forceRefresh) {
@@ -123,6 +128,16 @@ export const useStorageUsage = ({
           }
         }
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        
+        // Check for 401 Unauthorized - stop further fetches silently
+        if (errorMessage.includes('401') || errorMessage.toLowerCase().includes('unauthorized')) {
+          shouldStopFetching.current = true;
+          // Don't log or set error - this is expected when user logs out
+          setLoading(false);
+          return;
+        }
+        
         setError(err instanceof Error ? err : new Error('Failed to fetch storage usage'));
       } finally {
         setLoading(false);

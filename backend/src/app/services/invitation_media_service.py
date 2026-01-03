@@ -23,6 +23,10 @@ from app.services.r2_storage_service import (
     get_r2_storage_service,
     StorageError,
 )
+from app.services.storage_service import (
+    StorageService,
+    get_storage_service,
+)
 from app.services.task_queue import enqueue_task
 
 logger = logging.getLogger(__name__)
@@ -35,9 +39,11 @@ class InvitationMediaService:
         self,
         repository: Optional[InvitationMediaRepository] = None,
         storage_service: Optional[R2StorageService] = None,
+        quota_service: Optional[StorageService] = None,
     ):
         self._repository = repository
         self._storage_service = storage_service
+        self._quota_service = quota_service
 
     @property
     def repository(self) -> InvitationMediaRepository:
@@ -50,6 +56,12 @@ class InvitationMediaService:
         if self._storage_service is None:
             self._storage_service = get_r2_storage_service()
         return self._storage_service
+
+    @property
+    def quota_service(self) -> StorageService:
+        if self._quota_service is None:
+            self._quota_service = get_storage_service()
+        return self._quota_service
 
     async def _populate_url(self, media: dict[str, Any]) -> dict[str, Any]:
         """Populate presigned GET URL for media object."""
@@ -71,15 +83,23 @@ class InvitationMediaService:
         content_type: str,
         size_bytes: int,
         user_id: Optional[UUID] = None,
+        purpose: str = "content",
     ) -> dict[str, Any]:
         """Initiate valid media upload.
         
         Creates a DB record and returns a presigned URL for direct R2 upload.
         """
-        # 1. Generate Object Key
+        # 1. Check Storage Quota
+        allowed, error_msg = await self.quota_service.check_upload_allowed(
+            workspace_id, size_bytes
+        )
+        if not allowed:
+            raise ValueError(f"Storage quota exceeded: {error_msg}")
+
+        # 2. Generate Object Key
         object_key = f"workspaces/{workspace_id}/invitations/{invitation_id}/media/{filename}"
 
-        # 2. Create DB Record (pending status)
+        # 3. Create DB Record (pending status)
         media = await self.repository.create_media(
             workspace_id=workspace_id,
             invitation_id=invitation_id,
@@ -88,10 +108,11 @@ class InvitationMediaService:
             original_filename=filename,
             original_mime_type=content_type,
             original_size_bytes=size_bytes,
+            purpose=purpose,
             uploaded_by_user_id=user_id,
         )
 
-        # 3. Generate Presigned URL
+        # 4. Generate Presigned URL
         upload_url = await self.storage_service.generate_presigned_put_url(
             object_key=object_key,
             content_type=content_type,
@@ -122,7 +143,10 @@ class InvitationMediaService:
         if not updated_media:
             raise ValueError("Media not found")
 
-        # 2. Queue processing task
+        # 2. Invalidate storage cache to reflect new usage
+        await self.quota_service.invalidate_cache(workspace_id)
+
+        # 3. Queue processing task
         await enqueue_task(
             "invitation.media.process",
             {
@@ -181,7 +205,13 @@ class InvitationMediaService:
             # Continue to delete DB record even if storage deletion fails (consistency)
 
         # 2. Delete from DB
-        return await self.repository.delete_media(workspace_id, invitation_id, media_id)
+        deleted = await self.repository.delete_media(workspace_id, invitation_id, media_id)
+        
+        # 3. Invalidate storage cache
+        if deleted:
+            await self.quota_service.invalidate_cache(workspace_id)
+            
+        return deleted
 
 
 _invitation_media_service: Optional[InvitationMediaService] = None

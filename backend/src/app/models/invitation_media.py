@@ -10,12 +10,14 @@ from pydantic import BaseModel, Field
 class MediaType(str, Enum):
     VIDEO = "video"
     AUDIO = "audio"
+    IMAGE = "image"
 
 
 class MediaPurpose(str, Enum):
     CONTENT = "content"
     BACKGROUND = "background"
     EFFECT = "effect"
+    MAIN_CARD = "main_card"
 
 
 class MediaProcessingStatus(str, Enum):

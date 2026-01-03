@@ -23,6 +23,9 @@ import {
   Video,
   Music,
   Wand2,
+  LayoutTemplate,
+  CreditCard,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 import { AppButton } from '@/components/ui/AppButton';
@@ -53,6 +56,7 @@ import type {
   RSVPCustomQuestion,
   InvitationTemplate,
   InvitationMedia,
+  LayoutConfig,
 } from '@/types/invitations';
 
 // ---------------------------------------------------------------------------
@@ -87,6 +91,8 @@ export interface WizardData {
   video_url?: string;
   audio_object_key?: string;
   audio_url?: string;
+  main_card_object_key?: string;
+  main_card_url?: string;
 
   // Step 3: RSVP Settings
   rsvp_settings: RSVPSettings;
@@ -635,6 +641,21 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
     });
   };
 
+  const layoutConfig: LayoutConfig = (data.customization.layout_config as LayoutConfig) || {
+    mode: 'standard',
+    show_hero_overlay: true,
+    show_details_text: true,
+  };
+
+  const updateLayoutConfig = (updates: Partial<LayoutConfig>) => {
+    onChange({
+      customization: {
+        ...data.customization,
+        layout_config: { ...layoutConfig, ...updates },
+      },
+    });
+  };
+
   // Ensure an invitation exists once the user reaches Step 2 so media uploads are immediately available
   useEffect(() => {
     if (!workspaceId || data.invitation_id || isCreatingInvitation || hasRequestedInvitation) return;
@@ -671,12 +692,19 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
       const resolvedUrl = media.url || media.media_url || media.original_url;
       const updates: Partial<WizardData> = {};
 
-      if (media.media_type === 'video') {
+      if (media.purpose === 'main_card') {
+        updates.main_card_object_key = objectKey;
+        updates.main_card_url = resolvedUrl;
+      } else if (media.media_type === 'video') {
         updates.video_object_key = objectKey;
         updates.video_url = resolvedUrl;
-      } else {
+      } else if (media.media_type === 'audio') {
         updates.audio_object_key = objectKey;
         updates.audio_url = resolvedUrl;
+      } else if (media.media_type === 'image' && media.purpose === 'content') {
+        // Treat content images (hero) as video/poster for now, or just cover
+         updates.video_object_key = objectKey; // Reuse video key for hero image?
+         updates.video_url = resolvedUrl;
       }
 
       onChange(updates);
@@ -836,7 +864,86 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
       {/* Design Customization (if template selected) */}
       {data.template_id && (
         <section className="bg-surface-hover rounded-lg p-6 space-y-8">
+          {/* Layout Selection */}
           <div>
+            <h4 className="text-base font-medium text-text-primary mb-4 flex items-center gap-2">
+              <LayoutTemplate className="w-4 h-4 text-primary" />
+              Invitation Layout
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+               {/* Standard Mode */}
+               <button
+                type="button"
+                onClick={() => updateLayoutConfig({ mode: 'standard' })}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${
+                  layoutConfig.mode === 'standard'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-border hover:border-primary/50 bg-surface'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Video className="w-4 h-4 text-primary" />
+                  <span className="font-medium text-sm text-text-primary">Standard</span>
+                </div>
+                <p className="text-xs text-text-secondary">Hero video/image with event details below.</p>
+              </button>
+
+              {/* Design Card Mode */}
+              <button
+                type="button"
+                onClick={() => updateLayoutConfig({ mode: 'card_only' })}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${
+                  layoutConfig.mode === 'card_only'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-border hover:border-primary/50 bg-surface'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <CreditCard className="w-4 h-4 text-primary" />
+                  <span className="font-medium text-sm text-text-primary">Design Card</span>
+                </div>
+                <p className="text-xs text-text-secondary">Upload your own full invitation design.</p>
+              </button>
+
+              {/* Hybrid Mode */}
+              <button
+                type="button"
+                onClick={() => updateLayoutConfig({ mode: 'hybrid' })}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${
+                  layoutConfig.mode === 'hybrid'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-border hover:border-primary/50 bg-surface'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex -space-x-1">
+                    <Video className="w-4 h-4 text-primary" />
+                    <CreditCard className="w-4 h-4 text-primary" />
+                  </div>
+                  <span className="font-medium text-sm text-text-primary">Cinematic</span>
+                </div>
+                <p className="text-xs text-text-secondary">Hero video top + design card below.</p>
+              </button>
+            </div>
+
+            {/* Layout Options */}
+            <div className="flex flex-wrap gap-4">
+              <Checkbox
+                label="Show Title Overlay"
+                checked={layoutConfig.show_hero_overlay}
+                onChange={(e) => updateLayoutConfig({ show_hero_overlay: e.target.checked })}
+                description="Display event title over hero media"
+              />
+              <Checkbox
+                label="Show Event Details"
+                checked={layoutConfig.show_details_text}
+                onChange={(e) => updateLayoutConfig({ show_details_text: e.target.checked })}
+                description="List date, time, and venue text"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-6">
             <h4 className="text-base font-medium text-text-primary mb-4 flex items-center gap-2">
               <Palette className="w-4 h-4 text-primary" />
               Customize Colors
@@ -900,68 +1007,98 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
              />
           </div>
 
-          <div className="border-t border-border pt-6">
-            <h4 className="text-base font-medium text-text-primary mb-4 flex items-center gap-2">
-              <Video className="w-4 h-4 text-primary" />
-              Hero Media
-            </h4>
-
-            {!data.invitation_id || isCreatingInvitation ? (
-              <div className="bg-surface p-4 rounded-lg border border-border text-center space-y-3">
-                {isCreatingInvitation ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto" />
-                    <p className="text-sm text-text-secondary">
-                      Preparing your invitation so media uploads are ready...
-                    </p>
-                  </>
+            {/* Dynamic Media Upload Section */}
+            <div className="border-t border-border pt-6">
+              <h4 className="text-base font-medium text-text-primary mb-4 flex items-center gap-2">
+                {layoutConfig.mode === 'card_only' ? (
+                  <ImageIcon className="w-4 h-4 text-primary" />
                 ) : (
-                  <>
-                    <p className="text-sm text-text-secondary">
-                      We need to create a draft to attach media. Click below to retry.
-                    </p>
-                    <AppButton
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setHasRequestedInvitation(true);
-                        setIsCreatingInvitation(true);
-                        setCreateError(null);
-                        onCreateDraft().catch((err) => {
-                          setCreateError(err?.message || 'Failed to create invitation draft');
-                        }).finally(() => setIsCreatingInvitation(false));
-                      }}
-                    >
-                      Enable Media Upload
-                    </AppButton>
-                  </>
+                  <Video className="w-4 h-4 text-primary" />
                 )}
-                {createError && (
-                  <p className="text-xs text-destructive">{createError}</p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="block text-sm font-medium text-text-primary">
-                    Hero Video / Background Music
-                  </label>
-                  {existingMedia.length > 0 && (
-                    <AppButton
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowMediaLibrary((open) => !open)}
-                    >
-                      {showMediaLibrary ? 'Hide library' : 'Choose from gallery'}
-                    </AppButton>
-                  )}
-                </div>
+                Invitation Media
+              </h4>
 
-                <MediaUploader
-                  workspaceId={workspaceId}
-                  invitationId={data.invitation_id}
-                  onUploadComplete={handleUploadComplete}
-                />
+              {!data.invitation_id || isCreatingInvitation ? (
+                 <div className="bg-surface p-4 rounded-lg border border-border text-center space-y-3">
+                 {isCreatingInvitation ? (
+                   <>
+                     <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto" />
+                     <p className="text-sm text-text-secondary">
+                       Preparing your invitation so media uploads are ready...
+                     </p>
+                   </>
+                 ) : (
+                   <>
+                     <p className="text-sm text-text-secondary">
+                       We need to create a draft to attach media. Click below to retry.
+                     </p>
+                     <AppButton
+                       variant="outline"
+                       size="sm"
+                       onClick={() => {
+                         setHasRequestedInvitation(true);
+                         setIsCreatingInvitation(true);
+                         setCreateError(null);
+                         onCreateDraft().catch((err) => {
+                           setCreateError(err?.message || 'Failed to create invitation draft');
+                         }).finally(() => setIsCreatingInvitation(false));
+                       }}
+                     >
+                       Enable Media Upload
+                     </AppButton>
+                   </>
+                 )}
+                 {createError && (
+                   <p className="text-xs text-destructive">{createError}</p>
+                 )}
+               </div>
+              ) : (
+                <div className="space-y-6">
+                  {existingMedia.length > 0 && (
+                    <div className="flex justify-end">
+                      <AppButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowMediaLibrary((open) => !open)}
+                      >
+                        {showMediaLibrary ? 'Hide library' : 'View media library'}
+                      </AppButton>
+                    </div>
+                  )}
+
+                  {/* Hero Uploader (Standard & Hybrid) */}
+                  {layoutConfig.mode !== 'card_only' && (
+                    <div className="space-y-2">
+                       <label className="block text-sm font-medium text-text-primary">
+                        Hero Video / Cover
+                      </label>
+                      <MediaUploader
+                        workspaceId={workspaceId}
+                        invitationId={data.invitation_id}
+                        onUploadComplete={handleUploadComplete}
+                        purpose="content"
+                        label="Upload Hero Video or Photo"
+                      />
+                    </div>
+                  )}
+
+                  {/* Main Card Uploader (Card Only & Hybrid) */}
+                  {layoutConfig.mode !== 'standard' && (
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-text-primary">
+                        Invitation Design Card
+                      </label>
+                      <MediaUploader
+                        workspaceId={workspaceId}
+                        invitationId={data.invitation_id}
+                        onUploadComplete={handleUploadComplete}
+                        purpose="main_card"
+                        label="Upload Invitation Design (Image)"
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Media Library (Existing code preserved/adapted) */}
 
                 {showMediaLibrary && (
                   <div className="bg-surface p-4 rounded-lg border border-border space-y-3">

@@ -77,9 +77,15 @@ export interface SubEvent {
   updated_at: string;
 }
 
-export type MediaType = 'video' | 'audio';
-export type MediaPurpose = 'content' | 'background' | 'effect';
+export type MediaType = 'video' | 'audio' | 'image';
+export type MediaPurpose = 'content' | 'background' | 'effect' | 'main_card';
 export type MediaProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface LayoutConfig {
+  mode: 'standard' | 'card_only' | 'hybrid';
+  show_hero_overlay: boolean;
+  show_details_text: boolean;
+}
 
 export interface InvitationMedia {
   media_id: string;

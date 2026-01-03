@@ -1,0 +1,456 @@
+# API Changes: Invitation RSVP System Hardening
+# Feature: 020-invitation-rsvp-hardening
+# Date: 2026-01-03
+
+openapi: 3.0.3
+info:
+  title: RawDrive Invitation RSVP API Changes
+  description: |
+    API changes for the Invitation RSVP System Hardening feature.
+    This document covers new endpoints and modifications to existing ones.
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+tags:
+  - name: RSVP Export
+    description: Export RSVP data in various formats
+  - name: RSVP Management
+    description: RSVP CRUD operations (existing, behavior changes)
+
+paths:
+  # NEW ENDPOINT: PDF Export
+  /workspaces/{workspace_id}/invitations/{invitation_id}/rsvps/export/pdf:
+    get:
+      tags:
+        - RSVP Export
+      summary: Export RSVPs as PDF
+      description: |
+        Generate a formatted PDF document containing all RSVPs for an invitation.
+        The PDF includes guest list, attendance statistics, and event details.
+
+        **Authorization**: Requires workspace member access.
+
+        **Audit**: Logged as `rsvp.exported` event.
+      operationId: exportRsvpsPdf
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: PDF file download
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="guest-list-2026-01-03.pdf"'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+        - bearerAuth: []
+
+  # EXISTING ENDPOINT: Submit RSVP (behavior changes)
+  /public/invitations/{token}/rsvp:
+    post:
+      tags:
+        - RSVP Management
+      summary: Submit RSVP (public endpoint)
+      description: |
+        Submit an RSVP response to a published invitation.
+
+        **Changes in this feature**:
+        - Returns 409 Conflict if duplicate email detected (was 400)
+        - Race condition protected by database constraint
+        - Audit logging added (`rsvp.submitted` event)
+        - PII removed from application logs
+
+        **Authorization**: Public endpoint, no authentication required.
+      operationId: submitRsvp
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: Invitation access token
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RSVPCreate'
+      responses:
+        '201':
+          description: RSVP created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RSVPResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '404':
+          description: Invitation not found or expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate RSVP (email already submitted)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateError'
+
+  # EXISTING ENDPOINT: Update RSVP by token (behavior changes)
+  /public/invitations/{token}/rsvp/{edit_token}:
+    put:
+      tags:
+        - RSVP Management
+      summary: Update RSVP using edit token
+      description: |
+        Update an existing RSVP using the secure edit token from confirmation email.
+
+        **Changes in this feature**:
+        - Audit logging added (`rsvp.updated` or `rsvp.edit_token_invalid`)
+        - PII removed from application logs
+        - Invalid token attempts logged for security monitoring
+
+        **Authorization**: Edit token required (from confirmation email).
+      operationId: updateRsvpByToken
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: Invitation access token
+          schema:
+            type: string
+        - name: edit_token
+          in: path
+          required: true
+          description: RSVP edit token (from confirmation email)
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RSVPUpdate'
+      responses:
+        '200':
+          description: RSVP updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RSVPResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '403':
+          description: Invalid or expired edit token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: RSVP not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # EXISTING ENDPOINT: Delete RSVP (behavior changes)
+  /workspaces/{workspace_id}/invitations/{invitation_id}/rsvps/{rsvp_id}:
+    delete:
+      tags:
+        - RSVP Management
+      summary: Delete RSVP
+      description: |
+        Delete an RSVP from an invitation.
+
+        **Changes in this feature**:
+        - Audit logging added (`rsvp.deleted` event)
+        - Workspace isolation enforced at repository level
+
+        **Authorization**: Requires workspace member access.
+      operationId: deleteRsvp
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/InvitationId'
+        - name: rsvp_id
+          in: path
+          required: true
+          description: RSVP unique identifier
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: RSVP deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - bearerAuth: []
+
+components:
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      description: Workspace unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    InvitationId:
+      name: invitation_id
+      in: path
+      required: true
+      description: Invitation unique identifier
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    RSVPCreate:
+      type: object
+      required:
+        - guest_name
+        - guest_email
+      properties:
+        guest_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Guest display name (sanitized)
+          example: "John Smith"
+        guest_email:
+          type: string
+          format: email
+          description: Guest email address
+          example: "john.smith@example.com"
+        guest_phone:
+          type: string
+          maxLength: 50
+          description: Optional phone number
+          example: "+1-555-0100"
+        attending:
+          type: boolean
+          description: Attendance confirmation
+          example: true
+        party_size:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 1
+          description: Number of guests in party
+          example: 2
+        party_names:
+          type: array
+          items:
+            type: string
+          description: Names of additional guests
+          example: ["Jane Smith"]
+        dietary_preferences:
+          type: string
+          description: Food restrictions or preferences
+          example: "Vegetarian"
+        message:
+          type: string
+          maxLength: 1000
+          description: Message to hosts
+          example: "Looking forward to it!"
+        custom_answers:
+          type: object
+          additionalProperties: true
+          description: Responses to custom form fields
+
+    RSVPUpdate:
+      type: object
+      properties:
+        guest_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        attending:
+          type: boolean
+        party_size:
+          type: integer
+          minimum: 1
+          maximum: 20
+        party_names:
+          type: array
+          items:
+            type: string
+        dietary_preferences:
+          type: string
+        message:
+          type: string
+          maxLength: 1000
+        custom_answers:
+          type: object
+          additionalProperties: true
+
+    RSVPResponse:
+      type: object
+      properties:
+        rsvp_id:
+          type: string
+          format: uuid
+        invitation_id:
+          type: string
+          format: uuid
+        guest_name:
+          type: string
+        guest_email:
+          type: string
+          format: email
+        attending:
+          type: boolean
+        party_size:
+          type: integer
+        status:
+          type: string
+          enum: [pending, confirmed, declined, maybe, cancelled]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        edit_url:
+          type: string
+          format: uri
+          description: URL to edit this RSVP (included in confirmation email)
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error type
+          example: "NotFound"
+        message:
+          type: string
+          description: User-friendly error message
+          example: "Invitation not found or has expired"
+        requestId:
+          type: string
+          description: Request ID for support reference
+
+    ValidationError:
+      type: object
+      required:
+        - error
+        - message
+        - details
+      properties:
+        error:
+          type: string
+          example: "ValidationError"
+        message:
+          type: string
+          example: "Please correct the errors below"
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: "guest_email"
+              message:
+                type: string
+                example: "Invalid email format"
+
+    DuplicateError:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: "DuplicateRSVP"
+        message:
+          type: string
+          example: "You have already RSVP'd to this invitation. Check your email for the edit link."
+        existing_rsvp_id:
+          type: string
+          format: uuid
+          description: ID of the existing RSVP (only if authenticated user)
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Unauthorized"
+            message: "Authentication required"
+
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Forbidden"
+            message: "You don't have permission to access this resource"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "NotFound"
+            message: "The requested resource was not found"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "InternalError"
+            message: "Something went wrong. Our team has been notified."
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

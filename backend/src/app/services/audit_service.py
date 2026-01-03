@@ -255,6 +255,7 @@ class AuditEventType(str, Enum):
     USER_2FA_ENABLED = "user.2fa_enabled"
     USER_2FA_DISABLED = "user.2fa_disabled"
     USER_SETTINGS_UPDATED = "user.settings_updated"
+    SETTINGS_CHANGED = "settings.changed"  # Generic settings change (AI, platform, etc.)
     USER_DELETION_REQUESTED = "user.deletion_requested"
     USER_DELETION_CANCELLED = "user.deletion_cancelled"
     USER_DELETION_COMPLETED = "user.deletion_completed"  # GDPR: Record when data deleted

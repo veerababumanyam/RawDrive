@@ -74,7 +74,7 @@ class InvitationAIService:
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {
                         "temperature": 0.7,
-                        "maxOutputTokens": 800,
+                        "maxOutputTokens": 4096,  # High limit for Indian regional languages (Telugu, Tamil, Hindi, etc.)
                         "responseMimeType": "application/json",
                     },
                 },
