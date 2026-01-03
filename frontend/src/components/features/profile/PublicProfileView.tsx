@@ -9,6 +9,7 @@
  * - Dynamic font loading for theme typography
  * - SEO metadata via react-helmet
  * - Action buttons: vCard download, QR code, share
+ * - System theme detection + manual theme toggle (dark/light)
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -16,7 +17,9 @@ import { Helmet } from 'react-helmet-async';
 import { PublicCompanyProfile } from '../../../types/companyProfile';
 import { companyProfileService } from '../../../services/companyProfileService';
 import { fontService } from '../../../services/fontService';
-import { ProfileCard } from './ProfileCard';
+import { PublicProfileLayout } from './public/PublicProfileLayout';
+import { PublicProfileThemeToggle } from './public/PublicProfileThemeToggle';
+import { usePublicProfileTheme } from '../../../hooks/usePublicProfileTheme';
 import { AppButton } from '../../ui/AppButton';
 import {
     transformThemeForProfileCard,
@@ -33,6 +36,9 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [fontsLoaded, setFontsLoaded] = useState(false);
+    
+    // Theme management - detects system preference, allows manual toggle
+    const { theme, toggleTheme } = usePublicProfileTheme();
 
     // Fetch profile data
     useEffect(() => {
@@ -151,8 +157,11 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
     // Loading state
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <div 
+                data-theme={theme}
+                className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-200"
+            >
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 dark:border-primary-400"></div>
             </div>
         );
     }
@@ -160,7 +169,10 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
     // Error state
     if (error || !profile) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+            <div 
+                data-theme={theme}
+                className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4 transition-colors duration-200"
+            >
                 <div className="text-center max-w-md w-full bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl">
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">404</h1>
                     <p className="text-gray-600 dark:text-gray-400 mb-6">{error || "Profile not found"}</p>
@@ -187,49 +199,45 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
                 )}
             </Helmet>
 
-            {/* Mobile-first full-height layout */}
-            <div
-                className="min-h-screen flex flex-col items-center p-4 sm:py-12 sm:px-6 lg:px-8"
-                style={bgStyle}
-            >
-                {/* Main Card - Mobile: full width, Desktop: max-width */}
-                <div
-                    className={`w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-800 transition-all hover:shadow-2xl ${
-                        !fontsLoaded ? 'opacity-95' : 'opacity-100'
-                    }`}
-                >
-                    <ProfileCard
-                        profile={{
-                            name: profile.name,
-                            tagline: profile.tagline,
-                            // Use explicit public logo URL to ensure correct resolution
-                            // Backend may return relative path that needs proper base URL
-                            logo_url: profile.logo_url 
-                                ? (profile.logo_url.startsWith('/') 
-                                    ? companyProfileService.getPublicLogoUrl(slug)
-                                    : profile.logo_url)
-                                : undefined,
-                            email: profile.email,
-                            phone: profile.phone,
-                            website: profile.website,
-                            secondary_emails: profile.secondary_emails,
-                            secondary_phones: profile.secondary_phones,
-                            address_structured: profile.address_structured,
-                            socials: profile.socials,
-                            custom_links: profile.custom_links,
-                        }}
-                        visibility={profile.company_visibility}
-                        showActions={true}
-                        slug={slug}
-                        compact={false}
-                        themeColors={themeProps.themeColors}
-                        themeTypography={themeProps.themeTypography}
-                        themeLayout={themeProps.themeLayout}
-                        onDownloadVCard={handleDownloadVCard}
-                        onDownloadQr={handleDownloadQr}
-                        onShare={handleShare}
-                    />
-                </div>
+            {/* Theme-aware container */}
+            <div data-theme={theme} className="min-h-screen transition-colors duration-200">
+                {/* Theme Toggle Button */}
+                <PublicProfileThemeToggle 
+                    theme={theme} 
+                    onToggle={toggleTheme} 
+                />
+
+                {/* Mobile-first full-height layout */}
+                <PublicProfileLayout
+                    profile={{
+                        name: profile.name,
+                        tagline: profile.tagline,
+                        // Use explicit public logo URL to ensure correct resolution
+                        logo_url: profile.logo_url 
+                            ? (profile.logo_url.startsWith('http') 
+                                ? profile.logo_url 
+                                : companyProfileService.getPublicLogoUrl(slug))
+                            : undefined,
+                        email: profile.email,
+                        phone: profile.phone,
+                        website: profile.website,
+                        secondary_emails: profile.secondary_emails,
+                        secondary_phones: profile.secondary_phones,
+                        address_structured: profile.address_structured,
+                        socials: profile.socials,
+                        custom_links: profile.custom_links,
+                    }}
+                    visibility={profile.company_visibility}
+                    showActions={true}
+                    slug={slug}
+                    compact={false}
+                    themeColors={themeProps.themeColors}
+                    themeTypography={themeProps.themeTypography}
+                    themeLayout={themeProps.themeLayout}
+                    onDownloadVCard={handleDownloadVCard}
+                    onDownloadQr={handleDownloadQr}
+                    onShare={handleShare}
+                />
             </div>
         </>
     );

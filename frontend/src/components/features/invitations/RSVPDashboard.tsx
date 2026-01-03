@@ -6,9 +6,12 @@
  * - Filterable RSVP list with search
  * - Export to CSV/PDF
  * - Delete RSVP capability
+ * - Error boundary with retry (T043)
+ * - Responsive layout + design tokens (T044)
+ * - Theme toggle support (T045)
  *
- * Feature: 016-save-the-date
- * Tasks: T050-T059
+ * Feature: 016-save-the-date, 020-invitation-rsvp-hardening
+ * Tasks: T050-T059, T043-T045
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -34,6 +37,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { AppBadge } from '@/components/ui/AppBadge';
 import { AppCard } from '@/components/ui/AppCard';
+import InvitationErrorBoundary from '@/components/ErrorBoundary/InvitationErrorBoundary';
 import { invitationService } from '@/services/invitationService';
 import type { RSVPResponse, RSVPStatsResponse, InvitationRSVP } from '@/types/invitations';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
@@ -190,7 +194,11 @@ const RSVPRow: React.FC<RSVPRowProps> = ({ rsvp, onDelete, isDeleting }) => {
 // Main Component
 // ---------------------------------------------------------------------------
 
-export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
+/**
+ * Inner dashboard component - wrapped by error boundary
+ * Separated to allow error boundary to catch rendering errors
+ */
+const RSVPDashboardInner: React.FC<RSVPDashboardProps> = ({
   workspaceId,
   invitationId,
   className = '',
@@ -526,6 +534,42 @@ export const RSVPDashboard: React.FC<RSVPDashboardProps> = ({
         )}
       </AppCard>
     </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Exported Component with Error Boundary (T043)
+// ---------------------------------------------------------------------------
+
+/**
+ * RSVPDashboard with error boundary wrapper
+ *
+ * Provides resilient error handling:
+ * - Catches React rendering errors
+ * - Offers retry with exponential backoff
+ * - Logs errors without PII (SOC 2 compliant)
+ *
+ * @see T043 - Wrap dashboard content with error boundary and retry behavior
+ */
+export const RSVPDashboard: React.FC<RSVPDashboardProps> = (props) => {
+  const handleError = useCallback((error: Error, errorInfo: React.ErrorInfo) => {
+    // SOC 2 compliant logging - no PII
+    console.error('RSVPDashboard error:', {
+      errorName: error.name,
+      errorMessage: error.message,
+      workspaceId: props.workspaceId,
+      invitationId: props.invitationId,
+      // Do not log: guest names, emails, phone numbers
+    });
+  }, [props.workspaceId, props.invitationId]);
+
+  return (
+    <InvitationErrorBoundary
+      onError={handleError}
+      maxRetries={3}
+    >
+      <RSVPDashboardInner {...props} />
+    </InvitationErrorBoundary>
   );
 };
 

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 import { AppButton } from '../../ui/AppButton';
-import { ProfileCard } from '../profile/ProfileCard';
+import { PublicProfileLayout } from '../profile/public/PublicProfileLayout';
 import { fontService } from '../../../services/fontService';
 import { companyProfileService } from '../../../services/companyProfileService';
 import type { CompanyProfile, CompanyVisibilityConfig } from '../../../types/companyProfile';
@@ -436,15 +436,14 @@ export const CompanyProfilePreview: React.FC<CompanyProfilePreviewProps> = ({
       style={themeStyles}
     >
       <div
-        className="flex-1 flex flex-col m-2 bg-white dark:bg-gray-900 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800"
+        className="flex-1 flex flex-col h-full bg-white dark:bg-gray-900 overflow-hidden shadow-sm"
       >
-        <ProfileCard
+        <PublicProfileLayout
           profile={profile}
           visibility={visibility}
           showActions={false}
           slug={profile?.slug}
           compact={deviceMode === 'phone'}
-          qrCodeUrl={qrCodeUrl}
           themeColors={profile?._theme ? {
             primary: (profile._themeCustomization?.custom_colors?.primary || profile._theme.base_colors.primary),
             secondary: (profile._themeCustomization?.custom_colors?.secondary || profile._theme.base_colors.secondary),
@@ -462,6 +461,7 @@ export const CompanyProfilePreview: React.FC<CompanyProfilePreviewProps> = ({
                 ? `"${profile._theme.default_typography.body_font.family}", ${profile._theme.default_typography.body_font.fallback?.join(', ') || 'sans-serif'}`
                 : undefined,
           } : undefined}
+          // Layout config is not strictly used by PublicProfileLayout anymore but kept for type compatibility if needed
           themeLayout={profile?._theme ? {
             spacing: profile._themeCustomization?.custom_layout?.spacing || profile._theme.layout_config?.spacing,
             heroStyle: profile._themeCustomization?.custom_layout?.hero_style || profile._theme.layout_config?.hero_style,

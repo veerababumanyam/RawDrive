@@ -154,13 +154,15 @@ class RSVPRepository:
     async def get_rsvp_by_email(
         self,
         invitation_id: UUID,
+        workspace_id: UUID,
         guest_email: str,
     ) -> Optional[dict[str, Any]]:
-        """Get RSVP by email for an invitation.
+        """Get RSVP by email for an invitation within a workspace.
 
         Args:
             invitation_id: Invitation ID
-            guest_email: Guest email address
+            workspace_id: Workspace ID for tenant isolation
+            guest_email: Guest email address (case-insensitive)
 
         Returns:
             RSVP record or None
@@ -170,9 +172,12 @@ class RSVPRepository:
             row = await conn.fetchrow(
                 """
                 SELECT * FROM invitation_rsvps
-                WHERE invitation_id = $1 AND LOWER(guest_email) = LOWER($2)
+                WHERE invitation_id = $1
+                  AND workspace_id = $2
+                  AND LOWER(guest_email) = LOWER($3)
                 """,
                 invitation_id,
+                workspace_id,
                 guest_email,
             )
 
@@ -512,12 +517,12 @@ class RSVPRepository:
                 notes,
             )
 
+            # SOC 2: Don't log guest_name (PII)
             logger.info(
                 "Check-in created",
                 extra={
                     "checkin_id": str(row["checkin_id"]),
                     "invitation_id": str(invitation_id),
-                    "guest_name": guest_name,
                     "party_size": party_size_checked_in,
                 },
             )
@@ -801,10 +806,11 @@ class RSVPRepository:
     async def find_by_email(
         self,
         invitation_id: UUID,
+        workspace_id: UUID,
         email: str,
     ):
-        """Alias for get_rsvp_by_email."""
-        return await self.get_rsvp_by_email(invitation_id, email)
+        """Alias for get_rsvp_by_email with workspace isolation."""
+        return await self.get_rsvp_by_email(invitation_id, workspace_id, email)
 
     async def create(self, rsvp_data: dict):
         """Alias for create_rsvp - accepts dict and extracts parameters."""
@@ -843,9 +849,12 @@ class RSVPRepository:
             )
             return self._row_to_dict(row) if row else None
 
-    async def update(self, rsvp_id: UUID, update_data: dict):
-        """Alias for update_rsvp."""
-        return await self.update_rsvp(rsvp_id, **update_data)
+    async def update(self, rsvp_id: UUID, workspace_id: UUID, update_data: dict):
+        """Alias for update_rsvp with required workspace_id for tenant isolation.
+
+        Security: workspace_id is REQUIRED to enforce multi-tenant data isolation.
+        """
+        return await self.update_rsvp(rsvp_id, workspace_id, **update_data)
 
     async def get_stats(self, invitation_id: UUID, workspace_id: UUID):
         """Alias for get_rsvp_stats."""
@@ -884,9 +893,13 @@ class RSVPRepository:
         """Alias for get_rsvp_by_id."""
         return await self.get_rsvp_by_id(rsvp_id, workspace_id)
 
-    async def delete(self, rsvp_id: UUID):
-        """Alias for delete_rsvp without workspace_id."""
-        return await self.delete_rsvp(rsvp_id)
+    async def delete(self, rsvp_id: UUID, workspace_id: UUID):
+        """Alias for delete_rsvp with required workspace_id for tenant isolation.
+
+        Security: workspace_id is REQUIRED to enforce multi-tenant data isolation.
+        This prevents cross-workspace data deletion attacks.
+        """
+        return await self.delete_rsvp(rsvp_id, workspace_id)
 
 
 # Factory function for dependency injection

@@ -73,6 +73,7 @@ from app.services.invitation_draft_service import (
     get_invitation_draft_service,
     InvitationDraftService,
 )
+from app.services.audit_service import AuditService, AuditEventType
 from app.services.checkin_service import (
     CheckinService,
     AlreadyCheckedInError,
@@ -872,6 +873,31 @@ async def export_rsvps(
     safe_title = "".join(c for c in invitation_title if c.isalnum() or c in " -_").strip()
     safe_title = safe_title[:50] if safe_title else "rsvps"
     timestamp = datetime.now().strftime("%Y%m%d")
+
+    # T050: Audit log the export (SOC 2 compliance)
+    # Log before generating export to ensure audit trail even if export fails
+    export_format = format.lower() if format else "csv"
+    user_id = current_user.get("user_id") if current_user else None
+    try:
+        audit_service = AuditService()
+        await audit_service.log_event(
+            event_type=AuditEventType.RSVP_EXPORTED,
+            workspace_id=str(workspace_id),
+            resource_type="invitation",
+            resource_id=str(invitation_id),
+            actor_user_id=str(user_id) if user_id else None,
+            metadata={
+                "format": export_format,
+                "rsvp_count": total,
+                "invitation_id": str(invitation_id),
+            },
+        )
+    except Exception as e:
+        # Don't fail export if audit logging fails
+        logger.warning(
+            "Failed to log audit event for RSVP export",
+            extra={"invitation_id": str(invitation_id), "error": str(e)},
+        )
 
     if format.lower() == "pdf":
         # PDF Export

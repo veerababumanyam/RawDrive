@@ -340,6 +340,50 @@ npm run build
 
 ---
 
+## Test Results (2026-01-03)
+
+### Frontend Tests
+
+```
+Test Suites:  3 passed (3)
+Tests:        63 passed (63)
+
+Breakdown:
+- wcag-contrast-rsvp.test.ts      24 passed
+- rsvp_export_pdf.test.ts         21 passed
+- InvitationErrorBoundary.test.tsx 18 passed
+```
+
+### Backend Tests
+
+```
+Test Files: 1 passed
+Tests:      28 passed, 1 error (teardown only)
+
+Breakdown:
+- test_invitation_pdf_export.py   28 passed
+
+Error: Event loop cleanup issue in test teardown (not blocking)
+```
+
+### WCAG AA Compliance
+
+All contrast ratios validated:
+
+| Theme | Element | Ratio | Status |
+|-------|---------|-------|--------|
+| Light | text-primary on surface | 15.5:1 | PASS |
+| Light | text-secondary on surface | 7.0:1 | PASS |
+| Light | text-tertiary on surface | 4.6:1 | PASS |
+| Light | success badge | 4.7:1 | PASS |
+| Light | error badge | 4.9:1 | PASS |
+| Light | warning badge | 4.5:1 | PASS |
+| Dark | text-primary on surface | 15.5:1 | PASS |
+| Dark | text-secondary on surface | 9.8:1 | PASS |
+| Dark | text-tertiary on surface | 6.1:1 | PASS |
+
+---
+
 ## Resources
 
 - [Specification](./spec.md)

@@ -262,6 +262,21 @@ class AuditEventType(str, Enum):
     USER_DELETION_FAILED = "user.deletion_failed"  # GDPR: Record deletion failures
     DATA_EXPORT_REQUESTED = "user.data_export_requested"
 
+    # Invitation Lifecycle Events (020-invitation-rsvp-hardening)
+    INVITATION_CREATED = "invitation.created"
+    INVITATION_PUBLISHED = "invitation.published"
+    INVITATION_ARCHIVED = "invitation.archived"
+    INVITATION_DELETED = "invitation.deleted"
+    INVITATION_ACCESS_DENIED = "invitation.access_denied"
+
+    # RSVP Events (020-invitation-rsvp-hardening)
+    RSVP_SUBMITTED = "rsvp.submitted"
+    RSVP_UPDATED = "rsvp.updated"
+    RSVP_DELETED = "rsvp.deleted"
+    RSVP_EDIT_TOKEN_USED = "rsvp.edit_token_used"
+    RSVP_EDIT_TOKEN_INVALID = "rsvp.edit_token_invalid"
+    RSVP_EXPORTED = "rsvp.exported"
+
 
 @dataclass
 class AuditEvent:

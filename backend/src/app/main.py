@@ -13,6 +13,7 @@ from app.api.v1 import router as v1_router  # type: ignore
 from app.config.settings import ensure_settings_loaded
 from app.db.postgres import close_postgres_pool, init_postgres_pool, postgres_healthcheck  # type: ignore
 from app.db.redis import close_redis_client, init_redis_client, redis_healthcheck  # type: ignore
+from app.logging import configure_logging  # type: ignore
 from app.middleware.audit_logging import AuditLoggingMiddleware  # type: ignore
 from app.middleware.rate_limit import RateLimitMiddleware  # type: ignore
 from app.middleware.request_id import RequestIdMiddleware  # type: ignore
@@ -22,6 +23,7 @@ from app.services.task_queue import get_task_queue  # type: ignore
 from app.services.oauth_service import close_http_client  # type: ignore
 
 settings = ensure_settings_loaded()
+configure_logging()
 logger = logging.getLogger("rawdrive")
 
 

@@ -215,3 +215,6 @@ backend/credentials/
 
 # Allow backend source models
 !backend/src/app/models/
+
+# Allow frontend public models
+!frontend/public/models/
