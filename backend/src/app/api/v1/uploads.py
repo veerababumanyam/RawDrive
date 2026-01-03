@@ -23,6 +23,7 @@ from app.api.schemas import (
 )
 from app.api.exceptions import ValidationAppError, InternalError, NotFoundError
 from app.services.content_detection_service import get_content_detection_service
+from app.services.upload_service import get_upload_service, UploadError
 
 logger = logging.getLogger(__name__)
 
