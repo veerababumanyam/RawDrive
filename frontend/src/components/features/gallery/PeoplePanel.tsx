@@ -101,7 +101,7 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                 });
                 // Poll for completion if jobs were queued
                 pollForCompletion();
-            } else if (result.pending > 0) {
+            } else if (result.pending && result.pending > 0) {
                 setScanStatus({ 
                     scanning: true, 
                     message: `Processing ${result.pending} photo${result.pending !== 1 ? 's' : ''}...`,
