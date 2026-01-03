@@ -845,8 +845,40 @@ const PublicInvitationPage: React.FC = () => {
     );
   }
 
-  const invitation = accessResponse.invitation;
+  // Render invitation content in a separate component to ensure hooks are called consistently
+  return (
+    <InvitationContent
+      invitation={accessResponse.invitation}
+      slug={slug!}
+      turnstileConfig={turnstileConfig}
+      rsvpMutation={rsvpMutation}
+      submitResult={submitResult}
+      handleDownloadCalendar={handleDownloadCalendar}
+    />
+  );
+};
 
+// ---------------------------------------------------------------------------
+// Invitation Content Component (extracted to ensure hooks are called consistently)
+// ---------------------------------------------------------------------------
+
+interface InvitationContentProps {
+  invitation: PublicInvitation;
+  slug: string;
+  turnstileConfig?: TurnstileConfig;
+  rsvpMutation: ReturnType<typeof useMutation<RSVPSubmitResponse, Error, SubmitRSVPRequest>>;
+  submitResult?: RSVPSubmitResponse;
+  handleDownloadCalendar: () => void;
+}
+
+const InvitationContent: React.FC<InvitationContentProps> = ({
+  invitation,
+  slug,
+  turnstileConfig,
+  rsvpMutation,
+  submitResult,
+  handleDownloadCalendar,
+}) => {
   // Extract colors with fallbacks
   const colors = {
     primary: (invitation.customization as Record<string, Record<string, string>>)?.colors?.primary || '#6366f1',
@@ -859,10 +891,6 @@ const PublicInvitationPage: React.FC = () => {
     heading: (invitation.customization as Record<string, Record<string, string>>)?.fonts?.heading || 'Playfair Display',
     body: (invitation.customization as Record<string, Record<string, string>>)?.fonts?.body || 'Inter',
   };
-
-  // Extract custom font IDs if present (for custom uploaded fonts)
-  const customFontHeadingId = (invitation as { custom_font_heading_id?: string }).custom_font_heading_id;
-  const customFontBodyId = (invitation as { custom_font_body_id?: string }).custom_font_body_id;
 
   // Language configuration for i18n (Phase 9, enhanced for 019-invitation-indian-languages)
   const primaryLang = invitation.primary_language || 'en';
@@ -950,6 +978,7 @@ const PublicInvitationPage: React.FC = () => {
     } : undefined,
     image: invitation.cover_image_url,
   }), [invitation]);
+
   const endTime = invitation.event_end_datetime
     ? formatEventTime(invitation.event_end_datetime, invitation.event_timezone, primaryLang)
     : null;
