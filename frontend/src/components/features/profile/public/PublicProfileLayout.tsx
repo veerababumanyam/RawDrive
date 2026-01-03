@@ -7,6 +7,13 @@ import { ServicesGlassGrid } from './ServicesGlassGrid';
 import { FooterGlassStrip } from './FooterGlassStrip';
 import type { CompanyProfile, CompanyVisibilityConfig } from '../../../../types/companyProfile';
 
+/* =============================================================================
+   PublicProfileLayout Component
+
+   Mobile-first responsive layout for public profile pages.
+   Supports both light and dark themes.
+   ============================================================================= */
+
 interface PublicProfileLayoutProps {
   profile: Partial<CompanyProfile>;
   visibility?: Partial<CompanyVisibilityConfig>;
@@ -25,8 +32,6 @@ interface PublicProfileLayoutProps {
     headingFont?: string;
     bodyFont?: string;
   };
-  // Theme layout is unused in the new design as it enforces its own layout, 
-  // but kept for compatibility with existing types/props if needed
   themeLayout?: any; 
   onDownloadVCard?: () => void;
   onDownloadQr?: () => void;
@@ -36,7 +41,6 @@ interface PublicProfileLayoutProps {
 export const PublicProfileLayout: React.FC<PublicProfileLayoutProps> = ({
   profile,
   visibility = {},
-  slug,
   themeColors,
   themeTypography,
   onDownloadVCard,
@@ -54,13 +58,6 @@ export const PublicProfileLayout: React.FC<PublicProfileLayoutProps> = ({
       '--theme-font-body': themeTypography?.bodyFont ? `${themeTypography.bodyFont}` : 'inherit',
     } as React.CSSProperties;
   }, [themeColors, themeTypography]);
-
-  // Construct gradient from theme colors
-  const themeGradient = useMemo(() => {
-    const primary = themeColors?.primary || '#EFF6FF';
-    const accent = themeColors?.accent || '#E0F2FE';
-    return `linear-gradient(135deg, ${primary}20 0%, ${accent}20 100%)`;
-  }, [themeColors]);
 
   // Scroll to content section
   const handleViewPortfolio = () => {
@@ -82,10 +79,29 @@ export const PublicProfileLayout: React.FC<PublicProfileLayoutProps> = ({
     }
   };
 
+  // Check if we have any content to show in the main area
+  const hasContactInfo = visibility.email || visibility.phone || visibility.address;
+  const hasServices = visibility.custom_links && profile.custom_links && profile.custom_links.length > 0;
+  const hasWebsite = visibility.website && profile.website;
+
   return (
-    <GlassContainer themeGradient={themeGradient}>
-      <div style={styleVariables} className="font-body text-text-primary">
+    <GlassContainer>
+      <div style={styleVariables} className="text-gray-900 dark:text-white">
         
+        {/* Skip Link for Accessibility */}
+        <a 
+          href="#profile-content" 
+          className="
+            sr-only focus:not-sr-only 
+            focus:absolute focus:top-4 focus:left-4 focus:z-[60]
+            focus:px-4 focus:py-2 
+            focus:bg-primary-500 focus:text-white 
+            focus:rounded-lg focus:outline-none
+          "
+        >
+          Skip to content
+        </a>
+
         {/* Global font application */}
         <style>{`
           .font-heading { font-family: var(--theme-font-heading, inherit); }
@@ -100,53 +116,56 @@ export const PublicProfileLayout: React.FC<PublicProfileLayoutProps> = ({
           logoUrl={visibility.logo_url ? profile.logo_url : undefined}
           onViewPortfolio={handleViewPortfolio}
           onBookNow={handleBookNow}
-          className="mb-0"
         />
 
-        {/* Main Content Grid */}
-        <div id="profile-content" className="container mx-auto px-4 py-12 lg:py-20 relative z-20">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Main Content - Mobile-first layout */}
+        <div 
+          id="profile-content" 
+          className="
+            container mx-auto 
+            px-4 sm:px-6 lg:px-8 
+            py-8 sm:py-12 lg:py-16
+            relative z-20
+          "
+        >
+          {/* Mobile: Single column stack | Desktop: Two column flex */}
+          <div className="flex flex-col lg:flex-row lg:gap-8 xl:gap-12">
             
-            {/* Left Column: Info & Contact (4 cols) */}
-            <div className="lg:col-span-5 space-y-8">
-              {/* Studio Info (Logo/Name/Socials simplified) */}
-              <StudioInfoCard 
-                name={profile.name || ''}
-                tagline={visibility.tagline ? profile.tagline : undefined}
-                logoUrl={visibility.logo_url ? profile.logo_url : undefined}
-                website={visibility.website ? profile.website : undefined}
-              />
-
-              {/* Contact Details */}
-              <div id="contact-section">
-                <ContactMethodsCard 
-                  email={visibility.email ? (profile.email || '') : ''}
-                  phone={visibility.phone && profile.phone ? profile.phone : undefined}
-                  address={visibility.address ? profile.address_structured : undefined}
-                  socials={profile.socials} // Visibility handled inside? Or check keys here.
-                  // Note: ContactMethodsCard checks visibility internally mostly by existence, 
-                  // but we should respect the toggle if we want to be strict.
-                  // For now passing full socials, component will render if non-empty. 
-                  // TO-DO: Filter socials based on visibility config if granular control exists
-                  onDownloadVCard={visibility.vcard ? onDownloadVCard : undefined}
-                  onDownloadQr={visibility.qr_code ? onDownloadQr : undefined}
-                />
-              </div>
-            </div>
-
-            {/* Right Column: Custom Links / Services (8 cols) */}
-            <div className="lg:col-span-7">
-              {visibility.custom_links && profile.custom_links && (
-                <ServicesGlassGrid 
-                  links={profile.custom_links} 
+            {/* Left Column: Website + Contact (narrower on desktop) */}
+            <div className="w-full lg:w-5/12 xl:w-4/12 space-y-4 sm:space-y-6">
+              
+              {/* Website Link Card - only shows if website exists */}
+              {hasWebsite && (
+                <StudioInfoCard 
+                  name={profile.name || ''}
+                  tagline={visibility.tagline ? profile.tagline : undefined}
+                  website={profile.website}
                 />
               )}
-              
-              {/* Placeholder for future gallery or portfolio grid if data existed */}
-              {/* <div className="mt-8 p-8 glass-card rounded-2xl border border-glass-border-2 bg-glass-2 text-center text-text-secondary">
-                 Portfolio gallery coming soon...
-              </div> */}
+
+              {/* Contact Details */}
+              {hasContactInfo && (
+                <div id="contact-section">
+                  <ContactMethodsCard 
+                    email={visibility.email ? (profile.email || '') : ''}
+                    phone={visibility.phone && profile.phone ? profile.phone : undefined}
+                    address={visibility.address ? profile.address_structured : undefined}
+                    socials={profile.socials}
+                    onDownloadVCard={visibility.vcard ? onDownloadVCard : undefined}
+                    onDownloadQr={visibility.qr_code ? onDownloadQr : undefined}
+                  />
+                </div>
+              )}
             </div>
+
+            {/* Right Column: Services/Links (wider on desktop) */}
+            {hasServices && (
+              <div className="w-full lg:w-7/12 xl:w-8/12 mt-6 lg:mt-0">
+                <ServicesGlassGrid 
+                  links={profile.custom_links!} 
+                />
+              </div>
+            )}
 
           </div>
         </div>

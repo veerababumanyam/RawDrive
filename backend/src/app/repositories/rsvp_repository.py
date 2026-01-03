@@ -154,13 +154,15 @@ class RSVPRepository:
     async def get_rsvp_by_email(
         self,
         invitation_id: UUID,
+        workspace_id: UUID,
         guest_email: str,
     ) -> Optional[dict[str, Any]]:
-        """Get RSVP by email for an invitation.
+        """Get RSVP by email for an invitation within a workspace.
 
         Args:
             invitation_id: Invitation ID
-            guest_email: Guest email address
+            workspace_id: Workspace ID for tenant isolation
+            guest_email: Guest email address (case-insensitive)
 
         Returns:
             RSVP record or None
@@ -170,9 +172,12 @@ class RSVPRepository:
             row = await conn.fetchrow(
                 """
                 SELECT * FROM invitation_rsvps
-                WHERE invitation_id = $1 AND LOWER(guest_email) = LOWER($2)
+                WHERE invitation_id = $1
+                  AND workspace_id = $2
+                  AND LOWER(guest_email) = LOWER($3)
                 """,
                 invitation_id,
+                workspace_id,
                 guest_email,
             )
 
@@ -801,10 +806,11 @@ class RSVPRepository:
     async def find_by_email(
         self,
         invitation_id: UUID,
+        workspace_id: UUID,
         email: str,
     ):
-        """Alias for get_rsvp_by_email."""
-        return await self.get_rsvp_by_email(invitation_id, email)
+        """Alias for get_rsvp_by_email with workspace isolation."""
+        return await self.get_rsvp_by_email(invitation_id, workspace_id, email)
 
     async def create(self, rsvp_data: dict):
         """Alias for create_rsvp - accepts dict and extracts parameters."""

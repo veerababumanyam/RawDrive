@@ -117,6 +117,12 @@ Photographers can export their RSVP guest list as a formatted PDF document suita
 - What if the email service is temporarily unavailable? (Queue emails for retry, don't block RSVP submission)
 - What happens if two photographers share the same workspace? (Both see all invitations and RSVPs for that workspace)
 
+**Expected Behaviors for Edge Cases**
+
+- Expired invitations: Public RSVP endpoint returns an "invitation expired" response; UI shows a friendly message without exposing IDs.
+- Post-deadline edits: Edit-link requests after the deadline return "editing is no longer available"; existing RSVP remains unchanged.
+- Email outages: RSVP submission remains successful; emails are enqueued for retry with backoff and surfaced in audit/ops logs without exposing PII.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
@@ -189,6 +195,7 @@ Photographers can export their RSVP guest list as a formatted PDF document suita
 - Email service integration (SendGrid, SES, or equivalent)
 - Audit logging service
 - Workspace-based authentication and authorization system
+- Existing backend implementation is FastAPI (Python), noted as a variance from the constitution's Express+TypeScript standard; reconciled in plan and implementation strategy.
 
 ### Assumptions
 

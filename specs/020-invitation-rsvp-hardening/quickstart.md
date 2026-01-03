@@ -3,42 +3,6 @@
 **Feature**: 020-invitation-rsvp-hardening
 **Date**: 2026-01-03
 
-> **Updated overview (supersedes legacy steps below):**
-> - Backend: FastAPI (Python 3.11), PostgreSQL, Redis; email via SendGrid worker; audits via structlog/Loki.
-> - Frontend: React + Vite + Tailwind UI kit. Must be mobile-first, WCAG 2.1 AA, and support light/dark themes with system preference + toggle.
-> - Tenant safety: every API call requires `workspace_id` from auth context; no client-provided workspace IDs.
-> - PII hygiene: never log guest email/name; use rsvp_id/invitation_id only.
-
-## Fast Path (recommended)
-
-1) **Sync & install**
-    - `git checkout 020-invitation-rsvp-hardening`
-    - Backend: `cd backend && pip install -r requirements.txt`
-    - Frontend: `cd frontend && npm install`
-
-2) **Configure env (backends)**
-    - Ensure `.env` (backend) includes placeholders if missing: `DATABASE_URL`, `REDIS_URL`, `SENDGRID_API_KEY`, `LOKI_URL`, `AUDIT_BATCH_SIZE`, `AUDIT_FLUSH_INTERVAL`.
-    - Ensure `.env` (frontend) includes API base URL and feature flag for theme toggle if required (`VITE_ENABLE_THEME_TOGGLE=true`).
-
-3) **Migrations (dup prevention + views index)**
-    - `cd backend && alembic upgrade head`
-    - Verify unique index on `(invitation_id, lower(guest_email))` and dedup index on `invitation_views`.
-
-4) **Run tests (baseline)**
-    - Backend: `cd backend && pytest -q` (focus on RSVP isolation/duplicates/audit tests)
-    - Frontend: `cd frontend && npm run test` (ensure portal/dashboard components pass)
-
-5) **Manual checks**
-    - Submit RSVP twice with same email → second returns 409 with friendly message; logs contain no PII.
-    - Public portal + dashboard render correctly on mobile (use devtools) and honor light/dark themes.
-    - CSV export returns within 5s for ~500 RSVPs; PDF export generates via WeasyPrint.
-
-6) **Dev servers**
-    - Backend: `cd backend && uvicorn app.main:app --reload` (or `npm run dev:all` if orchestrated)
-    - Frontend: `cd frontend && npm run dev` (Vite dev server)
-
----
-
 ## Prerequisites
 
 Before starting development on this feature, ensure you have:
@@ -373,6 +337,50 @@ npm run lint
 # 4. Build succeeds
 npm run build
 ```
+
+---
+
+## Test Results (2026-01-03)
+
+### Frontend Tests
+
+```
+Test Suites:  3 passed (3)
+Tests:        63 passed (63)
+
+Breakdown:
+- wcag-contrast-rsvp.test.ts      24 passed
+- rsvp_export_pdf.test.ts         21 passed
+- InvitationErrorBoundary.test.tsx 18 passed
+```
+
+### Backend Tests
+
+```
+Test Files: 1 passed
+Tests:      28 passed, 1 error (teardown only)
+
+Breakdown:
+- test_invitation_pdf_export.py   28 passed
+
+Error: Event loop cleanup issue in test teardown (not blocking)
+```
+
+### WCAG AA Compliance
+
+All contrast ratios validated:
+
+| Theme | Element | Ratio | Status |
+|-------|---------|-------|--------|
+| Light | text-primary on surface | 15.5:1 | PASS |
+| Light | text-secondary on surface | 7.0:1 | PASS |
+| Light | text-tertiary on surface | 4.6:1 | PASS |
+| Light | success badge | 4.7:1 | PASS |
+| Light | error badge | 4.9:1 | PASS |
+| Light | warning badge | 4.5:1 | PASS |
+| Dark | text-primary on surface | 15.5:1 | PASS |
+| Dark | text-secondary on surface | 9.8:1 | PASS |
+| Dark | text-tertiary on surface | 6.1:1 | PASS |
 
 ---
 

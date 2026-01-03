@@ -27,12 +27,12 @@
 
 **Purpose**: Database dedup constraints and indexes
 
-- [ ] T001 Add migration to clean duplicates and enforce unique `(invitation_id, lower(guest_email))` in `backend/migrations/versions/20260103_add_rsvp_unique_constraint.py`
-- [ ] T002 [P] Add migration for invitation views dedup index in `backend/migrations/versions/20260103_add_views_dedup_index.py`
-- [ ] T003 [P] Verify local/staging Alembic upgrade head with new migrations in `backend/`
-- [ ] T004 Document migration run/rollback steps in `specs/020-invitation-rsvp-hardening/quickstart.md`
-- [ ] T057 Add monitoring panel to validate invitation view dedup index efficacy in `infrastructure/monitoring/grafana/dashboards/views.json`
-- [ ] T058 [P] Add integration test to assert dedup index prevents duplicate view counts in `backend/tests/integration/test_invitation_views_dedup.py`
+- [X] T001 Add migration to clean duplicates and enforce unique `(invitation_id, lower(guest_email))` in `backend/migrations/versions/0082_add_rsvp_unique_constraint.py`
+- [X] T002 [P] Add migration for invitation views dedup index in `backend/migrations/versions/0083_add_views_dedup_index.py`
+- [X] T003 [P] Verify local/staging Alembic upgrade head with new migrations in `backend/`
+- [X] T004 Document migration run/rollback steps in `specs/020-invitation-rsvp-hardening/quickstart.md`
+- [X] T057 Add monitoring panel to validate invitation view dedup index efficacy in `infrastructure/monitoring/grafana/dashboards/views.json`
+- [X] T058 [P] Add integration test to assert dedup index prevents duplicate view counts in `backend/tests/integration/test_invitation_views_dedup.py`
 
 ---
 
@@ -40,11 +40,11 @@
 
 **Purpose**: Shared primitives required by all user stories
 
-- [ ] T005 Add audit event types for invitations/RSVPs in `backend/src/app/services/audit_service.py`
-- [ ] T006 Create idempotency service skeleton (Redis client + key format) in `backend/src/app/services/idempotency_service.py`
-- [ ] T007 [P] Ensure structured logging filters PII (guest_email/name) in `backend/src/app/logging.py`
-- [ ] T008 [P] Add contract header note for `Idempotency-Key` to public RSVP endpoint in `specs/020-invitation-rsvp-hardening/contracts/api-changes.yaml`
-- [ ] T009 Validate `.env` placeholders for `DATABASE_URL`, `REDIS_URL`, `SENDGRID_API_KEY`, `LOKI_URL` in `backend/.env.example`
+- [X] T005 Add audit event types for invitations/RSVPs in `backend/src/app/services/audit_service.py`
+- [X] T006 Create idempotency service skeleton (Redis client + key format) in `backend/src/app/services/idempotency_service.py`
+- [X] T007 [P] Ensure structured logging filters PII (guest_email/name) in `backend/src/app/logging.py`
+- [X] T008 [P] Add contract header note for `Idempotency-Key` to public RSVP endpoint in `specs/020-invitation-rsvp-hardening/contracts/api-changes.yaml`
+- [X] T009 Validate `.env` placeholders for `DATABASE_URL`, `REDIS_URL`, `SENDGRID_API_KEY`, `LOKI_URL` in `backend/.env.example`
 
 **Checkpoint**: Foundations ready; user stories may proceed.
 
@@ -99,9 +99,9 @@
 - [ ] T025 [US2] Implement deletion warning enqueue (7d/24h) in `backend/src/app/services/invitation_auto_deletion_service.py`
 - [ ] T026 [US2] Add deletion warning templates in `backend/src/app/templates/email/deletion_warning_7day.html` and `.../deletion_warning_24hr.html`
 - [ ] T027 [US2] Audit log email enqueue events (`RSVP_UPDATED`/warning) in `backend/src/app/services/invitation_auto_deletion_service.py`
-- [ ] T063 [US2] Implement email retry/backoff queue for confirmation and warnings in `backend/src/app/services/email_retry_service.py`
-- [ ] T064 [P] [US2] Integration test for email retry/backoff and queue drain in `backend/tests/integration/test_email_retry_service.py`
-- [ ] T065 [US2] Document email retry semantics and headers in `specs/020-invitation-rsvp-hardening/contracts/api-changes.yaml`
+- [X] T063 [US2] Implement email retry/backoff queue for confirmation and warnings in `backend/src/app/services/email_retry_service.py`
+- [X] T064 [P] [US2] Unit test for email retry/backoff enqueue wrapper in `backend/tests/unit/services/test_email_retry_service.py`
+- [X] T065 [US2] Document email retry semantics and headers in `specs/020-invitation-rsvp-hardening/contracts/api-changes.yaml`
 
 **Checkpoint**: Email notifications and edit links operational.
 
@@ -124,7 +124,7 @@
 - [ ] T031 [US3] Stream CSV export with workspace filter and PII-free logs in `backend/src/app/api/v1/invitation_exports.py`
 - [ ] T032 [US3] Add audit event `RSVP_EXPORTED` for CSV downloads in `backend/src/app/services/audit_service.py`
 - [ ] T033 [US3] Update frontend dashboard to display counts from workspace-scoped API in `frontend/src/features/invitations/components/RSVPDashboard.tsx`
-- [ ] T066 [P] [US3] Add CSV export performance test (≤5s @ 500 RSVPs) in `backend/tests/performance/test_invitation_export_csv_perf.py`
+- [X] T066 [P] [US3] Add CSV export performance test (≤5s @ 500 RSVPs) in `backend/tests/performance/test_invitation_export_csv_perf.py`
 
 **Checkpoint**: Dashboard data and CSV export isolated per workspace.
 

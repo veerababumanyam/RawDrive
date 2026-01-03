@@ -121,6 +121,13 @@ class InvitationRSVPService:
         if invitation.get("status") != "published":
             raise RSVPServiceError("This invitation is not accepting RSVPs")
 
+        # Check if invitation has expired (event already passed)
+        event_end = self._to_utc(invitation.get("event_end_datetime"))
+        event_start = self._to_utc(invitation.get("event_datetime"))
+        cutoff = event_end or event_start
+        if cutoff and datetime.now(timezone.utc) > cutoff:
+            raise RSVPServiceError("This invitation has expired")
+
         # Check if RSVP is enabled
         rsvp_settings = invitation.get("rsvp_settings", {}) or {}
         if not rsvp_settings.get("enabled", True):
@@ -136,6 +143,7 @@ class InvitationRSVPService:
         # Check for existing RSVP by email
         existing = await self.rsvp_repo.find_by_email(
             invitation_id=invitation_id,
+            workspace_id=workspace_id,
             email=data.guest_email,
         )
 
@@ -289,13 +297,20 @@ class InvitationRSVPService:
         if not invitation or invitation.get("status") != "published":
             raise RSVPServiceError("This invitation is no longer accepting updates")
 
+        # Prevent edits after the event has ended
+        event_end = self._to_utc(invitation.get("event_end_datetime"))
+        event_start = self._to_utc(invitation.get("event_datetime"))
+        cutoff = event_end or event_start
+        if cutoff and datetime.now(timezone.utc) > cutoff:
+            raise RSVPServiceError("This invitation has expired")
+
         # Check deadline
         rsvp_settings = invitation.get("rsvp_settings", {}) or {}
         deadline = rsvp_settings.get("deadline")
         if deadline:
             deadline_dt = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
             if datetime.now(timezone.utc) > deadline_dt:
-                raise RSVPDeadlinePassedError("The RSVP deadline has passed")
+                raise RSVPDeadlinePassedError("Editing is no longer available for this invitation")
 
         # Update RSVP
         update_data = {}
@@ -613,6 +628,19 @@ class InvitationRSVPService:
             ])
 
         return output.getvalue()
+
+    def _to_utc(self, value: Optional[datetime | str]) -> Optional[datetime]:
+        """Normalize datetime/ISO strings to timezone-aware UTC for comparisons."""
+        if not value:
+            return None
+        if isinstance(value, str):
+            try:
+                value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
 
 # Singleton instance
