@@ -194,9 +194,9 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
                     tagline: profile.tagline,
                     // Use explicit public logo URL to ensure correct resolution
                     logo_url: profile.logo_url 
-                        ? (profile.logo_url.startsWith('/') 
-                            ? companyProfileService.getPublicLogoUrl(slug)
-                            : profile.logo_url)
+                        ? (profile.logo_url.startsWith('http') 
+                            ? profile.logo_url 
+                            : companyProfileService.getPublicLogoUrl(slug))
                         : undefined,
                     email: profile.email,
                     phone: profile.phone,

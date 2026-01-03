@@ -49,7 +49,7 @@ export const HeroGlassCard: React.FC<HeroGlassCardProps> = ({
 
   return (
     <div 
-      className={`relative w-full min-h-[60vh] lg:min-h-[70vh] flex flex-col justify-center items-center text-center p-8 overflow-hidden ${className}`}
+      className={`relative w-full min-h-[50vh] lg:min-h-[70vh] flex flex-col justify-center items-center text-center px-4 py-8 sm:p-8 overflow-hidden ${className}`}
     >
       {/* Immersive Background Layer - could be video or animated gradient */}
       <div className="absolute inset-0 z-0">
@@ -67,7 +67,7 @@ export const HeroGlassCard: React.FC<HeroGlassCardProps> = ({
 
       {/* Content Content - Floating Glass Card */}
       <div 
-        className="relative z-20 max-w-4xl w-full flex flex-col items-center glass-card p-8 sm:p-12 md:p-16 rounded-[40px] transform transition-all hover:scale-[1.01] duration-700"
+        className="relative z-20 max-w-4xl w-full flex flex-col items-center glass-card p-6 sm:p-12 md:p-16 rounded-3xl sm:rounded-[40px] transform transition-all hover:scale-[1.01] duration-700 mx-4 sm:mx-0"
         style={{
           background: 'rgba(255, 255, 255, 0.1) backdrop-filter: blur(20px)',
           border: '1px solid rgba(255, 255, 255, 0.2)',

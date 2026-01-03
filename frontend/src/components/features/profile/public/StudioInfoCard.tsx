@@ -18,7 +18,7 @@ export const StudioInfoCard: React.FC<StudioInfoCardProps> = ({
 }) => {
   return (
     <div 
-      className={`glass-card p-8 flex flex-col items-center text-center transition-all duration-300 hover:transform hover:translate-y-[-2px] hover:shadow-glass-strong ${className}`}
+      className={`glass-card p-6 sm:p-8 flex flex-col items-center text-center transition-all duration-300 hover:transform hover:translate-y-[-2px] hover:shadow-glass-strong ${className}`}
       style={{
         background: 'var(--glass-1)',
         border: '1px solid var(--glass-border-1)',
