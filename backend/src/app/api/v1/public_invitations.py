@@ -279,6 +279,105 @@ async def access_invitation_by_token(
         )
 
 
+@router.get(
+    "/token/{token}/calendar",
+    summary="Download calendar file via magic link token",
+    description="Download an iCalendar (.ics) file using magic link token access.",
+)
+async def download_calendar_by_token(
+    token: str,
+    request: Request,
+):
+    """
+    Download an iCalendar file for the invitation via magic link token.
+
+    This endpoint allows guests who accessed via magic link to download
+    the calendar file without needing the invitation slug.
+    """
+    magic_link_service = get_magic_link_service()
+    invitation_service = get_invitation_service()
+
+    try:
+        # Validate token and get invitation_id
+        link_data = await magic_link_service.validate_invitation_token(
+            token=token,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            referer=request.headers.get("referer"),
+        )
+
+        invitation_id = link_data.get("invitation_id")
+        workspace_id = link_data.get("workspace_id")
+        if not invitation_id or not workspace_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invitation not found",
+            )
+
+        # Get the invitation by ID
+        invitation_dict = await invitation_service.get_public_invitation_by_id(
+            invitation_id=UUID(invitation_id),
+            workspace_id=UUID(workspace_id),
+        )
+
+        if not invitation_dict:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invitation not found",
+            )
+
+        invitation = invitation_dict
+
+        # Check if event datetime is set
+        event_datetime = invitation.get("event_datetime")
+        if not event_datetime:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Event date not set for this invitation.",
+            )
+
+        # Generate calendar file
+        if is_calendar_available():
+            try:
+                calendar_service = get_calendar_service()
+                ics_bytes, filename = calendar_service.generate_invitation_ics(invitation)
+            except CalendarServiceError:
+                # Fallback to simple ICS
+                ics_content = _generate_simple_ics(invitation)
+                ics_bytes = ics_content.encode("utf-8")
+                filename = f"{invitation.get('invitation_id')}.ics"
+        else:
+            # Fallback to simple ICS generation
+            ics_content = _generate_simple_ics(invitation)
+            ics_bytes = ics_content.encode("utf-8")
+            filename = f"{invitation.get('invitation_id')}.ics"
+
+        return StreamingResponse(
+            io.BytesIO(ics_bytes),
+            media_type="text/calendar",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "text/calendar; charset=utf-8",
+            },
+        )
+
+    except TokenExpiredError:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This link has expired",
+        )
+    except LinkRevokedError:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This invitation link is no longer valid",
+        )
+    except InvitationNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invitation not found",
+        )
+
+
 @router.post(
     "/{slug}/access",
     response_model=AccessInvitationResponse,

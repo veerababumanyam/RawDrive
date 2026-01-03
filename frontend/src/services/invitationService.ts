@@ -1186,6 +1186,35 @@ export function getPublicCalendarUrl(slug: string): string {
   return `/api/v1/public/invitations/${slug}/calendar`;
 }
 
+/**
+ * Download ICS from invitation using magic link token.
+ * Used when invitation is accessed via /i/{token} route.
+ */
+export async function downloadPublicICSByToken(token: string): Promise<void> {
+  try {
+    const fetchResponse = await apiClient.fetchRaw(
+      `/api/v1/public/invitations/token/${token}/calendar`
+    );
+
+    if (!fetchResponse.ok) {
+      throw new Error('Failed to download calendar');
+    }
+
+    const blob = await fetchResponse.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `invitation.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Failed to download calendar:', error);
+    throw error;
+  }
+}
+
 // ============================================================================
 // QR Code Generation (Client-Side Utility)
 // ============================================================================

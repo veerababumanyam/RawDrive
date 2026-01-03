@@ -776,10 +776,10 @@ const PublicInvitationPage: React.FC = () => {
     []
   );
 
-  // Download calendar event
+  // Download calendar event - use token-based endpoint for magic link access
   const handleDownloadCalendar = useCallback(async () => {
     try {
-      await invitationService.downloadPublicICS(slug!);
+      await invitationService.downloadPublicICSByToken(slug!);
     } catch {
       // Silent fail - not critical
     }
