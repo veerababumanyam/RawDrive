@@ -361,7 +361,12 @@ async def download_calendar_by_token(
             },
         )
 
-    except TokenExpiredError:
+    except LinkNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid or expired link",
+        )
+    except LinkExpiredError:
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="This link has expired",
