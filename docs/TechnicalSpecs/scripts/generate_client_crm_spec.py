@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""
+Generate comprehensive client_crm.json technical specification
+This script creates a production-ready technical spec with all required sections
+"""
+
+import json
+from pathlib import Path
+
+technical_specs_dir = Path(__file__).resolve().parents[1]
+
+spec = {
+    "$schema": "./_schema.json",
+    "specVersion": "1.0",
+    "featureId": "client_crm",
+    "name": "Client CRM Module",
+    "status": "draft",
+    "lastUpdated": "2025-01-27",
+    "sourceDocs": [
+        ".kiro/specs/client-crm-module/requirements.md",
+        "docs/Features/PRD.md"
+    ],
+    "description": "Comprehensive Customer Relationship Management system for photographers to maintain professional client databases, track preferences, link clients to galleries, manage communication history, and handle the complete client lifecycle from acquisition to retention with analytics and insights.",
+    "goals": [
+        "Provide comprehensive client profile management with identity, contact, social media, and address information.",
+        "Enable gallery-client linking for personalized proofing workflows and selection tracking.",
+        "Track complete client activity timeline including gallery views, selections, favorites, and payments.",
+        "Maintain detailed communication history with follow-up reminders and scheduling.",
+        "Support client segmentation, smart lists, and bulk operations for efficient database management.",
+        "Provide client portal access for self-service gallery viewing and profile management.",
+        "Enable referral tracking and analytics for business growth insights.",
+        "Support avatar management with upload, crop, resize, and gallery photo selection.",
+        "Provide duplicate detection and merging capabilities for data quality.",
+        "Enable client preferences for auto-personalization of gallery experiences.",
+        "Support import/export for data migration and backup.",
+        "Provide comprehensive analytics dashboard with growth trends, engagement metrics, and revenue insights."
+    ],
+    "nonGoals": [
+        "Full-featured enterprise CRM with sales pipeline and opportunity management (use dedicated CRM integrations).",
+        "Email marketing automation and campaign management (basic communication tracking only).",
+        "Advanced BI dashboards and predictive analytics (basic analytics and reporting only).",
+        "Accounting and bookkeeping features (integrate with payments module for invoicing).",
+        "Project management and task tracking (use separate project management tools)."
+    ],
+    "tenancy": {
+        "scopingKey": "workspace_id",
+        "rules": [
+            "All client data is strictly workspace-scoped with mandatory workspace_id filtering.",
+            "Client queries MUST always include workspace_id in WHERE clause to prevent data leakage.",
+            "Gallery-client links are workspace-scoped and validated on both ends.",
+            "Client portal access is scoped to linked galleries within the same workspace.",
+            "Client tags, smart lists, and preferences are workspace-specific.",
+            "Client activities and communications are workspace-scoped.",
+            "Import/export operations are workspace-scoped.",
+            "Analytics and reports are workspace-scoped."
+        ]
+    },
+    "actors": [
+        {
+            "id": "photographer",
+            "name": "Photographer/Staff User",
+            "description": "Creates and manages client profiles, links galleries, tracks interactions, manages communications."
+        },
+        {
+            "id": "client",
+            "name": "Client",
+            "description": "Views galleries, makes selections, accesses client portal, updates own profile information."
+        },
+        {
+            "id": "workspace_admin",
+            "name": "Workspace Admin",
+            "description": "Manages client data, configures CRM settings, exports data, manages team access."
+        },
+        {
+            "id": "workspace_owner",
+            "name": "Workspace Owner",
+            "description": "Full access to all client data, analytics, and CRM configuration."
+        }
+    ],
+    "permissions": [
+        "clients.view",
+        "clients.create",
+        "clients.update",
+        "clients.delete",
+        "clients.export",
+        "clients.import",
+        "clients.link_gallery",
+        "clients.view_analytics",
+        "clients.manage_tags",
+        "clients.manage_smart_lists",
+        "clients.enable_portal_access",
+        "clients.merge_duplicates",
+        "client_communications.view",
+        "client_communications.create",
+        "client_activities.view"
+    ],
+    "fieldClassification": {
+        "legend": {
+            "MANDATORY": "Required field, must always have a value",
+            "OPTIONAL": "Field may be null/undefined",
+            "COMPUTED": "Derived from other data, not stored directly",
+            "SYSTEM": "Auto-generated by the system (timestamps, IDs)"
+        }
+    }
+}
+
+output_path = technical_specs_dir / 'client_crm.json'
+with output_path.open('w') as f:
+    json.dump(spec, f, indent=2)
+
+print(f"✅ Generated client_crm.json at {output_path}")
+print("⏳ Run this script to generate the complete specification...")
