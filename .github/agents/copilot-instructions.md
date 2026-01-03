@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2025-12-28
 
 ## Active Technologies
+- Backend Python 3.11 (FastAPI), Frontend TypeScript 5.2 + React 18 (Vite) + FastAPI, SQLAlchemy/asyncpg, Redis, structlog, SendGrid SDK, Zod, React Query, Tailwind UI kit (`AppButton`, `AppInput`, etc.) (020-invitation-rsvp-hardening)
+- PostgreSQL 16 for RSVPs/audit events, Redis 7 for idempotency + job queues, S3/R2 for asset storage (unchanged) (020-invitation-rsvp-hardening)
 
 - (010-ai-powered-features) Python 3.11, TypeScript 5.2+, Google Gemini API, FastAPI, React
 - (009-profile-tabs-redesign)
@@ -61,6 +63,7 @@ npm test -- --testPathPattern=ai
 - **Validation**: Strict input validation for AI requests
 
 ## Recent Changes
+- 020-invitation-rsvp-hardening: Added Backend Python 3.11 (FastAPI), Frontend TypeScript 5.2 + React 18 (Vite) + FastAPI, SQLAlchemy/asyncpg, Redis, structlog, SendGrid SDK, Zod, React Query, Tailwind UI kit (`AppButton`, `AppInput`, etc.)
 
 - 010-ai-powered-features: AI-powered photo analysis, caption generation, hashtag generation using Gemini LLM
 - 009-profile-tabs-redesign: Added

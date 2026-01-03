@@ -512,12 +512,12 @@ class RSVPRepository:
                 notes,
             )
 
+            # SOC 2: Don't log guest_name (PII)
             logger.info(
                 "Check-in created",
                 extra={
                     "checkin_id": str(row["checkin_id"]),
                     "invitation_id": str(invitation_id),
-                    "guest_name": guest_name,
                     "party_size": party_size_checked_in,
                 },
             )
@@ -843,9 +843,12 @@ class RSVPRepository:
             )
             return self._row_to_dict(row) if row else None
 
-    async def update(self, rsvp_id: UUID, update_data: dict):
-        """Alias for update_rsvp."""
-        return await self.update_rsvp(rsvp_id, **update_data)
+    async def update(self, rsvp_id: UUID, workspace_id: UUID, update_data: dict):
+        """Alias for update_rsvp with required workspace_id for tenant isolation.
+
+        Security: workspace_id is REQUIRED to enforce multi-tenant data isolation.
+        """
+        return await self.update_rsvp(rsvp_id, workspace_id, **update_data)
 
     async def get_stats(self, invitation_id: UUID, workspace_id: UUID):
         """Alias for get_rsvp_stats."""
@@ -884,9 +887,13 @@ class RSVPRepository:
         """Alias for get_rsvp_by_id."""
         return await self.get_rsvp_by_id(rsvp_id, workspace_id)
 
-    async def delete(self, rsvp_id: UUID):
-        """Alias for delete_rsvp without workspace_id."""
-        return await self.delete_rsvp(rsvp_id)
+    async def delete(self, rsvp_id: UUID, workspace_id: UUID):
+        """Alias for delete_rsvp with required workspace_id for tenant isolation.
+
+        Security: workspace_id is REQUIRED to enforce multi-tenant data isolation.
+        This prevents cross-workspace data deletion attacks.
+        """
+        return await self.delete_rsvp(rsvp_id, workspace_id)
 
 
 # Factory function for dependency injection

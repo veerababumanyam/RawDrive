@@ -4,6 +4,7 @@ Invitation RSVP Service
 Handles RSVP submissions, updates, and management for digital invitations.
 
 Feature: 016-save-the-date
+Security hardening: 020-invitation-rsvp-hardening
 """
 
 import hashlib
@@ -14,6 +15,8 @@ from typing import Optional, List
 from uuid import UUID
 import csv
 import io
+
+from asyncpg.exceptions import UniqueViolationError
 
 from app.repositories.rsvp_repository import RSVPRepository, get_rsvp_repository
 from app.repositories.invitation_repository import InvitationRepository, get_invitation_repository
@@ -27,6 +30,7 @@ from app.api.invitation_schemas import (
     RSVPSource,
 )
 from app.services.task_queue import enqueue_task
+from app.services.audit_service import AuditService, AuditEventType
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +67,11 @@ class InvitationRSVPService:
         self,
         rsvp_repo: Optional[RSVPRepository] = None,
         invitation_repo: Optional[InvitationRepository] = None,
+        audit_service: Optional[AuditService] = None,
     ):
         self.rsvp_repo = rsvp_repo or get_rsvp_repository()
         self.invitation_repo = invitation_repo or get_invitation_repository()
+        self.audit_service = audit_service or AuditService()
 
     def _generate_edit_token(self) -> tuple[str, str]:
         """
@@ -147,7 +153,7 @@ class InvitationRSVPService:
         # Generate edit token
         plain_token, hashed_token = self._generate_edit_token()
 
-        # Create RSVP
+        # Create RSVP - wrapped in try/except for atomic duplicate prevention
         rsvp_data = {
             "invitation_id": invitation_id,
             "workspace_id": workspace_id,
@@ -165,13 +171,49 @@ class InvitationRSVPService:
             "edit_token_hash": hashed_token,
         }
 
-        rsvp = await self.rsvp_repo.create(rsvp_data)
+        try:
+            rsvp = await self.rsvp_repo.create(rsvp_data)
+        except UniqueViolationError:
+            # Database unique constraint caught the race condition atomically
+            # This handles simultaneous submissions with same email
+            logger.info(
+                "Duplicate RSVP prevented by database constraint",
+                extra={"invitation_id": str(invitation_id)},
+            )
+            raise RSVPDuplicateError(
+                "An RSVP already exists for this email address. "
+                "Use the edit link sent to your email to update your response."
+            )
 
         # Update invitation RSVP count
         await self.invitation_repo.increment_rsvp_count(invitation_id)
 
-        # Queue confirmation email to guest (T048)
+        # Get RSVP ID for logging and audit
         rsvp_id = rsvp.get("rsvp_id") if isinstance(rsvp, dict) else rsvp.rsvp_id
+
+        # T022: Audit logging for RSVP submission (SOC 2 compliance)
+        try:
+            await self.audit_service.log_event(
+                event_type=AuditEventType.RSVP_SUBMITTED,
+                workspace_id=str(workspace_id),
+                resource_type="invitation_rsvp",
+                resource_id=str(rsvp_id),
+                metadata={
+                    "invitation_id": str(invitation_id),
+                    "attending": data.attending,
+                    "party_size": data.party_size,
+                    "source": source.value,
+                },
+                ip_address=ip_address,
+            )
+        except Exception as e:
+            # Don't fail RSVP if audit logging fails
+            logger.warning(
+                "Failed to log audit event for RSVP submission",
+                extra={"rsvp_id": str(rsvp_id), "error": str(e)},
+            )
+
+        # Queue confirmation email to guest (T048)
         try:
             event_dt = invitation.get("event_datetime")
             await enqueue_task(
@@ -186,9 +228,10 @@ class InvitationRSVPService:
                     "invitation_slug": invitation.get("slug"),
                 },
             )
+            # SOC 2: Log rsvp_id and invitation_id, not PII (email)
             logger.info(
                 "RSVP confirmation email queued",
-                extra={"rsvp_id": str(rsvp_id), "email": data.guest_email},
+                extra={"rsvp_id": str(rsvp_id), "invitation_id": str(invitation_id)},
             )
         except Exception as e:
             # Don't fail the RSVP if email queueing fails
@@ -273,7 +316,11 @@ class InvitationRSVPService:
         if data.custom_answers is not None:
             update_data["custom_answers"] = data.custom_answers
 
-        updated_rsvp = await self.rsvp_repo.update(rsvp.rsvp_id, update_data)
+        # Get workspace_id from the RSVP for tenant isolation
+        rsvp_workspace_id = rsvp.get("workspace_id") if isinstance(rsvp, dict) else rsvp.workspace_id
+        rsvp_id = rsvp.get("rsvp_id") if isinstance(rsvp, dict) else rsvp.rsvp_id
+
+        updated_rsvp = await self.rsvp_repo.update(rsvp_id, rsvp_workspace_id, update_data)
 
         return RSVPResponse.model_validate(updated_rsvp)
 
@@ -429,9 +476,10 @@ class InvitationRSVPService:
                         "rsvp_id": rsvp_id,
                     },
                 )
+                # SOC 2: Don't log host_email (PII)
                 logger.info(
                     "Host notification queued (immediate)",
-                    extra={"invitation_id": str(invitation_id), "host_email": host_email},
+                    extra={"invitation_id": str(invitation_id)},
                 )
 
             elif notification_preference == "daily_digest":
@@ -450,9 +498,10 @@ class InvitationRSVPService:
                         "rsvp_id": rsvp_id,
                     },
                 )
+                # SOC 2: Don't log host_email (PII)
                 logger.info(
                     "RSVP queued for daily digest",
-                    extra={"invitation_id": str(invitation_id), "host_email": host_email},
+                    extra={"invitation_id": str(invitation_id)},
                 )
 
         except Exception as e:
@@ -479,12 +528,14 @@ class InvitationRSVPService:
         Returns:
             True if deleted
         """
-        # Verify ownership
+        # Verify ownership and get RSVP data
         rsvp = await self.rsvp_repo.get_by_id(rsvp_id, workspace_id)
-        if not rsvp or rsvp.invitation_id != invitation_id:
+        rsvp_invitation_id = rsvp.get("invitation_id") if isinstance(rsvp, dict) else getattr(rsvp, "invitation_id", None)
+        if not rsvp or rsvp_invitation_id != invitation_id:
             raise RSVPNotFoundError("RSVP not found")
 
-        await self.rsvp_repo.delete(rsvp_id)
+        # Pass workspace_id for tenant isolation security
+        await self.rsvp_repo.delete(rsvp_id, workspace_id)
 
         # Decrement invitation RSVP count
         await self.invitation_repo.decrement_rsvp_count(invitation_id)

@@ -1,30 +1,31 @@
 # Implementation Plan: Invitation RSVP System Hardening
 
-**Branch**: `020-invitation-rsvp-hardening` | **Date**: 2026-01-03 | **Spec**: [spec.md](./spec.md)
+**Branch**: `020-invitation-rsvp-hardening` | **Date**: 2026-01-03 | **Spec**: `/specs/020-invitation-rsvp-hardening/spec.md`
 **Input**: Feature specification from `/specs/020-invitation-rsvp-hardening/spec.md`
+
+**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
 
 ## Summary
 
-This plan addresses critical security vulnerabilities and implements missing features in the Invitation RSVP system. Key deliverables include:
-
-1. **Security Hardening**: Fix workspace isolation bypasses in repository aliases and microservice guest lookups
-2. **Race Condition Prevention**: Add database unique constraint for duplicate RSVP prevention
-3. **PII Removal**: Remove email addresses from application logs (SOC 2 compliance)
-4. **Audit Logging**: Implement comprehensive audit trail for all RSVP operations using existing `AuditService`
-5. **Email Notifications**: Complete email sending implementation for RSVP confirmations and auto-deletion warnings
-6. **Dashboard Improvements**: Add error boundaries and PDF export functionality
+Secure and harden the multi-tenant Invitation RSVP flow: enforce workspace isolation, prevent duplicate submissions via transactional unique keys, add SOC 2-aligned audit logging, wire SendGrid-based confirmation/edit/deletion-warning emails, and deliver reliable dashboard exports (CSV/PDF) with graceful error boundaries. Backend (FastAPI + PostgreSQL + Redis) will own RSVP creation/update, deduplication, audit events, and email job enqueueing; frontend (React + Vite + Tailwind) will deliver responsive, WCAG-compliant RSVP forms and dashboard views that adopt light/dark themes.
 
 ## Technical Context
 
-**Language/Version**: Python 3.11 (Backend), TypeScript 5.2+ (Frontend)
-**Primary Dependencies**: FastAPI 0.115+, React 19, SQLAlchemy 2.0+, asyncpg 0.29+, Pydantic 2.7+
-**Storage**: PostgreSQL 16 (existing tables: `invitation_rsvps`, `digital_invitations`, `invitation_events`)
-**Testing**: pytest (Backend), Vitest (Frontend)
-**Target Platform**: Web (responsive, desktop-first)
-**Project Type**: Web application (frontend + backend)
-**Performance Goals**: 100 simultaneous RSVP submissions without data corruption, CSV export <5s for 500 RSVPs
-**Constraints**: Zero cross-workspace data leakage, SOC 2 compliance for PII handling
-**Scale/Scope**: Multi-tenant SaaS, typical workspace handles 50-500 RSVPs per invitation
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
+
+**Language/Version**: Backend Python 3.11 (FastAPI), Frontend TypeScript 5.2 + React 18 (Vite)  
+**Primary Dependencies**: FastAPI, SQLAlchemy/asyncpg, Redis, structlog, SendGrid SDK, Zod, React Query, Tailwind UI kit (`AppButton`, `AppInput`, etc.)  
+**Storage**: PostgreSQL 16 for RSVPs/audit events, Redis 7 for idempotency + job queues, S3/R2 for asset storage (unchanged)  
+**Testing**: Backend pytest + pytest-asyncio + hypothesis; Frontend Vitest + React Testing Library + fast-check  
+**Target Platform**: Multi-tenant web (RawDrive SaaS) deployed on Linux containers (FastAPI + Node build artifacts)  
+**Project Type**: Web application with separate backend (`backend/`) and frontend (`frontend/`) projects  
+**Performance Goals**: Reject duplicate RSVPs 100% (even concurrent), CSV export ≤5s for ≤500 RSVPs, confirmation emails delivered within 5 minutes for 95% of sends, dashboard render p95 < 200ms server response excluding network  
+**Constraints**: SOC 2 logging rules (no PII in logs), WCAG 2.1 AA UI, p95 API latency < 300ms for RSVP submit, avoid race conditions via DB transactions and unique constraints, dark/light theme parity  
+**Scale/Scope**: Up to 100 concurrent RSVP submissions per invitation; dashboard lists ≤5k RSVPs per invitation; PDF export sized for vendor handoffs
 
 ## Constitution Check
 
@@ -33,139 +34,85 @@ This plan addresses critical security vulnerabilities and implements missing fea
 Verify compliance with RawDrive Constitution (`.specify/memory/constitution.md`):
 
 - [x] **I. Security**: No hardcoded secrets, parameterized queries, input validation
-  - All queries use parameterized SQL via asyncpg
-  - Input validation via Pydantic schemas with `sanitize_text()`
-  - Edit tokens SHA-256 hashed, not stored in plain text
 - [x] **II. Accessibility**: WCAG 2.1 AA compliance, keyboard nav, screen reader support
-  - Existing RSVPDashboard uses AppButton, AppInput from design system
-  - Error boundary will use semantic HTML with proper ARIA
 - [x] **III. Design System**: Uses design tokens, no hardcoded colors, standard UI components
-  - All UI uses AppButton, AppCard, DataTable components
-  - No custom styling outside design system
 - [x] **IV. Multi-Tenant Isolation**: All queries include workspace_id, RBAC enforced
-  - THIS IS THE PRIMARY FIX: Adding workspace_id to all repository methods
-  - Removing alias methods that bypass workspace isolation
 - [x] **V. Testing**: Coverage targets defined (95% security, 85% services, 70% UI)
-  - Security fixes (workspace isolation) require 95% coverage
-  - Service layer changes require 85% coverage
-  - Dashboard UI changes require 70% coverage
 - [x] **VI. Clean Code**: SOLID principles, max file lengths, no over-engineering
-  - Using existing service/repository patterns
-  - No new abstractions needed
 - [x] **VII. Observability**: Structured logging, metrics, audit trail for sensitive ops
-  - Adding audit logging via existing `AuditService`
-  - Removing PII from application logs
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/020-invitation-rsvp-hardening/
-├── plan.md              # This file
-├── research.md          # Phase 0 output
-├── data-model.md        # Phase 1 output
-├── quickstart.md        # Phase 1 output
-├── contracts/           # Phase 1 output
-│   └── api-changes.yaml
-└── tasks.md             # Phase 2 output (/speckit.tasks command)
+specs/[###-feature]/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
 ### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
 
 ```text
 backend/
-├── src/app/
-│   ├── services/
-│   │   ├── invitation_rsvp_service.py     # Fix PII logging, add audit events
-│   │   ├── audit_service.py               # Add RSVP event types
-│   │   ├── invitation_auto_deletion_service.py  # Implement email sending
-│   │   └── task_queue.py                  # Email task processing
-│   ├── repositories/
-│   │   └── rsvp_repository.py             # Fix workspace isolation
-│   └── api/v1/
-│       ├── invitation_schemas.py          # No changes needed
-│       └── invitation_exports.py          # PDF export endpoint
-└── tests/
-    ├── unit/
-    │   └── services/
-    │       ├── test_invitation_rsvp_service.py
-    │       └── test_rsvp_repository.py
-    └── integration/
-        └── test_rsvp_workspace_isolation.py
+├── src/
+│   ├── models/           # Invitations, RSVPs, audit events, view records
+│   ├── services/         # Invitation/RSVP domain logic, audit, email enqueueing
+│   └── api/              # FastAPI routes (workspace-scoped)
+└── tests/                # unit + integration
 
 frontend/
 ├── src/
-│   ├── components/features/invitations/
-│   │   ├── RSVPDashboard.tsx              # Add error boundary wrapper
-│   │   └── RSVPExport.tsx                 # Implement PDF export
-│   └── components/ErrorBoundary/
-│       └── InvitationErrorBoundary.tsx    # New component
-└── tests/
-    └── components/
-        └── RSVPDashboard.test.tsx
+│   ├── components/       # UI kit (AppButton/AppInput/PhotoGrid)
+│   ├── pages/            # Invitation portal + dashboard views
+│   └── services/         # API clients (axios/react-query), theme + i18n
+└── tests/                # vitest + RTL
 ```
 
-**Structure Decision**: Using existing web application structure. Backend changes focus on services and repositories. Frontend changes focus on RSVPDashboard component and export functionality.
+**Structure Decision**: Web application split between `backend/` (FastAPI + PostgreSQL/Redis) and `frontend/` (React + Vite + Tailwind design system). Supporting services (email worker, audit logging) live alongside backend services.
+
+## Architecture Decisions
+
+- **Stack variance**: Backend remains FastAPI (Python 3.11) to match the existing codebase; this is a documented variance from the constitution’s Express+TS default and will be reconciled via a future amendment. Frontend stays React 18 + Vite + Tailwind design system.
+- **Services**: `invitation_rsvp_service` owns submission/edit/delete with workspace isolation; `digital_invitation_service` handles invitation lifecycle; `audit_service` centralizes audit events; `idempotency_service` uses Redis with namespaced keys per workspace; `email_retry_service` introduces retry/backoff queue for confirmations/warnings.
+- **API**: FastAPI routes under `/api/v1/` with workspace guards; public invitation routes validate workspace ownership and expiry/edit-deadline state.
+- **Background jobs**: Email enqueue + retry via Redis-based queue; deletion warnings scheduled at 7d/24h.
+- **Frontend**: Dashboard and public RSVP form consume workspace-scoped APIs, use UI kit tokens, and wrap data fetching in error boundaries with retry.
+
+## Data Model & Migrations
+
+- Unique constraint on `(invitation_id, lower(guest_email))` to prevent duplicates; migration cleans existing dupes.
+- Dedup index on invitation views (fingerprint + window) to curb inflated analytics; validated via integration test and Grafana panel.
+- Audit tables remain append-only; add new event types for RSVP/Invitation lifecycle and exports.
+- PDF/CSV exports use workspace-scoped queries; no schema change required.
+
+## Performance & Measurement
+
+- **RSVP submit**: Target p95 < 300ms measured in staging with Locust (100 concurrent submissions) against FastAPI app; report in quickstart.md.
+- **CSV export**: Target ≤5s for 500 RSVPs; add perf test harness in `backend/tests/performance/` and capture timings in quickstart.md.
+- **Email delivery**: 95% within 5 minutes; measure via SendGrid event logs (staging) and log summary in quickstart.md.
+- **View dedup**: Monitor dedup hits/misses via Grafana panel added in this feature.
+
+## Risk, Rollback, and Ops
+
+- **Risks**: Unique constraint deployment may fail if dupes remain; mitigate with pre-clean migration. Email retries could flood if misconfigured; cap backoff and max attempts.
+- **Rollback**: Alembic downgrade scripts for new migrations; feature flags for PDF export and new email templates; ability to disable retry queue via env toggle.
+- **Observability**: Structured logs with workspace_id, audit events for RSVP/Invitation lifecycle and exports, metrics for retries and dedup effectiveness.
 
 ## Complexity Tracking
 
-> No Constitution violations requiring justification. All changes use existing patterns.
+> **Fill ONLY if Constitution Check has violations that must be justified**
 
-| Aspect | Approach | Rationale |
-|--------|----------|-----------|
-| Workspace Isolation | Fix existing methods, remove dangerous aliases | Minimally invasive, existing pattern |
-| Duplicate Prevention | Database unique constraint + application check | Defense in depth, atomic guarantee |
-| Audit Logging | Extend existing AuditService | Reuse production infrastructure |
-| Email Sending | Implement via existing task queue | Background processing pattern already established |
-
-## Risk Assessment
-
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| Breaking existing RSVP functionality | High | Comprehensive test coverage before/after |
-| Database migration issues | Medium | Add constraint with `IF NOT EXISTS`, handle duplicates first |
-| Email delivery failures | Low | Existing retry mechanism in task queue |
-| Performance degradation from audit logging | Low | Non-blocking async logging via Loki |
-
-## Implementation Phases
-
-### Phase 1: Security Fixes (P1 - Critical)
-
-1. Fix `rsvp_repository.py` workspace isolation
-2. Fix microservice guest lookup isolation
-3. Add database unique constraint for duplicate prevention
-4. Remove PII from logs
-
-### Phase 2: Compliance (P2 - High)
-
-5. Add RSVP audit event types to `AuditService`
-6. Implement audit logging in `invitation_rsvp_service.py`
-7. Add audit logging for invitation lifecycle events
-
-### Phase 3: Notifications (P2 - High)
-
-8. Implement email sending in auto-deletion service
-9. Implement RSVP confirmation email sending
-10. Add email retry and failure handling
-
-### Phase 4: Dashboard (P3 - Medium)
-
-11. Add error boundary to RSVPDashboard
-12. Implement PDF export functionality
-
-## Dependencies
-
-| Dependency | Status | Notes |
-|------------|--------|-------|
-| AuditService (Loki) | Ready | Existing infrastructure |
-| TaskQueue (Redis) | Ready | Existing infrastructure |
-| SendGrid integration | Exists | Via notification templates |
-| Database migrations | Required | Add unique constraint |
-
-## Artifacts
-
-- [research.md](./research.md) - Phase 0 research findings
-- [data-model.md](./data-model.md) - Database schema changes
-- [contracts/api-changes.yaml](./contracts/api-changes.yaml) - API contract changes
-- [quickstart.md](./quickstart.md) - Developer setup guide
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| _None_ | n/a | n/a |

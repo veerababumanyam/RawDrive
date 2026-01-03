@@ -86,6 +86,15 @@ paths:
           description: Invitation access token
           schema:
             type: string
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: >
+            Optional idempotency key for RSVP submission. When provided, the server will treat
+            duplicate requests with the same key + invitation as safe retries and return the
+            original response, preventing duplicate RSVPs under concurrency.
+          schema:
+            type: string
       requestBody:
         required: true
         content:

@@ -10,6 +10,59 @@ This document describes database schema changes required for the Invitation RSVP
 
 ---
 
+## Key Entities & Fields (Current Plan)
+
+### Invitation
+- `invitation_id` (UUID, PK)
+- `workspace_id` (UUID, FK — tenant boundary)
+- `status` (enum: draft|published|archived)
+- `rsvp_settings` (JSONB: `enabled`, `deadline`, `max_party_size`, `edit_window_days`)
+- `auto_delete_at` (TIMESTAMP, nullable) — drives 7-day/24h warning emails
+
+### RSVP
+- `rsvp_id` (UUID, PK)
+- `invitation_id` (UUID, FK)
+- `workspace_id` (UUID, FK)
+- `guest_name` (VARCHAR 255, required, sanitized)
+- `guest_email` (VARCHAR 255, required) — **dedup key (normalized)**
+- `guest_phone` (VARCHAR 50, optional)
+- `attending` (BOOLEAN)
+- `status` (enum: pending|confirmed|declined|maybe|cancelled)
+- `party_size` (INT, default 1, max derived from `rsvp_settings.max_party_size`)
+- `dietary_preferences` (TEXT, optional)
+- `custom_answers` (JSONB)
+- `edit_token_hash` (VARCHAR 64) — hashed JWT nonce for edit link
+- `token_expires_at` (TIMESTAMP, nullable)
+- `source` (VARCHAR 50: web|qr_code|whatsapp|email_link|personal_link)
+- `ip_address` (INET, nullable), `user_agent` (TEXT, nullable)
+- `created_at`, `updated_at` (TIMESTAMP)
+
+### Edit Token (logical)
+- Not stored raw; JWT payload contains `workspace_id`, `invitation_id`, `rsvp_id`, `nonce`, `exp` (14 days)
+- Hash of nonce persisted in `edit_token_hash` for verification.
+
+### Audit Event
+- `event_id` (UUID, PK)
+- `workspace_id` (UUID)
+- `invitation_id` (UUID, nullable)
+- `rsvp_id` (UUID, nullable)
+- `actor_type` (user|guest|system)
+- `actor_user_id` / `actor_guest_email_hash`
+- `action` (enum: invitation.* or rsvp.*)
+- `metadata` (JSONB, PII-free)
+- `created_at` (TIMESTAMP)
+
+### View Record
+- `view_id` (UUID, PK)
+- `invitation_id` (UUID, FK)
+- `workspace_id` (UUID, FK)
+- `visitor_hash` (TEXT) — dedup key with TTL in Redis
+- `viewed_at` (TIMESTAMP)
+- **Index**: `(invitation_id, visitor_hash, viewed_at DESC)` for dedup window
+
+### Idempotency Key (operational)
+- Stored in Redis: `rsvp:idempotency:{invitation_id}:{email_normalized}` with short TTL (e.g., 5 minutes) to guard concurrent submits.
+
 ## Existing Tables (Reference)
 
 ### `invitation_rsvps`

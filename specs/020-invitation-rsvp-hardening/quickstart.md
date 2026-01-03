@@ -3,6 +3,42 @@
 **Feature**: 020-invitation-rsvp-hardening
 **Date**: 2026-01-03
 
+> **Updated overview (supersedes legacy steps below):**
+> - Backend: FastAPI (Python 3.11), PostgreSQL, Redis; email via SendGrid worker; audits via structlog/Loki.
+> - Frontend: React + Vite + Tailwind UI kit. Must be mobile-first, WCAG 2.1 AA, and support light/dark themes with system preference + toggle.
+> - Tenant safety: every API call requires `workspace_id` from auth context; no client-provided workspace IDs.
+> - PII hygiene: never log guest email/name; use rsvp_id/invitation_id only.
+
+## Fast Path (recommended)
+
+1) **Sync & install**
+    - `git checkout 020-invitation-rsvp-hardening`
+    - Backend: `cd backend && pip install -r requirements.txt`
+    - Frontend: `cd frontend && npm install`
+
+2) **Configure env (backends)**
+    - Ensure `.env` (backend) includes placeholders if missing: `DATABASE_URL`, `REDIS_URL`, `SENDGRID_API_KEY`, `LOKI_URL`, `AUDIT_BATCH_SIZE`, `AUDIT_FLUSH_INTERVAL`.
+    - Ensure `.env` (frontend) includes API base URL and feature flag for theme toggle if required (`VITE_ENABLE_THEME_TOGGLE=true`).
+
+3) **Migrations (dup prevention + views index)**
+    - `cd backend && alembic upgrade head`
+    - Verify unique index on `(invitation_id, lower(guest_email))` and dedup index on `invitation_views`.
+
+4) **Run tests (baseline)**
+    - Backend: `cd backend && pytest -q` (focus on RSVP isolation/duplicates/audit tests)
+    - Frontend: `cd frontend && npm run test` (ensure portal/dashboard components pass)
+
+5) **Manual checks**
+    - Submit RSVP twice with same email → second returns 409 with friendly message; logs contain no PII.
+    - Public portal + dashboard render correctly on mobile (use devtools) and honor light/dark themes.
+    - CSV export returns within 5s for ~500 RSVPs; PDF export generates via WeasyPrint.
+
+6) **Dev servers**
+    - Backend: `cd backend && uvicorn app.main:app --reload` (or `npm run dev:all` if orchestrated)
+    - Frontend: `cd frontend && npm run dev` (Vite dev server)
+
+---
+
 ## Prerequisites
 
 Before starting development on this feature, ensure you have:

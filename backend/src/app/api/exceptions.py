@@ -69,6 +69,28 @@ class ConflictError(AppError):
         super().__init__(message=message, code=code, status_code=409, user_message="This action conflicts with existing data.")
 
 
+class DuplicateRSVPError(ConflictError):
+    """Duplicate RSVP submission detected.
+
+    Raised when a guest attempts to submit an RSVP with an email address
+    that has already been used for the same invitation.
+
+    Feature: 020-invitation-rsvp-hardening
+    """
+
+    def __init__(self, invitation_id: str | None = None):
+        super().__init__(
+            message="An RSVP with this email already exists for this invitation",
+            code="DUPLICATE_RSVP",
+        )
+        self.invitation_id = invitation_id
+        # Override user_message with helpful guidance
+        self.user_message = (
+            "You have already RSVP'd to this invitation. "
+            "Check your email for the edit link to update your response."
+        )
+
+
 class ForbiddenError(AppError):
     """Permission denied."""
 
