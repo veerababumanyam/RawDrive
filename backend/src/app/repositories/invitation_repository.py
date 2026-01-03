@@ -483,8 +483,9 @@ class InvitationRepository:
 
             return self._row_to_dict(row) if row else None
 
-    # Alias for backward compatibility with RSVP service
+    # Aliases for backward compatibility with service layers
     get_by_id = get_invitation_by_id
+    get_invitation = get_invitation_by_id
 
     async def increment_rsvp_count(self, invitation_id: UUID) -> None:
         """Increment the RSVP count for an invitation."""
