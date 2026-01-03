@@ -295,6 +295,11 @@ class MagicLinkService:
         Returns:
             Full public URL
         """
+        # Use different URL patterns based on target type
+        if target_type == "invitation":
+            # Invitations use /i/{token} route
+            return f"{base_url}/i/{token}"
+
         # Base gallery URL
         url = f"{base_url}/g/{token}"
 
