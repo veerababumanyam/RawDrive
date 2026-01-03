@@ -754,9 +754,27 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                     <h2 className="text-2xl font-bold text-text-primary">Company Profile</h2>
                     <p className="text-text-secondary">Manage your public brand presence and contact information.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                     {watch('slug') && (
                         <>
+                            {/* Public URL with Copy */}
+                            <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-1.5 bg-surface-alt/50">
+                                <Globe size={14} className="text-text-tertiary flex-shrink-0" />
+                                <span className="text-sm text-text-secondary truncate max-w-[200px]">
+                                    {PUBLIC_URL_PREFIX}{watch('slug')}
+                                </span>
+                                <AppButton
+                                    variant="ghost"
+                                    size="sm"
+                                    type="button"
+                                    onClick={handleCopyPublicUrl}
+                                    leftIcon={copiedUrl ? <CheckCircle2 size={14} className="text-green-500" /> : <Copy size={14} />}
+                                    className="ml-1"
+                                    title="Copy public URL"
+                                >
+                                    {copiedUrl ? 'Copied' : 'Copy'}
+                                </AppButton>
+                            </div>
                             <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1">
                                 <AppButton variant="ghost" size="sm" type="button" onClick={handleDownloadVCard} leftIcon={<Download size={14} />}>
                                     vCard

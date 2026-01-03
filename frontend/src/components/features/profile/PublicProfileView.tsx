@@ -202,7 +202,13 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
                         profile={{
                             name: profile.name,
                             tagline: profile.tagline,
-                            logo_url: profile.logo_url,
+                            // Use explicit public logo URL to ensure correct resolution
+                            // Backend may return relative path that needs proper base URL
+                            logo_url: profile.logo_url 
+                                ? (profile.logo_url.startsWith('/') 
+                                    ? companyProfileService.getPublicLogoUrl(slug)
+                                    : profile.logo_url)
+                                : undefined,
                             email: profile.email,
                             phone: profile.phone,
                             website: profile.website,
