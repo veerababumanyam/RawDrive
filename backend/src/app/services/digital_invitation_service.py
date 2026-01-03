@@ -1145,9 +1145,11 @@ class DigitalInvitationService:
         if invitation.get("status") != "published":
             raise InvitationNotFoundError()
 
-        # Track view (using slug or fallback)
-        slug = invitation.get("slug") or str(invitation_id)
-        await self._track_view(slug, ip_address)
+        # Increment view count
+        await self.invitation_repo.increment_view_count(
+            invitation_id=invitation_id,
+            unique=True,
+        )
 
         # Build public response
         public_invitation = {
