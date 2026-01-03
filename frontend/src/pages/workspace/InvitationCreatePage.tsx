@@ -166,12 +166,12 @@ const InvitationCreatePage: React.FC = () => {
     showToast('Draft saved', 'success');
   }, [wizardData, currentStep, saveDraft, showToast]);
 
-  // Create mutation
+  // Create or update mutation
   const createMutation = useMutation({
     mutationFn: async (data: WizardData) => {
       if (!workspaceId) throw new Error('No workspace selected');
 
-      const request: CreateInvitationRequest = {
+      const requestData = {
         title: data.title,
         description: data.description,
         event_type: data.event_type as CreateInvitationRequest['event_type'],
@@ -192,10 +192,15 @@ const InvitationCreatePage: React.FC = () => {
         layout_density: data.layout_density,
       };
 
-      return invitationService.createInvitation(workspaceId, request);
+      // If a draft already created an invitation, update it instead of creating a new one
+      if (data.invitation_id) {
+        return invitationService.updateInvitation(workspaceId, data.invitation_id, requestData);
+      }
+
+      return invitationService.createInvitation(workspaceId, requestData);
     },
     onSuccess: async (response) => {
-      // Clear the draft after successful creation
+      // Clear the draft after successful creation/update
       await clearDraft();
       queryClient.invalidateQueries({ queryKey: ['invitations'] });
       showToast('Invitation created successfully!', 'success');
