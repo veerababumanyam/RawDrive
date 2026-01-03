@@ -352,11 +352,19 @@ async def download_calendar_by_token(
             ics_bytes = ics_content.encode("utf-8")
             filename = f"{invitation.get('invitation_id')}.ics"
 
+        # Sanitize filename for HTTP headers (ASCII only)
+        from urllib.parse import quote
+        safe_filename = filename.encode("ascii", "ignore").decode("ascii")
+        if not safe_filename or safe_filename == ".ics":
+            safe_filename = f"{invitation.get('invitation_id')}.ics"
+        # Use RFC 5987 encoding for non-ASCII filenames
+        encoded_filename = quote(filename)
+
         return StreamingResponse(
             io.BytesIO(ics_bytes),
             media_type="text/calendar",
             headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Disposition": f"attachment; filename=\"{safe_filename}\"; filename*=UTF-8''{encoded_filename}",
                 "Content-Type": "text/calendar; charset=utf-8",
             },
         )
