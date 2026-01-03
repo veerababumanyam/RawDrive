@@ -424,9 +424,13 @@ class UpdateInvitationRequest(BaseModel):
 
 
 class PublishInvitationRequest(BaseModel):
-    """Request to publish/unpublish an invitation."""
+    """Request to publish an invitation."""
 
-    publish: bool = Field(..., description="True to publish, False to unpublish")
+    base_url: Optional[str] = Field(
+        None,
+        description="Base URL for generating the public invitation link",
+        max_length=500,
+    )
 
 
 class InvitationResponse(BaseModel):

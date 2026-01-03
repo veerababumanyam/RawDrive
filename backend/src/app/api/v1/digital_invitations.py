@@ -599,7 +599,7 @@ async def publish_invitation(
 ) -> InvitationResponse:
     """Publish an invitation."""
     try:
-        base_url = request.base_url if request else "https://rawdrive.ai"
+        base_url = (request.base_url if request and request.base_url else "https://rawdrive.ai")
         invitation = await service.publish_invitation(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
