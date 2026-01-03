@@ -446,6 +446,126 @@ class MagicLinkService:
             } if link.get("company_name") else None,
         }
 
+    async def validate_invitation_token(
+        self,
+        token: str,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        referer: Optional[str] = None,
+        skip_rate_limit: bool = False,
+    ) -> dict[str, Any]:
+        """Validate a magic link token for an invitation.
+
+        This method:
+        1. Checks rate limiting (optional)
+        2. Looks up the link by token hash
+        3. Verifies link is for an invitation
+        4. Verifies link is active and not expired
+        5. Checks access limits
+        6. Logs the access
+        7. Returns invitation data for rendering
+
+        Args:
+            token: The access token from the URL
+            ip_address: Client IP for rate limiting
+            user_agent: Client user agent
+            referer: HTTP referer
+            skip_rate_limit: Skip rate limit check (for internal use)
+
+        Returns:
+            Invitation link data including invitation_id
+
+        Raises:
+            LinkNotFoundError: Token not found or not for invitation
+            LinkExpiredError: Link has expired
+            LinkRevokedError: Link was revoked
+            LinkAccessLimitError: Access limit reached
+            RateLimitError: Rate limit exceeded
+        """
+        # Rate limiting check
+        if ip_address and not skip_rate_limit:
+            await self._check_rate_limit(ip_address)
+
+        # Hash the token for lookup
+        token_hash = self._hash_token(token)
+
+        # Look up the link
+        link = await self.repo.get_by_hash(token_hash)
+
+        if not link:
+            logger.warning(
+                "Magic link validation failed: not found",
+                extra={"token_hash_prefix": token_hash[:8]},
+            )
+            raise LinkNotFoundError()
+
+        # Verify this is an invitation link
+        if link.get("target_type") != "invitation":
+            logger.warning(
+                "Magic link validation failed: not an invitation link",
+                extra={"token_hash_prefix": token_hash[:8], "target_type": link.get("target_type")},
+            )
+            raise LinkNotFoundError()
+
+        # Check status
+        if link["status"] == "revoked":
+            raise LinkRevokedError()
+
+        if link["status"] == "expired":
+            raise LinkExpiredError()
+
+        # Check expiration
+        if link.get("expires_at"):
+            expires_at = datetime.fromisoformat(link["expires_at"].replace("Z", "+00:00"))
+            if expires_at < datetime.now(timezone.utc):
+                # Update status to expired
+                await self.repo.update_status(
+                    link_id=UUID(link["link_id"]),
+                    workspace_id=UUID(link["workspace_id"]),
+                    status="expired",
+                )
+                raise LinkExpiredError()
+
+        # Check access limit
+        if link.get("max_accesses"):
+            if link["access_count"] >= link["max_accesses"]:
+                raise LinkAccessLimitError()
+
+        # Increment access count
+        await self.repo.increment_access_count(UUID(link["link_id"]))
+
+        # Parse user agent for device info
+        device_info = self._parse_user_agent(user_agent) if user_agent else {}
+
+        # Log the access
+        await self.repo.log_access(
+            link_id=UUID(link["link_id"]),
+            ip_address=ip_address,
+            user_agent=user_agent,
+            referer=referer,
+            device_type=device_info.get("device_type"),
+            browser=device_info.get("browser"),
+            os=device_info.get("os"),
+        )
+
+        logger.info(
+            "Invitation magic link validated successfully",
+            extra={
+                "link_id": link["link_id"],
+                "invitation_id": link.get("invitation_id"),
+                "access_count": link["access_count"] + 1,
+            },
+        )
+
+        # Return invitation data for rendering
+        return {
+            "link_id": link["link_id"],
+            "invitation_id": str(link.get("invitation_id")),
+            "workspace_id": link["workspace_id"],
+            "target_type": link["target_type"],
+            "label": link.get("label"),
+        }
+
     async def _check_rate_limit(self, ip_address: str) -> None:
         """Check rate limit for token validation.
 

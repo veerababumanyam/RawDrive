@@ -20,6 +20,12 @@ from app.services.digital_invitation_service import (
     get_invitation_service,
     InvitationNotFoundError,
 )
+from app.services.magic_link_service import (
+    get_magic_link_service,
+    LinkNotFoundError,
+    LinkExpiredError,
+    LinkRevokedError,
+)
 from app.services.calendar_service import (
     get_calendar_service,
     is_calendar_available,
@@ -147,6 +153,123 @@ async def access_invitation(
             requires_pin=False,
         )
 
+    except InvitationNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invitation not found",
+        )
+
+
+@router.get(
+    "/token/{token}",
+    response_model=AccessInvitationResponse,
+    summary="Access invitation via magic link token",
+    description="Get a public invitation using a magic link token. Used for /i/{token} URLs.",
+)
+async def access_invitation_by_token(
+    token: str,
+    request: Request,
+):
+    """
+    Access a public invitation via magic link token.
+
+    This endpoint resolves a magic link token to an invitation and returns
+    the public invitation data. Used when accessing invitations via the
+    /i/{token} URL pattern.
+    """
+    magic_link_service = get_magic_link_service()
+    invitation_service = get_invitation_service()
+
+    try:
+        # Validate token and get invitation_id
+        link_data = await magic_link_service.validate_invitation_token(
+            token=token,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            referer=request.headers.get("referer"),
+        )
+
+        invitation_id = link_data.get("invitation_id")
+        if not invitation_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invitation not found",
+            )
+
+        # Get the invitation by ID (not slug)
+        invitation_dict = await invitation_service.get_public_invitation_by_id(
+            invitation_id=UUID(invitation_id)
+        )
+
+        if not invitation_dict:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invitation not found",
+            )
+
+        # Convert dict to object for attribute access
+        invitation = SimpleNamespace(**invitation_dict)
+
+        # Check protection status
+        requires_password = getattr(invitation, 'password_protected', False)
+        requires_pin = getattr(invitation, 'pin_protected', False)
+
+        if requires_password or requires_pin:
+            return AccessInvitationResponse(
+                access_granted=False,
+                requires_password=requires_password,
+                requires_pin=requires_pin,
+                error=None,
+            )
+
+        # Return full invitation
+        public_data = PublicInvitationResponse(
+            invitation_id=invitation.invitation_id,
+            title=invitation.title,
+            description=getattr(invitation, 'description', None),
+            event_type=invitation.event_type,
+            event_datetime=invitation.event_datetime.isoformat() if getattr(invitation, 'event_datetime', None) else None,
+            event_end_datetime=invitation.event_end_datetime.isoformat() if getattr(invitation, 'event_end_datetime', None) else None,
+            event_timezone=getattr(invitation, 'event_timezone', 'UTC'),
+            venue=getattr(invitation, 'venue', {}),
+            host_names=getattr(invitation, 'host_names', None) or [],
+            cover_image_url=getattr(invitation, 'cover_image_url', None),
+            gallery_images=getattr(invitation, 'gallery_images', []) or [],
+            rsvp_enabled=getattr(invitation, 'rsvp_settings', {}).get("enabled", True),
+            rsvp_deadline=getattr(invitation, 'rsvp_settings', {}).get("deadline"),
+            max_party_size=getattr(invitation, 'rsvp_settings', {}).get("max_party_size", 1),
+            collect_dietary=getattr(invitation, 'rsvp_settings', {}).get("collect_dietary", False),
+            collect_phone=getattr(invitation, 'rsvp_settings', {}).get("collect_phone", False),
+            custom_questions=getattr(invitation, 'rsvp_settings', {}).get("custom_questions", []),
+            primary_language=getattr(invitation, 'primary_language', 'en'),
+            secondary_language=getattr(invitation, 'secondary_language', None),
+            content_i18n=getattr(invitation, 'content_i18n', {}),
+            template_layout=getattr(invitation, 'template_layout', None),
+            customization=getattr(invitation, 'customization', {}),
+        )
+
+        return AccessInvitationResponse(
+            access_granted=True,
+            invitation=public_data,
+            requires_password=False,
+            requires_pin=False,
+        )
+
+    except LinkNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid or expired invitation link",
+        )
+    except LinkExpiredError:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This invitation link has expired",
+        )
+    except LinkRevokedError:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This invitation link is no longer valid",
+        )
     except InvitationNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

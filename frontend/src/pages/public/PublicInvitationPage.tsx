@@ -729,7 +729,8 @@ const PublicInvitationPage: React.FC = () => {
   const [accessError, setAccessError] = useState<string>();
   const [submitResult, setSubmitResult] = useState<RSVPSubmitResponse>();
 
-  // Fetch invitation
+  // Fetch invitation using magic link token
+  // The 'slug' URL parameter is actually the magic link token for /i/{token} routes
   const {
     data: accessResponse,
     isLoading,
@@ -738,7 +739,7 @@ const PublicInvitationPage: React.FC = () => {
   } = useQuery({
     queryKey: ['public-invitation', slug, accessData],
     queryFn: () =>
-      invitationService.accessPublicInvitation(
+      invitationService.accessPublicInvitationByToken(
         slug!,
         accessData.password || accessData.pin ? accessData : undefined
       ),

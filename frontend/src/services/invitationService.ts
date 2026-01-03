@@ -1035,6 +1035,28 @@ export async function accessPublicInvitation(
 }
 
 /**
+ * Access a public invitation by magic link token.
+ * Used for /i/{token} URL pattern.
+ */
+export async function accessPublicInvitationByToken(
+  token: string,
+  credentials?: AccessInvitationRequest
+): Promise<AccessInvitationResponse> {
+  if (credentials) {
+    // For protected invitations with token, we need to pass credentials
+    const response = await apiClient.post<AccessInvitationResponse>(
+      `/api/v1/public/invitations/token/${token}/access`,
+      credentials
+    );
+    return unwrapResponse(response, 'Failed to access invitation');
+  }
+  const response = await apiClient.get<AccessInvitationResponse>(
+    `/api/v1/public/invitations/token/${token}`
+  );
+  return unwrapResponse(response, 'Failed to access invitation');
+}
+
+/**
  * Get public invitation by personal guest token.
  */
 export async function getPersonalizedInvitation(
@@ -1410,6 +1432,7 @@ export const invitationService = {
 
   // Public
   accessPublicInvitation,
+  accessPublicInvitationByToken,
   getPersonalizedInvitation,
   submitPublicRSVP,
   getTurnstileConfig,

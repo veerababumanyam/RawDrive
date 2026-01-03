@@ -1103,6 +1103,79 @@ class DigitalInvitationService:
     # Alias for API compatibility
     verify_and_get_invitation = get_public_invitation
 
+    async def get_public_invitation_by_id(
+        self,
+        invitation_id: UUID,
+        password: Optional[str] = None,
+        pin: Optional[str] = None,
+        ip_address: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Get a published invitation for public viewing by ID.
+
+        Similar to get_public_invitation but uses ID instead of slug.
+        Used for magic link token-based access.
+
+        Args:
+            invitation_id: Invitation UUID
+            password: Password if protected
+            pin: PIN if protected
+            ip_address: Viewer's IP for analytics
+
+        Returns:
+            Public invitation data (sanitized for guest view)
+
+        Raises:
+            InvitationNotFoundError: Invitation not found or not published
+            InvitationPasswordRequiredError: Password needed
+            InvitationPasswordIncorrectError: Wrong password
+            InvitationPinRequiredError: PIN needed
+            InvitationPinIncorrectError: Wrong PIN
+        """
+        invitation = await self.invitation_repo.get_invitation_by_id(invitation_id)
+
+        if not invitation:
+            raise InvitationNotFoundError()
+
+        # Verify invitation is published
+        if invitation.get("status") != "published":
+            raise InvitationNotFoundError()
+
+        # Track view (using slug or fallback)
+        slug = invitation.get("slug") or str(invitation_id)
+        await self._track_view(slug, ip_address)
+
+        # Build public response
+        public_invitation = {
+            "invitation_id": str(invitation["invitation_id"]),
+            "title": invitation.get("title", ""),
+            "description": invitation.get("description"),
+            "event_type": invitation.get("event_type", "general"),
+            "event_datetime": invitation.get("event_datetime"),
+            "event_end_datetime": invitation.get("event_end_datetime"),
+            "event_timezone": invitation.get("event_timezone", "UTC"),
+            "venue": invitation.get("venue") or {},
+            "host_names": invitation.get("host_names") or [],
+            "template_id": invitation.get("template_id"),
+            "template_layout": invitation.get("template_layout"),
+            "cover_image_url": invitation.get("cover_image_url"),
+            "gallery_images": invitation.get("gallery_images") or [],
+            "rsvp_settings": invitation.get("rsvp_settings") or {},
+            "password_protected": invitation.get("password_protected", False),
+            "pin_protected": invitation.get("pin_protected", False),
+            "primary_language": invitation.get("primary_language", "en"),
+            "secondary_language": invitation.get("secondary_language"),
+            "content_i18n": invitation.get("content_i18n") or {},
+            "customization": invitation.get("customization") or {},
+            "cover_media_id": invitation.get("cover_media_id"),
+            "gallery_media_ids": invitation.get("gallery_media_ids") or [],
+            "layout_density": invitation.get("layout_density", "normal"),
+            "font_heading": invitation.get("font_heading", "Playfair Display"),
+            "font_body": invitation.get("font_body", "Lora"),
+            "ai_generated_content": invitation.get("ai_generated_content") or {},
+            "has_sub_events": invitation.get("has_sub_events", False),
+        }
+        return await self._populate_media_urls(public_invitation)
+
     # =========================================================================
     # STATISTICS
     # =========================================================================
