@@ -7,7 +7,7 @@ import {
 } from '../types/companyProfile';
 import { WORKSPACE_PATHS, PUBLIC_PATHS } from '../constants/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:8000';
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL || 'https://rawdrive.ai';
 
 export interface LogoCropData {
