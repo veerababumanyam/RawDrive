@@ -703,12 +703,12 @@ async def scan_gallery_faces(
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT ga.asset_id 
+                SELECT ga.asset_id
                 FROM gallery_assets ga
                 JOIN assets a ON a.asset_id = ga.asset_id
-                WHERE ga.workspace_id = $1 
-                AND ga.gallery_id = $2 
-                AND ga.deleted_at IS NULL
+                WHERE ga.workspace_id = $1
+                AND ga.gallery_id = $2
+                AND a.deleted_at IS NULL
                 AND a.deleted = FALSE
                 AND a.mime_type LIKE 'image/%'
                 """,
