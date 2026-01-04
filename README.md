@@ -26,7 +26,7 @@
 ### 🎯 Core Capabilities
 
 - **📸 Professional Asset Management**: Upload, organize, and manage millions of high-resolution photos and videos
-- **🤖 AI-Powered Intelligence**: Automatic tagging, face recognition, scene detection, and smart search powered by Google Gemini, OpenAI, Anthropic, or Azure
+- **🤖 AI-Powered Intelligence**: Automatic tagging, face recognition, scene detection, and smart search powered by Google Gemini (Bring Your Own API)
 - **🏢 Enterprise Multi-Tenancy**: Complete workspace isolation with customizable permissions and governance
 - **🔒 SOC 2 Compliance**: Enterprise-grade security with end-to-end encryption and audit trails
 - **☁️ BYOS (Bring Your Own Storage)**: Full support for S3-compatible storage with customer-controlled data sovereignty
@@ -87,7 +87,7 @@
 - **🔍 Content Analysis**: Scene detection, object recognition, and metadata enrichment
 - **📊 Tagging Health**: Monitor and optimize AI tagging coverage across workspace
 - **🔄 Bulk Reanalysis**: Re-analyze photos with improved AI models
-- **⚙️ Multi-Provider Support**: Switch between Gemini, OpenAI, Anthropic, or local models
+- **🔑 BYOA Model**: Bring Your Own Google Gemini API key for full control
 
 ---
 
@@ -129,7 +129,7 @@ graph TB
 | **Database** | PostgreSQL 16 + pgvector + PostGIS | Relational data + vector embeddings + geo search |
 | **Cache** | Redis 7 + BullMQ | Caching, sessions, job queues |
 | **Storage** | Cloudflare R2 / BYOS S3 | Object storage with CDN |
-| **AI Providers** | Gemini / OpenAI / Anthropic / Azure / Local | Multi-provider AI with tier-based access |
+| **AI Provider** | Google Gemini (BYOA) | Bring Your Own API - users provide their own Gemini API key |
 | **Infrastructure** | Docker + Kubernetes | Container orchestration |
 | **Monitoring** | Grafana + Loki + Prometheus | Observability and alerting |
 | **Authentication** | Google OAuth (OIDC) + Local Auth | Enterprise authentication with MFA |
@@ -314,10 +314,9 @@ R2_ACCESS_KEY_ID=your-r2-access-key
 R2_SECRET_ACCESS_KEY=your-r2-secret
 R2_BUCKET_NAME=your-bucket-name
 
-# AI Service
-AI_PROVIDER=openai|anthropic|google
-AI_API_KEY=your-ai-api-key
-AI_MODEL=gpt-4|claude-3|gemini-pro
+# AI Service (Google Gemini - Bring Your Own API)
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-pro|gemini-pro-vision|gemini-flash
 
 # Email & Notifications
 SMTP_HOST=smtp.gmail.com
@@ -348,16 +347,16 @@ RawDrive supports multiple storage backends:
 - **Duplicate Detection**: Identify and manage duplicate photos across libraries
 - **Content Analysis**: Advanced image understanding with contextual insights
 
-### AI Features by Tier
+### AI Features (Bring Your Own API)
 
-RawDrive's AI capabilities are included in each subscription tier:
+RawDrive uses **Google Gemini** for all AI capabilities. Users must provide their own Gemini API key.
 
-**AI Features Access:**
-- **Starter**: Basic AI tagging and organization
-- **Professional**: Full AI tagging, face detection, and smart search
-- **Business**: Advanced AI curation, duplicate detection, and bulk operations
-- **Enterprise**: Unlimited AI processing with priority queuing and custom models
-- **Trial**: Full Business-tier AI features for 30 days
+**How It Works:**
+- **API Key**: Users configure their own Google Gemini API key in workspace settings
+- **Usage Limits**: Based on your Google Cloud/Gemini API quota (not RawDrive tiers)
+- **Billing**: AI usage is billed directly by Google to your account
+- **Privacy**: Your API key and usage stay within your control
+- **All Tiers**: AI features available to all subscription tiers with valid Gemini API key
 
 **Available AI Operations:**
 - Automatic photo tagging and categorization
@@ -365,6 +364,7 @@ RawDrive's AI capabilities are included in each subscription tier:
 - Smart gallery curation and photo selection
 - Duplicate detection across libraries
 - Content analysis and metadata enrichment
+- Natural language search with semantic understanding
 
 ### Model Context Protocol (MCP)
 
@@ -390,13 +390,28 @@ async def smart_curate_gallery(gallery_id: str, workspace_id: str) -> list:
 - Rate limiting and quota management
 - Audit logging for all AI operations
 
-### Supported AI Providers
+### Google Gemini Integration
 
-- **Google Gemini**: Default provider for vision and multimodal tasks (hosted)
-- **OpenAI**: GPT-4, DALL-E for image generation and analysis
-- **Anthropic**: Claude 3 for advanced reasoning and content analysis
-- **Azure AI**: Azure OpenAI and Azure AI Foundry hosted models
-- **Local Models**: OpenAI-compatible endpoints (Ollama, LM Studio) for privacy-focused deployments
+RawDrive exclusively uses **Google Gemini** for all AI features:
+
+**Setup:**
+1. Obtain a Google Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Configure the API key in your workspace settings
+3. Start using AI features immediately
+
+**Benefits of BYOA:**
+- **Full Control**: Your API key, your usage limits, your data
+- **Direct Billing**: Pay Google directly based on your usage
+- **No Hidden Costs**: RawDrive doesn't mark up AI usage
+- **Flexibility**: Choose your Gemini model tier (Flash, Pro, Ultra)
+- **Privacy**: Your API credentials never leave your workspace
+
+**Gemini Capabilities:**
+- Vision AI for photo analysis and understanding
+- Multimodal understanding (images + text)
+- Fast inference with Gemini Flash
+- Advanced reasoning with Gemini Pro
+- High-quality embeddings for semantic search
 
 ---
 
@@ -447,7 +462,7 @@ async def smart_curate_gallery(gallery_id: str, workspace_id: str) -> list:
 #### AI & Smart Features (Specs 005, 008, 010)
 - **Smart Tagging Cache**: Local caching layer for faster AI operations
 - **Face Group Merge**: Advanced face clustering with merge/split capabilities
-- **AI Provider Settings**: Multi-provider support (Gemini, OpenAI, Anthropic, Azure)
+- **AI Provider Settings**: Google Gemini BYOA (Bring Your Own API) configuration
 - **Tagging Health Monitoring**: Track AI coverage and optimization across workspace
 - **Bulk Reanalysis**: Re-process photos with improved AI models
 
@@ -569,7 +584,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ## 🏆 Awards & Recognition
 
 - **🏅 SOC 2 Type II Certified** - Enterprise-grade security and compliance
-- **🥇 AI Innovation Award** - Photography industry AI integration with multi-provider support
+- **🥇 AI Innovation Award** - Photography industry Google Gemini integration with BYOA model
 - **🏆 SaaS Excellence** - Outstanding user experience and platform reliability
 - **🌟 Best Client Portal** - Professional gallery and client management system
 - **🚀 Innovation in Events** - Digital invitation and RSVP management platform
