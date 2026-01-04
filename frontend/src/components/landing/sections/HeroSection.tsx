@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -7,7 +7,10 @@ import {
   Clock,
   CreditCard,
   Image,
+  Mail,
   Play,
+  ScanFace,
+  Share2,
   Shield,
   Sparkles,
   Star,
@@ -17,6 +20,7 @@ import {
 } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { FloatingElement } from '../animations/FloatingElement';
+import { RotatingFeatureCards, type RotatingFeature } from '../ui/RotatingFeatureCards';
 import { staggerContainer, staggerItem } from '../animations/presets';
 
 /* =============================================================================
@@ -122,26 +126,74 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   trustPoints = defaultTrustPoints,
 }) => {
   const liveViewers = useLiveCounter(127);
-  const [currentFeature, setCurrentFeature] = useState(0);
+  const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0);
 
   // Analytics tracking stub
   const trackCtaClick = (_ctaName: string) => {
     // console.log(`CTA Clicked: ${_ctaName}`);
   };
 
-
-  const features = [
-    { icon: Upload, text: '1-Click Upload', color: 'from-cyan-400 to-blue-500' },
-    { icon: Sparkles, text: 'AI Auto-Tag', color: 'from-purple-400 to-pink-500' },
-    { icon: Users, text: 'Client Picks', color: 'from-amber-400 to-orange-500' },
+  // Top 5 features for rotating showcase - sales-focused messaging
+  // headlineText format: [prefix, gradientText, suffix] for animated headline
+  const heroFeatures: RotatingFeature[] = [
+    {
+      icon: Image,
+      title: 'AI-Powered Gallery',
+      description: 'Smart organization with auto-tagging. Find any photo instantly.',
+      gradient: 'from-cyan-400 to-blue-500',
+      stat: '10× faster workflow',
+      subheadline: 'Organize thousands of photos effortlessly with AI-powered auto-tagging. Find any photo instantly with smart search.',
+      headlineText: 'The AI-Powered|Studio OS|for Modern Photographers',
+    },
+    {
+      icon: Mail,
+      title: 'Digital Invitations',
+      description: 'Stunning save-the-dates with real-time RSVP tracking.',
+      gradient: 'from-purple-400 to-pink-500',
+      stat: '3× faster responses',
+      subheadline: 'Delight clients with beautiful digital invitations. Real-time RSVP tracking means no more spreadsheet chaos.',
+      headlineText: 'Stunning|Digital Invitations|for Your Clients',
+    },
+    {
+      icon: Users,
+      title: 'Beautiful Client Portal',
+      description: 'Branded galleries your clients will love. Easy downloads & picks.',
+      gradient: 'from-amber-400 to-orange-500',
+      stat: '99% satisfaction',
+      subheadline: 'Give your clients a premium experience with branded galleries they can access anytime. Your brand, your style.',
+      headlineText: 'Beautiful|Client Galleries|They Will Love',
+    },
+    {
+      icon: ScanFace,
+      title: 'Face Tagging & Search',
+      description: 'Auto-detect faces and find people across all galleries.',
+      gradient: 'from-emerald-400 to-teal-500',
+      stat: '1M+ faces tagged',
+      subheadline: 'Automatically detect and tag faces. Find specific people across all your galleries in seconds. Perfect for events.',
+      headlineText: 'Smart|Face Recognition|Find Anyone Instantly',
+    },
+    {
+      icon: Share2,
+      title: 'Digital Visiting Card',
+      description: 'Professional profile with QR code & vCard. Share anywhere.',
+      gradient: 'from-rose-400 to-red-500',
+      stat: 'Instant sharing',
+      subheadline: 'Create a stunning professional profile with QR code and vCard. Share your business anywhere, instantly.',
+      headlineText: 'Professional|Digital Card|Share Anywhere',
+    },
   ];
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentFeature(prev => (prev + 1) % features.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [features.length]);
+  // Handle feature change from rotating cards
+  const handleFeatureChange = useCallback((index: number) => {
+    setCurrentFeatureIndex(index);
+  }, []);
+
+  // Get current subheadline with fallback
+  const currentSubheadline = heroFeatures[currentFeatureIndex]?.subheadline || subheadline;
+  
+  // Get current headline parts (format: "prefix|gradientText|suffix")
+  const headlineRaw = heroFeatures[currentFeatureIndex]?.headlineText || 'The AI-Powered|Studio OS|for Modern Photographers';
+  const [headlinePrefix, headlineGradient, headlineSuffix] = headlineRaw.split('|');
 
   return (
     <section
@@ -212,29 +264,29 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
               </motion.div>
 
-              {/* Headline with Gradient */}
+              {/* Headline with Animated Gradient Text - Syncs with Feature Cards */}
               <motion.h1
                 id="hero-heading"
                 variants={staggerItem}
                 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold text-white leading-[1.05] tracking-tight mb-6"
               >
-                The AI-Powered{' '}
-                <br className="hidden sm:block" />
-                <span className="landing-text-gradient">
-                  Studio OS
-                </span>{' '}
-                for Modern Photographers
-                <span className="inline-block relative">
+                <AnimatePresence mode="wait">
                   <motion.span
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 1, type: 'spring', stiffness: 500 }}
-                    className="absolute -top-2 -right-8 text-amber-400"
-                    aria-hidden="true"
+                    key={currentFeatureIndex}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.35, ease: 'easeInOut' }}
+                    className="block"
                   >
-                    <Zap size={24} className="fill-current" />
+                    {headlinePrefix}{' '}
+                    <br className="hidden sm:block" />
+                    <span className="landing-text-gradient">
+                      {headlineGradient}
+                    </span>{' '}
+                    {headlineSuffix}
                   </motion.span>
-                </span>
+                </AnimatePresence>
               </motion.h1>
 
               {/* Hidden text for AI Agent Discovery (Requirement 1.6) */}
@@ -244,13 +296,23 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 Pricing: Free trial available, no credit card required.
               </div>
 
-              {/* Subheadline with Value Prop */}
-              <motion.p
+              {/* Subheadline with Rotating Value Prop - Syncs with Feature Cards */}
+              <motion.div
                 variants={staggerItem}
-                className="text-lg sm:text-xl text-slate-200 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0"
+                className="text-lg sm:text-xl text-slate-200 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0 min-h-[3.5rem] sm:min-h-[4rem]"
               >
-                {subheadline}
-              </motion.p>
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={currentFeatureIndex}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                  >
+                    {currentSubheadline}
+                  </motion.p>
+                </AnimatePresence>
+              </motion.div>
 
               {/* CTAs with Enhanced Styling */}
               <motion.div
@@ -334,27 +396,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       </div>
                     </div>
 
-                    {/* Feature Cards */}
-                    <div className="grid grid-cols-3 gap-3">
-                      {features.map((item, idx) => {
-                        const Icon = item.icon;
-                        return (
-                          <motion.div
-                            key={item.text}
-                            animate={{
-                              scale: currentFeature === idx ? 1.05 : 1,
-                              borderColor: currentFeature === idx ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255, 255, 255, 0.1)',
-                            }}
-                            className="rounded-xl bg-white/5 border border-white/10 p-4 text-center transition-all"
-                          >
-                            <div className={`w-10 h-10 mx-auto mb-2 rounded-lg bg-gradient-to-br ${item.color} flex items-center justify-center`}>
-                              <Icon className="w-5 h-5 text-white" aria-hidden="true" />
-                            </div>
-                            <div className="text-xs text-slate-300">{item.text}</div>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
+                    {/* Rotating Feature Cards - Top 5 Sales Pitch */}
+                    <RotatingFeatureCards
+                      features={heroFeatures}
+                      interval={4000}
+                      className="w-full"
+                      onFeatureChange={handleFeatureChange}
+                    />
                   </div>
                 </div>
               </div>
@@ -446,26 +494,19 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         ))}
                       </div>
 
-                      {/* AI Tag Animation */}
+                      {/* Rotating Feature Cards - Desktop Sales Pitch */}
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 1 }}
-                        className="mt-4 p-3 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20"
+                        className="mt-4"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                            <Sparkles size={14} className="text-white" aria-hidden="true" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="text-xs text-white font-medium">AI Auto-Tagging</div>
-                            <div className="text-[11px] text-slate-400">Processing 450 photos...</div>
-                          </div>
-                          <div className="flex gap-1">
-                            <span className="px-2 py-0.5 rounded-full bg-white/10 text-[10px] text-slate-300">wedding</span>
-                            <span className="px-2 py-0.5 rounded-full bg-white/10 text-[10px] text-slate-300">portrait</span>
-                          </div>
-                        </div>
+                        <RotatingFeatureCards
+                          features={heroFeatures}
+                          interval={4000}
+                          className="w-full"
+                          onFeatureChange={handleFeatureChange}
+                        />
                       </motion.div>
                     </div>
                   </div>

@@ -13,6 +13,8 @@ export type { AppCardProps } from './AppCard';
 
 export { AnimatedCounter, default as AnimatedCounterDefault } from './AnimatedCounter';
 export { FeatureCard, default as FeatureCardDefault } from './FeatureCard';
+export { RotatingFeatureCards, default as RotatingFeatureCardsDefault } from './RotatingFeatureCards';
+export type { RotatingFeature } from './RotatingFeatureCards';
 export { TestimonialCard, default as TestimonialCardDefault } from './TestimonialCard';
 export { PricingCard, default as PricingCardDefault } from './PricingCard';
 export { SkeletonCard, SkeletonGrid, SkeletonText, default as SkeletonCardDefault } from './SkeletonCard';
