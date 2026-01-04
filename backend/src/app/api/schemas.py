@@ -9,35 +9,12 @@ from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from app.shared.types import ColorStop, GradientConfiguration
 
 
 # ---------------------------------------------------------------------------
 # Gradient Configuration Schemas
 # ---------------------------------------------------------------------------
-
-
-class ColorStop(BaseModel):
-    """Single color stop in a gradient."""
-
-    color: str = Field(..., description="Hex color code (#RRGGBB or #RGB)")
-    position: int = Field(..., ge=0, le=100, description="Position as percentage (0-100)")
-
-    @field_validator("color")
-    @classmethod
-    def validate_hex_color(cls, v: str) -> str:
-        """Validate and normalize hex color format."""
-        if not re.match(r"^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", v):
-            raise ValueError("Invalid hex color format. Use #RGB or #RRGGBB")
-        return v.upper()
-
-
-class GradientConfiguration(BaseModel):
-    """Complete gradient configuration for gallery branding."""
-
-    type: Literal["linear"] = Field("linear", description="Gradient type (linear only for v1)")
-    preset_id: Optional[str] = Field(None, max_length=50, description="Reference to predefined preset, null for custom")
-    direction: int = Field(135, ge=0, lt=360, description="Direction in degrees (0=top, 90=right)")
-    colors: list[ColorStop] = Field(..., min_length=2, max_length=5, description="Array of 2-5 color stops")
 
 
 # ---------------------------------------------------------------------------
@@ -607,9 +584,8 @@ class GalleryListResponse(BaseModel):
 class CreateUploadSessionRequest(BaseModel):
     """Create upload session request."""
 
-    gallery_id: Optional[UUID] = Field(None, description="Target gallery UUID (null for library upload)")
+    gallery_id: Optional[UUID] = Field(None, description="Target gallery UUID")
     sub_gallery_id: Optional[UUID] = Field(None, description="Target sub-gallery UUID (null = root)")
-    folder_id: Optional[UUID] = Field(None, description="Target library folder UUID (null = root library)")
     file_name: str = Field(..., min_length=1, max_length=255, description="Original filename")
     mime_type: str = Field(..., description="MIME type (e.g., image/jpeg)")
     size_bytes: int = Field(..., ge=1, description="File size in bytes")

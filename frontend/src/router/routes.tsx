@@ -1,4 +1,4 @@
-/* @refresh reset */
+/* @refresh reset - force update */
 import { Suspense, lazy, ComponentType } from 'react';
 import { RouteObject } from 'react-router-dom';
 import { ProtectedRoute } from '../components/auth';
@@ -86,7 +86,6 @@ const ForgotPasswordPage = lazyWithRetry(() => import('../pages/public/ForgotPas
 
 // Workspace pages
 const DashboardPage = lazy(() => import('../pages/workspace/DashboardPage'));
-const LibraryPage = lazy(() => import('../pages/workspace/LibraryPage'));
 const GalleriesPage = lazy(() => import('../pages/workspace/GalleriesPage'));
 const PeoplePage = lazy(() => import('../pages/workspace/PeoplePage'));
 const FavoritesPage = lazy(() => import('../pages/workspace/FavoritesPage'));
@@ -258,10 +257,6 @@ export const workspaceRoutes: RouteObject[] = [
       {
         path: 'galleries/:id',
         element: <CriticalLazyPage component={GalleryDetailPage} />,
-      },
-      {
-        path: 'libraries',
-        element: <CriticalLazyPage component={LibraryPage} />,
       },
       {
         path: 'people',

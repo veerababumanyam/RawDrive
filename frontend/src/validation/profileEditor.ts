@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import { hexColorSchema as sharedHexColorSchema } from '@rawdrive/shared-validation';
 
 // =============================================================================
 // Color Validation
@@ -14,10 +15,9 @@ import { z } from 'zod';
 
 /**
  * Hex color validation (3 or 6 digits)
+ * @deprecated Prefer importing directly from @rawdrive/shared-validation.
  */
-export const hexColorSchema = z
-  .string()
-  .regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, 'Invalid hex color format (use #RGB or #RRGGBB)');
+export const hexColorSchema = sharedHexColorSchema;
 
 /**
  * RGB color validation

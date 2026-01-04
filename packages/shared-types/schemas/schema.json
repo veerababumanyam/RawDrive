@@ -1,0 +1,238 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "AssetStatus": {
+      "description": "Asset processing status",
+      "enum": [
+        "uploading",
+        "processing",
+        "available",
+        "failed",
+        "deleted"
+      ],
+      "type": "string"
+    },
+    "ColorStop": {
+      "additionalProperties": false,
+      "description": "A single color stop in a gradient",
+      "properties": {
+        "color": {
+          "description": "Hex color value (e.g., '#FF5733')",
+          "type": "string"
+        },
+        "position": {
+          "description": "Position from 0 to 100",
+          "type": "number"
+        }
+      },
+      "required": [
+        "color",
+        "position"
+      ],
+      "type": "object"
+    },
+    "DownloadPolicy": {
+      "description": "Download policy for gallery assets Aligned with galleries_client_portal spec (view_only, web_only, watermarked_only, original_allowed)",
+      "enum": [
+        "view_only",
+        "web_only",
+        "watermarked_only",
+        "original_allowed"
+      ],
+      "type": "string"
+    },
+    "ErrorResponse": {
+      "additionalProperties": false,
+      "description": "Standard error response format",
+      "properties": {
+        "details": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "message"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "error": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "error",
+        "message"
+      ],
+      "type": "object"
+    },
+    "EventType": {
+      "description": "Type of event within an invitation",
+      "enum": [
+        "wedding",
+        "birthday",
+        "anniversary",
+        "baby_shower",
+        "engagement",
+        "festival",
+        "corporate",
+        "other"
+      ],
+      "type": "string"
+    },
+    "GalleryStatus": {
+      "description": "Status of a gallery",
+      "enum": [
+        "draft",
+        "published",
+        "archived"
+      ],
+      "type": "string"
+    },
+    "GradientConfiguration": {
+      "additionalProperties": false,
+      "description": "Configuration for gradient styling",
+      "properties": {
+        "colors": {
+          "description": "Color stops defining the gradient",
+          "items": {
+            "$ref": "#/definitions/ColorStop"
+          },
+          "type": "array"
+        },
+        "direction": {
+          "description": "Direction in degrees (0-360)",
+          "type": "number"
+        },
+        "preset_id": {
+          "description": "Reference to preset or null for custom",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "$ref": "#/definitions/GradientType",
+          "description": "Type of gradient"
+        }
+      },
+      "required": [
+        "type",
+        "preset_id",
+        "direction",
+        "colors"
+      ],
+      "type": "object"
+    },
+    "GradientType": {
+      "const": "linear",
+      "description": "Gradient type - currently only linear supported",
+      "type": "string"
+    },
+    "GuestStatus": {
+      "description": "Guest invitation status",
+      "enum": [
+        "invited",
+        "viewed",
+        "responded",
+        "checked_in"
+      ],
+      "type": "string"
+    },
+    "InvitationStatus": {
+      "description": "Status of a digital invitation Aligns with spec (draft, published, archived) while keeping legacy states for compatibility.",
+      "enum": [
+        "draft",
+        "published",
+        "archived",
+        "expired",
+        "cancelled",
+        "deleted"
+      ],
+      "type": "string"
+    },
+    "LayoutStyle": {
+      "description": "Layout style for gallery grid / portal navigation",
+      "enum": [
+        "tabs",
+        "continuous",
+        "grid",
+        "masonry"
+      ],
+      "type": "string"
+    },
+    "PaginationMeta": {
+      "additionalProperties": false,
+      "description": "Pagination metadata for list responses",
+      "properties": {
+        "limit": {
+          "type": "number"
+        },
+        "page": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "total_pages": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "total",
+        "page",
+        "limit",
+        "total_pages"
+      ],
+      "type": "object"
+    },
+    "RSVPStatus": {
+      "description": "RSVP response status from a guest",
+      "enum": [
+        "pending",
+        "attending",
+        "not_attending",
+        "maybe"
+      ],
+      "type": "string"
+    },
+    "TemplateCategory": {
+      "description": "Category of invitation template",
+      "enum": [
+        "wedding",
+        "engagement",
+        "birthday",
+        "baby_shower",
+        "corporate",
+        "religious",
+        "anniversary",
+        "festival",
+        "other"
+      ],
+      "type": "string"
+    },
+    "ThemeMode": {
+      "description": "Theme mode for gallery display",
+      "enum": [
+        "light",
+        "dark",
+        "system"
+      ],
+      "type": "string"
+    }
+  }
+}

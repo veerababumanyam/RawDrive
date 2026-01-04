@@ -17,7 +17,7 @@ import { Palette, X, Sparkles } from 'lucide-react';
 import { GradientThumbnail } from './GradientThumbnail';
 import { GRADIENT_PRESETS, GRADIENT_CATEGORIES, getPresetsByCategory } from '../../../constants/gradientPresets';
 import { AppButton } from '../../ui/AppButton';
-import type { GradientConfiguration, GradientCategory, GradientPreset } from '../../../types/gradient';
+import type { GradientConfiguration, GradientCategory, GradientPreset, ColorStop } from '../../../types/gradient';
 
 export interface GradientPickerProps {
   /** Currently selected gradient configuration */
@@ -65,7 +65,7 @@ export const GradientPicker: React.FC<GradientPickerProps> = ({
         value.colors.length === preset.config.colors.length &&
         value.direction === preset.config.direction &&
         value.colors.every(
-          (stop, i) =>
+          (stop: ColorStop, i: number) =>
             stop.color.toUpperCase() === preset.config.colors[i].color.toUpperCase() &&
             stop.position === preset.config.colors[i].position
         )
@@ -204,7 +204,7 @@ export const GradientPicker: React.FC<GradientPickerProps> = ({
             className="w-8 h-8 rounded-md ring-1 ring-border"
             style={{
               background: `linear-gradient(${value.direction}deg, ${value.colors
-                .map((s) => `${s.color} ${s.position}%`)
+                .map((s: ColorStop) => `${s.color} ${s.position}%`)
                 .join(', ')})`,
             }}
           />

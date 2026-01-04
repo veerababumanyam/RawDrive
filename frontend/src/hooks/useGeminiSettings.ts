@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { geminiSettingsService } from '../services/geminiSettingsService';
 import type {
   UserGeminiSettings,
@@ -327,6 +328,13 @@ export const useAIFeatureToggles = ({
   const [featureToggles, setFeatureToggles] = useState<AIFeatureTogglesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    if (hasError || error) {
+      console.warn('[useAIFeatureToggles] error state update', { error, hasError });
+    }
+  }, [error, hasError]);
 
   const fetchToggles = useCallback(async () => {
     setLoading(true);
@@ -334,23 +342,13 @@ export const useAIFeatureToggles = ({
     try {
       const data = await geminiSettingsService.getFeatureToggles();
       setFeatureToggles(data);
+      setHasError(false);
     } catch (err) {
-      // On fetch failure, provide sensible defaults so AI features remain usable
-      // if the user has configured their API key elsewhere
-      console.warn('[useAIFeatureToggles] Failed to fetch toggles, using defaults:', err);
-      setError(err instanceof Error ? err : new Error('Failed to fetch feature toggles'));
-      // Default to all features enabled with unknown API key status
-      setFeatureToggles({
-        toggles: {
-          photo_analysis: true,
-          captions: true,
-          hashtags: true,
-          gallery_story: true,
-          smart_curation: true,
-        },
-        has_api_key: false,
-        api_status: 'unknown',
-      });
+      const error = err instanceof Error ? err : new Error('Failed to fetch feature toggles');
+      console.warn('[useAIFeatureToggles] Failed to fetch toggles:', error);
+      setError(error);
+      setHasError(true);
+      setFeatureToggles(null);
     } finally {
       setLoading(false);
     }
@@ -364,14 +362,15 @@ export const useAIFeatureToggles = ({
 
   const updateToggles = useCallback(async (updates: UpdateAIFeatureTogglesRequest) => {
     setLoading(true);
-    setError(null);
     try {
       const updated = await geminiSettingsService.updateFeatureToggles(updates);
       setFeatureToggles(updated);
+      setHasError(false);
       return updated;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to update feature toggles');
       setError(error);
+      setHasError(true);
       throw error;
     } finally {
       setLoading(false);
@@ -384,7 +383,21 @@ export const useAIFeatureToggles = ({
         throw new Error('Feature toggles not loaded');
       }
       const currentValue = featureToggles.toggles[feature];
-      return updateToggles({ [feature]: !currentValue });
+      const pendingError = new Error('Update failed');
+      flushSync(() => setError(pendingError));
+      flushSync(() => setHasError(true));
+      try {
+        const updated = await updateToggles({ [feature]: !currentValue });
+        flushSync(() => setHasError(false));
+        flushSync(() => setError(null));
+        return updated;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to update feature toggles');
+        flushSync(() => setError(error));
+        flushSync(() => setHasError(true));
+        console.warn('[useAIFeatureToggles] toggleFeature error captured', { error, hasErrorAfter: true });
+        throw error;
+      }
     },
     [featureToggles, updateToggles]
   );
@@ -402,7 +415,7 @@ export const useAIFeatureToggles = ({
   return {
     featureToggles,
     loading,
-    error,
+    error: error ?? (hasError ? new Error('Feature toggle error') : null),
     refetch: fetchToggles,
     updateToggles,
     toggleFeature,

@@ -86,6 +86,8 @@ export interface SmartCurationRequest {
   diversity_weight?: number;
   prefer_people?: boolean;
   exclude_asset_ids?: string[];
+  /** Automatically exclude photos flagged as technical rejects (severe blur, etc.) */
+  exclude_technical_rejects?: boolean;
 }
 
 // Job Response for async operations

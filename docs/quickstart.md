@@ -1,85 +1,93 @@
-# Quickstart Guide - Smart Local Tagging Layer
+# Quickstart Guide - RawDrive
 
-This guide provides step-by-step instructions to get the Smart Local Tagging Layer up and running.
+This guide provides step-by-step instructions to get RawDrive up and running locally.
 
 ## Prerequisites
 
-- Node.js 18+
-- Python 3.9+
 - Docker & Docker Compose
-- PostgreSQL 15+ with pgvector extension
-- Redis
+- Node.js 18+ (for frontend development)
+- pnpm 8+ (package manager for monorepo)
+- Python 3.11+ (optional, for local development)
 
 ## 1. Environment Setup
 
-### Start Development Containers
+### Start Development Stack
 ```bash
-npm run docker:dev:up
+# Full development stack (recommended)
+docker compose -f infrastructure/docker/docker-compose.yml up -d
+
+# OR backend-only development (faster for backend work)
+docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
 ```
 
-This starts PostgreSQL + pgvector and Redis containers.
+This starts PostgreSQL + pgvector, Redis, and all backend services.
 
-### Install Dependencies
+### Install Dependencies (pnpm Workspaces)
 ```bash
-# Frontend
-cd frontend && npm install
+# Install pnpm if not already installed
+npm install -g pnpm
 
-# Backend
-cd backend && npm install
+# Install all workspace dependencies (frontend + shared packages)
+pnpm install
 
-# AI Service
-cd ai-service && pip install -r requirements.txt
+# Build shared packages
+pnpm build:packages
 ```
 
 ## 2. Database Setup
 
 ### Run Migrations
 ```bash
-cd backend && npm run db:migrate
+docker compose -f infrastructure/docker/docker-compose.yml exec backend alembic upgrade head
 ```
 
 ### Seed Development Data
 ```bash
-cd backend && npm run db:seed
+docker compose -f infrastructure/docker/docker-compose.yml exec backend python -m src.scripts.seed_user
 ```
 
 ## 3. Start Services
 
-### Development Mode (Concurrent)
+### Development Mode
 ```bash
-npm run dev:all
+# Frontend (React dev server)
+cd frontend && npm run dev
+
+# Backend (FastAPI) - runs inside Docker
+# Already started with docker compose above
 ```
 
-This starts:
+Services will be available at:
 - Frontend: http://localhost:3000
-- Backend: http://localhost:3001
-- AI Service: http://localhost:3002
+- Backend API: http://localhost:8000
+- AI Service: http://localhost:8001
 
-### Individual Services
+### Alternative: Individual Services
 ```bash
 # Frontend only
-npm run dev
+cd frontend && npm run dev
 
-# Backend only
-npm run dev:backend
-
-# AI Service only
-cd ai-service && python -m uvicorn main:app --reload
+# Backend only (if not using Docker)
+cd backend && uvicorn app.main:app --reload --port 8000
 ```
 
 ## 4. Start Background Workers
 
-```bash
-cd backend && npm run workers
-```
+Background workers start automatically with the Docker stack. If running locally:
 
-This starts the content detection worker for AI tagging.
+```bash
+# Using Docker
+docker compose -f infrastructure/docker/docker-compose.yml exec backend celery -A src.tasks worker --loglevel=info
+
+# OR locally
+cd backend && celery -A src.tasks worker --loglevel=info
+```
 
 ## 5. Verify Installation
 
 ### Health Check
 ```bash
-curl http://localhost:3001/api/v1/health
+curl http://localhost:8000/api/v1/health
 ```
 
 ### Test AI Tagging
@@ -87,23 +95,67 @@ curl http://localhost:3001/api/v1/health
 2. Check gallery health dashboard for AI analysis status
 3. Use search with tags/people filters
 
+## Testing
+
+### Run Backend Tests
+```bash
+docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest
+docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest --cov=src
+```
+
+### Run Frontend Tests
+```bash
+cd frontend && npm test
+```
+
+### Run Shared Package Tests
+```bash
+# Test all shared packages
+pnpm test:packages
+
+# Run cross-platform type parity tests
+pnpm test:parity
+```
+
 ## Troubleshooting
 
 ### Database Connection Issues
-- Ensure Docker containers are running: `docker ps`
-- Check connection: `cd backend && npm run db:check`
+- Ensure Docker containers are running: `docker compose -f infrastructure/docker/docker-compose.yml ps`
+- Check logs: `docker compose -f infrastructure/docker/docker-compose.yml logs postgres`
 
 ### Worker Not Processing
-- Check worker logs: `cd backend && npm run workers:logs`
-- Verify Redis connection
+- Check worker logs: `docker compose -f infrastructure/docker/docker-compose.yml logs worker`
+- Verify Redis connection: `docker compose -f infrastructure/docker/docker-compose.yml exec redis redis-cli ping`
+
+### AI Provider Issues
 
 ### AI Provider Issues
 - Check AI service logs
 - Verify API keys in environment variables
 
+## Working with Shared Packages
+
+RawDrive uses pnpm workspaces for shared code across frontend, backend, and microservices.
+
+### Adding New Shared Types
+
+1. Add TypeScript types in `packages/shared-types/src/`
+2. Export from `packages/shared-types/src/index.ts`
+3. Generate Python models: `pnpm generate:python`
+4. Use in frontend: `import { MyType } from '@rawdrive/shared-types'`
+5. Use in backend: `from app.shared.types import MyType`
+
+### Available Packages
+
+| Package | Import (TS) | Import (Python) |
+|---------|-------------|-----------------|
+| Types | `@rawdrive/shared-types` | `app.shared.types` |
+| Constants | `@rawdrive/shared-constants` | `app.shared.constants` |
+| Validation | `@rawdrive/shared-validation` | `app.shared.validation` |
+| Utils | `@rawdrive/shared-utils` | N/A (TS only) |
+
 ## Next Steps
 
-- Explore the [API Documentation](./docs/api/)
-- Review [Architecture Overview](./docs/architecture/)
-- Check [Development Roadmap](./docs/DEVELOPMENT_ROADMAP.md)</content>
-<parameter name="filePath">/Users/v13478/Desktop/RawDrive/docs/quickstart.md
+- Explore the [API Documentation](./api/)
+- Review [Architecture Overview](./ARCHITECTURE_QUICK_REFERENCE.md)
+- Check [Development Roadmap](./DEVELOPMENT_ROADMAP.md)

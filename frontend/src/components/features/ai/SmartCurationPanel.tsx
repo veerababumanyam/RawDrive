@@ -18,6 +18,7 @@ import {
   Shuffle,
   ChevronDown,
   Image as ImageIcon,
+  CircleOff,
 } from 'lucide-react';
 import { AppButton } from '@/components/ui/AppButton';
 import { AIErrorBoundary, AISpinner } from './index';
@@ -75,6 +76,7 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
   const [qualityThreshold, setQualityThreshold] = useState(0.6);
   const [diversityWeight, setDiversityWeight] = useState(0.3);
   const [preferPeople, setPreferPeople] = useState(false);
+  const [excludeTechnicalRejects, setExcludeTechnicalRejects] = useState(true);
 
   // Curation state
   const [curatedPhotos, setCuratedPhotos] = useState<CuratedPhoto[]>([]);
@@ -99,6 +101,7 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
         quality_threshold: qualityThreshold,
         diversity_weight: diversityWeight,
         prefer_people: preferPeople,
+        exclude_technical_rejects: excludeTechnicalRejects,
       };
 
       const result = await CurationService.curateGallery(workspaceId, galleryId, request);
@@ -124,6 +127,7 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
     qualityThreshold,
     diversityWeight,
     preferPeople,
+    excludeTechnicalRejects,
     onCurationComplete,
     onSelectionChange,
   ]);
@@ -302,6 +306,27 @@ export const SmartCurationPanel: React.FC<SmartCurationPanelProps> = ({
                 role="switch"
                 aria-checked={preferPeople}
                 onClick={() => setPreferPeople(!preferPeople)}
+                className="ai-toggle"
+              >
+                <span className="ai-toggle-thumb" />
+              </button>
+            </div>
+
+            {/* Exclude technical rejects toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm font-medium text-text-primary flex items-center gap-2">
+                  <CircleOff className="w-4 h-4 text-error" />
+                  Auto-exclude blurry photos
+                </label>
+                <p className="text-xs text-text-tertiary mt-0.5">
+                  Automatically skip motion blur and out-of-focus shots
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={excludeTechnicalRejects}
+                onClick={() => setExcludeTechnicalRejects(!excludeTechnicalRejects)}
                 className="ai-toggle"
               >
                 <span className="ai-toggle-thumb" />

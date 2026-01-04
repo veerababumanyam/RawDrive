@@ -25,6 +25,7 @@ import {
     CheckCircle,
     Globe,
     ScanFace,
+    UserCircle,
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -144,7 +145,7 @@ const DashboardPage = () => {
         { label: t('quickActions.newGallery'), icon: Plus, gradient: 'from-violet-500 to-purple-600', path: '/workspace/galleries/new' },
         { label: t('quickActions.uploadPhotos'), icon: Upload, gradient: 'from-blue-500 to-cyan-500', path: '/workspace/upload' },
         { label: t('common:nav.clients'), icon: Users, gradient: 'from-emerald-500 to-teal-500', path: '/workspace/clients' },
-        { label: t('common:nav.libraries'), icon: FolderOpen, gradient: 'from-amber-500 to-orange-500', path: '/workspace/libraries' },
+        { label: t('common:nav.people'), icon: UserCircle, gradient: 'from-amber-500 to-orange-500', path: '/workspace/people' },
     ], [t]);
 
 

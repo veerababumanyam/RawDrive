@@ -89,6 +89,18 @@
 - **🔄 Bulk Reanalysis**: Re-analyze photos with improved AI models
 - **🔑 BYOA Model**: Bring Your Own Google Gemini API key for full control
 
+### 📷 Smart Curate (AI-Powered Photo Culling)
+
+- **⭐ AI Quality Scoring**: Automatic scoring (0-100) for sharpness, exposure, and composition
+- **📸 Blur Detection**: Distinguishes motion blur, focus blur, and intentional bokeh
+- **🚫 Technical Reject Filter**: Auto-exclude severely blurry or out-of-focus shots
+- **🎯 Smart Selection**: Select your best N photos with quality and diversity balance
+- **👥 People Priority**: Optionally prioritize photos containing faces
+- **📊 Quality Analytics**: Gallery-wide quality summaries and distribution
+- **🔧 Customizable Thresholds**: Adjust quality, diversity, and filter settings per session
+
+See [Smart Curate Documentation](docs/SMART_CURATE.md) for API details and usage.
+
 ---
 
 ## 🏗️ Architecture
@@ -165,7 +177,11 @@ RawDrive includes a comprehensive design system with:
 
 2. **Start development infrastructure**
    ```bash
-   npm run docker:dev:up
+   # Full stack (all services)
+   docker compose -f infrastructure/docker/docker-compose.yml up -d
+   
+   # OR backend-only development (faster for backend work)
+   docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
    ```
 
 3. **Install dependencies**
@@ -173,11 +189,8 @@ RawDrive includes a comprehensive design system with:
    # Frontend
    cd frontend && npm install
 
-   # Backend (Python)
-   cd ../backend && pip install -r requirements.txt
-
-   # AI Service
-   cd ../ai-service && pip install -r requirements.txt
+   # Backend and AI Service (using Docker)
+   # Dependencies are installed in Docker containers
    ```
 
 4. **Set up environment**
@@ -188,21 +201,20 @@ RawDrive includes a comprehensive design system with:
 
 5. **Initialize database**
    ```bash
-   cd backend
-   python setup_db.py
-   alembic upgrade head
-   python seed_user.py
+   # Using Docker
+   docker compose -f infrastructure/docker/docker-compose.yml exec backend python setup_db.py
+   docker compose -f infrastructure/docker/docker-compose.yml exec backend alembic upgrade head
+   docker compose -f infrastructure/docker/docker-compose.yml exec backend python seed_user.py
    ```
 
 6. **Start development servers**
    ```bash
-   # Option 1: Start all services
-   npm run dev:all
+   # Frontend
+   cd frontend && npm run dev  # localhost:3000
 
-   # Option 2: Start individually
-   npm run dev          # Frontend (localhost:3000)
-   npm run dev:backend  # Backend (localhost:3001)
-   cd ai-service && python -m uvicorn main:app --reload  # AI Service (localhost:8000)
+   # Backend and microservices (using Docker)
+   # Services are already running in Docker containers
+   # Access backend at: http://localhost:8000
    ```
 
 ### 🧪 Testing
@@ -211,15 +223,15 @@ RawDrive includes a comprehensive design system with:
 # Frontend tests
 cd frontend && npm test
 
-# Backend tests
-cd backend && pytest
+# Backend tests (using Docker)
+docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest
 
-# AI Service tests
-cd ai-service && pytest
+# AI Service tests (using Docker)
+docker compose -f infrastructure/docker/docker-compose.yml exec ai-service pytest
 
 # Full test suite
 npm run verify  # Frontend
-cd backend && pytest  # Backend
+docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest  # Backend
 ```
 
 ### 📦 Production Build
@@ -238,17 +250,23 @@ docker-compose -f infrastructure/docker/docker-compose.yml up -d
 
 ```
 RawDrive/
+├── packages/                 # Shared npm packages (pnpm workspaces)
+│   ├── shared-types/        # @rawdrive/shared-types - Domain enums & types
+│   ├── shared-constants/    # @rawdrive/shared-constants - Config values
+│   ├── shared-validation/   # @rawdrive/shared-validation - Zod schemas
+│   └── shared-utils/        # @rawdrive/shared-utils - Utility functions
 ├── frontend/                 # React 19 + TypeScript + Vite
 │   ├── public/              # Static assets and logos
 │   ├── src/
 │   │   ├── components/      # Reusable UI components
 │   │   ├── pages/          # Route components
 │   │   ├── services/       # API client services
-│   │   └── types/          # TypeScript type definitions
+│   │   └── types/          # TypeScript types (re-exports from shared)
 │   └── tailwind.config.js   # Tailwind CSS configuration
 ├── backend/                 # Python FastAPI + SQLAlchemy
 │   ├── src/
 │   │   ├── app/            # Application core
+│   │   │   └── shared/     # Generated Python types from TypeScript
 │   │   ├── routes/         # API route handlers
 │   │   ├── services/       # Business logic services
 │   │   └── config/         # Configuration modules
@@ -260,6 +278,8 @@ RawDrive/
 │   │   ├── services/       # AI processing services
 │   │   └── models/         # ML model definitions
 │   └── tests/              # AI service tests
+├── scripts/                 # Build scripts
+│   └── generate-python-types.ts  # TypeScript → Python generator
 ├── infrastructure/          # Docker, nginx, monitoring
 ├── docs/                   # Comprehensive documentation
 └── CLAUDE.md               # AI assistant context
@@ -469,7 +489,7 @@ RawDrive exclusively uses **Google Gemini** for all AI features:
 #### Platform Improvements
 - **Admin Microservice**: Platform-wide administration tools (Spec 001)
 - **User Profile Settings**: Enhanced user management and preferences (Spec 002)
-- **Shared Packages**: Reusable components and libraries (Spec 022)
+- **Shared Packages Infrastructure** (Spec 022): 4 npm packages (`@rawdrive/shared-types`, `@rawdrive/shared-constants`, `@rawdrive/shared-validation`, `@rawdrive/shared-utils`) with TypeScript-to-Python type generation via pnpm workspaces
 - **Error Handling**: Comprehensive error boundaries and retry mechanisms
 
 ---

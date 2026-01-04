@@ -63,6 +63,8 @@ const StatusBadge: React.FC<{ status: Invitation['status'] }> = ({ status }) => 
     draft: { variant: 'default', label: 'Draft' },
     published: { variant: 'success', label: 'Published' },
     archived: { variant: 'warning', label: 'Archived' },
+    expired: { variant: 'warning', label: 'Expired' },
+    cancelled: { variant: 'error', label: 'Cancelled' },
     deleted: { variant: 'error', label: 'Deleted' },
   };
 

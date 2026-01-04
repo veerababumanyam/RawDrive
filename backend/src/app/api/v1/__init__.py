@@ -12,7 +12,6 @@ from app.api.v1.admin import router as admin_router
 from app.api.v1.tasks import router as tasks_router
 from app.api.v1.galleries import router as galleries_router
 from app.api.v1.gallery_assets import router as gallery_assets_router
-from app.api.v1.library import router as library_router
 from app.api.v1.media import router as media_router
 from app.api.v1.uploads import router as uploads_router
 from app.api.v1.websocket import router as websocket_router
@@ -36,6 +35,7 @@ from app.api.v1.magic_links import public_router as public_magic_links_router
 from app.api.v1.shared import router as shared_router
 from app.api.v1.storage import router as storage_router
 from app.api.v1.smart_tagging import router as smart_tagging_router
+from app.api.v1.curation_sessions import router as curation_sessions_router
 from app.api.v1.subscription import (
     router as subscription_router,
     plans_router as subscription_plans_router,
@@ -67,11 +67,6 @@ router.include_router(
     gallery_assets_router,
     prefix="/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/assets",
     tags=["gallery-assets"],
-)
-router.include_router(
-    library_router,
-    prefix="/api/v1/workspaces/{workspace_id}/library",
-    tags=["library"],
 )
 # Media router is intentionally mounted at two prefixes (route aliasing):
 # 1. /api/v1/media - Public media streaming (thumbnails, previews)
@@ -191,6 +186,14 @@ router.include_router(
     smart_tagging_router,
     prefix="/api/v1/workspaces/{workspace_id}/smart-tagging",
     tags=["smart-tagging"],
+)
+
+# Curation Sessions routes (023-enhanced-smart-curate)
+# AI-powered photo culling and curation workflow
+router.include_router(
+    curation_sessions_router,
+    prefix="/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/curation-sessions",
+    tags=["curation-sessions"],
 )
 
 # Subscription management routes (006-user-profile-sidebar)

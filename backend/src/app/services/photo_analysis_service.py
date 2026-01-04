@@ -135,13 +135,13 @@ class PhotoAnalysisService:
         """Internal implementation of photo analysis."""
         try:
             # Get user's Gemini client
-            client = await self.gemini_client.get_client_for_user(user_id)
+            client = await self.gemini_client.get_client_for_user(user_id, workspace_id)
 
             # Build analysis prompt
             prompt = self._build_analysis_prompt()
 
             # Fetch image data with caching
-            image_data = await self.dedup.fetch_image_data(photo_url)
+            image_data = await self._fetch_image_data(photo_url)
 
             # Make API call
             response = await client.generate_content(
@@ -181,6 +181,10 @@ class PhotoAnalysisService:
                 error_code=str(type(e).__name__),
             )
             raise
+
+    async def _fetch_image_data(self, photo_url: str) -> bytes:
+        """Fetch image data; kept as a separate method for easier testing/mocking."""
+        return await self.dedup.fetch_image_data(photo_url)
 
     def _build_analysis_prompt(self) -> str:
         """Build the analysis prompt for Gemini."""

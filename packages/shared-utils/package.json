@@ -1,0 +1,20 @@
+{
+  "name": "@rawdrive/shared-utils",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "generated"
+  ],
+  "dependencies": {
+    "@rawdrive/shared-constants": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest"
+  }
+}

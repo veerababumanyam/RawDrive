@@ -5,6 +5,21 @@
  * SOC2 compliant: No hardcoded secrets or sensitive data.
  */
 
+import {
+  AI_THRESHOLDS,
+  FILE_LIMITS,
+  PAGINATION,
+  RATE_LIMITS,
+  STORAGE,
+  STORAGE_KEYS,
+} from '@rawdrive/shared-constants';
+
+/**
+ * @deprecated Prefer importing directly from @rawdrive/shared-constants.
+ * These exports alias the shared package for backward compatibility.
+ */
+export { AI_THRESHOLDS, FILE_LIMITS, PAGINATION, RATE_LIMITS, STORAGE, STORAGE_KEYS };
+
 // =============================================================================
 // UI Timing Constants
 // =============================================================================

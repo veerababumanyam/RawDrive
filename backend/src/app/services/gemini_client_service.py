@@ -7,6 +7,7 @@ Feature: 003-user-gemini-settings
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -100,6 +101,20 @@ class GeminiClientService:
     def __init__(self, settings_service: Optional[GeminiSettingsService] = None):
         self._settings_service = settings_service
 
+    class _GeminiClient:
+        """Minimal Gemini client wrapper used by services and tests."""
+
+        def __init__(self, service: "GeminiClientService", config: GeminiClientConfig) -> None:
+            self._service = service
+            self._config = config
+            self.model = config.model_identifier
+
+        async def generate_content(self, contents: list[dict[str, Any]], **kwargs) -> Any:
+            endpoint = f"/v1beta/models/{self.model}:generateContent"
+            payload = {"contents": contents}
+            response = await self._service.make_api_call(self._config, endpoint, payload)
+            return type("GeminiResponse", (), {"text": json.dumps(response)})()
+
     @property
     def settings_service(self) -> GeminiSettingsService:
         if self._settings_service is None:
@@ -176,6 +191,15 @@ class GeminiClientService:
             user_id=user_id,
             workspace_id=workspace_id,
         )
+
+    async def get_client_for_user(
+        self, user_id: UUID, workspace_id: Optional[UUID] = None
+    ) -> "GeminiClientService._GeminiClient":
+        """Return a ready-to-use Gemini client for the given user."""
+
+        workspace = workspace_id or user_id
+        config = await self.get_client_config(user_id, workspace)
+        return self._GeminiClient(self, config)
 
     async def _get_effective_model(self, selected_model_id: Optional[UUID]) -> dict:
         """Get the effective model (selected or platform default)."""

@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Home,
-  FolderOpen,
   Users,
   Eye,
   Share2,
@@ -81,7 +80,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const mainNavItems = React.useMemo(() => [
     { id: 'dashboard', label: t('nav.dashboard'), icon: <Home size={20} />, path: '/workspace' },
     { id: 'galleries', label: t('nav.galleries'), icon: <LayoutGrid size={20} />, path: '/workspace/galleries' },
-    { id: 'libraries', label: t('nav.libraries'), icon: <FolderOpen size={20} />, path: '/workspace/libraries' },
     { id: 'invitations', label: t('nav.invitations', 'Invitations'), icon: <Mail size={20} />, path: '/workspace/invitations' },
     { id: 'people', label: t('nav.people', 'People'), icon: <UserCircle size={20} />, path: '/workspace/people' },
     { id: 'clients', label: t('nav.clients'), icon: <Users size={20} />, path: '/workspace/clients' },

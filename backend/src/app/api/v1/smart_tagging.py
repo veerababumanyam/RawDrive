@@ -242,6 +242,7 @@ class SmartCurationRequest(BaseModel):
     diversity_weight: float = Field(0.3, ge=0.0, le=1.0, description="Weight for diversity vs quality")
     prefer_people: bool = Field(False, description="Prefer photos with people")
     exclude_asset_ids: Optional[list[UUID]] = Field(None, description="Asset IDs to exclude")
+    exclude_technical_rejects: bool = Field(True, description="Exclude photos flagged as technical rejects (severe blur)")
 
 
 class SmartCurationResponse(BaseModel):
@@ -251,6 +252,117 @@ class SmartCurationResponse(BaseModel):
     selected_assets: list[dict] = Field(..., description="Selected asset IDs with scores")
     total_candidates: int = Field(..., description="Total photos analyzed")
     selection_criteria: dict = Field(..., description="Criteria used for selection")
+
+
+# ---------------------------------------------------------------------------
+# Quality Analysis Schemas (023-enhanced-smart-curate)
+# ---------------------------------------------------------------------------
+
+
+class QualityAnalysisStartRequest(BaseModel):
+    """Request to start quality analysis."""
+
+    session_id: Optional[UUID] = Field(None, description="Existing session to resume")
+    asset_ids: Optional[list[UUID]] = Field(None, description="Specific assets to analyze")
+
+
+class QualityAnalysisStartResponse(BaseModel):
+    """Response for starting quality analysis."""
+
+    session_id: UUID = Field(..., description="Session ID for tracking")
+    status: str = Field(..., description="Session status")
+    message: str = Field(..., description="Status message")
+
+
+class PhotoQualityResultSchema(BaseModel):
+    """Quality result for a single photo."""
+
+    asset_id: UUID
+    overall_score: float = Field(..., ge=0, le=100)
+    sharpness_score: float = Field(..., ge=0, le=100)
+    exposure_score: float = Field(..., ge=0, le=100)
+    composition_score: float = Field(..., ge=0, le=100)
+    blur_detected: bool
+    blur_type: Optional[str] = Field(None, description="motion|focus|bokeh")
+    blur_confidence: float = Field(default=0, ge=0, le=1)
+    blur_severity: Optional[str] = Field(None, description="low|medium|high")
+    blur_region: Optional[str] = Field(None, description="center|edges|full")
+    is_intentional_blur: bool = Field(default=False, description="True for artistic bokeh")
+    is_technical_reject: bool = Field(default=False, description="Flagged as reject candidate")
+    expression_data: Optional[dict] = None
+    scene_type: Optional[str] = None
+    analyzed_at: Optional[str] = None
+
+
+class QualitySummarySchema(BaseModel):
+    """Summary of quality analysis."""
+
+    total_analyzed: int
+    average_score: float
+    blur_count: int
+    excellent_count: int = 0  # 80+
+    good_count: int = 0  # 60-79
+    fair_count: int = 0  # 40-59
+    poor_count: int = 0  # <40
+
+
+class GalleryQualityResultsResponse(BaseModel):
+    """Response for gallery quality results."""
+
+    gallery_id: UUID
+    results: list[PhotoQualityResultSchema]
+    total: int
+    summary: Optional[QualitySummarySchema] = None
+
+
+class QualityAnalysisProgressSchema(BaseModel):
+    """Progress response for quality analysis."""
+
+    session_id: UUID
+    status: str
+    progress_percent: int = Field(..., ge=0, le=100)
+    photos_analyzed: int
+    photos_total: int
+    estimated_remaining_seconds: Optional[int] = None
+    stage: Optional[str] = None
+    error_message: Optional[str] = None
+
+
+class BlurDetectionResultSchema(BaseModel):
+    """Blur detection result for a single photo."""
+
+    asset_id: UUID
+    blur_detected: bool
+    blur_type: Optional[str] = Field(None, description="motion|focus|bokeh")
+    blur_confidence: float = Field(default=0, ge=0, le=1)
+    blur_severity: Optional[str] = Field(None, description="low|medium|high")
+    blur_region: Optional[str] = Field(None, description="center|edges|full")
+    is_intentional_blur: bool = Field(default=False, description="True for artistic bokeh")
+    is_technical_reject: bool = Field(default=False, description="Flagged as reject candidate")
+    sharpness_score: float = Field(..., ge=0, le=100)
+
+
+class BlurSummarySchema(BaseModel):
+    """Summary of blur detection results."""
+
+    total_analyzed: int
+    blur_count: int
+    motion_blur_count: int = 0
+    focus_blur_count: int = 0
+    bokeh_count: int = 0
+    technical_reject_count: int = 0
+    severity_low: int = 0
+    severity_medium: int = 0
+    severity_high: int = 0
+
+
+class BlurDetectionResponse(BaseModel):
+    """Response for blur detection endpoint."""
+
+    gallery_id: UUID
+    results: list[BlurDetectionResultSchema]
+    total: int
+    summary: BlurSummarySchema
 
 
 # ---------------------------------------------------------------------------
@@ -1017,6 +1129,7 @@ async def smart_curate_gallery(
             diversity_weight=request.diversity_weight,
             prefer_people=request.prefer_people,
             exclude_asset_ids=request.exclude_asset_ids,
+            exclude_technical_rejects=request.exclude_technical_rejects,
         )
 
         return SmartCurationResponse(
@@ -1028,6 +1141,7 @@ async def smart_curate_gallery(
                 "quality_threshold": request.quality_threshold,
                 "diversity_weight": request.diversity_weight,
                 "prefer_people": request.prefer_people,
+                "exclude_technical_rejects": request.exclude_technical_rejects,
             },
         )
 
@@ -1036,3 +1150,392 @@ async def smart_curate_gallery(
     except Exception as e:
         logger.exception("Failed to curate gallery")
         raise InternalError("Failed to curate gallery")
+
+
+# ---------------------------------------------------------------------------
+# Quality Analysis Endpoints (023-enhanced-smart-curate)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/galleries/{gallery_id}/quality-analysis",
+    response_model=QualityAnalysisStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start quality analysis for gallery photos",
+    responses={
+        400: {"model": ErrorResponse, "description": "AI not configured"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+        409: {"model": ErrorResponse, "description": "Analysis already in progress"},
+    },
+)
+async def start_quality_analysis(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    request: QualityAnalysisStartRequest,
+) -> QualityAnalysisStartResponse:
+    """
+    Start AI quality analysis for all photos in a gallery.
+
+    This creates a curation session and begins asynchronous analysis.
+    Requires user to have Gemini API key configured. Progress can be
+    tracked via the /progress endpoint or WebSocket updates.
+    """
+    from app.services.curation_session_service import (
+        get_curation_session_service,
+        SessionAlreadyActiveError,
+    )
+    from app.services.gemini_client_service import AIConfigurationError
+    from app.api.exceptions import ConflictError, ValidationAppError
+
+    try:
+        session_service = get_curation_session_service()
+
+        # Create or use existing session
+        if request.session_id:
+            # Resume existing session
+            session = await session_service.get_session(workspace_id, request.session_id)
+            if not session:
+                raise NotFoundError(f"Session not found: {request.session_id}")
+            # Start the session
+            session = await session_service.start_session(
+                workspace_id, request.session_id
+            )
+        else:
+            # Create new session
+            session = await session_service.create_session(
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                user_id=current_user.user_id,
+                auto_start=True,
+            )
+
+        return QualityAnalysisStartResponse(
+            session_id=session["session_id"],
+            status=session["status"],
+            message="Quality analysis started. Track progress via /progress endpoint.",
+        )
+
+    except SessionAlreadyActiveError as e:
+        raise ConflictError(str(e))
+    except AIConfigurationError as e:
+        raise ValidationAppError(
+            f"Gemini AI not configured: {e.message}. "
+            "Please add your API key in Settings > AI."
+        )
+    except NotFoundError:
+        raise
+    except Exception as e:
+        logger.exception("Failed to start quality analysis")
+        raise InternalError("Failed to start quality analysis")
+
+
+@router.get(
+    "/galleries/{gallery_id}/quality-analysis",
+    response_model=GalleryQualityResultsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get quality analysis results for a gallery",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def get_quality_analysis_results(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    session_id: Annotated[Optional[UUID], Query(description="Filter by session")] = None,
+    min_score: Annotated[Optional[float], Query(ge=0, le=100, description="Minimum overall score")] = None,
+    blur_detected: Annotated[Optional[bool], Query(description="Filter by blur detection")] = None,
+    limit: Annotated[int, Query(ge=1, le=500, description="Results per page")] = 100,
+    offset: Annotated[int, Query(ge=0, description="Pagination offset")] = 0,
+) -> GalleryQualityResultsResponse:
+    """
+    Get quality analysis results for photos in a gallery.
+
+    Returns quality scores for each analyzed photo with filtering
+    options by score threshold, blur detection, and session.
+    """
+    from app.repositories.photo_quality_repository import get_photo_quality_repository
+
+    try:
+        quality_repo = get_photo_quality_repository()
+
+        # If session_id specified, get results for that session
+        if session_id:
+            results, total = await quality_repo.list_by_session(
+                workspace_id, session_id, limit=limit, offset=offset
+            )
+        else:
+            # Get latest results for gallery (from most recent session)
+            results, total = await quality_repo.list_by_gallery(
+                workspace_id, gallery_id, limit=limit, offset=offset
+            )
+
+        # Apply filters
+        filtered_results = []
+        for r in results:
+            if min_score is not None and r["overall_score"] < min_score:
+                continue
+            if blur_detected is not None and r["blur_detected"] != blur_detected:
+                continue
+            filtered_results.append(r)
+
+        # Get summary - use session-specific method if session_id provided
+        summary = None
+        if results:
+            if session_id:
+                summary = await quality_repo.get_summary(workspace_id, session_id)
+            else:
+                summary = await quality_repo.get_summary_by_gallery(workspace_id, gallery_id)
+
+        return GalleryQualityResultsResponse(
+            gallery_id=gallery_id,
+            results=[
+                PhotoQualityResultSchema(
+                    asset_id=r["asset_id"],
+                    overall_score=r["overall_score"],
+                    sharpness_score=r["sharpness_score"],
+                    exposure_score=r["exposure_score"],
+                    composition_score=r["composition_score"],
+                    blur_detected=r["blur_detected"],
+                    blur_type=r.get("blur_type"),
+                    blur_confidence=r.get("blur_confidence", 0),
+                    blur_severity=r.get("blur_severity"),
+                    blur_region=r.get("blur_region"),
+                    is_intentional_blur=r.get("is_intentional_blur", False),
+                    is_technical_reject=_is_technical_reject(r),
+                    expression_data=r.get("expression_data"),
+                    scene_type=r.get("scene_type"),
+                    analyzed_at=r.get("created_at"),
+                )
+                for r in filtered_results
+            ],
+            total=len(filtered_results),
+            summary=QualitySummarySchema(
+                total_analyzed=summary["total_analyzed"] if summary else 0,
+                average_score=summary["average_score"] if summary else 0,
+                blur_count=summary["blur_count"] if summary else 0,
+                excellent_count=summary.get("excellent_count", 0) if summary else 0,
+                good_count=summary.get("good_count", 0) if summary else 0,
+                fair_count=summary.get("fair_count", 0) if summary else 0,
+                poor_count=summary.get("poor_count", 0) if summary else 0,
+            ) if summary else None,
+        )
+
+    except Exception as e:
+        logger.exception("Failed to get quality analysis results")
+        raise InternalError("Failed to get quality analysis results")
+
+
+@router.get(
+    "/galleries/{gallery_id}/quality-analysis/progress",
+    response_model=QualityAnalysisProgressSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Get quality analysis progress",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "No active analysis"},
+    },
+)
+async def get_quality_analysis_progress(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+) -> QualityAnalysisProgressSchema:
+    """
+    Get progress of active quality analysis for a gallery.
+
+    Returns current progress percentage, photos analyzed, and
+    estimated time remaining. Returns 404 if no active analysis.
+    """
+    from app.services.curation_session_service import get_curation_session_service
+
+    try:
+        session_service = get_curation_session_service()
+        session = await session_service.get_active_session(workspace_id, gallery_id)
+
+        if not session:
+            raise NotFoundError("No active analysis for this gallery")
+
+        # Calculate estimated time remaining
+        analyzed = session.get("analyzed_count", 0)
+        total = session.get("total_photos", 0)
+        percent = session.get("progress_percent", 0)
+
+        eta_seconds = None
+        if analyzed > 0 and total > analyzed:
+            # Rough estimate: 2 seconds per photo for quality analysis
+            remaining = total - analyzed
+            eta_seconds = remaining * 2
+
+        return QualityAnalysisProgressSchema(
+            session_id=session["session_id"],
+            status=session["status"],
+            progress_percent=percent,
+            photos_analyzed=analyzed,
+            photos_total=total,
+            estimated_remaining_seconds=eta_seconds,
+            stage=session.get("progress_stage"),
+            error_message=session.get("error_message"),
+        )
+
+    except NotFoundError:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get quality analysis progress")
+        raise InternalError("Failed to get quality analysis progress")
+
+
+# ---------------------------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------------------------
+
+
+def _is_technical_reject(result: dict) -> bool:
+    """Determine if a photo should be flagged as a technical reject.
+
+    A photo is a technical reject if:
+    - Blur detected with high confidence AND not intentional
+    - Sharpness score below acceptable threshold
+    """
+    blur_detected = result.get("blur_detected", False)
+    is_intentional = result.get("is_intentional_blur", False)
+    blur_confidence = result.get("blur_confidence", 0)
+    blur_severity = result.get("blur_severity")
+    sharpness_score = result.get("sharpness_score", 50)
+
+    if blur_detected and not is_intentional:
+        if blur_confidence >= 0.7 or blur_severity == "high":
+            return True
+    if sharpness_score < 40:
+        return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Blur Detection Endpoint (023-enhanced-smart-curate US4)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/galleries/{gallery_id}/blur-detection",
+    response_model=BlurDetectionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get blur detection results for a gallery",
+    responses={
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def get_blur_detection_results(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    blur_only: Annotated[bool, Query(description="Only return photos with blur")] = False,
+    technical_rejects_only: Annotated[bool, Query(description="Only return technical rejects")] = False,
+    blur_type: Annotated[Optional[str], Query(description="Filter by blur type: motion|focus|bokeh")] = None,
+    severity: Annotated[Optional[str], Query(description="Filter by severity: low|medium|high")] = None,
+    limit: Annotated[int, Query(ge=1, le=500, description="Results per page")] = 100,
+    offset: Annotated[int, Query(ge=0, description="Pagination offset")] = 0,
+) -> BlurDetectionResponse:
+    """
+    Get blur detection results for photos in a gallery.
+
+    Returns blur analysis for each photo, distinguishing between:
+    - Motion blur (camera shake, subject movement)
+    - Focus blur (missed focus)
+    - Bokeh (intentional artistic blur)
+
+    Technical rejects are photos with high-confidence blur or very low sharpness
+    that are strong candidates for rejection.
+    """
+    from app.repositories.photo_quality_repository import get_photo_quality_repository
+
+    try:
+        quality_repo = get_photo_quality_repository()
+
+        # Get quality results for gallery
+        results, total = await quality_repo.list_by_gallery(
+            workspace_id, gallery_id,
+            blur_only=blur_only,
+            limit=limit,
+            offset=offset,
+        )
+
+        # Apply additional filters and build response
+        filtered_results = []
+        summary_stats = {
+            "total_analyzed": 0,
+            "blur_count": 0,
+            "motion_blur_count": 0,
+            "focus_blur_count": 0,
+            "bokeh_count": 0,
+            "technical_reject_count": 0,
+            "severity_low": 0,
+            "severity_medium": 0,
+            "severity_high": 0,
+        }
+
+        for r in results:
+            is_reject = _is_technical_reject(r)
+            result_blur_type = r.get("blur_type")
+            result_severity = r.get("blur_severity")
+            result_blur_detected = r.get("blur_detected", False)
+
+            # Update summary
+            summary_stats["total_analyzed"] += 1
+            if result_blur_detected:
+                summary_stats["blur_count"] += 1
+                if result_blur_type == "motion":
+                    summary_stats["motion_blur_count"] += 1
+                elif result_blur_type == "focus":
+                    summary_stats["focus_blur_count"] += 1
+                elif result_blur_type == "bokeh":
+                    summary_stats["bokeh_count"] += 1
+            if is_reject:
+                summary_stats["technical_reject_count"] += 1
+            if result_severity == "low":
+                summary_stats["severity_low"] += 1
+            elif result_severity == "medium":
+                summary_stats["severity_medium"] += 1
+            elif result_severity == "high":
+                summary_stats["severity_high"] += 1
+
+            # Apply filters
+            if technical_rejects_only and not is_reject:
+                continue
+            if blur_type and result_blur_type != blur_type:
+                continue
+            if severity and result_severity != severity:
+                continue
+
+            filtered_results.append(
+                BlurDetectionResultSchema(
+                    asset_id=r["asset_id"],
+                    blur_detected=result_blur_detected,
+                    blur_type=result_blur_type,
+                    blur_confidence=r.get("blur_confidence", 0),
+                    blur_severity=result_severity,
+                    blur_region=r.get("blur_region"),
+                    is_intentional_blur=r.get("is_intentional_blur", False),
+                    is_technical_reject=is_reject,
+                    sharpness_score=r.get("sharpness_score", 50),
+                )
+            )
+
+        return BlurDetectionResponse(
+            gallery_id=gallery_id,
+            results=filtered_results,
+            total=len(filtered_results),
+            summary=BlurSummarySchema(**summary_stats),
+        )
+
+    except Exception as e:
+        logger.exception("Failed to get blur detection results")
+        raise InternalError("Failed to get blur detection results")

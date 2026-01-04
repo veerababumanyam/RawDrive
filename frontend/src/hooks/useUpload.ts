@@ -47,7 +47,6 @@ export interface UseUploadOptions {
   workspaceId: string;
   galleryId?: string;
   subGalleryId?: string | null;
-  folderId?: string | null;
   onComplete?: (assetId: string, fileId: string) => void;
   onError?: (error: Error, fileId: string) => void;
   onProgress?: (fileId: string, progress: number) => void;
@@ -90,7 +89,6 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     workspaceId,
     galleryId,
     subGalleryId,
-    folderId,
     onComplete,
     onError,
     onProgress,
@@ -381,7 +379,6 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           const session = await galleryService.createUploadSession(workspaceId, {
             gallery_id: galleryId || undefined,
             sub_gallery_id: subGalleryId || null,
-            folder_id: folderId || null,
             file_name: uploadFile.file.name,
             mime_type: uploadFile.file.type,
             size_bytes: uploadFile.file.size,
@@ -551,7 +548,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         }
       }
     },
-    [workspaceId, galleryId, subGalleryId, folderId, retryAttempts, retryDelay, updateFile, onComplete, onError, onProgress, bumpQueue]
+    [workspaceId, galleryId, subGalleryId, retryAttempts, retryDelay, updateFile, onComplete, onError, onProgress, bumpQueue]
   );
 
   // Store latest version in ref for recursive calls

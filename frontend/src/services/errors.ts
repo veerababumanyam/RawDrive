@@ -4,9 +4,9 @@
  */
 
 // V8 Error.captureStackTrace type extension
-interface ErrorConstructorWithCaptureStackTrace extends ErrorConstructor {
-    captureStackTrace?(targetObject: object, constructorOpt?: Function): void;
-}
+type ErrorConstructorWithCaptureStackTrace = ErrorConstructor & {
+    captureStackTrace?: (targetObject: object, constructorOpt?: Function) => void;
+};
 
 /**
  * Error codes for recycle bin operations

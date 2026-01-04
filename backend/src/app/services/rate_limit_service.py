@@ -112,9 +112,24 @@ class RateLimitService:
         Returns:
             RateLimitResult with allowed status and metadata
         """
-        redis = await get_redis_client()
         default_limits = get_rate_limits()
         config = custom_config or self._limits.get(limit_type, default_limits[RateLimitType.API])
+
+        try:
+            redis = await get_redis_client()
+        except RuntimeError:
+            logger.warning(
+                "Redis not initialized; skipping rate limit enforcement",
+                extra={"identifier": identifier, "limit_type": limit_type.value},
+            )
+            now = time.time()
+            reset_at = int(now + config.window_seconds)
+            return RateLimitResult(
+                allowed=True,
+                limit=config.requests,
+                remaining=config.requests,
+                reset_at=reset_at,
+            )
 
         key = _rate_limit_key(identifier, limit_type)
         now = time.time()

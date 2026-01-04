@@ -1,0 +1,882 @@
+# OpenAPI Specification: Photo Quality Analysis API
+# Feature: 023-enhanced-smart-curate
+# Version: 1.0.0
+
+openapi: 3.1.0
+info:
+  title: Photo Quality Analysis API
+  version: 1.0.0
+  description: |
+    API for AI-powered photo quality analysis using Gemini Vision API.
+    Provides quality scoring, blur detection, exposure evaluation, and composition analysis.
+
+    **Related FRs**: FR-001 to FR-004, FR-013 to FR-018, FR-030 to FR-032
+
+servers:
+  - url: /api/v1/workspaces/{workspace_id}
+    description: Workspace-scoped API
+
+paths:
+  /galleries/{gallery_id}/quality-analysis:
+    get:
+      operationId: getQualityAnalysis
+      summary: Get quality analysis results for gallery
+      description: Returns quality analysis for all analyzed photos in the gallery.
+      tags: [Quality]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: min_score
+          in: query
+          schema:
+            type: number
+            minimum: 0
+            maximum: 100
+          description: Filter photos with overall score >= min_score
+        - name: blur_filter
+          in: query
+          schema:
+            type: string
+            enum: [all, blur_only, no_blur]
+          description: Filter by blur detection status
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [overall_score, sharpness_score, exposure_score, composition_score]
+            default: overall_score
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Quality analysis results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PhotoQualityAnalysis'
+                  summary:
+                    $ref: '#/components/schemas/GalleryQualitySummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      operationId: startQualityAnalysis
+      summary: Start quality analysis for gallery
+      description: |
+        Queues batch quality analysis jobs for all unanalyzed photos in the gallery.
+        Uses the user's configured Gemini API key.
+      tags: [Quality]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                asset_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Specific assets to analyze (default all unanalyzed)
+                force_reanalyze:
+                  type: boolean
+                  default: false
+                  description: Re-analyze even if already analyzed
+                priority:
+                  type: string
+                  enum: [normal, high]
+                  default: normal
+      responses:
+        '202':
+          description: Analysis queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJob'
+        '400':
+          description: No Gemini API key configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /galleries/{gallery_id}/quality-analysis/progress:
+    get:
+      operationId: getQualityAnalysisProgress
+      summary: Get quality analysis progress
+      description: Returns the current progress of quality analysis for the gallery.
+      tags: [Quality]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Analysis progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisProgress'
+
+  /assets/{asset_id}/quality:
+    get:
+      operationId: getAssetQuality
+      summary: Get quality analysis for single asset
+      description: Returns detailed quality analysis for a single photo.
+      tags: [Quality]
+      parameters:
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Quality analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoQualityAnalysisDetailed'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /galleries/{gallery_id}/blur-detection:
+    get:
+      operationId: getBlurDetectionResults
+      summary: Get blur detection results
+      description: Returns photos flagged with blur or focus issues.
+      tags: [Blur]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [all, severe, moderate, mild]
+          description: Filter by blur severity
+        - name: blur_type
+          in: query
+          schema:
+            type: string
+            enum: [all, motion, focus, camera_shake]
+          description: Filter by type of blur
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Blur detection results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BlurDetectionResult'
+                  summary:
+                    $ref: '#/components/schemas/BlurSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /galleries/{gallery_id}/expression-analysis:
+    get:
+      operationId: getExpressionAnalysis
+      summary: Get face expression analysis results
+      description: Returns expression analysis for photos with detected faces.
+      tags: [Expression]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: issue_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Only return photos with expression issues
+        - name: face_group_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by specific face group (person)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Expression analysis results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExpressionAnalysisResult'
+                  summary:
+                    $ref: '#/components/schemas/ExpressionSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /galleries/{gallery_id}/scenes:
+    get:
+      operationId: getSceneCategories
+      summary: Get detected scene categories
+      description: Returns scene/moment categories detected in the gallery.
+      tags: [Scenes]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Scene categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SceneCategory'
+                  timeline:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TimelineSegment'
+
+  /galleries/{gallery_id}/scenes/{scene_id}/photos:
+    get:
+      operationId: getScenePhotos
+      summary: Get photos in a scene category
+      description: Returns all photos assigned to a specific scene category.
+      tags: [Scenes]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: scene_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [quality_score, capture_time]
+            default: quality_score
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Photos in scene
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PhotoInScene'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /galleries/{gallery_id}/auto-tags:
+    get:
+      operationId: getAutoTags
+      summary: Get auto-generated tags for gallery
+      description: Returns all AI-generated tags and their photo counts.
+      tags: [Tags]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [all, scene, object, mood, color, lighting]
+          description: Filter by tag category
+      responses:
+        '200':
+          description: Auto-generated tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tags:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AutoTag'
+
+  /galleries/{gallery_id}/crop-suggestions:
+    get:
+      operationId: getCropSuggestions
+      summary: Get crop and straightening suggestions
+      description: Returns photos with suggested crop improvements or horizon corrections.
+      tags: [Composition]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: suggestion_type
+          in: query
+          schema:
+            type: string
+            enum: [all, horizon, crop, both]
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Crop suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CropSuggestion'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /galleries/{gallery_id}/style-analysis:
+    get:
+      operationId: getStyleAnalysis
+      summary: Get style consistency analysis
+      description: Returns analysis of color grading and white balance consistency.
+      tags: [Style]
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Style analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StyleAnalysis'
+
+components:
+  parameters:
+    GalleryId:
+      name: gallery_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    AssetId:
+      name: asset_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    PhotoQualityAnalysis:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        overall_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        sharpness_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        exposure_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        composition_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        quality_tier:
+          type: string
+          enum: [excellent, good, fair, poor]
+        blur_detected:
+          type: boolean
+        expression_issues:
+          type: boolean
+        analyzed_at:
+          type: string
+          format: date-time
+
+    PhotoQualityAnalysisDetailed:
+      allOf:
+        - $ref: '#/components/schemas/PhotoQualityAnalysis'
+        - type: object
+          properties:
+            blur_details:
+              $ref: '#/components/schemas/BlurDetails'
+            exposure_details:
+              $ref: '#/components/schemas/ExposureDetails'
+            composition_details:
+              $ref: '#/components/schemas/CompositionDetails'
+            faces:
+              type: array
+              items:
+                $ref: '#/components/schemas/FaceAnalysis'
+            scene_category:
+              type: string
+              nullable: true
+            auto_tags:
+              type: array
+              items:
+                type: string
+            crop_suggestion:
+              $ref: '#/components/schemas/CropSuggestion'
+              nullable: true
+
+    GalleryQualitySummary:
+      type: object
+      properties:
+        total_photos:
+          type: integer
+        analyzed_count:
+          type: integer
+        average_score:
+          type: number
+        tier_distribution:
+          type: object
+          properties:
+            excellent:
+              type: integer
+            good:
+              type: integer
+            fair:
+              type: integer
+            poor:
+              type: integer
+        blur_flagged_count:
+          type: integer
+        expression_issues_count:
+          type: integer
+
+    AnalysisJob:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        gallery_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        photos_total:
+          type: integer
+        photos_processed:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    AnalysisProgress:
+      type: object
+      properties:
+        gallery_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [idle, analyzing, completed]
+        photos_total:
+          type: integer
+        photos_analyzed:
+          type: integer
+        photos_pending:
+          type: integer
+        estimated_remaining_seconds:
+          type: integer
+          nullable: true
+        current_batch:
+          type: integer
+          nullable: true
+        total_batches:
+          type: integer
+          nullable: true
+
+    BlurDetails:
+      type: object
+      properties:
+        is_blurry:
+          type: boolean
+        blur_type:
+          type: string
+          enum: [none, motion, focus, camera_shake]
+          nullable: true
+        severity:
+          type: string
+          enum: [none, mild, moderate, severe]
+        affected_region:
+          type: string
+          enum: [none, subject, background, edge]
+          nullable: true
+        is_intentional:
+          type: boolean
+          description: True if blur appears artistic (bokeh, panning)
+
+    BlurDetectionResult:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        blur_type:
+          type: string
+          enum: [motion, focus, camera_shake]
+        severity:
+          type: string
+          enum: [mild, moderate, severe]
+        affected_region:
+          type: string
+        is_intentional:
+          type: boolean
+        thumbnail_url:
+          type: string
+
+    BlurSummary:
+      type: object
+      properties:
+        total_flagged:
+          type: integer
+        by_type:
+          type: object
+          additionalProperties:
+            type: integer
+        by_severity:
+          type: object
+          additionalProperties:
+            type: integer
+
+    ExposureDetails:
+      type: object
+      properties:
+        is_well_exposed:
+          type: boolean
+        highlight_clipping:
+          type: boolean
+        shadow_clipping:
+          type: boolean
+        dynamic_range_score:
+          type: number
+        recovery_potential:
+          type: string
+          enum: [excellent, good, limited, none]
+
+    CompositionDetails:
+      type: object
+      properties:
+        rule_of_thirds_score:
+          type: number
+        headroom_score:
+          type: number
+        subject_centering_score:
+          type: number
+        horizon_tilt_degrees:
+          type: number
+          nullable: true
+        crop_improvement_available:
+          type: boolean
+
+    FaceAnalysis:
+      type: object
+      properties:
+        face_id:
+          type: string
+          format: uuid
+        face_group_id:
+          type: string
+          format: uuid
+          nullable: true
+        bounding_box:
+          $ref: '#/components/schemas/BoundingBox'
+        eyes_open:
+          type: boolean
+        smile_detected:
+          type: boolean
+        expression_quality:
+          type: string
+          enum: [excellent, good, neutral, awkward, eyes_closed]
+        is_sharp:
+          type: boolean
+
+    BoundingBox:
+      type: object
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+
+    ExpressionAnalysisResult:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        faces_count:
+          type: integer
+        faces_with_issues:
+          type: integer
+        best_expression_score:
+          type: number
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              face_group_id:
+                type: string
+                format: uuid
+                nullable: true
+              issue_type:
+                type: string
+                enum: [eyes_closed, awkward_expression, not_sharp]
+              description:
+                type: string
+
+    ExpressionSummary:
+      type: object
+      properties:
+        total_with_faces:
+          type: integer
+        perfect_expressions:
+          type: integer
+        minor_issues:
+          type: integer
+        major_issues:
+          type: integer
+
+    SceneCategory:
+      type: object
+      properties:
+        scene_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category_type:
+          type: string
+          enum: [ceremony, reception, portraits, prep, details, candid, other]
+        photo_count:
+          type: integer
+        confidence:
+          type: number
+        time_range:
+          type: object
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+
+    TimelineSegment:
+      type: object
+      properties:
+        scene_id:
+          type: string
+          format: uuid
+        scene_name:
+          type: string
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        photo_count:
+          type: integer
+        highlight_asset_id:
+          type: string
+          format: uuid
+
+    PhotoInScene:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        quality_score:
+          type: number
+        capture_time:
+          type: string
+          format: date-time
+        is_moment_highlight:
+          type: boolean
+        moment_type:
+          type: string
+          nullable: true
+          description: Key moment type if detected (first_kiss, vows, etc.)
+
+    AutoTag:
+      type: object
+      properties:
+        tag:
+          type: string
+        category:
+          type: string
+          enum: [scene, object, mood, color, lighting]
+        photo_count:
+          type: integer
+        confidence_avg:
+          type: number
+
+    CropSuggestion:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        suggestion_type:
+          type: string
+          enum: [horizon_correction, crop_improvement, both]
+        horizon_rotation_degrees:
+          type: number
+          nullable: true
+        suggested_crop:
+          $ref: '#/components/schemas/BoundingBox'
+          nullable: true
+        improvement_description:
+          type: string
+        before_composition_score:
+          type: number
+        after_composition_score:
+          type: number
+
+    StyleAnalysis:
+      type: object
+      properties:
+        gallery_id:
+          type: string
+          format: uuid
+        dominant_style:
+          type: object
+          properties:
+            color_temperature:
+              type: string
+              enum: [warm, neutral, cool]
+            contrast_level:
+              type: string
+              enum: [high, medium, low]
+            saturation_level:
+              type: string
+              enum: [vivid, natural, muted]
+        consistency_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        outliers:
+          type: array
+          items:
+            type: object
+            properties:
+              asset_id:
+                type: string
+                format: uuid
+              deviation_type:
+                type: string
+              recommendation:
+                type: string
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        has_more:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

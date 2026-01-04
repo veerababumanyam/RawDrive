@@ -199,8 +199,10 @@ export class MagicLinkService {
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/magic-links/${linkId}/qr${query ? `?${query}` : ''}`;
 
-    // Use apiClient.fetchRaw to handle base URL and authentication
-    const response = await apiClient.fetchRaw(endpoint);
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      credentials: 'include',
+    });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));

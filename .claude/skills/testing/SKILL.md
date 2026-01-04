@@ -13,6 +13,7 @@ description: Testing standards for RawDrive. Use when writing tests, setting up 
 | Frontend | Vitest + React Testing Library | `frontend/src/test/` |
 | Backend | pytest + pytest-asyncio | `backend/tests/` |
 | AI Service | pytest | `ai-service/tests/` |
+| Shared Packages | Vitest (TS) + pytest (parity) | `packages/*/tests/` |
 
 ## Commands
 
@@ -30,11 +31,22 @@ cd backend && pytest -v -k "test_gallery"  # Filter tests
 
 # AI Service
 cd ai-service && pytest
+
+# Shared Packages
+pnpm test:packages           # Test all shared packages
+pnpm test:parity             # Cross-platform TS/Python parity tests
+pnpm --filter @rawdrive/shared-types test  # Single package
 ```
 
 ## Directory Structure
 
 ```
+packages/
+├── shared-types/tests/      # Type unit tests + parity
+├── shared-constants/tests/  # Constants unit tests
+├── shared-validation/tests/ # Validation unit tests
+└── shared-utils/tests/      # Utils unit tests
+
 frontend/
 ├── src/test/
 │   ├── components/          # Component tests
@@ -49,6 +61,7 @@ backend/
 │   │   └── repositories/
 │   ├── integration/         # Integration tests
 │   │   └── api/
+│   ├── test_shared_types_parity.py  # Python type parity tests
 │   └── conftest.py          # pytest fixtures
 ```
 
@@ -248,3 +261,56 @@ def test_user(test_workspace):
 - Don't write flaky tests
 - Don't skip tests for "simple" code
 - Don't commit failing tests
+
+## Shared Package Tests
+
+### Type Parity Test
+
+```typescript
+// packages/shared-types/tests/invitations.test.ts
+import { describe, it, expect } from 'vitest';
+import { InvitationStatus, RSVPStatus } from '../src/invitations';
+
+describe('InvitationStatus', () => {
+  it('has all expected values', () => {
+    expect(InvitationStatus.DRAFT).toBe('draft');
+    expect(InvitationStatus.PUBLISHED).toBe('published');
+    expect(InvitationStatus.EXPIRED).toBe('expired');
+  });
+});
+```
+
+### Python Parity Test
+
+```python
+# backend/tests/test_shared_types_parity.py
+import pytest
+from app.shared.types import InvitationStatus, GalleryStatus
+
+def test_invitation_status_values():
+    """Verify Python enum values match TypeScript source."""
+    assert InvitationStatus.DRAFT == "draft"
+    assert InvitationStatus.PUBLISHED == "published"
+
+def test_gallery_status_values():
+    assert GalleryStatus.AVAILABLE == "available"
+    assert GalleryStatus.DELETED == "deleted"
+```
+
+### Validation Test
+
+```typescript
+// packages/shared-validation/tests/patterns.test.ts
+import { describe, it, expect } from 'vitest';
+import { isValidHexColor, isValidUUID } from '../src/patterns';
+
+describe('isValidHexColor', () => {
+  it('accepts valid 6-char hex', () => {
+    expect(isValidHexColor('#FF5733')).toBe(true);
+  });
+
+  it('rejects invalid hex', () => {
+    expect(isValidHexColor('#GGGGGG')).toBe(false);
+  });
+});
+```

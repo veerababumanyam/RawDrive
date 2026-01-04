@@ -8,10 +8,16 @@ description: Project structure and coding conventions for RawDrive. Use when cre
 
 ## Architecture Overview
 
-RawDrive is an enterprise SaaS photography platform with a **flat directory structure**:
+RawDrive is an enterprise SaaS photography platform with a **pnpm monorepo structure**:
 
 ```
 RawDrive/
+├── packages/              # Shared npm packages (pnpm workspace)
+│   ├── shared-types/      # @rawdrive/shared-types - Domain enums & types
+│   ├── shared-constants/  # @rawdrive/shared-constants - Config values
+│   ├── shared-validation/ # @rawdrive/shared-validation - Zod schemas
+│   └── shared-utils/      # @rawdrive/shared-utils - Date/format utils
+│
 ├── frontend/              # React 19 + Vite + TypeScript
 │   ├── src/
 │   │   ├── components/    # React components
@@ -22,8 +28,8 @@ RawDrive/
 │   │   ├── hooks/         # Custom React hooks
 │   │   ├── services/      # API clients
 │   │   ├── contexts/      # React contexts
-│   │   ├── types/         # TypeScript types
-│   │   └── utils/         # Utility functions
+│   │   ├── types/         # TypeScript types (re-exports from @rawdrive/shared-types)
+│   │   └── utils/         # Utility functions (re-exports from @rawdrive/shared-utils)
 │   └── public/            # Static assets
 │
 ├── backend/               # Python 3.11 + FastAPI
@@ -36,6 +42,7 @@ RawDrive/
 │   │   ├── middleware/    # FastAPI middleware
 │   │   ├── config/        # Configuration
 │   │   ├── utils/         # Utilities
+│   │   ├── shared/        # Generated Python types from @rawdrive/shared-*
 │   │   └── workers/       # Background job workers
 │   ├── migrations/        # Alembic migrations
 │   └── tests/             # pytest tests
@@ -45,6 +52,10 @@ RawDrive/
 │
 ├── services/              # Microservices
 │   └── invitations-service/  # Wedding invitations microservice
+│       └── src/shared/    # Generated Python types
+│
+├── scripts/               # Build and generation scripts
+│   └── generate-python-types.ts  # TypeScript → Python generator
 │
 ├── infrastructure/        # Docker, nginx, monitoring
 ├── docs/                  # Documentation
@@ -85,6 +96,18 @@ RawDrive/
 | FastAPI entry | `ai-service/src/main.py` |
 | MCP server | `ai-service/src/mcp/` |
 
+### Shared Packages
+
+| Purpose | Location |
+|---------|----------|
+| Types (TS) | `packages/shared-types/src/` |
+| Constants (TS) | `packages/shared-constants/src/` |
+| Validation (TS) | `packages/shared-validation/src/` |
+| Utils (TS) | `packages/shared-utils/src/` |
+| Python generator | `scripts/generate-python-types.ts` |
+| Backend Python types | `backend/src/app/shared/` |
+| Workspace config | `pnpm-workspace.yaml` |
+
 ## Commands
 
 ```bash
@@ -103,6 +126,13 @@ npm run docker:dev:down       # Stop
 # Testing
 cd frontend && npm test       # Vitest
 cd backend && pytest          # pytest
+
+# Shared Packages (pnpm workspaces)
+pnpm install                  # Install all workspace dependencies
+pnpm build:packages           # Build all shared packages
+pnpm generate:python          # Generate Python types from TypeScript
+pnpm test:packages            # Test shared packages
+pnpm test:parity              # Run cross-platform type parity tests
 ```
 
 ## Naming Conventions
@@ -125,13 +155,19 @@ cd backend && pytest          # pytest
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-// 2. Type imports
+// 2. Shared packages (preferred for cross-platform types)
+import { InvitationStatus, GalleryStatus } from '@rawdrive/shared-types';
+import { API_BASE, PAGINATION } from '@rawdrive/shared-constants';
+import { isValidHexColor, sanitizeHtml } from '@rawdrive/shared-validation';
+import { formatRelativeDate } from '@rawdrive/shared-utils';
+
+// 3. Type imports (local re-exports for backward compatibility)
 import type { Gallery } from '@/types/gallery';
 
-// 3. Services/hooks
+// 4. Services/hooks
 import { useGallery } from '@/hooks/useGallery';
 
-// 4. Components
+// 5. Components
 import { AppButton } from '@/components/ui/AppButton';
 ```
 
@@ -146,7 +182,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# 3. Local imports
+# 3. Shared types (generated from TypeScript)
+from app.shared.types import InvitationStatus, GalleryStatus
+from app.shared.constants import API_BASE, PAGINATION
+from app.shared.validation import is_valid_hex_color
+
+# 4. Local imports
 from app.services.gallery_service import GalleryService
 from app.api.dependencies import get_db, get_current_user
 ```
@@ -203,3 +244,5 @@ class GalleryService:
 3. **No Hardcoded Secrets**: Use environment variables
 4. **Path Alias**: Frontend uses `@/*` → `./src/*`
 5. **File Limits**: Components <400 lines, Services <600 lines
+6. **Shared Types**: Use `@rawdrive/shared-*` for cross-platform types (TS→Python)
+7. **Type Generation**: Run `pnpm generate:python` after modifying shared packages

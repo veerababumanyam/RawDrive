@@ -196,7 +196,7 @@ class GalleryStoryService:
                     return cached
 
             # Get user's Gemini client
-            client = await self.gemini_client.get_client_for_user(user_id)
+            client = await self.gemini_client.get_client_for_user(user_id, workspace_id)
 
             # Build story prompt
             prompt = self._build_story_prompt(

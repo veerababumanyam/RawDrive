@@ -56,8 +56,8 @@ export const AutomationSection: React.FC = () => {
                         viewport={{ once: true }}
                         transition={{ duration: 0.5 }}
                     >
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
-                            Built for the <span className="text-gradient bg-gradient-to-r from-accent-400 to-primary-500 bg-clip-text text-transparent">Future of Automation</span>
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 bg-gradient-to-r from-accent-400 to-primary-500 bg-clip-text text-transparent">
+                            Built for the Future of Automation
                         </h2>
                         <p className="text-slate-300 text-lg">
                             RawDrive connects seamlessly with your favorite tools and uses AI to handle the manual tasks you hate.

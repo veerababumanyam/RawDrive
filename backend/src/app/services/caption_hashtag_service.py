@@ -32,15 +32,18 @@ class CaptionResult:
         self,
         captions: list[str],
         style: str,
+        photo_id: Optional[str] = None,
     ):
         self.captions = captions
         self.style = style
+        self.photo_id = photo_id
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "captions": self.captions,
             "style": self.style,
+            "photo_id": self.photo_id,
         }
 
 
@@ -51,15 +54,18 @@ class HashtagResult:
         self,
         hashtags: list[str],
         categories: dict[str, list[str]],
+        photo_id: Optional[str] = None,
     ):
         self.hashtags = hashtags
         self.categories = categories
+        self.photo_id = photo_id
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "hashtags": self.hashtags,
             "categories": self.categories,
+            "photo_id": self.photo_id,
         }
 
 
@@ -128,13 +134,13 @@ class CaptionHashtagService:
         """Internal implementation of caption generation."""
         try:
             # Get user's Gemini client
-            client = await self.gemini_client.get_client_for_user(user_id)
+            client = await self.gemini_client.get_client_for_user(user_id, workspace_id)
 
             # Build caption prompt
             prompt = self._build_caption_prompt(style, count)
 
             # Fetch image data with caching
-            image_data = await self.dedup.fetch_image_data(photo_url)
+            image_data = await self._fetch_image_data(photo_url)
 
             # Make API call
             response = await client.generate_content(
@@ -174,6 +180,10 @@ class CaptionHashtagService:
                 error_code=str(type(e).__name__),
             )
             raise
+
+    async def _fetch_image_data(self, photo_url: str) -> bytes:
+        """Fetch image data for caption/hashtag generation (isolated for mocking)."""
+        return await self.dedup.fetch_image_data(photo_url)
 
     async def generate_hashtags(
         self,
@@ -222,13 +232,13 @@ class CaptionHashtagService:
         """Internal implementation of hashtag generation."""
         try:
             # Get user's Gemini client
-            client = await self.gemini_client.get_client_for_user(user_id)
+            client = await self.gemini_client.get_client_for_user(user_id, workspace_id)
 
             # Build hashtag prompt
             prompt = self._build_hashtag_prompt(count)
 
             # Fetch image data with caching
-            image_data = await self.dedup.fetch_image_data(photo_url)
+            image_data = await self._fetch_image_data(photo_url)
 
             # Make API call
             response = await client.generate_content(

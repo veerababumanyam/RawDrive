@@ -76,7 +76,7 @@ export const useAssetSearch = ({
   const [personSuggestions, setPersonSuggestions] = useState<PersonSuggestion[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
-  const debounceTimerRef = useRef<number | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounce the query string
   useEffect(() => {

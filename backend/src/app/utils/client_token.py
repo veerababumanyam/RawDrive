@@ -8,21 +8,14 @@ Feature: 012-client-favorites
 
 from __future__ import annotations
 
-import re
 import logging
 from typing import Annotated, Optional
 
+from app.shared.validation import is_valid_uuid
 from fastapi import Header, HTTPException, status
 
 
 logger = logging.getLogger(__name__)
-
-# UUID v4 pattern for validation
-UUID_PATTERN = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-    re.IGNORECASE,
-)
-
 
 def validate_client_token(token: str) -> bool:
     """Validate that a client token is properly formatted.
@@ -44,7 +37,7 @@ def validate_client_token(token: str) -> bool:
         return False
 
     # Must be UUID v4 format
-    return bool(UUID_PATTERN.match(token))
+    return is_valid_uuid(token)
 
 
 def extract_client_token(

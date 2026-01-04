@@ -56,10 +56,8 @@ def clear_settings_cache() -> None:
     get_settings.cache_clear()
 
 
-@given(
-    missing_key=st.sampled_from(sorted(REQUIRED_KEYS)),
-    settings=hypothesis_settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-)
+@hypothesis_settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(missing_key=st.sampled_from(sorted(REQUIRED_KEYS)))
 def test_settings_fail_fast_when_required_missing(monkeypatch: pytest.MonkeyPatch, missing_key: str) -> None:
     """Fail fast if any required configuration key is missing (Requirement 25.2)."""
 

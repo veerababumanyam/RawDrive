@@ -7,29 +7,39 @@ RawDrive is an enterprise SaaS professional photography platform.
 ### Commands
 
 ```bash
-# Development (start Docker first!)
+# Development (start Docker stack)
 docker compose -f infrastructure/docker/docker-compose.yml up -d
-cd frontend && npm run dev         # localhost:3000
-cd backend && uvicorn app.main:app --reload --port 8000
+# OR for backend-only development (faster):
+docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
 
-# Database
-cd backend && alembic upgrade head
-cd backend && alembic revision --autogenerate -m "description"
+cd frontend && npm run dev         # localhost:3000
+
+# Backend (using Docker)
+docker compose -f infrastructure/docker/docker-compose.yml exec backend uvicorn app.main:app --reload --port 8000
+# OR with dev compose:
+docker compose -f infrastructure/docker/docker-compose.dev.yml exec backend uvicorn app.main:app --reload --port 8000
+docker compose -f infrastructure/docker/docker-compose.yml exec backend alembic upgrade head
+docker compose -f infrastructure/docker/docker-compose.yml exec backend alembic revision --autogenerate -m "description"
 
 # Testing
 cd frontend && npm test            # Vitest
-cd backend && pytest               # pytest
-cd backend && pytest --cov=src
+docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest
+docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest --cov=src
 
 # Linting
 cd frontend && npm run lint
-cd backend && ruff check src && mypy src
+docker compose -f infrastructure/docker/docker-compose.yml exec backend ruff check src && mypy src
 ```
 
 ### Project Structure
 
 ```
 RawDrive/
+├── packages/          # Shared npm packages (pnpm workspace)
+│   ├── shared-types/       # @rawdrive/shared-types
+│   ├── shared-constants/   # @rawdrive/shared-constants
+│   ├── shared-validation/  # @rawdrive/shared-validation
+│   └── shared-utils/       # @rawdrive/shared-utils
 ├── frontend/          # React 19 + TypeScript + Vite + TailwindCSS
 ├── backend/           # Python 3.11 + FastAPI + SQLAlchemy + Alembic
 ├── ai-service/        # Python FastAPI + AI/LLM + MCP
@@ -37,6 +47,7 @@ RawDrive/
 ├── infrastructure/    # Docker, nginx configs
 ├── docs/              # Documentation
 ├── specs/             # Feature specifications
+├── scripts/           # Build scripts (generate-python-types.ts)
 └── .claude/skills/    # Claude Code skills (see below)
 ```
 
@@ -54,6 +65,13 @@ RawDrive/
 | Services | `backend/src/app/services/` |
 | Repositories | `backend/src/app/repositories/` |
 | Migrations | `backend/migrations/versions/` |
+| Shared Python types | `backend/src/app/shared/` |
+| **Shared Packages** | |
+| Types package | `packages/shared-types/src/` |
+| Constants package | `packages/shared-constants/src/` |
+| Validation package | `packages/shared-validation/src/` |
+| Utils package | `packages/shared-utils/src/` |
+| Python generator | `scripts/generate-python-types.ts` |
 
 ### Environment Variables
 
@@ -64,6 +82,56 @@ JWT_SECRET=<64-byte-hex>
 R2_ACCESS_KEY_ID=, R2_SECRET_ACCESS_KEY=, R2_BUCKET_NAME=
 AI_PROVIDER=, AI_API_KEY=, AI_MODEL=  # Never hardcode!
 ```
+
+## Shared Packages (pnpm Workspaces)
+
+RawDrive uses a **monorepo with pnpm workspaces** for shared code:
+
+| Package | Purpose | Exports |
+|---------|---------|---------|
+| `@rawdrive/shared-types` | Domain types | `InvitationStatus`, `GalleryStatus`, `GradientConfiguration`, etc. |
+| `@rawdrive/shared-constants` | Configuration | `API_BASE`, `STORAGE`, `AI_THRESHOLDS`, `PAGINATION` |
+| `@rawdrive/shared-validation` | Validation | `isValidHexColor`, `hexColorSchema`, `sanitizeHtml` |
+| `@rawdrive/shared-utils` | Utilities | `formatRelativeDate`, `formatFileSize`, `truncate` |
+
+### Usage
+
+```typescript
+// Frontend: Import from shared packages
+import { InvitationStatus, GalleryStatus } from '@rawdrive/shared-types';
+import { API_BASE, PAGINATION } from '@rawdrive/shared-constants';
+import { isValidHexColor, sanitizeHtml } from '@rawdrive/shared-validation';
+import { formatRelativeDate, formatFileSize } from '@rawdrive/shared-utils';
+```
+
+```python
+# Backend: Import from generated Python modules
+from app.shared.types import InvitationStatus, GalleryStatus
+from app.shared.constants import API_BASE, PAGINATION
+from app.shared.validation import is_valid_hex_color
+```
+
+### Commands
+
+```bash
+# Build all shared packages
+pnpm build:packages
+
+# Generate Python types from TypeScript
+pnpm generate:python
+
+# Test shared packages
+pnpm test:packages
+
+# Run cross-platform parity tests
+pnpm test:parity
+```
+
+### Adding New Types
+
+1. Add TypeScript types in `packages/shared-types/src/`
+2. Run `pnpm generate:python` to generate Pydantic models
+3. Import from `@rawdrive/shared-types` (TS) or `app.shared.types` (Python)
 
 ## Skills Reference
 
@@ -215,3 +283,13 @@ await redis.setex(f"gallery:{id}", 3600, json.dumps(result))
 - Skills: `.claude/skills/*/SKILL.md`
 - Tech Specs: `docs/TechnicalSpecs/`
 - Test Users: `docs/TEST_USERS.md`
+
+## Active Technologies
+- Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 19, Celery, CLIP (image embeddings), Gemini Vision API
+- PostgreSQL 16 + pgvector extension, Redis 7, Cloudflare R2
+- pnpm workspaces for monorepo package management
+- Zod 4.2+ for validation schemas, Pydantic 2.7+ for Python models
+
+## Recent Changes
+- 022-shared-packages: Implemented shared packages infrastructure with 4 npm packages (`@rawdrive/shared-types`, `@rawdrive/shared-constants`, `@rawdrive/shared-validation`, `@rawdrive/shared-utils`), TypeScript-to-Python type generation, pnpm workspaces
+- 023-enhanced-smart-curate: Added Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 19, Celery, CLIP (image embeddings), Gemini Vision API

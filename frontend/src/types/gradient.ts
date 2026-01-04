@@ -3,29 +3,25 @@
  * Type definitions for gallery gradient branding feature.
  */
 
-/**
- * Color stop within a gradient
- */
-export interface ColorStop {
-  /** Hex color code (#RRGGBB or #RGB) */
-  color: string;
-  /** Position as percentage (0-100) */
-  position: number;
-}
+import {
+  ColorStop as SharedColorStop,
+  GradientConfiguration as SharedGradientConfiguration,
+  GradientType as SharedGradientType,
+} from '@rawdrive/shared-types';
+import type {
+  ColorStop as ColorStopType,
+  GradientConfiguration as GradientConfigurationType,
+  GradientType as GradientTypeType,
+} from '@rawdrive/shared-types';
 
 /**
- * Complete gradient configuration
+ * @deprecated Prefer importing directly from @rawdrive/shared-types.
+ * These exports alias the shared package for backward compatibility.
  */
-export interface GradientConfiguration {
-  /** Gradient type (linear only for v1) */
-  type: 'linear';
-  /** Reference to predefined preset, null for custom */
-  preset_id: string | null;
-  /** Direction in degrees (0 = to top, 90 = to right, 180 = to bottom, 270 = to left) */
-  direction: number;
-  /** Array of color stops (2-5 stops) */
-  colors: ColorStop[];
-}
+export type ColorStop = ColorStopType;
+export type GradientConfiguration = GradientConfigurationType;
+export const GradientType = SharedGradientType;
+export type GradientType = GradientTypeType;
 
 /**
  * Gradient preset categories

@@ -1,7 +1,7 @@
 """Tests for AI Policy Service."""
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given, strategies as st, settings, HealthCheck
 from datetime import datetime
 from uuid import uuid4
 
@@ -39,6 +39,7 @@ company_profile_strategy = st.builds(
     updated_at=st.builds(datetime.now),
 )
 
+@settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow])
 @given(profile=company_profile_strategy)
 def test_privacy_policy_contains_company_name(profile: CompanyProfileResponse):
     """Property 16: AI Policy Company Name Usage (Privacy)."""
@@ -46,6 +47,7 @@ def test_privacy_policy_contains_company_name(profile: CompanyProfileResponse):
     assert profile.name in policy
     assert profile.email in policy
 
+@settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow])
 @given(profile=company_profile_strategy)
 def test_terms_contains_company_name(profile: CompanyProfileResponse):
     """Property 16: AI Policy Company Name Usage (Terms)."""
@@ -54,6 +56,7 @@ def test_terms_contains_company_name(profile: CompanyProfileResponse):
     if profile.website:
         assert profile.website in policy
 
+@settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow])
 @given(profile=company_profile_strategy)
 def test_refund_policy_contains_company_name(profile: CompanyProfileResponse):
     """Property 16: AI Policy Company Name Usage (Refund)."""

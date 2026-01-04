@@ -173,6 +173,15 @@ const AIFeatureTogglesSection: React.FC<AIFeatureTogglesSectionProps> = ({
     );
   }
 
+  // Not loaded yet (but not actively loading) – show a gentle placeholder
+  if (!featureToggles && !loading) {
+    return (
+      <div className="p-4 bg-surface border border-border rounded-lg text-sm text-text-secondary text-center">
+        Feature settings are not available yet. Please retry or check your connection.
+      </div>
+    );
+  }
+
   // Disabled state (no API key)
   if (!hasApiKey || apiStatus !== 'connected') {
     return (

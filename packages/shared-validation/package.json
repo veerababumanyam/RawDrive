@@ -1,0 +1,20 @@
+{
+  "name": "@rawdrive/shared-validation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "generated"
+  ],
+  "dependencies": {
+    "zod": "^4.3.5"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest"
+  }
+}

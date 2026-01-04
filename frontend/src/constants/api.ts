@@ -3,29 +3,29 @@
  * Centralized API path definitions to avoid hardcoded strings throughout the codebase
  */
 
-// Base paths
-export const API_BASE = '/api/v1';
+import {
+    API_BASE as SHARED_API_BASE,
+    API_VERSION as SHARED_API_VERSION,
+    WORKSPACE_PATHS as SHARED_WORKSPACE_PATHS,
+    PUBLIC_PATHS as SHARED_PUBLIC_PATHS,
+    STORAGE as SHARED_STORAGE,
+    FILE_LIMITS,
+    STORAGE_KEYS,
+    AI_THRESHOLDS,
+    PAGINATION,
+    RATE_LIMITS,
+} from '@rawdrive/shared-constants';
 
-// Workspace paths
-export const WORKSPACE_PATHS = {
-    base: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}`,
-    galleries: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/galleries`,
-    gallery: (workspaceId: string, galleryId: string) => `${API_BASE}/workspaces/${workspaceId}/galleries/${galleryId}`,
-    galleryCredentials: (workspaceId: string, galleryId: string) => `${API_BASE}/workspaces/${workspaceId}/galleries/${galleryId}/credentials`,
-    companyProfile: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/company-profile`,
-    settings: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/settings`,
-    members: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/members`,
-    clients: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/clients`,
-} as const;
-
-// Public paths
-export const PUBLIC_PATHS = {
-    profiles: (slug: string) => `${API_BASE}/public/profiles/${slug}`,
-    galleries: (galleryId: string) => `${API_BASE}/public/galleries/${galleryId}`,
-    vcard: (slug: string) => `${API_BASE}/public/profiles/${slug}/vcard`,
-    qrCode: (slug: string) => `${API_BASE}/public/profiles/${slug}/qr-code`,
-    logo: (slug: string, size: number = 256) => `${API_BASE}/public/profiles/${slug}/logo/${size}`,
-} as const;
+/**
+ * @deprecated Prefer importing directly from @rawdrive/shared-constants.
+ * These exports alias the shared package for backward compatibility.
+ */
+export const API_VERSION = SHARED_API_VERSION;
+export const API_BASE = SHARED_API_BASE;
+export const WORKSPACE_PATHS = SHARED_WORKSPACE_PATHS;
+export const PUBLIC_PATHS = SHARED_PUBLIC_PATHS;
+export const STORAGE = { ...SHARED_STORAGE, FREE_TIER_LIMIT: 5 * SHARED_STORAGE.GB };
+export { FILE_LIMITS, STORAGE_KEYS, AI_THRESHOLDS, PAGINATION, RATE_LIMITS };
 
 // Auth paths
 export const AUTH_PATHS = {
@@ -52,12 +52,4 @@ export const ROUTE_PATHS = {
         signin: '/signin',
         signup: '/signup',
     },
-} as const;
-
-// Storage constants
-export const STORAGE = {
-    GB: 1024 ** 3,
-    MB: 1024 ** 2,
-    KB: 1024,
-    FREE_TIER_LIMIT: 5 * (1024 ** 3), // 5GB
 } as const;

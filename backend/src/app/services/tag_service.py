@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 from uuid import UUID
 
-from app.db.postgres import get_postgres_pool
+from app.db.postgres import acquire_conn, get_postgres_pool, normalize_async_cm
 
 logger = logging.getLogger(__name__)
 
@@ -390,8 +390,8 @@ class TagService:
     ) -> list[dict]:
         """Replace all tags on an asset with a new set."""
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
-            async with conn.transaction():
+        async with acquire_conn(pool) as conn:
+            async with normalize_async_cm(conn.transaction()):
                 # Remove all existing tags
                 await conn.execute(
                     "DELETE FROM asset_tags WHERE workspace_id = $1 AND asset_id = $2",
@@ -426,8 +426,8 @@ class TagService:
     ) -> dict:
         """Create a new tag and immediately add it to an asset."""
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
-            async with conn.transaction():
+        async with acquire_conn(pool) as conn:
+            async with normalize_async_cm(conn.transaction()):
                 # Get or create tag
                 tag_id = await conn.fetchval(
                     "SELECT tag_id FROM tags WHERE workspace_id = $1 AND name = $2",
@@ -509,12 +509,12 @@ class TagService:
             raise TagError(f"Invalid source: {source}", "INVALID_SOURCE", 400)
 
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             import json
 
             created_tags = []
 
-            async with conn.transaction():
+            async with normalize_async_cm(conn.transaction()):
                 for tag_data in tags:
                     name = tag_data["name"].strip().lower()
                     confidence = tag_data.get("confidence")
@@ -600,7 +600,7 @@ class TagService:
             Number of tags removed
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             result = await conn.execute(
                 """
                 DELETE FROM asset_tags
@@ -642,7 +642,7 @@ class TagService:
             List of tag dicts with source and confidence
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             # Build query based on source filter
             if source == "manual":
                 source_filter = "AND at.source = 'manual'"

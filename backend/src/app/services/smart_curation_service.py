@@ -16,6 +16,7 @@ from uuid import UUID
 from app.config.settings import get_settings
 from app.db.redis import get_redis_client
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
+from app.services.gallery_service import get_gallery_service as _get_gallery_service
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,11 @@ class CurationResult:
             "quality_threshold": self.quality_threshold,
             "diversity_weight": self.diversity_weight,
         }
+
+
+def get_gallery_service():
+    """Wrapper for gallery service accessor to allow patching in tests."""
+    return _get_gallery_service()
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +169,7 @@ class SmartCurationService:
         diversity_weight: float = 0.3,
         prefer_people: bool = False,
         exclude_asset_ids: Optional[list[UUID]] = None,
+        exclude_technical_rejects: bool = True,
         use_cache: bool = True,
     ) -> CurationResult:
         """Curate the best photos from a gallery.
@@ -176,6 +183,7 @@ class SmartCurationService:
             diversity_weight: Weight for diversity vs pure quality (0-1)
             prefer_people: Whether to prioritize photos with people
             exclude_asset_ids: Asset IDs to exclude from selection
+            exclude_technical_rejects: Whether to exclude blurry/technical reject photos
             use_cache: Whether to use/store cached results (default: True)
 
         Returns:
@@ -191,7 +199,6 @@ class SmartCurationService:
                     return cached
 
             # Get gallery assets with their analysis data
-            from app.services.gallery_service import get_gallery_service
             gallery_service = get_gallery_service()
 
             assets_data = await gallery_service.get_gallery_assets(
@@ -215,6 +222,13 @@ class SmartCurationService:
             # Filter out excluded assets
             exclude_ids = set(str(aid) for aid in (exclude_asset_ids or []))
             assets = [a for a in assets if str(a.get("asset_id")) not in exclude_ids]
+
+            # Filter out technical rejects (severe blur, etc.)
+            if exclude_technical_rejects:
+                assets = [
+                    a for a in assets
+                    if not self._is_technical_reject(a)
+                ]
 
             # Score each asset
             scored_assets = []
@@ -289,6 +303,33 @@ class SmartCurationService:
                 error_code=str(type(e).__name__),
             )
             raise
+
+    def _is_technical_reject(self, asset: dict[str, Any]) -> bool:
+        """Determine if an asset is a technical reject (severe blur, etc.).
+
+        Technical rejects are photos with severe technical issues that should
+        typically be excluded from curation:
+        - High-confidence blur that isn't intentional (artistic bokeh)
+        - Very low sharpness scores
+        """
+        # Check blur detection results
+        blur_detected = asset.get("blur_detected", False)
+        is_intentional_blur = asset.get("is_intentional_blur", False)
+        blur_confidence = asset.get("blur_confidence", 0)
+        blur_severity = asset.get("blur_severity")
+        sharpness = asset.get("sharpness", 0.5)
+
+        # If blur detected and not intentional
+        if blur_detected and not is_intentional_blur:
+            # High-confidence blur is a reject
+            if blur_confidence >= 0.7 or blur_severity == "high":
+                return True
+
+        # Very low sharpness is a reject (score is 0-1, threshold at 0.4)
+        if sharpness < 0.4:
+            return True
+
+        return False
 
     def _calculate_asset_score(
         self,

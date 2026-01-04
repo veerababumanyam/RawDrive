@@ -142,7 +142,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       description: 'Smart organization with auto-tagging. Find any photo instantly.',
       gradient: 'from-cyan-400 to-blue-500',
       stat: '10× faster workflow',
-      subheadline: 'Organize thousands of photos effortlessly with AI-powered auto-tagging. Find any photo instantly with smart search.',
+      subheadline,
       headlineText: 'The AI-Powered|Studio OS|for Modern Photographers',
     },
     {

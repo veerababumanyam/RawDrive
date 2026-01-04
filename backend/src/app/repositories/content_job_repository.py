@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Any, Optional
 from uuid import UUID
 
-from app.db.postgres import get_postgres_pool
+from app.db.postgres import acquire_conn, get_postgres_pool
 
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class ContentJobRepository:
             Job ID if created, or existing job ID if duplicate
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             row = await conn.fetchrow(
                 """
                 INSERT INTO content_detection_jobs (
@@ -119,7 +119,7 @@ class ContentJobRepository:
             Job ID
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             row = await conn.fetchrow(
                 """
                 INSERT INTO content_detection_jobs (

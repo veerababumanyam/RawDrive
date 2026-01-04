@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
 
-from app.db.postgres import get_postgres_pool
+from app.db.postgres import acquire_conn, get_postgres_pool
 
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class AssetAnalysisRepository:
             Created record as dict
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             row = await conn.fetchrow(
                 """
                 INSERT INTO asset_analysis (
@@ -121,7 +121,7 @@ class AssetAnalysisRepository:
             Record as dict, or None if not found
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             row = await conn.fetchrow(
                 """
                 SELECT *
@@ -133,6 +133,15 @@ class AssetAnalysisRepository:
             )
 
             return self._row_to_dict(row) if row else None
+
+    async def get_by_asset_id(
+        self,
+        asset_id: UUID,
+        workspace_id: UUID,
+    ) -> Optional[dict[str, Any]]:
+        """Backward-compatible alias used in tests."""
+
+        return await self.find_by_asset_id(asset_id, workspace_id)
 
     async def find_pending_vision(
         self,
@@ -149,7 +158,7 @@ class AssetAnalysisRepository:
             List of records pending vision analysis
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             rows = await conn.fetch(
                 """
                 SELECT *
@@ -179,7 +188,7 @@ class AssetAnalysisRepository:
             List of records pending face analysis
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             rows = await conn.fetch(
                 """
                 SELECT *
@@ -207,7 +216,7 @@ class AssetAnalysisRepository:
             List of records ready for retry
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             rows = await conn.fetch(
                 """
                 SELECT *
@@ -242,7 +251,7 @@ class AssetAnalysisRepository:
             List of matching records
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             rows = await conn.fetch(
                 """
                 SELECT *
@@ -288,7 +297,7 @@ class AssetAnalysisRepository:
             Updated record or None if not found
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             vision_analyzed_at = datetime.now(timezone.utc) if vision_status == "completed" else None
 
             row = await conn.fetchrow(
@@ -349,7 +358,7 @@ class AssetAnalysisRepository:
             Updated record or None if not found
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             face_analyzed_at = datetime.now(timezone.utc) if face_status == "completed" else None
 
             row = await conn.fetchrow(
@@ -403,7 +412,7 @@ class AssetAnalysisRepository:
             Updated record or None if not found
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             next_retry = datetime.now(timezone.utc) + timedelta(seconds=retry_delay_seconds)
 
             row = await conn.fetchrow(
@@ -438,7 +447,7 @@ class AssetAnalysisRepository:
             Updated record or None if not found
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             row = await conn.fetchrow(
                 """
                 UPDATE asset_analysis
@@ -473,7 +482,7 @@ class AssetAnalysisRepository:
             Updated record or None if not found
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             row = await conn.fetchrow(
                 """
                 UPDATE asset_analysis
@@ -510,7 +519,7 @@ class AssetAnalysisRepository:
             True if deleted, False if not found
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             result = await conn.execute(
                 """
                 DELETE FROM asset_analysis
@@ -539,7 +548,7 @@ class AssetAnalysisRepository:
             Dict mapping status -> count
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             rows = await conn.fetch(
                 """
                 SELECT status, COUNT(*) as count
@@ -565,7 +574,7 @@ class AssetAnalysisRepository:
             Summary dict with counts and percentages
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             row = await conn.fetchrow(
                 """
                 SELECT

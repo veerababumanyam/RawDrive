@@ -10,16 +10,10 @@ from uuid import UUID
 import json
 
 from pydantic import BaseModel, Field, EmailStr, field_validator
+from src.shared.types import GuestStatus as SharedGuestStatus
 
 
-class GuestStatus(str, Enum):
-    """Status of a guest invitation."""
-    PENDING = "pending"
-    INVITED = "invited"
-    VIEWED = "viewed"
-    RSVP_YES = "rsvp_yes"
-    RSVP_NO = "rsvp_no"
-    RSVP_MAYBE = "rsvp_maybe"
+GuestStatus = SharedGuestStatus
 
 
 class GuestBase(BaseModel):
@@ -55,7 +49,7 @@ class Guest(GuestBase):
     guest_id: UUID
     invitation_id: UUID
     workspace_id: UUID
-    status: GuestStatus = GuestStatus.PENDING
+    status: GuestStatus = GuestStatus.invited
     import_batch_id: Optional[UUID] = None
     invited_at: Optional[datetime] = None
     viewed_at: Optional[datetime] = None

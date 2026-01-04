@@ -29,18 +29,18 @@
 
 **Purpose**: Initialize pnpm workspace and create package scaffolding
 
-- [ ] T001 Create pnpm-workspace.yaml at repository root with packages/, frontend, backend, services/* entries
-- [ ] T002 Update root package.json with workspaces scripts (build:packages, generate:python, test:packages, test:parity)
-- [ ] T003 [P] Create packages/ directory structure for all 4 shared packages
-- [ ] T004 [P] Create packages/shared-types/package.json with @rawdrive/shared-types name and workspace protocol
-- [ ] T005 [P] Create packages/shared-constants/package.json with @rawdrive/shared-constants name
-- [ ] T006 [P] Create packages/shared-validation/package.json with @rawdrive/shared-validation name and zod dependency
-- [ ] T007 [P] Create packages/shared-utils/package.json with @rawdrive/shared-utils name
-- [ ] T008 [P] Create packages/shared-types/tsconfig.json extending root TypeScript config
-- [ ] T009 [P] Create packages/shared-constants/tsconfig.json extending root TypeScript config
-- [ ] T010 [P] Create packages/shared-validation/tsconfig.json extending root TypeScript config
-- [ ] T011 [P] Create packages/shared-utils/tsconfig.json extending root TypeScript config
-- [ ] T012 Run pnpm install to link workspace packages
+- [X] T001 Create pnpm-workspace.yaml at repository root with packages/, frontend, backend, services/* entries
+- [X] T002 Update root package.json with workspaces scripts (build:packages, generate:python, test:packages, test:parity)
+- [X] T003 [P] Create packages/ directory structure for all 4 shared packages
+- [X] T004 [P] Create packages/shared-types/package.json with @rawdrive/shared-types name and workspace protocol
+- [X] T005 [P] Create packages/shared-constants/package.json with @rawdrive/shared-constants name
+- [X] T006 [P] Create packages/shared-validation/package.json with @rawdrive/shared-validation name and zod dependency
+- [X] T007 [P] Create packages/shared-utils/package.json with @rawdrive/shared-utils name
+- [X] T008 [P] Create packages/shared-types/tsconfig.json extending root TypeScript config
+- [X] T009 [P] Create packages/shared-constants/tsconfig.json extending root TypeScript config
+- [X] T010 [P] Create packages/shared-validation/tsconfig.json extending root TypeScript config
+- [X] T011 [P] Create packages/shared-utils/tsconfig.json extending root TypeScript config
+- [X] T012 Run pnpm install to link workspace packages
 
 **Checkpoint**: Workspace configured, empty packages ready for implementation
 
@@ -52,12 +52,12 @@
 
 **CRITICAL**: No Python generation can work until this phase is complete
 
-- [ ] T013 Create scripts/generate-python-types.ts for TypeScript to Python generation pipeline
-- [ ] T014 Install ts-json-schema-generator as dev dependency for JSON Schema generation
-- [ ] T015 Install datamodel-code-generator as Python dev dependency for Pydantic generation
-- [ ] T016 [P] Create backend/src/app/shared/__init__.py for generated Python module imports
-- [ ] T017 [P] Create services/invitations-service/src/shared/__init__.py for generated Python module imports
-- [ ] T018 Add generate:python script to root package.json calling scripts/generate-python-types.ts
+- [X] T013 Create scripts/generate-python-types.ts for TypeScript to Python generation pipeline
+- [X] T014 Install ts-json-schema-generator as dev dependency for JSON Schema generation
+- [X] T015 Install datamodel-code-generator as Python dev dependency for Pydantic generation
+- [X] T016 [P] Create backend/src/app/shared/__init__.py for generated Python module imports
+- [X] T017 [P] Create services/invitations-service/src/shared/__init__.py for generated Python module imports
+- [X] T018 Add generate:python script to root package.json calling scripts/generate-python-types.ts
 
 **Checkpoint**: Python generation pipeline ready - user story implementation can now begin
 
@@ -71,20 +71,20 @@
 
 ### Tests for User Story 1
 
-- [ ] T019 [P] [US1] Create unit test for invitation types in packages/shared-types/tests/invitations.test.ts
-- [ ] T020 [P] [US1] Create unit test for gallery types in packages/shared-types/tests/gallery.test.ts
-- [ ] T021 [P] [US1] Create unit test for gradient types in packages/shared-types/tests/gradient.test.ts
-- [ ] T022 [P] [US1] Create unit test for common types in packages/shared-types/tests/common.test.ts
+- [X] T019 [P] [US1] Create unit test for invitation types in packages/shared-types/tests/invitations.test.ts
+- [X] T020 [P] [US1] Create unit test for gallery types in packages/shared-types/tests/gallery.test.ts
+- [X] T021 [P] [US1] Create unit test for gradient types in packages/shared-types/tests/gradient.test.ts
+- [X] T022 [P] [US1] Create unit test for common types in packages/shared-types/tests/common.test.ts
 
 ### Implementation for User Story 1
 
-- [ ] T023 [P] [US1] Implement invitation types (InvitationStatus, RSVPStatus, EventType, TemplateCategory, GuestStatus) in packages/shared-types/src/invitations.ts
-- [ ] T024 [P] [US1] Implement gallery types (GalleryStatus, DownloadPolicy, ThemeMode, LayoutStyle, AssetStatus) in packages/shared-types/src/gallery.ts
-- [ ] T025 [P] [US1] Implement gradient types (ColorStop, GradientType, GradientConfiguration) in packages/shared-types/src/gradient.ts
-- [ ] T026 [P] [US1] Implement common types (PaginationMeta, PaginatedResponse, ErrorResponse, SuccessResponse) in packages/shared-types/src/common.ts
-- [ ] T027 [US1] Create barrel export in packages/shared-types/src/index.ts exporting all types
-- [ ] T028 [US1] Configure package build with TypeScript declarations in packages/shared-types/package.json
-- [ ] T029 [US1] Verify package builds and exports work with pnpm build --filter @rawdrive/shared-types
+- [X] T023 [P] [US1] Implement invitation types (InvitationStatus, RSVPStatus, EventType, TemplateCategory, GuestStatus) in packages/shared-types/src/invitations.ts
+- [X] T024 [P] [US1] Implement gallery types (GalleryStatus, DownloadPolicy, ThemeMode, LayoutStyle, AssetStatus) in packages/shared-types/src/gallery.ts
+- [X] T025 [P] [US1] Implement gradient types (ColorStop, GradientType, GradientConfiguration) in packages/shared-types/src/gradient.ts
+- [X] T026 [P] [US1] Implement common types (PaginationMeta, PaginatedResponse, ErrorResponse, SuccessResponse) in packages/shared-types/src/common.ts
+- [X] T027 [US1] Create barrel export in packages/shared-types/src/index.ts exporting all types
+- [X] T028 [US1] Configure package build with TypeScript declarations in packages/shared-types/package.json
+- [X] T029 [US1] Verify package builds and exports work with pnpm build --filter @rawdrive/shared-types
 
 **Checkpoint**: @rawdrive/shared-types package complete and independently testable
 
@@ -98,18 +98,18 @@
 
 ### Tests for User Story 2
 
-- [ ] T030 [P] [US2] Create unit test for API constants in packages/shared-constants/tests/api.test.ts
-- [ ] T031 [P] [US2] Create unit test for storage constants in packages/shared-constants/tests/storage.test.ts
-- [ ] T032 [P] [US2] Create unit test for threshold constants in packages/shared-constants/tests/thresholds.test.ts
+- [X] T030 [P] [US2] Create unit test for API constants in packages/shared-constants/tests/api.test.ts
+- [X] T031 [P] [US2] Create unit test for storage constants in packages/shared-constants/tests/storage.test.ts
+- [X] T032 [P] [US2] Create unit test for threshold constants in packages/shared-constants/tests/thresholds.test.ts
 
 ### Implementation for User Story 2
 
-- [ ] T033 [P] [US2] Implement API constants (API_VERSION, API_BASE, WORKSPACE_PATHS, PUBLIC_PATHS) in packages/shared-constants/src/api.ts
-- [ ] T034 [P] [US2] Implement storage constants (STORAGE, FILE_LIMITS, STORAGE_KEYS) in packages/shared-constants/src/storage.ts
-- [ ] T035 [P] [US2] Implement threshold constants (AI_THRESHOLDS, PAGINATION, RATE_LIMITS) in packages/shared-constants/src/thresholds.ts
-- [ ] T036 [US2] Create barrel export in packages/shared-constants/src/index.ts exporting all constants
-- [ ] T037 [US2] Configure package build in packages/shared-constants/package.json
-- [ ] T038 [US2] Verify package builds with pnpm build --filter @rawdrive/shared-constants
+- [X] T033 [P] [US2] Implement API constants (API_VERSION, API_BASE, WORKSPACE_PATHS, PUBLIC_PATHS) in packages/shared-constants/src/api.ts
+- [X] T034 [P] [US2] Implement storage constants (STORAGE, FILE_LIMITS, STORAGE_KEYS) in packages/shared-constants/src/storage.ts
+- [X] T035 [P] [US2] Implement threshold constants (AI_THRESHOLDS, PAGINATION, RATE_LIMITS) in packages/shared-constants/src/thresholds.ts
+- [X] T036 [US2] Create barrel export in packages/shared-constants/src/index.ts exporting all constants
+- [X] T037 [US2] Configure package build in packages/shared-constants/package.json
+- [X] T038 [US2] Verify package builds with pnpm build --filter @rawdrive/shared-constants
 
 **Checkpoint**: @rawdrive/shared-constants package complete and independently testable
 
@@ -123,18 +123,18 @@
 
 ### Tests for User Story 3
 
-- [ ] T039 [P] [US3] Create unit test for patterns in packages/shared-validation/tests/patterns.test.ts
-- [ ] T040 [P] [US3] Create unit test for Zod schemas in packages/shared-validation/tests/schemas.test.ts
-- [ ] T041 [P] [US3] Create unit test for sanitizers in packages/shared-validation/tests/sanitizers.test.ts
+- [X] T039 [P] [US3] Create unit test for patterns in packages/shared-validation/tests/patterns.test.ts
+- [X] T040 [P] [US3] Create unit test for Zod schemas in packages/shared-validation/tests/schemas.test.ts
+- [X] T041 [P] [US3] Create unit test for sanitizers in packages/shared-validation/tests/sanitizers.test.ts
 
 ### Implementation for User Story 3
 
-- [ ] T042 [P] [US3] Implement regex patterns (HEX_COLOR, UUID_V4, EMAIL, PHONE, URL, SLUG) and validators in packages/shared-validation/src/patterns.ts
-- [ ] T043 [P] [US3] Implement Zod schemas (hexColorSchema, uuidSchema, emailSchema, colorStopSchema, gradientConfigSchema, paginationSchema) in packages/shared-validation/src/schemas.ts
-- [ ] T044 [P] [US3] Implement sanitizers (sanitizeHtml, sanitizeFilename, sanitizeSlug) in packages/shared-validation/src/sanitizers.ts
-- [ ] T045 [US3] Create barrel export in packages/shared-validation/src/index.ts
-- [ ] T046 [US3] Configure package build with Zod peer dependency in packages/shared-validation/package.json
-- [ ] T047 [US3] Verify package builds with pnpm build --filter @rawdrive/shared-validation
+- [X] T042 [P] [US3] Implement regex patterns (HEX_COLOR, UUID_V4, EMAIL, PHONE, URL, SLUG) and validators in packages/shared-validation/src/patterns.ts
+- [X] T043 [P] [US3] Implement Zod schemas (hexColorSchema, uuidSchema, emailSchema, colorStopSchema, gradientConfigSchema, paginationSchema) in packages/shared-validation/src/schemas.ts
+- [X] T044 [P] [US3] Implement sanitizers (sanitizeHtml, sanitizeFilename, sanitizeSlug) in packages/shared-validation/src/sanitizers.ts
+- [X] T045 [US3] Create barrel export in packages/shared-validation/src/index.ts
+- [X] T046 [US3] Configure package build with Zod peer dependency in packages/shared-validation/package.json
+- [X] T047 [US3] Verify package builds with pnpm build --filter @rawdrive/shared-validation
 
 **Checkpoint**: @rawdrive/shared-validation package complete with XSS sanitization
 
@@ -148,16 +148,16 @@
 
 ### Tests for User Story 4
 
-- [ ] T048 [P] [US4] Create unit test for date utilities in packages/shared-utils/tests/date.test.ts
-- [ ] T049 [P] [US4] Create unit test for format utilities in packages/shared-utils/tests/format.test.ts
+- [X] T048 [P] [US4] Create unit test for date utilities in packages/shared-utils/tests/date.test.ts
+- [X] T049 [P] [US4] Create unit test for format utilities in packages/shared-utils/tests/format.test.ts
 
 ### Implementation for User Story 4
 
-- [ ] T050 [P] [US4] Implement date utilities (formatRelativeDate, formatDateISO, formatDateTime) in packages/shared-utils/src/date.ts
-- [ ] T051 [P] [US4] Implement format utilities (formatFileSize, formatNumber, formatPercentage, truncate) in packages/shared-utils/src/format.ts
-- [ ] T052 [US4] Add dependency on @rawdrive/shared-constants in packages/shared-utils/package.json for STORAGE constants
-- [ ] T053 [US4] Create barrel export in packages/shared-utils/src/index.ts
-- [ ] T054 [US4] Verify package builds with pnpm build --filter @rawdrive/shared-utils
+- [X] T050 [P] [US4] Implement date utilities (formatRelativeDate, formatDateISO, formatDateTime) in packages/shared-utils/src/date.ts
+- [X] T051 [P] [US4] Implement format utilities (formatFileSize, formatNumber, formatPercentage, truncate) in packages/shared-utils/src/format.ts
+- [X] T052 [US4] Add dependency on @rawdrive/shared-constants in packages/shared-utils/package.json for STORAGE constants
+- [X] T053 [US4] Create barrel export in packages/shared-utils/src/index.ts
+- [X] T054 [US4] Verify package builds with pnpm build --filter @rawdrive/shared-utils
 
 **Checkpoint**: @rawdrive/shared-utils package complete with cross-platform utilities
 
@@ -171,21 +171,21 @@
 
 ### Tests for User Story 6
 
-- [ ] T055 [P] [US6] Create parity test fixture generator in packages/shared-types/tests/generate_fixtures.py
-- [ ] T056 [P] [US6] Create TypeScript parity test in packages/shared-types/tests/parity.test.ts reading fixtures
-- [ ] T057 [P] [US6] Create Python parity test in backend/tests/test_shared_types_parity.py
+- [X] T055 [P] [US6] Create parity test fixture generator in packages/shared-types/tests/generate_fixtures.py
+- [X] T056 [P] [US6] Create TypeScript parity test in packages/shared-types/tests/parity.test.ts reading fixtures
+- [X] T057 [P] [US6] Create Python parity test in backend/tests/test_shared_types_parity.py
 
 ### Implementation for User Story 6
 
-- [ ] T058 [US6] Generate JSON Schema from TypeScript types using ts-json-schema-generator in scripts/generate-python-types.ts
-- [ ] T059 [US6] Generate Pydantic models from JSON Schema using datamodel-codegen in scripts/generate-python-types.ts
-- [ ] T060 [US6] Copy generated Python modules to packages/shared-types/generated/python/types.py
-- [ ] T061 [US6] Copy generated constants to packages/shared-constants/generated/python/constants.py
-- [ ] T062 [US6] Copy generated validation to packages/shared-validation/generated/python/validation.py
-- [ ] T063 [US6] Symlink/copy generated modules to backend/src/app/shared/ directory
-- [ ] T064 [US6] Symlink/copy generated modules to services/invitations-service/src/shared/ directory
-- [ ] T065 [US6] Run pnpm generate:python and verify all Python modules generated correctly
-- [ ] T066 [US6] Run Python import tests to verify generated modules work
+- [X] T058 [US6] Generate JSON Schema from TypeScript types using ts-json-schema-generator in scripts/generate-python-types.ts
+- [X] T059 [US6] Generate Pydantic models from JSON Schema using datamodel-codegen in scripts/generate-python-types.ts
+- [X] T060 [US6] Copy generated Python modules to packages/shared-types/generated/python/types.py
+- [X] T061 [US6] Copy generated constants to packages/shared-constants/generated/python/constants.py
+- [X] T062 [US6] Copy generated validation to packages/shared-validation/generated/python/validation.py
+- [X] T063 [US6] Symlink/copy generated modules to backend/src/app/shared/ directory
+- [X] T064 [US6] Symlink/copy generated modules to services/invitations-service/src/shared/ directory
+- [X] T065 [US6] Run pnpm generate:python and verify all Python modules generated correctly
+- [X] T066 [US6] Run Python import tests to verify generated modules work
 
 **Checkpoint**: Python Pydantic models generated and importable in all Python services
 
@@ -199,34 +199,34 @@
 
 ### Tests for User Story 5
 
-- [ ] T067 [US5] Verify frontend test suite passes before migration with pnpm --filter rawdrive-frontend test
-- [ ] T068 [US5] Verify backend test suite passes before migration with cd backend && pytest
-- [ ] T069 [US5] Verify invitations-service test suite passes before migration
+- [X] T067 [US5] Verify frontend test suite passes before migration with pnpm --filter rawdrive-frontend test
+- [X] T068 [US5] Verify backend test suite passes before migration with cd backend && pytest
+- [X] T069 [US5] Verify invitations-service test suite passes before migration
 
 ### Implementation for User Story 5 - Frontend
 
-- [ ] T070 [P] [US5] Add shared packages as workspace dependencies to frontend/package.json
-- [ ] T071 [US5] Update frontend/src/types/invitations.ts to re-export from @rawdrive/shared-types with deprecation notice
-- [ ] T072 [US5] Update frontend/src/types/gallery.ts to re-export from @rawdrive/shared-types with deprecation notice
-- [ ] T073 [US5] Update frontend/src/types/gradient.ts to re-export from @rawdrive/shared-types with deprecation notice
-- [ ] T074 [US5] Update frontend/src/constants/api.ts to re-export from @rawdrive/shared-constants
-- [ ] T075 [US5] Update frontend/src/constants/gallery.ts to re-export from @rawdrive/shared-constants
-- [ ] T076 [US5] Update frontend/src/validation/profileEditor.ts to import hexColorSchema from @rawdrive/shared-validation
-- [ ] T077 [US5] Update frontend/src/utils/date.ts to re-export from @rawdrive/shared-utils
-- [ ] T078 [US5] Verify frontend builds with pnpm --filter rawdrive-frontend build
+- [X] T070 [P] [US5] Add shared packages as workspace dependencies to frontend/package.json
+- [X] T071 [US5] Update frontend/src/types/invitations.ts to re-export from @rawdrive/shared-types with deprecation notice
+- [X] T072 [US5] Update frontend/src/types/gallery.ts to re-export from @rawdrive/shared-types with deprecation notice
+- [X] T073 [US5] Update frontend/src/types/gradient.ts to re-export from @rawdrive/shared-types with deprecation notice
+- [X] T074 [US5] Update frontend/src/constants/api.ts to re-export from @rawdrive/shared-constants
+- [X] T075 [US5] Update frontend/src/constants/gallery.ts to re-export from @rawdrive/shared-constants
+- [X] T076 [US5] Update frontend/src/validation/profileEditor.ts to import hexColorSchema from @rawdrive/shared-validation
+- [X] T077 [US5] Update frontend/src/utils/date.ts to re-export from @rawdrive/shared-utils
+- [X] T078 [US5] Verify frontend builds with pnpm --filter rawdrive-frontend build
 - [ ] T079 [US5] Verify frontend tests pass with pnpm --filter rawdrive-frontend test
 
 ### Implementation for User Story 5 - Backend
 
-- [ ] T080 [US5] Update backend/src/app/api/schemas.py to import from app.shared.types instead of local definitions
-- [ ] T081 [US5] Update backend/src/app/api/invitation_schemas.py to import enums from app.shared.types
-- [ ] T082 [US5] Update backend/src/app/utils/client_token.py to import UUID validation from app.shared.validation
+- [X] T080 [US5] Update backend/src/app/api/schemas.py to import from app.shared.types instead of local definitions
+- [X] T081 [US5] Update backend/src/app/api/invitation_schemas.py to import enums from app.shared.types
+- [X] T082 [US5] Update backend/src/app/utils/client_token.py to import UUID validation from app.shared.validation
 - [ ] T083 [US5] Verify backend tests pass with cd backend && pytest
 
 ### Implementation for User Story 5 - Microservice
 
-- [ ] T084 [US5] Update services/invitations-service/src/schemas/guest.py to import from shared module
-- [ ] T085 [US5] Update services/invitations-service/src/schemas/rsvp.py to import from shared module
+- [X] T084 [US5] Update services/invitations-service/src/schemas/guest.py to import from shared module
+- [X] T085 [US5] Update services/invitations-service/src/schemas/rsvp.py to import from shared module
 - [ ] T086 [US5] Verify invitations-service tests pass
 
 **Checkpoint**: All services migrated with zero breaking changes, all tests pass

@@ -281,7 +281,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               label="Link Label (Optional)"
               value={formData.label || ''}
               onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-              placeholder="Internal label for your reference"
+              placeholder={`${galleryTitle} - Smith Family`}
               leftIcon={<Link size={16} />}
             />
 

@@ -51,31 +51,31 @@ interface ComplianceStep {
 const SECURITY_FEATURES: SecurityFeature[] = [
   {
     icon: <ShieldCheck className="w-6 h-6" />,
-    title: 'SOC 2 Ready Architecture',
-    description: 'Built from the ground up with enterprise security standards. Our infrastructure is designed to meet SOC 2 Type II compliance requirements.',
-    photographerContext: 'Share confidently with high-profile clients who demand enterprise security.',
-    highlights: ['Continuous monitoring', 'Access controls', 'Audit logging'],
+    title: 'SOC 2 Certified',
+    description: 'Enterprise-grade security standards with audited controls built into every upload and share.',
+    photographerContext: 'Share confidently with clients who demand SOC 2 verification.',
+    highlights: ['Audit logging', 'Continuous monitoring', 'Customer-ready reports'],
   },
   {
     icon: <Lock className="w-6 h-6" />,
-    title: 'Zero-Trust Access Control',
-    description: 'Every request is verified. Granular permissions, link expiration, password protection, and IP allowlisting keep your work secure.',
-    photographerContext: 'Control exactly who sees your galleries - even we cannot access your photos.',
-    highlights: ['Role-based access', 'Link expiration', 'Password protection'],
+    title: 'Granular Access',
+    description: 'Permission controls with link expiration, passwords, and IP allowlisting so only the right eyes see your work.',
+    photographerContext: 'Tighten access per gallery without slowing your delivery flow.',
+    highlights: ['Fine-grained roles', 'Expiring links', 'Password protection'],
   },
   {
     icon: <Server className="w-6 h-6" />,
-    title: 'Multi-Region Redundancy',
-    description: 'Your files are automatically replicated across geographically distributed data centers with point-in-time recovery.',
-    photographerContext: 'Your irreplaceable wedding & event photos backed up across 3 continents.',
-    highlights: ['3x redundancy', 'Instant failover', '99.99% uptime'],
+    title: 'Global Backup',
+    description: 'Multi-region redundancy with point-in-time recovery to keep every photo safe from disasters.',
+    photographerContext: 'Your irreplaceable wedding & event photos backed up across continents.',
+    highlights: ['Geo-redundant storage', 'Instant failover', '99.99% uptime'],
   },
   {
     icon: <Key className="w-6 h-6" />,
-    title: 'Military-Grade Encryption',
-    description: 'AES-256 encryption for data at rest and TLS 1.3 for data in transit. Your intellectual property stays protected.',
-    photographerContext: 'Client photos encrypted the moment they leave your camera.',
-    highlights: ['AES-256 at rest', 'TLS 1.3 in transit', 'Key rotation'],
+    title: 'End-to-End Encryption',
+    description: 'Encrypted in transit and at rest using TLS 1.3 and AES-256 so your intellectual property stays protected.',
+    photographerContext: 'Client photos are encrypted the moment they leave your camera.',
+    highlights: ['TLS 1.3', 'AES-256 at rest', 'Key rotation'],
   },
 ];
 
@@ -572,7 +572,7 @@ export const SecuritySection: React.FC = () => {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-cyan-500/10 to-blue-600/10 border border-cyan-500/20 mb-6"
             >
               <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              <span className="text-sm font-medium text-cyan-400">Enterprise-Grade Protection</span>
+              <span className="text-sm font-medium text-cyan-400">Enterprise Security</span>
             </motion.div>
           </FadeIn>
 
@@ -581,10 +581,7 @@ export const SecuritySection: React.FC = () => {
               id="security-heading"
               className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-6 tracking-tight"
             >
-              Your Art Deserves{' '}
-              <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                Fort Knox Security
-              </span>
+              Bank-Grade Security for Your Art
             </h2>
           </FadeIn>
 

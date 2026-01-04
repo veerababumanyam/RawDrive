@@ -3,14 +3,37 @@
  * Based on design document: .kiro/specs/gallery-crud/design.md
  */
 
+import {
+  DownloadPolicy as SharedDownloadPolicy,
+  GalleryStatus as SharedGalleryStatus,
+  LayoutStyle as SharedLayoutStyle,
+  ThemeMode as SharedThemeMode,
+} from '@rawdrive/shared-types';
+import type {
+  DownloadPolicy as DownloadPolicyType,
+  GalleryStatus as GalleryStatusType,
+  LayoutStyle as LayoutStyleType,
+  ThemeMode as ThemeModeType,
+} from '@rawdrive/shared-types';
 import { CompanyProfile } from './companyProfile';
 import type { GradientConfiguration } from './gradient';
 
 // Gallery Status
-export type GalleryStatus = 'draft' | 'published' | 'archived';
-export type LayoutStyle = 'tabs' | 'continuous';
-export type ThemeMode = 'light' | 'dark' | 'system';
-export type DownloadPolicy = 'view_only' | 'web_only' | 'watermarked_only' | 'original_allowed';
+/**
+ * @deprecated Prefer importing directly from @rawdrive/shared-types.
+ * These exports alias the shared package for backward compatibility.
+ */
+export const GalleryStatus = SharedGalleryStatus;
+export type GalleryStatus = GalleryStatusType;
+
+export const LayoutStyle = SharedLayoutStyle;
+export type LayoutStyle = LayoutStyleType;
+
+export const ThemeMode = SharedThemeMode;
+export type ThemeMode = ThemeModeType;
+
+export const DownloadPolicy = SharedDownloadPolicy;
+export type DownloadPolicy = DownloadPolicyType;
 export type ViewMode = 'grid' | 'masonry' | 'list';
 export type FilterType = 'all' | 'picks' | 'favorites' | 'selections';
 export type BulkAction = 'move' | 'delete' | 'download';

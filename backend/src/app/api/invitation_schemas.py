@@ -19,6 +19,10 @@ from enum import Enum
 from typing import Literal, Optional
 from uuid import UUID
 
+from app.shared.types import EventType as SharedEventType
+from app.shared.types import InvitationStatus as SharedInvitationStatus
+from app.shared.types import RSVPStatus as SharedRSVPStatus
+from app.shared.types import TemplateCategory as SharedTemplateCategory
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
 import re
 import html
@@ -66,49 +70,10 @@ def sanitize_text(value: str | None) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-class InvitationStatus(str, Enum):
-    """Invitation lifecycle status."""
-
-    DRAFT = "draft"
-    PUBLISHED = "published"
-    ARCHIVED = "archived"
-    DELETED = "deleted"
-
-
-class EventType(str, Enum):
-    """Type of event for the invitation."""
-
-    WEDDING = "wedding"
-    BIRTHDAY = "birthday"
-    ANNIVERSARY = "anniversary"
-    BABY_SHOWER = "baby_shower"
-    ENGAGEMENT = "engagement"
-    FESTIVAL = "festival"
-    CORPORATE = "corporate"
-    OTHER = "other"
-
-
-class TemplateCategory(str, Enum):
-    """Template category classification."""
-
-    WEDDING = "wedding"
-    BIRTHDAY = "birthday"
-    ANNIVERSARY = "anniversary"
-    BABY_SHOWER = "baby_shower"
-    ENGAGEMENT = "engagement"
-    FESTIVAL = "festival"
-    CORPORATE = "corporate"
-    OTHER = "other"
-
-
-class RSVPStatus(str, Enum):
-    """RSVP response status."""
-
-    PENDING = "pending"
-    CONFIRMED = "confirmed"
-    DECLINED = "declined"
-    MAYBE = "maybe"
-    CANCELLED = "cancelled"
+InvitationStatus = SharedInvitationStatus
+EventType = SharedEventType
+TemplateCategory = SharedTemplateCategory
+RSVPStatus = SharedRSVPStatus
 
 
 class RSVPSource(str, Enum):
@@ -352,7 +317,7 @@ class CreateInvitationRequest(BaseModel):
         ..., min_length=1, max_length=300, description="Invitation title"
     )
     description: Optional[str] = Field(None, description="Event description")
-    event_type: EventType = Field(EventType.WEDDING, description="Type of event")
+    event_type: EventType = Field(EventType.wedding, description="Type of event")
     event_datetime: datetime = Field(..., description="Event date/time (UTC)")
     event_end_datetime: Optional[datetime] = Field(
         None, description="Event end time (UTC)"

@@ -853,8 +853,8 @@ class TestRequestDeduplication:
         print_step(2, "Verifying deduplication")
         # All results should be the same
         assert all(r["quality_score"] == 85 for r in results)
-        assert call_count == 3  # In this mock, we don't have real deduplication
-        print_success("Results verified (mock shows request pattern)")
+        assert call_count == 1  # Deduplication should fan-in concurrent requests
+        print_success("Results verified (requests were deduplicated)")
 
         print("\n" + Colors.GREEN + "✓ Request deduplication pattern verified!" + Colors.RESET)
 

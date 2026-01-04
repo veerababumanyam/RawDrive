@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field, EmailStr, field_validator
+from src.shared.types import RSVPStatus
 
 
 class RSVPSubmission(BaseModel):
@@ -28,10 +29,9 @@ class RSVPSubmission(BaseModel):
         max_length=50,
         description="Guest's phone number",
     )
-    status: str = Field(
+    status: RSVPStatus = Field(
         ...,
-        pattern="^(yes|no|maybe)$",
-        description="RSVP response: yes, no, or maybe",
+        description="RSVP status",
     )
     plus_ones: int = Field(
         0,
@@ -82,9 +82,9 @@ class RSVPResponse(BaseModel):
         ...,
         description="Public slug of the invitation",
     )
-    status: str = Field(
+    status: RSVPStatus = Field(
         ...,
-        description="RSVP status: yes, no, or maybe",
+        description="RSVP status",
     )
     edit_token: Optional[str] = Field(
         None,
@@ -111,9 +111,9 @@ class RSVPDetails(BaseModel):
         None,
         description="Guest's email (partially masked)",
     )
-    status: str = Field(
+    status: RSVPStatus = Field(
         ...,
-        description="RSVP status: yes, no, or maybe",
+        description="RSVP status",
     )
     plus_ones: int = Field(
         ...,

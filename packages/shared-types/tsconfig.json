@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/index.ts",
+    "src/invitations.ts",
+    "src/gallery.ts",
+    "src/gradient.ts",
+    "src/common.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests",
+    "generated"
+  ]
+}

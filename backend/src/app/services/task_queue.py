@@ -102,6 +102,29 @@ class Task:
 
 
 # ---------------------------------------------------------------------------
+# Task type constants
+# ---------------------------------------------------------------------------
+
+# Asset processing tasks
+TASK_ASSET_PROCESS = "asset.process"
+TASK_ASSET_CLEANUP = "asset.cleanup"
+
+# Face detection tasks
+TASK_FACE_DETECTION = "face.detection"
+TASK_FACE_CLUSTERING = "face.clustering"
+
+# AI/Curation tasks (Feature: 023-enhanced-smart-curate)
+TASK_CURATION_QUALITY_ANALYSIS = "curation.quality_analysis"
+TASK_CURATION_SIMILARITY_GROUPING = "curation.similarity_grouping"
+TASK_CURATION_SELECTION = "curation.selection"
+TASK_CURATION_EMBEDDING_COMPUTE = "curation.embedding_compute"
+
+# Invitation tasks
+TASK_INVITATION_SEND = "invitation.send"
+TASK_INVITATION_CLEANUP = "invitation.cleanup"
+
+
+# ---------------------------------------------------------------------------
 # Redis keys
 # ---------------------------------------------------------------------------
 

@@ -61,6 +61,8 @@ const STATUS_CONFIG: Record<InvitationStatus, { variant: 'default' | 'success' |
   draft: { variant: 'default', label: 'Draft' },
   published: { variant: 'success', label: 'Published' },
   archived: { variant: 'warning', label: 'Archived' },
+  expired: { variant: 'warning', label: 'Expired' },
+  cancelled: { variant: 'error', label: 'Cancelled' },
   deleted: { variant: 'error', label: 'Deleted' },
 };
 

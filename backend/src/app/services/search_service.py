@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 from uuid import UUID
 
-from app.db.postgres import get_postgres_pool
+from app.db.postgres import acquire_conn, get_postgres_pool
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ class SearchService:
     ) -> list[dict]:
         """Search galleries by title, description, or client name."""
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             galleries = await conn.fetch(
                 """
                 SELECT
@@ -169,7 +169,7 @@ class SearchService:
             List of matching assets with match_type indicator
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             # Build query to search assets by various criteria
             gallery_filter = ""
             params = [workspace_id, f"%{query}%", limit]
@@ -488,7 +488,7 @@ class SearchService:
         of whether faces were assigned individually or via group naming.
         """
         pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
+        async with acquire_conn(pool) as conn:
             offset = (page - 1) * limit
 
             gallery_filter = ""

@@ -20,3 +20,9 @@ export { SmartCurationPanel } from './SmartCurationPanel';
 export { PhotoAnalysisPanel, QualityBadge } from './PhotoAnalysisPanel';
 export { CaptionGenerator } from './CaptionGenerator';
 export { HashtagGenerator } from './HashtagGenerator';
+
+// Enhanced Smart Curate (023-enhanced-smart-curate)
+export { CurationProgress, CurationProgressMini } from './CurationProgress';
+export { QualityScoreCard } from './QualityScoreCard';
+export { QualityResultsGrid } from './QualityResultsGrid';
+export { BlurIndicator, BlurBadge } from './BlurIndicator';

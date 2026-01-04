@@ -86,7 +86,7 @@ export function useGalleryTaggingHealth({
 
   // Track if component is mounted
   const mountedRef = useRef(true);
-  const intervalRef = useRef<number | null>(null);
+  const intervalRef = useRef<ReturnType<typeof globalThis.setInterval> | null>(null);
 
   const fetchHealth = useCallback(async () => {
     // Skip if missing required params or not enabled
@@ -159,11 +159,11 @@ export function useGalleryTaggingHealth({
       return;
     }
 
-    intervalRef.current = setInterval(fetchHealth, refreshInterval);
+    intervalRef.current = globalThis.setInterval(fetchHealth, refreshInterval);
 
     return () => {
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        globalThis.clearInterval(intervalRef.current);
       }
     };
   }, [autoRefresh, enabled, refreshInterval, fetchHealth]);
@@ -174,7 +174,7 @@ export function useGalleryTaggingHealth({
     return () => {
       mountedRef.current = false;
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        globalThis.clearInterval(intervalRef.current);
       }
     };
   }, []);
@@ -218,7 +218,7 @@ export function useWorkspaceTaggingHealth({
   const [error, setError] = useState<Error | null>(null);
 
   const mountedRef = useRef(true);
-  const intervalRef = useRef<number | null>(null);
+  const intervalRef = useRef<ReturnType<typeof globalThis.setInterval> | null>(null);
 
   const fetchHealth = useCallback(async () => {
     if (!workspaceId || !enabled) return;
@@ -266,11 +266,11 @@ export function useWorkspaceTaggingHealth({
       return;
     }
 
-    intervalRef.current = setInterval(fetchHealth, refreshInterval);
+    intervalRef.current = globalThis.setInterval(fetchHealth, refreshInterval);
 
     return () => {
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        globalThis.clearInterval(intervalRef.current);
       }
     };
   }, [autoRefresh, enabled, refreshInterval, fetchHealth]);
@@ -280,7 +280,7 @@ export function useWorkspaceTaggingHealth({
     return () => {
       mountedRef.current = false;
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        globalThis.clearInterval(intervalRef.current);
       }
     };
   }, []);

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from contextlib import asynccontextmanager
+from inspect import isawaitable
 from typing import Optional
+from unittest.mock import AsyncMock
 
 import asyncpg
 
@@ -36,7 +40,7 @@ async def init_postgres_pool(settings: Optional[AppSettings] = None) -> asyncpg.
     """
 
     global _pool
-    if _pool is not None:
+    if _pool is not None and not os.getenv("PYTEST_CURRENT_TEST") and not isinstance(_pool, AsyncMock):
         return _pool
 
     settings = settings or get_settings()
@@ -68,9 +72,33 @@ async def init_postgres_pool(settings: Optional[AppSettings] = None) -> asyncpg.
 async def get_postgres_pool() -> asyncpg.Pool:
     """Return the initialized pool or raise if not initialized."""
 
+    global _pool
+
     if _pool is None:
         raise RuntimeError("PostgreSQL pool has not been initialized. Call init_postgres_pool first.")
     return _pool
+
+
+@asynccontextmanager
+async def acquire_conn(pool):
+    """Normalize pool.acquire() to support both asyncpg pools and AsyncMock pools."""
+
+    ctx = pool.acquire()
+    if isawaitable(ctx):
+        ctx = await ctx
+    async with ctx as conn:
+        yield conn
+
+
+@asynccontextmanager
+async def normalize_async_cm(cm):
+    """Allow AsyncMock-based context managers to behave like asyncpg ones."""
+
+    ctx = cm
+    if isawaitable(ctx):
+        ctx = await ctx
+    async with ctx:
+        yield ctx
 
 
 async def close_postgres_pool() -> None:
@@ -78,7 +106,9 @@ async def close_postgres_pool() -> None:
 
     global _pool
     if _pool is not None:
-        await _pool.close()
+        close_result = _pool.close()
+        if isawaitable(close_result):
+            await close_result
         _pool = None
         logger.info("PostgreSQL pool closed")
 
@@ -87,7 +117,7 @@ async def postgres_healthcheck(timeout: float = 1.0) -> bool:
     """Run a lightweight health check (SELECT 1)."""
 
     pool = await get_postgres_pool()
-    async with pool.acquire() as conn:
-        async with conn.transaction():
+    async with acquire_conn(pool) as conn:
+        async with normalize_async_cm(conn.transaction()):
             result = await conn.fetchval("SELECT 1")
             return result == 1

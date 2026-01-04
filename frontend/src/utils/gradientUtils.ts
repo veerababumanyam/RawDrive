@@ -21,8 +21,8 @@ export function gradientToCss(config: GradientConfiguration): string {
   }
 
   const colorStops = config.colors
-    .sort((a, b) => a.position - b.position)
-    .map((stop) => `${stop.color} ${stop.position}%`)
+    .sort((a: ColorStop, b: ColorStop) => a.position - b.position)
+    .map((stop: ColorStop) => `${stop.color} ${stop.position}%`)
     .join(', ');
 
   return `linear-gradient(${config.direction}deg, ${colorStops})`;
@@ -118,7 +118,7 @@ export function checkGradientContrast(
   }
 
   // Calculate contrast at each color stop
-  const ratios = config.colors.map((stop) =>
+  const ratios = config.colors.map((stop: ColorStop) =>
     calculateContrastRatio(stop.color, textColor)
   );
 

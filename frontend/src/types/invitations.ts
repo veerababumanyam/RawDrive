@@ -4,33 +4,38 @@
  * Feature: 016-save-the-date
  */
 
+import {
+  InvitationStatus as SharedInvitationStatus,
+  RSVPStatus as SharedRSVPStatus,
+  EventType as SharedEventType,
+  TemplateCategory as SharedTemplateCategory,
+} from '@rawdrive/shared-types';
+import type {
+  InvitationStatus as InvitationStatusType,
+  RSVPStatus as RSVPStatusType,
+  EventType as EventTypeType,
+  TemplateCategory as TemplateCategoryType,
+} from '@rawdrive/shared-types';
+
 // ---------------------------------------------------------------------------
 // Enums / Union Types
 // ---------------------------------------------------------------------------
 
-export type InvitationStatus = 'draft' | 'published' | 'archived' | 'deleted';
+/**
+ * @deprecated Prefer importing directly from @rawdrive/shared-types.
+ * These exports alias the shared package for backward compatibility.
+ */
+export const InvitationStatus = SharedInvitationStatus;
+export type InvitationStatus = InvitationStatusType;
 
-export type EventType =
-  | 'wedding'
-  | 'birthday'
-  | 'anniversary'
-  | 'baby_shower'
-  | 'engagement'
-  | 'festival'
-  | 'corporate'
-  | 'other';
+export const EventType = SharedEventType;
+export type EventType = EventTypeType;
 
-export type TemplateCategory =
-  | 'wedding'
-  | 'birthday'
-  | 'anniversary'
-  | 'baby_shower'
-  | 'engagement'
-  | 'festival'
-  | 'corporate'
-  | 'other';
+export const TemplateCategory = SharedTemplateCategory;
+export type TemplateCategory = TemplateCategoryType;
 
-export type RSVPStatus = 'pending' | 'confirmed' | 'declined' | 'maybe' | 'cancelled';
+export const RSVPStatus = SharedRSVPStatus;
+export type RSVPStatus = RSVPStatusType;
 
 export type RSVPSource = 'web' | 'qr_code' | 'whatsapp' | 'email_link' | 'personal_link';
 

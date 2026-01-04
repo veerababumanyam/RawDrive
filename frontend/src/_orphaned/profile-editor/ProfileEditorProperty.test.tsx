@@ -112,12 +112,16 @@ const profileDataArb = fc.record({
 });
 
 // Arbitrary for version objects
+const toIsoSafe = (d: Date) => (Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString());
+
 const versionArb = fc.record({
   version_id: fc.uuid(),
   profile_id: profileIdArb,
   label: fc.option(fc.string({ maxLength: 100 })),
   snapshot: fc.object(),
-  created_at: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }).map((d) => d.toISOString()),
+  created_at: fc
+    .date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') })
+    .map((d) => toIsoSafe(d)),
   is_auto: fc.boolean(),
 });
 
@@ -309,8 +313,8 @@ describe('Phase 1: Core Infrastructure Property Tests', () => {
           visibilityConfigArb,
           fc.string({ minLength: 1, maxLength: 50 }),
           (config, presetName) => {
-            // Simulate preset storage
-            const presets: Record<string, typeof config> = {};
+            // Simulate preset storage with null-prototype object to avoid key collisions
+            const presets: Record<string, typeof config> = Object.create(null);
             presets[presetName] = config;
 
             // Property: Preset should be retrievable with identical config

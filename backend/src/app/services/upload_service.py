@@ -175,21 +175,19 @@ class UploadService:
         sub_gallery_id: Optional[UUID] = None,
         sha256: Optional[str] = None,
         relative_path: Optional[str] = None,
-        folder_id: Optional[UUID] = None,
     ) -> dict:
         """Create upload session for file upload.
 
         Args:
             workspace_id: Workspace UUID
             user_id: User UUID creating the upload
-            gallery_id: Target gallery UUID (optional)
+            gallery_id: Target gallery UUID (required - all uploads go to galleries)
             filename: Original filename
             mime_type: MIME type
             size_bytes: File size in bytes
             sub_gallery_id: Optional sub-gallery UUID
             sha256: Optional SHA256 checksum (can be provided at commit)
             relative_path: Optional relative path from client (for folder uploads)
-            folder_id: Optional library folder UUID
 
         Returns:
             Dictionary with upload_id, upload_url, headers, expires_at
@@ -241,18 +239,17 @@ class UploadService:
                 """
                 INSERT INTO upload_sessions (
                     upload_id, workspace_id, created_by_user_id,
-                    gallery_id, sub_gallery_id, folder_id,
+                    gallery_id, sub_gallery_id,
                     file_name, mime_type, size_bytes, sha256,
                     resumable_protocol, provider, state, expires_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 """,
                 upload_id,
                 workspace_id,
                 user_id,
                 gallery_id,
                 sub_gallery_id,
-                folder_id,
                 filename,
                 normalized_mime_type,
                 size_bytes,
@@ -327,7 +324,7 @@ class UploadService:
                 """
                 SELECT
                     upload_id, workspace_id, created_by_user_id,
-                    gallery_id, sub_gallery_id, folder_id,
+                    gallery_id, sub_gallery_id,
                     file_name, mime_type, size_bytes, sha256 as session_sha256,
                     state, expires_at, asset_id
                 FROM upload_sessions
@@ -428,26 +425,21 @@ class UploadService:
                 except Exception as e:
                     logger.warning(f"Failed to get image dimensions: {e}")
 
-            # Create asset record
-            # Use 'library' or generic key if no gallery
-            if gallery_id:
-                original_object_key = f"workspaces/{workspace_id}/galleries/{gallery_id}/original/{asset_id}/{session['file_name']}"
-            else:
-                original_object_key = f"workspaces/{workspace_id}/library/original/{asset_id}/{session['file_name']}"
-            
+            # Create asset record - all assets belong to galleries
+            original_object_key = f"workspaces/{workspace_id}/galleries/{gallery_id}/original/{asset_id}/{session['file_name']}"
+
             await conn.execute(
                 """
                 INSERT INTO assets (
-                    asset_id, workspace_id, library_id, folder_id,
+                    asset_id, workspace_id, library_id,
                     type, original_object_key, original_bytes,
                     sha256, mime_type, exif, status, created_by_user_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 """,
                 asset_id,
                 workspace_id,
                 None,
-                session["folder_id"],
                 file_type,
                 original_object_key,
                 len(file_data),

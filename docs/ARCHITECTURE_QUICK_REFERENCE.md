@@ -1,6 +1,6 @@
 # RawDrive Architecture Quick Reference
 
-**Last Updated**: December 17, 2025
+**Last Updated**: January 4, 2026
 
 ## System Overview
 
@@ -22,6 +22,7 @@ RawDrive is a multi-tenant SaaS platform built on a modern, scalable architectur
 ### 3. Frontend Layer
 - **Framework**: React 19 + TypeScript + Vite
 - **Styling**: Tailwind CSS + Framer Motion
+- **Shared Packages**: pnpm workspaces (`@rawdrive/shared-*`)
 - **Deployment**: Hostinger VPS / Kubernetes
 - **Build**: Optimized production builds with code splitting
 
@@ -32,7 +33,8 @@ RawDrive is a multi-tenant SaaS platform built on a modern, scalable architectur
 - **Request Tracing**: X-Request-ID for tracking
 
 ### 5. Backend Services
-- **Runtime**: Node.js 18+ + Express 5 + TypeScript
+- **Runtime**: Python 3.11 + FastAPI + SQLAlchemy
+- **Shared Types**: Generated Pydantic models from TypeScript (`app.shared.*`)
 - **Services**:
   - Auth Service (JWT, OAuth, MFA)
   - Gallery Service (CRUD, sharing)
@@ -43,7 +45,7 @@ RawDrive is a multi-tenant SaaS platform built on a modern, scalable architectur
   - Payment Service (Razorpay, Stripe)
   - AI Service (Gemini, embeddings)
   - Email Service (SendGrid)
-  - Background Jobs (BullMQ)
+  - Background Jobs (Celery)
 
 ### 6. Data Layer
 
@@ -135,6 +137,29 @@ RawDrive is a multi-tenant SaaS platform built on a modern, scalable architectur
 - **AWS S3**: IAM credentials
 - **Azure Blob**: Connection string
 
+### 10. Shared Packages Layer (pnpm Monorepo)
+
+RawDrive uses a **pnpm workspace monorepo** for cross-platform type sharing:
+
+| Package | Purpose | Key Exports |
+|---------|---------|-------------|
+| `@rawdrive/shared-types` | Domain types & enums | `InvitationStatus`, `GalleryStatus`, `GradientConfiguration` |
+| `@rawdrive/shared-constants` | Configuration values | `API_BASE`, `STORAGE`, `AI_THRESHOLDS`, `PAGINATION` |
+| `@rawdrive/shared-validation` | Validation schemas | `isValidHexColor`, `hexColorSchema`, `sanitizeHtml` |
+| `@rawdrive/shared-utils` | Utility functions | `formatRelativeDate`, `formatFileSize`, `truncate` |
+
+**Type Generation Pipeline**:
+- TypeScript is the **single source of truth**
+- JSON Schema generated via `ts-json-schema-generator`
+- Python Pydantic models generated via `datamodel-codegen`
+- Generated modules copied to `backend/src/app/shared/` and `services/*/src/shared/`
+
+**Key Files**:
+- `pnpm-workspace.yaml` - Workspace configuration
+- `scripts/generate-python-types.ts` - TS→Python generator
+- `packages/*/src/` - TypeScript source files
+- `backend/src/app/shared/` - Generated Python modules
+
 ## Key Architectural Principles
 
 ### Multi-Tenancy
@@ -194,14 +219,15 @@ RawDrive is a multi-tenant SaaS platform built on a modern, scalable architectur
 | **Frontend** | React | 19+ |
 | **Frontend Build** | Vite | Latest |
 | **Frontend Styling** | Tailwind CSS | 3.3+ |
-| **Backend Runtime** | Node.js | 18+ |
-| **Backend Framework** | Express | 5+ |
-| **Language** | TypeScript | 5+ |
+| **Backend Runtime** | Python | 3.11+ |
+| **Backend Framework** | FastAPI | 0.115+ |
+| **Language** | TypeScript/Python | 5.2+/3.11+ |
+| **Package Manager** | pnpm | 8+ |
 | **Database** | PostgreSQL | 16+ |
 | **Cache** | Redis | 7+ |
-| **ORM** | Prisma | 5+ |
-| **Validation** | Zod | 3.22+ |
-| **Job Queue** | BullMQ | 4.11+ |
+| **ORM** | SQLAlchemy | 2.0+ |
+| **Validation** | Zod/Pydantic | 4.2+/2.7+ |
+| **Job Queue** | Celery | 5.3+ |
 | **Image Processing** | Sharp | Latest |
 | **Logging** | Winston | 3.10+ |
 | **Security** | Helmet.js | 7+ |
@@ -282,10 +308,26 @@ RawDrive is a multi-tenant SaaS platform built on a modern, scalable architectur
 
 ## Getting Started
 
-1. **Local Development**: `npm run docker:dev:up && npm run dev:all`
-2. **Database Setup**: `cd backend && npm run db:migrate && npm run db:seed`
-3. **Run Tests**: `npm test`
-4. **Build**: `npm run build`
+1. **Local Development**: 
+   ```bash
+   # Full stack
+   docker compose -f infrastructure/docker/docker-compose.yml up -d
+   cd frontend && npm run dev
+   
+   # OR backend-only
+   docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
+   ```
+2. **Database Setup**: 
+   ```bash
+   docker compose -f infrastructure/docker/docker-compose.yml exec backend alembic upgrade head
+   docker compose -f infrastructure/docker/docker-compose.yml exec backend python seed_user.py
+   ```
+3. **Run Tests**: 
+   ```bash
+   cd frontend && npm test
+   docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest
+   ```
+4. **Build**: `cd frontend && npm run build`
 5. **Deploy**: Push to main branch (GitHub Actions handles CI/CD)
 
 ## Support & Questions
@@ -298,6 +340,6 @@ For questions about the architecture:
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: December 17, 2025  
+**Version**: 1.1
+**Last Updated**: January 4, 2026
 **Maintained By**: Engineering Team

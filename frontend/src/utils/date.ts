@@ -3,51 +3,19 @@
  * Helper functions for date formatting and manipulation
  */
 
+import {
+  formatDateISO as sharedFormatDateISO,
+  formatDateTime as sharedFormatDateTime,
+  formatRelativeDate as sharedFormatRelativeDate,
+} from '@rawdrive/shared-utils';
+
 /**
- * Format a date string relative to now (e.g., "2 hours ago", "yesterday")
- * @param dateString ISO date string
- * @returns Formatted relative date string
+ * @deprecated Prefer importing directly from @rawdrive/shared-utils.
+ * These exports alias the shared package for backward compatibility.
  */
-export function formatRelativeDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSeconds < 60) {
-    return 'just now';
-  }
-
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) {
-    return `${diffInMinutes} minute${diffInMinutes !== 1 ? 's' : ''} ago`;
-  }
-
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) {
-    return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`;
-  }
-
-  const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays === 1) {
-    return 'yesterday';
-  }
-  if (diffInDays < 7) {
-    return `${diffInDays} days ago`;
-  }
-
-  const diffInWeeks = Math.floor(diffInDays / 7);
-  if (diffInWeeks < 4) {
-    return `${diffInWeeks} week${diffInWeeks !== 1 ? 's' : ''} ago`;
-  }
-
-  const diffInMonths = Math.floor(diffInDays / 30);
-  if (diffInMonths < 12) {
-    return `${diffInMonths} month${diffInMonths !== 1 ? 's' : ''} ago`;
-  }
-
-  const diffInYears = Math.floor(diffInDays / 365);
-  return `${diffInYears} year${diffInYears !== 1 ? 's' : ''} ago`;
-}
+export const formatRelativeDate = sharedFormatRelativeDate;
+export const formatDateISO = sharedFormatDateISO;
+export const formatDateTime = sharedFormatDateTime;
 
 /**
  * Format a date to a localized string
@@ -65,22 +33,6 @@ export function formatDate(
 ): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', options);
-}
-
-/**
- * Format a date to include time
- * @param dateString ISO date string
- * @returns Formatted date with time string
- */
-export function formatDateTime(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 /**
