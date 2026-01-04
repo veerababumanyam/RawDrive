@@ -226,7 +226,12 @@ export class GalleryService {
       headers['Authorization'] = `Bearer ${tokens.accessToken}`;
     }
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${endpoint}`, {
+    // Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
+    const apiBaseUrl = import.meta.env.VITE_API_URL !== undefined
+      ? import.meta.env.VITE_API_URL
+      : 'http://localhost:8000';
+
+    const response = await fetch(`${apiBaseUrl}${endpoint}`, {
       method: 'POST',
       headers,
       body: formData,
@@ -268,7 +273,12 @@ export class GalleryService {
       headers['Authorization'] = `Bearer ${tokens.accessToken}`;
     }
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${endpoint}`, {
+    // Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
+    const commitApiBaseUrl = import.meta.env.VITE_API_URL !== undefined
+      ? import.meta.env.VITE_API_URL
+      : 'http://localhost:8000';
+
+    const response = await fetch(`${commitApiBaseUrl}${endpoint}`, {
       method: 'POST',
       headers,
       body: formData,

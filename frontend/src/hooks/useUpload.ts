@@ -365,8 +365,10 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         } else {
           // Existing session for retry - get upload URL from backend
           // We need to re-fetch the session to get the correct URL
-          // For now, construct it using localhost as this is a retry scenario
-          const apiBase = 'http://localhost:8000'; // Use local backend for retries
+          // Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
+          const apiBase = import.meta.env.VITE_API_URL !== undefined
+            ? import.meta.env.VITE_API_URL
+            : 'http://localhost:8000';
           uploadUrl = `${apiBase}/api/v1/workspaces/${workspaceId}/uploads/${sessionUploadId}/upload`;
         }
 
