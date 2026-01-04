@@ -6,7 +6,7 @@
   ## Enterprise SaaS Professional Photography Management Platform
 
   [![Version](https://img.shields.io/badge/version-0.2.6-blue.svg)](https://github.com/rawdrive/RawDrive)
-  [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+  [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
   [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://reactjs.org/)
   [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -613,7 +613,13 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This software is proprietary and confidential. All rights reserved.
+
+**Copyright © 2026 RawDrive. All Rights Reserved.**
+
+Unauthorized copying, modification, distribution, or use of this software, via any medium, is strictly prohibited without explicit written permission from RawDrive.
+
+For licensing inquiries, please contact: licensing@rawdrive.com
 
 ---
 
