@@ -36,7 +36,7 @@
 
 ### 🎨 Professional Features
 
-- **✨ AI-Enhanced Curation**: Smart photo selection and automated quality scoring with credit-based system
+- **✨ AI-Enhanced Curation**: Smart photo selection and automated quality scoring
 - **👥 Face Recognition**: Automatic people clustering and identification across photo libraries with privacy controls
 - **🔍 Semantic Search**: Natural language search powered by CLIP embeddings and vector similarity
 - **🎭 Custom Branding**: White-label galleries with custom domains and gradient branding themes
@@ -124,12 +124,12 @@ graph TB
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | **Frontend** | React 19 + TypeScript + Vite + Tailwind CSS | Modern web application with design system |
-| **Backend** | Express 5 + TypeScript + FastAPI | RESTful API services (Node) + AI services (Python) |
+| **Backend** | Python FastAPI + SQLAlchemy | RESTful API services with async support |
 | **AI Service** | Python FastAPI + FastMCP | AI/ML processing and Model Context Protocol |
 | **Database** | PostgreSQL 16 + pgvector + PostGIS | Relational data + vector embeddings + geo search |
 | **Cache** | Redis 7 + BullMQ | Caching, sessions, job queues |
 | **Storage** | Cloudflare R2 / BYOS S3 | Object storage with CDN |
-| **AI Providers** | Gemini / OpenAI / Anthropic / Azure / Local | Multi-provider AI with credit system |
+| **AI Providers** | Gemini / OpenAI / Anthropic / Azure / Local | Multi-provider AI with tier-based access |
 | **Infrastructure** | Docker + Kubernetes | Container orchestration |
 | **Monitoring** | Grafana + Loki + Prometheus | Observability and alerting |
 | **Authentication** | Google OAuth (OIDC) + Local Auth | Enterprise authentication with MFA |
@@ -173,8 +173,8 @@ RawDrive includes a comprehensive design system with:
    # Frontend
    cd frontend && npm install
 
-   # Backend
-   cd ../backend && npm install
+   # Backend (Python)
+   cd ../backend && pip install -r requirements.txt
 
    # AI Service
    cd ../ai-service && pip install -r requirements.txt
@@ -189,8 +189,9 @@ RawDrive includes a comprehensive design system with:
 5. **Initialize database**
    ```bash
    cd backend
-   npm run db:migrate
-   npm run db:seed
+   python setup_db.py
+   alembic upgrade head
+   python seed_user.py
    ```
 
 6. **Start development servers**
@@ -211,13 +212,14 @@ RawDrive includes a comprehensive design system with:
 cd frontend && npm test
 
 # Backend tests
-cd backend && npm test
+cd backend && pytest
 
 # AI Service tests
 cd ai-service && pytest
 
 # Full test suite
-npm run verify
+npm run verify  # Frontend
+cd backend && pytest  # Backend
 ```
 
 ### 📦 Production Build
@@ -244,12 +246,13 @@ RawDrive/
 │   │   ├── services/       # API client services
 │   │   └── types/          # TypeScript type definitions
 │   └── tailwind.config.js   # Tailwind CSS configuration
-├── backend/                 # Express 5 + TypeScript
+├── backend/                 # Python FastAPI + SQLAlchemy
 │   ├── src/
 │   │   ├── app/            # Application core
 │   │   ├── routes/         # API route handlers
 │   │   ├── services/       # Business logic services
 │   │   └── config/         # Configuration modules
+│   ├── migrations/         # Alembic database migrations
 │   └── tests/              # Backend test suites
 ├── ai-service/              # Python FastAPI + AI/ML
 │   ├── src/
@@ -590,7 +593,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 | **SLA Guarantee** | ❌ | ❌ | 99% | 99.9% |
 | **Dedicated Support** | ❌ | ❌ | ❌ | ✅ |
 
-**Trial Period**: 30 days with Business-tier features and 2,000 AI credits
+**Trial Period**: 30 days with Business-tier features
 
 ---
 
