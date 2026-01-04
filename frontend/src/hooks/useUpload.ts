@@ -9,7 +9,7 @@ import { galleryService } from '../services/galleryService';
 import { calculateSHA256 } from '../utils/sha256';
 import { useBrowserCloseWarning } from './useBrowserCloseWarning';
 import { getStoredTokens, isTokenExpired } from '../services/tokenStorage';
-import { refreshAccessToken } from '../services/api';
+import { refreshAccessToken, API_BASE_URL } from '../services/api';
 import type { DuplicateAssetResponse } from '../types/gallery';
 
 export interface UploadFile {
@@ -104,6 +104,10 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [isPaused, setIsPaused] = useState(false);
+  // Trigger to signal queue processing without depending on fluctuating 'files' state (progress updates)
+  const [queueTrigger, setQueueTrigger] = useState(0);
+
+  const bumpQueue = useCallback(() => setQueueTrigger(t => t + 1), []);
 
   // Refs for upload state
   const activeUploadsRef = useRef<Set<string>>(new Set());
@@ -113,6 +117,10 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   const batchStartedRef = useRef<boolean>(false);
   // Track files that have started uploading (prevents duplicate uploads from StrictMode/double effects)
   const startedUploadsRef = useRef<Set<string>>(new Set());
+  // Track completed uploads in current session (prevents re-upload of already-completed files)
+  const completedUploadsRef = useRef<Set<string>>(new Set());
+  // Stable ref for files to avoid closure stale issues in processQueue
+  const filesRef = useRef<UploadFile[]>([]);
 
   // Calculate progress
   const progress = useMemo<UploadProgress>(() => {
@@ -150,6 +158,11 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       averageSpeed,
       estimatedTimeRemaining,
     };
+  }, [files]);
+
+  // Sync filesRef with files state
+  useEffect(() => {
+    filesRef.current = files;
   }, [files]);
 
   const isUploading = progress.uploading > 0 || progress.queued > 0;
@@ -275,8 +288,10 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       }
 
       setFiles((prev) => [...prev, ...processedFiles]);
+      // Trigger queue processing for new files
+      bumpQueue();
     },
-    [validateFile, checkForDuplicates, generateThumbnail, onDuplicateDetected]
+    [validateFile, checkForDuplicates, generateThumbnail, onDuplicateDetected, bumpQueue]
   );
 
   // Remove file
@@ -317,13 +332,36 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         return;
       }
 
+      // === DEDUPLICATION GUARDS (must be BEFORE status change) ===
+      // Check if this file has already started uploading (prevents StrictMode double-invocation)
+      if (startedUploadsRef.current.has(fileId)) {
+        console.log(`[Upload] Skipping duplicate start for file ${fileId}`);
+        return;
+      }
+      // Check if file was already completed in this session
+      if (completedUploadsRef.current.has(fileId)) {
+        console.log(`[Upload] Skipping already-completed file ${fileId}`);
+        return;
+      }
+      // Extra safety: check current filesRef state for completed/verifying (NOT uploading - we're about to set that)
+      const currentFileState = filesRef.current.find(f => f.id === fileId);
+      if (currentFileState && (currentFileState.status === 'completed' || currentFileState.status === 'verifying')) {
+        console.log(`[Upload] Skipping file ${fileId} with status ${currentFileState.status}`);
+        return;
+      }
+      // Mark as started BEFORE any async work
+      startedUploadsRef.current.add(fileId);
+
       try {
         // Update status
         updateFile(fileId, { status: 'uploading', progress: 0 });
 
-        // Check for token expiry before starting
+        // Check for token expiry before starting - fail early if refresh fails
         if (isTokenExpired()) {
-          await refreshAccessToken();
+          const newToken = await refreshAccessToken();
+          if (!newToken) {
+            throw new Error('Session expired. Please log in again to continue uploading.');
+          }
         }
 
         // Calculate SHA256 if not already done
@@ -333,13 +371,6 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         if (pauseStateRef.current.get(fileId)) {
           return;
         }
-
-        // Check if this file has already started uploading (prevents StrictMode double-invocation)
-        if (startedUploadsRef.current.has(fileId)) {
-          console.log(`[Upload] Skipping duplicate start for file ${fileId}`);
-          return;
-        }
-        startedUploadsRef.current.add(fileId);
 
         // Reuse existing session if retrying (prevents duplicate uploads)
         let sessionUploadId = uploadFile.uploadId;
@@ -365,8 +396,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         } else {
           // Existing session for retry - get upload URL from backend
           // We need to re-fetch the session to get the correct URL
-          // For now, construct it using localhost as this is a retry scenario
-          const apiBase = 'http://localhost:8000'; // Use local backend for retries
+          // For now, construct it using the environment-aware API_BASE_URL appropriately
+          const apiBase = API_BASE_URL; 
           uploadUrl = `${apiBase}/api/v1/workspaces/${workspaceId}/uploads/${sessionUploadId}/upload`;
         }
 
@@ -470,6 +501,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
         // Cleanup
         activeUploadsRef.current.delete(fileId);
+        completedUploadsRef.current.add(fileId); // Mark as completed in session
         startedUploadsRef.current.delete(fileId); // Allow re-upload if needed
         if (uploadFile.thumbnail) {
           URL.revokeObjectURL(uploadFile.thumbnail);
@@ -477,6 +509,9 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
         onComplete?.(commitResult.asset_id, fileId);
         onProgress?.(fileId, 100);
+        
+        // Trigger queue to pick up next file
+        bumpQueue();
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Upload failed';
         const retryCount = (uploadFile.retryCount || 0) + 1;
@@ -516,7 +551,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         }
       }
     },
-    [workspaceId, galleryId, subGalleryId, folderId, retryAttempts, retryDelay, updateFile, onComplete, onError, onProgress]
+    [workspaceId, galleryId, subGalleryId, folderId, retryAttempts, retryDelay, updateFile, onComplete, onError, onProgress, bumpQueue]
   );
 
   // Store latest version in ref for recursive calls
@@ -536,8 +571,13 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     }
 
     const availableSlots = maxConcurrent - activeCount;
-    const pendingFiles = files.filter(
-      (f) => (f.status === 'pending' || f.status === 'queued') && !pauseStateRef.current.get(f.id)
+    // Use filesRef.current instead of files to avoid stale closure and dependency churn
+    const currentFiles = filesRef.current;
+    const pendingFiles = currentFiles.filter(
+      (f) => (f.status === 'pending' || f.status === 'queued') && 
+             !pauseStateRef.current.get(f.id) &&
+             !completedUploadsRef.current.has(f.id) &&
+             !startedUploadsRef.current.has(f.id)
     );
 
     const filesToUpload = pendingFiles.slice(0, availableSlots);
@@ -550,7 +590,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         activeUploadsRef.current.delete(file.id);
       });
     }
-  }, [files, isPaused, maxConcurrent, uploadSingleFile, updateFile]);
+  }, [isPaused, maxConcurrent, uploadSingleFile, updateFile]);
 
   // Start uploads
   const startUpload = useCallback(async () => {
@@ -597,7 +637,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       const file = files.find((f) => f.id === fileId);
       if (file && file.status === 'paused') {
         updateFile(fileId, { status: 'pending' });
-        processQueue();
+        bumpQueue();
       }
     } else {
       setIsPaused(false);
@@ -611,9 +651,10 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           return f;
         })
       );
-      processQueue();
+      // Trigger queue
+      bumpQueue();
     }
-  }, [files, updateFile, processQueue]);
+  }, [files, updateFile, bumpQueue]);
 
   // Cancel upload
   const cancelUpload = useCallback((fileId?: string) => {
@@ -640,7 +681,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   // Retry upload
   const retryUpload = useCallback(
     async (fileId: string) => {
-      const file = files.find((f) => f.id === fileId);
+      // Use filesRef to avoid stale closure or dependency on frequently changing files state
+      const file = filesRef.current.find((f) => f.id === fileId);
       if (!file || file.status !== 'error') {
         return;
       }
@@ -656,9 +698,10 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         retryCount: 0,
       });
 
-      await processQueue();
+      // Trigger queue processing
+      bumpQueue();
     },
-    [files, updateFile, processQueue]
+    [updateFile, bumpQueue]
   );
 
   // Clear completed
@@ -694,12 +737,12 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     startedUploadsRef.current.clear();
   }, []);
 
-  // Process queue when files change
+  // Process queue when trigger changes
   useEffect(() => {
     if (!isPaused && activeUploadsRef.current.size < maxConcurrent) {
       processQueue();
     }
-  }, [files, isPaused, maxConcurrent, processQueue]);
+  }, [queueTrigger, isPaused, maxConcurrent, processQueue]);
 
   // Track batch start - when uploading begins
   useEffect(() => {

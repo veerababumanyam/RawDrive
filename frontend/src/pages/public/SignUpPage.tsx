@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Check } from 'lucide-react';
 import { SEOHead } from '../../components/landing';
 import { useAuth } from '../../contexts';
+import useTheme from '../../hooks/useTheme';
 
 /* =============================================================================
    SignUpPage Component
@@ -28,6 +29,7 @@ const passwordRequirements: PasswordRequirement[] = [
 const SignUpPage: React.FC = () => {
   const navigate = useNavigate();
   const { signup, googleOAuthUrl } = useAuth();
+  const { resolvedTheme } = useTheme();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -88,7 +90,10 @@ const SignUpPage: React.FC = () => {
         noIndex
       />
 
-      <div className="min-h-screen bg-hero-gradient flex items-center justify-center px-4 py-8">
+      <div
+        data-theme={resolvedTheme}
+        className="min-h-screen bg-hero-gradient flex items-center justify-center px-4 py-8"
+      >
         {/* Background subtle pattern */}
         <div className="absolute inset-0 hero-pattern-grid opacity-[0.02]" aria-hidden="true" />
 

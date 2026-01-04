@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 import { SEOHead } from '../../components/landing';
 import { useAuth } from '../../contexts';
+import useTheme from '../../hooks/useTheme';
 
 /* =============================================================================
    SignInPage Component
@@ -18,6 +19,7 @@ const SignInPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirect') || '/workspace';
   const { login, googleOAuthUrl } = useAuth();
+  const { resolvedTheme } = useTheme();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -61,7 +63,10 @@ const SignInPage: React.FC = () => {
         noIndex
       />
 
-      <div className="min-h-screen bg-hero-gradient flex items-center justify-center px-4 py-8">
+      <div
+        data-theme={resolvedTheme}
+        className="min-h-screen bg-hero-gradient flex items-center justify-center px-4 py-8"
+      >
         {/* Background subtle pattern */}
         <div className="absolute inset-0 hero-pattern-grid opacity-[0.02]" aria-hidden="true" />
 

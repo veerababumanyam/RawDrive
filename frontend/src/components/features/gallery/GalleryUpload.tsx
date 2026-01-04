@@ -170,15 +170,8 @@ export const GalleryUpload: React.FC<GalleryUploadProps> = ({
     }
   }, [duplicateDialog, addFiles]);
 
-  // Auto-start upload when files are added (queued) and we are not paused or stuck in dialog
-  useEffect(() => {
-    // Only auto-start if we have queued files, aren't already uploading, aren't paused
-    // AND we don't have a duplicate dialog open (which technically blocks the flow before queueing, 
-    // but good to be safe)
-    if (progress.queued > 0 && !isUploading && !isPaused && !duplicateDialog) {
-      startUpload();
-    }
-  }, [progress.queued, isUploading, isPaused, duplicateDialog, startUpload]);
+  // NOTE: Auto-start removed - useUpload.ts:700-705 handles queue processing automatically.
+  // The previous useEffect here caused duplicate uploads when combined with React StrictMode.
 
 
   return (

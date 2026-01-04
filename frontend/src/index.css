@@ -95,6 +95,14 @@
   --color-neutral-900: #0F172A;
   --color-neutral-950: #020617;
 
+  /* Legacy slate/gray aliases for auth utilities */
+  --color-slate-300: #CBD5E1;
+  --color-slate-400: #94A3B8;
+  --color-slate-500: #64748B;
+  --color-gray-50: #F9FAFB;
+  --color-red-400: #F87171;
+  --color-emerald-400: #34D399;
+
   /* Semantic Colors */
   --color-success-50: #F0FDF4;
   --color-success-100: #DCFCE7;
@@ -4486,7 +4494,7 @@ body {
 }
 
 .auth-input::placeholder {
-  color: var(--color-slate-500);
+  color: var(--color-slate-400);
 }
 
 .auth-input:hover:not(:disabled):not(:focus) {
@@ -4516,7 +4524,7 @@ body {
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--color-slate-500);
+  color: var(--color-slate-400);
   pointer-events: none;
 }
 
@@ -4527,7 +4535,7 @@ body {
   top: 50%;
   transform: translateY(-50%);
   padding: 0.25rem;
-  color: var(--color-slate-500);
+  color: var(--color-slate-400);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -4549,7 +4557,7 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
-  color: var(--color-gray-900);
+  color: #1f2937; /* Dark text for white background - visible in both light and dark modes */
   background: white;
   border: none;
   border-radius: 0.75rem;
@@ -4561,7 +4569,7 @@ body {
 }
 
 .auth-btn-google:hover {
-  background: var(--color-gray-50);
+  background: var(--color-neutral-50);
 }
 
 .auth-btn-google:active {
@@ -4589,7 +4597,7 @@ body {
   display: inline-block;
   padding: 0 0.75rem;
   font-size: var(--text-xs);
-  color: var(--color-slate-500);
+  color: var(--color-slate-300);
   background: var(--color-hero-bg);
 }
 
@@ -4665,7 +4673,7 @@ body {
 
 .auth-subheading {
   font-size: var(--text-sm);
-  color: var(--color-slate-400);
+  color: var(--color-slate-300);
 }
 
 .auth-label {
