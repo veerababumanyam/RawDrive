@@ -345,22 +345,23 @@ RawDrive supports multiple storage backends:
 - **Duplicate Detection**: Identify and manage duplicate photos across libraries
 - **Content Analysis**: Advanced image understanding with contextual insights
 
-### AI Credits System
+### AI Features by Tier
 
-RawDrive uses a credit-based system for AI features:
+RawDrive's AI capabilities are included in each subscription tier:
 
-**Credits by Tier:**
-- **Starter**: 100 credits/month
-- **Professional**: 500 credits/month  
-- **Business**: 2,000 credits/month
-- **Enterprise**: 10,000 credits/month
-- **Trial**: 2,000 credits (30-day trial)
+**AI Features Access:**
+- **Starter**: Basic AI tagging and organization
+- **Professional**: Full AI tagging, face detection, and smart search
+- **Business**: Advanced AI curation, duplicate detection, and bulk operations
+- **Enterprise**: Unlimited AI processing with priority queuing and custom models
+- **Trial**: Full Business-tier AI features for 30 days
 
-**Credit Costs:**
-- Photo Analysis: 1 credit
-- Face Detection: 5 credits
-- Smart Curation: 20 credits per gallery
-- Duplicate Detection: 15 credits per batch
+**Available AI Operations:**
+- Automatic photo tagging and categorization
+- Face detection and people clustering
+- Smart gallery curation and photo selection
+- Duplicate detection across libraries
+- Content analysis and metadata enrichment
 
 ### Model Context Protocol (MCP)
 
