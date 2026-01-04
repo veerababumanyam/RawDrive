@@ -84,7 +84,10 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
         return null;
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      // Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
+      const apiUrl = import.meta.env.VITE_API_URL !== undefined
+        ? import.meta.env.VITE_API_URL
+        : 'http://localhost:8000';
       // Convert http/https to ws/wss
       const wsUrl = apiUrl.replace(/^http/, 'ws');
       return `${wsUrl}/api/v1/ws?token=${encodeURIComponent(token)}`;

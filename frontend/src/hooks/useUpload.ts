@@ -396,8 +396,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         } else {
           // Existing session for retry - get upload URL from backend
           // We need to re-fetch the session to get the correct URL
-          // For now, construct it using the environment-aware API_BASE_URL appropriately
-          const apiBase = API_BASE_URL; 
+          // Use API_BASE_URL which properly handles VITE_API_URL (even empty string for relative URLs)
+          const apiBase = API_BASE_URL;
           uploadUrl = `${apiBase}/api/v1/workspaces/${workspaceId}/uploads/${sessionUploadId}/upload`;
         }
 

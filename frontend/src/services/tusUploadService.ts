@@ -244,7 +244,10 @@ export class TusUploadClient {
       headers['Authorization'] = `Bearer ${tokens.accessToken}`;
     }
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    // Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
+    const apiUrl = import.meta.env.VITE_API_URL !== undefined
+      ? import.meta.env.VITE_API_URL
+      : 'http://localhost:8000';
     const endpoint = `${apiUrl}/api/v1/workspaces/${this.options.workspaceId}/uploads/${this.uploadId}/chunk`;
 
     const response = await fetch(endpoint, {

@@ -5,7 +5,10 @@
 
 import type { RecycleBinItem } from '../../../types/recycleBin';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
+const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined
+  ? import.meta.env.VITE_API_URL
+  : 'http://localhost:8000';
 
 /**
  * Build a full asset URL from a thumbnail URL
