@@ -205,7 +205,9 @@ export function useQualityAnalysis({
   // Start analysis mutation
   const startMutation = useMutation({
     mutationFn: (options?: { sessionId?: string }) =>
-      curationService.startQualityAnalysis(workspaceId, galleryId, options),
+      curationService.startQualityAnalysis(workspaceId, galleryId,
+        options?.sessionId ? { session_id: options.sessionId } : undefined
+      ),
     onSuccess: () => {
       // Invalidate and refetch
       queryClient.invalidateQueries({

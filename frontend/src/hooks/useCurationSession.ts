@@ -106,24 +106,32 @@ export function useCurationSession({
   const queryClient = useQueryClient();
   const prevStatusRef = useRef<CurationStatus | null>(null);
 
-  // Fetch active session
+  // Fetch active session by filtering for non-terminal statuses
   const {
-    data: activeSession,
+    data: activeSessionData,
     isLoading: isLoadingActive,
     error: activeError,
     refetch: refetchActive,
   } = useQuery({
     queryKey: CURATION_KEYS.active(workspaceId, galleryId),
-    queryFn: () => curationService.getActiveSession(workspaceId, galleryId),
+    queryFn: async () => {
+      // Get sessions and find the first active one
+      const response = await curationService.listSessions(workspaceId, galleryId, { limit: 10 });
+      const activeSessions = response.sessions.filter(s => isActiveStatus(s.status));
+      return activeSessions.length > 0 ? activeSessions[0] : null;
+    },
     enabled: !!workspaceId && !!galleryId,
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Poll while session is active
+      const data = query.state.data;
       if (enablePolling && data && isActiveStatus(data.status)) {
         return POLLING_INTERVAL_MS;
       }
       return false;
     },
   });
+
+  const activeSession = activeSessionData ?? null;
 
   // Fetch session history
   const {
