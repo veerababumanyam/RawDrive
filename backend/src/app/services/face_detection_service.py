@@ -48,7 +48,9 @@ logger = logging.getLogger(__name__)
 
 
 # Default minimum confidence for storing faces
-DEFAULT_MIN_CONFIDENCE = 0.3
+# Set to 0.5 as a balance between including real faces and filtering false positives
+# Note: 0.3 was too low (detected furniture/objects as faces)
+DEFAULT_MIN_CONFIDENCE = 0.5
 
 # Default minimum photo dimensions for face detection
 MIN_PHOTO_WIDTH = 50
@@ -609,7 +611,12 @@ class FaceDetectionService:
                     workspace_id, photo_id, status, priority
                 )
                 VALUES ($1, $2, 'pending', $3)
-                ON CONFLICT (photo_id) DO NOTHING
+                ON CONFLICT (photo_id) DO UPDATE SET
+                    status = 'pending',
+                    priority = GREATEST(face_detection_jobs.priority, $3),
+                    error_message = NULL,
+                    retry_count = 0
+                WHERE face_detection_jobs.status = 'failed'
                 RETURNING id
                 """,
                 workspace_id,
@@ -718,13 +725,15 @@ class FaceDetectionService:
     
     async def _get_clustering_confidence_threshold(self) -> float:
         """Get confidence threshold for auto-clustering eligibility."""
+        # Set to 0.5 to balance between catching real faces and filtering false positives
+        DEFAULT_CLUSTERING_THRESHOLD = 0.5
         try:
             value = await self.config_service.get_face_detection_setting(
                 "clustering_confidence_threshold"
             )
-            return float(value) if value else 0.6
+            return float(value) if value else DEFAULT_CLUSTERING_THRESHOLD
         except Exception:
-            return 0.6
+            return DEFAULT_CLUSTERING_THRESHOLD
 
 
 # Singleton instance

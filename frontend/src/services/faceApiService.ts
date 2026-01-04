@@ -185,7 +185,8 @@ class FaceApiService {
         if (options?.page) params.set('page', String(options.page));
 
         const response = await apiClient.get<{ data: FaceGroupWithGalleryStats[]; meta: { total: number } }>(
-            `${this.baseUrl}/galleries/${galleryId}/face-groups?${params}`
+            `${this.baseUrl}/galleries/${galleryId}/face-groups?${params}`,
+            { headers: { 'X-Workspace-ID': workspaceId } }
         );
         const result = extractData(response);
 
@@ -265,10 +266,11 @@ class FaceApiService {
 
     /**
      * Delete a face group
+     * Note: Backend route is /face-groups/{group_id} (not workspace-scoped)
      */
     async deleteFaceGroup(workspaceId: string, groupId: string): Promise<void> {
         const response = await apiClient.delete(
-            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/${groupId}`
+            `${this.baseUrl}/face-groups/${groupId}`
         );
         if (response.error) {
             throw new Error(response.error.message || 'Failed to delete face group');
@@ -589,6 +591,25 @@ class FaceApiService {
             total_photos?: number;
             message: string;
         }>(`${this.baseUrl}/workspaces/${workspaceId}/galleries/${galleryId}/scan-faces`);
+        return extractData(response);
+    }
+
+    /**
+     * Cluster all ungrouped faces in a workspace
+     * This triggers clustering for faces that were detected but not automatically grouped
+     */
+    async clusterUngroupedFaces(
+        workspaceId: string
+    ): Promise<{
+        assigned_to_existing_groups: number;
+        new_groups_created: number;
+        message: string;
+    }> {
+        const response = await apiClient.post<{
+            assigned_to_existing_groups: number;
+            new_groups_created: number;
+            message: string;
+        }>(`${this.baseUrl}/workspaces/${workspaceId}/face-groups/cluster-ungrouped`);
         return extractData(response);
     }
 

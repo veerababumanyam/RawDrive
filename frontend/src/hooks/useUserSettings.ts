@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { userSettingsService } from '../services/userSettingsService';
+import { useAuth } from '../contexts/AuthContext';
 import type {
   ExtendedUserProfile,
   UpdateProfileRequest,
@@ -52,6 +53,7 @@ export const useUserProfile = ({
   const [profile, setProfile] = useState<ExtendedUserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const { refreshUser } = useAuth();
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -73,21 +75,25 @@ export const useUserProfile = ({
     }
   }, [autoFetch, fetchProfile]);
 
-  const updateProfile = useCallback(async (data: UpdateProfileRequest) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const updated = await userSettingsService.updateProfile(data);
-      setProfile(updated);
-      return updated;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to update profile');
-      setError(error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const updateProfile = useCallback(
+    async (data: UpdateProfileRequest) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const updated = await userSettingsService.updateProfile(data);
+        setProfile(updated);
+        await refreshUser().catch(() => undefined);
+        return updated;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to update profile');
+        setError(error);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [refreshUser]
+  );
 
   const uploadAvatar = useCallback(
     async (
@@ -102,6 +108,7 @@ export const useUserProfile = ({
         if (profile) {
           setProfile({ ...profile, avatar_url: result.avatar_url });
         }
+        await refreshUser().catch(() => undefined);
         return result;
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Failed to upload avatar');
@@ -111,7 +118,7 @@ export const useUserProfile = ({
         setLoading(false);
       }
     },
-    [profile]
+    [profile, refreshUser]
   );
 
   const deleteAvatar = useCallback(async () => {
@@ -123,6 +130,7 @@ export const useUserProfile = ({
       if (profile) {
         setProfile({ ...profile, avatar_url: null });
       }
+      await refreshUser().catch(() => undefined);
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to delete avatar');
       setError(error);
@@ -130,7 +138,7 @@ export const useUserProfile = ({
     } finally {
       setLoading(false);
     }
-  }, [profile]);
+  }, [profile, refreshUser]);
 
   const requestEmailChange = useCallback(
     async (newEmail: string, password: string) => {

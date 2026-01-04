@@ -50,7 +50,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_SIMILARITY_THRESHOLD = 0.7
 
 # Default confidence threshold for auto-clustering eligibility
-DEFAULT_CONFIDENCE_THRESHOLD = 0.6
+# Set to 0.5 as a balance between including real faces and filtering false positives
+# Note: 0.3 was too low (detected furniture), 0.6 was too strict (missed real faces)
+DEFAULT_CONFIDENCE_THRESHOLD = 0.5
 
 
 class FaceClusterService:

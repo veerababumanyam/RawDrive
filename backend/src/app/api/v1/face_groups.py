@@ -130,6 +130,14 @@ async def list_face_groups(
         representative_thumbnail_url = None
         if g.get("rep_face_id") and g.get("rep_thumbnail_urls"):
             thumbnail_urls = g.get("rep_thumbnail_urls")
+            # Handle both dict and double-encoded JSON string formats
+            # (legacy data may have been stored as JSON strings)
+            if isinstance(thumbnail_urls, str):
+                import json
+                try:
+                    thumbnail_urls = json.loads(thumbnail_urls)
+                except (json.JSONDecodeError, TypeError):
+                    thumbnail_urls = None
             if isinstance(thumbnail_urls, dict) and thumbnail_urls.get("medium"):
                 url_data = signed_url_service.generate_face_thumbnail_url(
                     workspace_id=workspace_id,
@@ -182,7 +190,7 @@ async def list_gallery_face_groups(
     search: Annotated[Optional[str], Query(description="Search by person name")] = None,
 ):
     """List face groups for a gallery."""
-    workspace_id = workspace_access["workspace_id"]
+    workspace_id = workspace_access[1]
     offset = (page - 1) * limit
 
     # 1. Get groups with stats
@@ -201,6 +209,14 @@ async def list_gallery_face_groups(
         representative_thumbnail_url = None
         if g.get("rep_face_id") and g.get("rep_thumbnail_urls"):
             thumbnail_urls = g.get("rep_thumbnail_urls")
+            # Handle both dict and double-encoded JSON string formats
+            # (legacy data may have been stored as JSON strings)
+            if isinstance(thumbnail_urls, str):
+                import json
+                try:
+                    thumbnail_urls = json.loads(thumbnail_urls)
+                except (json.JSONDecodeError, TypeError):
+                    thumbnail_urls = None
             if isinstance(thumbnail_urls, dict) and thumbnail_urls.get("medium"):
                 url_data = signed_url_service.generate_face_thumbnail_url(
                     workspace_id=workspace_id,
@@ -237,6 +253,42 @@ async def list_gallery_face_groups(
             total_pages=total_pages,
         ),
     )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/face-groups/cluster-ungrouped",
+    status_code=status.HTTP_200_OK,
+    summary="Cluster ungrouped faces",
+    description="Cluster all ungrouped faces in the workspace into face groups.",
+)
+async def cluster_ungrouped_faces(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    cluster_service: ClusterServiceDep,
+) -> dict:
+    """Cluster all ungrouped faces in a workspace.
+
+    This endpoint triggers clustering for faces that were detected but not
+    automatically clustered (e.g., due to low confidence scores).
+    """
+    result = await cluster_service.cluster_all_ungrouped(workspace_id)
+
+    logger.info(
+        "Clustered ungrouped faces",
+        extra={
+            "workspace_id": str(workspace_id),
+            "user_id": str(current_user.user_id),
+            "assigned": result["assigned"],
+            "new_groups": result["new_groups"],
+        },
+    )
+
+    return {
+        "assigned_to_existing_groups": result["assigned"],
+        "new_groups_created": result["new_groups"],
+        "message": f"Clustered {result['assigned'] + result['new_groups']} faces",
+    }
 
 
 @router.post(
@@ -285,7 +337,7 @@ async def get_face_group(
     face_repo: FaceRepoDep,
 ):
     """Get face group details with sample faces."""
-    workspace_id = workspace_access["workspace_id"]
+    workspace_id = workspace_access[1]
     
     group = await group_repo.find_by_id(group_id, workspace_id)
     if not group:
@@ -340,7 +392,7 @@ async def update_face_group(
     group_repo: GroupRepoDep,
 ):
     """Update a face group."""
-    workspace_id = workspace_access["workspace_id"]
+    workspace_id = workspace_access[1]
     
     # Build update dict
     updates = {}
@@ -483,7 +535,7 @@ async def delete_face_group(
     group_repo: GroupRepoDep,
 ):
     """Delete a face group (faces become ungrouped)."""
-    workspace_id = workspace_access["workspace_id"]
+    workspace_id = workspace_access[1]
     
     deleted = await group_repo.delete(group_id, workspace_id)
     
@@ -519,7 +571,7 @@ async def merge_face_groups(
     cluster_service: ClusterServiceDep,
 ):
     """Merge two face groups."""
-    workspace_id = workspace_access["workspace_id"]
+    workspace_id = workspace_access[1]
     
     try:
         merged_group = await cluster_service.merge_groups(
@@ -556,7 +608,7 @@ async def split_face_group(
     cluster_service: ClusterServiceDep,
 ):
     """Split faces from a group into a new group."""
-    workspace_id = workspace_access["workspace_id"]
+    workspace_id = workspace_access[1]
 
     try:
         new_group = await cluster_service.split_group(
@@ -1013,8 +1065,7 @@ async def get_photos_by_face_group(
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     limit: Annotated[int, Query(ge=1, le=500, description="Items per page")] = 100,
 ):
-    """Get all photo IDs containing faces from a specific face group."""
-    workspace_id = workspace_access["workspace_id"]
+    workspace_id = workspace_access[1]
     offset = (page - 1) * limit
 
     # Verify group exists
@@ -1060,8 +1111,7 @@ async def list_group_faces(
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
 ):
-    """List all faces in a group."""
-    workspace_id = workspace_access["workspace_id"]
+    workspace_id = workspace_access[1]
     offset = (page - 1) * limit
     
     # Verify group exists

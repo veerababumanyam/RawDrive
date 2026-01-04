@@ -6,6 +6,7 @@ import {
   Bell,
   ChevronDown,
   User,
+  Building2,
   Settings,
   LogOut,
   Moon,
@@ -120,9 +121,10 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const userMenuItems = [
-    { id: 'profile', label: 'Profile', icon: <User size={16} />, path: '/workspace/settings/profile' },
+    { id: 'user-profile', label: 'My Profile', icon: <User size={16} />, path: '/settings?tab=profile' },
+    { id: 'company-profile', label: 'Company Profile', icon: <Building2 size={16} />, path: '/workspace/settings/profile' },
     { id: 'billing', label: 'Billing', icon: <CreditCard size={16} />, path: '/workspace/settings/billing' },
-    { id: 'settings', label: 'Settings', icon: <Settings size={16} />, path: '/workspace/settings' },
+    { id: 'settings', label: 'Workspace Settings', icon: <Settings size={16} />, path: '/workspace/settings' },
     { id: 'help', label: 'Help & Support', icon: <HelpCircle size={16} />, path: '/workspace/help' },
   ];
 

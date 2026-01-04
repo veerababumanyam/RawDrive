@@ -12,6 +12,7 @@ import { SubscriptionBanner } from '../subscription';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../contexts/AuthContext';
 import { useStorageUsage } from '../../hooks/useStorageUsage';
+import { useAvatarUrl } from '../../hooks/useAvatarUrl';
 
 /* =============================================================================
    WorkspaceLayout Component
@@ -78,12 +79,15 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
   const storageUsedBytes = storageUsage?.storage_used_bytes || 0;
   const storageLimitBytes = storageUsage?.storage_limit_bytes || (1 * 1024 * 1024 * 1024); // Default 1GB
 
+  // Resolve avatar URL (handles protected endpoints by fetching blob with auth)
+  const headerAvatar = useAvatarUrl(user?.avatarUrl);
+
   // Build user object for header
   const headerUser = user
     ? {
         name: user.displayName || user.email,
         email: user.email,
-        avatar: user.avatarUrl,
+        avatar: headerAvatar,
       }
     : { name: 'User', email: '' };
 

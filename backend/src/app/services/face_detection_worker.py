@@ -541,17 +541,17 @@ class FaceDetectionWorker:
         thumbnail_urls: dict[str, str],
     ) -> None:
         """Update face with generated thumbnail URLs."""
-        import json
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Cast the JSON string to jsonb type explicitly
+            # Pass dict directly - asyncpg handles dict -> JSONB conversion
+            # Do NOT use json.dumps() as it would double-encode the JSON
             await conn.execute(
                 """
                 UPDATE faces
-                SET thumbnail_urls = $1::jsonb, updated_at = NOW()
+                SET thumbnail_urls = $1, updated_at = NOW()
                 WHERE id = $2 AND workspace_id = $3
                 """,
-                json.dumps(thumbnail_urls),
+                thumbnail_urls,  # asyncpg converts dict to JSONB directly
                 face_id,
                 workspace_id,
             )

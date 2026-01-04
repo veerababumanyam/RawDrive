@@ -592,53 +592,7 @@ async def add_assets_to_gallery(
         raise InternalError("Failed to add assets to gallery")
 
 
-@router.delete(
-    "/{gallery_id}/assets",
-    response_model=BatchAssetOperationResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Remove assets from gallery",
-    responses={
-        403: {"model": ErrorResponse, "description": "Access denied"},
-        404: {"model": ErrorResponse, "description": "Gallery not found"},
-    },
-)
-async def remove_assets_from_gallery(
-    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
-    workspace_access: WorkspaceAccessDep,
-    current_user: CurrentUserDep,
-    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
-    request: BatchAssetOperationRequest,
-) -> BatchAssetOperationResponse:
-    """Remove assets from a gallery (unlink)."""
-    service = get_gallery_service()
-    try:
-        result = await service.remove_assets(
-            workspace_id=workspace_id,
-            gallery_id=gallery_id,
-            asset_ids=request.asset_ids,
-        )
 
-        # Invalidate AI caches when gallery content changes
-        if result["removed_count"] > 0:
-            story_service = get_gallery_story_service()
-            curation_service = get_smart_curation_service()
-            await story_service.invalidate_story_cache(gallery_id)
-            await curation_service.invalidate_curation_cache(gallery_id)
-
-        return BatchAssetOperationResponse(count=result["removed_count"])
-    except GalleryNotFoundError as e:
-        raise NotFoundError("Gallery", str(gallery_id))
-    except Exception as e:
-        logger.exception(
-            "Failed to remove assets from gallery",
-            extra={
-                "workspace_id": str(workspace_id),
-                "gallery_id": str(gallery_id),
-                "asset_ids": [str(a) for a in request.asset_ids],
-                "error": str(e),
-            }
-        )
-        raise InternalError("Failed to remove assets from gallery")
 
 
 @router.post(

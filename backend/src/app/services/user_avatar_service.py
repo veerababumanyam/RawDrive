@@ -109,6 +109,12 @@ class UserAvatarUploadResult(TypedDict):
     thumbnails: dict[str, str]  # size name -> url
 
 
+class UserAvatarDownloadResult(TypedDict):
+    """Result of generating an avatar download URL."""
+
+    url: str
+
+
 # ---------------------------------------------------------------------------
 # UserAvatarService
 # ---------------------------------------------------------------------------
@@ -185,6 +191,70 @@ class UserAvatarService:
         Format: user-avatars/{user_id}/{size}.jpg
         """
         return f"user-avatars/{user_id}/{size}.jpg"
+
+    async def get_avatar_download_url(self, user_id: UUID, size: str) -> UserAvatarDownloadResult:
+        """Get a public (or presigned) URL for a user's avatar.
+
+        If a CDN/public base URL is configured, return a direct URL.
+        Otherwise, return a short-lived presigned URL from R2.
+        """
+
+        if size not in USER_AVATAR_SIZES:
+            raise UserAvatarError("Invalid avatar size", "INVALID_SIZE")
+
+        key = self._build_avatar_key(user_id, size)
+
+        # Prefer public CDN/base URL when configured
+        if self.avatar_base_url:
+            return {"url": f"{self.avatar_base_url}/{key}"}
+
+        # Fallback: generate presigned URL
+        try:
+            client = self.s3_client
+            url = client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket_name, "Key": key},
+                ExpiresIn=900,  # 15 minutes
+            )
+            return {"url": url}
+        except Exception as e:
+            logger.error("Failed to generate avatar presigned URL", extra={"user_id": str(user_id), "size": size, "error": str(e)})
+            raise UserAvatarError("Failed to generate avatar URL", "URL_GENERATION_FAILED") from e
+
+    async def get_avatar_bytes(self, user_id: UUID, size: str) -> tuple[bytes, str]:
+        """Fetch avatar bytes from storage for proxy streaming.
+
+        Returns (data, content_type).
+        """
+
+        if size not in USER_AVATAR_SIZES:
+            raise UserAvatarError("Invalid avatar size", "INVALID_SIZE")
+
+        key = self._build_avatar_key(user_id, size)
+
+        try:
+            loop = asyncio.get_event_loop()
+            obj = await loop.run_in_executor(
+                self.executor,
+                lambda: self.s3_client.get_object(Bucket=self.bucket_name, Key=key),
+            )
+
+            body = obj.get("Body")
+            if body is None:
+                raise UserAvatarError("Avatar not found", "NOT_FOUND")
+
+            data: bytes = await loop.run_in_executor(self.executor, body.read)
+            content_type = obj.get("ContentType") or "image/jpeg"
+            return data, content_type
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code") if hasattr(e, "response") else None
+            if code in ("NoSuchKey", "404"):
+                raise UserAvatarError("Avatar not found", "NOT_FOUND") from e
+            logger.error("Failed to fetch avatar bytes", extra={"user_id": str(user_id), "size": size, "error": str(e)})
+            raise UserAvatarError("Failed to fetch avatar", "FETCH_FAILED") from e
+        except Exception as e:
+            logger.error("Unexpected error fetching avatar bytes", extra={"user_id": str(user_id), "size": size, "error": str(e)})
+            raise UserAvatarError("Failed to fetch avatar", "FETCH_FAILED") from e
 
     async def upload_avatar(
         self,

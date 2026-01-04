@@ -13,7 +13,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Lock as LockIcon } from 'lucide-react';
+import { ArrowLeft, Lock as LockIcon, ScanFace } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useGallery } from '../../hooks/useGallery';
 import { useGalleryAssets } from '../../hooks/useGalleryAssets';
@@ -41,6 +41,7 @@ import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmation
 import { useToast } from '../../components/ui/Toast';
 import { useSearch } from '../../contexts/SearchContext';
 import { galleryService } from '../../services/galleryService';
+import { faceApiService } from '../../services/faceApiService';
 import { SignedUrlProvider } from '../../contexts/SignedUrlContext';
 import { StoryGenerator, SmartCurationPanel } from '../../components/features/ai';
 import { useAIFeatureToggles } from '../../hooks/useGeminiSettings';
@@ -238,6 +239,35 @@ const GalleryDetailPage: React.FC = () => {
 
     setShowSmartCurationModal(true);
   }, [workspace?.workspace_id, gallery, isAIFeatureReady, filteredStats.totalItems, addToast]);
+
+  // Handle Scan Faces
+  const handleScanFaces = useCallback(async () => {
+    if (!workspace?.workspace_id || !galleryId) return;
+
+    try {
+      addToast({ message: 'Starting face scan...', variant: 'info' });
+      const result = await faceApiService.scanGalleryFaces(workspace.workspace_id, galleryId);
+
+      if (result.jobs_queued > 0) {
+        addToast({
+          message: result.message || `Scanning ${result.jobs_queued} new photos`,
+          variant: 'success',
+        });
+      } else if (result.pending && result.pending > 0) {
+        addToast({
+          message: `Scan already in progress: ${result.pending} photos pending`,
+          variant: 'info',
+        });
+      } else {
+        addToast({
+          message: 'No new faces to scan',
+          variant: 'info',
+        });
+      }
+    } catch (error) {
+      addToast({ message: 'Failed to start face scan', variant: 'error' });
+    }
+  }, [workspace?.workspace_id, galleryId, addToast]);
 
   // WebSocket for real-time updates
   useSocket({
@@ -834,6 +864,7 @@ const GalleryDetailPage: React.FC = () => {
             hasPhotos={(gallery.stats?.total_items || 0) > 0}
             onViewAsClient={() => window.open(`/g/${gallery.gallery_id}`, '_blank')}
             onFindPeople={() => setShowPeoplePanel(true)}
+            onScanFaces={handleScanFaces}
             onAIStory={handleOpenAIStory}
             onSmartCurate={handleOpenSmartCurate}
             onShare={() => setShowShareDialog(true)}

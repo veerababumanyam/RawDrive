@@ -17,6 +17,7 @@ import {
   Trash2,
   Globe,
   EyeOff,
+  ScanFace,
 } from 'lucide-react';
 
 export interface GalleryActionBarProps {
@@ -27,7 +28,10 @@ export interface GalleryActionBarProps {
   /** Callback for View as Client action */
   onViewAsClient?: () => void;
   /** Callback for Find People action */
+  /** Callback for Find People action */
   onFindPeople?: () => void;
+  /** Callback for Scan Faces action */
+  onScanFaces?: () => void;
   /** Callback for AI Story action */
   onAIStory?: () => void;
   /** Callback for Smart Curate action */
@@ -55,6 +59,7 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
   hasPhotos = true,
   onViewAsClient,
   onFindPeople,
+  onScanFaces,
   onAIStory,
   onSmartCurate,
   onShare,
@@ -93,6 +98,18 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             >
               <Users size={16} className="flex-shrink-0" />
               <span className="hidden sm:inline">Find People</span>
+            </button>
+          )}
+
+          {/* Scan Faces - Purple (AI) */}
+          {onScanFaces && (
+            <button
+              onClick={onScanFaces}
+              className="btn-gallery-action btn-action-purple min-h-[36px] sm:min-h-[38px]"
+              aria-label="Scan Faces"
+            >
+              <ScanFace size={16} className="flex-shrink-0" />
+              <span className="hidden sm:inline">Scan Faces</span>
             </button>
           )}
 

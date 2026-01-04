@@ -40,11 +40,7 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
     // Use gallery-scoped face groups with gallery-specific stats
     const [groups, setGroups] = useState<FaceGroupWithGalleryStats[]>([]);
     const [loading, setLoading] = useState(false);
-    const [scanStatus, setScanStatus] = useState<{
-        scanning: boolean;
-        message?: string;
-        pending?: number;
-    }>({ scanning: false });
+
     const [searchQuery, setSearchQuery] = useState('');
     const [editingName, setEditingName] = useState<string | null>(null);
     const [newName, setNewName] = useState('');
@@ -84,88 +80,44 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
         }
     }, [workspace?.workspace_id, galleryId, addToast]);
 
-    // Auto-scan gallery for new unscanned faces (smart incremental scan)
-    const autoScanGallery = useCallback(async () => {
-        if (!workspace?.workspace_id || !galleryId) return;
-
-        setScanStatus({ scanning: true, message: 'Checking for new photos...' });
-        try {
-            const result = await faceApiService.scanGalleryFaces(workspace.workspace_id, galleryId);
-            
-            // Update status based on response
-            if (result.jobs_queued > 0) {
-                setScanStatus({ 
-                    scanning: true, 
-                    message: result.message,
-                    pending: result.jobs_queued + (result.pending || 0)
-                });
-                // Poll for completion if jobs were queued
-                pollForCompletion();
-            } else if (result.pending && result.pending > 0) {
-                setScanStatus({ 
-                    scanning: true, 
-                    message: `Processing ${result.pending} photo${result.pending !== 1 ? 's' : ''}...`,
-                    pending: result.pending
-                });
-                pollForCompletion();
-            } else {
-                // All photos already scanned
-                setScanStatus({ scanning: false });
-            }
-        } catch (error) {
-            console.error('Failed to auto-scan gallery:', error);
-            setScanStatus({ scanning: false });
-            // Don't show error toast for auto-scan - it's background operation
-        }
-    }, [workspace?.workspace_id, galleryId]);
-
-    // Poll for scan completion and refresh groups
-    const pollForCompletion = useCallback(() => {
-        let pollCount = 0;
-        const maxPolls = 60; // 5 minutes max (5 sec intervals)
-        
-        const pollInterval = setInterval(async () => {
-            pollCount++;
-            
-            if (!workspace?.workspace_id || pollCount > maxPolls) {
-                clearInterval(pollInterval);
-                setScanStatus({ scanning: false });
-                return;
-            }
-            
-            try {
-                // Check scan status
-                const result = await faceApiService.scanGalleryFaces(workspace.workspace_id, galleryId);
-                
-                if (result.jobs_queued === 0 && (result.pending || 0) === 0) {
-                    // Scanning complete - refresh groups
-                    clearInterval(pollInterval);
-                    setScanStatus({ scanning: false });
-                    fetchGroups();
-                } else {
-                    setScanStatus({
-                        scanning: true,
-                        message: `Processing ${result.pending || 0} photo${(result.pending || 0) !== 1 ? 's' : ''}...`,
-                        pending: result.pending || 0
-                    });
-                }
-            } catch (error) {
-                // Ignore polling errors
-            }
-        }, 5000); // Poll every 5 seconds
-        
-        // Cleanup on unmount
-        return () => clearInterval(pollInterval);
-    }, [workspace?.workspace_id, galleryId, fetchGroups]);
-
-    // Fetch on open and auto-trigger scan for new photos
+    // Fetch on open
     useEffect(() => {
         if (isOpen) {
             fetchGroups();
-            // Auto-scan for new unscanned photos (smart - only scans new ones)
-            autoScanGallery();
         }
-    }, [isOpen, fetchGroups, autoScanGallery]);
+    }, [isOpen, fetchGroups]);
+
+    // Cluster ungrouped faces
+    const handleClusterUngrouped = useCallback(async () => {
+        if (!workspace?.workspace_id) return;
+
+        setLoading(true);
+        try {
+            const result = await faceApiService.clusterUngroupedFaces(workspace.workspace_id);
+
+            if (result.assigned_to_existing_groups > 0 || result.new_groups_created > 0) {
+                addToast({
+                    message: `Grouped ${result.assigned_to_existing_groups + result.new_groups_created} faces into ${result.new_groups_created} new groups`,
+                    variant: 'success',
+                });
+                // Refresh the groups list
+                await fetchGroups();
+            } else {
+                addToast({
+                    message: 'No ungrouped faces found to cluster',
+                    variant: 'info',
+                });
+            }
+        } catch (error) {
+            console.error('Failed to cluster ungrouped faces:', error);
+            addToast({
+                message: 'Failed to group faces. Please try again.',
+                variant: 'error',
+            });
+        } finally {
+            setLoading(false);
+        }
+    }, [workspace?.workspace_id, addToast, fetchGroups]);
 
     // Fetch merge suggestions when entering selection mode
     const fetchMergeSuggestions = useCallback(async () => {
@@ -418,15 +370,7 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                         </div>
                     )}
 
-                    {/* Scan Status Indicator */}
-                    {scanStatus.scanning && (
-                        <div className="mb-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                            <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                <span>{scanStatus.message || 'Scanning for faces...'}</span>
-                            </div>
-                        </div>
-                    )}
+
 
                     {/* Search */}
                     <div className="relative">
@@ -452,9 +396,19 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                         <div className="flex flex-col items-center justify-center py-12 text-text-secondary">
                             <UserCircle className="w-16 h-16 mb-4 opacity-50" />
                             <p className="text-center mb-2">No people detected yet</p>
-                            <p className="text-sm text-center opacity-75">
-                                Face detection runs automatically when photos are uploaded
+                            <p className="text-sm text-center opacity-75 mb-4">
+                                Face detection runs automatically when photos are uploaded.
+                                If faces were detected but not grouped, try clustering them.
                             </p>
+                            <AppButton
+                                variant="primary"
+                                size="sm"
+                                onClick={handleClusterUngrouped}
+                                disabled={loading}
+                            >
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                                Group Detected Faces
+                            </AppButton>
                         </div>
                     ) : (
                         <div className="grid grid-cols-3 gap-3">

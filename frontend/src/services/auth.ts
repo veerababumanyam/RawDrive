@@ -5,11 +5,11 @@
  */
 
 import { apiClient } from './api';
-import { 
-  getStoredTokens, 
-  setStoredTokens, 
+import {
+  getStoredTokens,
+  setStoredTokens,
   clearStoredTokens,
-  type StoredTokens 
+  type StoredTokens
 } from './tokenStorage';
 
 // Re-export token functions for backward compatibility
@@ -105,6 +105,28 @@ export function setStoredWorkspace(workspace: Workspace): void {
   localStorage.setItem(WORKSPACE_KEY, JSON.stringify(workspace));
 }
 
+function normalizeUserPayload(raw: any): User {
+  const payload = raw?.user ?? raw ?? {};
+
+  const id = payload.user_id ?? payload.id ?? payload.sub ?? '';
+  const email = payload.email ?? '';
+  const displayName = payload.display_name ?? payload.displayName ?? payload.name ?? (email ? email.split('@')[0] : '');
+  const avatarUrl = payload.avatar_url ?? payload.avatarUrl ?? undefined;
+  const emailVerified = payload.email_verified ?? payload.emailVerified ?? payload.verified ?? false;
+  const createdAt = payload.created_at ?? payload.createdAt ?? new Date().toISOString();
+  const workspaceId = payload.workspace_id ?? payload.workspaceId ?? undefined;
+
+  return {
+    id,
+    email,
+    displayName: displayName || email,
+    avatarUrl,
+    emailVerified,
+    createdAt,
+    workspace_id: workspaceId,
+  };
+}
+
 /**
  * Check if user is authenticated (has valid tokens)
  */
@@ -158,6 +180,8 @@ export async function login(credentials: LoginCredentials): Promise<{
   if (response.data) {
     const { user, tokens, workspace: responseWorkspace } = response.data;
 
+    const normalizedUser = normalizeUserPayload(user);
+
     // Store tokens
     setStoredTokens({
       accessToken: tokens.access_token,
@@ -166,14 +190,14 @@ export async function login(credentials: LoginCredentials): Promise<{
     });
 
     // Store user
-    setStoredUser(user);
+    setStoredUser(normalizedUser);
 
     // Fetch workspace if not in response but workspace_id is available
     let workspace = responseWorkspace;
     try {
-      if (!workspace && (user as any).workspace_id) {
-        console.log('[Login] Fetching workspace for workspace_id:', (user as any).workspace_id);
-        workspace = await getWorkspace((user as any).workspace_id) || undefined;
+      if (!workspace && normalizedUser.workspace_id) {
+        console.log('[Login] Fetching workspace for workspace_id:', normalizedUser.workspace_id);
+        workspace = await getWorkspace(normalizedUser.workspace_id) || undefined;
       }
     } catch (error) {
       console.error('[Login] Error fetching workspace:', error);
@@ -187,7 +211,7 @@ export async function login(credentials: LoginCredentials): Promise<{
       console.warn('[Login] No workspace available after login');
     }
 
-    return { success: true, user, workspace };
+    return { success: true, user: normalizedUser, workspace };
   }
 
   return { success: false, error: 'Unknown error' };
@@ -219,6 +243,8 @@ export async function signup(data: SignupData): Promise<{
   if (response.data) {
     const { user, tokens, workspace: responseWorkspace } = response.data;
 
+    const normalizedUser = normalizeUserPayload(user);
+
     // Store tokens
     setStoredTokens({
       accessToken: tokens.access_token,
@@ -227,14 +253,14 @@ export async function signup(data: SignupData): Promise<{
     });
 
     // Store user
-    setStoredUser(user);
+    setStoredUser(normalizedUser);
 
     // Fetch workspace if not in response but workspace_id is available
     let workspace = responseWorkspace;
     try {
-      if (!workspace && (user as any).workspace_id) {
-        console.log('[Signup] Fetching workspace for workspace_id:', (user as any).workspace_id);
-        workspace = await getWorkspace((user as any).workspace_id) || undefined;
+      if (!workspace && normalizedUser.workspace_id) {
+        console.log('[Signup] Fetching workspace for workspace_id:', normalizedUser.workspace_id);
+        workspace = await getWorkspace(normalizedUser.workspace_id) || undefined;
       }
     } catch (error) {
       console.error('[Signup] Error fetching workspace:', error);
@@ -248,7 +274,7 @@ export async function signup(data: SignupData): Promise<{
       console.warn('[Signup] No workspace available after signup');
     }
 
-    return { success: true, user, workspace };
+    return { success: true, user: normalizedUser, workspace };
   }
 
   return { success: false, error: 'Unknown error' };
@@ -284,11 +310,14 @@ export function getGoogleOAuthUrl(redirectTo?: string): string {
  * Get current user from API
  */
 export async function getCurrentUser(): Promise<User | null> {
-  const response = await apiClient.get<{ user: User }>('/api/v1/users/me');
+  const response = await apiClient.get<any>('/api/v1/users/me');
 
-  if (response.data?.user) {
-    setStoredUser(response.data.user);
-    return response.data.user;
+  if (response.data) {
+    const normalized = normalizeUserPayload(response.data);
+    if (normalized?.id) {
+      setStoredUser(normalized);
+      return normalized;
+    }
   }
 
   return null;

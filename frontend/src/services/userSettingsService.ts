@@ -268,18 +268,18 @@ export class UserSettingsService {
 
   /**
    * Get data export status
-   * Returns null if no export exists (404 from server)
+   * Returns null if no export exists (204 No Content from server)
    */
   async getDataExportStatus(): Promise<DataExportResponse | null> {
     const response = await apiClient.get<DataExportResponse>('/api/v1/users/me/export');
     if (response.error) {
-      // 404 is expected when no export exists - return null instead of throwing
-      if (response.error.status === 404) {
-        return null;
-      }
       throw new Error(response.error.message || 'Failed to fetch export status');
     }
-    return response.data!;
+    // 204 No Content returns empty object {} from API client
+    if (!response.data || !response.data.export_id) {
+      return null;
+    }
+    return response.data;
   }
 
   // ---------------------------------------------------------------------------

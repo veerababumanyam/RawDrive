@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Camera, Trash2, Loader2 } from 'lucide-react';
 import { AppButton } from '../ui/AppButton';
 import { AvatarCropModal, CropData } from '../ui/AvatarCropModal';
+import { useAvatarUrl } from '../../hooks/useAvatarUrl';
 
 /* =============================================================================
    AvatarUploader Component
@@ -50,6 +51,9 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
   isUploading = false,
   isDeleting = false,
 }) => {
+  // Resolve avatar URL (handles authenticated API endpoints)
+  const resolvedAvatarUrl = useAvatarUrl(currentAvatarUrl);
+
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -152,9 +156,9 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
           `}
           aria-label={currentAvatarUrl ? 'Change avatar' : 'Upload avatar'}
         >
-          {currentAvatarUrl ? (
+          {resolvedAvatarUrl ? (
             <img
-              src={currentAvatarUrl}
+              src={resolvedAvatarUrl}
               alt={`${displayName}'s avatar`}
               className="w-full h-full object-cover"
             />

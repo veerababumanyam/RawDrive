@@ -6,12 +6,14 @@ Implements Requirements: 23.2, 23.3
 
 from __future__ import annotations
 
+import io
 import logging
 from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 
 from app.api.dependencies.auth import CurrentUserDep
 from app.api.schemas import (
@@ -56,6 +58,7 @@ from app.services.user_avatar_service import (
     UserAvatarError,
     UserAvatarFileTooLargeError,
     UserAvatarInvalidFormatError,
+    USER_AVATAR_SIZES,
 )
 from app.services.audit_service import AuditService, AuditEventType
 from app.services.totp_service import (
@@ -418,6 +421,98 @@ async def delete_user_avatar(
     except Exception as e:
         logger.exception("Failed to delete user avatar")
         raise InternalError("Failed to delete avatar")
+
+
+@router.get(
+    "/me/avatar",
+    summary="Get user avatar (original size)",
+    description="Return a public or presigned URL for the user's original avatar.",
+)
+async def get_user_avatar(
+    current_user: CurrentUserDep,
+    redirect: Annotated[bool, Query(description="Redirect to URL or return JSON")] = True,
+):
+    """Provide a fetchable URL for the caller's avatar (original size)."""
+    service = get_user_avatar_service()
+
+    try:
+        result = await service.get_avatar_download_url(current_user.user_id, "original")
+        if redirect:
+            return RedirectResponse(result["url"])
+        return {"url": result["url"]}
+    except UserAvatarError as e:
+        raise AppError(message=str(e), code=e.code, status_code=400)
+    except Exception:
+        logger.exception("Failed to generate avatar URL")
+        raise InternalError("Failed to get avatar URL")
+
+
+@router.get(
+    "/me/avatar/stream",
+    summary="Stream user avatar bytes",
+    description="Stream the user's avatar from storage to avoid CORS on presigned URLs.",
+)
+async def stream_user_avatar(
+    current_user: CurrentUserDep,
+    size: Annotated[str, Query(description="Avatar size", example="original")] = "original",
+):
+    """Proxy avatar bytes through the API to avoid cross-origin issues."""
+
+    service = get_user_avatar_service()
+
+    if size not in USER_AVATAR_SIZES:
+        raise AppError(message="Invalid avatar size", code="INVALID_SIZE", status_code=400)
+
+    try:
+        data, content_type = await service.get_avatar_bytes(current_user.user_id, size)
+        headers = {
+            "Cache-Control": "public, max-age=300",
+            "Access-Control-Allow-Origin": "*",
+            "Content-Length": str(len(data)),
+        }
+        return StreamingResponse(io.BytesIO(data), media_type=content_type, headers=headers)
+    except UserAvatarError as e:
+        if e.code == "NOT_FOUND":
+            # No avatar uploaded; return 204 so callers can gracefully fallback
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+        if e.code == "INVALID_SIZE":
+            raise AppError(message=str(e), code=e.code, status_code=400)
+        logger.warning("Failed to stream avatar", extra={"user_id": str(current_user.user_id), "size": size, "error": str(e)})
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except Exception:
+        logger.exception("Failed to stream avatar")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/me/avatar/{size}",
+    summary="Get user avatar URL",
+    description="Return a public or presigned URL for the requested avatar size.",
+)
+async def get_user_avatar_url(
+    size: str,
+    current_user: CurrentUserDep,
+):
+    """Provide a fetchable URL for the caller's avatar.
+
+    This endpoint exists to support environments where a CDN/public base URL
+    is not configured. It returns a temporary presigned URL when needed.
+    """
+    service = get_user_avatar_service()
+
+    if size not in USER_AVATAR_SIZES:
+        raise AppError(message="Invalid avatar size", code="INVALID_SIZE", status_code=400)
+
+    try:
+        result = await service.get_avatar_download_url(current_user.user_id, size)
+
+        # For public URLs, redirect; for presigned, redirect as well so <img> works
+        return RedirectResponse(result["url"])
+    except UserAvatarError as e:
+        raise AppError(message=str(e), code=e.code, status_code=400)
+    except Exception:
+        logger.exception("Failed to generate avatar URL")
+        raise InternalError("Failed to get avatar URL")
 
 
 # ---------------------------------------------------------------------------
@@ -1122,22 +1217,23 @@ async def request_data_export(
 
 @router.get(
     "/me/export",
-    response_model=DataExportResponse,
+    response_model=None,
     summary="Get export status",
     description="Get the status of the latest data export request.",
     responses={
-        404: {"model": ErrorResponse, "description": "No export request found"},
+        200: {"model": DataExportResponse, "description": "Export request found"},
+        204: {"description": "No export request exists"},
     },
 )
 async def get_export_status(
     current_user: CurrentUserDep,
     data_export_service: DataExportServiceDep,
-) -> DataExportResponse:
+) -> DataExportResponse | Response:
     """Get the latest export request status."""
     export = await data_export_service.get_latest_export(user_id=str(current_user.user_id))
 
     if not export:
-        raise NotFoundError(resource="Data export")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return DataExportResponse(
         export_id=export.export_id,
