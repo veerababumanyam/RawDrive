@@ -579,16 +579,15 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 |---------|---------|--------------|----------|------------|
 | **Storage** | 50 GB | 250 GB | 1 TB | Unlimited |
 | **Workspaces** | 1 | 3 | 10 | Unlimited |
-| **AI Credits/Month** | 100 | 500 | 2,000 | 10,000 |
 | **Team Members** | 1 | 3 | 10 | Unlimited |
 | **Galleries** | 10 | 50 | 200 | Unlimited |
-| **Custom Domain** | ❌ | ✅ | ✅ | ✅ |
-| **Face Recognition** | ❌ | ✅ | ✅ | ✅ |
-| **Digital Invitations** | ❌ | Limited | ✅ | ✅ |
-| **Public Profile** | Basic | ✅ | ✅ | ✅ |
-| **API Access** | ❌ | Limited | ✅ | ✅ |
+| **Custom Domains** | 1 | 3 | 10 | Unlimited |
+| **Face Recognition** | 1,000 faces | 10,000 faces | 50,000 faces | Unlimited |
+| **Digital Invitations** | 5/month | 25/month | 100/month | Unlimited |
+| **Public Profile** | 1 Basic | 3 Custom | 10 Custom | Unlimited |
+| **API Access** | ❌ | 10K calls/month | 100K calls/month | Unlimited |
 | **Priority Support** | ❌ | ❌ | ✅ | ✅ |
-| **SLA Guarantee** | ❌ | ❌ | ❌ | 99.9% |
+| **SLA Guarantee** | ❌ | ❌ | 99% | 99.9% |
 | **Dedicated Support** | ❌ | ❌ | ❌ | ✅ |
 
 **Trial Period**: 30 days with Business-tier features and 2,000 AI credits
