@@ -30,7 +30,7 @@ const FEATURES = [
     {
         icon: <Bot className="w-8 h-8 text-purple-500" />,
         title: 'AI Assistant',
-        description: 'Smart auto-enhancement and tagging that learns your style over time.',
+        description: 'Smart culling and tagging. Bring your own API key for unlimited power on any plan.',
         gradient: 'from-purple-500/10 to-pink-500/10'
     },
     {

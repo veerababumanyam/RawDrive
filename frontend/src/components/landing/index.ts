@@ -18,7 +18,7 @@ export * from './features';
 export * from './animations';
 
 // SEO Components
-export * from './animations';
+
 
 // SEO Components
 export * from './seo';

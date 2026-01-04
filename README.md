@@ -45,7 +45,7 @@
 - **📧 Marketing Automation**: Email campaigns, client notifications, and engagement tracking
 - **🔄 Workflow Automation**: Custom approval processes and automated delivery pipelines
 
-### 💌 Digital Invitations & Events (NEW)
+### 💌 Digital Invitations & Events
 
 - **🎉 Save The Date**: Create beautiful digital event invitations with customizable templates
 - **📋 RSVP Management**: Collect and manage guest responses with party size, dietary preferences, and plus-ones
@@ -56,7 +56,7 @@
 - **✅ Event Check-In**: QR code-based check-in system for event management
 - **📧 Automated Reminders**: Smart email reminders for guests with customizable schedules
 
-### 👤 Public Profile & Digital Identity (NEW)
+### 👤 Public Profile & Digital Identity
 
 - **🌟 Professional Profiles**: Showcase your work with custom photographer and company profiles
 - **🎨 Brand Customization**: Custom colors, fonts, logos, and gradient themes
@@ -67,7 +67,7 @@
 - **🔍 SEO Optimized**: Search engine optimization for client discovery
 - **📞 Lead Generation**: Contact forms and booking integration
 
-### 🎯 Client Experience Features (NEW)
+### 🎯 Client Experience Features
 
 - **⭐ Client Favorites**: Allow clients to mark and manage their favorite photos
 - **💬 Interactive Feedback**: Comment system for client feedback on specific photos
@@ -78,7 +78,7 @@
 - **🎨 Custom Gallery Themes**: Multiple gradient themes and branding options
 - **🖼️ Magic Link Grid**: Auto-layout grid system for beautiful gallery displays
 
-### 🧠 Enhanced AI Features (NEW)
+### 🧠 Enhanced AI Features
 
 - **🏷️ Smart Tagging Cache**: Local tagging layer for faster AI-powered organization
 - **👥 Face Group Merge**: Advanced face clustering with merge and split capabilities

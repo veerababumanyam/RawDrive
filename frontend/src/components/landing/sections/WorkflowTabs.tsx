@@ -9,7 +9,8 @@ import {
     FileText,
     Image,
     Sparkles,
-    Download
+    Download,
+    Mail
 } from 'lucide-react';
 import { AppCard } from '../ui/AppCard';
 import { AppButton } from '../ui/AppButton';
@@ -20,7 +21,7 @@ import { AppButton } from '../ui/AppButton';
    Interactive section showing different use cases (Attract, Manage, Deliver).
    ============================================================================= */
 
-type TabId = 'attract' | 'manage' | 'deliver';
+type TabId = 'attract' | 'invite' | 'manage' | 'deliver';
 
 interface WorkflowTab {
     id: TabId;
@@ -61,6 +62,31 @@ const TABS: WorkflowTab[] = [
             }
         ],
         image: '/images/workflow/attract-mockup.png'
+    },
+    {
+        id: 'invite',
+        label: 'Invite',
+        icon: <Mail className="w-5 h-5" />,
+        headline: 'Beautiful Digital Invitations',
+        description: 'Set the tone for your event. Create stunning Save the Dates, track RSVPs, and manage your guest list effortlessly.',
+        features: [
+            {
+                icon: <Mail className="w-5 h-5 text-pink-500" />,
+                title: 'Save the Dates',
+                text: 'Send beautiful digital cards to announce your special day.'
+            },
+            {
+                icon: <Users className="w-5 h-5 text-pink-500" />,
+                title: 'Guest Management',
+                text: 'Import contacts and manage your guest list in one place.'
+            },
+            {
+                icon: <Layout className="w-5 h-5 text-pink-500" />,
+                title: 'RSVP Tracking',
+                text: 'Real-time updates as guests confirm their attendance.'
+            }
+        ],
+        image: '/images/workflow/invite-mockup.png'
     },
     {
         id: 'manage',
@@ -245,6 +271,7 @@ export const WorkflowTabs: React.FC = () => {
                                     {/* Animated gradient background */}
                                     <div className={`absolute inset-0 opacity-30 ${
                                         activeTab === 'attract' ? 'bg-gradient-to-br from-blue-500/30 via-purple-500/20 to-pink-500/30' :
+                                        activeTab === 'invite' ? 'bg-gradient-to-br from-pink-500/30 via-rose-500/20 to-red-500/30' :
                                         activeTab === 'manage' ? 'bg-gradient-to-br from-green-500/30 via-teal-500/20 to-cyan-500/30' :
                                         'bg-gradient-to-br from-orange-500/30 via-amber-500/20 to-yellow-500/30'
                                     }`} />
@@ -264,6 +291,7 @@ export const WorkflowTabs: React.FC = () => {
                                         >
                                             <div className={`w-10 h-10 rounded-lg ${
                                                 activeTab === 'attract' ? 'bg-blue-500/30' :
+                                                activeTab === 'invite' ? 'bg-pink-500/30' :
                                                 activeTab === 'manage' ? 'bg-green-500/30' :
                                                 'bg-orange-500/30'
                                             } flex items-center justify-center mb-3`}>
@@ -285,6 +313,7 @@ export const WorkflowTabs: React.FC = () => {
                                         >
                                             <div className={`w-10 h-10 rounded-lg ${
                                                 activeTab === 'attract' ? 'bg-purple-500/30' :
+                                                activeTab === 'invite' ? 'bg-rose-500/30' :
                                                 activeTab === 'manage' ? 'bg-teal-500/30' :
                                                 'bg-amber-500/30'
                                             } flex items-center justify-center mb-3`}>
@@ -307,6 +336,7 @@ export const WorkflowTabs: React.FC = () => {
                                             <div className="flex items-center gap-3 mb-3">
                                                 <div className={`w-10 h-10 rounded-lg ${
                                                     activeTab === 'attract' ? 'bg-pink-500/30' :
+                                                    activeTab === 'invite' ? 'bg-red-500/30' :
                                                     activeTab === 'manage' ? 'bg-cyan-500/30' :
                                                     'bg-yellow-500/30'
                                                 } flex items-center justify-center flex-shrink-0`}>
@@ -325,12 +355,13 @@ export const WorkflowTabs: React.FC = () => {
                                             <div className="flex gap-2 items-center">
                                                 <div className={`h-2 rounded-full ${
                                                     activeTab === 'attract' ? 'bg-gradient-to-r from-blue-500 to-purple-500' :
+                                                    activeTab === 'invite' ? 'bg-gradient-to-r from-pink-500 to-rose-500' :
                                                     activeTab === 'manage' ? 'bg-gradient-to-r from-green-500 to-teal-500' :
                                                     'bg-gradient-to-r from-orange-500 to-amber-500'
                                                 }`} style={{ width: '60%' }} />
                                                 <div className="h-2 bg-white/10 rounded-full flex-1" />
                                                 <span className="text-white/40 text-xs font-medium ml-2">
-                                                    {activeTab === 'attract' ? '12 leads' : activeTab === 'manage' ? '8 active' : '156 photos'}
+                                                    {activeTab === 'attract' ? '12 leads' : activeTab === 'invite' ? '85 RSVPs' : activeTab === 'manage' ? '8 active' : '156 photos'}
                                                 </span>
                                             </div>
                                         </motion.div>
@@ -343,6 +374,7 @@ export const WorkflowTabs: React.FC = () => {
                                             transition={{ repeat: Infinity, duration: 20, ease: "linear" }}
                                             className={`w-16 h-16 rounded-full border-2 border-dashed ${
                                                 activeTab === 'attract' ? 'border-blue-500/20' :
+                                                activeTab === 'invite' ? 'border-pink-500/20' :
                                                 activeTab === 'manage' ? 'border-green-500/20' :
                                                 'border-orange-500/20'
                                             }`}

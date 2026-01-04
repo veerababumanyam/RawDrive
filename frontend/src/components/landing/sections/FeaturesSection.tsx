@@ -9,6 +9,7 @@ import {
   Sparkles,
   UserCheck,
   Users,
+  Mail,
 } from 'lucide-react';
 import { FadeIn } from '../animations/FadeIn';
 import { staggerContainer, staggerItem } from '../animations/presets';
@@ -67,6 +68,23 @@ const defaultFeatures: Feature[] = [
     stat: '10× faster organization',
     href: '/features#ai',
     category: 'ai',
+    demoImages,
+  },
+
+  {
+    icon: <Mail size={24} />,
+    title: 'Digital Invitations & Save the Dates',
+    description:
+      'First impressions matter. Delight your clients with stunning, mobile-responsive invitations that integrate perfectly with their gallery. Automated RSVP tracking means no more spreadsheets.',
+    benefits: [
+      'Instant "Save the Date" delivery',
+      'Real-time RSVP & guest tracking',
+      'Seamless guest list management from contacts',
+      'Matches your gallery branding',
+    ],
+    stat: '3x faster client responses',
+    href: '/features#invitations',
+    category: 'delivery',
     demoImages,
   },
   {

@@ -45,7 +45,7 @@ export const heroContent: HeroContent = {
   trustPoints: [
     { icon: null, text: 'No credit card required' },
     { icon: null, text: '5 min setup' },
-    { icon: null, text: 'Free forever plan' },
+    { icon: null, text: 'Unlimited AI (BYO Key)' },
   ],
 };
 
@@ -112,6 +112,14 @@ export const featuresContent: FeatureItem[] = [
     href: '/features#galleries',
   },
   {
+    icon: 'mail',
+    title: 'Digital Invitations',
+    description:
+      'Create stunning Save the Date cards and invitations. Track RSVPs and manage your guest list effortlessly.',
+    category: 'delivery',
+    href: '/features#invitations',
+  },
+  {
     icon: 'share',
     title: 'Client Proofing',
     description:
@@ -131,7 +139,7 @@ export const featuresContent: FeatureItem[] = [
     icon: 'sparkles',
     title: 'AI-Powered Features',
     description:
-      'Auto-tagging, face recognition, and smart culling. Let AI handle the tedious work so you can focus on creativity.',
+      'Auto-tagging, face recognition, and smart culling. Bring your own Gemini API key for unlimited access on any plan.',
     category: 'ai',
     href: '/features#ai',
   },
@@ -375,9 +383,15 @@ export const faqContent: FAQItem[] = [
     category: 'features',
   },
   {
+    question: 'How does the AI BYOA work?',
+    answer:
+      'All plans (including Free) can access our powerful AI features by providing your own Google Gemini API key. This gives you unlimited usage controlled by your own quota.',
+    category: 'features',
+  },
+  {
     question: 'What AI features are included?',
     answer:
-      'Pro and Business plans include AI auto-tagging, face recognition for people grouping, smart culling suggestions, and automatic album layout suggestions.',
+      'All plans include AI auto-tagging, face recognition, smart culling, and hashtag generation. Just bring your own API key to unlock them.',
     category: 'features',
   },
   {
@@ -476,6 +490,8 @@ export const seoContent = {
       'album design',
       'photography business',
       'AI photo tagging',
+      'digital invitations',
+      'save the date',
     ],
   },
   features: {
