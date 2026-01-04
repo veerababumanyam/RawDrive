@@ -237,7 +237,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           src={displayUrl}
           alt={asset.asset.filename || `Photo ${index + 1}`}
           className={`w-full h-full object-cover transition-all duration-300 ${
-            isLocked ? 'blur-[20px] scale-110' : 'group-hover:scale-105'
+            isLocked ? 'blur-[40px] scale-110' : 'group-hover:scale-105'
           }`}
           loading="lazy"
           decoding="async"

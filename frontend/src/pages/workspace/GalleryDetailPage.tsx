@@ -112,23 +112,18 @@ const GalleryDetailPage: React.FC = () => {
     }
   }, [searchParams]);
 
-  // Check localStorage for previous private unlock status
-  useEffect(() => {
-    if (galleryId) {
-      const privateUnlocked = localStorage.getItem(`${ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
-      if (privateUnlocked) {
-        setIsPrivateUnlocked(true);
-      }
-    }
-  }, [galleryId]);
+  // Note: Admin unlock is session-based only (no localStorage persistence)
+  // This ensures private photos are always blurred on page refresh
+  // and require PIN re-entry each session for security
 
-  // Handle PIN verification for unlocking private photos
+  // Handle PIN verification for unlocking private photos (session-based only)
   const handlePrivatePhotoUnlock = useCallback(async (pin: string): Promise<boolean> => {
     if (!galleryId) return false;
     try {
       const isValid = await galleryService.verifyPin(galleryId, pin);
       if (isValid) {
-        localStorage.setItem(`${ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
+        // Session-based unlock only - no localStorage persistence
+        // Private photos will require PIN again on page refresh
         setShowPinModal(false);
         setIsPrivateUnlocked(true);
       }
@@ -447,6 +442,14 @@ const GalleryDetailPage: React.FC = () => {
   const handleAssetLock = useCallback(
     async (assetId: string, isPrivate: boolean) => {
       if (!workspace?.workspace_id || !galleryId) return;
+
+      // When LOCKING a photo, reset the gallery-wide unlock state
+      // This ensures the newly locked photo shows blur immediately
+      if (isPrivate) {
+        setIsPrivateUnlocked(false);
+        // Also clear any stale localStorage value from previous sessions
+        localStorage.removeItem(`${ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`);
+      }
 
       // Optimistic update
       updateAsset(assetId, { is_private: isPrivate });
@@ -922,9 +925,8 @@ const GalleryDetailPage: React.FC = () => {
                 if (gallery.pin_protected) {
                   setShowPinModal(true);
                 } else {
-                  // No PIN protection - auto-unlock for admin
+                  // No PIN protection - auto-unlock for admin (session only)
                   setIsPrivateUnlocked(true);
-                  localStorage.setItem(`${ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
                   addToast({ message: 'Private photos unlocked', variant: 'success' });
                 }
               }}
@@ -1089,9 +1091,8 @@ const GalleryDetailPage: React.FC = () => {
                 if (gallery.pin_protected) {
                   setShowPinModal(true);
                 } else {
-                  // No PIN protection - auto-unlock for admin
+                  // No PIN protection - auto-unlock for admin (session only)
                   setIsPrivateUnlocked(true);
-                  localStorage.setItem(`${ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX}${galleryId}`, 'true');
                   addToast({ message: 'Private photos unlocked', variant: 'success' });
                 }
               }}
