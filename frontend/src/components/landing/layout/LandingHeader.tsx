@@ -73,6 +73,7 @@ const defaultNavItems: NavItem[] = [
     isDropdown: true,
     subItems: solutionsSubItems,
   },
+  { label: 'Features', href: '#features', isSection: true },
   { label: 'Pricing', href: '#pricing', isSection: true },
   { label: 'How It Works', href: '#workflow', isSection: true },
   { label: 'FAQ', href: '#faq', isSection: true },

@@ -18,6 +18,7 @@ import { seoContent } from '../../data/landing-content';
    ============================================================================= */
 
 // Below-fold sections - lazy loaded for better initial load performance
+const FeaturesSection = lazy(() => import('../../components/landing/sections/FeaturesSection'));
 const WorkflowTabs = lazy(() => import('../../components/landing/sections/WorkflowTabs'));
 const AutomationSection = lazy(() => import('../../components/landing/sections/AutomationSection'));
 const SecuritySection = lazy(() => import('../../components/landing/sections/SecuritySection'));
@@ -143,6 +144,11 @@ const LandingPage: React.FC = () => {
           <SocialProofBar />
 
           {/* Below-the-fold sections - lazy loaded for better performance */}
+          <Suspense fallback={<SectionSkeleton height="700px" />}>
+            {/* Features - Core Value Proposition */}
+            <FeaturesSection id="features" />
+          </Suspense>
+
           <Suspense fallback={<SectionSkeleton height="600px" />}>
             {/* Workflow Demonstration - Interactive Storytelling */}
             <WorkflowTabs />
