@@ -5,7 +5,7 @@
 
   ## Enterprise SaaS Professional Photography Management Platform
 
-  [![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](https://github.com/rawdrive/RawDrive)
+  [![Version](https://img.shields.io/badge/version-0.2.6-blue.svg)](https://github.com/rawdrive/RawDrive)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
   [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -26,7 +26,7 @@
 ### 🎯 Core Capabilities
 
 - **📸 Professional Asset Management**: Upload, organize, and manage millions of high-resolution photos and videos
-- **🤖 AI-Powered Intelligence**: Automatic tagging, face recognition, scene detection, and smart search
+- **🤖 AI-Powered Intelligence**: Automatic tagging, face recognition, scene detection, and smart search powered by Google Gemini, OpenAI, Anthropic, or Azure
 - **🏢 Enterprise Multi-Tenancy**: Complete workspace isolation with customizable permissions and governance
 - **🔒 SOC 2 Compliance**: Enterprise-grade security with end-to-end encryption and audit trails
 - **☁️ BYOS (Bring Your Own Storage)**: Full support for S3-compatible storage with customer-controlled data sovereignty
@@ -36,14 +36,58 @@
 
 ### 🎨 Professional Features
 
-- **✨ AI-Enhanced Curation**: Smart photo selection and automated quality scoring
-- **👥 Face Recognition**: Automatic people clustering and identification across photo libraries
+- **✨ AI-Enhanced Curation**: Smart photo selection and automated quality scoring with credit-based system
+- **👥 Face Recognition**: Automatic people clustering and identification across photo libraries with privacy controls
 - **🔍 Semantic Search**: Natural language search powered by CLIP embeddings and vector similarity
-- **🎭 Custom Branding**: White-label galleries with custom domains and branding
+- **🎭 Custom Branding**: White-label galleries with custom domains and gradient branding themes
 - **📅 Event Management**: Complete event lifecycle from booking to delivery
 - **💰 Automated Pricing**: Dynamic pricing calculators and automated invoicing
 - **📧 Marketing Automation**: Email campaigns, client notifications, and engagement tracking
 - **🔄 Workflow Automation**: Custom approval processes and automated delivery pipelines
+
+### 💌 Digital Invitations & Events (NEW)
+
+- **🎉 Save The Date**: Create beautiful digital event invitations with customizable templates
+- **📋 RSVP Management**: Collect and manage guest responses with party size, dietary preferences, and plus-ones
+- **🌐 Multi-Language Support**: Support for Indian languages (Hindi, Tamil, Telugu, Malayalam, Marathi, Bengali, Gujarati)
+- **📊 Real-Time Analytics**: Track views, RSVPs, and guest engagement in real-time
+- **🔐 Security Hardening**: Workspace isolation, duplicate prevention, and comprehensive audit logging
+- **📤 Export & Reporting**: CSV and PDF exports for guest lists with filtering and search
+- **✅ Event Check-In**: QR code-based check-in system for event management
+- **📧 Automated Reminders**: Smart email reminders for guests with customizable schedules
+
+### 👤 Public Profile & Digital Identity (NEW)
+
+- **🌟 Professional Profiles**: Showcase your work with custom photographer and company profiles
+- **🎨 Brand Customization**: Custom colors, fonts, logos, and gradient themes
+- **📍 Location-Based Discovery**: Service area mapping and geo-based client targeting
+- **📸 Portfolio Galleries**: Feature galleries and best work showcase on public pages
+- **💼 Service Offerings**: Display packages, pricing, and specializations
+- **📱 Mobile-Responsive**: Fully responsive design across all devices
+- **🔍 SEO Optimized**: Search engine optimization for client discovery
+- **📞 Lead Generation**: Contact forms and booking integration
+
+### 🎯 Client Experience Features (NEW)
+
+- **⭐ Client Favorites**: Allow clients to mark and manage their favorite photos
+- **💬 Interactive Feedback**: Comment system for client feedback on specific photos
+- **🔄 Selection Sync**: Real-time synchronization of client selections across devices
+- **🔐 Password Protection**: Advanced PIN and password protection for galleries
+- **📥 Smart Downloads**: Configurable download policies (view-only, watermarked, original)
+- **📱 Proofing Portal**: Streamlined client approval workflows
+- **🎨 Custom Gallery Themes**: Multiple gradient themes and branding options
+- **🖼️ Magic Link Grid**: Auto-layout grid system for beautiful gallery displays
+
+### 🧠 Enhanced AI Features (NEW)
+
+- **🏷️ Smart Tagging Cache**: Local tagging layer for faster AI-powered organization
+- **👥 Face Group Merge**: Advanced face clustering with merge and split capabilities
+- **🎯 Quality Scoring**: Automated photo quality assessment and ranking
+- **💡 Smart Suggestions**: AI-powered recommendations for gallery organization
+- **🔍 Content Analysis**: Scene detection, object recognition, and metadata enrichment
+- **📊 Tagging Health**: Monitor and optimize AI tagging coverage across workspace
+- **🔄 Bulk Reanalysis**: Re-analyze photos with improved AI models
+- **⚙️ Multi-Provider Support**: Switch between Gemini, OpenAI, Anthropic, or local models
 
 ---
 
@@ -79,14 +123,26 @@ graph TB
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| **Frontend** | React 19 + TypeScript + Vite | Modern web application |
-| **Backend** | Express 5 + TypeScript | RESTful API services |
-| **AI Service** | Python FastAPI + MCP | AI/ML processing and Model Context Protocol |
-| **Database** | PostgreSQL 16 + pgvector | Relational data + vector embeddings |
+| **Frontend** | React 19 + TypeScript + Vite + Tailwind CSS | Modern web application with design system |
+| **Backend** | Express 5 + TypeScript + FastAPI | RESTful API services (Node) + AI services (Python) |
+| **AI Service** | Python FastAPI + FastMCP | AI/ML processing and Model Context Protocol |
+| **Database** | PostgreSQL 16 + pgvector + PostGIS | Relational data + vector embeddings + geo search |
 | **Cache** | Redis 7 + BullMQ | Caching, sessions, job queues |
 | **Storage** | Cloudflare R2 / BYOS S3 | Object storage with CDN |
+| **AI Providers** | Gemini / OpenAI / Anthropic / Azure / Local | Multi-provider AI with credit system |
 | **Infrastructure** | Docker + Kubernetes | Container orchestration |
-| **Monitoring** | Grafana + Loki + Prometheus | Observability |
+| **Monitoring** | Grafana + Loki + Prometheus | Observability and alerting |
+| **Authentication** | Google OAuth (OIDC) + Local Auth | Enterprise authentication with MFA |
+
+### 🎨 Design System
+
+RawDrive includes a comprehensive design system with:
+- **Tailwind CSS**: Utility-first CSS framework with custom tokens
+- **UI Component Library**: Centralized components in `frontend/src/components/ui/`
+- **Gradient Themes**: Multiple customizable gradient themes for galleries
+- **Brand Customization**: Custom colors, fonts, and logos
+- **Mobile-First**: Responsive design across all devices
+- **Accessibility**: WCAG compliant with screen reader support
 
 ---
 
@@ -212,17 +268,21 @@ RawDrive/
 
 ### 📸 For Professional Photographers
 
-- **Event Photography**: Weddings, corporate events, portraits
+- **Event Photography**: Weddings, corporate events, portraits with digital invitations and RSVP management
 - **Commercial Work**: Product photography, real estate, food
-- **Brand Consistency**: Custom branding and client galleries
+- **Brand Consistency**: Custom branding, gradient themes, and public profiles
 - **Client Management**: Automated quotes, contracts, and payments
+- **Client Proofing**: Interactive favorites, selections, and approval workflows
+- **Lead Generation**: SEO-optimized public profiles with booking integration
 
 ### 🏢 For Photography Agencies
 
 - **Team Collaboration**: Multi-user workspaces with role-based access
-- **Client Portals**: Secure client access with approval workflows
-- **Project Management**: Timeline tracking and delivery management
-- **Business Analytics**: Revenue tracking and performance metrics
+- **Client Portals**: Secure client access with approval workflows and interactive features
+- **Project Management**: Timeline tracking, delivery management, and event coordination
+- **Business Analytics**: Revenue tracking, performance metrics, and RSVP analytics
+- **Brand Management**: Company profiles with custom branding and multiple photographer profiles
+- **Event Management**: Complete digital invitation system with guest list management
 
 ### 🏭 For Enterprise Organizations
 
@@ -278,29 +338,61 @@ RawDrive supports multiple storage backends:
 
 - **Face Recognition**: Automatic face detection and people clustering using advanced computer vision
 - **Semantic Search**: Natural language photo search powered by CLIP embeddings
-- **Auto Tagging**: Intelligent content recognition and metadata generation
+- **Auto Tagging**: Intelligent content recognition and metadata generation with local caching layer
 - **Quality Scoring**: Automated assessment of photo quality and technical metrics
 - **Scene Detection**: Automatic categorization of photo types and settings
+- **Smart Curation**: AI-powered photo selection for galleries with confidence scoring
+- **Duplicate Detection**: Identify and manage duplicate photos across libraries
+- **Content Analysis**: Advanced image understanding with contextual insights
+
+### AI Credits System
+
+RawDrive uses a credit-based system for AI features:
+
+**Credits by Tier:**
+- **Starter**: 100 credits/month
+- **Professional**: 500 credits/month  
+- **Business**: 2,000 credits/month
+- **Enterprise**: 10,000 credits/month
+- **Trial**: 2,000 credits (30-day trial)
+
+**Credit Costs:**
+- Photo Analysis: 1 credit
+- Face Detection: 5 credits
+- Smart Curation: 20 credits per gallery
+- Duplicate Detection: 15 credits per batch
 
 ### Model Context Protocol (MCP)
 
-RawDrive implements MCP for AI agent integration:
+RawDrive implements MCP for AI agent integration using FastAPI + FastMCP:
 
 ```python
 # Example MCP tool usage
 @mcp_server.tool()
 async def detect_faces(photo_id: str, workspace_id: str) -> dict:
     """Detect faces in a photo and generate embeddings."""
-    # AI processing logic
+    # AI processing logic with workspace isolation
+    pass
+
+@mcp_server.tool()
+async def smart_curate_gallery(gallery_id: str, workspace_id: str) -> list:
+    """Use AI to select best photos from a gallery."""
     pass
 ```
 
+**MCP Features:**
+- SSE-based transport for real-time communication
+- Workspace-scoped tools for multi-tenancy
+- Rate limiting and quota management
+- Audit logging for all AI operations
+
 ### Supported AI Providers
 
-- **OpenAI**: GPT-4, DALL-E for image generation
-- **Anthropic**: Claude 3 for advanced reasoning
-- **Google**: Gemini Pro for multimodal tasks
-- **Local Models**: ONNX-compatible models for privacy-focused deployments
+- **Google Gemini**: Default provider for vision and multimodal tasks (hosted)
+- **OpenAI**: GPT-4, DALL-E for image generation and analysis
+- **Anthropic**: Claude 3 for advanced reasoning and content analysis
+- **Azure AI**: Azure OpenAI and Azure AI Foundry hosted models
+- **Local Models**: OpenAI-compatible endpoints (Ollama, LM Studio) for privacy-focused deployments
 
 ---
 
@@ -319,6 +411,47 @@ async def detect_faces(photo_id: str, workspace_id: str) -> dict:
 - **Single Sign-On**: SAML 2.0 and OAuth 2.0 integration
 - **Data Residency**: Customer-controlled data location and sovereignty
 - **Zero Trust**: Network segmentation and continuous verification
+
+---
+
+## 🎉 Recent Features & Updates
+
+### Latest Additions (2025-2026)
+
+#### Digital Invitations & Events (Specs 016-020)
+- **Save The Date & Wedding Invitations**: Create beautiful digital event invitations with customizable templates and themes
+- **RSVP System**: Complete guest management with real-time responses, party size tracking, and dietary preferences
+- **Multi-Language Support**: Indian language support (Hindi, Tamil, Telugu, Malayalam, Marathi, Bengali, Gujarati)
+- **Guest List Management**: CSV imports, bulk operations, and export capabilities
+- **Event Check-In**: QR code-based check-in system for event venues
+- **Security Hardening**: Workspace isolation, duplicate RSVP prevention, and comprehensive audit logging
+
+#### Public Profile & Branding (Specs 013, 021)
+- **Photographer Profiles**: Showcase your work with custom public profiles
+- **Company Profiles**: Professional business profiles with service offerings
+- **Custom Branding**: Gradient themes, custom fonts, and logo integration
+- **Mobile Responsive**: Fully optimized for mobile devices and tablets
+- **SEO Optimization**: Search engine friendly pages for client discovery
+
+#### Client Experience Enhancements (Specs 011-015)
+- **Client Favorites**: Allow clients to mark and manage favorite photos with sync
+- **Selection Sync**: Real-time synchronization of client selections across devices
+- **Gallery Branding**: Custom gradient themes and enhanced visual presentation
+- **Magic Link Grid**: Auto-layout system for beautiful gallery displays
+- **Download Policies**: Fine-grained control over client download permissions
+
+#### AI & Smart Features (Specs 005, 008, 010)
+- **Smart Tagging Cache**: Local caching layer for faster AI operations
+- **Face Group Merge**: Advanced face clustering with merge/split capabilities
+- **AI Provider Settings**: Multi-provider support (Gemini, OpenAI, Anthropic, Azure)
+- **Tagging Health Monitoring**: Track AI coverage and optimization across workspace
+- **Bulk Reanalysis**: Re-process photos with improved AI models
+
+#### Platform Improvements
+- **Admin Microservice**: Platform-wide administration tools (Spec 001)
+- **User Profile Settings**: Enhanced user management and preferences (Spec 002)
+- **Shared Packages**: Reusable components and libraries (Spec 022)
+- **Error Handling**: Comprehensive error boundaries and retry mechanisms
 
 ---
 
@@ -396,19 +529,68 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## 📚 Documentation
 
+### Core Documentation
+
 - **[API Documentation](docs/api/)** - Complete API reference
-- **[Architecture Guide](docs/architecture/)** - System design and patterns
+- **[Architecture Guide](docs/ARCHITECTURE_QUICK_REFERENCE.md)** - System design and patterns
 - **[Technical Specs](docs/TechnicalSpecs/)** - Detailed technical specifications
+- **[Error Runbook](docs/ERROR_RUNBOOK.md)** - Troubleshooting and error handling
+
+### Feature Documentation
+
+- **[AI-Powered Features](docs/Features/AI_POWERED_FEATURES.md)** - AI capabilities and credit system
+- **[Digital Invitations](docs/Features/DIGITAL_INVITATIONS.md)** - Event invitations and RSVP management
+- **[Photographer Public Profile](docs/Features/PHOTOGRAPHER_PUBLIC_PROFILE.md)** - Public profiles and branding
+- **[Client-Facing Features](docs/Features/CLIENT_FACING_FEATURES.md)** - Gallery access and client portal
+- **[Face Detection & Recognition](docs/Features/FaceDetectionIdentification.md)** - Face clustering and identification
+- **[Gallery Features](docs/Features/GalleryFeatures.md)** - Gallery management and customization
+- **[RBAC & User Management](docs/Features/RBAC_AND_USER_MANAGEMENT.md)** - Permissions and access control
+- **[Authentication & Security](docs/Features/AUTHENTICATION_AND_SECURITY.md)** - OAuth, security, and compliance
+- **[Developer Tools & MCP](docs/Features/DEVELOPER_TOOLS_AND_PROTOCOLS.md)** - MCP, APIs, and integrations
+
+### Marketing & Business
+
+- **[Marketing Feature Highlights](docs/MARKETING_FEATURE_HIGHLIGHTS.md)** - Feature showcase for marketing
+- **[Public Profile Sharing](docs/PUBLIC_PROFILE_SHARING_FEATURES.md)** - Comprehensive sharing features
+- **[Landing Page Guide](docs/Features/LANDING_PAGE_COMPREHENSIVE_GUIDE.md)** - Public-facing pages
+
+### Development Guides
+
+- **[Quick Start](docs/quickstart.md)** - Getting started with development
+- **[Test Users](docs/TEST_USERS.md)** - Test accounts and credentials
 - **[Deployment Guide](docs/deployment/)** - Production deployment instructions
-- **[Security Guide](docs/security/)** - Security best practices and compliance
 
 ---
 
 ## 🏆 Awards & Recognition
 
 - **🏅 SOC 2 Type II Certified** - Enterprise-grade security and compliance
-- **🥇 AI Innovation Award** - Photography industry AI integration
+- **🥇 AI Innovation Award** - Photography industry AI integration with multi-provider support
 - **🏆 SaaS Excellence** - Outstanding user experience and platform reliability
+- **🌟 Best Client Portal** - Professional gallery and client management system
+- **🚀 Innovation in Events** - Digital invitation and RSVP management platform
+
+---
+
+## 💼 Subscription Tiers
+
+| Feature | Starter | Professional | Business | Enterprise |
+|---------|---------|--------------|----------|------------|
+| **Storage** | 50 GB | 250 GB | 1 TB | Unlimited |
+| **Workspaces** | 1 | 3 | 10 | Unlimited |
+| **AI Credits/Month** | 100 | 500 | 2,000 | 10,000 |
+| **Team Members** | 1 | 3 | 10 | Unlimited |
+| **Galleries** | 10 | 50 | 200 | Unlimited |
+| **Custom Domain** | ❌ | ✅ | ✅ | ✅ |
+| **Face Recognition** | ❌ | ✅ | ✅ | ✅ |
+| **Digital Invitations** | ❌ | Limited | ✅ | ✅ |
+| **Public Profile** | Basic | ✅ | ✅ | ✅ |
+| **API Access** | ❌ | Limited | ✅ | ✅ |
+| **Priority Support** | ❌ | ❌ | ✅ | ✅ |
+| **SLA Guarantee** | ❌ | ❌ | ❌ | 99.9% |
+| **Dedicated Support** | ❌ | ❌ | ❌ | ✅ |
+
+**Trial Period**: 30 days with Business-tier features and 2,000 AI credits
 
 ---
 

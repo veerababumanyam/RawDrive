@@ -34,7 +34,7 @@ RawDrive is built on a modern, scalable technology stack designed to handle 20,0
                              │
 ┌────────────────────────────▼─────────────────────────────────────────┐
 │                    BACKEND LAYER                                      │
-│         (Node.js 18+, Express 5, TypeScript)                         │
+│         (Python 3.11+, FastAPI, asyncpg)                             │
 │              Kubernetes Pods / Hostinger VPS                          │
 │                                                                       │
 │  ┌─────────────────────────────────────────────────────────────┐    │
@@ -101,7 +101,7 @@ graph TB
     
     Ingress["🚪 API Gateway<br/>(Nginx Ingress, Load Balancer)<br/>Authentication, Rate Limiting"]
     
-    Backend["🔧 Backend Services<br/>(Node.js, Express, TypeScript)<br/>K8s Pods / VPS"]
+    Backend["🔧 Backend Services<br/>(Python, FastAPI)<br/>K8s Pods / VPS"]
     
     Auth["🔐 Auth Service"]
     Gallery["🖼️ Gallery Service"]
@@ -343,23 +343,20 @@ graph TB
 
 ### Runtime and Framework
 
-**Node.js 18+**
-- JavaScript runtime
-- Event-driven architecture
-- Non-blocking I/O
-- Large ecosystem
+**Python 3.11+**
+- Modern asyncio support
+- Type hints integration
+- Large data science ecosystem
 
-**Express.js**
-- Lightweight web framework
-- Middleware support
-- Routing system
-- RESTful API development
+**FastAPI**
+- High performance (based on Starlette/Pydantic)
+- Automatic OpenAPI docs
+- Type-safe request handling
 
-**TypeScript**
-- Static type checking
-- Better maintainability
-- IDE support
-- Compile-time error detection
+**asyncpg**
+- High-performance async PostgreSQL driver
+- Low-latency raw SQL execution
+- Type-safe parameter handling
 
 ### API Development
 
@@ -578,11 +575,14 @@ graph TB
 - Mock support
 - Coverage reporting
 
-**Supertest**
-- HTTP assertion library
-- API testing
+**Pytest**
+- Backend testing framework
+- Fixtures support
 - Integration testing
-- Request/response validation
+
+**Hypothesis**
+- Property-based testing
+- Automated test case generation
 
 **Mocha** (Alternative)
 - Test framework

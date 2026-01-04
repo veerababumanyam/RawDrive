@@ -1,5 +1,6 @@
 ---
 name: ide
+aliases: [vscode, jetbrains, editor, extension, intellij, pycharm]
 description: How to integrate Claude Code with VS Code and JetBrains IDEs. Use when user asks about IDE integration, VS Code extension, JetBrains plugin, or IDE setup.
 ---
 

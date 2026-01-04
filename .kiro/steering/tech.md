@@ -20,7 +20,7 @@
                      │
 ┌────────────────────▼────────────────────────────────────────┐
 │                  Backend Layer                               │
-│  (Node.js 18+, Express 5, TypeScript)                       │
+│   (Python 3.11+, FastAPI, asyncpg)          │
 └────────────────────┬────────────────────────────────────────┘
                      │
         ┌────────────┼────────────┐
@@ -70,14 +70,14 @@
 ## Backend Stack
 
 ### Runtime & Framework
-- **Node.js 18+**: JavaScript runtime with event-driven architecture
-- **Express 5**: Lightweight web framework with middleware support
-- **TypeScript**: Static type checking for maintainability and error detection
+- **Python 3.11+**: Modern Python with asyncio support
+- **FastAPI**: High-performance async web framework
+- **Pydantic**: Data validation and settings management using Python type hints
 
 ### API Development
-- **REST API**: Standard HTTP methods with JSON payloads
-- **OpenAPI/Swagger**: API documentation and interactive explorer
-- **Zod**: Request/response validation
+- **REST API**: Standard HTTP methods
+- **OpenAPI/Swagger**: Auto-generated interactive API docs (FastAPI default)
+- **asyncpg**: High-performance async PostgreSQL driver (Raw SQL)
 
 ### Authentication & Authorization
 - **JWT (JSON Web Tokens)**: Stateless authentication with 15-minute expiry
@@ -89,9 +89,8 @@
 
 ### Database
 - **PostgreSQL 16+**: ACID-compliant relational database
-- **pgvector**: Vector similarity search for embeddings
-- **Prisma ORM**: Type-safe database client with auto-generated types
-- **Database Migrations**: Version-controlled schema changes with zero-downtime support
+- **asyncpg**: High-performance async PostgreSQL driver
+- **Alembic**: Database migrations
 
 ### Caching
 - **Redis 7**: In-memory data store for sessions, cache, and pub/sub
@@ -144,9 +143,9 @@
 - **Cloudflare WAF**: Web application firewall at edge
 
 ### Testing
-- **Vitest**: Unit testing framework
-- **Supertest**: HTTP assertion library for API testing
-- **Jest**: Snapshot testing and mock support
+- **Vitest**: Frontend unit testing
+- **Pytest**: Backend testing framework
+- **Hypothesis**: Property-based testing for backend
 
 ## Infrastructure
 
@@ -202,20 +201,20 @@
 # Start frontend dev server (localhost:3000)
 npm run dev
 
-# Start backend dev server (localhost:3001)
-npm run dev:backend
+# Start backend dev server (localhost:8000)
+uvicorn src.app.main:app --reload
 
-# Start frontend + backend concurrently
+# Start frontend + backend (requires tmux/concurrently setup)
 npm run dev:all
 
 # Start Docker containers (PostgreSQL + Redis)
-npm run docker:dev:up
+docker-compose up -d
 
 # Stop Docker containers
-npm run docker:dev:down
+docker-compose down
 
-# View container logs
-npm run docker:dev:logs
+# View logs
+docker-compose logs -f
 ```
 
 ### Build & Verification
@@ -237,14 +236,14 @@ npm run verify
 ### Database
 
 ```bash
-# Run database migrations
-cd backend && npm run db:migrate
+# Run metadata migration (Alembic)
+alembic upgrade head
 
-# Seed development data
-cd backend && npm run db:seed
+# Create new migration
+alembic revision --autogenerate -m "description"
 
-# Complete test data setup
-cd backend && npm run db:setup-all
+# Seed data
+python src/scripts/seed.py
 ```
 
 ### Testing
@@ -344,15 +343,15 @@ SENTRY_DSN=
 
 | Purpose | Location |
 |---------|----------|
-| Frontend types | `frontend/src/types/types.ts` |
-| API client | `frontend/src/services/apiService.ts` |
-| Backend entry | `backend/src/index.ts` |
-| Database config | `backend/src/config/database.ts` |
-| Redis config | `backend/src/config/redis.ts` |
+| Frontend types | `frontend/src/types/*.ts` (domain specific) |
+| API client | `frontend/src/services/api.ts` |
+| Backend entry | `backend/src/app/main.py` |
+| Database config | `backend/src/app/core/config.py` |
+| Redis config | `backend/src/app/core/redis.py` |
 | Environment vars | `.env` (single source of truth) |
-| API routes | `backend/src/routes/v1/` |
-| Services | `backend/src/services/` |
-| Database migrations | `backend/src/db/migrations/` |
+| API routes | `backend/src/app/api/v1/` |
+| Services | `backend/src/app/services/` |
+| Database migrations | `backend/migrations/` |
 | Docker config | `docker-compose.yml` |
 | CI/CD workflows | `.github/workflows/` |
 
