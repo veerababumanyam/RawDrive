@@ -46,7 +46,7 @@ RETRY_DELAY_SECONDS = 60  # Initial delay before retry
 POLLING_INTERVAL_SECONDS = 5  # How often to check for new jobs
 JOB_TIMEOUT_SECONDS = 120  # Maximum time for a single job (2 minutes)
 STALE_JOB_TIMEOUT_MINUTES = 3  # Jobs "processing" longer than this are considered stale (reduced from 10 for faster recovery)
-CONCURRENT_JOBS = 5  # Number of jobs to process concurrently (increased for parallel processing)
+CONCURRENT_JOBS = 2  # Number of jobs to process concurrently (reduced from 5 to prevent OOM when loading ONNX models)
 OLD_JOB_CLEANUP_MINUTES = 60  # Jobs older than this are auto-deleted to prevent blocking
 
 
