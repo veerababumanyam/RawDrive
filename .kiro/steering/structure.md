@@ -8,121 +8,69 @@ RawDrive/
 │   ├── src/
 │   │   ├── components/         # Reusable React components
 │   │   │   ├── ui/            # Design system components (AppButton, AppInput, etc.)
-│   │   │   ├── gallery/       # Gallery-specific components
-│   │   │   ├── album/         # Album designer components
-│   │   │   └── common/        # Shared components (Header, Footer, etc.)
+│   │   │   ├── features/      # Feature-sliced domain components
+│   │   │   │   ├── gallery/   # Gallery features
+│   │   │   │   ├── profile/   # Public profile features
+│   │   │   │   ├── invitations/ # Digital invitation features
+│   │   │   │   └── ...        # (album, billing, auth, etc.)
+│   │   │   ├── layout/        # Layout components (Sidebar, Shell, etc.)
+│   │   │   ├── landing/       # Landing page components
+│   │   │   ├── auth/          # Authentication flows
+│   │   │   ├── admin/         # Admin panel components
+│   │   │   └── common/        # Shared components
 │   │   ├── pages/             # Page components (route-level)
-│   │   ├── services/          # API clients and external service integrations
-│   │   ├── hooks/             # Custom React hooks
+│   │   ├── services/          # API clients (galleryService, authService, etc.)
+│   │   ├── hooks/             # Custom hooks (useGallery, useAuth, etc.)
 │   │   ├── types/             # TypeScript type definitions
 │   │   ├── utils/             # Utility functions
 │   │   ├── styles/            # Global styles and CSS variables
 │   │   ├── App.tsx            # Root component
 │   │   └── index.css           # Design tokens and CSS variables
-│   ├── public/                # Static assets
+│   ├── public/                # Static assets (favicons, logos)
 │   ├── tailwind.config.js     # Tailwind configuration
 │   ├── vite.config.ts         # Vite configuration
 │   ├── tsconfig.json          # TypeScript configuration
 │   └── package.json           # Frontend dependencies
 │
-├── backend/                     # Express 5 + TypeScript + PostgreSQL
+├── backend/                     # Python 3.11+ + FastAPI + SQLAlchemy
 │   ├── src/
-│   │   ├── index.ts           # Application entry point
-│   │   ├── config/            # Configuration files
-│   │   │   ├── database.ts    # PostgreSQL connection
-│   │   │   ├── redis.ts       # Redis connection
-│   │   │   └── env.ts         # Environment variables
-│   │   ├── middleware/        # Express middleware
-│   │   │   ├── auth.ts        # Authentication middleware
-│   │   │   ├── tenant.ts      # Tenant/workspace scoping
-│   │   │   ├── errorHandler.ts # Error handling
-│   │   │   └── rateLimit.ts   # Rate limiting
-│   │   ├── routes/            # API routes
-│   │   │   └── v1/            # API v1 endpoints
-│   │   │       ├── auth.ts
-│   │   │       ├── galleries.ts
-│   │   │       ├── photos.ts
-│   │   │       ├── albums.ts
-│   │   │       ├── clients.ts
-│   │   │       ├── bookings.ts
-│   │   │       └── payments.ts
-│   │   ├── controllers/       # Request handlers
-│   │   ├── services/          # Business logic
-│   │   │   ├── authService.ts
-│   │   │   ├── galleryService.ts
-│   │   │   ├── photoService.ts
-│   │   │   ├── storageService.ts
-│   │   │   ├── aiService.ts
-│   │   │   └── paymentService.ts
-│   │   ├── models/            # Data models and types
-│   │   ├── db/                # Database layer
-│   │   │   ├── migrations/    # SQL migration files (numbered)
-│   │   │   ├── schema.sql     # Database schema
-│   │   │   └── seeds/         # Seed data for development
-│   │   ├── workers/           # Background job workers
-│   │   │   ├── photoProcessor.ts
-│   │   │   ├── aiProcessor.ts
-│   │   │   └── emailWorker.ts
-│   │   ├── utils/             # Utility functions
-│   │   ├── types/             # TypeScript type definitions
-│   │   └── logger.ts          # Logging configuration
-│   ├── tests/                 # Test files
-│   │   ├── unit/
-│   │   ├── integration/
-│   │   └── fixtures/
-│   ├── tsconfig.json          # TypeScript configuration
-│   └── package.json           # Backend dependencies
+│   │   ├── app/
+│   │   │   ├── main.py            # Application entry point
+│   │   │   ├── api/               # API Layer
+│   │   │   │   ├── v1/            # Route handlers
+│   │   │   │   └── schemas.py     # Pydantic models (Request/Response)
+│   │   │   ├── models/            # Pydantic Domain models
+│   │   │   ├── repositories/      # Data access layer
+│   │   │   ├── services/          # Business logic
+│   │   │   ├── core/              # Config and security
+│   │   │   └── workers/           # Background tasks
+│   │   └── migrations/            # Alembic migrations
+│   ├── tests/                     # Pytest tests
+│   ├── alembic.ini                # Alembic configuration
+│   ├── pyproject.toml             # Project configuration
+│   └── requirements.txt           # Python dependencies
 │
 ├── ai-service/                  # Python FastAPI (optional, Phase 6+)
 │   ├── src/
 │   │   ├── main.py            # FastAPI application
 │   │   ├── models/            # ML models and inference
 │   │   ├── services/          # AI service logic
-│   │   ├── routes/            # API endpoints
-│   │   └── utils/             # Utility functions
+│   │   └── routes/            # API endpoints
 │   ├── tests/                 # Test files
-│   ├── requirements.txt       # Python dependencies
+│   ├── pyproject.toml         # Python dependencies and config
 │   └── Dockerfile             # Container configuration
 │
 ├── infrastructure/              # Deployment and infrastructure
-│   ├── docker-compose.yml     # Local development environment
-│   ├── Dockerfile             # Backend container image
+│   ├── docker/                # Dockerfiles and helpers
 │   ├── nginx/                 # Nginx configuration
-│   │   └── nginx.conf
-│   ├── kubernetes/            # Kubernetes manifests (future)
-│   │   ├── deployment.yaml
-│   │   ├── service.yaml
-│   │   └── ingress.yaml
-│   └── monitoring/            # Prometheus, Grafana configs
+│   ├── monitoring/            # Prometheus, Grafana configs
+│   ├── scripts/               # Utility scripts
+│   └── docker-compose.yml     # Local development environment (if moved here)
 │
 ├── docs/                        # Project documentation
-│   ├── project/               # Project-level documentation
-│   │   ├── 01-TECH_STACK.md
-│   │   ├── 02-SECURITY_REQUIREMENTS.md
-│   │   ├── 03-API_CONTRACTS.md
-│   │   ├── 04-DATA_MODEL.md
-│   │   ├── 05-ONBOARDING_FLOWS.md
-│   │   ├── 06-PRICING_MODEL.md
-│   │   ├── 07-PROD_CHECKLIST.md
-│   │   ├── 08-SUPPORT_PLAYBOOK.md
-│   │   └── roadmap.md
-│   ├── Features/               # Feature documentation
-│   │   ├── PRD.md
-│   │   ├── CLIENT_FACING_FEATURES.md
-│   │   ├── GalleryFeatures.md
-│   │   ├── DigitalAlbumFeatures.md
-│   │   ├── CALENDAR_INTEGRATIONS_AND_BOOKINGS.md
-│   │   ├── AI_POWERED_FEATURES.md
-│   │   ├── GEO_Search.md
-│   │   ├── BYOS_Requiremetns.md
-│   │   └── ... (more feature docs)
+│   ├── project/               # Project-level documentation (Tech Stack, API, etc.)
+│   ├── Features/              # Feature documentation (PRD, Requirements)
 │   ├── TechnicalSpecs/        # Technical specifications
-│   │   ├── index.json
-│   │   ├── auth_rbac.json
-│   │   ├── galleries_client_portal.json
-│   │   ├── album_designer.json
-│   │   ├── payments_billing_subscriptions.json
-│   │   └── ... (more specs)
 │   └── DatabaseSchemas/       # Database schema documentation
 │
 ├── .kiro/                       # Kiro IDE configuration
@@ -132,15 +80,8 @@ RawDrive/
 │   │   └── structure.md       # Project structure (this file)
 │   └── settings/              # IDE settings
 │
-├── .github/                     # GitHub configuration
-│   ├── workflows/             # CI/CD workflows
-│   │   ├── test.yml           # Run tests on PR
-│   │   ├── lint.yml           # Lint code
-│   │   └── deploy.yml         # Deploy to production
-│   └── CODEOWNERS             # Code ownership rules
-│
+├── .github/                     # GitHub configuration (Workflows, Codeowners)
 ├── .env                         # Environment variables (local development)
-├── .env.example                # Environment variables template
 ├── .gitignore                  # Git ignore rules
 ├── .eslintrc.json              # ESLint configuration
 ├── .prettierrc                 # Prettier configuration
@@ -150,8 +91,7 @@ RawDrive/
 ├── docker-compose.yml          # Local development containers
 ├── CLAUDE.md                   # AI context and coding guidelines
 └── README.md                   # Project overview
-
-```
+````
 
 ## Key Organizational Principles
 
@@ -182,45 +122,37 @@ const galleries = await db.query(
    - Reusable across the entire application
    - No business logic
 
-2. **Feature Components** (`components/gallery/`, `components/album/`, etc.): Domain-specific
-   - GalleryGrid, PhotoLightbox, AlbumDesigner, etc.
-   - May contain business logic
-   - Scoped to specific features
+2. **Feature Components** (`components/features/`): Domain-specific
+   - Organized by feature (`gallery`, `profile`, `invitations`)
+   - `components/features/gallery/`, `components/features/profile/`
+   - Scoped to specific features, containing their own sub-components
 
 3. **Page Components** (`pages/`): Route-level containers
-   - GalleryPage, AlbumPage, DashboardPage, etc.
-   - Orchestrate feature components
-   - Handle data fetching and state management
+   - Organized by layout context (`admin/`, `workspace/`, `public/`)
+   - `pages/workspace/GalleryPage`, `pages/admin/DashboardPage`
+   - Orchestrate feature components & data fetching
 
-### Service Layer Organization
-
-**Backend services follow this pattern:**
-
-1. **Controllers** (`controllers/`): Request handlers
-   - Parse and validate input
+### Service Layer Organization (Backend)
+1. **API Layer** (`api/v1/`): Route handlers (FastAPI)
+   - Validate inputs (Pydantic)
    - Call services
-   - Format responses
-
-2. **Services** (`services/`): Business logic
-   - Implement domain logic
-   - Handle data transformations
-   - Coordinate with repositories
-
-3. **Models** (`models/`): Data access
-   - Database queries
-   - ORM interactions
-   - Data persistence
+2. **Service Layer** (`services/`): Business Logic
+   - Coordinate transactions
+   - Complex domain logic
+3. **Repository Layer** (`repositories/`): Data Access
+   - Raw SQL queries (asyncpg)
+   - Database abstractions
+4. **Models** (`models/`):
+   - Pydantic Domain models
 
 ### Database Organization
 
-**Migrations are numbered and immutable:**
+**Migrations are managed by Alembic:**
 
 ```
-backend/src/db/migrations/
-├── 001_create_users_table.sql
-├── 002_create_workspaces_table.sql
-├── 003_create_galleries_table.sql
-├── 004_add_workspace_id_to_galleries.sql
+backend/migrations/versions/
+├── 1234abcd_create_users_table.py
+├── 5678efgh_add_workspace_id.py
 └── ...
 ```
 
@@ -232,17 +164,14 @@ backend/src/db/migrations/
 
 ### API Route Organization
 
-**Routes are organized by resource and versioned:**
+**Routes are organized by resource:**
 
 ```
-backend/src/routes/v1/
-├── auth.ts              # POST /api/v1/auth/login, /auth/logout
-├── galleries.ts         # GET/POST /api/v1/galleries
-├── photos.ts            # GET/POST /api/v1/photos
-├── albums.ts            # GET/POST /api/v1/albums
-├── clients.ts           # GET/POST /api/v1/clients
-├── bookings.ts          # GET/POST /api/v1/bookings
-└── payments.ts          # GET/POST /api/v1/payments
+backend/src/app/api/v1/
+├── auth.py
+├── galleries.py
+├── photos.py
+└── ...
 ```
 
 ### Type Definitions
@@ -251,14 +180,16 @@ backend/src/routes/v1/
 
 ```
 frontend/src/types/
-├── types.ts             # All frontend types
-├── api.ts               # API request/response types
-└── models.ts            # Domain model types
+├── client.ts            # Client domain types
+├── gallery.ts           # Gallery domain types
+├── invitations.ts       # Invitation domain types
+├── common.ts            # Shared types
+└── ...                  # (activity, userSettings, etc.)
 
-backend/src/types/
-├── types.ts             # All backend types
-├── models.ts            # Database model types
-└── api.ts               # API contract types
+backend/src/app/
+├── api/schemas.py       # Pydantic Schemas (Request/Response types)
+├── models/              # Pydantic Domain Models
+└── ...
 ```
 
 ### Utility Functions
@@ -267,16 +198,18 @@ backend/src/types/
 
 ```
 frontend/src/utils/
-├── formatting.ts        # Date, currency, number formatting
-├── validation.ts        # Form and input validation
-├── storage.ts           # LocalStorage helpers
-└── api.ts               # API helper functions
+├── date.ts              # Date formatting (date-fns wrapper)
+├── fileUtils.ts         # File handling helpers
+├── colorTools.ts        # Color manipulation
+├── themeTransformer.ts  # Theme conversion logic
+└── ...                  # (securityUtils, errorMessages, etc.)
 
-backend/src/utils/
-├── encryption.ts        # Encryption/decryption
-├── jwt.ts               # JWT token generation/verification
-├── validation.ts        # Input validation
-└── errors.ts            # Error handling utilities
+backend/src/app/
+├── core/security.py     # Auth utilities
+├── utils/
+│   ├── time.py          # Time helpers
+│   └── email.py         # Email helpers
+└── ...
 ```
 
 ## Naming Conventions
@@ -299,7 +232,7 @@ backend/src/utils/
 
 - **React components**: Max 400 lines (split into smaller components)
 - **Services**: Max 600 lines (split by domain)
-- **Controllers**: Max 300 lines (one resource per file)
+- **API Routes**: Max 300 lines (one resource per file)
 - **Utilities**: Max 200 lines (split by function)
 
 ## Import Organization
@@ -320,7 +253,7 @@ import { formatDate } from '@/utils/formatting';
 
 // 4. Internal components
 import { AppButton } from '@/components/ui/AppButton';
-import { GalleryGrid } from '@/components/gallery/GalleryGrid';
+import { GalleryCard } from '@/components/features/gallery/GalleryCard';
 
 // 5. Styles
 import styles from './GalleryPage.module.css';
@@ -338,11 +271,12 @@ import { Gallery } from '@/types/types';
 import { AppButton } from '@/components/ui/AppButton';
 ```
 
-**Backend uses `@/*` alias:**
+**Backend uses absolute imports:**
 
-```typescript
-// Instead of: import { galleryService } from '../../../services/galleryService'
-import { galleryService } from '@/services/galleryService';
+```python
+# From src root
+from src.app.services.gallery_service import GalleryService
+from src.app.core.config import settings
 ```
 
 ## Documentation Files
@@ -371,23 +305,14 @@ docs/Features/
 ```
 backend/tests/
 ├── unit/
-│   ├── services/
-│   │   ├── galleryService.test.ts
-│   │   └── authService.test.ts
-│   └── utils/
-│       └── validation.test.ts
 ├── integration/
-│   ├── galleries.test.ts
-│   ├── auth.test.ts
-│   └── payments.test.ts
-└── fixtures/
-    ├── users.json
-    └── galleries.json
+├── fixtures/
+└── conftest.py          # Pytest configuration and fixtures
 
 frontend/tests/
 ├── unit/
 │   ├── components/
-│   │   └── GalleryGrid.test.tsx
+│   │   └── GalleryCard.test.tsx
 │   └── utils/
 │       └── formatting.test.ts
 └── integration/
@@ -411,7 +336,7 @@ frontend/tests/
 
 - `frontend/vite.config.ts` - Vite build configuration
 - `frontend/tailwind.config.js` - Tailwind CSS configuration
-- `backend/tsconfig.json` - Backend TypeScript configuration
+- `backend/pyproject.toml` - Backend Python configuration
 
 ## Git Workflow
 
@@ -437,8 +362,11 @@ test(photos): add integration tests for upload flow
 
 ## Development Workflow
 
-1. **Setup**: `npm install && npm run docker:dev:up`
-2. **Development**: `npm run dev:all` (frontend + backend)
+1. **Setup**: `npm install` (frontend) + `pip install -r requirements.txt` (backend)
+2. **Development**:
+   - Frontend: `npm run dev`
+   - Backend: `uvicorn src.app.main:app --reload`
+   - Services: `docker-compose up -d`
 3. **Testing**: `npm test` (run all tests)
 4. **Linting**: `npm run lint` (check code quality)
 5. **Building**: `npm run build` (production build)

@@ -1,5 +1,6 @@
 ---
 name: accessibility
+aliases: [a11y, wcag, aria, keyboard-nav, screen-reader]
 description: Accessibility guidelines for RawDrive. Use when building UI components, handling keyboard navigation, implementing ARIA attributes, or ensuring WCAG compliance.
 ---
 

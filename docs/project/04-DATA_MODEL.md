@@ -22,106 +22,46 @@ The data model serves to:
 
 Represents a photographer or admin account.
 
-**User Entity:**
-```typescript
-interface User {
-  // Identifiers
-  id: string, // UUID
-  email: string, // Unique, lowercase
-  
-  // Profile
-  firstName: string,
-  lastName: string,
-  displayName: string,
-  avatar?: string, // URL
-  bio?: string,
-  
-  // Authentication
-  passwordHash: string, // Argon2id
-  passwordSalt: string,
-  lastPasswordChange: Date,
-  
-  // Account Status
-  status: 'active' | 'inactive' | 'suspended' | 'deleted',
-  emailVerified: boolean,
-  emailVerifiedAt?: Date,
-  
-  // Subscription
-  subscriptionTier: 'free' | 'starter' | 'professional' | 'business' | 'enterprise',
-  subscriptionStatus: 'active' | 'trial' | 'expired' | 'cancelled',
-  subscriptionStartDate: Date,
-  subscriptionEndDate?: Date,
-  
-  // Security
-  twoFactorEnabled: boolean,
-  twoFactorMethod?: 'totp' | 'sms' | 'email',
-  lastLoginAt?: Date,
-  lastLoginIp?: string,
-  
-  // Metadata
-  createdAt: Date,
-  updatedAt: Date,
-  deletedAt?: Date,
-}
-
-// Indexes
-CREATE UNIQUE INDEX idx_user_email ON users(email);
-CREATE INDEX idx_user_status ON users(status);
-CREATE INDEX idx_user_subscription_tier ON users(subscriptionTier);
-CREATE INDEX idx_user_created_at ON users(createdAt);
+**User Model (Pydantic / Logical):**
+```python
+class User(BaseModel):
+    id: UUID
+    email: str
+    
+    # Profile
+    first_name: str
+    last_name: str
+    display_name: str
+    avatar: Optional[str] = None
+    bio: Optional[str] = None
+    
+    # Auth
+    password_hash: str
+    
+    # Subscriptions
+    subscription_tier: SubscriptionTier = SubscriptionTier.FREE
+    
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
 ```
 
 ### Gallery
 
 Represents a photo gallery.
 
-**Gallery Entity:**
-```typescript
-interface Gallery {
-  // Identifiers
-  id: string, // UUID
-  photographerId: string, // FK -> User
-  
-  // Basic Info
-  name: string,
-  description?: string,
-  slug: string, // URL-friendly name
-  
-  // Settings
-  isPublic: boolean,
-  passwordProtected: boolean,
-  password?: string, // Hashed
-  accessCode?: string,
-  allowDownload: boolean,
-  allowSharing: boolean,
-  allowComments: boolean,
-  
-  // Branding
-  customBranding?: {
-    logo?: string,
-    primaryColor?: string,
-    secondaryColor?: string,
-    customDomain?: string,
-  },
-  
-  // Metadata
-  photoCount: number,
-  totalSize: number, // Bytes
-  viewCount: number,
-  lastViewedAt?: Date,
-  
-  // Timestamps
-  createdAt: Date,
-  updatedAt: Date,
-  publishedAt?: Date,
-  archivedAt?: Date,
-}
-
-// Indexes
-CREATE INDEX idx_gallery_photographer_id ON galleries(photographerId);
-CREATE INDEX idx_gallery_is_public ON galleries(isPublic);
-CREATE INDEX idx_gallery_created_at ON galleries(createdAt);
-CREATE UNIQUE INDEX idx_gallery_slug ON galleries(slug);
+**Gallery Model:**
+```python
+class Gallery(BaseModel):
+    id: UUID
+    photographer_id: UUID
+    
+    name: str
+    slug: str
+    is_public: bool = False
+    
+    # Metadata
+    # ...
 ```
 
 ### Photo

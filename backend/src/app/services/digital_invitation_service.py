@@ -524,16 +524,35 @@ class DigitalInvitationService:
             updates["event_end_datetime"] = event_end_datetime
         if event_timezone is not None:
             updates["event_timezone"] = event_timezone
+        
+        # Flatten venue
         if venue is not None:
-            updates["venue"] = venue
+            updates["venue_name"] = venue.get("name")
+            updates["venue_address"] = venue.get("address")
+            updates["venue_city"] = venue.get("city")
+            updates["venue_state"] = venue.get("state")
+            updates["venue_country"] = venue.get("country")
+            updates["venue_postal_code"] = venue.get("postal_code")
+            updates["venue_latitude"] = venue.get("latitude")
+            updates["venue_longitude"] = venue.get("longitude")
+            updates["venue_map_url"] = venue.get("map_url")
+
         if host_names is not None:
             updates["host_names"] = host_names
         if host_contact_phone is not None:
             updates["host_contact_phone"] = host_contact_phone
         if host_contact_email is not None:
             updates["host_contact_email"] = host_contact_email
+            
+        # Flatten RSVP settings
         if rsvp_settings is not None:
-            updates["rsvp_settings"] = rsvp_settings
+            updates["rsvp_enabled"] = rsvp_settings.get("enabled", True)
+            updates["rsvp_deadline"] = rsvp_settings.get("deadline")
+            updates["rsvp_max_party_size"] = rsvp_settings.get("max_party_size")
+            updates["rsvp_collect_dietary"] = rsvp_settings.get("collect_dietary")
+            updates["rsvp_collect_phone"] = rsvp_settings.get("collect_phone")
+            updates["rsvp_custom_questions"] = rsvp_settings.get("custom_questions")
+
         if primary_language is not None:
             updates["primary_language"] = primary_language
         if secondary_language is not None:

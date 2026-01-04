@@ -151,7 +151,7 @@ export const ProfileBody: React.FC<ProfileBodyProps> = ({
                   ">
                     <item.icon size={24} />
                   </div>
-                  <span className="text-xs text-gray-500 font-medium">{item.label}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-300 font-medium">{item.label}</span>
                 </>
               );
 
@@ -215,7 +215,7 @@ export const ProfileBody: React.FC<ProfileBodyProps> = ({
               <Mail size={20} />
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase font-semibold">Email</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Email</p>
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{email}</p>
             </div>
           </div>
@@ -234,7 +234,7 @@ export const ProfileBody: React.FC<ProfileBodyProps> = ({
               <Phone size={20} />
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase font-semibold">Phone</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Phone</p>
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{phone}</p>
             </div>
           </div>
@@ -253,7 +253,7 @@ export const ProfileBody: React.FC<ProfileBodyProps> = ({
               <MapPin size={20} />
             </div>
             <div className="flex-1">
-              <p className="text-xs text-gray-500 uppercase font-semibold">Location</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Location</p>
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{address}</p>
             </div>
              <a href={`https://maps.google.com/?q=${encodeURIComponent(address)}`} target="_blank" className="text-gray-400">

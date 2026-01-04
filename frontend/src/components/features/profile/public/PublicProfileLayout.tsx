@@ -52,8 +52,8 @@ export const PublicProfileLayout: React.FC<PublicProfileLayoutProps> = ({
       '--theme-primary': themeColors?.primary || '#2563EB',
       '--theme-secondary': themeColors?.secondary || '#64748B',
       '--theme-accent': themeColors?.accent || '#06B6D4',
-      '--theme-bg': themeColors?.background || '#F8FAFC',
-      '--theme-text': themeColors?.text || '#0F172A',
+      '--theme-bg': themeColors?.background,
+      '--theme-text': themeColors?.text,
       '--theme-font-heading': themeTypography?.headingFont ? `${themeTypography.headingFont}` : 'inherit',
       '--theme-font-body': themeTypography?.bodyFont ? `${themeTypography.bodyFont}` : 'inherit',
     } as React.CSSProperties;
