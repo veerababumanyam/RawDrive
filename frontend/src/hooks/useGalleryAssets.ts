@@ -5,7 +5,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { galleryService } from '../services/galleryService';
+import { aiFilterService } from '../services/aiFilterService';
 import type { GalleryAssetsResponse, GalleryAssetItem } from '../types/gallery';
+import type { AIFilterState } from '../types/aiFilter';
 
 interface UseGalleryAssetsOptions {
   workspaceId: string;
@@ -20,6 +22,8 @@ interface UseGalleryAssetsOptions {
   autoFetch?: boolean;
   /** Sort by: position (default), favorites, picks, newest, oldest */
   sortBy?: 'position' | 'favorites' | 'picks' | 'newest' | 'oldest';
+  /** AI Filters state */
+  aiFilters?: AIFilterState;
 }
 
 interface UseGalleryAssetsReturn {
@@ -45,6 +49,7 @@ export const useGalleryAssets = ({
   limit = 50,
   autoFetch = true,
   sortBy = 'position',
+  aiFilters,
 }: UseGalleryAssetsOptions): UseGalleryAssetsReturn => {
   const [assets, setAssets] = useState<GalleryAssetItem[]>([]);
   const [meta, setMeta] = useState<GalleryAssetsResponse['meta'] | null>(null);
@@ -64,6 +69,41 @@ export const useGalleryAssets = ({
       setLoading(true);
       setError(null);
       try {
+        // Check if AI filters are active
+        const hasAIFilters = aiFilters && (
+          aiFilters.qualityTier !== 'all' ||
+          aiFilters.qualityMin !== undefined ||
+          aiFilters.blurHide ||
+          aiFilters.minSharpness !== undefined ||
+          aiFilters.minExposure !== undefined ||
+          aiFilters.minComposition !== undefined
+        );
+
+        let assetIds: string[] | undefined;
+        let aiMeta: GalleryAssetsResponse['meta'] | undefined;
+
+        if (hasAIFilters) {
+          const aiResult = await aiFilterService.getFilteredAssets(workspaceId, galleryId, {
+            ...aiFilters,
+            page: pageNum,
+            limit,
+          });
+          
+          assetIds = aiResult.assetIds;
+          aiMeta = aiResult.meta;
+
+          // If no assets match AI filters, return empty result immediately
+          if (assetIds.length === 0) {
+            if (!append) {
+              setAssets([]);
+            }
+            setMeta(aiMeta);
+            setCurrentPage(pageNum);
+            setLoading(false);
+            return;
+          }
+        }
+
         const response = await galleryService.listGalleryAssets(workspaceId, galleryId, {
           page: pageNum,
           limit,
@@ -77,6 +117,7 @@ export const useGalleryAssets = ({
           selections_only: selectionsOnly,
           search_query: searchQuery || undefined,
           sort_by: sortBy,
+          asset_ids: assetIds,
           signal: abortControllerRef.current.signal,
         });
 
@@ -85,7 +126,10 @@ export const useGalleryAssets = ({
         } else {
           setAssets(response.data);
         }
-        setMeta(response.meta);
+        
+        // If using AI filters, use the AI meta for total counts/pagination
+        setMeta(hasAIFilters && aiMeta ? aiMeta : response.meta);
+        
         setCurrentPage(pageNum);
         setLoading(false);
       } catch (err) {
@@ -101,7 +145,19 @@ export const useGalleryAssets = ({
         setLoading(false);
       }
     },
-    [workspaceId, galleryId, subGalleryId, picksOnly, favoritesOnly, selectionsOnly, searchQuery, sortBy, limit, currentPage]
+    [
+      workspaceId,
+      galleryId,
+      subGalleryId,
+      picksOnly,
+      favoritesOnly,
+      selectionsOnly,
+      searchQuery,
+      sortBy,
+      limit,
+      currentPage,
+      aiFilters,
+    ]
   );
 
   useEffect(() => {

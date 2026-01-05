@@ -29,6 +29,7 @@ from app.repositories.similarity_group_repository import (
     SimilarityGroupRepository,
     get_similarity_group_repository,
 )
+from app.services.audit_service import AuditService, AuditEventType
 
 logger = logging.getLogger(__name__)
 
@@ -374,6 +375,27 @@ class CurationSessionService:
             },
         )
 
+        # T060: Audit logging for AI analysis completion
+        try:
+            gallery_id = session.get("gallery_id")
+            user_id = session.get("user_id")
+            await AuditService().log_event(
+                event_type=AuditEventType.AI_ANALYSIS_COMPLETED,
+                actor_user_id=user_id,
+                workspace_id=workspace_id,
+                resource_type="gallery",
+                resource_id=str(gallery_id) if gallery_id else str(session_id),
+                details={
+                    "session_id": str(session_id),
+                    "selected_count": selected_count,
+                    "groups_count": groups_count,
+                    "total_photos": session.get("total_photos", 0),
+                    "analyzed_count": session.get("analyzed_count", 0),
+                },
+            )
+        except Exception:
+            logger.warning("Failed to log AI_ANALYSIS_COMPLETED audit event", exc_info=True)
+
         return self._format_session_response(session)
 
     async def fail_session(
@@ -406,6 +428,26 @@ class CurationSessionService:
                 "error": error_message,
             },
         )
+
+        # T060: Audit logging for AI analysis failure
+        try:
+            gallery_id = session.get("gallery_id") if session else None
+            user_id = session.get("user_id") if session else None
+            await AuditService().log_event(
+                event_type=AuditEventType.AI_ANALYSIS_FAILED,
+                actor_user_id=user_id,
+                workspace_id=workspace_id,
+                resource_type="gallery",
+                resource_id=str(gallery_id) if gallery_id else str(session_id),
+                details={
+                    "session_id": str(session_id),
+                    "error_message": error_message,
+                    "total_photos": session.get("total_photos", 0) if session else 0,
+                    "analyzed_count": session.get("analyzed_count", 0) if session else 0,
+                },
+            )
+        except Exception:
+            logger.warning("Failed to log AI_ANALYSIS_FAILED audit event", exc_info=True)
 
         return self._format_session_response(session)
 

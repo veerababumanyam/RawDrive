@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Grid, List, Sparkles, Heart, CheckSquare, Search, X, LayoutDashboard } from 'lucide-react';
+import { Grid, List, Sparkles, Heart, CheckSquare, Search, X, LayoutDashboard, FolderPlus } from 'lucide-react';
 import { Checkbox } from '../../ui/FormControls';
 import { ViewMode, FilterType } from '../../../types/gallery';
 import { GallerySearchBar } from './GallerySearchBar';
@@ -37,6 +37,12 @@ export interface GalleryToolbarProps {
   useEnhancedSearch?: boolean;
   /** Callback for enhanced search filter changes */
   onEnhancedFiltersChange?: (filters: SearchFilters, queryParams: URLSearchParams) => void;
+  /** AI filter match count badge */
+  aiMatchCount?: number | null;
+  aiFiltersApplied?: boolean;
+  onClearAIFilters?: () => void;
+  /** Callback to save filtered results as a sub-gallery */
+  onSaveAsGallery?: () => void;
 }
 
 // Filter pill button styles
@@ -83,6 +89,10 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
   galleryId,
   useEnhancedSearch = false,
   onEnhancedFiltersChange,
+  aiMatchCount = null,
+  aiFiltersApplied = false,
+  onClearAIFilters,
+  onSaveAsGallery,
 }) => {
   const handleFilterToggle = (filterKey: 'picks' | 'favorites' | 'selections') => {
     if (onFiltersChange) {
@@ -209,6 +219,35 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
 
         {/* Spacer - pushes remaining items to right */}
         <div className="flex-1" />
+
+        {aiMatchCount !== null && (
+          <div className="flex items-center gap-2 text-sm text-text-secondary">
+            <span className="inline-flex items-center gap-1 rounded-full bg-surface-hover px-2 py-1 border border-border/60">
+              <Sparkles size={14} className="text-primary" />
+              <span>{aiMatchCount}</span>
+            </span>
+            {aiFiltersApplied && onSaveAsGallery && aiMatchCount > 0 && (
+              <button
+                type="button"
+                onClick={onSaveAsGallery}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                aria-label="Save filtered results as a new sub-gallery"
+              >
+                <FolderPlus size={14} />
+                <span className="hidden sm:inline">Save as Gallery</span>
+              </button>
+            )}
+            {aiFiltersApplied && onClearAIFilters && (
+              <button
+                type="button"
+                onClick={onClearAIFilters}
+                className="text-xs text-primary hover:underline"
+              >
+                Clear AI filters
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Search Input - Enhanced or basic depending on props */}
         {useEnhancedSearch && galleryId && onEnhancedFiltersChange ? (

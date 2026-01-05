@@ -7,6 +7,8 @@ Auto-generated from all feature plans. Last updated: 2025-12-28
 - PostgreSQL 16 for RSVPs/audit events, Redis 7 for idempotency + job queues, S3/R2 for asset storage (unchanged) (020-invitation-rsvp-hardening)
 - TypeScript 5.2+, Python 3.9+ + npm/pnpm workspaces, Zod 4.2+, Pydantic 2.7+, json-schema-to-typescrip (022-shared-packages)
 - N/A (no database changes - application-level type sharing) (022-shared-packages)
+- Backend Python 3.11 (FastAPI 0.115+), Frontend TypeScript 5.2+ with React 19 + Vite 5. + FastAPI, SQLAlchemy, Alembic, Celery, Redis client; Frontend uses React Query, Tailwind-based design tokens, UI kit (`AppButton`, `AppInput`, etc.). (025-ai-filter-simplify)
+- PostgreSQL 16 with pgvector; Redis 7 for cache/queues; Cloudflare R2 (S3-compatible) for assets. (025-ai-filter-simplify)
 
 - (010-ai-powered-features) Python 3.11, TypeScript 5.2+, Google Gemini API, FastAPI, React
 - (009-profile-tabs-redesign)
@@ -65,10 +67,10 @@ npm test -- --testPathPattern=ai
 - **Validation**: Strict input validation for AI requests
 
 ## Recent Changes
+- 025-ai-filter-simplify: Added Backend Python 3.11 (FastAPI 0.115+), Frontend TypeScript 5.2+ with React 19 + Vite 5. + FastAPI, SQLAlchemy, Alembic, Celery, Redis client; Frontend uses React Query, Tailwind-based design tokens, UI kit (`AppButton`, `AppInput`, etc.).
 - 022-shared-packages: Added TypeScript 5.2+, Python 3.9+ + npm/pnpm workspaces, Zod 4.2+, Pydantic 2.7+, json-schema-to-typescrip
 - 020-invitation-rsvp-hardening: Added Backend Python 3.11 (FastAPI), Frontend TypeScript 5.2 + React 18 (Vite) + FastAPI, SQLAlchemy/asyncpg, Redis, structlog, SendGrid SDK, Zod, React Query, Tailwind UI kit (`AppButton`, `AppInput`, etc.)
 
-- 010-ai-powered-features: AI-powered photo analysis, caption generation, hashtag generation using Gemini LLM
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

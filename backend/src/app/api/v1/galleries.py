@@ -797,3 +797,74 @@ async def scan_gallery_faces(
             status_code=500,
         )
 
+
+# ---------------------------------------------------------------------------
+# Create Sub-Gallery from Filter Results (025-ai-filter-simplify US3)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{gallery_id}/create-from-filter",
+    response_model=dict,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create sub-gallery from filtered assets",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid request"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def create_sub_gallery_from_filter(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    request: dict,
+) -> dict:
+    """Create a new sub-gallery containing the specified assets.
+    
+    Used by "Save as Gallery" feature in AI filter UI to persist filtered results.
+    """
+    from app.services.gallery_service import GalleryService, GalleryNotFoundError
+
+    try:
+        name = request.get("name")
+        asset_ids = [UUID(aid) for aid in request.get("assetIds", [])]
+        copy_settings = request.get("copySettings", True)
+
+        if not name:
+            raise ValidationAppError("Sub-gallery name is required")
+        if not asset_ids:
+            raise ValidationAppError("At least one asset ID is required")
+        if len(asset_ids) > 500:
+            raise ValidationAppError(
+                "Cannot create sub-gallery with more than 500 assets. "
+                "Please narrow your filters or split into multiple galleries."
+            )
+
+        gallery_service = GalleryService()
+        
+        result = await gallery_service.create_from_assets(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            name=name,
+            asset_ids=asset_ids,
+            copy_settings=copy_settings,
+        )
+
+        return {
+            "galleryId": result["sub_gallery_id"],
+            "name": result["name"],
+            "assetCount": result["asset_count"],
+            "parentGalleryId": result["parent_gallery_id"],
+            "createdAt": result["created_at"],
+        }
+
+    except GalleryNotFoundError:
+        raise NotFoundError("Gallery", gallery_id)
+    except ValidationAppError:
+        raise
+    except Exception:
+        logger.exception("Failed to create sub-gallery from filter")
+        raise InternalError("Failed to create sub-gallery from filter")
+

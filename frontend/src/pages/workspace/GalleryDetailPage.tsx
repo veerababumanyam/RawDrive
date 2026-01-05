@@ -43,11 +43,21 @@ import { useSearch } from '../../contexts/SearchContext';
 import { galleryService } from '../../services/galleryService';
 import { faceApiService } from '../../services/faceApiService';
 import { SignedUrlProvider } from '../../contexts/SignedUrlContext';
-import { StoryGenerator, SmartCurationPanel, AIToolsHub } from '../../components/features/ai';
+import {
+  StoryGenerator,
+  SmartCurationPanel,
+  AIToolsHub,
+  QualityFilterSection,
+  BlurFilterSection,
+  TechnicalScoreFilterSection,
+  SaveFilteredGalleryModal,
+} from '../../components/features/ai';
+import { SimpleAnalysisBar } from '../../components/ai/SimpleAnalysisBar';
 import { useAIFeatureToggles } from '../../hooks/useGeminiSettings';
 import type { GalleryAssetItem, ViewMode, FilterType } from '../../types/gallery';
 import type { AIFeatureToggles } from '../../types/geminiSettings';
 import { ADMIN_PRIVATE_UNLOCKED_KEY_PREFIX } from '../../constants/gallery';
+import { useAIFilters } from '../../hooks/useAIFilters';
 
 const GalleryDetailPage: React.FC = () => {
   const { id: galleryId } = useParams<{ id: string }>();
@@ -91,6 +101,7 @@ const GalleryDetailPage: React.FC = () => {
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [showSmartCurationModal, setShowSmartCurationModal] = useState(false);
   const [showAITools, setShowAITools] = useState(false);
+  const [showSaveFilteredGalleryModal, setShowSaveFilteredGalleryModal] = useState(false);
   
   // Private photo unlock state (admin also needs PIN to see private photos)
   const [showPinModal, setShowPinModal] = useState(false);
@@ -147,6 +158,38 @@ const GalleryDetailPage: React.FC = () => {
     autoFetch: !!galleryId && !!workspace?.workspace_id,
   });
 
+  const {
+    filters,
+    updateFilter,
+    resetFilters,
+    applyFilters,
+    matchCount,
+    countLoading,
+    applyLoading,
+    lastApplied,
+  } = useAIFilters({
+    workspaceId: workspace?.workspace_id,
+    galleryId,
+    autoCount: true,
+    countDebounceMs: 350,
+  });
+
+  // Track applied filters separately to allow "Apply" button behavior
+  // Initialize with filters so URL params are applied immediately
+  // Type allows undefined to represent "no AI filters applied" state
+  const [appliedFilters, setAppliedFilters] = useState<typeof filters | undefined>(filters);
+
+  // Update appliedFilters when filters change from external sources (like session storage load)
+  // We use a ref to track if it's the initial load/sync
+  const filtersRef = React.useRef(filters);
+  useEffect(() => {
+    // If filters changed and it wasn't a user interaction (we can't easily know that, but...)
+    // Actually, let's just rely on manual Apply for now, except for initial load.
+    // But initial load is handled by useState(filters).
+    // If session storage updates filters later, we might want to auto-apply?
+    // Let's leave it manual for now to avoid auto-apply loops.
+  }, []);
+
   // Fetch gallery assets
   const {
     assets,
@@ -165,17 +208,21 @@ const GalleryDetailPage: React.FC = () => {
     favoritesOnly: activeFilters.favorites || false,
     selectionsOnly: activeFilters.selections || false,
     searchQuery: searchQuery,
+    limit: 50,
     autoFetch: !!galleryId && !!workspace?.workspace_id,
+    aiFilters: appliedFilters,
   });
 
   const { featureToggles } = useAIFeatureToggles({ autoFetch: true });
 
+  const visibleAssets = assets;
+
   // Compute filtered stats from currently loaded assets
   const filteredStats = useMemo(() => {
     const totalItems = meta?.total ?? assets.length;
-    const favoritesCount = assets.filter((a) => a.is_favorited).length;
-    const selectionsCount = assets.filter((a) => a.is_selected).length;
-    const privateCount = assets.filter((a) => a.is_private).length;
+    const favoritesCount = visibleAssets.filter((a) => a.is_favorited).length;
+    const selectionsCount = visibleAssets.filter((a) => a.is_selected).length;
+    const privateCount = visibleAssets.filter((a) => a.is_private).length;
 
     return {
       totalItems,
@@ -183,7 +230,7 @@ const GalleryDetailPage: React.FC = () => {
       selectionsCount,
       privateCount,
     };
-  }, [assets, meta?.total]);
+  }, [visibleAssets, meta?.total, assets.length]);
 
   const isAIFeatureReady = useCallback(
     (feature: keyof AIFeatureToggles) => {
@@ -242,6 +289,25 @@ const GalleryDetailPage: React.FC = () => {
     setShowAITools(true);
   }, [workspace?.workspace_id, gallery]);
 
+  const handleApplyAIFilters = useCallback(() => {
+    setAppliedFilters(filters);
+    addToast({ message: 'Filters applied', variant: 'success' });
+  }, [filters, addToast]);
+
+  const handleResetAIFilters = useCallback(() => {
+    resetFilters();
+    setAppliedFilters(undefined); // Or reset to default? resetFilters resets 'filters' state.
+    // We should set appliedFilters to the new (reset) filters.
+    // But resetFilters is async? No, it's synchronous state update.
+    // But we don't have the new value here yet.
+    // So we can pass undefined to useGalleryAssets to disable AI filtering?
+    // Or we can wait for effect?
+    // Let's just set it to undefined (or default) for now.
+    // Actually, if we set it to undefined, useGalleryAssets will see "no AI filters" and fetch all.
+    // Which is what we want.
+    setAppliedFilters(undefined);
+  }, [resetFilters]);
+
   // Handle Scan Faces
   const handleScanFaces = useCallback(async () => {
     if (!workspace?.workspace_id || !galleryId) return;
@@ -283,6 +349,12 @@ const GalleryDetailPage: React.FC = () => {
       }
     },
   });
+
+  useEffect(() => {
+    if (lightboxIndex >= visibleAssets.length) {
+      setLightboxIndex(0);
+    }
+  }, [visibleAssets.length, lightboxIndex]);
 
   // Handle asset selection
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
@@ -900,6 +972,68 @@ const GalleryDetailPage: React.FC = () => {
           />
         </div>
 
+        {/* AI Filters (quality/blur/technical) */}
+        <div className="glass-card rounded-2xl border border-border/60 bg-surface p-4 sm:p-6 space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-text-primary">AI Filters</div>
+              <p className="text-xs text-text-tertiary">Quality tiers, blur, and technical scores</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-text-secondary">
+                Matches: {countLoading ? '...' : matchCount ?? '—'}
+              </div>
+              <AppButton
+                variant="primary"
+                size="sm"
+                onClick={handleApplyAIFilters}
+                disabled={applyLoading || !workspace?.workspace_id || !galleryId}
+                isLoading={applyLoading}
+              >
+                Apply Filters
+              </AppButton>
+              <AppButton variant="ghost" size="sm" onClick={handleResetAIFilters}>
+                Reset
+              </AppButton>
+            </div>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <QualityFilterSection
+              qualityTier={filters.qualityTier}
+              qualityMin={filters.qualityMin}
+              onChange={(vals) => updateFilter(vals)}
+            />
+            <BlurFilterSection
+              blurHide={filters.blurHide}
+              blurShowBokeh={filters.blurShowBokeh}
+              onChange={(vals) => updateFilter(vals)}
+            />
+            <TechnicalScoreFilterSection
+              minSharpness={filters.minSharpness}
+              minExposure={filters.minExposure}
+              minComposition={filters.minComposition}
+              onChange={(vals) => updateFilter(vals)}
+            />
+          </div>
+
+          {appliedFilters && meta && (
+            <div className="text-xs text-text-tertiary">
+              Applied to {meta.total} item{meta.total === 1 ? '' : 's'}. Showing filtered results in the grid.
+            </div>
+          )}
+        </div>
+
+        {/* AI Analysis Bar */}
+        {workspace?.workspace_id && galleryId && (
+          <div className="mb-4">
+            <SimpleAnalysisBar
+              workspaceId={workspace.workspace_id}
+              galleryId={galleryId}
+            />
+          </div>
+        )}
+
         {/* Row 4: Toolbar (view toggle, filters, search) */}
         <GalleryToolbar
           viewMode={viewMode}
@@ -911,14 +1045,18 @@ const GalleryDetailPage: React.FC = () => {
           onSearchChange={setSearchQuery}
           activeFilters={activeFilters}
           onFiltersChange={setActiveFilters}
-          selectAll={selectedAssetIds.size === assets.length && assets.length > 0}
+          selectAll={selectedAssetIds.size === visibleAssets.length && visibleAssets.length > 0}
           onSelectAllChange={(selected) => {
             if (selected) {
-              setSelectedAssetIds(new Set(assets.map((a) => a.asset_id)));
+              setSelectedAssetIds(new Set(visibleAssets.map((a) => a.asset_id)));
             } else {
               setSelectedAssetIds(new Set());
             }
           }}
+          aiMatchCount={matchCount}
+          aiFiltersApplied={!!appliedFilters}
+          onClearAIFilters={handleResetAIFilters}
+          onSaveAsGallery={() => setShowSaveFilteredGalleryModal(true)}
         />
 
         {/* Unlock Private Photos Button - show when private photos exist and not unlocked */}
@@ -958,10 +1096,10 @@ const GalleryDetailPage: React.FC = () => {
         )}
 
         {/* Bulk Action Bar - Shows when items selected */}
-        {selectedAssetIds.size > 0 && (
+          {selectedAssetIds.size > 0 && (
           <BulkActionBar
             selectedAssetIds={selectedAssetIds}
-            assets={assets}
+              assets={visibleAssets}
             onClearSelection={() => setSelectedAssetIds(new Set())}
             subGalleries={gallery?.sub_galleries || []}
             onBulkMove={async (assetIds, subGalleryId) => {
@@ -1026,7 +1164,7 @@ const GalleryDetailPage: React.FC = () => {
             </div>
           ) : viewMode === 'grid' || viewMode === 'masonry' ? (
             <GalleryCanvas
-              assets={assets}
+              assets={visibleAssets}
               viewMode={viewMode === 'masonry' ? 'masonry' : 'grid'}
               selectedAssetIds={selectedAssetIds}
               lastSelectedId={lastSelectedId}
@@ -1106,7 +1244,7 @@ const GalleryDetailPage: React.FC = () => {
             />
           ) : (
             <PhotoListView
-              assets={assets}
+              assets={visibleAssets}
               selectedAssetIds={selectedAssetIds}
               onAssetSelect={handleAssetSelect}
               onAssetClick={handleAssetClick}
@@ -1129,12 +1267,12 @@ const GalleryDetailPage: React.FC = () => {
         </div>
 
         {/* Lightbox */}
-        {lightboxOpen && assets[lightboxIndex] && (
+        {lightboxOpen && visibleAssets[lightboxIndex] && (
           <Lightbox
             isOpen={lightboxOpen}
             onClose={handleLightboxClose}
-            currentAsset={assets[lightboxIndex]}
-            assets={assets}
+            currentAsset={visibleAssets[lightboxIndex]}
+            assets={visibleAssets}
             currentIndex={lightboxIndex}
             onNavigate={handleLightboxNavigate}
             onFavorite={handleAssetFavorite}
@@ -1361,6 +1499,24 @@ const GalleryDetailPage: React.FC = () => {
           onVerify={handlePrivatePhotoUnlock}
           onCancel={() => setShowPinModal(false)}
           galleryTitle={gallery.title}
+        />
+
+        {/* Save Filtered Gallery Modal (AI filter results to sub-gallery) */}
+        <SaveFilteredGalleryModal
+          isOpen={showSaveFilteredGalleryModal}
+          onClose={() => setShowSaveFilteredGalleryModal(false)}
+          workspaceId={workspace?.workspace_id || ''}
+          parentGalleryId={gallery.gallery_id}
+          parentGalleryName={gallery.title}
+          assetIds={visibleAssets.map((a) => a.asset_id)}
+          filterDescription={appliedFilters?.qualityTier && appliedFilters.qualityTier !== 'all' ? `${appliedFilters.qualityTier} quality` : undefined}
+          onSuccess={(newGalleryId, newGalleryName) => {
+            addToast({
+              message: `Created sub-gallery "${newGalleryName}" with ${visibleAssets.length} photos`,
+              variant: 'success',
+            });
+            refetchGallery(); // Refresh to show new sub-gallery in tabs
+          }}
         />
       </div>
     </div>

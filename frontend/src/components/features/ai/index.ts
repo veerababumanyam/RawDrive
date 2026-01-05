@@ -54,3 +54,21 @@ export { HashtagGenerator } from './HashtagGenerator';
 // Legacy standalone panel - consider using AIToolsHub CurateTab instead
 // ---------------------------------------------------------------------------
 export { SmartCurationPanel } from './SmartCurationPanel';
+
+// ---------------------------------------------------------------------------
+// AI Filter Controls (025-ai-filter-simplify)
+// ---------------------------------------------------------------------------
+export { QualityFilterSection } from './QualityFilterSection';
+export { BlurFilterSection } from './BlurFilterSection';
+export { TechnicalScoreFilterSection } from './TechnicalScoreFilterSection';
+export { SmartCollectionSelector } from './SmartCollectionSelector';
+export { SaveFilteredGalleryModal } from './SaveFilteredGalleryModal';
+
+// US4: Content & Context Filtering
+export { ContentFilterSection } from './ContentFilterSection';
+
+// US5: Similarity Organization
+export { SimilarityStackSection } from './SimilarityStackSection';
+
+// US6: AI Create Panel
+export { AICreatePanel } from './AICreatePanel';

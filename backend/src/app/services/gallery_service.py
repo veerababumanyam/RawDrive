@@ -578,6 +578,7 @@ class GalleryService:
         face_group_ids: list[UUID] | None = None,
         tag_ids: list[UUID] | None = None,
         tag_source: str | None = None,
+        asset_ids: list[UUID] | None = None,
     ) -> dict:
         """List assets in a gallery with pagination and filtering."""
         pool = await get_postgres_pool()
@@ -601,6 +602,22 @@ class GalleryService:
             ]
             params = [workspace_id, gallery_id]
             param_idx = 3
+
+            if asset_ids is not None:
+                # If asset_ids is empty, return empty result immediately
+                if not asset_ids:
+                    return {
+                        "data": [],
+                        "meta": {
+                            "page": page,
+                            "limit": limit,
+                            "total": 0,
+                            "totalPages": 0,
+                        },
+                    }
+                where_conditions.append(f"ga.asset_id = ANY(${param_idx}::uuid[])")
+                params.append(asset_ids)
+                param_idx += 1
 
             if sub_gallery_id is not None:
                 if sub_gallery_id == "":
@@ -2031,3 +2048,113 @@ def get_gallery_service() -> GalleryService:
                 }
                 for row in rows
             ]
+
+    async def create_from_assets(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        name: str,
+        asset_ids: list[UUID],
+        copy_settings: bool = True,
+    ) -> dict:
+        """Create a sub-gallery from a list of asset IDs.
+        
+        Used by AI Filter "Save as Gallery" feature to create sub-galleries
+        from filtered results (025-ai-filter-simplify).
+        
+        Args:
+            workspace_id: Workspace UUID
+            gallery_id: Parent gallery UUID
+            name: Name for the new sub-gallery
+            asset_ids: List of asset IDs to include
+            copy_settings: Whether to copy parent gallery settings (privacy, watermark, etc.)
+            
+        Returns:
+            Sub-gallery dict with metadata
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Verify parent gallery exists
+            gallery = await conn.fetchrow(
+                "SELECT gallery_id, download_policy, watermark_enabled FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
+                workspace_id,
+                gallery_id,
+            )
+            if not gallery:
+                raise GalleryNotFoundError(gallery_id)
+
+            # Create sub-gallery
+            sub_gallery_id = await conn.fetchval(
+                """
+                INSERT INTO sub_galleries (
+                    workspace_id, gallery_id, name, sort_order, visible
+                )
+                VALUES ($1, $2, $3, (
+                    SELECT COALESCE(MAX(sort_order), 0) + 1
+                    FROM sub_galleries
+                    WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+                ), TRUE)
+                RETURNING sub_gallery_id
+                """,
+                workspace_id,
+                gallery_id,
+                name,
+            )
+
+            # Insert assets into sub-gallery
+            # Verify assets belong to the parent gallery
+            for idx, asset_id in enumerate(asset_ids):
+                await conn.execute(
+                    """
+                    INSERT INTO gallery_assets (
+                        workspace_id, gallery_id, sub_gallery_id, asset_id,
+                        sort_order, visible
+                    )
+                    SELECT $1, $2, $3, $4, $5, TRUE
+                    WHERE EXISTS (
+                        SELECT 1 FROM gallery_assets
+                        WHERE workspace_id = $1 AND gallery_id = $2 AND asset_id = $4
+                        AND visible = TRUE
+                    )
+                    ON CONFLICT (workspace_id, gallery_id, asset_id)
+                    DO UPDATE SET sub_gallery_id = $3, sort_order = $5
+                    """,
+                    workspace_id,
+                    gallery_id,
+                    sub_gallery_id,
+                    asset_id,
+                    idx,
+                )
+
+            # Get final sub-gallery data
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    sub_gallery_id, name, sort_order, visible, cover_asset_id,
+                    (
+                        SELECT COUNT(*)
+                        FROM gallery_assets ga
+                        JOIN assets a ON ga.asset_id = a.asset_id
+                        WHERE ga.sub_gallery_id = sub_galleries.sub_gallery_id
+                        AND ga.visible = TRUE
+                        AND a.deleted = FALSE
+                        AND a.status = 'available'
+                    ) as photo_count
+                FROM sub_galleries
+                WHERE workspace_id = $1 AND sub_gallery_id = $2
+                """,
+                workspace_id,
+                sub_gallery_id,
+            )
+
+            return {
+                "sub_gallery_id": str(row["sub_gallery_id"]),
+                "gallery_id": str(gallery_id),
+                "name": row["name"],
+                "asset_count": row["photo_count"],
+                "parent_gallery_id": str(gallery_id),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "sort_order": row["sort_order"],
+                "visible": row["visible"],
+                "cover_asset_id": str(row["cover_asset_id"]) if row["cover_asset_id"] else None,
+            }

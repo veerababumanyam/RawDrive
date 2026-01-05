@@ -15,13 +15,15 @@ import logging
 from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Path, Query, status
+from fastapi import APIRouter, Depends, Path, Query, status
 from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
 from app.api.schemas import ErrorResponse
-from app.api.exceptions import InternalError, NotFoundError
+from app.api.exceptions import ForbiddenError, InternalError, NotFoundError
+from app.config.feature_flags import FeatureFlags, get_feature_flags
+from app.services.audit_service import AuditService, AuditEventType
 from app.services.content_detection_service import get_content_detection_service
 from app.services.tagging_health_service import get_tagging_health_service
 from app.services.search_service import get_search_service
@@ -29,6 +31,14 @@ from app.services.search_service import get_search_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _require_ai_filter_enabled(flags: FeatureFlags = Depends(get_feature_flags)) -> None:
+    if not flags.ai_filter_simplify:
+        raise ForbiddenError(
+            message="AI filter simplify feature is disabled",
+            code="FEATURE_DISABLED",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +347,877 @@ class QualityAnalysisProgressSchema(BaseModel):
     estimated_remaining_seconds: Optional[int] = None
     stage: Optional[str] = None
     error_message: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# One-Click Analysis (alias) Endpoints (025-ai-filter-simplify)
+# These wrap the quality-analysis workflow under the new /analyze paths
+# defined in the feature contracts to keep backwards compatibility while
+# aligning to the simplified AI entry point.
+# ---------------------------------------------------------------------------
+
+
+class StartAnalyzeRequest(BaseModel):
+    """Request payload for one-click analyze endpoint."""
+
+    reanalyzeAll: bool = Field(
+        False,
+        description="If true, re-run analysis for all photos; otherwise analyze only new/unanalyzed photos.",
+    )
+
+
+class AnalysisSummaryResponse(BaseModel):
+    """Summary response for one-click analyze summary endpoint."""
+
+    total_analyzed: int
+    total_photos: int  # Total photos in gallery (for partial failure calculation)
+    failed_count: int  # Photos that failed analysis: total_photos - total_analyzed
+    excellent: int
+    good: int
+    fair: int
+    poor: int
+    blur_count: int
+
+
+# ---------------------------------------------------------------------------
+# AI Filter Schemas (quality/blur/technical only - 025-ai-filter-simplify P1)
+# ---------------------------------------------------------------------------
+
+
+class AIFilterRequest(BaseModel):
+    """Query params for AI filter endpoint (subset for P1)."""
+
+    quality_tier: str = Field("all", description="all|excellent|good|fair")
+    quality_min: Optional[int] = Field(None, ge=0, le=100)
+    blur_hide: bool = Field(False, description="Hide blurred photos")
+    blur_show_bokeh: bool = Field(True, description="Show bokeh even when hiding blur")
+    min_sharpness: Optional[int] = Field(None, ge=0, le=100)
+    min_exposure: Optional[int] = Field(None, ge=0, le=100)
+    min_composition: Optional[int] = Field(None, ge=0, le=100)
+    page: int = Field(1, ge=1)
+    limit: int = Field(100, ge=1, le=500)
+
+
+class FilteredAsset(BaseModel):
+    asset_id: UUID
+    overall_score: float
+    sharpness_score: Optional[float] = None
+    exposure_score: Optional[float] = None
+    composition_score: Optional[float] = None
+    blur_detected: Optional[bool] = None
+    blur_type: Optional[str] = None
+    blur_severity: Optional[str] = None
+
+
+class AIFilterResponse(BaseModel):
+    assets: list[FilteredAsset]
+    meta: dict
+    filter_stats: dict
+    applied_filters: dict
+
+
+class AIFilterCountResponse(BaseModel):
+    count: int
+    similarityGroupsCount: int = 0
+
+
+@router.post(
+    "/galleries/{gallery_id}/analyze",
+    response_model=QualityAnalysisStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start one-click AI analysis for a gallery",
+    responses={
+        400: {"model": ErrorResponse, "description": "AI not configured"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+        409: {"model": ErrorResponse, "description": "Analysis already in progress"},
+    },
+)
+async def start_one_click_analysis(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    request: StartAnalyzeRequest,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> QualityAnalysisStartResponse:
+    """
+    Start AI analysis via the new /analyze path (alias of quality-analysis).
+
+    This reuses the curation session service. "reanalyzeAll" maps to creating a
+    fresh session (analyze all). When false, the existing session logic will
+    process only new/unanalyzed photos as implemented by the service.
+    """
+    from app.services.curation_session_service import (
+        get_curation_session_service,
+        SessionAlreadyActiveError,
+    )
+    from app.services.gemini_client_service import AIConfigurationError
+    from app.api.exceptions import ConflictError, ValidationAppError
+
+    try:
+        session_service = get_curation_session_service()
+
+        # If reanalyzeAll is true, start a fresh session; otherwise reuse/create
+        # NOTE: curation_session_service currently enforces a single active session.
+        # reanalyzeAll semantics are approximated by starting a fresh session (and
+        # failing with 409 if one is active). Future enhancement can explicitly
+        # archive/close existing sessions when reanalyzeAll=True.
+        session = await session_service.create_session(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            user_id=current_user.user_id,
+            auto_start=True,
+        )
+
+        # T060: Audit logging for AI analysis start
+        try:
+            await AuditService().log_event(
+                event_type=AuditEventType.AI_ANALYSIS_STARTED,
+                actor_user_id=current_user.user_id,
+                workspace_id=workspace_id,
+                resource_type="gallery",
+                resource_id=str(gallery_id),
+                details={
+                    "session_id": str(session["session_id"]),
+                    "reanalyze_all": request.reanalyzeAll,
+                },
+            )
+        except Exception:
+            logger.warning("Failed to log AI_ANALYSIS_STARTED audit event", exc_info=True)
+
+        return QualityAnalysisStartResponse(
+            session_id=session["session_id"],
+            status=session["status"],
+            message="Analysis started. Track progress via /analyze/progress endpoint.",
+        )
+
+    except SessionAlreadyActiveError as e:
+        raise ConflictError(str(e), code="SESSION_ALREADY_ACTIVE")
+    except AIConfigurationError as e:
+        raise ValidationAppError(
+            f"Gemini AI not configured: {e.message}. "
+            "Please add your API key in Settings > AI."
+        )
+    except NotFoundError:
+        raise
+    except Exception:
+        logger.exception("Failed to start one-click analysis")
+        raise InternalError("Failed to start one-click analysis")
+
+
+@router.get(
+    "/galleries/{gallery_id}/analyze/progress",
+    response_model=QualityAnalysisProgressSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Get one-click analysis progress",
+)
+async def get_one_click_analysis_progress(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> QualityAnalysisProgressSchema:
+    """Alias for quality-analysis progress under the new /analyze path."""
+    return await get_quality_analysis_progress(
+        workspace_id=workspace_id,
+        gallery_id=gallery_id,
+        workspace_access=workspace_access,
+        current_user=current_user,
+    )
+
+
+@router.get(
+    "/galleries/{gallery_id}/analyze/summary",
+    response_model=AnalysisSummaryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get one-click analysis summary",
+)
+async def get_one_click_analysis_summary(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> AnalysisSummaryResponse:
+    """Return aggregate analysis summary for a gallery under the /analyze path.
+
+    Includes total_photos and failed_count to support partial failure handling (T023a).
+    """
+    from app.repositories.photo_quality_repository import get_photo_quality_repository
+    from app.services.gallery_service import get_gallery_service
+
+    try:
+        repo = get_photo_quality_repository()
+        gallery_service = get_gallery_service()
+
+        # Get gallery to determine total photo count
+        gallery = await gallery_service.get_gallery(gallery_id=gallery_id, workspace_id=workspace_id)
+        total_photos = gallery.get("photo_count", 0) if gallery else 0
+
+        summary = await repo.get_summary_by_gallery(workspace_id, gallery_id)
+        total_analyzed = summary.get("total_analyzed", 0) if summary else 0
+        failed_count = max(0, total_photos - total_analyzed)
+
+        if not summary:
+            return AnalysisSummaryResponse(
+                total_analyzed=0,
+                total_photos=total_photos,
+                failed_count=failed_count,
+                excellent=0,
+                good=0,
+                fair=0,
+                poor=0,
+                blur_count=0,
+            )
+
+        return AnalysisSummaryResponse(
+            total_analyzed=total_analyzed,
+            total_photos=total_photos,
+            failed_count=failed_count,
+            excellent=summary.get("excellent_count", 0),
+            good=summary.get("good_count", 0),
+            fair=summary.get("fair_count", 0),
+            poor=summary.get("poor_count", 0),
+            blur_count=summary.get("blur_count", 0),
+        )
+    except Exception:
+        logger.exception("Failed to get analysis summary")
+        raise InternalError("Failed to get analysis summary")
+
+
+class RetryFailedAnalysisResponse(BaseModel):
+    """Response for retry failed analysis endpoint."""
+
+    queued_count: int
+    message: str
+
+
+@router.post(
+    "/galleries/{gallery_id}/analyze/retry-failed",
+    response_model=RetryFailedAnalysisResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Retry failed AI analysis for unanalyzed photos",
+    responses={
+        400: {"model": ErrorResponse, "description": "AI not configured"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+        409: {"model": ErrorResponse, "description": "Analysis already in progress"},
+    },
+)
+async def retry_failed_analysis(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> RetryFailedAnalysisResponse:
+    """Retry analysis for photos that failed or were not analyzed.
+
+    This identifies photos in the gallery that don't have quality analysis
+    results and queues them for re-analysis. Used by the "Retry Failed" button
+    when partial failures are detected (T023a).
+    """
+    from app.repositories.photo_quality_repository import get_photo_quality_repository
+    from app.services.gallery_service import get_gallery_service
+    from app.services.curation_session_service import (
+        get_curation_session_service,
+        SessionAlreadyActiveError,
+    )
+    from app.services.gemini_client_service import AIConfigurationError
+    from app.api.exceptions import ConflictError, ValidationAppError
+
+    try:
+        gallery_service = get_gallery_service()
+        repo = get_photo_quality_repository()
+        session_service = get_curation_session_service()
+
+        # Get gallery to verify it exists and get total photo count
+        gallery = await gallery_service.get_gallery(gallery_id=gallery_id, workspace_id=workspace_id)
+        if not gallery:
+            raise NotFoundError("Gallery", gallery_id)
+
+        # Get list of all asset IDs in gallery
+        assets_result = await gallery_service.list_assets(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            limit=2000,  # Support up to 2000 photos per gallery
+        )
+        all_asset_ids = {a["asset_id"] for a in assets_result.get("assets", [])}
+
+        # Get list of already-analyzed asset IDs from latest session
+        analyzed_results, _ = await repo.list_by_gallery(
+            workspace_id, gallery_id, limit=2000, offset=0
+        )
+        analyzed_asset_ids = {str(r["asset_id"]) for r in analyzed_results}
+
+        # Find unanalyzed assets
+        unanalyzed_ids = all_asset_ids - analyzed_asset_ids
+
+        if not unanalyzed_ids:
+            return RetryFailedAnalysisResponse(
+                queued_count=0,
+                message="All photos have already been analyzed successfully."
+            )
+
+        # Start a new session to analyze only the failed photos
+        session = await session_service.create_session(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            user_id=current_user.user_id,
+            auto_start=True,
+            asset_ids=list(unanalyzed_ids),  # Only analyze unanalyzed photos
+        )
+
+        # T060: Audit logging for AI analysis retry
+        try:
+            await AuditService().log_event(
+                event_type=AuditEventType.AI_ANALYSIS_RETRY,
+                actor_user_id=current_user.user_id,
+                workspace_id=workspace_id,
+                resource_type="gallery",
+                resource_id=str(gallery_id),
+                details={
+                    "session_id": str(session["session_id"]),
+                    "failed_count": len(unanalyzed_ids),
+                    "total_photos": len(all_asset_ids),
+                },
+            )
+        except Exception:
+            logger.warning("Failed to log AI_ANALYSIS_RETRY audit event", exc_info=True)
+
+        return RetryFailedAnalysisResponse(
+            queued_count=len(unanalyzed_ids),
+            message=f"Queued {len(unanalyzed_ids)} photos for re-analysis. Track progress via /analyze/progress."
+        )
+
+    except SessionAlreadyActiveError as e:
+        raise ConflictError(str(e), code="SESSION_ALREADY_ACTIVE")
+    except AIConfigurationError as e:
+        raise ValidationAppError(
+            f"Gemini AI not configured: {e.message}. "
+            "Please add your API key in Settings > AI."
+        )
+    except NotFoundError:
+        raise
+    except Exception:
+        logger.exception("Failed to retry failed analysis")
+        raise InternalError("Failed to retry failed analysis")
+
+
+# ---------------------------------------------------------------------------
+# AI Filter Endpoints (quality/blur/technical score filters, P1 scope)
+# ---------------------------------------------------------------------------
+
+
+def _quality_min_from_tier(tier: str) -> Optional[int]:
+    tier_map = {
+        "excellent": 90,
+        "good": 70,
+        "fair": 50,
+        "all": None,
+    }
+    return tier_map.get(tier, None)
+
+
+def _passes_blur_filters(row: dict, blur_hide: bool, blur_show_bokeh: bool) -> bool:
+    if not blur_hide:
+        return True
+    if not row.get("blur_detected"):
+        return True
+    # allow artistic bokeh if configured
+    if blur_show_bokeh and row.get("blur_type") == "bokeh":
+        return True
+    # otherwise hide blurred
+    return False
+
+
+def _passes_score_filters(row: dict, min_sharpness: Optional[int], min_exposure: Optional[int], min_composition: Optional[int]) -> bool:
+    if min_sharpness is not None and (row.get("sharpness_score") or 0) < min_sharpness:
+        return False
+    if min_exposure is not None and (row.get("exposure_score") or 0) < min_exposure:
+        return False
+    if min_composition is not None and (row.get("composition_score") or 0) < min_composition:
+        return False
+    return True
+
+
+@router.get(
+    "/galleries/{gallery_id}/ai-filter",
+    response_model=AIFilterResponse,
+    summary="Filter gallery assets by AI quality/blur/technical scores",
+)
+async def filter_gallery_ai(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    quality_tier: Annotated[str, Query(alias="quality_tier", regex="^(all|excellent|good|fair)$", description="Quality tier filter")] = "all",
+    quality_min: Annotated[Optional[int], Query(ge=0, le=100, description="Minimum overall quality score")]=None,
+    blur_hide: Annotated[bool, Query(description="Hide photos with blur")]=False,
+    blur_show_bokeh: Annotated[bool, Query(description="Show bokeh even when hiding blur")]=True,
+    min_sharpness: Annotated[Optional[int], Query(ge=0, le=100, description="Minimum sharpness score")]=None,
+    min_exposure: Annotated[Optional[int], Query(ge=0, le=100, description="Minimum exposure score")]=None,
+    min_composition: Annotated[Optional[int], Query(ge=0, le=100, description="Minimum composition score")]=None,
+    page: Annotated[int, Query(ge=1, description="Page number")]=1,
+    limit: Annotated[int, Query(ge=1, le=500, description="Page size")]=100,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> AIFilterResponse:
+    """Return filtered assets using quality/blur/technical scores from latest session."""
+    from app.repositories.photo_quality_repository import get_photo_quality_repository
+
+    repo = get_photo_quality_repository()
+
+    # Determine min score from tier/explicit override
+    tier_min = _quality_min_from_tier(quality_tier)
+    effective_min = quality_min if quality_min is not None else tier_min
+
+    results, total = await repo.list_by_gallery(
+        workspace_id,
+        gallery_id,
+        min_score=effective_min,
+        blur_only=False,
+        limit=2000,  # fetch enough to filter/paginate client-side for this response
+        offset=0,
+    )
+
+    filtered: list[dict] = []
+    for row in results:
+        if not _passes_blur_filters(row, blur_hide=blur_hide, blur_show_bokeh=blur_show_bokeh):
+            continue
+        if not _passes_score_filters(row, min_sharpness, min_exposure, min_composition):
+            continue
+        filtered.append(row)
+
+    # Pagination (server-side)
+    start = (page - 1) * limit
+    end = start + limit
+    paged = filtered[start:end]
+
+    assets = [
+        FilteredAsset(
+            asset_id=row["asset_id"],
+            overall_score=row.get("overall_score", 0),
+            sharpness_score=row.get("sharpness_score"),
+            exposure_score=row.get("exposure_score"),
+            composition_score=row.get("composition_score"),
+            blur_detected=row.get("blur_detected"),
+            blur_type=row.get("blur_type"),
+            blur_severity=row.get("blur_severity"),
+        )
+        for row in paged
+    ]
+
+    applied_filters = {
+        "quality_tier": quality_tier,
+        "quality_min": quality_min,
+        "blur_hide": blur_hide,
+        "blur_show_bokeh": blur_show_bokeh,
+        "min_sharpness": min_sharpness,
+        "min_exposure": min_exposure,
+        "min_composition": min_composition,
+        "page": page,
+        "limit": limit,
+    }
+
+    filter_stats = {
+        "excellentCount": sum(1 for r in filtered if (r.get("overall_score", 0) >= 90)),
+        "goodCount": sum(1 for r in filtered if 70 <= (r.get("overall_score", 0)) < 90),
+        "fairCount": sum(1 for r in filtered if 50 <= (r.get("overall_score", 0)) < 70),
+        "blurryHidden": sum(1 for r in results if not _passes_blur_filters(r, blur_hide=True, blur_show_bokeh=blur_show_bokeh)),
+    }
+
+    meta = {
+        "page": page,
+        "limit": limit,
+        "total": len(filtered),
+        "hasMore": end < len(filtered),
+    }
+
+    # T060: Audit logging for AI filter application (only log on first page to avoid spam)
+    if page == 1:
+        try:
+            await AuditService().log_event(
+                event_type=AuditEventType.AI_FILTER_APPLIED,
+                actor_user_id=current_user.user_id,
+                workspace_id=workspace_id,
+                resource_type="gallery",
+                resource_id=str(gallery_id),
+                details={
+                    "filters": applied_filters,
+                    "result_count": len(filtered),
+                    "total_analyzed": total,
+                },
+            )
+        except Exception:
+            logger.warning("Failed to log AI_FILTER_APPLIED audit event", exc_info=True)
+
+    return AIFilterResponse(
+        assets=assets,
+        meta=meta,
+        filter_stats=filter_stats,
+        applied_filters=applied_filters,
+    )
+
+
+@router.get(
+    "/galleries/{gallery_id}/ai-filter/count",
+    response_model=AIFilterCountResponse,
+    summary="Get count of assets matching AI filters (quality/blur/technical)",
+)
+async def count_gallery_ai_filters(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    quality_tier: Annotated[str, Query(alias="quality_tier", regex="^(all|excellent|good|fair)$", description="Quality tier filter")] = "all",
+    quality_min: Annotated[Optional[int], Query(ge=0, le=100, description="Minimum overall quality score")]=None,
+    blur_hide: Annotated[bool, Query(description="Hide photos with blur")]=False,
+    blur_show_bokeh: Annotated[bool, Query(description="Show bokeh even when hiding blur")]=True,
+    min_sharpness: Annotated[Optional[int], Query(ge=0, le=100, description="Minimum sharpness score")]=None,
+    min_exposure: Annotated[Optional[int], Query(ge=0, le=100, description="Minimum exposure score")]=None,
+    min_composition: Annotated[Optional[int], Query(ge=0, le=100, description="Minimum composition score")]=None,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> AIFilterCountResponse:
+    """Return count only, for real-time match indicator."""
+    from app.repositories.photo_quality_repository import get_photo_quality_repository
+
+    repo = get_photo_quality_repository()
+    tier_min = _quality_min_from_tier(quality_tier)
+    effective_min = quality_min if quality_min is not None else tier_min
+
+    results, _ = await repo.list_by_gallery(
+        workspace_id,
+        gallery_id,
+        min_score=effective_min,
+        blur_only=False,
+        limit=2000,
+        offset=0,
+    )
+
+    filtered = [
+        r
+        for r in results
+        if _passes_blur_filters(r, blur_hide=blur_hide, blur_show_bokeh=blur_show_bokeh)
+        and _passes_score_filters(r, min_sharpness, min_exposure, min_composition)
+    ]
+
+    return AIFilterCountResponse(count=len(filtered), similarityGroupsCount=0)
+
+
+# ---------------------------------------------------------------------------
+# US4: Content & Context Filtering Endpoints
+# ---------------------------------------------------------------------------
+
+
+class GalleryTagResponse(BaseModel):
+    """Tag info for content filtering."""
+
+    tag_id: str
+    name: str
+    type: str
+    color: Optional[str] = None
+    usage_count: int
+    source: Optional[str] = None
+
+
+class GalleryTagsResponse(BaseModel):
+    """Response for gallery tags endpoint."""
+
+    tags: list[GalleryTagResponse]
+    total: int
+
+
+@router.get(
+    "/galleries/{gallery_id}/tags",
+    response_model=GalleryTagsResponse,
+    summary="Get tags used in gallery for content filtering UI",
+)
+async def get_gallery_tags(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    source: Annotated[Optional[str], Query(description="Filter by source: all, ai, manual")] = "all",
+    min_usage: Annotated[int, Query(ge=0, description="Minimum usage count")] = 0,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> GalleryTagsResponse:
+    """Get all tags used in gallery assets for the content filter UI."""
+    from app.db.postgres import acquire_conn, get_postgres_pool
+
+    pool = await get_postgres_pool()
+    async with acquire_conn(pool) as conn:
+        # Build source filter
+        source_filter = ""
+        if source == "ai":
+            source_filter = "AND at.source != 'manual'"
+        elif source == "manual":
+            source_filter = "AND at.source = 'manual'"
+
+        rows = await conn.fetch(
+            f"""
+            SELECT
+                t.tag_id::text,
+                t.name,
+                t.type,
+                t.color,
+                COUNT(DISTINCT ga.asset_id) as usage_count,
+                MAX(at.source) as source
+            FROM gallery_assets ga
+            JOIN asset_tags at ON ga.asset_id = at.asset_id AND ga.workspace_id = at.workspace_id
+            JOIN tags t ON at.tag_id = t.tag_id
+            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
+            {source_filter}
+            GROUP BY t.tag_id, t.name, t.type, t.color
+            HAVING COUNT(DISTINCT ga.asset_id) >= $3
+            ORDER BY COUNT(DISTINCT ga.asset_id) DESC, t.name ASC
+            """,
+            workspace_id,
+            gallery_id,
+            min_usage,
+        )
+
+        tags = [
+            GalleryTagResponse(
+                tag_id=row["tag_id"],
+                name=row["name"],
+                type=row["type"],
+                color=row["color"],
+                usage_count=row["usage_count"],
+                source=row["source"],
+            )
+            for row in rows
+        ]
+
+        return GalleryTagsResponse(tags=tags, total=len(tags))
+
+
+# ---------------------------------------------------------------------------
+# US5: Similarity Organization Endpoints
+# ---------------------------------------------------------------------------
+
+
+class SimilarityGroupMemberResponse(BaseModel):
+    """Member of a similarity group."""
+
+    asset_id: str
+    similarity_score: float
+    is_best: bool
+    is_user_selected: bool
+    quality_rank: Optional[int] = None
+
+
+class SimilarityGroupResponse(BaseModel):
+    """Similarity group response."""
+
+    group_id: str
+    best_asset_id: Optional[str] = None
+    user_override_asset_id: Optional[str] = None
+    member_count: int
+    avg_similarity: float
+    best_reason: Optional[str] = None
+    members: list[SimilarityGroupMemberResponse] = []
+
+
+class SimilarityGroupsListResponse(BaseModel):
+    """Response for similarity groups list."""
+
+    groups: list[SimilarityGroupResponse]
+    total: int
+    singleton_count: int
+
+
+class SetBestShotRequest(BaseModel):
+    """Request to set best shot for a group."""
+
+    asset_id: UUID = Field(..., description="Asset ID to set as best shot")
+
+
+@router.get(
+    "/galleries/{gallery_id}/similarity-groups",
+    response_model=SimilarityGroupsListResponse,
+    summary="Get similarity groups for a gallery",
+)
+async def get_similarity_groups(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    min_members: Annotated[int, Query(ge=1, description="Minimum group members")] = 2,
+    include_members: Annotated[bool, Query(description="Include member details")] = False,
+    page: Annotated[int, Query(ge=1)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> SimilarityGroupsListResponse:
+    """Get similarity groups for the gallery from the latest curation session."""
+    from app.repositories.similarity_group_repository import get_similarity_group_repository
+    from app.services.curation_session_service import get_curation_session_service
+
+    session_service = get_curation_session_service()
+    group_repo = get_similarity_group_repository()
+
+    # Find the latest completed session for this gallery
+    session = await session_service.get_latest_session(workspace_id, gallery_id)
+    if not session:
+        return SimilarityGroupsListResponse(groups=[], total=0, singleton_count=0)
+
+    session_id = session.get("session_id")
+    if not session_id:
+        return SimilarityGroupsListResponse(groups=[], total=0, singleton_count=0)
+
+    groups, total, singleton_count = await group_repo.list_by_session(
+        workspace_id=workspace_id,
+        session_id=session_id,
+        min_members=min_members,
+        include_members=include_members,
+        limit=limit,
+        offset=(page - 1) * limit,
+    )
+
+    response_groups = [
+        SimilarityGroupResponse(
+            group_id=str(g["group_id"]),
+            best_asset_id=str(g["best_asset_id"]) if g.get("best_asset_id") else None,
+            user_override_asset_id=str(g["user_override_asset_id"]) if g.get("user_override_asset_id") else None,
+            member_count=g.get("member_count", 0),
+            avg_similarity=g.get("avg_similarity", 0.0),
+            best_reason=g.get("best_reason"),
+            members=[
+                SimilarityGroupMemberResponse(
+                    asset_id=str(m["asset_id"]),
+                    similarity_score=m.get("similarity_score", 0.0),
+                    is_best=m.get("is_best", False),
+                    is_user_selected=m.get("is_user_selected", False),
+                    quality_rank=m.get("quality_rank"),
+                )
+                for m in g.get("members", [])
+            ],
+        )
+        for g in groups
+    ]
+
+    return SimilarityGroupsListResponse(
+        groups=response_groups,
+        total=total,
+        singleton_count=singleton_count,
+    )
+
+
+@router.put(
+    "/galleries/{gallery_id}/similarity-groups/{group_id}/best-shot",
+    status_code=status.HTTP_200_OK,
+    summary="Set best shot for a similarity group (user override)",
+)
+async def set_best_shot(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    group_id: Annotated[UUID, Path(..., description="Similarity group ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    request: SetBestShotRequest,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> dict:
+    """Set the best shot for a similarity group (user override)."""
+    from app.repositories.similarity_group_repository import get_similarity_group_repository
+
+    group_repo = get_similarity_group_repository()
+
+    result = await group_repo.set_best_shot(
+        workspace_id=workspace_id,
+        group_id=group_id,
+        asset_id=request.asset_id,
+        reason="User override",
+        is_user_override=True,
+    )
+
+    if not result:
+        raise NotFoundError("Similarity group not found")
+
+    return {"success": True, "group_id": str(group_id), "best_asset_id": str(request.asset_id)}
+
+
+# ---------------------------------------------------------------------------
+# US6: AI Create (Story/Caption generation) Endpoints
+# ---------------------------------------------------------------------------
+
+
+class AICreateRequest(BaseModel):
+    """Request for AI content generation."""
+
+    mode: str = Field(..., description="story|caption|hashtags")
+    asset_ids: list[UUID] = Field(..., min_length=1, max_length=50, description="Asset IDs to include")
+    style: Optional[str] = Field(None, description="Content style")
+    tone: Optional[str] = Field(None, description="Content tone")
+    max_length: Optional[int] = Field(None, ge=50, le=5000, description="Max content length")
+
+
+class AICreateResponse(BaseModel):
+    """Response for AI content generation."""
+
+    mode: str
+    content: str
+    asset_count: int
+    tokens_used: Optional[int] = None
+
+
+@router.post(
+    "/galleries/{gallery_id}/ai-create",
+    response_model=AICreateResponse,
+    summary="Generate AI content from selected photos",
+)
+async def generate_ai_content(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    request: AICreateRequest,
+    feature_flag: Annotated[None, Depends(_require_ai_filter_enabled)] = None,
+) -> AICreateResponse:
+    """Generate AI content (story, captions, hashtags) from selected photos."""
+    from app.services.ai_filter_service import get_ai_filter_service
+
+    ai_service = get_ai_filter_service()
+
+    try:
+        result = await ai_service.generate_content(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            asset_ids=request.asset_ids,
+            mode=request.mode,
+            style=request.style,
+            tone=request.tone,
+            max_length=request.max_length,
+            user_id=current_user.user_id,
+        )
+
+        # T060: Audit logging for AI content generation
+        try:
+            await AuditService().log_event(
+                event_type=AuditEventType.AI_CONTENT_GENERATED,
+                actor_user_id=current_user.user_id,
+                workspace_id=workspace_id,
+                resource_type="gallery",
+                resource_id=str(gallery_id),
+                details={
+                    "mode": request.mode,
+                    "asset_count": len(request.asset_ids),
+                    "tokens_used": result.get("tokens_used"),
+                },
+            )
+        except Exception:
+            logger.warning("Failed to log AI_CONTENT_GENERATED audit event", exc_info=True)
+
+        return AICreateResponse(
+            mode=request.mode,
+            content=result.get("content", ""),
+            asset_count=len(request.asset_ids),
+            tokens_used=result.get("tokens_used"),
+        )
+
+    except Exception as e:
+        logger.exception("Failed to generate AI content")
+        raise InternalError("Failed to generate AI content")
 
 
 class BlurDetectionResultSchema(BaseModel):
@@ -1556,3 +2437,185 @@ async def get_blur_detection_results(
     except Exception as e:
         logger.exception("Failed to get blur detection results")
         raise InternalError("Failed to get blur detection results")
+
+
+# ---------------------------------------------------------------------------
+# Smart Collection Presets Endpoints (Phase 5 - US3)
+# ---------------------------------------------------------------------------
+
+
+class CurationPresetSchema(BaseModel):
+    """Curation preset schema."""
+
+    preset_id: UUID
+    name: str
+    description: str
+    target_count_ratio: Optional[float] = None
+    target_count_fixed: Optional[int] = None
+    quality_threshold: float
+    similarity_threshold: float
+    prioritize_expressions: bool = False
+    prioritize_composition: bool = False
+    enforce_story_coverage: bool = False
+    enforce_person_coverage: bool = False
+    is_system: bool
+
+
+@router.get(
+    "/presets",
+    response_model=dict,
+    summary="List Smart Collection presets",
+    responses={
+        401: {"model": ErrorResponse, "description": "Authentication required"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+    },
+)
+async def list_curation_presets(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+) -> dict:
+    """List available Smart Collection presets (system + workspace custom).
+    
+    Returns system presets (workspace_id=NULL) and workspace-specific custom presets.
+    """
+    from app.db.postgres import get_postgres_pool
+
+    try:
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    preset_id, workspace_id, name, description,
+                    target_count_ratio, target_count_fixed, quality_threshold,
+                    similarity_threshold, prioritize_expressions, prioritize_composition,
+                    enforce_story_coverage, enforce_person_coverage, is_system
+                FROM curation_presets
+                WHERE workspace_id IS NULL OR workspace_id = $1
+                ORDER BY is_system DESC, name ASC
+                """,
+                workspace_id,
+            )
+
+            presets = [
+                CurationPresetSchema(
+                    preset_id=row["preset_id"],
+                    name=row["name"],
+                    description=row["description"],
+                    target_count_ratio=float(row["target_count_ratio"]) if row["target_count_ratio"] else None,
+                    target_count_fixed=row["target_count_fixed"],
+                    quality_threshold=float(row["quality_threshold"]),
+                    similarity_threshold=float(row["similarity_threshold"]),
+                    prioritize_expressions=row["prioritize_expressions"],
+                    prioritize_composition=row["prioritize_composition"],
+                    enforce_story_coverage=row["enforce_story_coverage"],
+                    enforce_person_coverage=row["enforce_person_coverage"],
+                    is_system=row["is_system"],
+                )
+                for row in rows
+            ]
+
+            return {"presets": presets}
+
+    except Exception:
+        logger.exception("Failed to list curation presets")
+        raise InternalError("Failed to list curation presets")
+
+
+# ---------------------------------------------------------------------------
+# Create Sub-Gallery from Filter Results (Phase 5 - US3)
+# ---------------------------------------------------------------------------
+
+
+class CreateSubGalleryRequest(BaseModel):
+    """Request to create sub-gallery from filter results."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    asset_ids: list[UUID] = Field(..., min_length=1, max_length=500)
+    copy_settings: bool = Field(True, description="Copy parent gallery settings")
+
+
+class CreateSubGalleryResponse(BaseModel):
+    """Response for create sub-gallery operation."""
+
+    gallery_id: UUID
+    name: str
+    asset_count: int
+    parent_gallery_id: UUID
+    created_at: str
+
+
+@router.post(
+    "/galleries/{gallery_id}/create-from-filter",
+    response_model=CreateSubGalleryResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create sub-gallery from filtered assets",
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid request"},
+        403: {"model": ErrorResponse, "description": "Access denied"},
+        404: {"model": ErrorResponse, "description": "Gallery not found"},
+    },
+)
+async def create_sub_gallery_from_filter(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    request: CreateSubGalleryRequest,
+) -> CreateSubGalleryResponse:
+    """Create a new sub-gallery containing the specified assets.
+    
+    Used by "Save as Gallery" feature in AI filter UI to persist filtered results.
+    """
+    from app.services.gallery_service import GalleryService, GalleryNotFoundError
+    from app.api.exceptions import ValidationAppError
+
+    try:
+        if len(request.asset_ids) > 500:
+            raise ValidationAppError(
+                "Cannot create sub-gallery with more than 500 assets. "
+                "Please narrow your filters or split into multiple galleries."
+            )
+
+        gallery_service = GalleryService()
+        
+        result = await gallery_service.create_from_assets(
+            workspace_id=workspace_id,
+            gallery_id=gallery_id,
+            name=request.name,
+            asset_ids=request.asset_ids,
+            copy_settings=request.copy_settings,
+        )
+
+        # T060: Audit logging for AI sub-gallery creation
+        try:
+            await AuditService().log_event(
+                event_type=AuditEventType.AI_SUBGALLERY_CREATED,
+                actor_user_id=current_user.user_id,
+                workspace_id=workspace_id,
+                resource_type="gallery",
+                resource_id=result["sub_gallery_id"],
+                details={
+                    "name": request.name,
+                    "asset_count": len(request.asset_ids),
+                    "parent_gallery_id": str(gallery_id),
+                    "copy_settings": request.copy_settings,
+                },
+            )
+        except Exception:
+            logger.warning("Failed to log AI_SUBGALLERY_CREATED audit event", exc_info=True)
+
+        return CreateSubGalleryResponse(
+            gallery_id=UUID(result["sub_gallery_id"]),
+            name=result["name"],
+            asset_count=result["asset_count"],
+            parent_gallery_id=UUID(result["parent_gallery_id"]),
+            created_at=result["created_at"],
+        )
+
+    except GalleryNotFoundError:
+        raise NotFoundError("Gallery", gallery_id)
+    except Exception:
+        logger.exception("Failed to create sub-gallery from filter")
+        raise InternalError("Failed to create sub-gallery from filter")

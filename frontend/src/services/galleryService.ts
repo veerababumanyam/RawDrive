@@ -167,6 +167,7 @@ export class GalleryService {
       selections_only?: boolean;
       search_query?: string;
       sort_by?: string;
+      asset_ids?: string[];
       signal?: AbortSignal;
     }
   ): Promise<GalleryAssetsResponse> {
@@ -181,6 +182,9 @@ export class GalleryService {
     if (options?.selections_only) params.append('selections_only', 'true');
     if (options?.search_query) params.append('search_query', options.search_query);
     if (options?.sort_by) params.append('sort_by', options.sort_by);
+    if (options?.asset_ids?.length) {
+      options.asset_ids.forEach(id => params.append('asset_ids', id));
+    }
 
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets${query ? `?${query}` : ''}`;
@@ -775,6 +779,42 @@ export class GalleryService {
     }>(endpoint);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to get favorites analytics');
+    }
+    return response.data!;
+  }
+
+  // ==========================================================================
+  // Sub-Gallery Creation (Feature: 025-ai-filter-simplify)
+  // ==========================================================================
+
+  /**
+   * Create a sub-gallery from filtered asset results
+   */
+  async createSubGalleryFromFilter(
+    workspaceId: string,
+    parentGalleryId: string,
+    data: {
+      name: string;
+      asset_ids: string[];
+      copy_settings?: boolean;
+    }
+  ): Promise<{
+    gallery_id: string;
+    name: string;
+    asset_count: number;
+    parent_gallery_id: string;
+    created_at: string;
+  }> {
+    const endpoint = `/api/v1/workspaces/${workspaceId}/smart-tagging/galleries/${parentGalleryId}/create-from-filter`;
+    const response = await apiClient.post<{
+      gallery_id: string;
+      name: string;
+      asset_count: number;
+      parent_gallery_id: string;
+      created_at: string;
+    }>(endpoint, data);
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to create sub-gallery');
     }
     return response.data!;
   }

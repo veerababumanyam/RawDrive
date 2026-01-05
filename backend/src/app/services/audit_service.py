@@ -277,6 +277,14 @@ class AuditEventType(str, Enum):
     RSVP_EDIT_TOKEN_INVALID = "rsvp.edit_token_invalid"
     RSVP_EXPORTED = "rsvp.exported"
 
+    # AI Analysis Events (025-ai-filter-simplify)
+    AI_ANALYSIS_STARTED = "ai.analysis_started"
+    AI_ANALYSIS_COMPLETED = "ai.analysis_completed"
+    AI_ANALYSIS_FAILED = "ai.analysis_failed"
+    AI_ANALYSIS_RETRY = "ai.analysis_retry"
+    AI_FILTER_APPLIED = "ai.filter_applied"
+    AI_SUBGALLERY_CREATED = "ai.subgallery_created"
+
 
 @dataclass
 class AuditEvent:

@@ -1,0 +1,729 @@
+openapi: 3.0.3
+info:
+  title: RawDrive AI Filter API
+  description: API contracts for One-Click AI Analysis & Filtering feature (025-ai-filter-simplify)
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+paths:
+  /workspaces/{workspace_id}/smart-tagging/galleries/{gallery_id}/analyze:
+    post:
+      summary: Start One-Click Gallery Analysis
+      description: |
+        Triggers comprehensive AI analysis for all photos in the gallery.
+        Includes quality scoring, blur detection, and content tagging.
+        Incremental by default (only analyzes new photos).
+      operationId: startGalleryAnalysis
+      tags:
+        - AI Analysis
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartAnalysisRequest'
+      responses:
+        '202':
+          description: Analysis started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartAnalysisResponse'
+        '409':
+          description: Analysis already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /workspaces/{workspace_id}/smart-tagging/galleries/{gallery_id}/analyze/progress:
+    get:
+      summary: Get Analysis Progress
+      description: Returns current progress of gallery analysis
+      operationId: getAnalysisProgress
+      tags:
+        - AI Analysis
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Analysis progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisProgress'
+        '404':
+          description: No active analysis session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /workspaces/{workspace_id}/smart-tagging/galleries/{gallery_id}/analyze/summary:
+    get:
+      summary: Get Analysis Summary
+      description: Returns summary statistics after analysis completes
+      operationId: getAnalysisSummary
+      tags:
+        - AI Analysis
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Analysis summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisSummary'
+        '404':
+          description: Gallery not analyzed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /workspaces/{workspace_id}/smart-tagging/galleries/{gallery_id}/ai-filter:
+    get:
+      summary: Get AI-Filtered Assets
+      description: |
+        Returns gallery assets filtered by AI analysis results.
+        Supports quality tiers, blur filtering, content tags, and similarity grouping.
+      operationId: getAIFilteredAssets
+      tags:
+        - AI Filtering
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+        - name: quality_tier
+          in: query
+          schema:
+            type: string
+            enum: [all, excellent, good, fair]
+            default: all
+          description: Filter by quality tier
+        - name: quality_min
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+          description: Minimum overall quality score
+        - name: blur_hide
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Hide photos with moderate/severe blur
+        - name: blur_show_bokeh
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Show intentional bokeh when blur_hide is true
+        - name: content_event_type
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by event types (wedding, birthday, etc.)
+        - name: content_activity
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by activities (dancing, ceremony, etc.)
+        - name: content_mood
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by mood (happy, romantic, etc.)
+        - name: content_lighting
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by lighting (natural, flash, etc.)
+        - name: min_sharpness
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+          description: Minimum sharpness score
+        - name: min_exposure
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+          description: Minimum exposure score
+        - name: min_composition
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+          description: Minimum composition score
+        - name: similarity_mode
+          in: query
+          schema:
+            type: string
+            enum: [none, stack, hide]
+            default: none
+          description: |
+            - none: Show all photos individually
+            - stack: Group similar photos (show best representative)
+            - hide: Show only best photo from each similarity group
+        - name: preset_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Apply Smart Collection preset
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: Filtered assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIFilterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /workspaces/{workspace_id}/smart-tagging/galleries/{gallery_id}/ai-filter/count:
+    get:
+      summary: Get Filter Match Count
+      description: Returns count of assets matching current filters (for real-time count display)
+      operationId: getFilterMatchCount
+      tags:
+        - AI Filtering
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+        # Same filter params as /ai-filter (abbreviated for space)
+        - name: quality_tier
+          in: query
+          schema:
+            type: string
+            enum: [all, excellent, good, fair]
+        - name: blur_hide
+          in: query
+          schema:
+            type: boolean
+        - name: similarity_mode
+          in: query
+          schema:
+            type: string
+            enum: [none, stack, hide]
+      responses:
+        '200':
+          description: Filter match count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    description: Number of assets matching filters
+                  similarityGroupsCount:
+                    type: integer
+                    description: Number of similarity groups (if applicable)
+
+  /workspaces/{workspace_id}/smart-tagging/galleries/{gallery_id}/similarity-groups:
+    get:
+      summary: Get Similarity Groups
+      description: Returns all similarity groups for the gallery
+      operationId: getSimilarityGroups
+      tags:
+        - AI Filtering
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Similarity groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SimilarityGroup'
+                  totalGroups:
+                    type: integer
+
+  /workspaces/{workspace_id}/smart-tagging/presets:
+    get:
+      summary: List Smart Collection Presets
+      description: Returns available Smart Collection presets (system + workspace custom)
+      operationId: listPresets
+      tags:
+        - Smart Collections
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Presets list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  presets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CurationPreset'
+
+  /workspaces/{workspace_id}/galleries/{gallery_id}/create-from-filter:
+    post:
+      summary: Create Sub-Gallery from Filter Results
+      description: Creates a new sub-gallery containing the specified assets
+      operationId: createSubGalleryFromFilter
+      tags:
+        - Smart Collections
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubGalleryRequest'
+      responses:
+        '201':
+          description: Sub-gallery created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSubGalleryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Workspace UUID
+
+    GalleryId:
+      name: gallery_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Gallery UUID
+
+  schemas:
+    StartAnalysisRequest:
+      type: object
+      properties:
+        reanalyzeAll:
+          type: boolean
+          default: false
+          description: If true, re-analyze all photos. If false, only analyze new/unanalyzed.
+
+    StartAnalysisResponse:
+      type: object
+      required:
+        - sessionId
+        - status
+        - totalPhotos
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [started, already_running]
+        totalPhotos:
+          type: integer
+        unanalyzedPhotos:
+          type: integer
+        estimatedDuration:
+          type: integer
+          description: Estimated seconds to complete
+
+    AnalysisProgress:
+      type: object
+      required:
+        - sessionId
+        - status
+        - progressPercent
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, analyzing, grouping, curating, completed, failed]
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        progressStage:
+          type: string
+          description: Current stage (quality_analysis, embedding_compute, etc.)
+        totalPhotos:
+          type: integer
+        analyzedCount:
+          type: integer
+        estimatedTimeRemaining:
+          type: integer
+          description: Estimated seconds remaining
+        errorMessage:
+          type: string
+
+    AnalysisSummary:
+      type: object
+      required:
+        - totalAnalyzed
+        - qualityDistribution
+      properties:
+        totalAnalyzed:
+          type: integer
+        qualityDistribution:
+          type: object
+          properties:
+            excellent:
+              type: integer
+              description: Photos with score >= 90
+            good:
+              type: integer
+              description: Photos with score >= 70
+            fair:
+              type: integer
+              description: Photos with score >= 50
+            poor:
+              type: integer
+              description: Photos with score < 50
+        blurStats:
+          type: object
+          properties:
+            sharp:
+              type: integer
+            slightBlur:
+              type: integer
+            blurry:
+              type: integer
+            intentionalBokeh:
+              type: integer
+        contentBreakdown:
+          type: object
+          properties:
+            eventTypes:
+              type: object
+              additionalProperties:
+                type: integer
+            activities:
+              type: object
+              additionalProperties:
+                type: integer
+            moods:
+              type: object
+              additionalProperties:
+                type: integer
+        similarityGroupsCount:
+          type: integer
+        failedCount:
+          type: integer
+          description: Photos that failed analysis
+
+    AIFilterResponse:
+      type: object
+      required:
+        - assets
+        - meta
+        - filterStats
+      properties:
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilteredAsset'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            hasMore:
+              type: boolean
+        filterStats:
+          type: object
+          properties:
+            excellentCount:
+              type: integer
+            goodCount:
+              type: integer
+            fairCount:
+              type: integer
+            blurryHidden:
+              type: integer
+            similarityGroupsCount:
+              type: integer
+        similarityGroups:
+          type: array
+          items:
+            $ref: '#/components/schemas/SimilarityGroup'
+        appliedFilters:
+          type: object
+          description: Echo of applied filter parameters
+
+    FilteredAsset:
+      allOf:
+        - $ref: '#/components/schemas/GalleryAssetItem'
+        - type: object
+          properties:
+            qualityScore:
+              type: number
+              minimum: 0
+              maximum: 100
+            sharpnessScore:
+              type: number
+            exposureScore:
+              type: number
+            compositionScore:
+              type: number
+            blurDetected:
+              type: boolean
+            blurSeverity:
+              type: string
+              enum: [none, slight, moderate, severe]
+            blurType:
+              type: string
+              enum: [motion, focus, bokeh]
+            eventType:
+              type: string
+            activity:
+              type: string
+            mood:
+              type: string
+            lighting:
+              type: string
+            similarityGroupId:
+              type: string
+              format: uuid
+            isGroupRepresentative:
+              type: boolean
+            groupMemberCount:
+              type: integer
+
+    GalleryAssetItem:
+      type: object
+      description: Base gallery asset (existing schema)
+      properties:
+        gallery_asset_id:
+          type: string
+          format: uuid
+        asset_id:
+          type: string
+          format: uuid
+        sort_order:
+          type: integer
+        visible:
+          type: boolean
+        is_favorited:
+          type: boolean
+        is_selected:
+          type: boolean
+        asset:
+          type: object
+          description: Asset details
+
+    SimilarityGroup:
+      type: object
+      required:
+        - groupId
+        - bestAssetId
+        - memberCount
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        bestAssetId:
+          type: string
+          format: uuid
+        userOverrideAssetId:
+          type: string
+          format: uuid
+        memberAssetIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        memberCount:
+          type: integer
+        avgSimilarity:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    CurationPreset:
+      type: object
+      properties:
+        presetId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        targetCountRatio:
+          type: number
+        targetCountFixed:
+          type: integer
+        qualityThreshold:
+          type: number
+        isSystem:
+          type: boolean
+
+    CreateSubGalleryRequest:
+      type: object
+      required:
+        - name
+        - assetIds
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        assetIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 10000
+        copySettings:
+          type: boolean
+          default: true
+          description: Copy privacy/watermark settings from parent gallery
+
+    CreateSubGalleryResponse:
+      type: object
+      required:
+        - galleryId
+        - name
+        - assetCount
+      properties:
+        galleryId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        assetCount:
+          type: integer
+        parentGalleryId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+        requestId:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
