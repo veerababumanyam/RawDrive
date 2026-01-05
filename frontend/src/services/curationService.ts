@@ -50,7 +50,8 @@ export class CurationService {
     galleryId: string,
     request: SmartCurationRequest
   ): Promise<CurationResult> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/smart-tagging/curate`;
+    // Note: smart-tagging router prefix comes before /galleries/
+    const endpoint = `/api/v1/workspaces/${workspaceId}/smart-tagging/galleries/${galleryId}/curate`;
     const response = await apiClient.post<CurationResult>(endpoint, request);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to curate gallery');
@@ -262,13 +263,14 @@ export class CurationService {
 
   /**
    * Start quality analysis for a gallery
+   * Note: Uses smart-tagging router prefix
    */
   async startQualityAnalysis(
     workspaceId: string,
     galleryId: string,
     data?: QualityAnalysisStartRequest
   ): Promise<CurationSession> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/quality-analysis`;
+    const endpoint = `/api/v1/workspaces/${workspaceId}/smart-tagging/galleries/${galleryId}/quality-analysis`;
     const response = await apiClient.post<CurationSession>(endpoint, data || {});
     if (response.error) {
       throw new Error(response.error.message || 'Failed to start analysis');
@@ -278,6 +280,7 @@ export class CurationService {
 
   /**
    * Get quality analysis results
+   * Note: Uses smart-tagging router prefix
    */
   async getQualityAnalysis(
     workspaceId: string,
@@ -300,7 +303,7 @@ export class CurationService {
     if (options?.offset) params.append('offset', options.offset.toString());
 
     const query = params.toString();
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/quality-analysis${query ? `?${query}` : ''}`;
+    const endpoint = `/api/v1/workspaces/${workspaceId}/smart-tagging/galleries/${galleryId}/quality-analysis${query ? `?${query}` : ''}`;
 
     const response = await apiClient.get<QualityAnalysisResponse>(endpoint);
     if (response.error) {
@@ -311,13 +314,14 @@ export class CurationService {
 
   /**
    * Get quality analysis progress
+   * Note: Uses smart-tagging router prefix
    */
   async getQualityAnalysisProgress(
     workspaceId: string,
     galleryId: string,
     sessionId: string
   ): Promise<QualityAnalysisProgressResponse> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/quality-analysis/progress?session_id=${sessionId}`;
+    const endpoint = `/api/v1/workspaces/${workspaceId}/smart-tagging/galleries/${galleryId}/quality-analysis/progress?session_id=${sessionId}`;
     const response = await apiClient.get<QualityAnalysisProgressResponse>(endpoint);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch progress');

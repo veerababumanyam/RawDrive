@@ -242,23 +242,30 @@ import { QualityScoreCard } from '@/components/features/ai';
 />
 ```
 
-### CurationProgress
+### AIToolsHub - CurateTab
 
-Progress indicator during analysis.
+The recommended way to access Smart Curation is through AIToolsHub's CurateTab, which includes built-in progress visualization:
 
 ```tsx
-import { CurationProgress, CurationProgressMini } from '@/components/features/ai';
+import { AIToolsHub } from '@/components/features/ai';
 
-<CurationProgress
-  status="analyzing"
-  progress={{
-    percent: 45,
-    analyzed_count: 67,
-    total_photos: 150,
-    stage: "Analyzing Quality"
-  }}
+<AIToolsHub
+  workspaceId={workspaceId}
+  galleryId={galleryId}
+  galleryName="Wedding Photos"
+  totalPhotos={500}
+  isOpen={isOpen}
+  onClose={onClose}
+  initialTab="curate"
 />
 ```
+
+**CurateTab Features:**
+- Built-in presets (Wedding Highlights, Portrait Selection, Event Coverage)
+- Target count selection (10, 25, 50, 100, 200)
+- Inline progress bar during curation
+- Session history with resume capability
+- Advanced settings (quality/similarity thresholds)
 
 ## TypeScript Types
 

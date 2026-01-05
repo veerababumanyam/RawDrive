@@ -82,12 +82,15 @@ frontend/src/
 │   ├── hashtagService.ts             # NEW: Frontend hashtag API
 │   ├── storyService.ts               # NEW: Frontend story API
 │   └── curationService.ts            # NEW: Frontend curation API
-├── components/ai/
-│   ├── PhotoAnalysisPanel.tsx        # NEW: Analysis UI component
-│   ├── CaptionGenerator.tsx          # NEW: Caption generation UI
-│   ├── HashtagGenerator.tsx          # NEW: Hashtag generation UI
+├── components/features/ai/
+│   ├── AIToolsHub.tsx                # NEW: Unified AI panel (consolidates analysis, curation, creation)
+│   ├── tabs/AnalyzeTab.tsx           # NEW: Quality analysis tab
+│   ├── tabs/CurateTab.tsx            # NEW: Curation tab
+│   ├── tabs/CreateTab.tsx            # NEW: Content generation tab
+│   ├── CaptionGenerator.tsx          # NEW: Single-asset caption UI
+│   ├── HashtagGenerator.tsx          # NEW: Single-asset hashtag UI
 │   ├── StoryGenerator.tsx            # NEW: Story generation UI
-│   └── SmartCurationPanel.tsx        # NEW: Curation UI component
+│   └── SmartCurationPanel.tsx        # NEW: Standalone curation (legacy)
 └── types/
     └── aiFeatures.ts                 # NEW: TypeScript types for AI features
 ```

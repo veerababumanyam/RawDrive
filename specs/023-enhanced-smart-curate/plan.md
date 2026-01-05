@@ -104,7 +104,7 @@ frontend/
 │   │   ├── PhotoGroupCard.tsx             # NEW: Similarity group display
 │   │   ├── QualityBadge.tsx               # NEW: Quality score badge
 │   │   ├── ComparisonView.tsx             # NEW: Side-by-side compare
-│   │   ├── CurationProgress.tsx           # NEW: Progress indicators
+│   │   ├── tabs/CurateTab.tsx             # NEW: Curation tab with inline progress
 │   │   └── PresetSelector.tsx             # NEW: Curation presets
 │   ├── hooks/
 │   │   ├── useCurationSession.ts          # NEW

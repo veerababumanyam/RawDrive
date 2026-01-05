@@ -49,7 +49,7 @@
 - [x] T013 [P] Create `backend/src/app/workers/curation_worker.py` worker skeleton
 - [x] T014 Create `backend/src/app/api/v1/curation_sessions.py` with session CRUD endpoints
 - [x] T015 [P] Create `frontend/src/hooks/useCurationSession.ts` for session state management
-- [x] T016 [P] Create `frontend/src/components/features/ai/CurationProgress.tsx` progress indicator component
+- [x] T016 [P] Create curation progress indicator (now integrated into `frontend/src/components/features/ai/tabs/CurateTab.tsx`)
 - [x] T017 Register curation routes in `backend/src/app/api/v1/__init__.py`
 
 **Checkpoint**: Foundation ready - user story implementation can begin

@@ -30,7 +30,7 @@
 - [x] T011 [US1] Create PhotoAnalysisResponse schema with all required fields
 - [x] T012 [US1] Implement AI usage logging for photo analysis operations
 - [x] T013 [US1] Add error handling for missing API keys with user-friendly messages
-- [x] T014 [P] [US1] Create frontend PhotoAnalysisPanel component with loading states
+- [x] T014 [P] [US1] Create frontend photo analysis UI (now integrated into `frontend/src/components/features/ai/tabs/AnalyzeTab.tsx`)
 - [x] T015 [P] [US1] Add photo analysis API service in frontend/src/services/
 - [x] T016 [US1] Implement quality badge display (⭐⭐⭐⭐⭐) based on analysis scores
 - [x] T017 [US1] Add photo analysis results caching (24-hour TTL)

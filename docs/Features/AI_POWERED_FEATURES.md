@@ -2,7 +2,36 @@
 
 > Terminology: See [`GLOSSARY.md`](GLOSSARY.md) (Workspace, Asset, Share Link, Trial, etc.).
 
-## Overview
+
+## Implementation Status (Jan 2026)
+
+| Feature | Status | Backend Service | Notes |
+| :--- | :--- | :--- | :--- |
+| **AI Smart Culling** | ✅ Implemented | `PhotoAnalysisService` | Rejects blur, scores quality. |
+| **Face Recognition** | ✅ Implemented | `FaceDetectionService` | Detection, Clustering, Embeddings. |
+| **Duplicate Detection** | ❌ Missing Backend | - | Frontend service exists, backend routes missing. |
+| **Quality Scoring** | ✅ Implemented | `PhotoAnalysisService` | Sharpness, exposure, composition scores (0-100). |
+| **Scene/Event Tagging** | ✅ Implemented | `ContentDetectionService` | Uses Vision AI / Gemini labels. |
+| **Emotion Detection** | ⚠️ Partial | `PhotoAnalysisService` | "Mood" field in analysis, no specific "tears/hug" detector. |
+| **Lighting Analysis** | ✅ Implemented | `PhotoAnalysisService` | Returns lighting type (natural, mixed, etc). |
+| **Auto-Crop** | ❌ Not Implemented | - | Suggestions only ("improvements" list). |
+| **Style Consistency** | ❌ Not Implemented | - | |
+| **Diversity Balancing** | ⚠️ Partial | `SmartCuration` | Field exists in request, heuristics in place. |
+| **Caption/Hashtags** | ✅ Implemented | `CaptionHashtagService` | Generates text/tags via Gemini. |
+| **Album/Slideshow** | ⚠️ Partial | `StoryGenerator` | Text stories implemented. Video/Slideshow not found. |
+| **Smart Proofing** | ✅ Implemented | `SmartCuration` | Logic for selection based on quality/tags. |
+| **RSVP/Invite Gen** | ⚠️ Partial | `InvitationAIService` | Text content generation only. No design generation. |
+| **Video Highlights** | ❌ Not Implemented | - | No video processing service found. |
+| **Trend Prediction** | ❌ Not Implemented | - | |
+| **Anomaly Detection** | ✅ Implemented | `PhotoAnalysisService` | Flags `is_technical_reject`. |
+| **Multi-Language** | ✅ Implemented | `InvitationAIService` | explicit `language` param supported. |
+| **Nano Banana** | ❌ Not Implemented | - | No references found. |
+| **Policy/Contract** | ❌ Not Implemented | - | No specific service found. |
+
+---
+
+Overview
+
 
 RawDrive is **AI-native** and uses a **multi-provider AI layer** to deliver intelligent photo analysis, curation, organization, and search features. These capabilities help photographers save time, improve consistency, and provide better client experiences.
 
@@ -658,16 +687,111 @@ Ensure AI features are accessible.
 - Alternative text for generated content
 - Captions for video analysis
 
+## Frontend Components
+
+### AIToolsHub - Unified Gallery AI Panel
+
+The primary entry point for all gallery-level AI features. Access via the gallery toolbar.
+
+```tsx
+import { AIToolsHub } from '@/components/features/ai';
+
+<AIToolsHub
+  workspaceId={workspaceId}
+  galleryId={galleryId}
+  galleryName="Wedding Photos"
+  totalPhotos={500}
+  isOpen={isAIToolsOpen}
+  onClose={() => setAIToolsOpen(false)}
+  initialTab="analyze"
+/>
+```
+
+**Tabs:**
+| Tab | Purpose | Features |
+|-----|---------|----------|
+| **Analyze** | Quality analysis & blur detection | Score distribution, blur categorization, tier badges |
+| **Curate** | Smart photo selection | Presets (wedding/portrait/event), target count, progress |
+| **Create** | Content generation | Gallery story, batch captions, aggregate hashtags |
+
+### Single-Asset Generators
+
+For individual photo operations (e.g., lightbox, photo detail view):
+
+```tsx
+import { CaptionGenerator, HashtagGenerator, StoryGenerator } from '@/components/features/ai';
+
+// Single photo captions
+<CaptionGenerator
+  workspaceId={workspaceId}
+  assetId={assetId}
+  filename="photo.jpg"
+  onCaptionsGenerated={(result) => console.log(result)}
+/>
+
+// Single photo hashtags
+<HashtagGenerator
+  workspaceId={workspaceId}
+  assetId={assetId}
+  onHashtagsGenerated={(result) => console.log(result)}
+/>
+```
+
+### Quality Analysis Components
+
+```tsx
+import { QualityScoreCard, QualityResultsGrid, BlurIndicator, BlurBadge } from '@/components/features/ai';
+
+<QualityScoreCard
+  overallScore={78}
+  sharpnessScore={85}
+  exposureScore={72}
+  compositionScore={77}
+/>
+
+<BlurBadge blurDetected={true} severity="high" isIntentional={false} />
+```
+
+## Component Architecture
+
+```
+components/features/ai/
+├── Core Infrastructure
+│   ├── AIErrorBoundary.tsx      # Error handling wrapper
+│   └── AILoadingStates.tsx      # Loading spinners, progress bars
+│
+├── AIToolsHub (Primary Entry Point)
+│   ├── AIToolsHub.tsx           # Unified slide-out panel
+│   └── tabs/
+│       ├── AnalyzeTab.tsx       # Quality analysis, blur detection
+│       ├── CurateTab.tsx        # Smart curation with presets
+│       └── CreateTab.tsx        # Batch story/caption/hashtag
+│
+├── Quality Analysis
+│   ├── QualityScoreCard.tsx     # Individual score display
+│   ├── QualityResultsGrid.tsx   # Grid of results with filtering
+│   └── BlurIndicator.tsx        # Blur type badges
+│
+├── Single-Asset Generators
+│   ├── StoryGenerator.tsx       # Gallery story (used by CreateTab)
+│   ├── CaptionGenerator.tsx     # Per-photo captions (for lightbox)
+│   └── HashtagGenerator.tsx     # Per-photo hashtags (for lightbox)
+│
+└── SmartCurationPanel.tsx       # Standalone curation panel
+```
+
 ## Related Files
 
-- `frontend/src/components/ai/PhotoAnalysisPanel.tsx` - Photo analysis UI
-- `frontend/src/components/ai/AutoSelectionWizard.tsx` - Smart curation
-- `frontend/src/components/ai/DuplicateReviewPanel.tsx` - Duplicate detection
-- `frontend/src/components/ai/BatchAnalysisProgress.tsx` - Progress tracking
-- `frontend/src/components/gallery/PhotoAnalysisPanel.tsx` - Gallery analysis
-- `services/aiInferenceService.ts` - AI inference integration (multi-provider Model Router; Gemini default; supports OpenAI/Anthropic/Azure-hosted/local)
+- `frontend/src/components/features/ai/` - AI feature components
+- `frontend/src/hooks/useQualityAnalysis.ts` - Quality analysis hook
+- `frontend/src/hooks/useCurationSession.ts` - Curation session hook
+- `frontend/src/services/curationService.ts` - Curation API client
+- `frontend/src/services/storyService.ts` - Story generation API
+- `frontend/src/services/captionService.ts` - Caption generation API
+- `frontend/src/services/hashtagService.ts` - Hashtag generation API
+- `backend/src/app/services/ai_inference_service.py` - AI inference (multi-provider)
 - `docs/RBAC_AND_USER_MANAGEMENT.md` - Tier-based feature access
 
 ## Last Updated
 
-2026-01-03
+2026-01-05
