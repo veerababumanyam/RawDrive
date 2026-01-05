@@ -7,7 +7,7 @@ import type {
   GenerateStoryRequest,
 } from '../types/aiFeatures';
 
-const API_BASE = '/smart-tagging';
+const API_BASE = '/api/v1';
 
 export class StoryService {
   /**
@@ -19,7 +19,7 @@ export class StoryService {
     request: GenerateStoryRequest
   ): Promise<StoryResult> {
     const response = await apiClient.post<StoryResult>(
-      `/workspaces/${workspaceId}${API_BASE}/galleries/${galleryId}/story`,
+      `${API_BASE}/workspaces/${workspaceId}/smart-tagging/galleries/${galleryId}/story`,
       request
     );
     if (!response.data) {

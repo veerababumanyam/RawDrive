@@ -1,0 +1,42 @@
+/Users/v13478/Library/Python/3.9/lib/python/site-packages/pydantic/_internal/_fields.py:132: UserWarning: Field "model_id" in GeminiModelPublic has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+/Users/v13478/Library/Python/3.9/lib/python/site-packages/pydantic/_internal/_fields.py:132: UserWarning: Field "model_id" in GeminiModelAdmin has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+/Users/v13478/Library/Python/3.9/lib/python/site-packages/pydantic/_internal/_fields.py:132: UserWarning: Field "model_ids" in ReorderGeminiModelsRequest has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+/Users/v13478/Library/Python/3.9/lib/python/site-packages/pydantic/_internal/_fields.py:132: UserWarning: Field "model_identifier" in ModelDistribution has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+/Users/v13478/Library/Python/3.9/lib/python/site-packages/pydantic/_internal/_fields.py:132: UserWarning: Field "model_distribution" in GeminiAdminStats has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+/Users/v13478/Library/Python/3.9/lib/python/site-packages/pydantic/_internal/_fields.py:132: UserWarning: Field "model_version" in AITagMetadata has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+prometheus_client not available, metrics disabled
+reportlab not installed - PDF generation will be unavailable
+Loaded .env file
+Python version: 3.9.6 (default, Dec  2 2025, 07:27:58) 
+[Clang 17.0.0 (clang-1700.6.3.2)]
+Attempting to import modules...
+IMPORTED: app.api.v1.smart_tagging
+IMPORTED: app.repositories.photo_quality_repository
+IMPORTED: app.services.curation_session_service
+IMPORTED: app.services.task_queue
+INSTANTIATED: PhotoQualityRepository
+INSTANTIATED: CurationSessionService
+Attempting to connect to DB...
+CONNECTED to DB
+TABLE photo_quality_analysis EXISTS
+ROW COUNT: 0
+Testing list_by_gallery with 44063f97-ab65-41f3-a62b-0d32a1849c2a, 9f0c3ed2-188e-4003-9c66-e943683835c2
+list_by_gallery returned: 0 results, total=0

@@ -7,7 +7,7 @@ import type {
   AnalyzePhotoRequest,
 } from '../types/aiFeatures';
 
-const API_BASE = '/smart-tagging';
+const API_BASE = '/api/v1';
 
 export class PhotoAnalysisService {
   /**
@@ -19,7 +19,7 @@ export class PhotoAnalysisService {
     request: AnalyzePhotoRequest
   ): Promise<PhotoAnalysisResult> {
     const response = await apiClient.post<PhotoAnalysisResult>(
-      `/workspaces/${workspaceId}${API_BASE}/assets/${assetId}/analyze`,
+      `${API_BASE}/workspaces/${workspaceId}/smart-tagging/assets/${assetId}/analyze`,
       request
     );
     if (!response.data) {

@@ -7,7 +7,7 @@ import type {
   GenerateHashtagsRequest,
 } from '../types/aiFeatures';
 
-const API_BASE = '/smart-tagging';
+const API_BASE = '/api/v1';
 
 export class HashtagService {
   /**
@@ -19,7 +19,7 @@ export class HashtagService {
     request: GenerateHashtagsRequest
   ): Promise<HashtagResult> {
     const response = await apiClient.post<HashtagResult>(
-      `/workspaces/${workspaceId}${API_BASE}/assets/${assetId}/hashtags`,
+      `${API_BASE}/workspaces/${workspaceId}/smart-tagging/assets/${assetId}/hashtags`,
       request
     );
     if (!response.data) {

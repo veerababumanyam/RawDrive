@@ -301,12 +301,16 @@ class PhotoQualityRepository:
             total = count_row["total"] if count_row else 0
 
             # Get paginated results
-            params.extend([limit, offset])
+            params.append(limit)
+            params.append(offset)
+
             rows = await conn.fetch(
                 f"""
-                SELECT * FROM photo_quality_analysis
-                {where_clause}
-                ORDER BY overall_score DESC
+                SELECT pqa.*, aa.ai_metadata
+                FROM photo_quality_analysis pqa
+                LEFT JOIN asset_analysis aa ON pqa.asset_id = aa.asset_id AND pqa.workspace_id = aa.workspace_id
+                {where_clause.replace("WHERE", "WHERE pqa.")}
+                ORDER BY pqa.overall_score DESC
                 LIMIT ${len(params) - 1} OFFSET ${len(params)}
                 """,
                 *params,
@@ -567,6 +571,17 @@ class PhotoQualityRepository:
             except (json.JSONDecodeError, TypeError):
                 crop_suggestion = row["crop_suggestion"]
 
+        # Parse AI metadata if present
+        metadata = None
+        if "ai_metadata" in row and row["ai_metadata"]:
+            try:
+                if isinstance(row["ai_metadata"], str):
+                    metadata = json.loads(row["ai_metadata"])
+                else:
+                    metadata = row["ai_metadata"]
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
+
         return {
             "asset_id": row["asset_id"],
             "workspace_id": row["workspace_id"],
@@ -584,6 +599,13 @@ class PhotoQualityRepository:
             "horizon_tilt_degrees": float(row["horizon_tilt_degrees"]) if row["horizon_tilt_degrees"] else None,
             "crop_suggestion": crop_suggestion,
             "analyzed_at": row["analyzed_at"],
+            # AI Metadata fields
+            "event_type": metadata.get("event_type") if metadata else None,
+            "key_elements": (metadata.get("key_elements") or []) if metadata else [],
+            "activity": metadata.get("activity") if metadata else None,
+            "semantic_description": metadata.get("semantic_description") if metadata else None,
+            "lighting": metadata.get("lighting") if metadata else None,
+            "mood": metadata.get("mood") if metadata else None,
         }
 
 

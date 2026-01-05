@@ -19,7 +19,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Coroutine
+from typing import Any, Callable, Coroutine, Optional
 
 from app.db.redis import get_redis_client
 
@@ -60,11 +60,11 @@ class Task:
     priority: TaskPriority = TaskPriority.NORMAL
     status: TaskStatus = TaskStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     retries: int = 0
     max_retries: int = 3
-    error: str | None = None
+    error: Optional[str] = None
     result: Any = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -157,7 +157,7 @@ def register_task_handler(task_type: str) -> Callable[[TaskHandler], TaskHandler
     return decorator
 
 
-def get_handler(task_type: str) -> TaskHandler | None:
+def get_handler(task_type: str) -> Optional[TaskHandler]:
     """Get handler for task type."""
     return _handlers.get(task_type)
 

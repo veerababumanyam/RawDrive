@@ -11,7 +11,7 @@ import hashlib
 import logging
 import secrets
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Optional, List, Union
 from uuid import UUID
 import csv
 import io
@@ -629,7 +629,7 @@ class InvitationRSVPService:
 
         return output.getvalue()
 
-    def _to_utc(self, value: Optional[datetime | str]) -> Optional[datetime]:
+    def _to_utc(self, value: Optional[Union[datetime, str]]) -> Optional[datetime]:
         """Normalize datetime/ISO strings to timezone-aware UTC for comparisons."""
         if not value:
             return None

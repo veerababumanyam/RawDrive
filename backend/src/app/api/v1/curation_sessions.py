@@ -8,7 +8,7 @@ Feature: 023-enhanced-smart-curate
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Path, Query, status
@@ -62,7 +62,7 @@ async def list_sessions(
     gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-    status_filter: Annotated[str | None, Query(alias="status", description="Filter by status")] = None,
+    status_filter: Annotated[Optional[str], Query(alias="status", description="Filter by status")] = None,
     limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
     offset: Annotated[int, Query(ge=0, description="Offset for pagination")] = 0,
 ) -> CurationSessionListResponse:
@@ -138,7 +138,7 @@ async def create_session(
 
 @router.get(
     "/active",
-    response_model=CurationSessionResponse | None,
+    response_model=Optional[CurationSessionResponse],
     status_code=status.HTTP_200_OK,
     summary="Get active session",
     responses={
@@ -150,7 +150,7 @@ async def get_active_session(
     gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-) -> CurationSessionResponse | None:
+) -> Optional[CurationSessionResponse]:
     """Get the active curation session for a gallery, if any.
 
     Returns null if no active session exists.
@@ -302,7 +302,7 @@ async def start_session(
     session_id: Annotated[UUID, Path(..., description="Session ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-    request: CurationSessionStartRequest | None = None,
+    request: Optional[CurationSessionStartRequest] = None,
 ) -> CurationSessionResponse:
     """Start or resume a curation session.
 

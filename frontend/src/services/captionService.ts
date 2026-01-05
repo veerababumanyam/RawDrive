@@ -7,7 +7,7 @@ import type {
   GenerateCaptionsRequest,
 } from '../types/aiFeatures';
 
-const API_BASE = '/smart-tagging';
+const API_BASE = '/api/v1';
 
 export class CaptionService {
   /**
@@ -19,7 +19,7 @@ export class CaptionService {
     request: GenerateCaptionsRequest
   ): Promise<CaptionResult> {
     const response = await apiClient.post<CaptionResult>(
-      `/workspaces/${workspaceId}${API_BASE}/assets/${assetId}/captions`,
+      `${API_BASE}/workspaces/${workspaceId}/smart-tagging/assets/${assetId}/captions`,
       request
     );
     if (!response.data) {

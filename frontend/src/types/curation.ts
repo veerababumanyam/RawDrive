@@ -179,6 +179,12 @@ export interface PhotoQualityResult {
   expression_data?: Record<string, unknown>;
   scene_type?: string;
   analyzed_at?: string;
+  event_type?: string;
+  key_elements?: string[];
+  activity?: string;
+  semantic_description?: string;
+  lighting?: string;
+  mood?: string;
 }
 
 /** Blur detection result for blur-focused queries */

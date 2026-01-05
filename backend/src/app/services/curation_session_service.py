@@ -55,6 +55,9 @@ MAX_SIMILARITY_THRESHOLD = 1.0
 MIN_TARGET_COUNT = 1
 MAX_TARGET_COUNT = 10000
 
+# Session timeout (stale sessions are auto-marked as failed)
+SESSION_TIMEOUT_MINUTES = 30
+
 
 class CurationSessionError(Exception):
     """Base exception for curation session errors."""
@@ -184,6 +187,9 @@ class CurationSessionService:
             similarity_threshold=similarity_threshold,
             target_count=target_count,
         )
+
+        # Auto-cleanup stale sessions before checking for active ones
+        await self._cleanup_stale_sessions(workspace_id, gallery_id)
 
         # Check for existing active session
         active_session = await self.session_repo.get_active_session(
@@ -598,6 +604,53 @@ class CurationSessionService:
 
         if errors:
             raise InvalidSessionParametersError("; ".join(errors))
+
+    async def _cleanup_stale_sessions(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+    ) -> int:
+        """Mark stale sessions as failed to prevent blocking new sessions.
+
+        Sessions that have been stuck in a non-terminal state for longer
+        than SESSION_TIMEOUT_MINUTES are automatically marked as failed.
+
+        Args:
+            workspace_id: Workspace ID for tenant isolation
+            gallery_id: Gallery to clean up
+
+        Returns:
+            Number of sessions cleaned up
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE curation_sessions
+                SET status = 'failed',
+                    error_message = 'Session timed out after inactivity',
+                    updated_at = NOW()
+                WHERE workspace_id = $1
+                  AND gallery_id = $2
+                  AND status NOT IN ('completed', 'failed')
+                  AND updated_at < NOW() - INTERVAL '1 minute' * $3
+                """,
+                workspace_id,
+                gallery_id,
+                SESSION_TIMEOUT_MINUTES,
+            )
+
+            count = int(result.split()[-1]) if result else 0
+            if count > 0:
+                logger.info(
+                    f"Auto-cleaned {count} stale curation session(s)",
+                    extra={
+                        "workspace_id": str(workspace_id),
+                        "gallery_id": str(gallery_id),
+                        "timeout_minutes": SESSION_TIMEOUT_MINUTES,
+                    },
+                )
+            return count
 
     async def _get_gallery_photo_count(
         self,

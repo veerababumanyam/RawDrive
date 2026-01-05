@@ -14,6 +14,10 @@ export interface PhotoAnalysisResult {
   mood: string;
   improvements: string[];
   best_for: string[];
+  event_type?: string;
+  key_elements?: string[];
+  activity?: string;
+  semantic_description?: string;
 }
 
 export interface CaptionResult {

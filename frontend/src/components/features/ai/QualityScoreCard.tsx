@@ -352,8 +352,63 @@ export function QualityScoreCard({
             />
           </div>
 
-          {/* Additional metadata */}
-          <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+
+          {/* Detailed Analysis */}
+          <div className="pt-4 border-t border-zinc-800 space-y-4">
+            <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">AI Analysis</h4>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {quality.event_type && (
+                <div className="space-y-1">
+                  <span className="text-xs text-zinc-500">Event Type</span>
+                  <div className="text-sm font-medium text-zinc-200">{quality.event_type}</div>
+                </div>
+              )}
+              {quality.activity && (
+                <div className="space-y-1">
+                  <span className="text-xs text-zinc-500">Activity</span>
+                  <div className="text-sm font-medium text-zinc-200">{quality.activity}</div>
+                </div>
+              )}
+              {quality.lighting && (
+                <div className="space-y-1">
+                  <span className="text-xs text-zinc-500">Lighting</span>
+                  <div className="text-sm font-medium text-zinc-200 capitalize">{quality.lighting}</div>
+                </div>
+              )}
+              {quality.mood && (
+                <div className="space-y-1">
+                  <span className="text-xs text-zinc-500">Mood</span>
+                  <div className="text-sm font-medium text-zinc-200 capitalize">{quality.mood}</div>
+                </div>
+              )}
+            </div>
+
+            {quality.key_elements && quality.key_elements.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-xs text-zinc-500">Key Elements</span>
+                <div className="flex flex-wrap gap-2">
+                  {quality.key_elements.map((element, idx) => (
+                    <span key={idx} className="px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300">
+                      {element}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {quality.semantic_description && (
+              <div className="space-y-2">
+                <span className="text-xs text-zinc-500">Visual Description</span>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  {quality.semantic_description}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Technical Metadata */}
+          <div className="flex flex-wrap gap-2 text-xs text-zinc-500 pt-2 border-t border-zinc-800">
             {quality.noise_level && (
               <span className="px-2 py-1 bg-zinc-800 rounded">
                 Noise: {quality.noise_level}

@@ -16,6 +16,7 @@ from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Path, Query, status
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
@@ -114,6 +115,10 @@ class PhotoAnalysisResponse(BaseModel):
     mood: str
     improvements: list[str]
     best_for: list[str]
+    event_type: Optional[str] = None
+    key_elements: list[str] = []
+    activity: Optional[str] = None
+    semantic_description: Optional[str] = None
 
 
 class AnalyzePhotoRequest(BaseModel):
@@ -291,7 +296,13 @@ class PhotoQualityResultSchema(BaseModel):
     is_technical_reject: bool = Field(default=False, description="Flagged as reject candidate")
     expression_data: Optional[dict] = None
     scene_type: Optional[str] = None
-    analyzed_at: Optional[str] = None
+    analyzed_at: Optional[datetime] = None
+    event_type: Optional[str] = None
+    key_elements: list[str] = []
+    activity: Optional[str] = None
+    semantic_description: Optional[str] = None
+    lighting: Optional[str] = None
+    mood: Optional[str] = None
 
 
 class QualitySummarySchema(BaseModel):
@@ -617,9 +628,9 @@ async def analyze_photo(
     Requires user to have Gemini API key configured. Returns detailed
     analysis including description, tags, quality metrics, and improvements.
     """
-    from app.services.photo_analysis_service import get_photo_analysis_service
+    from app.services.vision_service import get_vision_service
 
-    service = get_photo_analysis_service()
+    service = get_vision_service()
     try:
         # Get signed URL for the asset
         from app.services.signed_url_service import get_signed_url_service
@@ -668,9 +679,9 @@ async def generate_captions(
     Requires user to have Gemini API key configured. Returns multiple
     caption options in the specified style.
     """
-    from app.services.caption_hashtag_service import get_caption_hashtag_service
+    from app.services.vision_service import get_vision_service
 
-    service = get_caption_hashtag_service()
+    service = get_vision_service()
     try:
         # Get signed URL for the asset
         from app.services.signed_url_service import get_signed_url_service
@@ -721,9 +732,9 @@ async def generate_hashtags(
     Requires user to have Gemini API key configured. Returns categorized
     hashtags suitable for social media.
     """
-    from app.services.caption_hashtag_service import get_caption_hashtag_service
+    from app.services.vision_service import get_vision_service
 
-    service = get_caption_hashtag_service()
+    service = get_vision_service()
     try:
         # Get signed URL for the asset
         from app.services.signed_url_service import get_signed_url_service
@@ -974,13 +985,13 @@ async def generate_gallery_story(
         # Get photo descriptions from gallery assets
         # In a real implementation, this would fetch AI analysis data for the photos
         photo_descriptions = []
-        assets = await gallery_service.get_gallery_assets(
-            gallery_id=gallery_id,
+        assets_result = await gallery_service.list_assets(
             workspace_id=workspace_id,
+            gallery_id=gallery_id,
             limit=50,
         )
 
-        for asset in assets.get("assets", []):
+        for asset in assets_result.get("assets", []):
             desc = {
                 "description": asset.get("ai_description", asset.get("filename", "")),
                 "tags": asset.get("ai_tags", []),
@@ -1219,7 +1230,7 @@ async def start_quality_analysis(
         )
 
     except SessionAlreadyActiveError as e:
-        raise ConflictError(str(e))
+        raise ConflictError(str(e), code="SESSION_ALREADY_ACTIVE")
     except AIConfigurationError as e:
         raise ValidationAppError(
             f"Gemini AI not configured: {e.message}. "
@@ -1310,7 +1321,13 @@ async def get_quality_analysis_results(
                     is_technical_reject=_is_technical_reject(r),
                     expression_data=r.get("expression_data"),
                     scene_type=r.get("scene_type"),
-                    analyzed_at=r.get("created_at"),
+                    analyzed_at=r.get("analyzed_at"),
+                    event_type=r.get("event_type"),
+                    key_elements=r.get("key_elements", []),
+                    activity=r.get("activity"),
+                    semantic_description=r.get("semantic_description"),
+                    lighting=r.get("lighting"),
+                    mood=r.get("mood"),
                 )
                 for r in filtered_results
             ],

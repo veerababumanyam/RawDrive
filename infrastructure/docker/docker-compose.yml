@@ -209,6 +209,47 @@ services:
           cpus: '0.25'
           memory: 256M
 
+  quality-worker:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile.quality-worker
+    container_name: rawdrive-quality-worker
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Database connection (same as backend)
+      DATABASE_URL: postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: ${APP_ENV:-development}
+      # Worker-specific settings
+      DB_POOL_MIN_SIZE: 1
+      DB_POOL_MAX_SIZE: 5
+    # Health check endpoint on port 8003
+    expose:
+      - "8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../../backend:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
   one-api:
     image: justsong/one-api:latest
     platform: linux/amd64

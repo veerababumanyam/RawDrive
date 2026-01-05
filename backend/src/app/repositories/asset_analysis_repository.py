@@ -9,6 +9,7 @@ between tenants.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -281,6 +282,8 @@ class AssetAnalysisRepository:
         vision_model_version: Optional[str] = None,
         vision_tags_count: Optional[int] = None,
         error_message: Optional[str] = None,
+        ai_metadata: Optional[dict[str, Any]] = None,
+        result_metadata: Optional[dict[str, Any]] = None,  # Backward compatibility
     ) -> Optional[dict[str, Any]]:
         """Update vision analysis status.
 
@@ -292,6 +295,8 @@ class AssetAnalysisRepository:
             vision_model_version: Model version (if completed)
             vision_tags_count: Tags detected (if completed)
             error_message: Error message (if failed)
+            ai_metadata: Rich AI metadata to store
+            result_metadata: Alias for ai_metadata (backward compatibility)
 
         Returns:
             Updated record or None if not found
@@ -299,30 +304,62 @@ class AssetAnalysisRepository:
         pool = await get_postgres_pool()
         async with acquire_conn(pool) as conn:
             vision_analyzed_at = datetime.now(timezone.utc) if vision_status == "completed" else None
-
-            row = await conn.fetchrow(
-                """
-                UPDATE asset_analysis
-                SET
-                    vision_status = $3,
-                    vision_analyzed_at = COALESCE($4, vision_analyzed_at),
-                    vision_provider = COALESCE($5, vision_provider),
-                    vision_model_version = COALESCE($6, vision_model_version),
-                    vision_tags_count = COALESCE($7, vision_tags_count),
-                    error_message = $8,
-                    updated_at = NOW()
-                WHERE asset_id = $1 AND workspace_id = $2
-                RETURNING *
-                """,
-                asset_id,
-                workspace_id,
-                vision_status,
-                vision_analyzed_at,
-                vision_provider,
-                vision_model_version,
-                vision_tags_count,
-                error_message,
-            )
+            
+            # Merge metadata if both provided, preferring ai_metadata
+            final_metadata = ai_metadata or result_metadata
+            
+            # If we have metadata to update
+            if final_metadata is not None:
+                row = await conn.fetchrow(
+                    """
+                    UPDATE asset_analysis
+                    SET
+                        vision_status = $3,
+                        vision_analyzed_at = COALESCE($4, vision_analyzed_at),
+                        vision_provider = COALESCE($5, vision_provider),
+                        vision_model_version = COALESCE($6, vision_model_version),
+                        vision_tags_count = COALESCE($7, vision_tags_count),
+                        error_message = $8,
+                        ai_metadata = COALESCE($9, ai_metadata),
+                        updated_at = NOW()
+                    WHERE asset_id = $1 AND workspace_id = $2
+                    RETURNING *
+                    """,
+                    asset_id,
+                    workspace_id,
+                    vision_status,
+                    vision_analyzed_at,
+                    vision_provider,
+                    vision_model_version,
+                    vision_tags_count,
+                    error_message,
+                    json.dumps(final_metadata) if final_metadata else None,
+                )
+            else:
+                # Legacy query without ai_metadata update
+                row = await conn.fetchrow(
+                    """
+                    UPDATE asset_analysis
+                    SET
+                        vision_status = $3,
+                        vision_analyzed_at = COALESCE($4, vision_analyzed_at),
+                        vision_provider = COALESCE($5, vision_provider),
+                        vision_model_version = COALESCE($6, vision_model_version),
+                        vision_tags_count = COALESCE($7, vision_tags_count),
+                        error_message = $8,
+                        updated_at = NOW()
+                    WHERE asset_id = $1 AND workspace_id = $2
+                    RETURNING *
+                    """,
+                    asset_id,
+                    workspace_id,
+                    vision_status,
+                    vision_analyzed_at,
+                    vision_provider,
+                    vision_model_version,
+                    vision_tags_count,
+                    error_message,
+                )
 
             if row:
                 # Recalculate overall status

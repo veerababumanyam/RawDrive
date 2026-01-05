@@ -1,26 +1,27 @@
-"""Unit tests for PhotoAnalysisService.
+"""Unit tests for VisionService.
 
 Feature: 010-ai-powered-features
-Tasks: T018 - Unit tests for photo analysis service
+Tasks: T018 - Unit tests for vision service
 """
 
 from __future__ import annotations
 
 import json
+import base64
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-from app.services.photo_analysis_service import PhotoAnalysisService, PhotoAnalysis
+from app.services.vision_service import VisionService, PhotoAnalysis
 
 
-class TestPhotoAnalysisService:
-    """Test PhotoAnalysisService methods."""
+class TestVisionService:
+    """Test VisionService methods."""
 
     @pytest.fixture
-    def service(self) -> PhotoAnalysisService:
-        """Create a PhotoAnalysisService instance."""
-        return PhotoAnalysisService()
+    def service(self) -> VisionService:
+        """Create a VisionService instance."""
+        return VisionService()
 
     @pytest.fixture
     def mock_gemini_client(self) -> MagicMock:
@@ -45,12 +46,16 @@ class TestPhotoAnalysisService:
             "mood": "majestic",
             "improvements": ["Consider adding foreground interest"],
             "best_for": ["print", "portfolio", "social media"],
+            "event_type": "Nature",
+            "key_elements": ["Mountains", "Sunset"],
+            "activity": "Sunset view",
+            "semantic_description": "A beautiful sunset over mountains.",
         }
 
     @pytest.mark.asyncio
     async def test_analyze_photo_success(
         self,
-        service: PhotoAnalysisService,
+        service: VisionService,
         mock_gemini_client: MagicMock,
         sample_analysis_response: dict,
     ) -> None:
@@ -74,7 +79,7 @@ class TestPhotoAnalysisService:
             service,
             "_fetch_image_data",
             new_callable=AsyncMock,
-            return_value=b"fake_image_data",
+            return_value="fake_image_data_b64",
         ), patch.object(
             service,
             "_parse_analysis_response",
@@ -83,7 +88,11 @@ class TestPhotoAnalysisService:
             service.ai_usage,
             "log_ai_call",
             new_callable=AsyncMock,
-        ):
+        ), patch.object(
+            service.asset_analysis_repo,
+            "update_vision_status",
+            new_callable=AsyncMock,
+        ) as mock_db:
             result = await service.analyze_photo(
                 user_id=user_id,
                 workspace_id=workspace_id,
@@ -102,11 +111,22 @@ class TestPhotoAnalysisService:
         assert len(result.tags) == 5
         assert len(result.dominant_colors) == 3
         assert len(result.improvements) == 1
+        assert result.event_type == "Nature"
+        assert result.key_elements == ["Mountains", "Sunset"]
+        assert result.activity == "Sunset view"
+        assert result.semantic_description == "A beautiful sunset over mountains."
+
+        # Verify DB persistence
+        mock_db.assert_called_once()
+        db_kwargs = mock_db.call_args.kwargs
+        assert db_kwargs["asset_id"] == photo_id
+        assert db_kwargs["vision_status"] == "completed"
+        assert db_kwargs["ai_metadata"]["event_type"] == "Nature"
 
     @pytest.mark.asyncio
     async def test_analyze_photo_logs_usage_on_success(
         self,
-        service: PhotoAnalysisService,
+        service: VisionService,
         mock_gemini_client: MagicMock,
         sample_analysis_response: dict,
     ) -> None:
@@ -128,7 +148,7 @@ class TestPhotoAnalysisService:
             service,
             "_fetch_image_data",
             new_callable=AsyncMock,
-            return_value=b"fake_image_data",
+            return_value="fake_image_data_b64",
         ), patch.object(
             service,
             "_parse_analysis_response",
@@ -154,7 +174,7 @@ class TestPhotoAnalysisService:
     @pytest.mark.asyncio
     async def test_analyze_photo_logs_failure(
         self,
-        service: PhotoAnalysisService,
+        service: VisionService,
     ) -> None:
         """Test that failed analysis is logged."""
         user_id = uuid4()
@@ -198,7 +218,7 @@ class TestPhotoAnalysisService:
 
     def test_build_analysis_prompt(
         self,
-        service: PhotoAnalysisService,
+        service: VisionService,
     ) -> None:
         """Test that analysis prompt is properly constructed."""
         prompt = service._build_analysis_prompt()
@@ -207,26 +227,26 @@ class TestPhotoAnalysisService:
         assert "analyze" in prompt.lower()
         assert "quality" in prompt.lower()
         assert "json" in prompt.lower()
+        assert "event_type" in prompt
+        assert "key_elements" in prompt
 
     @pytest.mark.asyncio
     async def test_fetch_image_data_success(
         self,
-        service: PhotoAnalysisService,
+        service: VisionService,
     ) -> None:
         """Test successful image data fetching."""
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_response = MagicMock()
-            mock_response.content = b"image_bytes"
-            mock_response.raise_for_status = MagicMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
-            mock_client_class.return_value = mock_client
-
-            result = await service._fetch_image_data("https://example.com/photo.jpg")
-
-        assert result == b"image_bytes"
+        # Note: VisionService delegates to dedup service for fetch_image_data,
+        # but the method _fetch_image_data calls dedup.fetch_image_data.
+        # We need to mock dedup.fetch_image_data
+        
+        with patch.object(service.dedup, "fetch_image_data", new_callable=AsyncMock) as mock_fetch:
+             mock_fetch.return_value = base64.b64encode(b"image_bytes").decode()
+             
+             result = await service._fetch_image_data("https://example.com/photo.jpg")
+             expected = base64.b64encode(b"image_bytes").decode()
+             
+             assert result == expected
 
 
 class TestPhotoAnalysisModel:
@@ -247,12 +267,14 @@ class TestPhotoAnalysisModel:
             mood="calm",
             improvements=["tip1"],
             best_for=["print"],
+            event_type="Test Event",
         )
 
         assert analysis.description == "Test description"
         assert len(analysis.tags) == 2
         assert analysis.quality_score == 85
         assert analysis.lighting == "natural"
+        assert analysis.event_type == "Test Event"
 
     def test_quality_score_range(self) -> None:
         """Test that quality scores should be 0-100."""
