@@ -4,7 +4,7 @@
  * Feature: 003-user-gemini-settings
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { geminiSettingsService } from '../services/geminiSettingsService';
 import type {
@@ -52,13 +52,24 @@ export const useGeminiSettings = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Track abort controller to cancel in-flight requests on unmount/re-fetch
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const fetchSettings = useCallback(async () => {
+    // Cancel any previous request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
     setLoading(true);
     setError(null);
     try {
       const data = await geminiSettingsService.getSettings();
       setSettings(data);
     } catch (err) {
+      // Ignore AbortError - component unmounted or request was cancelled
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
       setError(err instanceof Error ? err : new Error('Failed to fetch Gemini settings'));
       setSettings(null);
     } finally {
@@ -70,6 +81,11 @@ export const useGeminiSettings = ({
     if (autoFetch) {
       fetchSettings();
     }
+
+    // Cleanup: abort any in-flight request on unmount
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, [autoFetch, fetchSettings]);
 
   const updateSettings = useCallback(async (data: UpdateGeminiSettingsRequest) => {
@@ -330,6 +346,9 @@ export const useAIFeatureToggles = ({
   const [error, setError] = useState<Error | null>(null);
   const [hasError, setHasError] = useState(false);
 
+  // Track abort controller to cancel in-flight requests on unmount/re-fetch
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
     if (hasError || error) {
       console.warn('[useAIFeatureToggles] error state update', { error, hasError });
@@ -337,6 +356,10 @@ export const useAIFeatureToggles = ({
   }, [error, hasError]);
 
   const fetchToggles = useCallback(async () => {
+    // Cancel any previous request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
     setLoading(true);
     setError(null);
     try {
@@ -344,6 +367,10 @@ export const useAIFeatureToggles = ({
       setFeatureToggles(data);
       setHasError(false);
     } catch (err) {
+      // Ignore AbortError - component unmounted or request was cancelled
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
       const error = err instanceof Error ? err : new Error('Failed to fetch feature toggles');
       console.warn('[useAIFeatureToggles] Failed to fetch toggles:', error);
       setError(error);
@@ -358,6 +385,11 @@ export const useAIFeatureToggles = ({
     if (autoFetch) {
       fetchToggles();
     }
+
+    // Cleanup: abort any in-flight request on unmount
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, [autoFetch, fetchToggles]);
 
   const updateToggles = useCallback(async (updates: UpdateAIFeatureTogglesRequest) => {

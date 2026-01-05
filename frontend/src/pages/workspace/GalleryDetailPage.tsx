@@ -43,7 +43,7 @@ import { useSearch } from '../../contexts/SearchContext';
 import { galleryService } from '../../services/galleryService';
 import { faceApiService } from '../../services/faceApiService';
 import { SignedUrlProvider } from '../../contexts/SignedUrlContext';
-import { StoryGenerator, SmartCurationPanel } from '../../components/features/ai';
+import { StoryGenerator, SmartCurationPanel, AIToolsHub } from '../../components/features/ai';
 import { useAIFeatureToggles } from '../../hooks/useGeminiSettings';
 import type { GalleryAssetItem, ViewMode, FilterType } from '../../types/gallery';
 import type { AIFeatureToggles } from '../../types/geminiSettings';
@@ -90,6 +90,7 @@ const GalleryDetailPage: React.FC = () => {
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [showSmartCurationModal, setShowSmartCurationModal] = useState(false);
+  const [showAITools, setShowAITools] = useState(false);
   
   // Private photo unlock state (admin also needs PIN to see private photos)
   const [showPinModal, setShowPinModal] = useState(false);
@@ -234,6 +235,12 @@ const GalleryDetailPage: React.FC = () => {
 
     setShowSmartCurationModal(true);
   }, [workspace?.workspace_id, gallery, isAIFeatureReady, filteredStats.totalItems, addToast]);
+
+  // Handle AI Tools Hub open
+  const handleOpenAITools = useCallback(() => {
+    if (!workspace?.workspace_id || !gallery) return;
+    setShowAITools(true);
+  }, [workspace?.workspace_id, gallery]);
 
   // Handle Scan Faces
   const handleScanFaces = useCallback(async () => {
@@ -868,8 +875,8 @@ const GalleryDetailPage: React.FC = () => {
             onViewAsClient={() => window.open(`/g/${gallery.gallery_id}`, '_blank')}
             onFindPeople={() => setShowPeoplePanel(true)}
             onScanFaces={handleScanFaces}
-            onAIStory={handleOpenAIStory}
-            onSmartCurate={handleOpenSmartCurate}
+            onAITools={handleOpenAITools}
+            aiToolsOpen={showAITools}
             onShare={() => setShowShareDialog(true)}
             onSettings={() => setShowSettings(true)}
             onUpload={() => setShowUpload(!showUpload)}
@@ -1304,6 +1311,28 @@ const GalleryDetailPage: React.FC = () => {
             />
           </ModalBody>
         </Modal>
+
+        {/* AI Tools Hub - Slide-out Panel */}
+        <AIToolsHub
+          isOpen={showAITools}
+          onClose={() => setShowAITools(false)}
+          workspaceId={workspace?.workspace_id || ''}
+          galleryId={gallery.gallery_id}
+          galleryName={gallery.title}
+          totalPhotos={gallery.stats?.total_photos ?? filteredStats.totalItems}
+          selectedAssetIds={Array.from(selectedAssetIds)}
+          onQualityAnalysisComplete={() => {
+            addToast({ message: 'Quality analysis complete', variant: 'success' });
+            refetchAssets();
+          }}
+          onCurationComplete={(assetIds) => {
+            setSelectedAssetIds(new Set(assetIds));
+            addToast({
+              message: `Selected ${assetIds.length} photos from AI curation`,
+              variant: 'success',
+            });
+          }}
+        />
 
         {/* People Panel */}
         <PeoplePanel

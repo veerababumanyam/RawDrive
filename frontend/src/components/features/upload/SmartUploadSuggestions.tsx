@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { AlertTriangle, Calendar, X } from 'lucide-react';
+import { Calendar, X } from 'lucide-react';
 
 // Simple class merger helper
 function cn(...classes: (string | undefined | null | false)[]) {
@@ -16,10 +16,8 @@ interface SmartUploadSuggestionsProps {
 // Helper to extract basic info
 const analyzeFiles = (files: File[]): {
     dateGroups: Record<string, File[]>;
-    lowQualityFiles: File[];
 } => {
     const dateGroups: Record<string, File[]> = {};
-    const lowQualityFiles: File[] = [];
 
     files.forEach(file => {
         // Group by Date (YYYY-MM-DD)
@@ -32,14 +30,9 @@ const analyzeFiles = (files: File[]): {
 
         if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
         dateGroups[dateKey].push(file);
-
-        // Low quality check (mock - purely based on file size as proxy for now, < 200KB)
-        if (file.size < 200 * 1024 && file.type.startsWith('image/')) {
-            lowQualityFiles.push(file);
-        }
     });
 
-    return { dateGroups, lowQualityFiles };
+    return { dateGroups };
 };
 
 export const SmartUploadSuggestions: React.FC<SmartUploadSuggestionsProps> = ({
@@ -48,13 +41,12 @@ export const SmartUploadSuggestions: React.FC<SmartUploadSuggestionsProps> = ({
     onDismiss,
     className
 }) => {
-    const { dateGroups, lowQualityFiles } = useMemo(() => analyzeFiles(files), [files]);
+    const { dateGroups } = useMemo(() => analyzeFiles(files), [files]);
 
     const dateKeys = Object.keys(dateGroups);
     const multipleDates = dateKeys.length > 1;
-    const hasLowQuality = lowQualityFiles.length > 0;
 
-    if (!multipleDates && !hasLowQuality) return null;
+    if (!multipleDates) return null;
 
     return (
         <div className={cn("bg-surface border border-brand-primary/20 rounded-lg p-4 shadow-lg space-y-4", className)}>
@@ -97,26 +89,6 @@ export const SmartUploadSuggestions: React.FC<SmartUploadSuggestionsProps> = ({
                     </div>
                 )}
 
-                {/* Low Quality Warning */}
-                {hasLowQuality && (
-                    <div className="bg-orange-50 p-3 rounded-md flex items-start gap-3 border border-orange-100">
-                        <div className="bg-warning-100 p-2 rounded-full text-warning-600 mt-1">
-                            <AlertTriangle className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="font-medium text-gray-900">Low Quality Logic Detected</h4>
-                            <p className="text-sm text-gray-600 mt-1">
-                                {lowQualityFiles.length} files appear to be low resolution or small file size.
-                            </p>
-                            <button
-                                onClick={() => onApplySuggestion('quality', 'review')}
-                                className="mt-3 text-sm bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors"
-                            >
-                                Review Issues
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );

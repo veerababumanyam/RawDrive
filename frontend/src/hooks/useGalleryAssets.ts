@@ -3,7 +3,7 @@
  * Manages gallery assets (photos/videos) data fetching and state
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { galleryService } from '../services/galleryService';
 import type { GalleryAssetsResponse, GalleryAssetItem } from '../types/gallery';
 
@@ -52,8 +52,15 @@ export const useGalleryAssets = ({
   const [error, setError] = useState<Error | null>(null);
   const [currentPage, setCurrentPage] = useState(page);
 
+  // Track abort controller to cancel in-flight requests on unmount/re-fetch
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const fetchAssets = useCallback(
     async (pageNum: number = currentPage, append: boolean = false) => {
+      // Cancel any previous request
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = new AbortController();
+
       setLoading(true);
       setError(null);
       try {
@@ -80,6 +87,10 @@ export const useGalleryAssets = ({
         setMeta(response.meta);
         setCurrentPage(pageNum);
       } catch (err) {
+        // Ignore AbortError - component unmounted or request was cancelled
+        if (err instanceof Error && err.name === 'AbortError') {
+          return;
+        }
         setError(err instanceof Error ? err : new Error('Failed to fetch gallery assets'));
         if (!append) {
           setAssets([]);
@@ -96,6 +107,11 @@ export const useGalleryAssets = ({
     if (autoFetch && galleryId) {
       fetchAssets(1, false);
     }
+
+    // Cleanup: abort any in-flight request on unmount
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, [autoFetch, galleryId, subGalleryId, picksOnly, favoritesOnly, selectionsOnly, searchQuery, sortBy, fetchAssets]);
 
   const refetch = useCallback(async () => {

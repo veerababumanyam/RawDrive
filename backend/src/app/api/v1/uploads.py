@@ -173,17 +173,25 @@ async def commit_upload(
         )
 
         # T039: After commit, create asset_analysis record and queue content detection job
-        content_detection_service = get_content_detection_service()
-        asset_id = result["asset_id"]
-        
-        # Queue content detection (handles deduplication and tag inheritance)
-        job_id = await content_detection_service.queue_detection(
-            asset_id=asset_id,
-            workspace_id=workspace_id,
-        )
-        
-        # Update response to indicate analysis was queued
-        result["analysis_queued"] = job_id is not None
+        # This is wrapped separately so analysis failures don't fail the upload
+        try:
+            content_detection_service = get_content_detection_service()
+            asset_id = result["asset_id"]
+
+            # Queue content detection (handles deduplication and tag inheritance)
+            job_id = await content_detection_service.queue_detection(
+                asset_id=asset_id,
+                workspace_id=workspace_id,
+            )
+
+            # Update response to indicate analysis was queued
+            result["analysis_queued"] = job_id is not None
+        except Exception as analysis_error:
+            # Log but don't fail the upload - analysis can be retried later
+            logger.warning(
+                f"Content detection queuing failed for asset {result.get('asset_id')}: {analysis_error}"
+            )
+            result["analysis_queued"] = False
 
         return UploadCommitResponse(**result)
     except UploadError as e:

@@ -3,7 +3,7 @@
  * Manages gallery data fetching and state
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { galleryService } from '../services/galleryService';
 import type {
   GalleryDetailData,
@@ -37,11 +37,18 @@ export const useGallery = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Track abort controller to cancel in-flight requests on unmount/re-fetch
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const fetchGallery = useCallback(async () => {
     if (!galleryId) {
       setGallery(null);
       return;
     }
+
+    // Cancel any previous request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
 
     setLoading(true);
     setError(null);
@@ -49,6 +56,10 @@ export const useGallery = ({
       const data = await galleryService.getGallery(workspaceId, galleryId);
       setGallery(data);
     } catch (err) {
+      // Ignore AbortError - component unmounted or request was cancelled
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
       setError(err instanceof Error ? err : new Error('Failed to fetch gallery'));
       setGallery(null);
     } finally {
@@ -60,6 +71,11 @@ export const useGallery = ({
     if (autoFetch && galleryId) {
       fetchGallery();
     }
+
+    // Cleanup: abort any in-flight request on unmount
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, [autoFetch, galleryId, fetchGallery]);
 
   const updateGallery = useCallback(
@@ -167,7 +183,14 @@ export const useGalleryList = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Track abort controller to cancel in-flight requests on unmount/re-fetch
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const fetchGalleries = useCallback(async () => {
+    // Cancel any previous request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
     setLoading(true);
     setError(null);
     try {
@@ -185,6 +208,10 @@ export const useGalleryList = ({
       setGalleries(response.data);
       setMeta(response.meta);
     } catch (err) {
+      // Ignore AbortError - component unmounted or request was cancelled
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
       setError(err instanceof Error ? err : new Error('Failed to fetch galleries'));
       setGalleries([]);
       setMeta(null);
@@ -197,6 +224,11 @@ export const useGalleryList = ({
     if (autoFetch) {
       fetchGalleries();
     }
+
+    // Cleanup: abort any in-flight request on unmount
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, [autoFetch, fetchGalleries]);
 
   const createGallery = useCallback(

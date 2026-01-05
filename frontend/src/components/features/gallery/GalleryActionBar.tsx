@@ -10,7 +10,6 @@ import {
   Eye,
   Users,
   Sparkles,
-  Wand2,
   Share2,
   Settings,
   Upload,
@@ -28,14 +27,13 @@ export interface GalleryActionBarProps {
   /** Callback for View as Client action */
   onViewAsClient?: () => void;
   /** Callback for Find People action */
-  /** Callback for Find People action */
   onFindPeople?: () => void;
   /** Callback for Scan Faces action */
   onScanFaces?: () => void;
-  /** Callback for AI Story action */
-  onAIStory?: () => void;
-  /** Callback for Smart Curate action */
-  onSmartCurate?: () => void;
+  /** Callback for AI Tools Hub action (replaces AI Story + Smart Curate) */
+  onAITools?: () => void;
+  /** Whether AI Tools panel is open */
+  aiToolsOpen?: boolean;
   /** Callback for Share action */
   onShare?: () => void;
   /** Callback for Settings action */
@@ -60,8 +58,8 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
   onViewAsClient,
   onFindPeople,
   onScanFaces,
-  onAIStory,
-  onSmartCurate,
+  onAITools,
+  aiToolsOpen = false,
   onShare,
   onSettings,
   onUpload,
@@ -113,27 +111,18 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </button>
           )}
 
-          {/* AI Story - Purple (AI) */}
-          {onAIStory && (
+          {/* AI Tools - Purple (AI) - Opens AI Tools Hub */}
+          {onAITools && (
             <button
-              onClick={onAIStory}
-              className="btn-gallery-action btn-action-purple min-h-[36px] sm:min-h-[38px]"
-              aria-label="AI Story"
+              onClick={onAITools}
+              className={`btn-gallery-action min-h-[36px] sm:min-h-[38px] ${
+                aiToolsOpen ? 'btn-action-primary' : 'btn-action-purple'
+              }`}
+              aria-label="AI Tools"
+              aria-pressed={aiToolsOpen}
             >
               <Sparkles size={16} className="flex-shrink-0" />
-              <span className="hidden sm:inline">AI Story</span>
-            </button>
-          )}
-
-          {/* Smart Curate - Neutral */}
-          {onSmartCurate && (
-            <button
-              onClick={onSmartCurate}
-              className="btn-gallery-action btn-action-neutral min-h-[36px] sm:min-h-[38px]"
-              aria-label="Smart Curate"
-            >
-              <Wand2 size={16} className="flex-shrink-0" />
-              <span className="hidden md:inline">Smart Curate</span>
+              <span className="hidden sm:inline">AI Tools</span>
             </button>
           )}
         </div>

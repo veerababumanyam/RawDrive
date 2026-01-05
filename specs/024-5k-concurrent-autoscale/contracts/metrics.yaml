@@ -1,0 +1,123 @@
+# Prometheus Metrics Contract
+# New metrics for capacity monitoring and autoscaling
+
+openapi: 3.0.3
+info:
+  title: RawDrive Metrics API
+  version: 1.0.0
+  description: |
+    Prometheus metrics endpoint exposing connection pool and capacity metrics.
+
+paths:
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: |
+        Returns Prometheus-formatted metrics including new capacity metrics.
+        Used by Prometheus for scraping and alerting.
+      operationId: getMetrics
+      tags:
+        - Monitoring
+      responses:
+        '200':
+          description: Prometheus metrics in text format
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP rawdrive_db_pool_connections_active Active database connections
+                # TYPE rawdrive_db_pool_connections_active gauge
+                rawdrive_db_pool_connections_active 8
+
+                # HELP rawdrive_db_pool_connections_idle Idle database connections
+                # TYPE rawdrive_db_pool_connections_idle gauge
+                rawdrive_db_pool_connections_idle 2
+
+                # HELP rawdrive_db_pool_connections_max Maximum database connections
+                # TYPE rawdrive_db_pool_connections_max gauge
+                rawdrive_db_pool_connections_max 10
+
+                # HELP rawdrive_redis_pool_connections_active Active Redis connections
+                # TYPE rawdrive_redis_pool_connections_active gauge
+                rawdrive_redis_pool_connections_active 5
+
+                # HELP rawdrive_redis_pool_connections_max Maximum Redis connections
+                # TYPE rawdrive_redis_pool_connections_max gauge
+                rawdrive_redis_pool_connections_max 20
+
+                # HELP rawdrive_http_requests_total Total HTTP requests
+                # TYPE rawdrive_http_requests_total counter
+                rawdrive_http_requests_total{method="GET",endpoint="/api/v1/galleries",status="200"} 12345
+
+                # HELP rawdrive_http_request_duration_seconds HTTP request duration
+                # TYPE rawdrive_http_request_duration_seconds histogram
+                rawdrive_http_request_duration_seconds_bucket{le="0.1"} 10000
+                rawdrive_http_request_duration_seconds_bucket{le="0.5"} 11500
+                rawdrive_http_request_duration_seconds_bucket{le="1.0"} 12000
+                rawdrive_http_request_duration_seconds_bucket{le="3.0"} 12300
+                rawdrive_http_request_duration_seconds_bucket{le="+Inf"} 12345
+                rawdrive_http_request_duration_seconds_sum 1234.5
+                rawdrive_http_request_duration_seconds_count 12345
+
+# Metric Definitions (for documentation)
+components:
+  schemas:
+    MetricDefinitions:
+      type: object
+      description: Metric definitions for capacity monitoring
+      properties:
+        connection_pool_metrics:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+                enum: [gauge, counter, histogram]
+              description:
+                type: string
+          example:
+            - name: rawdrive_db_pool_connections_active
+              type: gauge
+              description: Current number of active database connections in the pool
+            - name: rawdrive_db_pool_connections_idle
+              type: gauge
+              description: Current number of idle database connections in the pool
+            - name: rawdrive_db_pool_connections_max
+              type: gauge
+              description: Maximum number of database connections allowed
+            - name: rawdrive_redis_pool_connections_active
+              type: gauge
+              description: Current number of active Redis connections
+            - name: rawdrive_redis_pool_connections_max
+              type: gauge
+              description: Maximum number of Redis connections allowed
+
+        request_metrics:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+                enum: [gauge, counter, histogram]
+              labels:
+                type: array
+                items:
+                  type: string
+              description:
+                type: string
+          example:
+            - name: rawdrive_http_requests_total
+              type: counter
+              labels: [method, endpoint, status]
+              description: Total number of HTTP requests
+            - name: rawdrive_http_request_duration_seconds
+              type: histogram
+              labels: [method, endpoint]
+              description: HTTP request duration in seconds

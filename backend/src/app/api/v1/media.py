@@ -283,8 +283,17 @@ async def stream_media(
     except EncryptionError as e:
         logger.error(f"Encryption error: {e}")
         raise InternalError("Failed to decrypt media")
+    except StorageError as e:
+        # Storage errors that weren't already caught (e.g., connectivity issues)
+        logger.error(f"Storage error streaming media: {e}")
+        if e.code == "FILE_NOT_FOUND":
+            raise NotFoundError("Media file", "unknown")
+        raise InternalError("Failed to access media storage")
     except Exception as e:
-        logger.exception("Failed to stream media")
+        # Log the full exception with context for debugging
+        logger.exception(
+            f"Failed to stream media (type={type(e).__name__}, message={str(e)[:200]})"
+        )
         raise InternalError("Failed to stream media")
 
 

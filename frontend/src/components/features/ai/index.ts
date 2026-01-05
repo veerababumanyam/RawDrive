@@ -26,3 +26,10 @@ export { CurationProgress, CurationProgressMini } from './CurationProgress';
 export { QualityScoreCard } from './QualityScoreCard';
 export { QualityResultsGrid } from './QualityResultsGrid';
 export { BlurIndicator, BlurBadge } from './BlurIndicator';
+
+// AI Tools Hub (024-ai-tools-hub)
+export { AIToolsHub } from './AIToolsHub';
+export type { AIToolsTab, AIToolsHubProps } from './AIToolsHub';
+export { AnalyzeTab } from './tabs/AnalyzeTab';
+export { CurateTab } from './tabs/CurateTab';
+export { CreateTab } from './tabs/CreateTab';

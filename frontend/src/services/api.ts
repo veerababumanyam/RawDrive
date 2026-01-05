@@ -86,8 +86,13 @@ function isRetryableError(error: any): boolean {
     return true;
   }
 
-  // Timeout errors
-  if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+  // Timeout errors - but NOT user-triggered aborts (component unmount, navigation)
+  // AbortError from user action has message "signal is aborted without reason" or similar
+  // Only retry explicit timeout aborts that have 'timeout' in the message
+  if (error.name === 'AbortError') {
+    return error.message?.toLowerCase().includes('timeout') || false;
+  }
+  if (error.message?.includes('timeout')) {
     return true;
   }
 

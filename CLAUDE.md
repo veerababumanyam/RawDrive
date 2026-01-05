@@ -289,6 +289,8 @@ await redis.setex(f"gallery:{id}", 3600, json.dumps(result))
 - PostgreSQL 16 + pgvector extension, Redis 7, Cloudflare R2
 - pnpm workspaces for monorepo package management
 - Zod 4.2+ for validation schemas, Pydantic 2.7+ for Python models
+- Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, SQLAlchemy (asyncpg), Redis 7, PgBouncer 1.21+ (024-5k-concurrent-autoscale)
+- PostgreSQL 16 + pgvector, Cloudflare R2, Redis 7 (024-5k-concurrent-autoscale)
 
 ## Recent Changes
 - 022-shared-packages: Implemented shared packages infrastructure with 4 npm packages (`@rawdrive/shared-types`, `@rawdrive/shared-constants`, `@rawdrive/shared-validation`, `@rawdrive/shared-utils`), TypeScript-to-Python type generation, pnpm workspaces
