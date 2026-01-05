@@ -86,6 +86,12 @@ Enterprise-grade features including SSO, RBAC, policies, retention rules, and au
 | 16 | Calendar & Bookings | [16_CALENDAR_BOOKINGS.md](16_CALENDAR_BOOKINGS.md) | 🚧 MVP in progress |
 | 17 | API & Integrations | [17_API_INTEGRATIONS.md](17_API_INTEGRATIONS.md) | 🚧 Public preview; fuller coverage planned |
 | 18 | Digital Album | [18_DIGITAL_ALBUM_DESIGN.md](18_DIGITAL_ALBUM_DESIGN.md) | 🚧 Design Studio alpha |
+| 19 | Admin Roles | [19_ADMIN_ROLES.md](19_ADMIN_ROLES.md) | ✅ Complete |
+| 20 | Onboarding | [20_ONBOARDING_AND_WORKSPACE_SETUP.md](20_ONBOARDING_AND_WORKSPACE_SETUP.md) | ✅ Complete |
+| 21 | Team Management | [21_TEAM_MANAGEMENT.md](21_TEAM_MANAGEMENT.md) | ✅ Complete |
+| 22 | Localization | [22_LOCALIZATION_AND_REGIONAL_FEATURES.md](22_LOCALIZATION_AND_REGIONAL_FEATURES.md) | ✅ Complete |
+| 23 | Mobile App | [23_MOBILE_COMPANION_APP.md](23_MOBILE_COMPANION_APP.md) | 🚧 Planned |
+| 24 | Growth & Referrals | [24_GROWTH_AND_REFERRALS.md](24_GROWTH_AND_REFERRALS.md) | ✅ Complete |
 
 ---
 
