@@ -140,47 +140,48 @@ POST /api/v1/users/me/password
 - Password hashing: bcrypt with 12 rounds
 - Session invalidation: All sessions except current
 
-#### 3.2 Password Reset (⚠️ TODO - Priority Implementation)
+#### 3.2 Password Reset (✅ Specified - Ready for Implementation)
 
 **Business Value**: Critical self-service feature for account recovery.
 
 **Current State**:
 - Frontend UI exists: `frontend/src/pages/public/ForgotPasswordPage.tsx`
 - API endpoints exist but return "not yet implemented"
-- Email service integration pending
 
-**API Endpoints** (to be implemented):
+**API Endpoints**:
 ```
 POST /api/v1/auth/forgot-password    # Request reset email
 POST /api/v1/auth/reset-password     # Reset with token
 ```
 
-**Recommended Implementation**:
-1. Generate secure token (64 bytes, URL-safe)
-2. Store token hash in `password_reset_tokens` table
-3. Send email via existing transactional email provider (`email_service.py` → SendGrid/SES) with localized templates
-4. Token expiry: 1 hour
-5. Rate limit: 3 requests per hour per email address and IP pair
-6. Audit log all reset attempts (including IP, user agent, success/failure)
+**Implementation Specification**:
+1.  **Token Generation**:
+    - Use `secrets.token_urlsafe(64)` for high entropy.
+    - Token hash (SHA-256) stored in DB; plain token sent via email.
+2.  **Email Delivery**:
+    - Use `SendGridService` (template ID: `d-password-reset`).
+    - Localized template based on user's `preferred_language`.
+3.  **Security Controls**:
+    - **Expiry**: 60 minutes hard limit.
+    - **One-Time Use**: Token deleted immediately upon successful reset.
+    - **Rate Limit**: 3 requests / hour / email + IP.
+    - **Leaking**: Always return "202 Accepted" even if email not found (prevent user enumeration).
 
-**Database Schema** (to be created):
+**Database Schema**:
 ```sql
 CREATE TABLE password_reset_tokens (
-  token_id UUID PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES users(user_id),
-  token_hash VARCHAR(64) NOT NULL,
+  token_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  token_hash VARCHAR(64) NOT NULL, -- SHA-256 hash of the token
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL,
   used_at TIMESTAMPTZ,
-  ip_address INET,
+  ip_address INET, -- Requesting IP
   user_agent TEXT
 );
+CREATE INDEX idx_pwd_reset_token_hash ON password_reset_tokens(token_hash);
+CREATE INDEX idx_pwd_reset_user_id ON password_reset_tokens(user_id);
 ```
-
-**Known Gaps (Jan 2026)**:
-- Endpoints are stubbed and not wired to `email_service.py`.
-- No UI for localized error states (expired/used/invalid tokens) on `ForgotPasswordPage.tsx`.
-- Brute-force protection on token verification relies on generic rate limiting; dedicated per-token lockout is still pending.
 
 ---
 
@@ -394,46 +395,57 @@ PATCH /api/v1/users/me/privacy    # Update settings
 
 ---
 
-### 9. Data Export (GDPR Article 20)
+### 9. Data Export (GDPR Article 20) (✅ Specified - Ready for Implementation)
 
 **Business Value**: Regulatory compliance, user trust, data portability.
 
 **Capabilities**:
 - Request full data export
-- Async processing for large datasets
-- Download link with expiry
-- Rate limited (1 per 24 hours)
+- Async processing (background worker)
+- Secure download link (R2 presigned URL)
+
+**Export Schema (JSON Structure)**:
+The export will be a ZIP file containing `rawdrive_export.json` and associated media summaries.
+
+```json
+{
+  "version": "1.0",
+  "generated_at": "2026-01-05T10:00:00Z",
+  "user": {
+    "profile": { ... },
+    "security": { "2fa_enabled": true, "sessions_active": 2 }
+  },
+  "workspaces": [
+    {
+      "id": "uuid",
+      "galleries": [
+        {
+          "title": "Wedding",
+          "asset_count": 500,
+          "public_url": "..."
+        }
+      ]
+    }
+  ],
+  "activity_log": [ ... ]
+}
+```
+
+**Implementation Specification**:
+1.  **Trigger**: `POST /api/v1/users/me/export` enqueues job `process_data_export` in `default` queue.
+2.  **Worker**:
+    - Aggregates data from `users`, `galleries`, `assets`, `audit_logs`.
+    - Generates JSON file.
+    - Uploads to `s3://rawdrive-exports/{user_id}/{export_id}.zip` (Lifecycle rule: 7 days).
+3.  **Completion**:
+    - Updates job status in DB.
+    - Sends email with Download Link.
 
 **API Endpoints**:
 ```
 POST /api/v1/users/me/export    # Request export (202 Accepted)
 GET  /api/v1/users/me/export    # Get export status
 ```
-
-**Export Contents**:
-- User profile data
-- Gallery metadata
-- Client information
-- Activity history
-- Settings and preferences
-
-**Response Schema**:
-```json
-{
-  "export_id": "uuid",
-  "status": "pending|processing|completed|failed",
-  "requested_at": "ISO datetime",
-  "completed_at": "ISO datetime or null",
-  "download_url": "presigned URL or null",
-  "expires_at": "ISO datetime or null"
-}
-```
-
-**Technical Implementation**:
-- Service: `backend/src/app/services/data_export_service.py`
-- Processing: Background job via BullMQ
-- Format: JSON archive (ZIP)
-- Retention: Download available for 7 days
 
 ---
 

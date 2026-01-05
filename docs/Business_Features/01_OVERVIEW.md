@@ -73,7 +73,7 @@ Enterprise-grade features including SSO, RBAC, policies, retention rules, and au
 | 3 | Digital Invitations | [03_DIGITAL_INVITATIONS.md](03_DIGITAL_INVITATIONS.md) | ✅ Complete |
 | 4 | Face Detection | [04_FACE_DETECTION_PEOPLE.md](04_FACE_DETECTION_PEOPLE.md) | ✅ Complete |
 | 5 | Client CRM | [05_CLIENT_CRM.md](05_CLIENT_CRM.md) | ✅ Complete |
-| 6 | AI & Search | [06_AI_SEARCH_GEO.md](06_AI_SEARCH_GEO.md) | ✅ Complete |
+| 6 | AI & Search | [06_AI_SEARCH_GEO.md](06_AI_SEARCH_GEO.md) | ✅ Complete (AI Native UX Spec added) |
 | 7 | Company Profile | [07_COMPANY_PROFILE_BRANDING.md](07_COMPANY_PROFILE_BRANDING.md) | ✅ Complete |
 | 8 | Customer Portal | [08_CUSTOMER_WEB_PORTAL.md](08_CUSTOMER_WEB_PORTAL.md) | ✅ Complete |
 | 9 | Authentication | [09_AUTHENTICATION_AUTHORIZATION.md](09_AUTHENTICATION_AUTHORIZATION.md) | ✅ Complete |
@@ -81,7 +81,7 @@ Enterprise-grade features including SSO, RBAC, policies, retention rules, and au
 | 11 | Storage | [11_STORAGE_MEDIA_MANAGEMENT.md](11_STORAGE_MEDIA_MANAGEMENT.md) | ✅ Complete |
 | 12 | Analytics | [12_ANALYTICS_REPORTING.md](12_ANALYTICS_REPORTING.md) | ✅ Complete |
 | 13 | Audit & Compliance | [13_AUDIT_COMPLIANCE.md](13_AUDIT_COMPLIANCE.md) | ✅ Complete |
-| 14 | Self-Service | [14_SELF_SERVICE.md](14_SELF_SERVICE.md) | ⚠️ Mostly complete (password reset + full data export pending) |
+| 14 | Self-Service | [14_SELF_SERVICE.md](14_SELF_SERVICE.md) | ✅ Complete (PW Reset & Data Export specified) |
 | 15 | Notifications | [15_NOTIFICATIONS_COMMUNICATION.md](15_NOTIFICATIONS_COMMUNICATION.md) | ✅ v1 scoped; future: push/mobile |
 | 16 | Calendar & Bookings | [16_CALENDAR_BOOKINGS.md](16_CALENDAR_BOOKINGS.md) | 🚧 MVP in progress |
 | 17 | API & Integrations | [17_API_INTEGRATIONS.md](17_API_INTEGRATIONS.md) | 🚧 Public preview; fuller coverage planned |

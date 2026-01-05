@@ -140,7 +140,19 @@ AI & Search Features (GEO) provide intelligent photo analysis, semantic search, 
 - Emotional narrative
 - Technical excellence notes
 
-### 5. Semantic Search (GEO)
+### 5. AI Native UX Experience (New)
+
+**Command Bar Integration (Cmd+K)**
+- **Unified Entry Point**: All search and navigation via a central floating palette.
+- **Natural Language Parsing**: "Show me weddings from last summer" -> Filters: `{ category: 'wedding', date: 'last summer' }`.
+- **Action Execution**: "Create a new gallery called 'Smith Wedding'" -> Opens wizard with pre-filled title.
+
+**Generative Inputs ("Magic Rewrite")**
+- **Context Aware**: Text areas for captions/bios have a sparkle icon.
+- **Tone Shift**: "Make it friendlier", "Make it professional", "Fix grammar".
+- **Skeleton Loading**: UI displays "shimmering" text blocks of approximate length while AI generates content to reduce perceived latency.
+
+### 6. Semantic Search (GEO)
 
 **Natural Language Search**
 - Search using everyday language
