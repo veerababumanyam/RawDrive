@@ -53,8 +53,9 @@ export const useGallery = ({
     setLoading(true);
     setError(null);
     try {
-      const data = await galleryService.getGallery(workspaceId, galleryId);
+      const data = await galleryService.getGallery(workspaceId, galleryId, abortControllerRef.current.signal);
       setGallery(data);
+      setLoading(false);
     } catch (err) {
       // Ignore AbortError - component unmounted or request was cancelled
       if (err instanceof Error && err.name === 'AbortError') {
@@ -62,7 +63,6 @@ export const useGallery = ({
       }
       setError(err instanceof Error ? err : new Error('Failed to fetch gallery'));
       setGallery(null);
-    } finally {
       setLoading(false);
     }
   }, [workspaceId, galleryId]);
@@ -204,9 +204,11 @@ export const useGalleryList = ({
         endDate,
         pinnedOnly,
         recentOnly,
+        signal: abortControllerRef.current.signal,
       });
       setGalleries(response.data);
       setMeta(response.meta);
+      setLoading(false);
     } catch (err) {
       // Ignore AbortError - component unmounted or request was cancelled
       if (err instanceof Error && err.name === 'AbortError') {
@@ -215,7 +217,6 @@ export const useGalleryList = ({
       setError(err instanceof Error ? err : new Error('Failed to fetch galleries'));
       setGalleries([]);
       setMeta(null);
-    } finally {
       setLoading(false);
     }
   }, [workspaceId, page, limit, sort, status, search, startDate, endDate, pinnedOnly, recentOnly]);

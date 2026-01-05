@@ -36,6 +36,7 @@ export class GalleryService {
       endDate?: string;   // YYYY-MM-DD
       pinnedOnly?: boolean;
       recentOnly?: boolean;
+      signal?: AbortSignal;
     }
   ): Promise<GalleryListResponse> {
     const params = new URLSearchParams();
@@ -52,7 +53,7 @@ export class GalleryService {
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries${query ? `?${query}` : ''}`;
 
-    const response = await apiClient.get<GalleryListResponse>(endpoint);
+    const response = await apiClient.get<GalleryListResponse>(endpoint, { headers: undefined, signal: options?.signal } as any);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch galleries');
     }
@@ -62,11 +63,11 @@ export class GalleryService {
   /**
    * Get gallery details
    */
-  async getGallery(workspaceId: string, galleryId: string): Promise<GalleryDetailData> {
+  async getGallery(workspaceId: string, galleryId: string, signal?: AbortSignal): Promise<GalleryDetailData> {
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}`;
     // Backend returns flat GalleryDetailResponse structure
     // API client wraps it: { data: GalleryDetailResponse }
-    const response = await apiClient.get<GalleryDetailData>(endpoint);
+    const response = await apiClient.get<GalleryDetailData>(endpoint, { headers: undefined, signal } as any);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch gallery');
     }
@@ -76,9 +77,9 @@ export class GalleryService {
   /**
    * Get public gallery details
    */
-  async getPublicGallery(galleryId: string): Promise<GalleryDetailData> {
+  async getPublicGallery(galleryId: string, signal?: AbortSignal): Promise<GalleryDetailData> {
     const endpoint = `/api/v1/public/galleries/${galleryId}`;
-    const response = await apiClient.get<GalleryDetailData>(endpoint);
+    const response = await apiClient.get<GalleryDetailData>(endpoint, { headers: undefined, signal } as any);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch public gallery');
     }
@@ -166,6 +167,7 @@ export class GalleryService {
       selections_only?: boolean;
       search_query?: string;
       sort_by?: string;
+      signal?: AbortSignal;
     }
   ): Promise<GalleryAssetsResponse> {
     const params = new URLSearchParams();
@@ -183,7 +185,7 @@ export class GalleryService {
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets${query ? `?${query}` : ''}`;
 
-    const response = await apiClient.get<GalleryAssetsResponse>(endpoint);
+    const response = await apiClient.get<GalleryAssetsResponse>(endpoint, { headers: undefined, signal: options?.signal } as any);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch gallery assets');
     }

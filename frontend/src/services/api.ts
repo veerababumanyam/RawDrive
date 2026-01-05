@@ -92,7 +92,7 @@ function isRetryableError(error: any): boolean {
   if (error.name === 'AbortError') {
     return error.message?.toLowerCase().includes('timeout') || false;
   }
-  if (error.message?.includes('timeout')) {
+  if (error.message?.toLowerCase().includes('timeout')) {
     return true;
   }
 
@@ -215,6 +215,19 @@ class ApiClient {
     // Create AbortController for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+    // Merge custom signal if provided
+    if (options.signal) {
+      if (options.signal.aborted) {
+        clearTimeout(timeoutId);
+        controller.abort();
+      } else {
+        options.signal.addEventListener('abort', () => {
+          clearTimeout(timeoutId);
+          controller.abort();
+        });
+      }
+    }
 
     try {
       let response = await fetch(url, {

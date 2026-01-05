@@ -77,6 +77,7 @@ export const useGalleryAssets = ({
           selections_only: selectionsOnly,
           search_query: searchQuery || undefined,
           sort_by: sortBy,
+          signal: abortControllerRef.current.signal,
         });
 
         if (append) {
@@ -86,6 +87,7 @@ export const useGalleryAssets = ({
         }
         setMeta(response.meta);
         setCurrentPage(pageNum);
+        setLoading(false);
       } catch (err) {
         // Ignore AbortError - component unmounted or request was cancelled
         if (err instanceof Error && err.name === 'AbortError') {
@@ -96,7 +98,6 @@ export const useGalleryAssets = ({
           setAssets([]);
           setMeta(null);
         }
-      } finally {
         setLoading(false);
       }
     },
