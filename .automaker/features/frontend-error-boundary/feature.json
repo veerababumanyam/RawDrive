@@ -1,0 +1,14 @@
+{
+  "id": "frontend-error-boundary",
+  "category": "Frontend",
+  "title": "Error Boundary with Retry Logic",
+  "description": "Implement React error boundary component that catches errors, displays user-friendly messages, and provides retry mechanisms.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "frontend-invitation-creation"
+  ],
+  "createdAt": "2026-01-05T16:31:48.845Z",
+  "updatedAt": "2026-01-05T16:31:48.845Z"
+}

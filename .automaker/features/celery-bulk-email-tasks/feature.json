@@ -1,0 +1,16 @@
+{
+  "id": "celery-bulk-email-tasks",
+  "category": "Background Jobs",
+  "title": "Celery Bulk Email Task Workers",
+  "description": "Create Celery tasks for bulk email sending with exponential backoff retry logic. Implement delivery status tracking and rate limiting per workspace.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "celery-task-queue",
+    "email-bulk-invitation",
+    "api-rate-limiting"
+  ],
+  "createdAt": "2026-01-05T16:31:48.830Z",
+  "updatedAt": "2026-01-05T16:31:48.830Z"
+}

@@ -1,0 +1,133 @@
+# Coverage.py configuration file
+# This file provides additional coverage settings beyond pyproject.toml
+# Run with: pytest --cov=app --cov-report=html --cov-report=xml
+
+[run]
+# Source directories to measure
+source = src/app
+
+# Enable branch coverage
+branch = True
+
+# Enable parallel collection for pytest-xdist
+parallel = True
+
+# Context for coverage data
+dynamic_context = test_function
+
+# Files to omit from coverage
+omit =
+    */tests/*
+    */__pycache__/*
+    */migrations/*
+    */.venv/*
+    */venv/*
+    */site-packages/*
+    *_test.py
+    test_*.py
+    conftest.py
+    setup.py
+    */alembic/*
+
+# Data file location
+data_file = .coverage
+
+[paths]
+# Path mapping for combining coverage from different environments
+source =
+    src/app
+    */site-packages/app
+
+[report]
+# Lines to exclude from coverage reporting
+exclude_lines =
+    # Standard exclusions
+    pragma: no cover
+
+    # Debug-only code
+    def __repr__
+    if self\.debug
+    if settings\.DEBUG
+
+    # Abstract methods
+    raise AssertionError
+    raise NotImplementedError
+
+    # Main guard
+    if __name__ == .__main__.:
+
+    # Type checking imports
+    if TYPE_CHECKING:
+    if typing\.TYPE_CHECKING:
+
+    # Protocol definitions
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+
+    # Unreachable code
+    pass
+    \.\.\.
+
+    # Defensive assertions
+    assert False
+
+    # Platform-specific code
+    if sys\.platform
+
+# Regexes for lines to exclude from consideration
+exclude_also =
+    # Don't complain about missing debug-only code:
+    def __repr__
+    if self\.debug:
+
+    # Don't complain if tests don't hit defensive assertion code:
+    raise AssertionError
+    raise NotImplementedError
+
+    # Don't complain about abstract methods, they aren't run:
+    @(abc\.)?abstractmethod
+
+# Minimum coverage percentage to pass
+fail_under = 70
+
+# Show missing lines in report
+show_missing = True
+
+# Report precision
+precision = 2
+
+# Skip empty files
+skip_empty = True
+
+# Sort by which column
+sort = Cover
+
+[html]
+# HTML report output directory
+directory = htmlcov
+
+# Title for HTML report
+title = RawDrive Backend Coverage Report
+
+# Skip files with no coverage
+skip_empty = True
+
+# Extra CSS file
+# extra_css =
+
+[xml]
+# XML report output file
+output = coverage.xml
+
+# Package depth
+package_depth = 4
+
+[json]
+# JSON report output file
+output = coverage.json
+
+# Pretty print JSON
+pretty_print = True
+
+# Show context in JSON report
+show_contexts = True

@@ -42,9 +42,23 @@ RATE_LIMIT_ROUTES = {
     "/api/v1/search": RateLimitType.SEARCH,
     "/api/v1/public/profiles/": RateLimitType.PUBLIC,  # Public profile endpoints
     "/api/v1/public/galleries/": RateLimitType.PUBLIC,  # Public gallery endpoints (SOC2: rate limit PIN verify, favorites, selections)
-    "/api/v1/public/invitations/": RateLimitType.PUBLIC,  # Public invitation endpoints (016-save-the-date: RSVP submissions)
+    "/api/v1/public/invitations/": RateLimitType.PUBLIC,  # Public invitation endpoints (read-only)
     "/api/": RateLimitType.API,
 }
+
+# More specific endpoint patterns for targeted rate limiting
+# These are checked BEFORE the generic RATE_LIMIT_ROUTES
+# Format: (path_pattern, method, rate_limit_type)
+SPECIFIC_RATE_LIMIT_ROUTES: list[tuple[str, str, RateLimitType]] = [
+    # RSVP submissions: 10/minute per IP
+    ("/api/v1/public/invitations/", "POST", RateLimitType.RSVP),  # POST /{slug}/rsvp
+    # CSV import: 5/hour per IP
+    ("/microservice/guests/import", "POST", RateLimitType.CSV_IMPORT),
+    # Bulk invite: 10/hour per IP
+    ("/microservice/guests/bulk-invite", "POST", RateLimitType.BULK_INVITE),
+    # Analytics endpoints: 100/minute per IP
+    ("/analytics", "GET", RateLimitType.ANALYTICS),
+]
 
 # AI endpoint patterns - checked separately for more specific matching
 AI_RATE_LIMIT_PATTERNS = [
@@ -86,8 +100,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(exempt) for exempt in self.exclude_paths):
             return await call_next(request)
 
-        # Determine rate limit type based on path
-        limit_type = self._get_limit_type(path)
+        # Determine rate limit type based on path and method
+        limit_type = self._get_limit_type(path, request.method)
         if limit_type is None:
             return await call_next(request)
 
@@ -143,14 +157,28 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    def _get_limit_type(self, path: str) -> Optional[RateLimitType]:
-        """Determine rate limit type for path."""
-        # Check for AI-specific endpoints first (more specific matching)
+    def _get_limit_type(self, path: str, method: str = "GET") -> Optional[RateLimitType]:
+        """Determine rate limit type for path and method.
+
+        Args:
+            path: The request URL path
+            method: The HTTP method (GET, POST, etc.)
+
+        Returns:
+            The appropriate RateLimitType for the request
+        """
+        # Check for specific endpoint patterns first (most specific matching)
+        # These patterns combine path and method for targeted rate limiting
+        for pattern, pattern_method, limit_type in SPECIFIC_RATE_LIMIT_ROUTES:
+            if pattern in path and method.upper() == pattern_method:
+                return limit_type
+
+        # Check for AI-specific endpoints (also specific matching)
         for pattern in AI_RATE_LIMIT_PATTERNS:
             if pattern in path:
                 return RateLimitType.AI
 
-        # Then check prefix-based routes
+        # Then check prefix-based routes (general matching)
         for prefix, limit_type in RATE_LIMIT_ROUTES.items():
             if path.startswith(prefix):
                 return limit_type

@@ -43,7 +43,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined
   : 'http://localhost:8000';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second
-const TIMEOUT_MS = 30000; // 30 seconds
+const TIMEOUT_MS = 60000; // 60 seconds
 
 // Event for auth state changes - allows React to handle navigation instead of hard redirects
 export const AUTH_EVENTS = {
@@ -214,7 +214,7 @@ class ApiClient {
 
     // Create AbortController for timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(new Error('Request timed out')), TIMEOUT_MS);
 
     // Merge custom signal if provided
     if (options.signal) {
@@ -246,7 +246,7 @@ class ApiClient {
           // Retry request with new token
           clearTimeout(timeoutId);
           const retryController = new AbortController();
-          const retryTimeoutId = setTimeout(() => retryController.abort(), TIMEOUT_MS);
+          const retryTimeoutId = setTimeout(() => retryController.abort(new Error('Request timed out')), TIMEOUT_MS);
 
           try {
             response = await fetch(url, {

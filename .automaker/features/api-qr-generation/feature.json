@@ -1,0 +1,14 @@
+{
+  "id": "api-qr-generation",
+  "category": "API",
+  "title": "QR Code Generation Endpoint",
+  "description": "Create endpoint generating dynamic QR codes with logo embedding, error correction level H. Support multiple formats (PNG, SVG, PDF) and custom branding.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-invitation-crud"
+  ],
+  "createdAt": "2026-01-05T16:31:48.822Z",
+  "updatedAt": "2026-01-05T16:31:48.822Z"
+}

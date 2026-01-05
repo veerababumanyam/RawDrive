@@ -128,6 +128,11 @@ class R2StorageService:
         else:
              return f"workspaces/{workspace_id}/library/{variant}/{asset_id}/{filename}"
 
+    # Threshold for using multipart upload (10MB)
+    MULTIPART_THRESHOLD = 10 * 1024 * 1024
+    # Size of each part in multipart uploads (5MB - S3 minimum)
+    MULTIPART_PART_SIZE = 5 * 1024 * 1024
+
     async def upload_encrypted_file(
         self,
         workspace_id: UUID,
@@ -139,6 +144,9 @@ class R2StorageService:
         content_type: str = "application/octet-stream",
     ) -> str:
         """Upload encrypted file to R2.
+
+        Automatically uses multipart upload for files > 10MB to improve
+        memory efficiency and enable parallel uploads.
 
         Args:
             workspace_id: Workspace UUID
@@ -160,28 +168,40 @@ class R2StorageService:
         )
 
         try:
-            # Upload to R2 (run in thread pool since boto3 is synchronous)
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                self.executor,
-                lambda: self.s3_client.put_object(
-                    Bucket=self.bucket_name,
-                    Key=object_key,
-                    Body=encrypted_data,
-                    ContentType=content_type,
-                    Metadata={
-                        "workspace_id": str(workspace_id),
-                        "gallery_id": str(gallery_id) if gallery_id else "library",
-                        "asset_id": str(asset_id),
-                        "variant": variant,
-                    },
-                ),
-            )
-
-            logger.info(
-                f"Uploaded encrypted file to R2: {object_key} "
-                f"(workspace={workspace_id}, asset={asset_id}, variant={variant})"
-            )
+            # Use multipart upload for large files
+            if len(encrypted_data) > self.MULTIPART_THRESHOLD:
+                await self.upload_large_file_multipart(
+                    object_key=object_key,
+                    data=encrypted_data,
+                    content_type=content_type,
+                )
+                logger.info(
+                    f"Uploaded encrypted file to R2 (multipart): {object_key} "
+                    f"(workspace={workspace_id}, asset={asset_id}, variant={variant}, "
+                    f"size={len(encrypted_data)})"
+                )
+            else:
+                # Standard single-request upload for smaller files
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    self.executor,
+                    lambda: self.s3_client.put_object(
+                        Bucket=self.bucket_name,
+                        Key=object_key,
+                        Body=encrypted_data,
+                        ContentType=content_type,
+                        Metadata={
+                            "workspace_id": str(workspace_id),
+                            "gallery_id": str(gallery_id) if gallery_id else "library",
+                            "asset_id": str(asset_id),
+                            "variant": variant,
+                        },
+                    ),
+                )
+                logger.info(
+                    f"Uploaded encrypted file to R2: {object_key} "
+                    f"(workspace={workspace_id}, asset={asset_id}, variant={variant})"
+                )
 
             return object_key
         except (ClientError, BotoCoreError) as e:
@@ -502,9 +522,214 @@ class R2StorageService:
         )
         return url
 
+    # -------------------------------------------------------------------------
+    # Multipart Upload Methods (Phase 4.1 - Upload Performance)
+    # -------------------------------------------------------------------------
+
+    async def create_multipart_upload(
+        self,
+        object_key: str,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        """Create a multipart upload session.
+
+        Used for large files (>10MB) to upload in chunks.
+
+        Args:
+            object_key: R2 object key
+            content_type: MIME type of the content
+
+        Returns:
+            Upload ID for the multipart upload session
+
+        Raises:
+            StorageError: If creation fails
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                self.executor,
+                lambda: self.s3_client.create_multipart_upload(
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                    ContentType=content_type,
+                ),
+            )
+            upload_id = response["UploadId"]
+            logger.debug(f"Created multipart upload: {object_key} (upload_id={upload_id})")
+            return upload_id
+        except (ClientError, BotoCoreError) as e:
+            logger.error(f"Failed to create multipart upload: {e}")
+            raise StorageError(f"Multipart create failed: {e}", "MULTIPART_CREATE_FAILED") from e
+
+    async def upload_part(
+        self,
+        object_key: str,
+        upload_id: str,
+        part_number: int,
+        data: bytes,
+    ) -> dict:
+        """Upload a single part of a multipart upload.
+
+        Part numbers start at 1 and go up to 10,000.
+        Each part must be at least 5MB (except the last part).
+
+        Args:
+            object_key: R2 object key
+            upload_id: Multipart upload ID from create_multipart_upload
+            part_number: Part number (1-10000)
+            data: Part data bytes
+
+        Returns:
+            Dict with ETag and PartNumber for complete_multipart_upload
+
+        Raises:
+            StorageError: If upload fails
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                self.executor,
+                lambda: self.s3_client.upload_part(
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                    UploadId=upload_id,
+                    PartNumber=part_number,
+                    Body=data,
+                ),
+            )
+            etag = response["ETag"]
+            logger.debug(
+                f"Uploaded part {part_number} for {object_key} "
+                f"(size={len(data)}, etag={etag})"
+            )
+            return {"ETag": etag, "PartNumber": part_number}
+        except (ClientError, BotoCoreError) as e:
+            logger.error(f"Failed to upload part {part_number}: {e}")
+            raise StorageError(f"Part upload failed: {e}", "PART_UPLOAD_FAILED") from e
+
+    async def complete_multipart_upload(
+        self,
+        object_key: str,
+        upload_id: str,
+        parts: list[dict],
+    ) -> str:
+        """Complete a multipart upload.
+
+        Must be called after all parts are uploaded successfully.
+
+        Args:
+            object_key: R2 object key
+            upload_id: Multipart upload ID
+            parts: List of {"ETag": ..., "PartNumber": ...} from upload_part
+
+        Returns:
+            Object ETag
+
+        Raises:
+            StorageError: If completion fails
+        """
+        try:
+            # Sort parts by PartNumber (required by S3)
+            sorted_parts = sorted(parts, key=lambda p: p["PartNumber"])
+
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                self.executor,
+                lambda: self.s3_client.complete_multipart_upload(
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                    UploadId=upload_id,
+                    MultipartUpload={"Parts": sorted_parts},
+                ),
+            )
+            etag = response.get("ETag", "")
+            logger.info(f"Completed multipart upload: {object_key} (etag={etag})")
+            return etag
+        except (ClientError, BotoCoreError) as e:
+            logger.error(f"Failed to complete multipart upload: {e}")
+            raise StorageError(f"Multipart complete failed: {e}", "MULTIPART_COMPLETE_FAILED") from e
+
+    async def abort_multipart_upload(
+        self,
+        object_key: str,
+        upload_id: str,
+    ) -> None:
+        """Abort a multipart upload.
+
+        Called when an upload fails partway through to clean up.
+
+        Args:
+            object_key: R2 object key
+            upload_id: Multipart upload ID
+
+        Raises:
+            StorageError: If abort fails
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                self.executor,
+                lambda: self.s3_client.abort_multipart_upload(
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                    UploadId=upload_id,
+                ),
+            )
+            logger.info(f"Aborted multipart upload: {object_key} (upload_id={upload_id})")
+        except (ClientError, BotoCoreError) as e:
+            logger.warning(f"Failed to abort multipart upload (may already be complete): {e}")
+
+    async def upload_large_file_multipart(
+        self,
+        object_key: str,
+        data: bytes,
+        content_type: str = "application/octet-stream",
+        part_size: int = 5 * 1024 * 1024,  # 5MB default
+    ) -> str:
+        """Upload a large file using multipart upload.
+
+        Convenience method that handles the full multipart workflow.
+
+        Args:
+            object_key: R2 object key
+            data: Complete file bytes
+            content_type: MIME type
+            part_size: Size of each part (min 5MB)
+
+        Returns:
+            Object ETag
+
+        Raises:
+            StorageError: If upload fails
+        """
+        upload_id = await self.create_multipart_upload(object_key, content_type)
+
+        try:
+            parts = []
+            total_size = len(data)
+            part_number = 1
+
+            for offset in range(0, total_size, part_size):
+                chunk = data[offset:offset + part_size]
+                part_info = await self.upload_part(
+                    object_key, upload_id, part_number, chunk
+                )
+                parts.append(part_info)
+                part_number += 1
+
+            return await self.complete_multipart_upload(object_key, upload_id, parts)
+        except Exception as e:
+            # Clean up on failure
+            await self.abort_multipart_upload(object_key, upload_id)
+            raise
+
 
 # Export singleton instance
 _r2_storage_service: Optional[R2StorageService] = None
+
+# Export constants
+MULTIPART_PART_SIZE = R2StorageService.MULTIPART_PART_SIZE
 
 
 def get_r2_storage_service() -> R2StorageService:

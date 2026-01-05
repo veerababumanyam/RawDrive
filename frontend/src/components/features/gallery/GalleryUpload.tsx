@@ -83,7 +83,8 @@ export const GalleryUpload: React.FC<GalleryUploadProps> = ({
     stage: f.status === 'completed' ? 'complete' :
       f.status === 'error' ? 'error' :
         f.status === 'uploading' ? 'uploading' :
-          f.status === 'verifying' ? 'processing' : 'queued',
+          f.status === 'verifying' ? 'processing' :
+            f.status === 'preparing' ? 'processing' : 'queued',
     progress: f.progress,
     uploadedBytes: f.uploadedBytes,
     totalBytes: f.totalBytes,

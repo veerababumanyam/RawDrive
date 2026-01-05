@@ -12,6 +12,7 @@ This migration:
 """
 
 from alembic import op
+import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -25,11 +26,11 @@ def upgrade():
     """Add invitation support to magic_links."""
 
     # 1. Add 'invitation' to the magic_link_target_type enum
-    op.execute(
-        """
-        ALTER TYPE magic_link_target_type ADD VALUE IF NOT EXISTS 'invitation';
-        """
-    )
+    # Note: Using execute with autocommit to ensure enum is committed before use
+    conn = op.get_bind()
+    conn.execute(sa.text("COMMIT"))
+    conn.execute(sa.text("ALTER TYPE magic_link_target_type ADD VALUE IF NOT EXISTS 'invitation'"))
+    conn.execute(sa.text("BEGIN"))
 
     # 2. Add invitation_id column
     op.execute(

@@ -4,7 +4,7 @@ import asyncpg
 import os
 
 async def main():
-    database_url = os.getenv("DATABASE_URL", "postgresql://rawdrive:rawdrive@postgres:5432/rawdrive")
+    database_url = os.getenv("DATABASE_URL", "postgresql://rawdrive:rawdrive@localhost:5432/rawdrive")
     if database_url.startswith("postgresql+asyncpg://"):
         database_url = database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
     

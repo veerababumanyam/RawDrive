@@ -1,0 +1,15 @@
+{
+  "id": "data-retention-auto-delete",
+  "category": "Compliance",
+  "title": "Configurable Auto-Deletion Post-Event",
+  "description": "Implement automatic data deletion after configurable period (default 7 days post-event) with warning emails and opt-out capabilities.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "moderate",
+  "dependencies": [
+    "celery-task-queue",
+    "email-sendgrid-setup"
+  ],
+  "createdAt": "2026-01-05T16:31:48.851Z",
+  "updatedAt": "2026-01-05T16:31:48.851Z"
+}

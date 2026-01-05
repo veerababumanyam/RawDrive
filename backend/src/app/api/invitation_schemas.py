@@ -23,7 +23,7 @@ from app.shared.types import EventType as SharedEventType
 from app.shared.types import InvitationStatus as SharedInvitationStatus
 from app.shared.types import RSVPStatus as SharedRSVPStatus
 from app.shared.types import TemplateCategory as SharedTemplateCategory
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 import re
 import html
 
@@ -120,6 +120,32 @@ class ImagePurpose(str, Enum):
     LOGO = "logo"
     BACKGROUND = "background"
     PATTERN = "pattern"
+
+
+class ActorType(str, Enum):
+    """Actor type for audit events."""
+
+    USER = "user"
+    GUEST = "guest"
+    SYSTEM = "system"
+
+
+class GuestStatus(str, Enum):
+    """Status of a guest in the invitation workflow.
+
+    Tracks the guest's progression through the invitation lifecycle:
+    - invited: Guest has been added to the list but invitation not yet sent
+    - sent: Invitation has been sent to the guest
+    - viewed: Guest has viewed the invitation
+    - responded: Guest has submitted an RSVP response
+    - checked_in: Guest has checked in at the event
+    """
+
+    INVITED = "invited"
+    SENT = "sent"
+    VIEWED = "viewed"
+    RESPONDED = "responded"
+    CHECKED_IN = "checked_in"
 
 
 class NotificationPreference(str, Enum):
@@ -316,18 +342,18 @@ class CreateInvitationRequest(BaseModel):
     title: str = Field(
         ..., min_length=1, max_length=300, description="Invitation title"
     )
-    description: Optional[str] = Field(None, description="Event description")
+    description: Optional[str] = Field(None, max_length=5000, description="Event description")
     event_type: EventType = Field(EventType.wedding, description="Type of event")
     event_datetime: datetime = Field(..., description="Event date/time (UTC)")
     event_end_datetime: Optional[datetime] = Field(
         None, description="Event end time (UTC)"
     )
     event_timezone: str = Field(
-        "Asia/Kolkata", max_length=50, description="Timezone identifier"
+        "Asia/Kolkata", max_length=50, description="Timezone identifier (IANA format)"
     )
     venue: Optional[VenueInfo] = Field(None, description="Venue information")
     host_names: list[str] = Field(
-        default_factory=list, description="Names of event hosts"
+        default_factory=list, max_length=10, description="Names of event hosts (max 10)"
     )
     host_contact_phone: Optional[str] = Field(None, max_length=20)
     host_contact_email: Optional[EmailStr] = Field(None)
@@ -340,12 +366,75 @@ class CreateInvitationRequest(BaseModel):
         None, description="Template customization overrides"
     )
 
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v: str | None) -> str | None:
+        """Sanitize text fields to prevent XSS attacks."""
+        return sanitize_text(v)
+
+    @field_validator("host_names", mode="before")
+    @classmethod
+    def sanitize_host_names(cls, v: list[str] | None) -> list[str]:
+        """Sanitize host names for XSS protection."""
+        if v is None:
+            return []
+        return [sanitize_text(name) or "" for name in v if name]
+
+    @field_validator("event_timezone", mode="after")
+    @classmethod
+    def validate_timezone(cls, v: str) -> str:
+        """Validate timezone is a known IANA timezone identifier."""
+        # Common valid timezones - not exhaustive but covers most use cases
+        valid_prefixes = (
+            "Africa/", "America/", "Antarctica/", "Arctic/", "Asia/",
+            "Atlantic/", "Australia/", "Europe/", "Indian/", "Pacific/",
+            "UTC", "GMT", "Etc/"
+        )
+        if not any(v.startswith(prefix) for prefix in valid_prefixes):
+            raise ValueError(
+                f"Invalid timezone: {v}. Must be a valid IANA timezone "
+                "(e.g., 'Asia/Kolkata', 'America/New_York', 'UTC')"
+            )
+        return v
+
+    @field_validator("event_end_datetime", mode="after")
+    @classmethod
+    def validate_end_after_start(
+        cls, v: datetime | None, info
+    ) -> datetime | None:
+        """Ensure end datetime is after start datetime."""
+        if v is not None and info.data.get("event_datetime"):
+            if v <= info.data["event_datetime"]:
+                raise ValueError("event_end_datetime must be after event_datetime")
+        return v
+
+    @field_validator("host_contact_phone", mode="before")
+    @classmethod
+    def validate_phone_format(cls, v: str | None) -> str | None:
+        """Validate and clean phone number format."""
+        if v is None:
+            return None
+        # Remove all whitespace and common separators for validation
+        cleaned = re.sub(r'[\s\-\.\(\)]', '', v)
+        # Allow + at start for international format
+        if cleaned.startswith('+'):
+            cleaned_for_check = cleaned[1:]
+        else:
+            cleaned_for_check = cleaned
+        # Must be digits only after cleaning
+        if not cleaned_for_check.isdigit():
+            raise ValueError("Phone number must contain only digits, spaces, and standard separators")
+        # Must be reasonable length (4-15 digits per E.164)
+        if len(cleaned_for_check) < 4 or len(cleaned_for_check) > 15:
+            raise ValueError("Phone number must be between 4 and 15 digits")
+        return v.strip()
+
 
 class UpdateInvitationRequest(BaseModel):
     """Request to update an invitation."""
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=5000)
     event_type: Optional[EventType] = None
     event_datetime: Optional[datetime] = None
     event_end_datetime: Optional[datetime] = None
@@ -386,6 +475,60 @@ class UpdateInvitationRequest(BaseModel):
     font_body: Optional[str] = Field(None, max_length=100)
     ai_generated_content: Optional[dict] = None
     has_sub_events: Optional[bool] = None
+
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v: str | None) -> str | None:
+        """Sanitize text fields to prevent XSS attacks."""
+        return sanitize_text(v)
+
+    @field_validator("host_names", mode="before")
+    @classmethod
+    def sanitize_host_names(cls, v: list[str] | None) -> list[str] | None:
+        """Sanitize host names for XSS protection."""
+        if v is None:
+            return None
+        return [sanitize_text(name) or "" for name in v if name]
+
+    @field_validator("event_timezone", mode="after")
+    @classmethod
+    def validate_timezone(cls, v: str | None) -> str | None:
+        """Validate timezone is a known IANA timezone identifier."""
+        if v is None:
+            return None
+        # Common valid timezones - not exhaustive but covers most use cases
+        valid_prefixes = (
+            "Africa/", "America/", "Antarctica/", "Arctic/", "Asia/",
+            "Atlantic/", "Australia/", "Europe/", "Indian/", "Pacific/",
+            "UTC", "GMT", "Etc/"
+        )
+        if not any(v.startswith(prefix) for prefix in valid_prefixes):
+            raise ValueError(
+                f"Invalid timezone: {v}. Must be a valid IANA timezone "
+                "(e.g., 'Asia/Kolkata', 'America/New_York', 'UTC')"
+            )
+        return v
+
+    @field_validator("host_contact_phone", mode="before")
+    @classmethod
+    def validate_phone_format(cls, v: str | None) -> str | None:
+        """Validate and clean phone number format."""
+        if v is None:
+            return None
+        # Remove all whitespace and common separators for validation
+        cleaned = re.sub(r'[\s\-\.\(\)]', '', v)
+        # Allow + at start for international format
+        if cleaned.startswith('+'):
+            cleaned_for_check = cleaned[1:]
+        else:
+            cleaned_for_check = cleaned
+        # Must be digits only after cleaning
+        if not cleaned_for_check.isdigit():
+            raise ValueError("Phone number must contain only digits, spaces, and standard separators")
+        # Must be reasonable length (4-15 digits per E.164)
+        if len(cleaned_for_check) < 4 or len(cleaned_for_check) > 15:
+            raise ValueError("Phone number must be between 4 and 15 digits")
+        return v.strip()
 
 
 class PublishInvitationRequest(BaseModel):
@@ -572,9 +715,36 @@ class AddGuestRequest(BaseModel):
         None, max_length=100, description="Guest group (Family, Friends, etc.)"
     )
     personalized_message: Optional[str] = Field(
-        None, description="Personal message for this guest"
+        None, max_length=2000, description="Personal message for this guest"
     )
     expected_party_size: int = Field(1, ge=1, le=20, description="Expected party size")
+
+    @field_validator("name", "salutation", "group_name", "personalized_message", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v: str | None) -> str | None:
+        """Sanitize text fields to prevent XSS attacks."""
+        return sanitize_text(v)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone_format(cls, v: str | None) -> str | None:
+        """Validate and clean phone number format."""
+        if v is None:
+            return None
+        # Remove all whitespace and common separators for validation
+        cleaned = re.sub(r'[\s\-\.\(\)]', '', v)
+        # Allow + at start for international format
+        if cleaned.startswith('+'):
+            cleaned_for_check = cleaned[1:]
+        else:
+            cleaned_for_check = cleaned
+        # Must be digits only after cleaning
+        if not cleaned_for_check.isdigit():
+            raise ValueError("Phone number must contain only digits, spaces, and standard separators")
+        # Must be reasonable length (4-15 digits per E.164)
+        if len(cleaned_for_check) < 4 or len(cleaned_for_check) > 15:
+            raise ValueError("Phone number must be between 4 and 15 digits")
+        return v.strip()
 
 
 class UpdateGuestRequest(BaseModel):
@@ -585,8 +755,35 @@ class UpdateGuestRequest(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     salutation: Optional[str] = Field(None, max_length=50)
     group_name: Optional[str] = Field(None, max_length=100)
-    personalized_message: Optional[str] = None
+    personalized_message: Optional[str] = Field(None, max_length=2000)
     expected_party_size: Optional[int] = Field(None, ge=1, le=20)
+
+    @field_validator("name", "salutation", "group_name", "personalized_message", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v: str | None) -> str | None:
+        """Sanitize text fields to prevent XSS attacks."""
+        return sanitize_text(v)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone_format(cls, v: str | None) -> str | None:
+        """Validate and clean phone number format."""
+        if v is None:
+            return None
+        # Remove all whitespace and common separators for validation
+        cleaned = re.sub(r'[\s\-\.\(\)]', '', v)
+        # Allow + at start for international format
+        if cleaned.startswith('+'):
+            cleaned_for_check = cleaned[1:]
+        else:
+            cleaned_for_check = cleaned
+        # Must be digits only after cleaning
+        if not cleaned_for_check.isdigit():
+            raise ValueError("Phone number must contain only digits, spaces, and standard separators")
+        # Must be reasonable length (4-15 digits per E.164)
+        if len(cleaned_for_check) < 4 or len(cleaned_for_check) > 15:
+            raise ValueError("Phone number must be between 4 and 15 digits")
+        return v.strip()
 
 
 class BulkAddGuestsRequest(BaseModel):
@@ -662,7 +859,9 @@ class SubmitRSVPRequest(BaseModel):
     attending: bool = Field(..., description="Whether attending")
     party_size: int = Field(1, ge=1, le=20, description="Number of guests")
     party_names: list[str] = Field(
-        default_factory=list, description="Names of accompanying guests"
+        default_factory=list,
+        max_length=19,
+        description="Names of accompanying guests (excluding primary guest)",
     )
     dietary_preferences: Optional[str] = Field(
         None, max_length=500, description="Dietary restrictions/preferences"
@@ -676,6 +875,11 @@ class SubmitRSVPRequest(BaseModel):
     # T124: Optional Turnstile CAPTCHA token (required if workspace has Turnstile enabled)
     turnstile_token: Optional[str] = Field(
         None, max_length=2048, description="Cloudflare Turnstile verification token"
+    )
+    # Source tracking
+    source: Optional[RSVPSource] = Field(
+        RSVPSource.WEB,
+        description="How the RSVP was submitted",
     )
 
     # T125: XSS protection validators
@@ -700,6 +904,45 @@ class SubmitRSVPRequest(BaseModel):
         if v is None:
             return {}
         return {k: sanitize_text(val) or "" for k, val in v.items()}
+
+    @field_validator("guest_phone", mode="before")
+    @classmethod
+    def validate_phone_format(cls, v: str | None) -> str | None:
+        """Validate and clean phone number format."""
+        if v is None:
+            return None
+        # Remove all whitespace and common separators for validation
+        cleaned = re.sub(r'[\s\-\.\(\)]', '', v)
+        # Allow + at start for international format
+        if cleaned.startswith('+'):
+            cleaned_for_check = cleaned[1:]
+        else:
+            cleaned_for_check = cleaned
+        # Must be digits only after cleaning
+        if not cleaned_for_check.isdigit():
+            raise ValueError("Phone number must contain only digits, spaces, and standard separators")
+        # Must be reasonable length (4-15 digits per E.164)
+        if len(cleaned_for_check) < 4 or len(cleaned_for_check) > 15:
+            raise ValueError("Phone number must be between 4 and 15 digits")
+        return v.strip()
+
+    @model_validator(mode="after")
+    def validate_rsvp_business_rules(self) -> "SubmitRSVPRequest":
+        """Validate RSVP business rules that require cross-field validation."""
+        # Validate party_size is consistent with party_names length
+        if self.party_names and len(self.party_names) > self.party_size - 1:
+            raise ValueError(
+                f"party_names has {len(self.party_names)} entries but party_size is {self.party_size}. "
+                f"party_names should have at most {self.party_size - 1} entries (excluding the primary guest)."
+            )
+
+        # Validate that party_size is 1 when not attending
+        if not self.attending and self.party_size > 1:
+            raise ValueError(
+                "party_size must be 1 when not attending (only the primary guest)"
+            )
+
+        return self
 
 
 class UpdateRSVPRequest(BaseModel):
@@ -1147,3 +1390,246 @@ class CheckinStatsResponse(BaseModel):
     last_checkin_at: Optional[datetime] = None
     by_method: dict = Field(default_factory=dict, description="Breakdown by verification method")
     rsvp_stats: Optional[dict] = None
+
+
+# ---------------------------------------------------------------------------
+# Sub-Event Schemas (Multi-Event Support)
+# ---------------------------------------------------------------------------
+
+
+class SubEventVenueInfo(BaseModel):
+    """Venue information specific to a sub-event."""
+
+    name: Optional[str] = Field(None, max_length=300, description="Venue name")
+    address: Optional[str] = Field(None, description="Full street address")
+    city: Optional[str] = Field(None, max_length=100, description="City")
+    map_url: Optional[str] = Field(None, description="Google Maps or custom map URL")
+
+    @field_validator("name", "address", "city", mode="before")
+    @classmethod
+    def sanitize_venue_fields(cls, v: str | None) -> str | None:
+        """Sanitize venue text fields to prevent XSS attacks."""
+        return sanitize_text(v)
+
+
+class CreateSubEventRequest(BaseModel):
+    """Request to create a sub-event for a multi-event invitation.
+
+    Sub-events allow invitations to include multiple related events
+    (e.g., Mehendi, Sangeet, Wedding, Reception for Indian weddings).
+    """
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Sub-event name (e.g., 'Mehendi Ceremony')",
+    )
+    event_type: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Optional sub-event type classification",
+    )
+    event_datetime: datetime = Field(
+        ...,
+        description="Sub-event start date/time (UTC)",
+    )
+    event_end_datetime: Optional[datetime] = Field(
+        None,
+        description="Sub-event end date/time (UTC)",
+    )
+    event_timezone: str = Field(
+        "Asia/Kolkata",
+        max_length=50,
+        description="Timezone identifier (IANA format)",
+    )
+    description: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Sub-event description",
+    )
+    venue: Optional[SubEventVenueInfo] = Field(
+        None,
+        description="Venue information (can differ from main event)",
+    )
+    display_order: int = Field(
+        0,
+        ge=0,
+        le=99,
+        description="Display order (0 = first)",
+    )
+    show_countdown: bool = Field(
+        True,
+        description="Show countdown timer for this sub-event",
+    )
+    enable_individual_rsvp: bool = Field(
+        False,
+        description="Allow guests to RSVP separately for this sub-event",
+    )
+
+    @field_validator("name", "description", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v: str | None) -> str | None:
+        """Sanitize text fields to prevent XSS attacks."""
+        return sanitize_text(v)
+
+    @field_validator("event_end_datetime", mode="after")
+    @classmethod
+    def validate_end_after_start(
+        cls, v: datetime | None, info
+    ) -> datetime | None:
+        """Ensure end datetime is after start datetime."""
+        if v is not None and info.data.get("event_datetime"):
+            if v <= info.data["event_datetime"]:
+                raise ValueError("event_end_datetime must be after event_datetime")
+        return v
+
+
+class UpdateSubEventRequest(BaseModel):
+    """Request to update an existing sub-event."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    event_type: Optional[str] = Field(None, max_length=50)
+    event_datetime: Optional[datetime] = None
+    event_end_datetime: Optional[datetime] = None
+    event_timezone: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = Field(None, max_length=2000)
+    venue: Optional[SubEventVenueInfo] = None
+    display_order: Optional[int] = Field(None, ge=0, le=99)
+    show_countdown: Optional[bool] = None
+    enable_individual_rsvp: Optional[bool] = None
+
+    @field_validator("name", "description", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v: str | None) -> str | None:
+        """Sanitize text fields to prevent XSS attacks."""
+        return sanitize_text(v)
+
+
+class SubEventResponse(BaseModel):
+    """Response schema for a sub-event."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    sub_event_id: UUID
+    invitation_id: UUID
+    workspace_id: UUID
+    name: str
+    event_type: Optional[str] = None
+    event_datetime: datetime
+    event_end_datetime: Optional[datetime] = None
+    event_timezone: str = "Asia/Kolkata"
+    description: Optional[str] = None
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
+    venue_city: Optional[str] = None
+    venue_map_url: Optional[str] = None
+    display_order: int = 0
+    show_countdown: bool = True
+    enable_individual_rsvp: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
+class SubEventListResponse(BaseModel):
+    """List of sub-events for an invitation."""
+
+    data: list[SubEventResponse]
+    total: int
+
+
+class ReorderSubEventsRequest(BaseModel):
+    """Request to reorder sub-events."""
+
+    sub_event_ids: list[UUID] = Field(
+        ...,
+        min_length=1,
+        description="Sub-event IDs in desired display order",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Invitation Audit Event Schemas
+# ---------------------------------------------------------------------------
+
+
+class InvitationAuditEventResponse(BaseModel):
+    """Response schema for an invitation audit event.
+
+    Audit events track all significant actions on an invitation for
+    compliance (SOC 2) and debugging purposes. No PII is stored in
+    event_data - use IDs only.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    event_id: UUID
+    invitation_id: UUID
+    workspace_id: UUID
+    event_type: str  # InvitationEventType value
+    actor_type: str  # ActorType value
+    actor_user_id: Optional[UUID] = None
+    actor_guest_email: Optional[str] = None
+    actor_ip_address: Optional[str] = None
+    event_data: dict = Field(
+        default_factory=dict,
+        description="Event-specific data (IDs only, no PII)",
+    )
+    created_at: datetime
+
+
+class InvitationAuditEventListResponse(BaseModel):
+    """Paginated list of audit events."""
+
+    data: list[InvitationAuditEventResponse]
+    meta: dict = Field(..., description="Pagination metadata")
+
+
+class CreateAuditEventRequest(BaseModel):
+    """Request to create an audit event (internal use only).
+
+    This is typically called by services, not directly by API endpoints.
+    """
+
+    event_type: InvitationEventType = Field(..., description="Type of event")
+    actor_type: ActorType = Field(..., description="Who performed the action")
+    actor_user_id: Optional[UUID] = Field(
+        None,
+        description="User ID if actor_type is 'user'",
+    )
+    actor_guest_email: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Guest email if actor_type is 'guest'",
+    )
+    actor_ip_address: Optional[str] = Field(
+        None,
+        description="IP address of the actor",
+    )
+    event_data: dict = Field(
+        default_factory=dict,
+        description="Event-specific data (use IDs only, no PII)",
+    )
+
+    @field_validator("event_data", mode="before")
+    @classmethod
+    def validate_no_pii_in_event_data(cls, v: dict | None) -> dict:
+        """Validate that event_data doesn't contain obvious PII fields."""
+        if v is None:
+            return {}
+
+        # List of field names that likely contain PII
+        pii_fields = {
+            "email", "phone", "password", "name", "address",
+            "credit_card", "ssn", "dob", "date_of_birth",
+        }
+
+        for key in v.keys():
+            key_lower = key.lower()
+            for pii_field in pii_fields:
+                if pii_field in key_lower and not key_lower.endswith("_id"):
+                    raise ValueError(
+                        f"event_data should not contain PII. "
+                        f"Found suspicious field: '{key}'. Use IDs instead."
+                    )
+        return v

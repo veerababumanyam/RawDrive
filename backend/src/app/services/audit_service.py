@@ -35,7 +35,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # Configuration
-LOKI_URL = os.getenv("LOKI_URL", "http://localhost:3100")
+LOKI_URL = os.getenv("LOKI_URL")  # No default, must be set explicitly
 LOKI_PUSH_PATH = "/loki/api/v1/push"
 AUDIT_BATCH_SIZE = int(os.getenv("AUDIT_BATCH_SIZE", "100"))
 AUDIT_FLUSH_INTERVAL = float(os.getenv("AUDIT_FLUSH_INTERVAL", "5.0"))  # seconds
@@ -69,6 +69,10 @@ async def _push_to_loki(events: list[dict[str, Any]]) -> bool:
     }
     """
     if not events:
+        return True
+        
+    if not LOKI_URL:
+        # Loki not configured, skip push
         return True
 
     try:

@@ -35,6 +35,7 @@ from app.services.r2_storage_service import (
     R2StorageService,
     get_r2_storage_service,
 )
+from app.services.audit_service import AuditService, AuditEventType
 
 
 logger = logging.getLogger(__name__)
@@ -221,11 +222,13 @@ class DigitalInvitationService:
         invitation_repo: Optional[InvitationRepository] = None,
         rsvp_repo: Optional[RSVPRepository] = None,
         magic_link_service: Optional[MagicLinkService] = None,
+        audit_service: Optional[AuditService] = None,
     ):
         self.invitation_repo = invitation_repo or get_invitation_repository()
         self.rsvp_repo = rsvp_repo or get_rsvp_repository()
         self.magic_link_service = magic_link_service or MagicLinkService()
         self.storage_service = get_r2_storage_service()
+        self.audit_service = audit_service or AuditService()
 
     async def _populate_media_urls(self, invitation: dict[str, Any]) -> dict[str, Any]:
         """Populate media URLs from object keys."""

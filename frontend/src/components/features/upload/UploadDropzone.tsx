@@ -209,34 +209,7 @@ export const UploadDropzone = React.memo<UploadDropzoneProps>(({
     [maxSize, accept]
   );
 
-  // Process files and generate previews
-  const processFiles = useCallback(
-    async (fileList: FileList | File[]) => {
-      const fileArray = Array.from(fileList);
-
-      // Check max files limit
-      const availableSlots = maxFiles - files.length;
-      const filesToProcess = fileArray.slice(0, availableSlots);
-
-      if (filesToProcess.length === 0) {
-        return;
-      }
-
-      // Check for smart suggestions candidates (e.g. duplicate dates, low quality)
-      // We do this before setting isProcessing so we can show the UI
-      if (filesToProcess.length > 1 && !showSuggestions) {
-        // Simple heuristic: if we have multiple files, let's offer to check them
-        // In a real implementation we'd check if they actually trigger the suggestions
-        setSuggestionFiles(filesToProcess);
-        setShowSuggestions(true);
-        return;
-      }
-
-      confirmProcessFiles(filesToProcess);
-    },
-    [files.length, maxFiles, showSuggestions]
-  );
-
+  // Process files and add to upload queue
   const confirmProcessFiles = useCallback(async (filesToProcess: File[]) => {
     setIsProcessing(true);
     setShowSuggestions(false);
@@ -306,6 +279,27 @@ export const UploadDropzone = React.memo<UploadDropzoneProps>(({
       onFilesSelected(validFiles);
     }
   }, [validateFile, onFilesSelected]);
+
+  // Process files and generate previews
+  const processFiles = useCallback(
+    async (fileList: FileList | File[]) => {
+      const fileArray = Array.from(fileList);
+
+      // Check max files limit
+      const availableSlots = maxFiles - files.length;
+      const filesToProcess = fileArray.slice(0, availableSlots);
+
+      if (filesToProcess.length === 0) {
+        return;
+      }
+
+      // Process files directly - SmartUploadSuggestions disabled to ensure
+      // immediate feedback via upload progress panel
+      // TODO: Re-implement SmartUploadSuggestions as non-blocking feature
+      confirmProcessFiles(filesToProcess);
+    },
+    [files.length, maxFiles, confirmProcessFiles]
+  );
 
   // Handle folder selection (webkitdirectory)
   const handleFolderSelect = useCallback(

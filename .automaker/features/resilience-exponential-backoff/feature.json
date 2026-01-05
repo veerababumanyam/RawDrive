@@ -1,0 +1,14 @@
+{
+  "id": "resilience-exponential-backoff",
+  "category": "Resilience",
+  "title": "Exponential Backoff Retry Logic",
+  "description": "Implement exponential backoff with jitter for failed requests and background tasks to prevent cascading failures.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "celery-task-queue"
+  ],
+  "createdAt": "2026-01-05T16:31:48.857Z",
+  "updatedAt": "2026-01-05T16:31:48.857Z"
+}

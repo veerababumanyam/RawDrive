@@ -1,0 +1,14 @@
+{
+  "id": "dietary-preferences-tracking",
+  "category": "RSVP",
+  "title": "Enhanced Dietary Preferences Tracking",
+  "description": "Create structured dietary preferences collection with predefined options, allergies tracking, and custom notes support.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "simple",
+  "dependencies": [
+    "api-rsvp-submission"
+  ],
+  "createdAt": "2026-01-05T16:31:48.858Z",
+  "updatedAt": "2026-01-05T16:31:48.858Z"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "billing-subscription-tiers",
+  "category": "Monetization",
+  "title": "Billing and Subscription Tier Management",
+  "description": "Implement subscription tier differentiation with feature limits, storage quotas, and analytics retention periods.",
+  "status": "backlog",
+  "priority": 3,
+  "complexity": "complex",
+  "dependencies": [
+    "core-fastapi-app"
+  ],
+  "createdAt": "2026-01-05T16:31:48.864Z",
+  "updatedAt": "2026-01-05T16:31:48.864Z",
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "imagePaths": [],
+  "textFilePaths": [],
+  "branchName": "025-ai-filter-simplify",
+  "planningMode": "full",
+  "requirePlanApproval": false
+}

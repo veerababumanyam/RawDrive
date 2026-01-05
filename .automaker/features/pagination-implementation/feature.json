@@ -1,0 +1,14 @@
+{
+  "id": "pagination-implementation",
+  "category": "API",
+  "title": "Pagination for List Endpoints",
+  "description": "Implement pagination with cursor-based or offset-limit strategies supporting 25/50/100 records per page with sorting.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-guest-crud"
+  ],
+  "createdAt": "2026-01-05T16:31:48.854Z",
+  "updatedAt": "2026-01-05T16:31:48.854Z"
+}

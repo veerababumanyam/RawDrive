@@ -12,6 +12,16 @@ from uuid import UUID
 
 from PIL import Image, ImageOps
 
+# Register HEIC/HEIF support with Pillow
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    logger_init = logging.getLogger(__name__)
+    logger_init.debug("HEIC/HEIF support enabled via pillow-heif")
+except ImportError:
+    logger_init = logging.getLogger(__name__)
+    logger_init.warning("pillow-heif not installed - HEIC/HEIF images will not be supported")
+
 logger = logging.getLogger(__name__)
 
 # Image processing constants

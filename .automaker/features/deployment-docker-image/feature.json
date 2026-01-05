@@ -1,0 +1,16 @@
+{
+  "id": "deployment-docker-image",
+  "category": "Deployment",
+  "title": "Docker Image Build and Registry",
+  "description": "Create Dockerfile optimized for Python FastAPI with multi-stage builds and container registry configuration.",
+  "status": "verified",
+  "priority": 1,
+  "complexity": "simple",
+  "dependencies": [
+    "core-fastapi-app"
+  ],
+  "createdAt": "2026-01-05T16:31:48.855Z",
+  "updatedAt": "2026-01-05T16:55:09.818Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T16:48:15.661Z"
+}

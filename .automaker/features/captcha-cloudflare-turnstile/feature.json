@@ -1,0 +1,14 @@
+{
+  "id": "captcha-cloudflare-turnstile",
+  "category": "Security",
+  "title": "Cloudflare Turnstile CAPTCHA Integration",
+  "description": "Integrate Cloudflare Turnstile CAPTCHA for RSVP submission and public form protection against bot attacks.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-rsvp-submission"
+  ],
+  "createdAt": "2026-01-05T16:31:48.851Z",
+  "updatedAt": "2026-01-05T16:31:48.851Z"
+}

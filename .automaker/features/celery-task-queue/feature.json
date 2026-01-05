@@ -1,0 +1,17 @@
+{
+  "id": "celery-task-queue",
+  "category": "Background Jobs",
+  "title": "Celery Background Task Setup",
+  "description": "Configure Celery 5.3.6+ with Redis broker for background task processing. Implement task routing and result tracking.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "core-redis-cache",
+    "email-sendgrid-setup"
+  ],
+  "createdAt": "2026-01-05T16:31:48.829Z",
+  "updatedAt": "2026-01-05T17:04:15.373Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T17:04:12.224Z"
+}

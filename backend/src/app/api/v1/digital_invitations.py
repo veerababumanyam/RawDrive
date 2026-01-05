@@ -877,19 +877,17 @@ async def export_rsvps(
     # T050: Audit log the export (SOC 2 compliance)
     # Log before generating export to ensure audit trail even if export fails
     export_format = format.lower() if format else "csv"
-    user_id = current_user.get("user_id") if current_user else None
     try:
         audit_service = AuditService()
         await audit_service.log_event(
             event_type=AuditEventType.RSVP_EXPORTED,
-            workspace_id=str(workspace_id),
-            resource_type="invitation",
-            resource_id=str(invitation_id),
-            actor_user_id=str(user_id) if user_id else None,
-            metadata={
+            workspace_id=workspace_id,
+            actor_user_id=current_user.user_id,
+            target_entity_type="invitation",
+            target_entity_id=invitation_id,
+            details={
                 "format": export_format,
                 "rsvp_count": total,
-                "invitation_id": str(invitation_id),
             },
         )
     except Exception as e:

@@ -1,0 +1,14 @@
+{
+  "id": "api-rsvp-management",
+  "category": "API",
+  "title": "RSVP Management Endpoints",
+  "description": "Create endpoints for listing, updating, and deleting RSVPs. Support filtering by response status and date range.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-rsvp-submission"
+  ],
+  "createdAt": "2026-01-05T16:31:48.817Z",
+  "updatedAt": "2026-01-05T16:31:48.817Z"
+}

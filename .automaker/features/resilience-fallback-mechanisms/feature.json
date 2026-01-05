@@ -1,0 +1,14 @@
+{
+  "id": "resilience-fallback-mechanisms",
+  "category": "Resilience",
+  "title": "Fallback Mechanisms for Service Degradation",
+  "description": "Implement fallback behaviors when external services fail, such as queuing emails locally or returning cached analytics.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "resilience-circuit-breaker"
+  ],
+  "createdAt": "2026-01-05T16:31:48.857Z",
+  "updatedAt": "2026-01-05T16:31:48.857Z"
+}

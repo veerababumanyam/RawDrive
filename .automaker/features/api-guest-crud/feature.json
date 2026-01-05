@@ -1,0 +1,23 @@
+{
+  "id": "api-guest-crud",
+  "category": "API",
+  "title": "Guest List CRUD Endpoints",
+  "description": "Create endpoints for adding, updating, listing, and deleting individual guests. Support filtering and pagination with 25/50/100 records per page.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-invitation-crud",
+    "core-database-async"
+  ],
+  "createdAt": "2026-01-05T16:31:48.813Z",
+  "updatedAt": "2026-01-05T16:31:48.813Z",
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "imagePaths": [],
+  "textFilePaths": [],
+  "branchName": "025-ai-filter-simplify",
+  "planningMode": "full",
+  "requirePlanApproval": false
+}

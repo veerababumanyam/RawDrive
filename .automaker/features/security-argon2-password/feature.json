@@ -1,0 +1,16 @@
+{
+  "id": "security-argon2-password",
+  "category": "Security",
+  "title": "Argon2id Password Hashing",
+  "description": "Implement Argon2id password hashing for user accounts with proper salt generation and parameter configuration.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "simple",
+  "dependencies": [
+    "core-authentication-jwt"
+  ],
+  "createdAt": "2026-01-05T16:31:48.834Z",
+  "updatedAt": "2026-01-05T17:03:55.543Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T17:03:48.972Z"
+}

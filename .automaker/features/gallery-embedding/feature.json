@@ -1,0 +1,14 @@
+{
+  "id": "gallery-embedding",
+  "category": "Integration",
+  "title": "Gallery Embedding in External Sites",
+  "description": "Implement iframe-based embedding allowing invitation gallery to be embedded in external photographer portfolios or websites.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-public-invitation-page"
+  ],
+  "createdAt": "2026-01-05T16:31:48.866Z",
+  "updatedAt": "2026-01-05T16:31:48.866Z"
+}

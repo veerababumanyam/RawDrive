@@ -1,0 +1,15 @@
+{
+  "id": "security-error-leakage-prevention",
+  "category": "Security",
+  "title": "Error Information Leakage Prevention",
+  "description": "Implement custom error responses that don't leak internal system details. Log detailed errors server-side while showing generic messages to clients.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "core-error-handling",
+    "core-structured-logging"
+  ],
+  "createdAt": "2026-01-05T16:31:48.834Z",
+  "updatedAt": "2026-01-05T16:31:48.834Z"
+}

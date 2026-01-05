@@ -1,0 +1,14 @@
+{
+  "id": "language-ai-generation",
+  "category": "AI",
+  "title": "AI-Generated Content in Multiple Languages",
+  "description": "Implement AI-powered content generation for invitation titles and descriptions in all supported languages with cultural appropriateness.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "complex",
+  "dependencies": [
+    "language-support-regional"
+  ],
+  "createdAt": "2026-01-05T16:31:48.849Z",
+  "updatedAt": "2026-01-05T16:31:48.849Z"
+}

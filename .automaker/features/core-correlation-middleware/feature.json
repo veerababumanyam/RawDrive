@@ -1,0 +1,17 @@
+{
+  "id": "core-correlation-middleware",
+  "category": "Observability",
+  "title": "Correlation ID Middleware",
+  "description": "Implement middleware for generating and propagating correlation IDs across requests. Ensure correlation IDs are included in all logs.",
+  "status": "verified",
+  "priority": 1,
+  "complexity": "simple",
+  "dependencies": [
+    "core-fastapi-app",
+    "core-structured-logging"
+  ],
+  "createdAt": "2026-01-05T16:31:48.807Z",
+  "updatedAt": "2026-01-05T16:58:26.838Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T16:51:26.046Z"
+}

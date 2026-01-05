@@ -31,6 +31,15 @@ export const useAnalysisProgress = ({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Use refs for callbacks to avoid re-triggering effects when they change
+  const onCompleteRef = useRef(onComplete);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+    onErrorRef.current = onError;
+  }, [onComplete, onError]);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -51,7 +60,7 @@ export const useAnalysisProgress = ({
         try {
           const resultSummary = await aiFilterService.getAnalysisSummary(workspaceId, galleryId);
           setSummary(resultSummary);
-          onComplete?.(resultSummary);
+          onCompleteRef.current?.(resultSummary);
         } catch (summaryErr) {
           console.error('Failed to fetch summary:', summaryErr);
           // Even if summary fails, we consider analysis complete
@@ -61,13 +70,13 @@ export const useAnalysisProgress = ({
         setIsAnalyzing(false);
         const err = new Error('Analysis failed');
         setError(err);
-        onError?.(err);
+        onErrorRef.current?.(err);
       }
     } catch (err) {
       // Don't stop polling on transient network errors, but maybe log them
       console.warn('Error fetching progress:', err);
     }
-  }, [workspaceId, galleryId, onComplete, onError, stopPolling]);
+  }, [workspaceId, galleryId, stopPolling]);
 
   const startAnalysis = useCallback(async (force: boolean = false) => {
     try {
@@ -85,9 +94,9 @@ export const useAnalysisProgress = ({
       setIsAnalyzing(false);
       const errorObj = err instanceof Error ? err : new Error('Failed to start analysis');
       setError(errorObj);
-      onError?.(errorObj);
+      onErrorRef.current?.(errorObj);
     }
-  }, [workspaceId, galleryId, fetchProgress, pollInterval, stopPolling, onError]);
+  }, [workspaceId, galleryId, fetchProgress, pollInterval, stopPolling]);
 
   // Cleanup on unmount
   useEffect(() => {

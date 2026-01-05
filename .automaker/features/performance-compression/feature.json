@@ -1,0 +1,22 @@
+{
+  "id": "performance-compression",
+  "category": "Performance",
+  "title": "Response Compression (gzip/brotli)",
+  "description": "Enable gzip and brotli compression for API responses to reduce payload size and improve transfer speed.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "simple",
+  "dependencies": [
+    "core-fastapi-app"
+  ],
+  "createdAt": "2026-01-05T16:31:48.856Z",
+  "updatedAt": "2026-01-05T16:31:48.856Z",
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "imagePaths": [],
+  "textFilePaths": [],
+  "branchName": "025-ai-filter-simplify",
+  "planningMode": "full",
+  "requirePlanApproval": false
+}

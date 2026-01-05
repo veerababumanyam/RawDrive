@@ -1,0 +1,269 @@
+# =============================================================================
+# GitHub Actions Workflow: Docker Build and Push
+# Builds multi-stage Docker images and pushes to container registries
+# =============================================================================
+
+name: Docker Build and Push
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'
+    paths:
+      - 'backend/**'
+      - 'services/**'
+      - 'infrastructure/docker/**'
+      - '.github/workflows/docker-build-push.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'services/**'
+      - 'infrastructure/docker/**'
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to build (backend, face-worker, content-worker, invitations, all)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - backend
+          - face-worker
+          - content-worker
+          - invitations
+      push:
+        description: 'Push to registry'
+        required: true
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}
+
+jobs:
+  # ===========================================================================
+  # Prepare: Determine what to build
+  # ===========================================================================
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set-matrix.outputs.services }}
+      version: ${{ steps.version.outputs.version }}
+      push: ${{ steps.check-push.outputs.push }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
+            VERSION="latest"
+          elif [[ "${{ github.ref }}" == refs/heads/develop ]]; then
+            VERSION="develop"
+          else
+            VERSION="sha-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Set build matrix
+        id: set-matrix
+        run: |
+          SERVICE="${{ github.event.inputs.service || 'all' }}"
+
+          if [[ "${SERVICE}" == "all" ]]; then
+            SERVICES='["backend", "face-worker", "content-worker", "invitations"]'
+          else
+            SERVICES='["'"${SERVICE}"'"]'
+          fi
+
+          echo "services=${SERVICES}" >> $GITHUB_OUTPUT
+          echo "Building services: ${SERVICES}"
+
+      - name: Check if should push
+        id: check-push
+        run: |
+          # Push on main/develop branches or tags, unless it's a PR
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            PUSH="false"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            PUSH="${{ github.event.inputs.push }}"
+          elif [[ "${{ github.ref }}" == refs/heads/main ]] || \
+               [[ "${{ github.ref }}" == refs/heads/develop ]] || \
+               [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            PUSH="true"
+          else
+            PUSH="false"
+          fi
+          echo "push=${PUSH}" >> $GITHUB_OUTPUT
+          echo "Push: ${PUSH}"
+
+  # ===========================================================================
+  # Build: Build Docker images
+  # ===========================================================================
+  build:
+    runs-on: ubuntu-latest
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.prepare.outputs.services) }}
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:v0.12.0
+
+      - name: Login to GitHub Container Registry
+        if: needs.prepare.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          SERVICE="${{ matrix.service }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
+
+          # Map service to image name and paths
+          case "${SERVICE}" in
+            backend)
+              IMAGE_NAME="rawdrive-backend"
+              DOCKERFILE="backend/Dockerfile.optimized"
+              CONTEXT="backend"
+              ;;
+            face-worker)
+              IMAGE_NAME="rawdrive-face-worker"
+              DOCKERFILE="backend/Dockerfile.worker"
+              CONTEXT="backend"
+              ;;
+            content-worker)
+              IMAGE_NAME="rawdrive-content-worker"
+              DOCKERFILE="backend/Dockerfile.content-worker"
+              CONTEXT="backend"
+              ;;
+            invitations)
+              IMAGE_NAME="rawdrive-invitations"
+              DOCKERFILE="services/invitations-service/Dockerfile"
+              CONTEXT="services/invitations-service"
+              ;;
+          esac
+
+          FULL_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${IMAGE_NAME}"
+
+          # Build tag list
+          TAGS="${FULL_IMAGE}:${VERSION}"
+          TAGS="${TAGS},${FULL_IMAGE}:sha-${{ github.sha }}"
+
+          # Add latest tag for main branch
+          if [[ "${{ github.ref }}" == refs/heads/main ]]; then
+            TAGS="${TAGS},${FULL_IMAGE}:latest"
+          fi
+
+          # Add semver tags for releases
+          if [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            MAJOR=$(echo "${VERSION}" | cut -d. -f1)
+            MINOR="${MAJOR}.$(echo "${VERSION}" | cut -d. -f2)"
+            TAGS="${TAGS},${FULL_IMAGE}:${MAJOR},${FULL_IMAGE}:${MINOR}"
+          fi
+
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "dockerfile=${DOCKERFILE}" >> $GITHUB_OUTPUT
+          echo "context=${CONTEXT}" >> $GITHUB_OUTPUT
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "full_image=${FULL_IMAGE}" >> $GITHUB_OUTPUT
+
+          echo "Image: ${FULL_IMAGE}"
+          echo "Tags: ${TAGS}"
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ steps.meta.outputs.context }}
+          file: ${{ steps.meta.outputs.dockerfile }}
+          target: production
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.prepare.outputs.push == 'true' }}
+          load: ${{ needs.prepare.outputs.push == 'false' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=${{ steps.meta.outputs.image_name }}
+            org.opencontainers.image.description=RawDrive ${{ matrix.service }} service
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            VCS_REF=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        if: needs.prepare.outputs.push == 'false'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ steps.meta.outputs.full_image }}:${{ needs.prepare.outputs.version }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Upload Trivy scan results
+        if: needs.prepare.outputs.push == 'false'
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+  # ===========================================================================
+  # Summary: Report build status
+  # ===========================================================================
+  summary:
+    runs-on: ubuntu-latest
+    needs: [prepare, build]
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ needs.prepare.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Registry | ${{ env.REGISTRY }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Push | ${{ needs.prepare.outputs.push }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Services | ${{ needs.prepare.outputs.services }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.build.result }}" == "success" ]]; then
+            echo "✅ All builds completed successfully!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some builds failed." >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,0 +1,14 @@
+{
+  "id": "check-in-manual-entry",
+  "category": "Check-in",
+  "title": "Manual Check-in Entry",
+  "description": "Create interface for manual check-ins with name lookup, token verification, and offline-capable data syncing.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "check-in-qr-scanning"
+  ],
+  "createdAt": "2026-01-05T16:31:48.847Z",
+  "updatedAt": "2026-01-05T16:31:48.847Z"
+}

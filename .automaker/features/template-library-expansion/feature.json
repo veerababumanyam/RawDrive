@@ -1,0 +1,14 @@
+{
+  "id": "template-library-expansion",
+  "category": "Content",
+  "title": "Premium Template Library Expansion",
+  "description": "Create library of 50+ premium templates designed by professional designers for various event types.",
+  "status": "backlog",
+  "priority": 3,
+  "complexity": "simple",
+  "dependencies": [
+    "api-template-crud"
+  ],
+  "createdAt": "2026-01-05T16:31:48.860Z",
+  "updatedAt": "2026-01-05T16:31:48.860Z"
+}

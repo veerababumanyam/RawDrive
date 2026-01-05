@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project_specification>
+  <project_name>RawDrive Digital Invitations &amp; Save-the-Date</project_name>
+
+  <overview>
+    RawDrive&apos;s Digital Invitations system is a comprehensive event invitation platform designed for Indian photographers, event organizers, and hosts to create, customize, share, and manage beautiful digital invitations with integrated RSVP management, guest tracking, analytics, and multi-language support. The system enables photographers to leverage workspace-scoped assets and the centralized design system to create professional invitations in under 5 minutes, eliminating printing and postage costs while providing real-time guest engagement tracking. The platform supports complex multi-day event structures (typical of Indian weddings with Mehndi, Sangeet, Ceremony, Reception), integrated QR codes, calendar synchronization, and email distribution with comprehensive security, audit logging, and GDPR/DPDP compliance. The feature is segmented across multiple specifications covering save-the-date basics (016), digital wedding invitations (017), production readiness (018), multi-language support (019), and RSVP security hardening (020).
+  </overview>
+
+  <technology_stack>
+    <technology>Backend: Python 3.x with FastAPI, Uvicorn, Pydantic</technology>
+    <technology>Database: PostgreSQL with asyncpg, Alembic migrations</technology>
+    <technology>Cache: Redis 5.0.1+</technology>
+    <technology>Message Queue: Celery 5.3.6+ for background tasks</technology>
+    <technology>Email Service: SendGrid 6.11.0+</technology>
+    <technology>Frontend: React with TypeScript</technology>
+    <technology>Shared Types: TypeScript (@rawdrive/shared-types package)</technology>
+    <technology>HTTP Client: HTTPX 0.26.0+</technology>
+    <technology>Authentication: JWT (PyJWT 2.8.0+)</technology>
+    <technology>Security: HMAC-SHA256 for edit tokens, Argon2id for password hashing</technology>
+    <technology>Observability: Prometheus metrics, Structlog (structured JSON logging), Grafana dashboards</technology>
+    <technology>Testing: Pytest 7.4.4+, Pytest-asyncio, Vitest</technology>
+    <technology>Code Quality: Black, isort, mypy</technology>
+    <technology>API Documentation: FastAPI OpenAPI (Swagger/ReDoc)</technology>
+    <technology>Container: Kubernetes-compatible with health probes (liveness, readiness)</technology>
+  </technology_stack>
+
+  <core_capabilities>
+    <capability>Invitation Creation Wizard: Step-by-step guided creation for invitations with event details, template selection, and media uploads</capability>
+    <capability>Template System: 30+ gradient-based templates with real-time color, font, and layout customization</capability>
+    <capability>Multi-Event Support: Support for multi-day Indian wedding structures with individual RSVPs, countdowns, and reorderable sequences</capability>
+    <capability>Media Management: Support for 1-10 images (JPEG, PNG, WebP) and videos (60-90 seconds, max 100MB) with smart cropping</capability>
+    <capability>RSVP Management: Guest response collection with attendance status, party size, dietary preferences, and optional messages</capability>
+    <capability>Duplicate Prevention: Email-based duplicate detection with atomic handling and edit tokens for RSVP updates</capability>
+    <capability>Guest Management: Guest list CRUD operations, CSV/Excel import with column mapping, and bulk operations</capability>
+    <capability>QR Code Integration: Dynamic QR codes with logo embedding, multiple formats (PNG, SVG, PDF), and error correction level H</capability>
+    <capability>Calendar Integration: .ics file generation compatible with Google Calendar, Apple Calendar, and Outlook with venue coordinates</capability>
+    <capability>Multi-Channel Sharing: WhatsApp (Open Graph meta tags), Social Media (Instagram/Facebook), Email (bulk with personalization), Custom Domains</capability>
+    <capability>Multi-Language Support: 12 Indian languages plus English with RTL support for Urdu, AI content generation in all languages, culturally appropriate phrasing</capability>
+    <capability>AI-Powered Features: AI-generated titles and descriptions, content suggestions in multiple styles, background generation (future)</capability>
+    <capability>View Tracking &amp; Analytics: Real-time engagement metrics including views, unique visitors, device breakdown, geographic distribution, RSVP response rates</capability>
+    <capability>Export Capabilities: CSV and PDF export for guest lists with audit logging</capability>
+    <capability>Data Retention: Configurable auto-deletion (default 7 days post-event) with warning emails and data export rights</capability>
+    <capability>Workspace Isolation: Strict tenant isolation with workspace_id enforcement on all database queries</capability>
+    <capability>Audit Logging: SOC 2 compliant audit trail for RSVP operations, access attempts, and exports with PII filtering</capability>
+    <capability>Rate Limiting: Sliding window rate limiting (10 RSVP submissions/minute per IP, 5 CSV imports/hour, 10 bulk invites/hour)</capability>
+    <capability>Error Handling: React error boundary with retry logic, timeout handling, and user-friendly error messages</capability>
+    <capability>Monitoring &amp; Observability: Prometheus metrics, health checks (liveness and readiness probes), Grafana dashboards with anomaly detection</capability>
+    <capability>Check-in System: Event-day attendance tracking via QR codes with verification methods (QR scan, manual, name lookup, token)</capability>
+    <capability>Check-in Analytics: Real-time check-in statistics with breakdown by verification method and party size tracking</capability>
+  </core_capabilities>
+
+  <implemented_features>
+    <feature>
+      <name>Digital Invitations Microservice</name>
+      <description>A dedicated Python FastAPI microservice handling invitation supplementary operations including guest management, RSVP handling, public page caching, analytics, and bulk email operations. The microservice focuses on high-availability RSVP submission with rate limiting, structured JSON logging with PII filtering, and Kubernetes-compatible health probes.</description>
+    </feature>
+    <feature>
+      <name>RSVP Service with Edit Tokens</name>
+      <description>Comprehensive RSVP submission and management service with secure HMAC-SHA256 signed edit tokens, constant-time token verification to prevent timing attacks, 30-day token expiration, duplicate prevention via unique email constraints, and atomic request handling for concurrent submissions.</description>
+    </feature>
+    <feature>
+      <name>Guest Management Service</name>
+      <description>Service for managing invitation guest lists including CRUD operations, CSV/Excel import with column mapping, bulk guest operations, and invitation sending via email and WhatsApp channels.</description>
+    </feature>
+    <feature>
+      <name>Analytics Service</name>
+      <description>Real-time analytics tracking for invitations including view counts, unique visitor tracking, RSVP statistics, response rate calculations, and cached aggregations (10-minute TTL) for efficient database usage.</description>
+    </feature>
+    <feature>
+      <name>View Tracking Service</name>
+      <description>Service for tracking invitation page views with deduplication, device type detection (mobile/tablet/desktop), referrer tracking, and engagement metrics (scroll depth, media interaction).</description>
+    </feature>
+    <feature>
+      <name>Audit Service</name>
+      <description>SOC 2 compliant audit logging service tracking all lifecycle events (RSVP submission, updates, deletion, export, access denied) with workspace isolation, PII filtering, and metadata logging without exposing personal information.</description>
+    </feature>
+    <feature>
+      <name>Bulk Invite Service</name>
+      <description>Service for bulk email distribution using Celery workers with queue-based processing, rate limiting per workspace, exponential backoff retry logic, and delivery status tracking.</description>
+    </feature>
+    <feature>
+      <name>Redis Caching System</name>
+      <description>3-tier Redis caching architecture for analytics (10-minute TTL), public page content, and rate limiting state. Includes cache invalidation strategies and sliding window rate limiting implementation.</description>
+    </feature>
+    <feature>
+      <name>Rate Limiting Middleware</name>
+      <description>Sliding window rate limiting middleware with per-endpoint configuration (CSV import: 5/hour, Bulk invite: 10/hour, RSVP submit: 10/minute, Analytics: 100/minute) and per-IP tracking.</description>
+    </feature>
+    <feature>
+      <name>Correlation ID Middleware</name>
+      <description>Request correlation tracking middleware for distributed tracing and debugging across services with unique correlation ID generation and propagation.</description>
+    </feature>
+    <feature>
+      <name>Structured JSON Logging</name>
+      <description>Production-ready structured logging with JSON format, PII filtering (email/phone/names), correlation ID injection, and configurable log levels with Prometheus integration.</description>
+    </feature>
+    <feature>
+      <name>Prometheus Metrics</name>
+      <description>Comprehensive metrics export for monitoring RSVP error rates, audit event distribution, access denied alerts, export activity, and anomaly detection with Grafana dashboard support.</description>
+    </feature>
+    <feature>
+      <name>Health Check Endpoints</name>
+      <description>Kubernetes-compatible health check endpoints including liveness probe (process health), readiness probe (dependencies check), and startup probes with database and Redis connectivity verification.</description>
+    </feature>
+    <feature>
+      <name>Resilience Patterns</name>
+      <description>Circuit breaker, retry with exponential backoff, and fallback mechanisms for handling transient failures and cascading failures in dependent services.</description>
+    </feature>
+    <feature>
+      <name>Frontend Invitation Types</name>
+      <description>Comprehensive TypeScript type definitions for frontend invitation operations including invitations, templates, guests, RSVPs, check-ins, analytics, and calendar integration with shared-types package imports.</description>
+    </feature>
+    <feature>
+      <name>Frontend Invitation Service</name>
+      <description>Client-side service layer providing type-safe API methods for invitation operations including CRUD, template management, guest operations, RSVP submission/management, check-ins, and analytics queries.</description>
+    </feature>
+    <feature>
+      <name>Database Migrations</name>
+      <description>Alembic migrations creating comprehensive schema for invitations including core invitations table, sub-events, templates, guests, RSVPs, check-ins, view analytics, media, and AI generations with workspace isolation enforcement.</description>
+    </feature>
+    <feature>
+      <name>Security Implementation</name>
+      <description>Security features including HTML escaping for XSS prevention, CSRF token validation, workspace isolation on all queries, edit token HMAC signing, constant-time token comparison, and PII filtering in logs.</description>
+    </feature>
+    <feature>
+      <name>Comprehensive Test Suite</name>
+      <description>Unit tests, integration tests, security tests, and production readiness tests covering RSVP flows, audit trails, bulk operations, resilience patterns, error leakage prevention, XSS protection, and guest isolation.</description>
+    </feature>
+  </implemented_features>
+
+  <additional_requirements>
+    <requirement>System Requirements: Python 3.10+, PostgreSQL 14+, Redis 5.0+, Node.js 18+ for frontend</requirement>
+    <requirement>API Contracts: REST API with JSON payloads, OpenAPI 3.0 documentation, semantic versioning (/api/v1)</requirement>
+    <requirement>Database: Asyncpg for non-blocking database operations, connection pooling, Alembic for migrations</requirement>
+    <requirement>Deployment: Kubernetes with health probes, Prometheus metrics endpoint, CORS configuration for multiple origins</requirement>
+    <requirement>Performance Targets: Invitation creation &lt;5 minutes, RSVP submission &lt;500ms, public page load &lt;3s on 4G, bulk invite (500 guests) &lt;30s queue</requirement>
+    <requirement>Scalability: Indexed queries on invitation_id and workspace_id, pagination support (25/50/100 per page), batch operations for bulk actions, analytics caching</requirement>
+    <requirement>Security: TLS 1.3 in transit, AES-256 at rest, no PII in logs, workspace isolation, audit trail, rate limiting</requirement>
+    <requirement>Compliance: GDPR (data export/deletion), DPDP India, SOC 2 audit trail, CAPTCHA support (Cloudflare Turnstile)</requirement>
+    <requirement>Multi-language: Support for 12 Indian languages (Hindi, Telugu, Tamil, Kannada, Malayalam, Assamese, Bengali, Gujarati, Marathi, Odia, Punjabi, Urdu) plus English with RTL support</requirement>
+    <requirement>Integration: Gallery embedding, Client CRM integration, Face detection support, Company profile branding, Notification system, Analytics aggregation, Billing/subscription tier limits</requirement>
+    <requirement>Observability: Structured JSON logging, Prometheus metrics, Grafana dashboards, Loki for log aggregation, correlation IDs for tracing</requirement>
+    <requirement>Error Handling: Custom error types, HTML escaping, XSS prevention, request/response validation via Pydantic, error boundary with retry logic</requirement>
+  </additional_requirements>
+
+  <development_guidelines>
+    <guideline>Architecture: Microservices pattern with separation between invitation CRUD (main backend) and supplementary operations (dedicated microservice)</guideline>
+    <guideline>API Design: RESTful endpoints with workspace routing, consistent response formats, semantic HTTP status codes, JWT authentication</guideline>
+    <guideline>Code Organization: Services layer abstraction, dependency injection via FastAPI, configuration management via environment variables</guideline>
+    <guideline>Database: Async operations with asyncpg, proper connection pooling, migrations via Alembic with down_revision tracking</guideline>
+    <guideline>Caching: Redis with 10-minute TTL for analytics, cache invalidation strategies, cache-aside pattern</guideline>
+    <guideline>Background Jobs: Celery for email operations with exponential backoff, rate limiting per workspace, delivery tracking</guideline>
+    <guideline>Testing: Pytest for unit/integration tests with fixtures, asyncio support, security-focused tests (error leakage, XSS, guest isolation)</guideline>
+    <guideline>Logging: Structured JSON logging with correlation IDs, PII filtering, log levels (DEBUG/INFO/WARNING/ERROR)</guideline>
+    <guideline>Security: HMAC-SHA256 for tokens, Argon2id for passwords, HTML escaping, CSRF tokens, constant-time comparisons</guideline>
+    <guideline>Monitoring: Prometheus metrics on critical paths, health checks for Kubernetes, Grafana dashboards for anomaly detection</guideline>
+    <guideline>Type Safety: TypeScript for frontend, Pydantic models for backend, shared type definitions via @rawdrive/shared-types</guideline>
+    <guideline>Error Handling: Custom exception classes, detailed error context, user-friendly error messages, error boundaries in React</guideline>
+    <guideline>Frontend: React components for invitation creation, RSVP submission, check-ins, analytics, error boundaries with retry logic</guideline>
+    <guideline>Documentation: OpenAPI/Swagger docs, migration descriptions, test coverage targets (95% for security-critical code)</guideline>
+    <guideline>Deprecation: Backward compatibility where possible, deprecated exports marked with @deprecated comments, migration guides</guideline>
+  </development_guidelines>
+
+  <implementation_roadmap>
+    <phase>
+      <name>Phase 1: Invitation Creation &amp; Templates</name>
+      <status>completed</status>
+      <description>Core invitation creation wizard with step-by-step guidance, 30+ gradient templates, real-time customization, event type selection, venue management, and RSVP settings configuration</description>
+    </phase>
+    <phase>
+      <name>Phase 2: Multi-Event Support</name>
+      <status>completed</status>
+      <description>Support for multi-day event structures (Mehndi, Sangeet, Ceremony, Reception), individual sub-event RSVPs, countdown timers, reorderable event sequences</description>
+    </phase>
+    <phase>
+      <name>Phase 3: Media &amp; Publishing</name>
+      <status>completed</status>
+      <description>1-10 image uploads with smart cropping, video support (60-90s, 100MB max), cover image selection, OG image optimization for social sharing, public URL publishing</description>
+    </phase>
+    <phase>
+      <name>Phase 4: RSVP Management Core</name>
+      <status>completed</status>
+      <description>Guest response collection with attendance status, party size, dietary preferences, optional messages, duplicate prevention, unique email constraints, edit tokens for updates</description>
+    </phase>
+    <phase>
+      <name>Phase 5: Guest Management &amp; Bulk Operations</name>
+      <status>completed</status>
+      <description>Guest list CRUD, CSV/Excel import with column mapping, bulk email sending, WhatsApp integration, personalized invitations, delivery tracking</description>
+    </phase>
+    <phase>
+      <name>Phase 6: QR Codes &amp; Calendar Integration</name>
+      <status>completed</status>
+      <description>.ics file generation for Google/Apple/Outlook calendars, QR code generation with logo embedding, multiple export formats (PNG/SVG/PDF), print-ready designs</description>
+    </phase>
+    <phase>
+      <name>Phase 7: Analytics &amp; Monitoring</name>
+      <status>completed</status>
+      <description>Real-time view tracking with device/browser/geo detection, RSVP response rates, engagement analytics, Prometheus metrics, Grafana dashboards, Kubernetes health probes</description>
+    </phase>
+    <phase>
+      <name>Phase 8: Multi-Language Support</name>
+      <status>in_progress</status>
+      <description>12 Indian languages plus English, RTL support for Urdu, AI content generation in all languages, culturally appropriate phrasing, language-specific fonts and rendering</description>
+    </phase>
+    <phase>
+      <name>Phase 9: Production Readiness &amp; Security</name>
+      <status>in_progress</status>
+      <description>Workspace isolation enforcement, audit logging (SOC 2), PII protection, error handling with retry logic, rate limiting, GDPR/DPDP compliance, security hardening</description>
+    </phase>
+    <phase>
+      <name>Phase 10: Advanced RSVP Features</name>
+      <status>in_progress</status>
+      <description>Custom RSVP questions, CAPTCHA integration (Cloudflare Turnstile), dietary tracking enhancements, message boarding</description>
+    </phase>
+    <phase>
+      <name>Phase 11: Event Check-in System</name>
+      <status>in_progress</status>
+      <description>QR code scanning for check-ins, manual check-in options, name/token lookup verification, real-time check-in statistics, geographic location tracking</description>
+    </phase>
+    <phase>
+      <name>Phase 12: AI-Powered Content</name>
+      <status>pending</status>
+      <description>AI-generated invitation titles and descriptions, content suggestions in multiple styles, custom background generation from prompts, Gemini/Imagen integration</description>
+    </phase>
+    <phase>
+      <name>Phase 13: Data Retention &amp; Privacy</name>
+      <status>pending</status>
+      <description>Configurable auto-deletion post-event, warning emails before deletion, data export capabilities, customer removal workflows</description>
+    </phase>
+    <phase>
+      <name>Phase 14: Advanced Analytics &amp; Insights</name>
+      <status>pending</status>
+      <description>Attendance predictions, guest engagement scoring, campaign performance comparison, trend analysis over time</description>
+    </phase>
+    <phase>
+      <name>Phase 15: Premium Features &amp; Monetization</name>
+      <status>pending</status>
+      <description>Custom domain support for invitations, premium template library, extended storage, advanced analytics, priority support, subscription tier differentiation</description>
+    </phase>
+  </implementation_roadmap>
+</project_specification>

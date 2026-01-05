@@ -32,11 +32,17 @@ Requires-Dist: pyotp>=2.9
 Requires-Dist: geoip2>=4.7
 Requires-Dist: qrcode>=7.4
 Requires-Dist: Pillow>=10.0
+Requires-Dist: structlog>=25.5.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.3; extra == "dev"
-Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24; extra == "dev"
+Requires-Dist: pytest-cov>=4.1; extra == "dev"
+Requires-Dist: pytest-xdist>=3.5; extra == "dev"
+Requires-Dist: pytest-timeout>=2.2; extra == "dev"
+Requires-Dist: pytest-mock>=3.12; extra == "dev"
 Requires-Dist: hypothesis>=6.100; extra == "dev"
 Requires-Dist: faker>=25.0; extra == "dev"
+Requires-Dist: coverage[toml]>=7.4; extra == "dev"
 Requires-Dist: ruff>=0.6; extra == "dev"
 Requires-Dist: mypy>=1.11; extra == "dev"
 Requires-Dist: types-redis>=4.6; extra == "dev"

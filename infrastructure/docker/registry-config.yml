@@ -1,0 +1,269 @@
+# =============================================================================
+# Container Registry Configuration for RawDrive
+# Supports multiple registries: Docker Hub, GitHub Container Registry (GHCR),
+# AWS ECR, Google Container Registry (GCR), Azure Container Registry (ACR)
+# =============================================================================
+
+version: "1.0"
+
+# Default registry configuration
+defaults:
+  # Base image prefix for pulling from registry
+  image_prefix: "rawdrive"
+  # Default tag for builds
+  default_tag: "latest"
+  # Platform targets for multi-arch builds
+  platforms:
+    - linux/amd64
+    - linux/arm64
+
+# =============================================================================
+# Registry Profiles
+# =============================================================================
+registries:
+  # ---------------------------------------------------------------------------
+  # Docker Hub
+  # ---------------------------------------------------------------------------
+  dockerhub:
+    enabled: true
+    url: "docker.io"
+    namespace: "${DOCKERHUB_NAMESPACE:-rawdrive}"
+    # Image naming pattern: docker.io/rawdrive/backend:latest
+    images:
+      backend:
+        name: "backend"
+        dockerfile: "backend/Dockerfile.optimized"
+        context: "backend"
+        target: "production"
+      backend-dev:
+        name: "backend-dev"
+        dockerfile: "backend/Dockerfile.optimized"
+        context: "backend"
+        target: "development"
+      face-worker:
+        name: "face-worker"
+        dockerfile: "backend/Dockerfile.worker"
+        context: "backend"
+        target: "production"
+      content-worker:
+        name: "content-worker"
+        dockerfile: "backend/Dockerfile.content-worker"
+        context: "backend"
+        target: "production"
+      invitations-api:
+        name: "invitations-api"
+        dockerfile: "services/invitations-service/Dockerfile"
+        context: "services/invitations-service"
+    auth:
+      type: "credentials"
+      username_env: "DOCKERHUB_USERNAME"
+      password_env: "DOCKERHUB_TOKEN"
+
+  # ---------------------------------------------------------------------------
+  # GitHub Container Registry (GHCR)
+  # ---------------------------------------------------------------------------
+  ghcr:
+    enabled: true
+    url: "ghcr.io"
+    namespace: "${GITHUB_REPOSITORY_OWNER:-rawdrive}"
+    # Image naming pattern: ghcr.io/rawdrive/rawdrive-backend:latest
+    images:
+      backend:
+        name: "rawdrive-backend"
+        dockerfile: "backend/Dockerfile.optimized"
+        context: "backend"
+        target: "production"
+      backend-dev:
+        name: "rawdrive-backend-dev"
+        dockerfile: "backend/Dockerfile.optimized"
+        context: "backend"
+        target: "development"
+      face-worker:
+        name: "rawdrive-face-worker"
+        dockerfile: "backend/Dockerfile.worker"
+        context: "backend"
+        target: "production"
+      content-worker:
+        name: "rawdrive-content-worker"
+        dockerfile: "backend/Dockerfile.content-worker"
+        context: "backend"
+        target: "production"
+      invitations-api:
+        name: "rawdrive-invitations-api"
+        dockerfile: "services/invitations-service/Dockerfile"
+        context: "services/invitations-service"
+    auth:
+      type: "token"
+      token_env: "GITHUB_TOKEN"
+
+  # ---------------------------------------------------------------------------
+  # AWS Elastic Container Registry (ECR)
+  # ---------------------------------------------------------------------------
+  ecr:
+    enabled: false
+    url: "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION:-us-east-1}.amazonaws.com"
+    namespace: "rawdrive"
+    # Image naming pattern: 123456789.dkr.ecr.us-east-1.amazonaws.com/rawdrive/backend:latest
+    images:
+      backend:
+        name: "backend"
+        dockerfile: "backend/Dockerfile.optimized"
+        context: "backend"
+        target: "production"
+      face-worker:
+        name: "face-worker"
+        dockerfile: "backend/Dockerfile.worker"
+        context: "backend"
+        target: "production"
+      content-worker:
+        name: "content-worker"
+        dockerfile: "backend/Dockerfile.content-worker"
+        context: "backend"
+        target: "production"
+      invitations-api:
+        name: "invitations-api"
+        dockerfile: "services/invitations-service/Dockerfile"
+        context: "services/invitations-service"
+    auth:
+      type: "aws"
+      # Uses AWS CLI credentials or IAM role
+      region_env: "AWS_REGION"
+      profile_env: "AWS_PROFILE"
+
+  # ---------------------------------------------------------------------------
+  # Google Container Registry (GCR) / Artifact Registry
+  # ---------------------------------------------------------------------------
+  gcr:
+    enabled: false
+    url: "${GCR_REGION:-us}-docker.pkg.dev"
+    namespace: "${GCP_PROJECT_ID}/rawdrive"
+    # Image naming pattern: us-docker.pkg.dev/project-id/rawdrive/backend:latest
+    images:
+      backend:
+        name: "backend"
+        dockerfile: "backend/Dockerfile.optimized"
+        context: "backend"
+        target: "production"
+      face-worker:
+        name: "face-worker"
+        dockerfile: "backend/Dockerfile.worker"
+        context: "backend"
+        target: "production"
+      content-worker:
+        name: "content-worker"
+        dockerfile: "backend/Dockerfile.content-worker"
+        context: "backend"
+        target: "production"
+      invitations-api:
+        name: "invitations-api"
+        dockerfile: "services/invitations-service/Dockerfile"
+        context: "services/invitations-service"
+    auth:
+      type: "gcloud"
+      # Uses gcloud CLI or service account key
+      key_file_env: "GOOGLE_APPLICATION_CREDENTIALS"
+
+  # ---------------------------------------------------------------------------
+  # Azure Container Registry (ACR)
+  # ---------------------------------------------------------------------------
+  acr:
+    enabled: false
+    url: "${ACR_REGISTRY_NAME}.azurecr.io"
+    namespace: "rawdrive"
+    # Image naming pattern: myregistry.azurecr.io/rawdrive/backend:latest
+    images:
+      backend:
+        name: "backend"
+        dockerfile: "backend/Dockerfile.optimized"
+        context: "backend"
+        target: "production"
+      face-worker:
+        name: "face-worker"
+        dockerfile: "backend/Dockerfile.worker"
+        context: "backend"
+        target: "production"
+      content-worker:
+        name: "content-worker"
+        dockerfile: "backend/Dockerfile.content-worker"
+        context: "backend"
+        target: "production"
+      invitations-api:
+        name: "invitations-api"
+        dockerfile: "services/invitations-service/Dockerfile"
+        context: "services/invitations-service"
+    auth:
+      type: "azure"
+      # Uses Azure CLI or service principal
+      tenant_id_env: "AZURE_TENANT_ID"
+      client_id_env: "AZURE_CLIENT_ID"
+      client_secret_env: "AZURE_CLIENT_SECRET"
+
+# =============================================================================
+# Build Configuration
+# =============================================================================
+build:
+  # BuildKit settings for optimized builds
+  buildkit:
+    enabled: true
+    # Enable inline cache for registry caching
+    cache_from: true
+    cache_to: true
+
+  # Multi-platform build settings
+  platforms:
+    enabled: true
+    targets:
+      - linux/amd64
+      - linux/arm64
+
+  # Build arguments passed to all Dockerfiles
+  args:
+    PYTHON_VERSION: "3.11"
+    # Version info (set by CI/CD)
+    VERSION: "${VERSION:-latest}"
+    BUILD_DATE: "${BUILD_DATE:-}"
+    VCS_REF: "${VCS_REF:-}"
+
+# =============================================================================
+# Tagging Strategy
+# =============================================================================
+tagging:
+  # Git-based tagging
+  git:
+    # Tag with git commit SHA (short)
+    commit_sha: true
+    # Tag with git branch name (sanitized)
+    branch: true
+    # Tag with git tag if present
+    tag: true
+
+  # Semantic versioning
+  semver:
+    enabled: true
+    # Generate additional tags for semver (e.g., v1.2.3 -> v1, v1.2)
+    generate_major: true
+    generate_minor: true
+
+  # Environment-based tags
+  environment:
+    production: ["latest", "stable"]
+    staging: ["staging", "rc"]
+    development: ["dev", "nightly"]
+
+# =============================================================================
+# Security Scanning
+# =============================================================================
+security:
+  # Trivy vulnerability scanner
+  trivy:
+    enabled: true
+    severity: "HIGH,CRITICAL"
+    ignore_unfixed: true
+
+  # Docker Scout (Docker Hub)
+  scout:
+    enabled: true
+
+  # Fail build on vulnerabilities
+  fail_on_vuln: false
+  vuln_threshold: "CRITICAL"

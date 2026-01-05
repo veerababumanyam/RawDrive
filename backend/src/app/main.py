@@ -1,7 +1,6 @@
 """FastAPI application entrypoint."""
 
 import asyncio
-import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -13,10 +12,13 @@ from app.api.v1 import router as v1_router  # type: ignore
 from app.config.settings import ensure_settings_loaded
 from app.db.postgres import close_postgres_pool, init_postgres_pool, postgres_healthcheck  # type: ignore
 from app.db.redis import close_redis_client, init_redis_client, redis_healthcheck  # type: ignore
-from app.logging import configure_logging  # type: ignore
+from app.logging import configure_logging, get_logger  # type: ignore
 from app.middleware.audit_logging import AuditLoggingMiddleware  # type: ignore
+from app.middleware.correlation import CorrelationMiddleware  # type: ignore
 from app.middleware.rate_limit import RateLimitMiddleware  # type: ignore
 from app.middleware.request_id import RequestIdMiddleware  # type: ignore
+from app.metrics.middleware import PrometheusMiddleware  # type: ignore
+from app.api.versioning import VersioningMiddleware  # type: ignore
 from app.services.audit_service import start_audit_worker, stop_audit_worker  # type: ignore
 from app.services.scheduler import get_scheduler  # type: ignore
 from app.services.task_queue import get_task_queue  # type: ignore
@@ -24,7 +26,7 @@ from app.services.oauth_service import close_http_client  # type: ignore
 
 settings = ensure_settings_loaded()
 configure_logging()
-logger = logging.getLogger("rawdrive")
+logger = get_logger("rawdrive")
 
 
 @asynccontextmanager
@@ -112,12 +114,18 @@ app = FastAPI(
 )
 
 # Add other middleware (applied in reverse order)
-# 1. Request ID - first to process, last to respond
+# 1. Correlation ID - first to process for distributed tracing
+app.add_middleware(CorrelationMiddleware)  # type: ignore
+# 2. Request ID - unique ID per request
 app.add_middleware(RequestIdMiddleware)  # type: ignore
-# 2. Audit logging - logs all requests
+# 3. API Versioning - adds version headers and deprecation notices
+app.add_middleware(VersioningMiddleware)  # type: ignore
+# 4. Audit logging - logs all requests
 app.add_middleware(AuditLoggingMiddleware)  # type: ignore
-# 3. Rate limiting - before processing
+# 5. Rate limiting - before processing
 app.add_middleware(RateLimitMiddleware)  # type: ignore
+# 6. Prometheus metrics - track request metrics
+app.add_middleware(PrometheusMiddleware)  # type: ignore
 
 # CORS middleware - MUST be added last to update ALL responses (including errors from other middleware)
 app.add_middleware(  # type: ignore
@@ -126,7 +134,7 @@ app.add_middleware(  # type: ignore
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID"],
+    expose_headers=["X-Correlation-ID", "X-Request-ID", "X-API-Version", "X-API-Min-Version", "X-API-Deprecation-Info", "Deprecation", "Sunset", "Link"],
 )
 
 # Include API v1 routes

@@ -1,0 +1,14 @@
+{
+  "id": "language-support-regional",
+  "category": "Localization",
+  "title": "Regional Indian Languages Support",
+  "description": "Add support for Telugu, Tamil, Kannada, Malayalam, Assamese, Bengali, Gujarati, Marathi, Odia, Punjabi with proper font rendering.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "moderate",
+  "dependencies": [
+    "language-support-hindi"
+  ],
+  "createdAt": "2026-01-05T16:31:48.848Z",
+  "updatedAt": "2026-01-05T16:31:48.848Z"
+}

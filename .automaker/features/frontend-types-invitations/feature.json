@@ -1,0 +1,14 @@
+{
+  "id": "frontend-types-invitations",
+  "category": "Frontend",
+  "title": "TypeScript Invitation Types",
+  "description": "Define comprehensive TypeScript types for invitations, sub-events, templates, guests, and media using shared-types package.",
+  "status": "verified",
+  "priority": 1,
+  "complexity": "simple",
+  "dependencies": [],
+  "createdAt": "2026-01-05T16:31:48.839Z",
+  "updatedAt": "2026-01-05T16:46:50.996Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T16:34:15.453Z"
+}

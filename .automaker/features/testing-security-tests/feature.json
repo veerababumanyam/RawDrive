@@ -1,0 +1,16 @@
+{
+  "id": "testing-security-tests",
+  "category": "Testing",
+  "title": "Security Test Suite",
+  "description": "Implement security tests for XSS prevention, CSRF protection, workspace isolation, error leakage prevention, and guest data isolation.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "testing-api-integration",
+    "security-html-escaping",
+    "security-workspace-isolation"
+  ],
+  "createdAt": "2026-01-05T16:31:48.837Z",
+  "updatedAt": "2026-01-05T16:31:48.837Z"
+}

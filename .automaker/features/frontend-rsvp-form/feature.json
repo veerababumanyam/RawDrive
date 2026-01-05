@@ -1,0 +1,14 @@
+{
+  "id": "frontend-rsvp-form",
+  "category": "Frontend",
+  "title": "RSVP Form Component",
+  "description": "Build React component for RSVP submission with attendance status, party size, dietary preferences, and optional messages.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "frontend-types-rsvp"
+  ],
+  "createdAt": "2026-01-05T16:31:48.843Z",
+  "updatedAt": "2026-01-05T16:31:48.843Z"
+}

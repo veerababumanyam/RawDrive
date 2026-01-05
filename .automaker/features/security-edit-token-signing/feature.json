@@ -1,0 +1,14 @@
+{
+  "id": "security-edit-token-signing",
+  "category": "Security",
+  "title": "HMAC-SHA256 Edit Token Signing",
+  "description": "Implement HMAC-SHA256 signing for RSVP edit tokens with constant-time comparison. Support token rotation and expiration.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-rsvp-edit-tokens"
+  ],
+  "createdAt": "2026-01-05T16:31:48.833Z",
+  "updatedAt": "2026-01-05T16:31:48.833Z"
+}

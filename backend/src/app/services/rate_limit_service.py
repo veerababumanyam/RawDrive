@@ -29,6 +29,10 @@ class RateLimitType(str, Enum):
     SEARCH = "search"  # Search/query endpoints
     PUBLIC = "public"  # Public profile endpoints (QR, vCard, profile view)
     AI = "ai"  # AI operations (analysis, captions, hashtags, stories, curation)
+    RSVP = "rsvp"  # RSVP submissions (public, per IP)
+    CSV_IMPORT = "csv_import"  # CSV guest imports (authenticated)
+    BULK_INVITE = "bulk_invite"  # Bulk invitation sending (authenticated)
+    ANALYTICS = "analytics"  # Analytics endpoints (authenticated)
 
 
 @dataclass
@@ -47,6 +51,10 @@ DEFAULT_LIMITS: dict[RateLimitType, RateLimitConfig] = {
     RateLimitType.SEARCH: RateLimitConfig(requests=30, window_seconds=60),  # 30 req / min
     RateLimitType.PUBLIC: RateLimitConfig(requests=60, window_seconds=60),  # 60 req / min (public profile views)
     RateLimitType.AI: RateLimitConfig(requests=30, window_seconds=60),  # 30 req / min (AI operations)
+    RateLimitType.RSVP: RateLimitConfig(requests=10, window_seconds=60),  # 10 req / min (RSVP submissions per IP)
+    RateLimitType.CSV_IMPORT: RateLimitConfig(requests=5, window_seconds=3600),  # 5 req / hour (CSV imports)
+    RateLimitType.BULK_INVITE: RateLimitConfig(requests=10, window_seconds=3600),  # 10 req / hour (bulk invites)
+    RateLimitType.ANALYTICS: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min (analytics)
 }
 
 # Development rate limits (more lenient)
@@ -57,6 +65,10 @@ DEV_LIMITS: dict[RateLimitType, RateLimitConfig] = {
     RateLimitType.SEARCH: RateLimitConfig(requests=300, window_seconds=60),  # 300 req / min
     RateLimitType.PUBLIC: RateLimitConfig(requests=300, window_seconds=60),  # 300 req / min (dev)
     RateLimitType.AI: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min (dev AI)
+    RateLimitType.RSVP: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min (dev RSVP)
+    RateLimitType.CSV_IMPORT: RateLimitConfig(requests=50, window_seconds=3600),  # 50 req / hour (dev CSV import)
+    RateLimitType.BULK_INVITE: RateLimitConfig(requests=100, window_seconds=3600),  # 100 req / hour (dev bulk invite)
+    RateLimitType.ANALYTICS: RateLimitConfig(requests=1000, window_seconds=60),  # 1000 req / min (dev analytics)
 }
 
 

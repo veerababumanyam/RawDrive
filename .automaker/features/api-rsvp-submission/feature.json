@@ -1,0 +1,15 @@
+{
+  "id": "api-rsvp-submission",
+  "category": "API",
+  "title": "RSVP Submission Endpoint",
+  "description": "Create secure endpoint for guest RSVP submission with attendance status, party size, and dietary preferences. Implement duplicate prevention and edit tokens.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-invitation-crud",
+    "core-pydantic-models"
+  ],
+  "createdAt": "2026-01-05T16:31:48.815Z",
+  "updatedAt": "2026-01-05T16:31:48.815Z"
+}

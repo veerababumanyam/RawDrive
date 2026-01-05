@@ -10,12 +10,16 @@ import { calculateSHA256 } from '../utils/sha256';
 import { useBrowserCloseWarning } from './useBrowserCloseWarning';
 import { getStoredTokens, isTokenExpired } from '../services/tokenStorage';
 import { refreshAccessToken, API_BASE_URL } from '../services/api';
+import { createTusUpload, type TusUploadClient } from '../services/tusUploadService';
 import type { DuplicateAssetResponse } from '../types/gallery';
+
+// Files larger than this threshold use TUS chunked upload (10MB)
+const TUS_UPLOAD_THRESHOLD = 10 * 1024 * 1024;
 
 export interface UploadFile {
   id: string;
   file: File;
-  status: 'pending' | 'queued' | 'uploading' | 'verifying' | 'completed' | 'error' | 'paused' | 'cancelled';
+  status: 'pending' | 'preparing' | 'queued' | 'uploading' | 'verifying' | 'completed' | 'error' | 'paused' | 'cancelled';
   progress: number; // 0-100
   uploadedBytes: number;
   totalBytes: number;
@@ -27,6 +31,7 @@ export interface UploadFile {
   retryCount?: number;
   thumbnail?: string; // Local preview URL
   clientMetadata?: Record<string, any>;
+  preparationProgress?: number; // 0-100 for SHA256 calculation progress
 }
 
 export interface UploadProgress {
@@ -53,7 +58,7 @@ export interface UseUploadOptions {
   onBatchComplete?: (completedCount: number, failedCount: number) => void; // Called when all uploads finish
   enableDuplicateDetection?: boolean; // Default: true
   enableBackgroundUpload?: boolean; // Default: false (can be enabled later)
-  maxConcurrent?: number; // Default: 3
+  maxConcurrent?: number; // Default: 6 (optimized for modern connections)
   retryAttempts?: number; // Default: 3
   retryDelay?: number; // Default: 1000ms
   onDuplicateDetected?: (file: File, duplicates: DuplicateAssetResponse[]) => void; // Callback for duplicate dialog
@@ -94,7 +99,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     onProgress,
     onBatchComplete,
     enableDuplicateDetection = true,
-    maxConcurrent = 3,
+    maxConcurrent = 6,
     retryAttempts = 3,
     retryDelay = 1000,
     onDuplicateDetected,
@@ -119,13 +124,15 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   const completedUploadsRef = useRef<Set<string>>(new Set());
   // Stable ref for files to avoid closure stale issues in processQueue
   const filesRef = useRef<UploadFile[]>([]);
+  // TUS upload clients for large files (for pause/resume/cancel)
+  const tusClientsRef = useRef<Map<string, TusUploadClient>>(new Map());
 
   // Calculate progress
   const progress = useMemo<UploadProgress>(() => {
     const total = files.length;
     const completed = files.filter((f) => f.status === 'completed').length;
     const failed = files.filter((f) => f.status === 'error').length;
-    const uploading = files.filter((f) => f.status === 'uploading' || f.status === 'verifying').length;
+    const uploading = files.filter((f) => f.status === 'uploading' || f.status === 'verifying' || f.status === 'preparing').length;
     const queued = files.filter((f) => f.status === 'queued' || f.status === 'pending').length;
     const paused = files.filter((f) => f.status === 'paused').length;
 
@@ -230,10 +237,24 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     }
   }, []);
 
+  // Update file state
+  const updateFile = useCallback((fileId: string, updates: Partial<UploadFile>) => {
+    setFiles((prev) =>
+      prev.map((f) => {
+        if (f.id === fileId) {
+          return { ...f, ...updates };
+        }
+        return f;
+      })
+    );
+  }, []);
+
   // Add files to queue
   const addFiles = useCallback(
     async (newFiles: File[], skipDuplicateCheck = false) => {
-      const processedFiles: UploadFile[] = [];
+      // Step 1: Immediately add all valid files to state as 'preparing' so UI shows progress panel
+      const initialFiles: UploadFile[] = [];
+      const filesToProcess: { uploadFile: UploadFile; needsDuplicateCheck: boolean }[] = [];
 
       for (const file of newFiles) {
         // Validate file
@@ -248,33 +269,25 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
             totalBytes: file.size,
             error: validationError,
           };
-          processedFiles.push(errorFile);
+          initialFiles.push(errorFile);
           continue;
         }
 
-        // Check for duplicates (skip if explicitly requested)
-        if (!skipDuplicateCheck) {
-          const duplicates = await checkForDuplicates(file);
-          if (duplicates && duplicates.length > 0) {
-            // Call duplicate callback if provided
-            if (onDuplicateDetected) {
-              onDuplicateDetected(file, duplicates);
-              // Don't add to queue - let user decide via dialog
-              continue;
-            }
-            // If no callback, skip file
-            continue;
+        // Generate thumbnail synchronously (fast for object URLs)
+        let thumbnail: string | undefined;
+        if (file.type.startsWith('image/')) {
+          try {
+            thumbnail = URL.createObjectURL(file);
+          } catch {
+            // Ignore thumbnail generation failures
           }
         }
 
-        // Generate thumbnail
-        const thumbnail = await generateThumbnail(file);
-
-        // Add to queue
+        // Add file with 'preparing' status so it shows immediately in the panel
         const uploadFile: UploadFile = {
           id: `${Date.now()}-${Math.random()}`,
           file,
-          status: 'pending',
+          status: 'preparing',
           progress: 0,
           uploadedBytes: 0,
           totalBytes: file.size,
@@ -282,14 +295,52 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           thumbnail,
           clientMetadata: (file as any).clientMetadata,
         };
-        processedFiles.push(uploadFile);
+        initialFiles.push(uploadFile);
+        filesToProcess.push({ uploadFile, needsDuplicateCheck: !skipDuplicateCheck });
       }
 
-      setFiles((prev) => [...prev, ...processedFiles]);
-      // Trigger queue processing for new files
+      // Immediately update state so progress panel is visible
+      if (initialFiles.length > 0) {
+        setFiles((prev) => [...prev, ...initialFiles]);
+      }
+
+      // Step 2: Process duplicate detection in background for each file AND parallelize
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
+        const batch = filesToProcess.slice(i, i + BATCH_SIZE);
+        
+        await Promise.all(batch.map(async ({ uploadFile, needsDuplicateCheck }) => {
+            if (uploadFile.status === 'error') return; // Skip already errored files
+
+            if (needsDuplicateCheck && enableDuplicateDetection) {
+            try {
+                const duplicates = await checkForDuplicates(uploadFile.file);
+                if (duplicates && duplicates.length > 0) {
+                // Remove file from queue and show duplicate dialog
+                setFiles((prev) => prev.filter((f) => f.id !== uploadFile.id));
+                if (uploadFile.thumbnail) {
+                    URL.revokeObjectURL(uploadFile.thumbnail);
+                }
+                if (onDuplicateDetected) {
+                    onDuplicateDetected(uploadFile.file, duplicates);
+                }
+                return;
+                }
+            } catch (error) {
+                // If duplicate check fails, proceed with upload
+                console.warn('Failed to check for duplicates:', error);
+            }
+            }
+
+            // Update file status to 'pending' so it enters the upload queue
+            updateFile(uploadFile.id, { status: 'pending' });
+        }));
+      }
+
+      // Trigger queue processing for files that passed duplicate check
       bumpQueue();
     },
-    [validateFile, checkForDuplicates, generateThumbnail, onDuplicateDetected, bumpQueue]
+    [validateFile, checkForDuplicates, enableDuplicateDetection, onDuplicateDetected, updateFile, bumpQueue]
   );
 
   // Remove file
@@ -306,18 +357,6 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       }
       return prev.filter((f) => f.id !== fileId);
     });
-  }, []);
-
-  // Update file state
-  const updateFile = useCallback((fileId: string, updates: Partial<UploadFile>) => {
-    setFiles((prev) =>
-      prev.map((f) => {
-        if (f.id === fileId) {
-          return { ...f, ...updates };
-        }
-        return f;
-      })
-    );
   }, []);
 
   // Upload single file
@@ -351,8 +390,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       startedUploadsRef.current.add(fileId);
 
       try {
-        // Update status
-        updateFile(fileId, { status: 'uploading', progress: 0 });
+        // Update status to preparing (for SHA256 calculation)
+        updateFile(fileId, { status: 'preparing', progress: 0, preparationProgress: 0 });
 
         // Check for token expiry before starting - fail early if refresh fails
         if (isTokenExpired()) {
@@ -362,138 +401,177 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           }
         }
 
-        // Calculate SHA256 if not already done
-        const sha256 = await calculateSHA256(uploadFile.file);
+        // Calculate SHA256 with progress tracking (runs in Web Worker for large files)
+        const sha256 = await calculateSHA256(uploadFile.file, (hashProgress) => {
+          updateFile(fileId, { preparationProgress: hashProgress });
+        });
+
+        // Now move to uploading status
+        updateFile(fileId, { status: 'uploading', progress: 0 });
 
         // Check if paused again after SHA calc
         if (pauseStateRef.current.get(fileId)) {
           return;
         }
 
-        // Reuse existing session if retrying (prevents duplicate uploads)
-        let sessionUploadId = uploadFile.uploadId;
-        let uploadUrl = '';
+        let assetId: string;
 
-        if (!sessionUploadId) {
-          // Create upload session only if we don't have one
-          const session = await galleryService.createUploadSession(workspaceId, {
-            gallery_id: galleryId || undefined,
-            sub_gallery_id: subGalleryId || null,
-            file_name: uploadFile.file.name,
-            mime_type: uploadFile.file.type,
-            size_bytes: uploadFile.file.size,
-            sha256,
-            relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
+        // Use TUS chunked upload for large files (> 10MB) for better reliability and resume capability
+        if (uploadFile.file.size > TUS_UPLOAD_THRESHOLD && galleryId) {
+          // ========== TUS CHUNKED UPLOAD (for large files) ==========
+          const tusClient = createTusUpload({
+            workspaceId,
+            galleryId,
+            subGalleryId: subGalleryId || undefined,
+            file: uploadFile.file,
+            uploadId: uploadFile.uploadId, // Resume if retrying
+            chunkSize: 5 * 1024 * 1024, // 5MB chunks
+            onProgress: (uploaded, total, percentage) => {
+              const speed = uploaded / ((Date.now() - Date.now()) / 1000 || 1);
+              const remainingBytes = total - uploaded;
+              const eta = speed > 0 ? Math.ceil(remainingBytes / speed) : undefined;
+
+              updateFile(fileId, {
+                progress: percentage,
+                uploadedBytes: uploaded,
+                speed: speed > 0 ? speed : undefined,
+                eta,
+              });
+              onProgress?.(fileId, percentage);
+            },
           });
-          sessionUploadId = session.upload_id;
-          // CRITICAL: Always use the upload_url returned by the backend
-          // This ensures correct environment (dev vs prod) URL is used
-          uploadUrl = session.upload_url;
-          updateFile(fileId, { uploadId: session.upload_id });
+
+          // Store client reference for pause/cancel operations
+          tusClientsRef.current.set(fileId, tusClient);
+
+          try {
+            // TUS client handles session creation, chunking, and commit
+            assetId = await tusClient.start();
+            updateFile(fileId, { uploadId: tusClient.getState().uploadId });
+          } finally {
+            // Cleanup TUS client reference
+            tusClientsRef.current.delete(fileId);
+          }
         } else {
-          // Existing session for retry - get upload URL from backend
-          // We need to re-fetch the session to get the correct URL
-          // Use API_BASE_URL which properly handles VITE_API_URL (even empty string for relative URLs)
-          const apiBase = API_BASE_URL;
-          uploadUrl = `${apiBase}/api/v1/workspaces/${workspaceId}/uploads/${sessionUploadId}/upload`;
-        }
+          // ========== STANDARD SINGLE-REQUEST UPLOAD (for small files) ==========
+          // Reuse existing session if retrying (prevents duplicate uploads)
+          let sessionUploadId = uploadFile.uploadId;
+          let uploadUrl = '';
 
-        // Upload file to R2 using XMLHttpRequest for progress tracking
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          const startTime = Date.now();
-          let lastLoaded = 0;
-          let lastTime = startTime;
-
-          xhr.open('PUT', uploadUrl);
-
-          // Set headers
-          const tokens = getStoredTokens();
-          if (tokens && uploadUrl.includes('/api/v1/')) {
-            xhr.setRequestHeader('Authorization', `Bearer ${tokens.accessToken}`);
+          if (!sessionUploadId) {
+            // Create upload session only if we don't have one
+            const session = await galleryService.createUploadSession(workspaceId, {
+              gallery_id: galleryId || undefined,
+              sub_gallery_id: subGalleryId || null,
+              file_name: uploadFile.file.name,
+              mime_type: uploadFile.file.type,
+              size_bytes: uploadFile.file.size,
+              sha256,
+              relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
+            });
+            sessionUploadId = session.upload_id;
+            // CRITICAL: Always use the upload_url returned by the backend
+            // This ensures correct environment (dev vs prod) URL is used
+            uploadUrl = session.upload_url;
+            updateFile(fileId, { uploadId: session.upload_id });
+          } else {
+            // Existing session for retry - get upload URL from backend
+            // Use API_BASE_URL which properly handles VITE_API_URL (even empty string for relative URLs)
+            const apiBase = API_BASE_URL;
+            uploadUrl = `${apiBase}/api/v1/workspaces/${workspaceId}/uploads/${sessionUploadId}/upload`;
           }
 
-          // Progress handler
-          xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-              const currentTime = Date.now();
-              const timeDiff = (currentTime - lastTime) / 1000; // seconds
+          // Upload file to R2 using XMLHttpRequest for progress tracking
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            const startTime = Date.now();
+            let lastLoaded = 0;
+            let lastTime = startTime;
 
-              // Calculate speed (bytes per second)
-              let speed = 0;
-              if (timeDiff > 0.5) { // Update speed every 500ms
-                const bytesDiff = event.loaded - lastLoaded;
-                speed = bytesDiff / timeDiff;
-                // Calculate ETA (seconds)
-                const remainingBytes = event.total - event.loaded;
-                const eta = speed > 0 ? Math.ceil(remainingBytes / speed) : undefined;
+            xhr.open('PUT', uploadUrl);
 
-                const progress = (event.loaded / event.total) * 100;
+            // Set headers
+            const tokens = getStoredTokens();
+            if (tokens && uploadUrl.includes('/api/v1/')) {
+              xhr.setRequestHeader('Authorization', `Bearer ${tokens.accessToken}`);
+            }
 
-                // Only update state if meaningful change to avoid excessive re-renders
-                // or if specifically updating speed/eta
-                updateFile(fileId, {
-                  progress,
-                  uploadedBytes: event.loaded,
-                  speed: speed > 0 ? speed : undefined,
-                  eta
-                });
+            // Progress handler
+            xhr.upload.onprogress = (event) => {
+              if (event.lengthComputable) {
+                const currentTime = Date.now();
+                const timeDiff = (currentTime - lastTime) / 1000; // seconds
 
-                onProgress?.(fileId, progress);
-                lastLoaded = event.loaded;
-                lastTime = currentTime;
+                // Calculate speed (bytes per second)
+                let speed = 0;
+                if (timeDiff > 0.5) { // Update speed every 500ms
+                  const bytesDiff = event.loaded - lastLoaded;
+                  speed = bytesDiff / timeDiff;
+                  // Calculate ETA (seconds)
+                  const remainingBytes = event.total - event.loaded;
+                  const eta = speed > 0 ? Math.ceil(remainingBytes / speed) : undefined;
+
+                  const progress = (event.loaded / event.total) * 100;
+
+                  // Only update state if meaningful change to avoid excessive re-renders
+                  updateFile(fileId, {
+                    progress,
+                    uploadedBytes: event.loaded,
+                    speed: speed > 0 ? speed : undefined,
+                    eta
+                  });
+
+                  onProgress?.(fileId, progress);
+                  lastLoaded = event.loaded;
+                  lastTime = currentTime;
+                }
               }
+            };
+
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve();
+              } else {
+                const error = new Error(`Upload failed: ${xhr.statusText}`);
+                (error as any).status = xhr.status;
+                reject(error);
+              }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error'));
+            xhr.onabort = () => reject(new Error('Upload cancelled'));
+
+            // Handle cancellation if needed
+            if (pauseStateRef.current.get(fileId)) {
+              xhr.abort();
+              return;
             }
-          };
 
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve();
-            } else {
-              const error = new Error(`Upload failed: ${xhr.statusText}`);
-              (error as any).status = xhr.status;
-              reject(error);
+            xhr.send(uploadFile.file);
+          });
+
+          updateFile(fileId, { progress: 90, status: 'verifying' });
+
+          // Commit upload
+          const commitResult = await galleryService.commitUpload(
+            workspaceId,
+            sessionUploadId,
+            {
+              sha256,
+              etag: undefined,
+              client_metadata: uploadFile.clientMetadata
             }
-          };
+          );
 
-          xhr.onerror = () => reject(new Error('Network error'));
-          xhr.onabort = () => reject(new Error('Upload cancelled'));
-
-          // Handle cancellation if needed
-          if (pauseStateRef.current.get(fileId)) {
-            xhr.abort();
-            return;
-          }
-
-          xhr.send(uploadFile.file);
-        });
-
-        // Get ETag from response headers if possible (XHR doesn't make it easy to get from PUT response unless CORS exposes it)
-        // For presigned URLs, ETag is often returned in the ETag header.
-        // We can try to get it, but it might be null if not exposed.
-        // Since we resolved the promise, we need to handle ETag outside or inside.
-        // Let's rely on backend verification or ignore ETag for now if strict check isn't enforced.
-        const etag = undefined; // R2/S3 usually requires HEAD request or specific CORS setup to read ETag from PUT response
-
-        updateFile(fileId, { progress: 90, status: 'verifying' });
-
-        // Commit upload
-        const commitResult = await galleryService.commitUpload(
-          workspaceId,
-          sessionUploadId,
-          {
-            sha256,
-            etag,
-            client_metadata: uploadFile.clientMetadata
-          }
-        );
+          assetId = commitResult.asset_id;
+        }
 
         // Update to completed
         updateFile(fileId, {
           status: 'completed',
           progress: 100,
           uploadedBytes: uploadFile.totalBytes,
-          assetId: commitResult.asset_id,
+          assetId,
         });
 
         // Cleanup
@@ -504,7 +582,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           URL.revokeObjectURL(uploadFile.thumbnail);
         }
 
-        onComplete?.(commitResult.asset_id, fileId);
+        onComplete?.(assetId, fileId);
         onProgress?.(fileId, 100);
         
         // Trigger queue to pick up next file
@@ -612,13 +690,23 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   const pauseUpload = useCallback((fileId?: string) => {
     if (fileId) {
       pauseStateRef.current.set(fileId, true);
+      // Pause TUS client if exists
+      const tusClient = tusClientsRef.current.get(fileId);
+      if (tusClient) {
+        tusClient.pause();
+      }
       updateFile(fileId, { status: 'paused' });
     } else {
       setIsPaused(true);
       setFiles((prev) =>
         prev.map((f) => {
-          if (f.status === 'uploading' || f.status === 'verifying') {
+          if (f.status === 'uploading' || f.status === 'verifying' || f.status === 'preparing') {
             pauseStateRef.current.set(f.id, true);
+            // Pause TUS client if exists
+            const tusClient = tusClientsRef.current.get(f.id);
+            if (tusClient) {
+              tusClient.pause();
+            }
             return { ...f, status: 'paused' };
           }
           return f;
@@ -658,12 +746,21 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     if (fileId) {
       activeUploadsRef.current.delete(fileId);
       pauseStateRef.current.delete(fileId);
+      // Abort TUS client if exists
+      const tusClient = tusClientsRef.current.get(fileId);
+      if (tusClient) {
+        tusClient.abort();
+        tusClientsRef.current.delete(fileId);
+      }
       updateFile(fileId, { status: 'cancelled' });
       removeFile(fileId);
     } else {
       // Cancel all
       activeUploadsRef.current.clear();
       pauseStateRef.current.clear();
+      // Abort all TUS clients
+      tusClientsRef.current.forEach((client) => client.abort());
+      tusClientsRef.current.clear();
       setFiles((prev) => {
         prev.forEach((f) => {
           if (f.thumbnail) {

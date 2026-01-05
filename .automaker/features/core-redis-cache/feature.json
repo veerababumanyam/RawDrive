@@ -1,0 +1,14 @@
+{
+  "id": "core-redis-cache",
+  "category": "Cache",
+  "title": "Redis Cache Infrastructure",
+  "description": "Configure Redis connection pooling and basic cache operations. Implement key namespacing and TTL management for different cache layers.",
+  "status": "verified",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [],
+  "createdAt": "2026-01-05T16:31:48.799Z",
+  "updatedAt": "2026-01-05T16:42:04.823Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T16:32:51.631Z"
+}

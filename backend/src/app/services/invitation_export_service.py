@@ -22,6 +22,7 @@ from uuid import UUID, uuid4
 from enum import Enum
 
 from app.db.postgres import get_postgres_pool
+from app.services.audit_service import AuditService, AuditEventType
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +43,12 @@ class ExportStatus(str, Enum):
 class InvitationExportService:
     """Service for exporting digital invitations."""
 
-    def __init__(self):
+    def __init__(self, audit_service: Optional[AuditService] = None):
         self._r2_bucket = os.getenv("R2_EXPORTS_BUCKET", "invitation-exports")
         self._r2_endpoint = os.getenv("R2_ENDPOINT", "")
         self._r2_access_key = os.getenv("R2_ACCESS_KEY_ID", "")
         self._r2_secret_key = os.getenv("R2_SECRET_ACCESS_KEY", "")
+        self._audit_service = audit_service or AuditService()
 
     async def create_export_job(
         self,
@@ -103,6 +105,27 @@ class InvitationExportService:
             )
             
             logger.info(f"Created export job {job_id} for invitation {invitation_id}")
+
+            # Audit logging for invitation export job creation
+            try:
+                await self._audit_service.log_event(
+                    event_type=AuditEventType.RSVP_EXPORTED,  # Using RSVP_EXPORTED as it covers exports
+                    workspace_id=workspace_id,
+                    actor_user_id=user_id,
+                    target_entity_type="invitation_export",
+                    target_entity_id=job_id,
+                    details={
+                        "invitation_id": str(invitation_id),
+                        "format": export_format.value,
+                        "status": "job_created",
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to log audit event for export job creation",
+                    extra={"export_id": str(job_id), "error": str(e)},
+                )
+
             return dict(row)
 
     async def get_export_job(

@@ -1,0 +1,15 @@
+{
+  "id": "face-detection-integration",
+  "category": "Media",
+  "title": "Face Detection for Smart Cropping",
+  "description": "Integrate face detection API for intelligent image cropping that keeps faces centered and prominent.",
+  "status": "backlog",
+  "priority": 3,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-media-crop"
+  ],
+  "createdAt": "2026-01-05T16:31:48.862Z",
+  "updatedAt": "2026-01-05T17:05:20.559Z",
+  "startedAt": "2026-01-05T17:05:17.148Z"
+}

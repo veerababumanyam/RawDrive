@@ -1,0 +1,14 @@
+{
+  "id": "data-retention-warnings",
+  "category": "Compliance",
+  "title": "Data Retention Warning Emails",
+  "description": "Create email notifications sent before automatic deletion with data export and removal workflow options.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "simple",
+  "dependencies": [
+    "data-retention-auto-delete"
+  ],
+  "createdAt": "2026-01-05T16:31:48.851Z",
+  "updatedAt": "2026-01-05T16:31:48.851Z"
+}

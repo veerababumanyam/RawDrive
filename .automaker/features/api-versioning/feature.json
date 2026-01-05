@@ -1,0 +1,16 @@
+{
+  "id": "api-versioning",
+  "category": "API",
+  "title": "API Versioning Strategy",
+  "description": "Implement semantic versioning for API endpoints (/api/v1) with deprecation paths and backward compatibility support.",
+  "status": "verified",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "core-fastapi-app"
+  ],
+  "createdAt": "2026-01-05T16:31:48.852Z",
+  "updatedAt": "2026-01-05T16:48:39.957Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T16:39:20.792Z"
+}

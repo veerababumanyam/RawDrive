@@ -1,0 +1,16 @@
+{
+  "id": "database-indexing",
+  "category": "Database",
+  "title": "Optimized Database Indexing",
+  "description": "Create database indexes on critical query paths (invitation_id, workspace_id, email, created_date) for query performance optimization.",
+  "status": "verified",
+  "priority": 1,
+  "complexity": "simple",
+  "dependencies": [
+    "core-database-setup"
+  ],
+  "createdAt": "2026-01-05T16:31:48.854Z",
+  "updatedAt": "2026-01-05T16:47:20.355Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T16:39:24.367Z"
+}

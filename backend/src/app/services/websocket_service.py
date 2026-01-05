@@ -124,6 +124,31 @@ async def emit_asset_deleted(
     )
 
 
+async def emit_asset_updated(
+    workspace_id: UUID,
+    asset_id: UUID,
+    updates: dict[str, Any],
+) -> None:
+    """Emit asset:updated event for metadata changes, status updates, etc.
+
+    Used to notify frontend when background processing completes
+    (e.g., metadata extraction, thumbnail generation).
+
+    Args:
+        workspace_id: Workspace UUID
+        asset_id: Asset UUID
+        updates: Dictionary of updated fields
+    """
+    await emit_event(
+        workspace_id,
+        "asset:updated",
+        {
+            "asset_id": str(asset_id),
+            **updates,
+        },
+    )
+
+
 async def emit_activity_created(
     workspace_id: UUID,
     activity: dict,
@@ -141,5 +166,46 @@ async def emit_activity_created(
             "activity": activity,
         },
     )
+
+
+async def emit_upload_progress(
+    workspace_id: UUID,
+    upload_id: UUID,
+    status: str,
+    progress: int = 0,
+    asset_id: Optional[UUID] = None,
+    error: Optional[str] = None,
+) -> None:
+    """Emit upload:progress event for real-time upload status.
+
+    Used to notify frontend of upload processing stages:
+    - uploading: File being uploaded (0-100%)
+    - encrypting: File being encrypted
+    - storing: File being stored to R2
+    - processing: Thumbnail generation, etc.
+    - complete: Upload finished successfully
+    - error: Upload failed
+
+    Args:
+        workspace_id: Workspace UUID
+        upload_id: Upload session UUID
+        status: Current processing status
+        progress: Progress percentage (0-100)
+        asset_id: Asset UUID (when available)
+        error: Error message (for error status)
+    """
+    data = {
+        "upload_id": str(upload_id),
+        "status": status,
+        "progress": progress,
+    }
+
+    if asset_id:
+        data["asset_id"] = str(asset_id)
+
+    if error:
+        data["error"] = error
+
+    await emit_event(workspace_id, "upload:progress", data)
 
 

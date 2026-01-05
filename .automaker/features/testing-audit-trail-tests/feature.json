@@ -1,0 +1,15 @@
+{
+  "id": "testing-audit-trail-tests",
+  "category": "Testing",
+  "title": "Audit Trail Test Suite",
+  "description": "Implement tests verifying all operations generate correct audit events with PII filtering and workspace isolation.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "testing-api-integration",
+    "api-audit-logging"
+  ],
+  "createdAt": "2026-01-05T16:31:48.838Z",
+  "updatedAt": "2026-01-05T16:31:48.838Z"
+}

@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.version import router as version_router
 from app.api.v1.users import router as users_router
 from app.api.v1.workspaces import router as workspaces_router
 from app.api.v1.billing import router as billing_router
@@ -51,6 +52,7 @@ from app.api.v1.public_invitations import router as public_invitations_router
 
 router = APIRouter()
 router.include_router(auth_router)
+router.include_router(version_router)
 router.include_router(users_router)
 router.include_router(workspaces_router)
 router.include_router(billing_router)
@@ -276,6 +278,16 @@ router.include_router(
     invitation_analytics_router,
     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/analytics",
     tags=["invitation-analytics"],
+)
+
+# Event Analytics Views routes (api-analytics-views)
+# Comprehensive analytics endpoint with 10-minute caching for view counts,
+# unique visitors, device breakdown, geographic distribution, and RSVP rates
+from app.api.v1.event_analytics_views import router as event_analytics_views_router
+router.include_router(
+    event_analytics_views_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/analytics",
+    tags=["event-analytics-views"],
 )
 
 # Invitation Templates routes (016-save-the-date)

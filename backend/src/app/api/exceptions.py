@@ -20,6 +20,18 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.utils.error_logger import ErrorLogger
 from app.utils.error_validator import TenantSafeErrorValidator
 
+# Import domain-specific exceptions for global handling
+# These are imported conditionally to avoid circular imports
+def _get_client_error():
+    """Lazy import for ClientError to avoid circular imports."""
+    from app.services.client_exceptions import ClientError
+    return ClientError
+
+def _get_face_detection_error():
+    """Lazy import for FaceDetectionError to avoid circular imports."""
+    from app.services.face_exceptions import FaceDetectionError
+    return FaceDetectionError
+
 logger = logging.getLogger(__name__)
 
 
@@ -325,16 +337,124 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     return JSONResponse(status_code=500, content=response)
 
 
+async def client_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handle ClientError from the Client CRM module.
+
+    Converts ClientError exceptions to standardized API responses.
+    This handler allows ClientError exceptions to propagate directly
+    without requiring manual conversion to AppError in each endpoint.
+    """
+    user_message = getattr(exc, 'user_message', None) or str(exc)
+    response = build_error_response(
+        status_code=getattr(exc, 'status_code', 400),
+        code=getattr(exc, 'code', 'CLIENT_ERROR'),
+        message=user_message,
+        request=request,
+        details=getattr(exc, 'details', None),
+    )
+
+    # Use ErrorLogger for structured logging
+    error_logger = ErrorLogger()
+    error_logger.log_error(
+        exc,
+        request_id=response["error"]["requestId"],
+        user_id=getattr(request.state, "user_id", None),
+        workspace_id=getattr(request.state, "workspace_id", None),
+        extra_context={
+            "error_code": getattr(exc, 'code', 'CLIENT_ERROR'),
+            "status_code": getattr(exc, 'status_code', 400),
+        },
+        log_level="warning" if getattr(exc, 'status_code', 400) < 500 else "error"
+    )
+
+    return JSONResponse(
+        status_code=getattr(exc, 'status_code', 400),
+        content=response,
+    )
+
+
+async def face_detection_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handle FaceDetectionError from the Face Detection module.
+
+    Converts FaceDetectionError exceptions to standardized API responses.
+    Supports correlation IDs for distributed tracing.
+    """
+    # Get user message - FaceDetectionError has special handling
+    user_message = getattr(exc, 'user_message', None)
+    if not user_message:
+        user_message = str(exc)
+
+    # Get correlation ID if available
+    correlation_id = getattr(exc, 'correlation_id', None)
+
+    response = build_error_response(
+        status_code=getattr(exc, 'status_code', 400),
+        code=getattr(exc, 'code', 'FACE_DETECTION_ERROR'),
+        message=user_message,
+        request=request,
+        details=getattr(exc, 'details', None),
+    )
+
+    # Add correlation ID if available
+    if correlation_id:
+        response["error"]["correlationId"] = correlation_id
+
+    # Use ErrorLogger for structured logging
+    error_logger = ErrorLogger()
+    error_logger.log_error(
+        exc,
+        request_id=response["error"]["requestId"],
+        user_id=getattr(request.state, "user_id", None),
+        workspace_id=getattr(request.state, "workspace_id", None),
+        extra_context={
+            "error_code": getattr(exc, 'code', 'FACE_DETECTION_ERROR'),
+            "status_code": getattr(exc, 'status_code', 400),
+            "correlation_id": correlation_id,
+        },
+        log_level="warning" if getattr(exc, 'status_code', 400) < 500 else "error"
+    )
+
+    return JSONResponse(
+        status_code=getattr(exc, 'status_code', 400),
+        content=response,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Registration helper
 # ---------------------------------------------------------------------------
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    """Register all exception handlers on the FastAPI app."""
+    """Register all exception handlers on the FastAPI app.
+
+    Handler registration order matters - more specific handlers are registered first.
+    The exception lookup works by finding the most specific matching handler.
+
+    Registered handlers:
+    1. AppError - Base application error and subclasses (NotFoundError, etc.)
+    2. ClientError - Client CRM domain errors
+    3. FaceDetectionError - Face detection domain errors
+    4. HTTPException - FastAPI/Starlette HTTP exceptions
+    5. RequestValidationError - Pydantic request validation
+    6. ValidationError - Internal Pydantic validation
+    7. Exception - Catch-all for unexpected errors
+    """
+    # Register AppError and subclasses
     app.add_exception_handler(AppError, app_error_handler)
+
+    # Register domain-specific exception handlers
+    # Using lazy imports to avoid circular dependencies
+    ClientError = _get_client_error()
+    FaceDetectionError = _get_face_detection_error()
+    app.add_exception_handler(ClientError, client_error_handler)
+    app.add_exception_handler(FaceDetectionError, face_detection_error_handler)
+
+    # Register framework exception handlers
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(ValidationError, pydantic_validation_handler)
+
+    # Catch-all handler for unexpected exceptions
     app.add_exception_handler(Exception, generic_exception_handler)

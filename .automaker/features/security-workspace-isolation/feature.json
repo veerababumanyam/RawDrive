@@ -1,0 +1,15 @@
+{
+  "id": "security-workspace-isolation",
+  "category": "Security",
+  "title": "Workspace Isolation Enforcement",
+  "description": "Enforce workspace_id validation on all database queries and API endpoints. Prevent cross-workspace data access through comprehensive middleware.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "core-authentication-jwt",
+    "core-database-async"
+  ],
+  "createdAt": "2026-01-05T16:31:48.832Z",
+  "updatedAt": "2026-01-05T16:31:48.832Z"
+}

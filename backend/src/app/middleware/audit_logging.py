@@ -13,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.middleware.correlation import get_correlation_id
 from app.middleware.request_id import get_request_id
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
         # Start timing
         start_time = time.time()
+        correlation_id = get_correlation_id()
         request_id = get_request_id()
         client_info = get_client_info(request)
 
@@ -84,6 +86,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
         logger.info(
             "API request started",
             extra={
+                "correlation_id": correlation_id,
                 "request_id": request_id,
                 "event_type": event_type or "api.request",
                 "method": method,
@@ -102,6 +105,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
             logger.error(
                 "API request failed",
                 extra={
+                    "correlation_id": correlation_id,
                     "request_id": request_id,
                     "event_type": event_type or "api.error",
                     "method": method,
@@ -129,6 +133,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
             log_level,
             "API request completed",
             extra={
+                "correlation_id": correlation_id,
                 "request_id": request_id,
                 "event_type": event_type or "api.response",
                 "method": method,

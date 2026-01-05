@@ -133,6 +133,8 @@ async def stream_media(
         is_raw: bool = is_raw_file(mime_type, filename)
         needs_raw_conversion: bool = is_raw and variant == "preview"
 
+        import asyncio
+        
         # Fetch encrypted file from R2
         # For RAW files requesting preview, we need the original RAW file
         fetch_variant: str = "original" if needs_raw_conversion else variant
@@ -145,6 +147,44 @@ async def stream_media(
                 filename=filename,
             )
         except StorageError as e:
+            # Check for legacy unencrypted thumbnail (pre-0.2.0)
+            # These files exist but don't have .enc extension
+            if e.code == "FILE_NOT_FOUND" and variant == "thumbnail":
+                try:
+                    # Try to fetch unencrypted thumbnail
+                    # Note: Legacy path structure matches current but without .enc
+                    legacy_key = f"workspaces/{workspace_id}/galleries/{gallery_id}/{variant}/{asset_id}/thumb.webp"
+                    
+                    logger.info(f"Attempting to fetch legacy unencrypted thumbnail: {legacy_key}")
+                    
+                    loop = asyncio.get_event_loop()
+                    response = await loop.run_in_executor(
+                        storage_service.executor,
+                        lambda: storage_service.s3_client.get_object(
+                            Bucket=storage_service.bucket_name, 
+                            Key=legacy_key
+                        )
+                    )
+                    
+                    legacy_data = await loop.run_in_executor(
+                        storage_service.executor,
+                        lambda: response["Body"].read()
+                    )
+                    
+                    # Stream unencrypted content directly
+                    return StreamingResponse(
+                        iter([legacy_data]),
+                        media_type="image/webp",
+                        headers={
+                            "Cache-Control": "private, max-age=3600",
+                            "X-Legacy-Asset": "true",
+                        },
+                    )
+                except Exception as legacy_error:
+                    logger.debug(f"Legacy thumbnail not found: {legacy_error}")
+                    # Fall through to original error handling
+                    pass
+
             if e.code == "FILE_NOT_FOUND":
                 raise NotFoundError("Media file", asset_id) from e
             raise

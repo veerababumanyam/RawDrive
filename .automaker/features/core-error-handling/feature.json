@@ -1,0 +1,17 @@
+{
+  "id": "core-error-handling",
+  "category": "API",
+  "title": "Custom Exception Handling",
+  "description": "Define custom exception classes for different error scenarios. Implement global exception handlers that return appropriate HTTP status codes and error messages.",
+  "status": "verified",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "core-fastapi-app",
+    "core-structured-logging"
+  ],
+  "createdAt": "2026-01-05T16:31:48.805Z",
+  "updatedAt": "2026-01-05T16:57:22.226Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T16:51:27.025Z"
+}

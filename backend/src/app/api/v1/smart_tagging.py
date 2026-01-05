@@ -2258,7 +2258,19 @@ async def get_quality_analysis_progress(
         session = await session_service.get_active_session(workspace_id, gallery_id)
 
         if not session:
-            raise NotFoundError("No active analysis for this gallery")
+            # Instead of 404 (which causes console errors), return idle status
+            # Use nil UUID for session_id since none exists
+            from uuid import UUID
+            return QualityAnalysisProgressSchema(
+                session_id=UUID(int=0),
+                status="idle",
+                progress_percent=0,
+                photos_analyzed=0,
+                photos_total=0,
+                estimated_remaining_seconds=None,
+                stage=None,
+                error_message=None,
+            )
 
         # Calculate estimated time remaining
         analyzed = session.get("analyzed_count", 0)

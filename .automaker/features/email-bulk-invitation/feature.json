@@ -1,0 +1,16 @@
+{
+  "id": "email-bulk-invitation",
+  "category": "Email",
+  "title": "Bulk Email Invitation Sending",
+  "description": "Implement bulk email sending for invitations with personalization. Support both guest list and custom recipient lists.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "email-sendgrid-setup"
+  ],
+  "createdAt": "2026-01-05T16:31:48.828Z",
+  "updatedAt": "2026-01-05T17:04:16.393Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T17:04:13.503Z"
+}

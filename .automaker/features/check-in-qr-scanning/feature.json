@@ -1,0 +1,14 @@
+{
+  "id": "check-in-qr-scanning",
+  "category": "Check-in",
+  "title": "QR Code Scanning for Check-in",
+  "description": "Implement mobile-friendly QR code scanning interface for event-day check-ins with camera access and verification.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-qr-generation"
+  ],
+  "createdAt": "2026-01-05T16:31:48.847Z",
+  "updatedAt": "2026-01-05T16:31:48.847Z"
+}

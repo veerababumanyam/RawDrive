@@ -108,6 +108,7 @@ class Task:
 # Asset processing tasks
 TASK_ASSET_PROCESS = "asset.process"
 TASK_ASSET_CLEANUP = "asset.cleanup"
+TASK_ASSET_EXTRACT_METADATA = "asset.extract_metadata"
 
 # Face detection tasks
 TASK_FACE_DETECTION = "face.detection"
@@ -776,3 +777,141 @@ async def handle_send_rsvp_digest(payload: dict[str, Any]) -> dict[str, Any]:
     await redis.delete(digest_key)
 
     return {"sent": True, "email": email_content, "rsvp_count": len(rsvps)}
+
+
+# ---------------------------------------------------------------------------
+# Asset Metadata Extraction Handler (Phase 3.2 - Upload Performance)
+# ---------------------------------------------------------------------------
+
+
+@register_task_handler("asset.extract_metadata")
+async def handle_extract_metadata(payload: dict[str, Any]) -> dict[str, Any]:
+    """Extract and store asset metadata in background.
+
+    This handler is queued during upload to defer heavy metadata extraction
+    from the upload response path, improving perceived upload speed.
+
+    Extracts:
+    - EXIF data (camera, settings, date taken, GPS)
+    - Image dimensions (width, height)
+    - Additional metadata (color profile, orientation)
+
+    Payload:
+        - asset_id: The asset UUID
+        - workspace_id: The workspace UUID
+        - original_object_key: R2 object key for the original file
+        - mime_type: File MIME type
+    """
+    from uuid import UUID
+    from app.db.postgres import get_postgres_pool
+    from app.services.encryption_service import get_encryption_service
+    from app.services.metadata_service import get_metadata_service
+    from app.services.image_processing_service import get_image_processing_service
+    from app.services.r2_storage_service import get_r2_storage_service
+
+    asset_id = UUID(payload["asset_id"])
+    workspace_id = UUID(payload["workspace_id"])
+    original_object_key = payload["original_object_key"]
+    mime_type = payload.get("mime_type", "image/jpeg")
+
+    logger.info(
+        "Extracting metadata for asset",
+        extra={"asset_id": str(asset_id), "workspace_id": str(workspace_id)},
+    )
+
+    # Services
+    r2_service = get_r2_storage_service()
+    encryption_service = get_encryption_service()
+    metadata_service = get_metadata_service()
+    image_service = get_image_processing_service()
+
+    try:
+        # Download encrypted original from R2
+        encrypted_data = await r2_service.download_file(original_object_key)
+
+        if not encrypted_data:
+            logger.error(f"Failed to download file for metadata extraction: {original_object_key}")
+            return {"success": False, "error": "file_not_found"}
+
+        # Decrypt file
+        file_data = await encryption_service.decrypt_file(
+            encrypted_data, workspace_id, asset_id, variant="original"
+        )
+
+        # Extract EXIF metadata
+        metadata = None
+        try:
+            metadata = metadata_service.extract_metadata(
+                file_data, workspace_id, strip_gps=False
+            )
+        except Exception as e:
+            logger.warning(f"Failed to extract EXIF metadata for {asset_id}: {e}")
+
+        # Get image dimensions
+        width, height = None, None
+        try:
+            width, height = image_service.get_image_dimensions(file_data)
+        except Exception as e:
+            logger.warning(f"Failed to get dimensions for {asset_id}: {e}")
+
+        # Update asset record with extracted metadata
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Build update query dynamically based on what was extracted
+            updates = []
+            params = []
+            param_idx = 1
+
+            if metadata is not None:
+                updates.append(f"exif = ${param_idx}")
+                params.append(metadata)
+                param_idx += 1
+
+            if width is not None and height is not None:
+                updates.append(f"width = ${param_idx}")
+                params.append(width)
+                param_idx += 1
+                updates.append(f"height = ${param_idx}")
+                params.append(height)
+                param_idx += 1
+
+            if updates:
+                updates.append(f"updated_at = NOW()")
+                query = f"""
+                    UPDATE assets
+                    SET {', '.join(updates)}
+                    WHERE asset_id = ${param_idx}
+                """
+                params.append(asset_id)
+                await conn.execute(query, *params)
+
+        logger.info(
+            "Metadata extraction complete",
+            extra={
+                "asset_id": str(asset_id),
+                "has_exif": metadata is not None,
+                "dimensions": f"{width}x{height}" if width else None,
+            },
+        )
+
+        # Emit WebSocket event to notify frontend that metadata is ready
+        try:
+            from app.services.websocket_service import emit_asset_updated
+            await emit_asset_updated(workspace_id, asset_id, {
+                "metadata_extracted": True,
+                "width": width,
+                "height": height,
+            })
+        except Exception as e:
+            logger.debug(f"Failed to emit metadata update event: {e}")
+
+        return {
+            "success": True,
+            "has_metadata": metadata is not None,
+            "width": width,
+            "height": height,
+        }
+
+    except Exception as e:
+        logger.exception(f"Metadata extraction failed for {asset_id}")
+        return {"success": False, "error": str(e)}

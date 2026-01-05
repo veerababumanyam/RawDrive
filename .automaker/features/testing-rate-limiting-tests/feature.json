@@ -1,0 +1,15 @@
+{
+  "id": "testing-rate-limiting-tests",
+  "category": "Testing",
+  "title": "Rate Limiting Tests",
+  "description": "Create tests verifying rate limiting enforcement per endpoint and IP address with time window sliding behavior.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "testing-api-integration",
+    "api-rate-limiting"
+  ],
+  "createdAt": "2026-01-05T16:31:48.839Z",
+  "updatedAt": "2026-01-05T16:31:48.839Z"
+}

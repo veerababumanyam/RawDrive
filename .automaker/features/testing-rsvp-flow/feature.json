@@ -1,0 +1,15 @@
+{
+  "id": "testing-rsvp-flow",
+  "category": "Testing",
+  "title": "RSVP Flow End-to-End Tests",
+  "description": "Create end-to-end tests covering RSVP submission, duplicate handling, edit token validation, and response updates.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "testing-api-integration",
+    "api-rsvp-submission"
+  ],
+  "createdAt": "2026-01-05T16:31:48.838Z",
+  "updatedAt": "2026-01-05T16:31:48.838Z"
+}

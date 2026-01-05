@@ -1,0 +1,22 @@
+{
+  "id": "language-support-hindi",
+  "category": "Localization",
+  "title": "Hindi Language Support",
+  "description": "Add Hindi language translations for all UI elements, invitation templates, and email content with proper font rendering.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "simple",
+  "dependencies": [
+    "core-fastapi-app"
+  ],
+  "createdAt": "2026-01-05T16:31:48.848Z",
+  "updatedAt": "2026-01-05T16:31:48.848Z",
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "imagePaths": [],
+  "textFilePaths": [],
+  "branchName": "025-ai-filter-simplify",
+  "planningMode": "full",
+  "requirePlanApproval": false
+}

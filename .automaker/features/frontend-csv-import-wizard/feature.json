@@ -1,0 +1,14 @@
+{
+  "id": "frontend-csv-import-wizard",
+  "category": "Frontend",
+  "title": "CSV Import Wizard",
+  "description": "Create wizard for CSV/Excel import with column mapping UI, preview functionality, and batch operation progress tracking.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "frontend-guest-list-management"
+  ],
+  "createdAt": "2026-01-05T16:31:48.842Z",
+  "updatedAt": "2026-01-05T16:31:48.842Z"
+}

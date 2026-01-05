@@ -1,0 +1,14 @@
+{
+  "id": "api-rsvp-edit-tokens",
+  "category": "API",
+  "title": "RSVP Edit Token Generation and Validation",
+  "description": "Implement HMAC-SHA256 signed edit tokens for RSVP updates. Support 30-day expiration and constant-time comparison to prevent timing attacks.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-rsvp-submission"
+  ],
+  "createdAt": "2026-01-05T16:31:48.816Z",
+  "updatedAt": "2026-01-05T16:31:48.816Z"
+}

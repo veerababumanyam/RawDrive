@@ -1,0 +1,14 @@
+{
+  "id": "security-html-escaping",
+  "category": "Security",
+  "title": "XSS Prevention via HTML Escaping",
+  "description": "Implement automatic HTML escaping for all user-provided content in invitation details, guest messages, and RSVP responses.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "simple",
+  "dependencies": [
+    "core-pydantic-models"
+  ],
+  "createdAt": "2026-01-05T16:31:48.831Z",
+  "updatedAt": "2026-01-05T16:31:48.831Z"
+}

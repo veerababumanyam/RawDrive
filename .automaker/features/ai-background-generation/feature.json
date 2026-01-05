@@ -1,0 +1,14 @@
+{
+  "id": "ai-background-generation",
+  "category": "AI",
+  "title": "AI-Powered Background Generation",
+  "description": "Implement background generation from text prompts using image generation models with fallback to gradient templates.",
+  "status": "backlog",
+  "priority": 3,
+  "complexity": "complex",
+  "dependencies": [
+    "api-template-crud"
+  ],
+  "createdAt": "2026-01-05T16:31:48.850Z",
+  "updatedAt": "2026-01-05T16:31:48.850Z"
+}

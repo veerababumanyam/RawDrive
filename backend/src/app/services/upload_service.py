@@ -13,10 +13,15 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from app.db.postgres import get_postgres_pool
-from app.services.encryption_service import get_encryption_service
+from app.services.chunked_upload_service import get_chunked_upload_service
+from app.services.encryption_service import (
+    get_encryption_service,
+    StreamingEncryptor,
+    STREAMING_CHUNK_SIZE,
+)
 from app.services.image_processing_service import get_image_processing_service
 from app.services.metadata_service import get_metadata_service
-from app.services.r2_storage_service import get_r2_storage_service
+from app.services.r2_storage_service import get_r2_storage_service, MULTIPART_PART_SIZE
 from app.services.storage_service import get_storage_service
 from app.services.task_queue import TaskPriority, get_task_queue
 
@@ -37,6 +42,10 @@ ALLOWED_MIME_TYPES = ALLOWED_IMAGE_TYPES | ALLOWED_VIDEO_TYPES
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB for images
 MAX_VIDEO_SIZE = 500 * 1024 * 1024  # 500MB for videos
 UPLOAD_SESSION_TTL_HOURS = 24
+
+# Streaming upload thresholds
+STREAMING_THRESHOLD = 10 * 1024 * 1024  # 10MB - files larger use streaming
+STREAMING_BUFFER_SIZE = 5 * 1024 * 1024  # 5MB - aligns with S3 minimum part size
 
 
 class UploadError(Exception):
@@ -405,25 +414,21 @@ class UploadService:
             if session["gallery_id"]:
                 gallery_id = session["gallery_id"] if isinstance(session["gallery_id"], UUID) else UUID(str(session["gallery_id"]))
 
-            # Extract metadata (for images)
+            # NOTE: Full metadata extraction is deferred to background processing
+            # for faster upload response times. Only basic validation happens here.
+            # The asset.extract_metadata task will populate EXIF, dimensions, etc.
             metadata = None
-            if file_type == "photo":
-                try:
-                    metadata = self.metadata_service.extract_metadata(
-                        file_data, workspace_id, strip_gps=False  # TODO: Use workspace privacy setting
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to extract metadata: {e}")
-
-            # Get image dimensions
             width, height = None, None
-            if file_type == "photo":
+
+            # Quick dimension check for very small files (< 1MB) - optional optimization
+            # For larger files, dimensions are extracted in background
+            if file_type == "photo" and len(file_data) < 1024 * 1024:
                 try:
                     width, height = self.image_processing_service.get_image_dimensions(
                         file_data
                     )
                 except Exception as e:
-                    logger.warning(f"Failed to get image dimensions: {e}")
+                    logger.debug(f"Quick dimension extraction failed, will retry in background: {e}")
 
             # Create asset record - all assets belong to galleries
             original_object_key = f"workspaces/{workspace_id}/galleries/{gallery_id}/original/{asset_id}/{session['file_name']}"
@@ -469,11 +474,28 @@ class UploadService:
 
             # Encrypt and store original file
             try:
+                # Emit encrypting status via WebSocket
+                try:
+                    from app.services.websocket_service import emit_upload_progress
+                    await emit_upload_progress(
+                        workspace_id, upload_id, "encrypting", progress=50
+                    )
+                except Exception:
+                    pass  # Non-critical
+
                 encrypted_original, _, _, _ = (
                     await self.encryption_service.encrypt_file(
                         file_data, workspace_id, asset_id, variant="original"
                     )
                 )
+
+                # Emit storing status via WebSocket
+                try:
+                    await emit_upload_progress(
+                        workspace_id, upload_id, "storing", progress=75
+                    )
+                except Exception:
+                    pass  # Non-critical
 
                 # Upload original to R2
                 await self.storage_service.upload_encrypted_file(
@@ -492,17 +514,27 @@ class UploadService:
                     "UPDATE assets SET status = 'failed' WHERE asset_id = $1",
                     asset_id,
                 )
+                # Emit error status
+                try:
+                    from app.services.websocket_service import emit_upload_progress
+                    await emit_upload_progress(
+                        workspace_id, upload_id, "error", error=str(e)
+                    )
+                except Exception:
+                    pass
                 raise UploadError(
                     f"Failed to store original file: {e}",
                     "STORAGE_FAILED",
                     500,
                 ) from e
 
-            # Enqueue background job
+            # Enqueue background jobs
             content_analysis_queued = False  # Track if content detection was queued
+            task_queue = get_task_queue()
+
             if file_type == "photo":
+                # Queue thumbnail generation (high priority - users expect thumbnails fast)
                 try:
-                    task_queue = get_task_queue()
                     await task_queue.enqueue(
                         task_type="asset.process",
                         payload={
@@ -518,6 +550,23 @@ class UploadService:
                     )
                 except Exception as e:
                     logger.error(f"Failed to enqueue asset processing job: {e}")
+
+                # Queue metadata extraction (deferred from upload for speed)
+                # This extracts EXIF, dimensions, camera info, GPS, etc.
+                try:
+                    await task_queue.enqueue(
+                        task_type="asset.extract_metadata",
+                        payload={
+                            "asset_id": str(asset_id),
+                            "workspace_id": str(workspace_id),
+                            "original_object_key": original_object_key,
+                            "mime_type": session["mime_type"],
+                        },
+                        priority=TaskPriority.NORMAL,
+                        max_retries=3,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to enqueue metadata extraction job: {e}")
                 
                 # Queue face detection job for photos
                 try:
@@ -569,11 +618,18 @@ class UploadService:
             )
 
             try:
-                from app.services.websocket_service import emit_asset_created
-                # Emit event (might need update to handle null gallery_id)
+                from app.services.websocket_service import (
+                    emit_asset_created,
+                    emit_upload_progress,
+                )
+                # Emit upload complete event
+                await emit_upload_progress(
+                    workspace_id, upload_id, "complete", progress=100, asset_id=asset_id
+                )
+                # Emit asset created event (might need update to handle null gallery_id)
                 await emit_asset_created(workspace_id, gallery_id, asset_id)
             except Exception as e:
-                logger.warning(f"Failed to emit asset:created event: {e}")
+                logger.warning(f"Failed to emit upload complete events: {e}")
 
             # Invalidate storage cache after successful upload
             try:
@@ -587,6 +643,368 @@ class UploadService:
                 "status": "processing",
                 "analysis_queued": content_analysis_queued,
             }
+
+    async def process_large_upload(
+        self,
+        workspace_id: UUID,
+        upload_id: UUID,
+        total_size: int,
+        client_metadata: Optional[dict] = None,
+    ) -> dict:
+        """Process a large file using streaming encryption and multipart upload.
+
+        This method is optimized for large files (> 10MB):
+        1. Streams chunks from Redis (assembled by chunked_upload_service)
+        2. Encrypts in-stream using AES-256-CTR + HMAC
+        3. Uploads to R2 using multipart upload
+
+        Memory usage is bounded to ~15MB regardless of file size:
+        - 5MB chunk buffer for reading
+        - 5MB encryption buffer
+        - 5MB upload buffer
+
+        Args:
+            workspace_id: Workspace UUID
+            upload_id: Upload session UUID
+            total_size: Total file size in bytes
+            client_metadata: Optional client-provided metadata
+
+        Returns:
+            Dict with asset_id and status
+
+        Raises:
+            UploadError: If processing fails
+        """
+        import base64
+        from app.services.websocket_service import emit_upload_progress
+        from app.services.encryption_service import STREAMING_ALGORITHM
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Get upload session
+            session = await conn.fetchrow(
+                """
+                SELECT upload_id, workspace_id, gallery_id, sub_gallery_id,
+                       file_name, mime_type, file_bytes, sha256,
+                       state, created_by_user_id
+                FROM upload_sessions
+                WHERE upload_id = $1 AND workspace_id = $2
+                """,
+                upload_id,
+                workspace_id,
+            )
+
+            if not session:
+                raise UploadError("Upload session not found", "SESSION_NOT_FOUND", 404)
+
+            if session["state"] == "committed":
+                # Already processed
+                return {"asset_id": str(session.get("asset_id")), "status": "processing"}
+
+            # Validate file type
+            file_type, _ = self.validate_file(
+                session["file_name"], session["mime_type"], total_size
+            )
+
+            # Create asset record
+            asset_id = uuid4()
+            gallery_id = session["gallery_id"] if session["gallery_id"] else None
+            if gallery_id and not isinstance(gallery_id, UUID):
+                gallery_id = UUID(str(gallery_id))
+
+            original_object_key = f"workspaces/{workspace_id}/galleries/{gallery_id}/original/{asset_id}/{session['file_name']}"
+
+            # Insert asset record first (status = processing)
+            await conn.execute(
+                """
+                INSERT INTO assets (
+                    asset_id, workspace_id, library_id,
+                    type, original_object_key, original_bytes,
+                    sha256, mime_type, status, created_by_user_id
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                """,
+                asset_id,
+                workspace_id,
+                None,
+                file_type,
+                original_object_key,
+                total_size,
+                session["sha256"],
+                session["mime_type"],
+                "processing",
+                session["created_by_user_id"] if isinstance(session["created_by_user_id"], UUID) else UUID(str(session["created_by_user_id"])),
+            )
+
+            # Link to gallery if present
+            if gallery_id:
+                await conn.execute(
+                    """
+                    INSERT INTO gallery_assets (
+                        workspace_id, gallery_id, sub_gallery_id, asset_id,
+                        sort_order, visible
+                    )
+                    VALUES ($1, $2, $3, $4, 0, TRUE)
+                    ON CONFLICT (gallery_id, asset_id) DO NOTHING
+                    """,
+                    workspace_id,
+                    gallery_id,
+                    session["sub_gallery_id"],
+                    asset_id,
+                )
+
+            # Update session state
+            await conn.execute(
+                "UPDATE upload_sessions SET state = 'processing' WHERE upload_id = $1",
+                upload_id,
+            )
+
+        # Emit progress: starting encryption
+        try:
+            await emit_upload_progress(workspace_id, upload_id, "encrypting", progress=30)
+        except Exception:
+            pass
+
+        # Get workspace encryption key
+        workspace_key, key_version = await self.encryption_service.get_workspace_key(
+            workspace_id
+        )
+
+        # Create streaming encryptor
+        encryptor = StreamingEncryptor(workspace_key)
+        iv = encryptor.iv
+
+        # Get chunked upload service
+        chunked_service = get_chunked_upload_service()
+
+        try:
+            # Start R2 multipart upload
+            r2_upload_id = await self.storage_service.create_multipart_upload(
+                original_object_key, session["mime_type"]
+            )
+
+            parts = []
+            part_number = 1
+            encrypted_buffer = bytearray()
+            total_encrypted = 0
+            bytes_processed = 0
+
+            # Process chunks from Redis in streaming fashion
+            async for chunk in chunked_service.assemble_file(
+                workspace_id, upload_id, total_size
+            ):
+                # Encrypt chunk
+                encrypted_chunk = encryptor.encrypt_chunk(chunk)
+                encrypted_buffer.extend(encrypted_chunk)
+                bytes_processed += len(chunk)
+
+                # Upload when buffer reaches part size
+                while len(encrypted_buffer) >= MULTIPART_PART_SIZE:
+                    part_data = bytes(encrypted_buffer[:MULTIPART_PART_SIZE])
+                    encrypted_buffer = encrypted_buffer[MULTIPART_PART_SIZE:]
+
+                    part_info = await self.storage_service.upload_part(
+                        original_object_key, r2_upload_id, part_number, part_data
+                    )
+                    parts.append(part_info)
+                    part_number += 1
+                    total_encrypted += len(part_data)
+
+                    # Update progress
+                    progress = min(30 + int((bytes_processed / total_size) * 50), 80)
+                    try:
+                        await emit_upload_progress(
+                            workspace_id, upload_id, "storing", progress=progress
+                        )
+                    except Exception:
+                        pass
+
+            # Finalize encryption and get HMAC
+            hmac_tag = encryptor.finalize()
+
+            # Upload remaining buffer (must be > 0 for last part)
+            if encrypted_buffer:
+                part_info = await self.storage_service.upload_part(
+                    original_object_key, r2_upload_id, part_number, bytes(encrypted_buffer)
+                )
+                parts.append(part_info)
+                total_encrypted += len(encrypted_buffer)
+
+            # Complete multipart upload
+            await self.storage_service.complete_multipart_upload(
+                original_object_key, r2_upload_id, parts
+            )
+
+            # Store encryption metadata
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO asset_encryption (
+                        asset_id, workspace_id, variant, key_version, iv, auth_tag, algorithm
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    ON CONFLICT (asset_id, variant) DO UPDATE SET
+                        key_version = EXCLUDED.key_version,
+                        iv = EXCLUDED.iv,
+                        auth_tag = EXCLUDED.auth_tag,
+                        algorithm = EXCLUDED.algorithm,
+                        encrypted_at = NOW()
+                    """,
+                    asset_id,
+                    workspace_id,
+                    "original",
+                    key_version,
+                    base64.b64encode(iv).decode("utf-8"),
+                    base64.b64encode(hmac_tag).decode("utf-8"),
+                    STREAMING_ALGORITHM,
+                )
+
+            logger.info(
+                f"Streaming upload complete: {upload_id} -> asset {asset_id}, "
+                f"encrypted {total_encrypted} bytes"
+            )
+
+        except Exception as e:
+            # Abort multipart upload on failure
+            try:
+                await self.storage_service.abort_multipart_upload(
+                    original_object_key, r2_upload_id
+                )
+            except Exception:
+                pass
+
+            # Mark asset as failed
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE assets SET status = 'failed' WHERE asset_id = $1",
+                    asset_id,
+                )
+
+            # Emit error
+            try:
+                await emit_upload_progress(
+                    workspace_id, upload_id, "error", error=str(e)
+                )
+            except Exception:
+                pass
+
+            logger.error(f"Streaming upload failed for {upload_id}: {e}")
+            raise UploadError(
+                f"Streaming upload failed: {e}", "STREAMING_UPLOAD_FAILED", 500
+            ) from e
+
+        finally:
+            # Clean up chunks from Redis
+            try:
+                await chunked_service.cleanup_chunks(workspace_id, upload_id, total_size)
+            except Exception as e:
+                logger.warning(f"Failed to cleanup chunks: {e}")
+
+        # Enqueue background jobs
+        task_queue = get_task_queue()
+        content_analysis_queued = False
+
+        if file_type == "photo":
+            # Queue thumbnail generation
+            try:
+                await task_queue.enqueue(
+                    task_type="asset.process",
+                    payload={
+                        "asset_id": str(asset_id),
+                        "workspace_id": str(workspace_id),
+                        "gallery_id": str(gallery_id) if gallery_id else None,
+                        "file_type": file_type,
+                        "mime_type": session["mime_type"],
+                        "original_object_key": original_object_key,
+                    },
+                    priority=TaskPriority.HIGH,
+                    max_retries=3,
+                )
+            except Exception as e:
+                logger.error(f"Failed to enqueue asset processing job: {e}")
+
+            # Queue metadata extraction
+            try:
+                await task_queue.enqueue(
+                    task_type="asset.extract_metadata",
+                    payload={
+                        "asset_id": str(asset_id),
+                        "workspace_id": str(workspace_id),
+                        "original_object_key": original_object_key,
+                        "mime_type": session["mime_type"],
+                    },
+                    priority=TaskPriority.NORMAL,
+                    max_retries=3,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to enqueue metadata extraction job: {e}")
+
+            # Queue face detection
+            try:
+                await task_queue.enqueue(
+                    task_type="face_detection",
+                    payload={
+                        "photo_id": str(asset_id),
+                        "workspace_id": str(workspace_id),
+                        "priority": 0,
+                        "client_metadata": client_metadata,
+                    },
+                    priority=TaskPriority.NORMAL,
+                    max_retries=3,
+                )
+            except Exception as e:
+                logger.debug(f"Failed to enqueue face detection job: {e}")
+
+            # Queue content detection
+            try:
+                from app.services.content_detection_service import (
+                    get_content_detection_service,
+                )
+                content_service = get_content_detection_service()
+                job_id = await content_service.queue_detection(
+                    asset_id=asset_id,
+                    workspace_id=workspace_id,
+                    priority=0,
+                )
+                content_analysis_queued = job_id is not None
+            except Exception as e:
+                logger.debug(f"Failed to queue content detection job: {e}")
+
+        # Update session state to committed
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE upload_sessions
+                SET state = 'committed', asset_id = $1
+                WHERE upload_id = $2
+                """,
+                asset_id,
+                upload_id,
+            )
+
+        # Emit completion events
+        try:
+            from app.services.websocket_service import emit_asset_created
+            await emit_upload_progress(
+                workspace_id, upload_id, "complete", progress=100, asset_id=asset_id
+            )
+            await emit_asset_created(workspace_id, gallery_id, asset_id)
+        except Exception as e:
+            logger.warning(f"Failed to emit completion events: {e}")
+
+        # Invalidate storage cache
+        try:
+            storage_service = get_storage_service()
+            await storage_service.invalidate_cache(workspace_id)
+        except Exception as e:
+            logger.warning(f"Failed to invalidate storage cache: {e}")
+
+        return {
+            "asset_id": str(asset_id),
+            "status": "processing",
+            "analysis_queued": content_analysis_queued,
+            "streaming": True,
+        }
 
 
 # Export singleton instance

@@ -47,7 +47,7 @@ class AppSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=None if os.getenv("PYTEST_CURRENT_TEST") else ".env",
+        env_file=None if os.getenv("PYTEST_CURRENT_TEST") else str(Path(__file__).parent.parent.parent.parent / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -87,6 +87,13 @@ class AppSettings(BaseSettings):
     db_pool_min_size: int = Field(1, alias="DB_POOL_MIN_SIZE")
     db_pool_max_size: int = Field(10, alias="DB_POOL_MAX_SIZE")
     db_pool_max_lifetime_sec: int = Field(1800, alias="DB_POOL_MAX_LIFETIME_SEC")
+
+    # Redis connection pool settings
+    redis_pool_max_connections: int = Field(50, alias="REDIS_POOL_MAX_CONNECTIONS")
+    redis_socket_timeout: float = Field(5.0, alias="REDIS_SOCKET_TIMEOUT")
+    redis_socket_connect_timeout: float = Field(5.0, alias="REDIS_SOCKET_CONNECT_TIMEOUT")
+    redis_retry_on_timeout: bool = Field(True, alias="REDIS_RETRY_ON_TIMEOUT")
+    redis_health_check_interval: int = Field(30, alias="REDIS_HEALTH_CHECK_INTERVAL")
 
     # JWT and token lifetimes (Requirements 3, 5)
     jwt_private_key_path: Path = Field(..., alias="JWT_PRIVATE_KEY_PATH")
@@ -169,6 +176,23 @@ class AppSettings(BaseSettings):
         description="Razorpay webhook signature secret",
     )
 
+    # SendGrid Email
+    sendgrid_api_key: Optional[SecretStr] = Field(
+        default=None,
+        alias="SENDGRID_API_KEY",
+        description="SendGrid API key for email delivery",
+    )
+    sendgrid_from_email: str = Field(
+        default="noreply@rawdrive.in",
+        alias="SENDGRID_FROM_EMAIL",
+        description="Default from email address for SendGrid",
+    )
+    sendgrid_from_name: str = Field(
+        default="RawDrive",
+        alias="SENDGRID_FROM_NAME",
+        description="Default from name for SendGrid emails",
+    )
+
     # AI Providers
     gemini_api_key: Optional[SecretStr] = Field(
         default=None,
@@ -226,7 +250,12 @@ class AppSettings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_required_env(cls, values: "AppSettings") -> "AppSettings":
-        missing = [key for key in cls.REQUIRED_ENV_KEYS if os.getenv(key) is None]
+        # Check actual field values instead of os.getenv - pydantic-settings loads from .env
+        missing = []
+        for key in cls.REQUIRED_ENV_KEYS:
+            field_name = key.lower()
+            if not getattr(values, field_name, None):
+                missing.append(key)
         if missing:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(sorted(missing))}"
@@ -261,6 +290,11 @@ class AppSettings(BaseSettings):
 
     # Observability
     log_level: str = Field("INFO", alias="LOG_LEVEL")
+    log_format: str = Field(
+        "",
+        alias="LOG_FORMAT",
+        description="Log output format: 'json' for structured JSON, 'console' for colored dev output, 'plain' for plain text. Empty defaults to 'json' in production/staging, 'console' in development.",
+    )
     sentry_dsn: Optional[SecretStr] = Field(None, alias="SENTRY_DSN")
 
     SENSITIVE_FIELDS: frozenset[str] = frozenset(
@@ -276,6 +310,7 @@ class AppSettings(BaseSettings):
             "signed_url_secret",
             "RAZORPAY_KEY_SECRET",
             "RAZORPAY_WEBHOOK_SECRET",
+            "sendgrid_api_key",
             "gemini_api_key",
             "openai_api_key",
             "anthropic_api_key",

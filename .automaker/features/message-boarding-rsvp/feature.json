@@ -1,0 +1,14 @@
+{
+  "id": "message-boarding-rsvp",
+  "category": "RSVP",
+  "title": "Message Boarding for RSVPs",
+  "description": "Implement message boarding where guests can leave notes and well-wishes visible to invitation organizers with moderation.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-rsvp-submission"
+  ],
+  "createdAt": "2026-01-05T16:31:48.858Z",
+  "updatedAt": "2026-01-05T16:31:48.858Z"
+}

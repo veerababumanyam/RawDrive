@@ -1,0 +1,15 @@
+{
+  "id": "api-public-invitation-page",
+  "category": "API",
+  "title": "Public Invitation Page Endpoint",
+  "description": "Create unauthenticated endpoint for public invitation viewing with media, event details, and RSVP form. Implement caching for performance.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-invitation-crud",
+    "core-redis-cache"
+  ],
+  "createdAt": "2026-01-05T16:31:48.823Z",
+  "updatedAt": "2026-01-05T16:31:48.823Z"
+}

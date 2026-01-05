@@ -1,0 +1,14 @@
+{
+  "id": "api-media-crop",
+  "category": "API",
+  "title": "Smart Image Cropping Endpoint",
+  "description": "Implement smart image cropping functionality with focal point detection. Support custom crop region selection and generate multiple sizes for optimization.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "moderate",
+  "dependencies": [
+    "api-media-upload"
+  ],
+  "createdAt": "2026-01-05T16:31:48.822Z",
+  "updatedAt": "2026-01-05T16:31:48.822Z"
+}

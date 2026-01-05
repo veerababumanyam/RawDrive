@@ -1,0 +1,14 @@
+{
+  "id": "ai-content-suggestions",
+  "category": "AI",
+  "title": "AI Content Suggestion Engine",
+  "description": "Create AI-powered content suggestion system offering titles, descriptions, and captions in multiple writing styles.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "complex",
+  "dependencies": [
+    "language-ai-generation"
+  ],
+  "createdAt": "2026-01-05T16:31:48.849Z",
+  "updatedAt": "2026-01-05T16:31:48.849Z"
+}

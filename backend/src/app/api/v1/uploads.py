@@ -123,6 +123,81 @@ async def upload_file_data(
         raise InternalError("Failed to upload file")
 
 
+@router.patch(
+    "/{upload_id}/chunk",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Upload file chunk (TUS protocol)",
+    responses={
+        400: {"model": ErrorResponse, "description": "Validation error"},
+        404: {"model": ErrorResponse, "description": "Upload session not found"},
+        409: {"model": ErrorResponse, "description": "Offset mismatch"},
+    },
+)
+async def upload_chunk(
+    workspace_id: Annotated[UUID, WorkspaceAccessDep],
+    upload_id: UUID,
+    current_user: CurrentUserDep,
+    request: Request,
+):
+    """Upload a chunk of file data using TUS resumable protocol.
+
+    This endpoint implements TUS (https://tus.io/protocols/resumable-upload.html):
+    - Accepts PATCH requests with chunk data
+    - Uses Upload-Offset header to track progress
+    - Returns new Upload-Offset after successful chunk storage
+    - Stores chunks in Redis with 1-hour expiry for assembly
+
+    Client-side chunking reduces server memory usage and enables
+    resume capability for large file uploads.
+    """
+    from fastapi.responses import Response
+    from app.services.chunked_upload_service import get_chunked_upload_service, ChunkError
+
+    chunked_service = get_chunked_upload_service()
+
+    try:
+        # Get upload offset from TUS header
+        upload_offset_str = request.headers.get("Upload-Offset", "0")
+        try:
+            upload_offset = int(upload_offset_str)
+        except ValueError:
+            raise ValidationAppError("Invalid Upload-Offset header", "Upload-Offset")
+
+        # Read chunk data
+        chunk_data = await request.body()
+
+        if not chunk_data:
+            raise ValidationAppError("Empty chunk data", "body")
+
+        # Store chunk
+        new_offset = await chunked_service.store_chunk(
+            workspace_id=workspace_id,
+            upload_id=upload_id,
+            offset=upload_offset,
+            chunk_data=chunk_data,
+        )
+
+        # Return 204 with new offset (TUS protocol)
+        return Response(
+            status_code=204,
+            headers={
+                "Upload-Offset": str(new_offset),
+                "Tus-Resumable": "1.0.0",
+            },
+        )
+    except ChunkError as e:
+        if "offset mismatch" in str(e).lower():
+            from fastapi import HTTPException
+            raise HTTPException(status_code=409, detail=str(e))
+        elif e.status == 404:
+            raise NotFoundError("Upload session", upload_id)
+        else:
+            raise ValidationAppError(str(e), "chunk")
+    except Exception as e:
+        logger.exception("Failed to upload chunk")
+        raise InternalError("Failed to upload chunk")
+
+
 @router.post(
     "/{upload_id}/commit",
     response_model=UploadCommitResponse,
@@ -204,6 +279,69 @@ async def commit_upload(
     except Exception as e:
         logger.exception("Failed to commit upload")
         raise InternalError("Failed to commit upload")
+
+
+@router.post(
+    "/{upload_id}/commit-chunked",
+    response_model=UploadCommitResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Commit chunked upload (streaming)",
+    responses={
+        400: {"model": ErrorResponse, "description": "Validation error"},
+        404: {"model": ErrorResponse, "description": "Upload session not found"},
+    },
+)
+async def commit_chunked_upload(
+    workspace_id: Annotated[UUID, WorkspaceAccessDep],
+    upload_id: UUID,
+    current_user: CurrentUserDep,
+    total_size: int = Form(..., gt=0, description="Total file size in bytes"),
+    sha256: str = Form(..., min_length=64, max_length=64, description="SHA256 checksum"),
+    client_metadata: Optional[str] = Form(None, description="JSON string of client metadata"),
+) -> UploadCommitResponse:
+    """Commit a chunked upload using streaming encryption and multipart storage.
+
+    This endpoint is used for large files (> 10MB) that were uploaded in chunks
+    via PATCH /{upload_id}/chunk endpoints.
+
+    The streaming pipeline:
+    1. Streams chunks from Redis (no full file in memory)
+    2. Encrypts using AES-256-CTR + HMAC (streamable)
+    3. Uploads to R2 using multipart upload (5MB parts)
+
+    Memory usage is bounded to ~15MB regardless of file size.
+    """
+    upload_service = get_upload_service()
+
+    # Parse metadata if provided
+    metadata_dict = None
+    if client_metadata:
+        import json
+        try:
+            metadata_dict = json.loads(client_metadata)
+        except Exception:
+            pass
+
+    try:
+        # Use the streaming pipeline for large files
+        result = await upload_service.process_large_upload(
+            workspace_id=workspace_id,
+            upload_id=upload_id,
+            total_size=total_size,
+            client_metadata=metadata_dict,
+        )
+
+        return UploadCommitResponse(**result)
+    except UploadError as e:
+        if e.status == 400:
+            raise ValidationAppError(str(e), "file")
+        elif e.status == 404:
+            raise NotFoundError("Upload session", upload_id)
+        else:
+            raise InternalError(str(e))
+    except Exception as e:
+        logger.exception("Failed to commit chunked upload")
+        raise InternalError("Failed to commit chunked upload")
 
 
 @router.post(

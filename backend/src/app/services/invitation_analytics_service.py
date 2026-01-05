@@ -4,18 +4,24 @@ Invitation Analytics Service
 Provides tracking and analytics for digital invitations:
 - View tracking (impressions)
 - Device type detection
+- Referrer tracking and classification
+- IP-based deduplication
 - Geographic location (optional)
 - Time-based analytics
 - RSVP conversion tracking
 
 Feature: 016-save-the-date Phase 12
+Feature: api-view-tracking (enhanced tracking with deduplication)
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any, Optional
+from urllib.parse import urlparse
 from uuid import UUID, uuid4
 from enum import Enum
 
@@ -28,7 +34,55 @@ class DeviceType(str, Enum):
     DESKTOP = "desktop"
     MOBILE = "mobile"
     TABLET = "tablet"
+    PHONE = "phone"
     UNKNOWN = "unknown"
+
+
+class ReferrerType(str, Enum):
+    DIRECT = "direct"
+    SOCIAL = "social"
+    SEARCH = "search"
+    EMAIL = "email"
+    OTHER = "other"
+
+
+# Social media domains for referrer classification
+SOCIAL_DOMAINS = {
+    "facebook.com", "fb.com", "fb.me",
+    "twitter.com", "t.co", "x.com",
+    "instagram.com",
+    "linkedin.com", "lnkd.in",
+    "pinterest.com", "pin.it",
+    "tiktok.com",
+    "snapchat.com",
+    "reddit.com",
+    "tumblr.com",
+    "youtube.com", "youtu.be",
+    "whatsapp.com", "wa.me",
+    "telegram.org", "t.me",
+    "messenger.com",
+}
+
+# Search engine domains for referrer classification
+SEARCH_DOMAINS = {
+    "google.com", "google.co.in", "google.co.uk",
+    "bing.com",
+    "yahoo.com",
+    "duckduckgo.com",
+    "baidu.com",
+    "yandex.ru", "yandex.com",
+    "ecosia.org",
+    "ask.com",
+}
+
+# Email domains for referrer classification
+EMAIL_DOMAINS = {
+    "mail.google.com", "gmail.com",
+    "outlook.com", "outlook.live.com",
+    "mail.yahoo.com",
+    "mail.protonmail.com", "protonmail.com",
+    "mail.zoho.com",
+}
 
 
 class InvitationAnalyticsService:

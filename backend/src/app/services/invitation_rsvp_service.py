@@ -203,10 +203,10 @@ class InvitationRSVPService:
         try:
             await self.audit_service.log_event(
                 event_type=AuditEventType.RSVP_SUBMITTED,
-                workspace_id=str(workspace_id),
-                resource_type="invitation_rsvp",
-                resource_id=str(rsvp_id),
-                metadata={
+                workspace_id=workspace_id,
+                target_entity_type="invitation_rsvp",
+                target_entity_id=rsvp_id,
+                details={
                     "invitation_id": str(invitation_id),
                     "attending": data.attending,
                     "party_size": data.party_size,
@@ -286,6 +286,20 @@ class InvitationRSVPService:
         # Find RSVP by token hash
         rsvp = await self.rsvp_repo.find_by_edit_token_hash(hashed_token)
         if not rsvp:
+            # Audit logging for invalid edit token attempts (security monitoring)
+            try:
+                await self.audit_service.log_event(
+                    event_type=AuditEventType.RSVP_EDIT_TOKEN_INVALID,
+                    target_entity_type="invitation_rsvp",
+                    details={
+                        "reason": "token_not_found",
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to log audit event for invalid edit token",
+                    extra={"error": str(e)},
+                )
             raise InvalidEditTokenError("Invalid or expired edit token")
 
         # Check if invitation still accepts edits
@@ -337,6 +351,44 @@ class InvitationRSVPService:
 
         updated_rsvp = await self.rsvp_repo.update(rsvp_id, rsvp_workspace_id, update_data)
 
+        # Audit logging for RSVP update (SOC 2 compliance)
+        try:
+            await self.audit_service.log_event(
+                event_type=AuditEventType.RSVP_UPDATED,
+                workspace_id=rsvp_workspace_id,
+                target_entity_type="invitation_rsvp",
+                target_entity_id=rsvp_id,
+                details={
+                    "invitation_id": str(rsvp.get("invitation_id") if isinstance(rsvp, dict) else rsvp.invitation_id),
+                    "updated_fields": list(update_data.keys()),
+                    "attending": update_data.get("attending"),
+                    "party_size": update_data.get("party_size"),
+                },
+            )
+        except Exception as e:
+            # Don't fail RSVP update if audit logging fails
+            logger.warning(
+                "Failed to log audit event for RSVP update",
+                extra={"rsvp_id": str(rsvp_id), "error": str(e)},
+            )
+
+        # Audit logging for edit token usage
+        try:
+            await self.audit_service.log_event(
+                event_type=AuditEventType.RSVP_EDIT_TOKEN_USED,
+                workspace_id=rsvp_workspace_id,
+                target_entity_type="invitation_rsvp",
+                target_entity_id=rsvp_id,
+                details={
+                    "invitation_id": str(rsvp.get("invitation_id") if isinstance(rsvp, dict) else rsvp.invitation_id),
+                },
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to log audit event for edit token usage",
+                extra={"rsvp_id": str(rsvp_id), "error": str(e)},
+            )
+
         return RSVPResponse.model_validate(updated_rsvp)
 
     async def get_rsvp_by_token(self, edit_token: str) -> RSVPResponse:
@@ -353,6 +405,21 @@ class InvitationRSVPService:
         rsvp = await self.rsvp_repo.find_by_edit_token_hash(hashed_token)
 
         if not rsvp:
+            # Audit logging for invalid edit token attempts (security monitoring)
+            try:
+                await self.audit_service.log_event(
+                    event_type=AuditEventType.RSVP_EDIT_TOKEN_INVALID,
+                    target_entity_type="invitation_rsvp",
+                    details={
+                        "reason": "token_not_found",
+                        "action": "get_rsvp",
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to log audit event for invalid edit token",
+                    extra={"error": str(e)},
+                )
             raise InvalidEditTokenError("Invalid or expired edit token")
 
         return RSVPResponse.model_validate(rsvp)
@@ -549,8 +616,29 @@ class InvitationRSVPService:
         if not rsvp or rsvp_invitation_id != invitation_id:
             raise RSVPNotFoundError("RSVP not found")
 
+        # Get RSVP details before deletion for audit
+        attending = rsvp.get("attending") if isinstance(rsvp, dict) else getattr(rsvp, "attending", None)
+
         # Pass workspace_id for tenant isolation security
         await self.rsvp_repo.delete(rsvp_id, workspace_id)
+
+        # Audit logging for RSVP deletion (SOC 2 compliance)
+        try:
+            await self.audit_service.log_event(
+                event_type=AuditEventType.RSVP_DELETED,
+                workspace_id=workspace_id,
+                target_entity_type="invitation_rsvp",
+                target_entity_id=rsvp_id,
+                details={
+                    "invitation_id": str(invitation_id),
+                    "attending_before_delete": attending,
+                },
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to log audit event for RSVP deletion",
+                extra={"rsvp_id": str(rsvp_id), "error": str(e)},
+            )
 
         # Decrement invitation RSVP count
         await self.invitation_repo.decrement_rsvp_count(invitation_id)

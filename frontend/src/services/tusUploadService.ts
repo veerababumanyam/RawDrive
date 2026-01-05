@@ -273,7 +273,7 @@ export class TusUploadClient {
   }
 
   /**
-   * Commit upload
+   * Commit upload using streaming endpoint for chunked uploads
    */
   private async commitUpload(): Promise<string> {
     if (!this.uploadId) {
@@ -281,15 +281,36 @@ export class TusUploadClient {
     }
 
     const sha256 = await calculateSHA256(this.options.file);
+    const tokens = await getStoredTokens();
 
-    const result = await galleryService.commitUpload(
-      this.options.workspaceId,
-      this.uploadId,
-      {
-        sha256: sha256,
-      }
-    );
+    // Use the chunked commit endpoint for streaming encryption + multipart upload
+    const apiUrl = import.meta.env.VITE_API_URL !== undefined
+      ? import.meta.env.VITE_API_URL
+      : 'http://localhost:8000';
+    const endpoint = `${apiUrl}/api/v1/workspaces/${this.options.workspaceId}/uploads/${this.uploadId}/commit-chunked`;
 
+    const formData = new FormData();
+    formData.append('total_size', this.totalBytes.toString());
+    formData.append('sha256', sha256);
+
+    const headers: Record<string, string> = {};
+    if (tokens?.accessToken) {
+      headers['Authorization'] = `Bearer ${tokens.accessToken}`;
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: this.abortController?.signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Commit failed: ${response.statusText}`);
+    }
+
+    const result = await response.json();
     return result.asset_id;
   }
 }

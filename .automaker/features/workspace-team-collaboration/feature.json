@@ -1,0 +1,14 @@
+{
+  "id": "workspace-team-collaboration",
+  "category": "Core",
+  "title": "Team Member Collaboration in Workspace",
+  "description": "Implement workspace team management allowing multiple users to collaborate on invitations with role-based permissions.",
+  "status": "backlog",
+  "priority": 2,
+  "complexity": "moderate",
+  "dependencies": [
+    "core-authentication-jwt"
+  ],
+  "createdAt": "2026-01-05T16:31:48.863Z",
+  "updatedAt": "2026-01-05T16:31:48.863Z"
+}

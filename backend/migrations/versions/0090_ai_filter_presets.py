@@ -1,6 +1,6 @@
 """Add AI filter simplify presets
 
-Revision ID: 0090_ai_filter_presets
+Revision ID: 0090
 Revises: 0089
 Create Date: 2026-01-05
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0090_ai_filter_presets'
+revision = '0090'
 down_revision = '0089'
 branch_labels = None
 depends_on = None

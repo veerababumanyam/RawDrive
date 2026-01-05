@@ -1,0 +1,17 @@
+{
+  "id": "api-view-tracking",
+  "category": "API",
+  "title": "View Tracking Recording Endpoint",
+  "description": "Implement endpoint for recording invitation page views with device type detection, referrer tracking, and IP-based deduplication to prevent double-counting.",
+  "status": "backlog",
+  "priority": 1,
+  "complexity": "moderate",
+  "dependencies": [
+    "core-redis-cache",
+    "core-database-async"
+  ],
+  "createdAt": "2026-01-05T16:31:48.820Z",
+  "updatedAt": "2026-01-05T17:04:15.055Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T17:04:11.681Z"
+}

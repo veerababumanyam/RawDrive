@@ -1,0 +1,16 @@
+{
+  "id": "frontend-types-analytics",
+  "category": "Frontend",
+  "title": "TypeScript Analytics Types",
+  "description": "Define types for analytics data including views, visitors, device breakdown, and RSVP statistics.",
+  "status": "verified",
+  "priority": 1,
+  "complexity": "simple",
+  "dependencies": [
+    "frontend-types-invitations"
+  ],
+  "createdAt": "2026-01-05T16:31:48.840Z",
+  "updatedAt": "2026-01-05T16:54:31.703Z",
+  "branchName": "025-ai-filter-simplify",
+  "startedAt": "2026-01-05T16:48:16.984Z"
+}

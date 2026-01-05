@@ -181,8 +181,10 @@ async def login(
             pass  # Don't fail on audit log errors
         raise UnauthorizedError(message=str(e), code=e.code)
     except Exception as e:
-        logger.exception("Unexpected error during login")
-        raise InternalError("An unexpected error occurred")
+        logger.error(f"CRITICAL LOGIN ERROR: {type(e).__name__}: {repr(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise InternalError(f"Login failed: {type(e).__name__} - {str(e)}")
 
     return AuthResponse(
         user=UserResponse(
