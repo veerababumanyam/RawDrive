@@ -8,6 +8,7 @@
 
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { Upload, Folder, Image, FileVideo, File, X, Loader2 } from 'lucide-react';
+import heic2any from 'heic2any';
 import { AppButton } from '../../ui/AppButton';
 import { AppCard } from '../../ui/AppCard';
 import { SmartUploadSuggestions } from './SmartUploadSuggestions';
@@ -57,6 +58,27 @@ const SUPPORTED_VIDEO_TYPES = [
   'video/x-msvideo', // AVI
 ];
 
+// Check if file is HEIC/HEIF format
+function isHeicFile(file: File): boolean {
+  const ext = file.name.toLowerCase();
+  return (
+    file.type === 'image/heic' ||
+    file.type === 'image/heif' ||
+    ext.endsWith('.heic') ||
+    ext.endsWith('.heif')
+  );
+}
+
+// Convert HEIC to JPEG blob for preview generation
+async function convertHeicToJpeg(file: File): Promise<Blob> {
+  const result = await heic2any({
+    blob: file,
+    toType: 'image/jpeg',
+    quality: 0.8,
+  });
+  // heic2any can return array for multi-image HEIC, take first
+  return Array.isArray(result) ? result[0] : result;
+}
 
 // Format file size
 function formatFileSize(bytes: number): string {
@@ -68,9 +90,22 @@ function formatFileSize(bytes: number): string {
 }
 
 // Generate thumbnail preview using canvas API
+// Handles HEIC/HEIF conversion automatically
 async function generateThumbnail(file: File, maxSize: number = 200): Promise<string> {
+  // Convert HEIC to JPEG first if needed
+  let fileToProcess: Blob = file;
+  if (isHeicFile(file)) {
+    try {
+      fileToProcess = await convertHeicToJpeg(file);
+    } catch (heicError) {
+      console.warn('HEIC conversion failed, skipping preview:', file.name, heicError);
+      throw new Error('HEIC conversion failed');
+    }
+  }
+
   return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) {
+    // After HEIC conversion, fileToProcess is a JPEG Blob, so check original file
+    if (!file.type.startsWith('image/') && !isHeicFile(file)) {
       reject(new Error('Not an image file'));
       return;
     }
@@ -112,7 +147,7 @@ async function generateThumbnail(file: File, maxSize: number = 200): Promise<str
       img.src = e.target?.result as string;
     };
     reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(fileToProcess);
   });
 }
 
@@ -227,8 +262,8 @@ export const UploadDropzone = React.memo<UploadDropzoneProps>(({
             file
           };
 
-          // Generate thumbnail preview for images
-          if (file.type.startsWith('image/')) {
+          // Generate thumbnail preview for images (including HEIC which may have empty MIME)
+          if (file.type.startsWith('image/') || isHeicFile(file)) {
             try {
               fileWithPreview.thumbnail = await generateThumbnail(file, 200);
               fileWithPreview.preview = URL.createObjectURL(file);
