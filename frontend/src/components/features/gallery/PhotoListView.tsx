@@ -22,6 +22,8 @@ export interface PhotoListViewProps {
   onAssetDelete?: (assetId: string) => void; // refreshed
   isLoading?: boolean;
   className?: string;
+  /** Whether private photos have been unlocked with PIN */
+  isPrivateUnlocked?: boolean;
 }
 
 type SortField = 'filename' | 'created_at' | 'dimensions' | 'favorites_count';
@@ -37,6 +39,7 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
   onAssetDelete,
   isLoading = false,
   className = '',
+  isPrivateUnlocked = false,
 }) => {
   const { workspace } = useAuth();
   const [sortField, setSortField] = useState<SortField>('created_at');
@@ -194,6 +197,7 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
                 onDownload={onAssetDownload}
                 onDelete={onAssetDelete}
                 workspaceId={workspace?.workspace_id || ''}
+                isPrivateUnlocked={isPrivateUnlocked}
               />
             ))}
           </tbody>
@@ -213,6 +217,8 @@ interface PhotoListRowProps {
   onDownload?: (assetId: string) => void;
   onDelete?: (assetId: string) => void;
   workspaceId: string;
+  /** Whether private photos have been unlocked with PIN */
+  isPrivateUnlocked: boolean;
 }
 
 const PhotoListRow: React.FC<PhotoListRowProps> = ({
@@ -225,6 +231,7 @@ const PhotoListRow: React.FC<PhotoListRowProps> = ({
   onDownload,
   onDelete,
   workspaceId,
+  isPrivateUnlocked,
 }) => {
   const [imageError, setImageError] = React.useState(false);
 
@@ -254,6 +261,7 @@ const PhotoListRow: React.FC<PhotoListRowProps> = ({
   const isVideo = asset.asset.type === 'video';
   const isFavorite = asset.is_favorited || false;
   const isSelectedAsset = asset.is_selected || false;
+  const isLocked = asset.is_private && !isPrivateUnlocked;
 
   return (
     <tr
@@ -288,7 +296,9 @@ const PhotoListRow: React.FC<PhotoListRowProps> = ({
             <img
               src={thumbnailUrl}
               alt={asset.asset.filename || `Photo ${index + 1}`}
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover transition-all duration-300 ${
+                isLocked ? 'blur-[40px] scale-110' : ''
+              }`}
               onError={() => setImageError(true)}
             />
           )}

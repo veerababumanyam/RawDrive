@@ -1107,6 +1107,7 @@ const GalleryDetailPage: React.FC = () => {
               onAssetDownload={handleAssetDownload}
               onAssetDelete={handleDeleteAsset}
               isLoading={assetsLoading}
+              isPrivateUnlocked={isPrivateUnlocked}
             />
           )}
 
