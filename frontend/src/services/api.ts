@@ -37,10 +37,21 @@ export function isApiError(error: unknown): error is ApiError {
 }
 
 // Configuration
-// Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
-export const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined
-  ? import.meta.env.VITE_API_URL
-  : 'http://localhost:8000';
+/**
+ * Get the API base URL from environment variable
+ * Only uses VITE_API_URL if it's a non-empty string
+ * This prevents issues with empty string values that would break relative URLs
+ */
+export function getApiBaseUrl(): string {
+  const viteUrl = import.meta.env.VITE_API_URL;
+  // Only use VITE_API_URL if it's a non-empty string
+  if (viteUrl && typeof viteUrl === 'string' && viteUrl.trim() !== '') {
+    return viteUrl.trim();
+  }
+  return 'http://localhost:8000';
+}
+
+export const API_BASE_URL = getApiBaseUrl();
 const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second
 const TIMEOUT_MS = 60000; // 60 seconds

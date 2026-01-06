@@ -20,8 +20,8 @@ The service uses **configurable LLM providers** via environment variables. Never
 
 | Purpose | Location |
 |---------|----------|
-| FastAPI entry | `ai-service/src/main.py` |
-| MCP server | `ai-service/src/mcp/server.py` |
+| FastAPI entry | `services/ai-service/src/main.py` |
+| MCP server | `services/ai-service/src/mcp/server.py` |
 | Face detection | `backend/src/app/services/face_detection_service.py` |
 | AI providers | `backend/src/app/services/ai_providers/` |
 | Content detection | `backend/src/app/services/content_detection_service.py` |
@@ -29,7 +29,7 @@ The service uses **configurable LLM providers** via environment variables. Never
 ## MCP Tool Pattern
 
 ```python
-# ai-service/src/mcp/server.py
+# services/ai-service/src/mcp/server.py
 from typing import Annotated
 from fastmcp import FastMCP
 

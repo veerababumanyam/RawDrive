@@ -364,7 +364,7 @@ async def delete_model(
             status_code=e.status,
         )
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 
 
 

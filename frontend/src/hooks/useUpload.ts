@@ -434,10 +434,43 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     });
   }, []);
 
+  // Helper to ensure token is valid before upload
+  const ensureValidToken = useCallback(async (): Promise<{accessToken: string; refreshToken: string} | null> => {
+    const tokens = getStoredTokens();
+    if (!tokens) return null;
+
+    try {
+      // Check if token is expired or expiring soon (within 1 minute)
+      const tokenPayload = JSON.parse(atob(tokens.accessToken.split('.')[1]));
+      const expiresAt = tokenPayload.exp * 1000; // Convert to ms
+      const now = Date.now();
+
+      if (expiresAt - now < 60000) { // Less than 1 minute remaining
+        // Trigger refresh via API client (which has refresh logic and stores new tokens)
+        const newAccessToken = await refreshAccessToken();
+        if (newAccessToken) {
+          // Tokens were refreshed and stored, retrieve the updated tokens
+          const updatedTokens = getStoredTokens();
+          return updatedTokens;
+        }
+        // If refresh failed, return existing tokens (they might still work)
+        return tokens;
+      }
+
+      return tokens;
+    } catch (error) {
+      console.error('[Upload] Token validation/refresh failed:', error);
+      // Return existing tokens as fallback
+      return tokens;
+    }
+  }, []);
+
   // Upload single file
   const uploadSingleFile = useCallback(
     async (uploadFile: UploadFile): Promise<void> => {
       const fileId = uploadFile.id;
+      // Create unique upload key combining fileId and uploadId to prevent duplicate starts
+      const uploadKey = `${fileId}-${uploadFile.uploadId || 'new'}`;
 
       // Check if paused
       if (pauseStateRef.current.get(fileId)) {
@@ -446,8 +479,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
       // === DEDUPLICATION GUARDS (must be BEFORE status change) ===
       // Check if this file has already started uploading (prevents StrictMode double-invocation)
-      if (startedUploadsRef.current.has(fileId)) {
-        console.log(`[Upload] Skipping duplicate start for file ${fileId}`);
+      if (startedUploadsRef.current.has(uploadKey)) {
+        console.log(`[Upload] Skipping duplicate start for upload ${uploadKey}`);
         return;
       }
       // Check if file was already completed in this session
@@ -462,7 +495,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         return;
       }
       // Mark as started BEFORE any async work
-      startedUploadsRef.current.add(fileId);
+      startedUploadsRef.current.add(uploadKey);
 
       try {
         // Update status to preparing (for SHA256 calculation)
@@ -578,6 +611,9 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
             uploadUrl = `${apiBase}/api/v1/workspaces/${workspaceId}/uploads/${sessionUploadId}/upload`;
           }
 
+          // Ensure token is valid before uploading
+          const validTokens = await ensureValidToken();
+
           // Upload file to R2 using XMLHttpRequest for progress tracking
           await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -587,11 +623,11 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
             xhr.open('PUT', uploadUrl);
 
-            // Set headers
-            const tokens = getStoredTokens();
-            if (tokens && uploadUrl.includes('/api/v1/')) {
-              xhr.setRequestHeader('Authorization', `Bearer ${tokens.accessToken}`);
+            // Set headers with validated/refreshed token
+            if (validTokens && uploadUrl.includes('/api/v1/')) {
+              xhr.setRequestHeader('Authorization', `Bearer ${validTokens.accessToken}`);
             }
+            xhr.setRequestHeader('X-Workspace-ID', workspaceId);
 
             // Progress handler
             xhr.upload.onprogress = (event) => {
@@ -684,7 +720,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         // Cleanup
         activeUploadsRef.current.delete(fileId);
         completedUploadsRef.current.add(fileId); // Mark as completed in session
-        startedUploadsRef.current.delete(fileId); // Allow re-upload if needed
+        startedUploadsRef.current.delete(uploadKey); // Clean up upload session tracking
         if (uploadFile.thumbnail) {
           URL.revokeObjectURL(uploadFile.thumbnail);
         }
@@ -715,11 +751,13 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
             retryCount,
           });
           // Retry after delay with preserved uploadId
+          // Use exponential backoff with cap to prevent excessive delays
+          const backoffDelay = Math.min(retryDelay * Math.pow(1.5, retryCount - 1), 5000);
           setTimeout(() => {
             if (uploadSingleFileRef.current) {
               uploadSingleFileRef.current({ ...uploadFile, retryCount, uploadId: currentUploadId });
             }
-          }, retryDelay * retryCount); // Exponential backoff
+          }, backoffDelay); // Exponential backoff: 1s, 1.5s, 2.25s, 3.375s, max 5s
         } else {
           // Max retries reached
           updateFile(fileId, {
@@ -728,7 +766,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
             retryCount,
           });
           activeUploadsRef.current.delete(fileId);
-          startedUploadsRef.current.delete(fileId); // Allow manual retry
+          startedUploadsRef.current.delete(uploadKey); // Clean up upload session tracking
           onError?.(error instanceof Error ? error : new Error(errorMessage), fileId);
         }
       }

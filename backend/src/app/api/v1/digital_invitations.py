@@ -316,6 +316,7 @@ async def get_draft(
 @router.delete(
     "/drafts/{draft_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     response_class=Response,
     summary="Delete invitation draft",
     description="Delete a specific invitation draft.",
@@ -340,7 +341,7 @@ async def delete_draft(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Draft not found or has expired",
         )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 
 
 # ---------------------------------------------------------------------------
@@ -462,6 +463,7 @@ async def update_invitation(
 @router.delete(
     "/{invitation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     response_class=Response,
     summary="Delete invitation",
     description="Soft-delete an invitation.",
@@ -479,7 +481,7 @@ async def delete_invitation(
             workspace_id=workspace_id,
             deleted_by_user_id=current_user.user_id,
         )
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)
     except InvitationNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -784,6 +786,7 @@ async def get_rsvp_stats(
 @router.delete(
     "/{invitation_id}/rsvps/{rsvp_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     response_class=Response,
     summary="Delete RSVP",
     description="Delete an RSVP (host action).",
@@ -815,7 +818,7 @@ async def delete_rsvp(
             invitation_id=invitation_id,
             workspace_id=workspace_id,
         )
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)
     except RSVPNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -202,7 +202,7 @@ async def get_export(
     )
 
 
-@router.delete("/{export_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{export_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_export(
     workspace_id: UUID,
     invitation_id: UUID,

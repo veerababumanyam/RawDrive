@@ -1,5 +1,6 @@
 import React from 'react';
 import { PhotoGrid } from './PhotoGrid';
+import { VirtualPhotoGrid } from './VirtualPhotoGrid';
 import { GalleryCanvasProps } from '../../../types/canvas';
 export type { GalleryCanvasProps };
 
@@ -31,6 +32,8 @@ export const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
   onSortOrderChange,
   onMoveToSubGallery,
   coverAssetId,
+  enableVirtualization = false,
+  rowHeight,
   isLoading,
   error,
   isPrivateUnlocked,
@@ -141,12 +144,23 @@ export const GalleryCanvas: React.FC<GalleryCanvasProps> = ({
     className,
   };
 
+  // Use virtualization for large galleries (>50 assets) when not in sortable mode
+  // Sortable mode requires all items to be in DOM for drag-and-drop
+  const shouldVirtualize = enableVirtualization && viewMode === 'grid' && !sortable && assets.length > 50;
+
   const content = viewMode === 'masonry' ? (
-      <MasonryLayout 
+      <MasonryLayout
         {...commonProps}
         columns={columns}
         gap={gap}
       />
+  ) : shouldVirtualize ? (
+    <VirtualPhotoGrid
+      {...commonProps}
+      columns={columns}
+      gap={gap}
+      minItemSize={rowHeight || 200}
+    />
   ) : (
     <PhotoGrid
       {...commonProps}

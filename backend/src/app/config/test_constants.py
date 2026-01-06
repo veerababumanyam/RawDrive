@@ -3,7 +3,7 @@
 These constants define test user emails, UUIDs, and credentials used across:
 - Database seeding (seed_static.py)
 - E2E tests
-- Operational scripts (llm-service)
+- Operational scripts (services/llm-service)
 
 IMPORTANT: Do not change these values without updating the database seeds,
 as they are tied to deterministic UUIDs used for testing.

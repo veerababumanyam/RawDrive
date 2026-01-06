@@ -3,7 +3,11 @@
   "description": "Expand role-based access control with granular permission delegation (e.g., 'edit only approved galleries', 'view analytics but not client data', 'manage invitations for Q4 events only'). Add role audit trails and time-based access expiration for temporary team members or assistants.",
   "id": "feature-1767713716915-7eqqjggqu",
   "steps": [],
-  "status": "backlog",
+  "status": "verified",
   "skipTests": true,
-  "priority": 2
+  "priority": 2,
+  "branchName": "main",
+  "startedAt": "2026-01-06T19:27:09.243Z",
+  "updatedAt": "2026-01-06T19:38:16.672Z",
+  "justFinishedAt": "2026-01-06T19:38:16.672Z"
 }

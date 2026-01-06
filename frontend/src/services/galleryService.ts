@@ -3,7 +3,7 @@
  * API client for gallery operations
  */
 
-import apiClient from './api';
+import apiClient, { getApiBaseUrl } from './api';
 import type {
   GalleryListResponse,
   GalleryDetailData,
@@ -232,10 +232,8 @@ export class GalleryService {
       headers['Authorization'] = `Bearer ${tokens.accessToken}`;
     }
 
-    // Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
-    const apiBaseUrl = import.meta.env.VITE_API_URL !== undefined
-      ? import.meta.env.VITE_API_URL
-      : 'http://localhost:8000';
+    // Use centralized API base URL logic
+    const apiBaseUrl = getApiBaseUrl();
 
     const response = await fetch(`${apiBaseUrl}${endpoint}`, {
       method: 'POST',

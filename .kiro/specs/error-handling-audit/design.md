@@ -367,7 +367,7 @@ export function useErrorHandler() {
 #### 3.1 Structured MCP Error Responses
 
 ```python
-# ai-service/src/mcp/errors.py (NEW)
+# services/ai-service/src/mcp/errors.py (NEW)
 
 from dataclasses import dataclass
 from typing import Any

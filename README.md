@@ -181,7 +181,7 @@ RawDrive includes a comprehensive design system with:
    ```bash
    # Option A: Database only (recommended for local backend development)
    # Uses timescale/timescaledb-ha:pg16 with pgvector + pgvectorscale
-   docker compose -f docker-compose.db.yml up -d
+   docker compose -f infrastructure/docker/docker-compose.db.yml up -d
    
    # Option B: Full stack (all services including backend in Docker)
    docker compose -f infrastructure/docker/docker-compose.yml up -d
@@ -307,7 +307,7 @@ RawDrive/
 │   │   └── config/         # Configuration modules
 │   ├── migrations/         # Alembic database migrations
 │   └── tests/              # Backend test suites
-├── ai-service/              # Python FastAPI + AI/ML
+├── services/ai-service/              # Python FastAPI + AI/ML
 │   ├── src/
 │   │   ├── mcp/            # Model Context Protocol tools
 │   │   ├── services/       # AI processing services

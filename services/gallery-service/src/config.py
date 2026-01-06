@@ -6,11 +6,30 @@ Handles 50K concurrent gallery views with KEDA autoscaling.
 
 import os
 from typing import List
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def get_cors_origins() -> List[str]:
+    """Get CORS origins from environment or return defaults."""
+    env_value = os.getenv("CORS_ORIGINS", "")
+    if env_value:
+        return [origin.strip() for origin in env_value.split(",") if origin.strip()]
+    return [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://rawdrive.io",
+        "https://*.rawdrive.io",
+    ]
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",  # Ignore extra env vars
+    )
 
     # Service
     SERVICE_NAME: str = "gallery-service"
@@ -38,14 +57,6 @@ class Settings(BaseSettings):
     # JWT Authentication
     JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
     JWT_ALGORITHM: str = "HS256"
-
-    # CORS
-    CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://rawdrive.io",
-        "https://*.rawdrive.io",
-    ]
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -85,9 +96,10 @@ class Settings(BaseSettings):
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = 30
     CIRCUIT_BREAKER_EXPECTED_EXCEPTION: str = "ConnectionError"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    @property
+    def CORS_ORIGINS(self) -> List[str]:
+        """Get CORS origins - handled as property to avoid pydantic env parsing issues."""
+        return get_cors_origins()
 
 
 settings = Settings()

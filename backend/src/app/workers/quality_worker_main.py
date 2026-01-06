@@ -136,11 +136,13 @@ def main():
     logger.info("Starting Quality Analysis Worker Service...")
 
     # Run the FastAPI app with uvicorn
-    # Port 8003 to avoid conflict with backend (8000), face-worker (8001), content-worker (8002)
+    # Port from environment or default to 8003
+    import os
+    port = int(os.getenv("PORT", 8003))
     uvicorn.run(
         "app.workers.quality_worker_main:app",
         host="0.0.0.0",
-        port=8003,
+        port=port,
         workers=1,  # Single worker - the async worker handles parallelism
         log_level="info",
     )

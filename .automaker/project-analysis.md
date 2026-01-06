@@ -20,9 +20,7 @@ RawDrive/
 │   ├── shared-constants/       # Shared constants
 │   ├── shared-validation/      # Validation utilities
 │   └── shared-utils/           # Utility functions
-├── services/                   # Microservices (invitations-service)
-├── ai-service/                 # Python FastAPI AI/LLM service
-├── llm-service/                # LLM configuration and utilities
+├── services/                   # Microservices (invitations-service, ai-service, llm-service)
 ├── infrastructure/             # Docker, Kubernetes, nginx configs
 ├── docs/                       # Comprehensive documentation
 ├── specs/                      # Feature specifications

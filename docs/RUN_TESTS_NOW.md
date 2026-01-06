@@ -51,9 +51,9 @@
 ### ✅ Phase 4: Testing Infrastructure (100%)
 
 **PowerShell Test Scripts:**
-- ✅ [test-upload-service.ps1](test-upload-service.ps1) - Complete automated testing
-- ✅ [start-upload-service.ps1](start-upload-service.ps1) - Quick start services
-- ✅ [test-endpoints.ps1](test-endpoints.ps1) - Endpoint validation
+- ✅ [test-upload-service.ps1](../scripts/test-upload-service.ps1) - Complete automated testing
+- ✅ [start-upload-service.ps1](../scripts/start-upload-service.ps1) - Quick start services
+- ✅ [test-endpoints.ps1](../scripts/test-endpoints.ps1) - Endpoint validation
 
 **Documentation:**
 - ✅ [UPLOAD_SERVICE_DEPLOYMENT_GUIDE.md](UPLOAD_SERVICE_DEPLOYMENT_GUIDE.md) - Comprehensive guide
@@ -70,7 +70,7 @@ Open **PowerShell** and run:
 
 ```powershell
 cd C:\Users\admin\Desktop\RawDrive
-.\test-upload-service.ps1
+.\scripts\test-upload-service.ps1
 ```
 
 This will:
@@ -90,10 +90,10 @@ This will:
 cd C:\Users\admin\Desktop\RawDrive
 
 # Step 1: Start services
-.\start-upload-service.ps1
+.\scripts\start-upload-service.ps1
 
 # Step 2: Test endpoints (wait 15 seconds after start)
-.\test-endpoints.ps1
+.\scripts\test-endpoints.ps1
 ```
 
 ---
@@ -306,7 +306,7 @@ cd C:\Users\admin\Desktop\RawDrive
 
 ### 2. Run Automated Tests
 ```powershell
-.\test-upload-service.ps1
+.\scripts\test-upload-service.ps1
 ```
 
 ### 3. Review Results
@@ -351,7 +351,7 @@ docker compose -f infrastructure/docker/docker-compose.dev.yml restart
 
 All code is complete and ready. Just run the tests above to verify everything works!
 
-**Next Step:** Open PowerShell and run `.\test-upload-service.ps1`
+**Next Step:** Open PowerShell and run `.\scripts\test-upload-service.ps1`
 
 ---
 

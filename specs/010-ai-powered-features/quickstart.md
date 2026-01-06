@@ -59,8 +59,7 @@ Or apply the schema changes manually:
 
 **Terminal 1: Backend**
 ```bash
-cd backend
-python start_backend.py
+python scripts/start_backend.py
 ```
 
 **Terminal 2: Frontend**

@@ -9,7 +9,16 @@
     "src/invitations.ts",
     "src/gallery.ts",
     "src/gradient.ts",
-    "src/common.ts"
+    "src/common.ts",
+    "src/sync.ts",
+    "src/collaboration.ts",
+    "src/admin.ts",
+    "src/calendar.ts",
+    "src/analytics.ts",
+    "src/cleanup.ts",
+    "src/compliance.ts",
+    "src/export.ts",
+    "src/permissions.ts"
   ],
   "exclude": [
     "node_modules",

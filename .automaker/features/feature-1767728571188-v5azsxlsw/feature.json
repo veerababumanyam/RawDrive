@@ -1,0 +1,9 @@
+{
+  "category": "Caching Strategy",
+  "description": "Implement cache warming on workspace load (preload 5 most recent galleries) and reduce R2 signed URL cache TTL from 1 hour to 15 minutes for security/freshness balance",
+  "id": "feature-1767728571188-v5azsxlsw",
+  "steps": [],
+  "status": "backlog",
+  "skipTests": true,
+  "priority": 2
+}

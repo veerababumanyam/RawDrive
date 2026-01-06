@@ -1,0 +1,293 @@
+{
+  "category": "Uncategorized",
+  "description": "# Admin Roles & Platform Management\n\n## Business Value Proposition\n\nThe Admin Roles system provides the governance layer for the RawDrive SaaS platform. Unlike Workspace roles which manage content and members within a single tenant, **Platform Roles** facilitate the management of the business itself—ensuring operational stability, customer support, revenue assurance, and safety.\n\n### Key Business Benefits\n- **Operational Security**: Least-privilege access for employees (e.g., Support agents cannot change system configs).\n- **Scalable Support**: Dedicated roles for Level 1/2 support to view accounts without full administrative power.\n- **Revenue Protection**: Strict controls over billing and subscription overrides.\n- **Trust & Safety**: Specialized tools and permissions for content moderation and user bans.\n- **Auditability**: Every administrative action is logged with the specific admin identity and role context.\n\n> **Status**: Required - Production Ready\n\n---\n\n## Role Hierarchy & Architecture\n\nThe system implements a **Dual-Scope RBAC** architecture:\n\n1.  **Workspace Scope**: Controls access to a specific customer workspace (e.g., `workspace:read`, `galleries:write`).\n2.  **Platform Scope**: Controls access to the SaaS back-office (e.g., `platform:billing:write`, `platform:config:write`).\n\n**A single user can hold roles in both scopes simultaneously.** For example, a Customer Success Manager might have the `Accounts Admin` platform role, but also be an invited `Viewer` in a specific key client's workspace.\n\n### Platform Role Definitions\n\n#### 1. Super Admin\n**The \"Break Glass\" Authority.**\n*   **Purpose**: Ultimate authority for system recovery, critical configuration, and managing other admins.\n*   **Access Level**: Full wildcard access (`*`) to all platform scopes.\n*   **Key Responsibilities**:\n    *   Granting/Revoking other admin roles.\n    *   Emergency system reconfiguration.\n    *   Accessing any workspace data for legal/compliance reasons (via Support Access).\n*   **Security Requirement**: Mandatory Hardware 2FA (YubiKey/Passkey) enforced.\n\n#### 2. Platform Admin (DevOps / Engineering)\n**The System Maintainer.**\n*   **Purpose**: managing the technical infrastructure, feature flags, and system health without accessing customer business data.\n*   **Access Level**: Configuration and Observability focused.\n*   **Key Responsibilities**:\n    *   Managing global system configurations.\n    *   Toggling Feature Flags for rollouts.\n    *   Monitoring system observability (logs, metrics, health).\n*   **Restrictions**: Cannot view specific customer billing details or access workspace content.\n*   **Internal Role Name**: `platform_admin`\n\n#### 3. Support Admin (Accounts / CSM)\n**The Customer Manager.**\n*   **Purpose**: Enabling business operations, handling subscriptions, and providing customer support.\n*   **Access Level**: Read-only access to Workspace metadata, Write access to Billing.\n*   **Key Responsibilities**:\n    *   Searching and viewing Workspace metadata (Owner, Plan, Usage).\n    *   Managing Subscriptions (Upgrades, Refunds, Adjustments).\n    *   Initiating \"Support Access\" sessions to troubleshoot as a user.\n*   **Restrictions**: Cannot change system configs or view content without explicit \"Support Access\" grant.\n*   **Internal Role Name**: `support_admin`\n\n#### 4. Content Moderator (Trust & Safety)\n**The Moderator.**\n*   **Purpose**: Enforcing terms of service and responding to abuse reports.\n*   **Access Level**: Moderation focused.\n*   **Key Responsibilities**:\n    *   Reviewing flagged content queues.\n    *   Banning abusive users or suspending workspaces.\n    *   Generating compliance reports.\n*   **Restrictions**: No access to billing or system configuration.\n*   **Internal Role Name**: `content_moderator`\n\n### Specialized Platform Roles\n\nIn addition to the core administrative roles, the platform defines several specialized roles for specific business functions.\n\n#### 5. Finance Admin\n**Purpose**: Full management of invoicing, revenue reporting, and refunds. Includes sensitive financial data access.\n**Permissions**: `platform:billing:*`, `platform:finance:*`, `platform:invoices:*`, `platform:refunds:write`.\n**Internal Role Name**: `finance_admin`\n\n#### 6. Product Admin\n**Purpose**: Managing feature rollouts and beta testing via feature flags.\n**Permissions**: `platform:feature_flags:read`, `platform:feature_flags:write`.\n**Internal Role Name**: `product_admin`\n\n#### 7. Security Admin\n**Purpose**: High-level oversight of system configuration and security audits.\n**Permissions**: `platform:config:write`, `platform:observability:read`, `platform:audit:read`.\n**Internal Role Name**: `security_admin`\n\n#### 8. Observability Admin\n**Purpose**: Read-only access to system health, logs, and metrics for monitoring.\n**Permissions**: `platform:observability:read`.\n**Internal Role Name**: `observability_admin`\n\n#### 9. Auditor (Read-Only)\n**Purpose**: External or internal compliance auditing.\n**Permissions**: `platform:audit:read`.\n**Internal Role Name**: `auditor_readonly`\n\n---\n\n## Detailed Permission Matrix\n\nThe following matrix maps the abstract roles to concrete permissions defined in the `RBACService`.\n\n| Permission Scope | Description | Super Admin | Platform Admin | Accounts Admin | Content Admin |\n| :--- | :--- | :---: | :---: | :---: | :---: |\n| **Admin Management** | | | | | |\n| `platform:admins:read` | View list of platform admins | ✅ | ✅ | ✅ | ❌ |\n| `platform:admins:write` | Create/Delete platform admins | ✅ | ❌ | ❌ | ❌ |\n| **Workspace Operations** | | | | | |\n| `platform:workspaces:read` | List/Search all workspaces | ✅ | ✅ | ✅ | ❌ |\n| `platform:support_access:start`| Impersonate/Access workspace | ✅ | ❌ | ✅ | ❌ |\n| `platform:support_access:stop` | End support session | ✅ | ❌ | ✅ | ❌ |\n| **System Configuration** | | | | | |\n| `platform:config:write` | Edit global settings | ✅ | ✅ | ❌ | ❌ |\n| `platform:feature_flags:read` | View feature flags | ✅ | ✅ | ❌ | ❌ |\n| `platform:feature_flags:write` | Toggle feature flags | ✅ | ✅ | ❌ | ❌ |\n| **Billing & Revenue** | | | | | |\n| `platform:billing:read` | View revenue/invoices | ✅ | ❌ | ✅ | ❌ |\n| `platform:billing:write` | Refund/Modify subscriptions | ✅ | ❌ | ✅ | ❌ |\n| **Trust & Safety** | | | | | |\n| `platform:moderation:read` | View abuse reports | ✅ | ❌ | ❌ | ✅ |\n| `platform:moderation:write` | Ban/Suspend entities | ✅ | ❌ | ❌ | ✅ |\n| **Observability** | | | | | |\n| `platform:observability:read` | View system logs/metrics | ✅ | ✅ | ❌ | ❌ |\n| `platform:audit:read` | View comprehensive audit logs | ✅ | ✅ | ✅ | ✅ |\n| **Specialized Data** | | | | | |\n| `platform:finance:*` | Granular financial record access | ❌ | ❌ | ❌ | ❌ |\n| `platform:invoices:*` | Invoice management | ❌ | ❌ | ❌ | ❌ |\n| `platform:refunds:write` | Process refunds | ❌ | ❌ | ❌ | ❌ |\n\n> **Note**: Specialized permissions like `platform:finance:*` are currently reserved for the `finance_admin` role and are not granted to general admins by default.\n\n---\n\n## Operational Workflows\n\n### 1. Support Access (Impersonation)\nTo troubleshoot user issues, **Accounts Admins** and **Super Admins** can initiate a controlled access session.\n1.  Admin locates workspace via `platform:workspaces:read`.\n2.  Admin requests access via providing a **Reason Code** and **Ticket ID**.\n3.  System checks `platform:support_access:start` permission.\n4.  **Audit Log** records `SUPPORT_ACCESS_STARTED` with `admin_id`, `target_workspace_id`, and `reason`.\n5.  Admin receives a temporary, short-lived session token for that workspace.\n6.  All actions performed during this session are logged as `actor: admin_user (on_behalf_of: workspace_user)`.\n\n### 2. Moderation Takedown\nWhen content is flagged (automated or manual report):\n1.  **Content Admin** receives notification.\n2.  Accesses the specific resource via `platform:moderation:read`.\n3.  Determines violation.\n4.  Executes `platform:moderation:write` to set status to `SUSPENDED` or `BANNED`.\n5.  Triggers email notification to the workspace owner.\n\n### 3. Feature Flag Rollout\nFor safe deployment of new features:\n1.  **Platform Admin** creates a flag in `disabled` state.\n2.  Updates flag to `targeted` (enabled for internal dogfooding workspaces).\n3.  Verifies metrics via `platform:observability:read`.\n4.   Gradually increases rollout percentage (10% -> 50% -> 100%) via `platform:feature_flags:write`.\n\n---\n\n## Database & Implementation\n\n### Core Tables\n*   `platform_roles`: Static definition of roles and their permission sets.\n*   `user_platform_roles`: Check table linking `user_id` to `role_id` with `granted_at` and `revoked_at` timestamps for history.\n\n### Security Controls\n1.  **Immutable Logs**: Admin actions are written to a write-only audit table that cannot be purged by Admins (requires direct DB access by DevOps).\n2.  **Session Hardening**: Admin sessions have shorter idle timeouts (15 minutes) compared to regular user sessions.\n3.  **Privilege Separation**: The application is designed so that normal runtime operations do not require `Super Admin` privileges; those are reserved for API operations.\n\n## Future Roadmap\n- [ ] **Role Scoping by Region**: Restrict Content Admins to specific legal jurisdictions (e.g., \"EU Content Admin\").\n- [ ] **Just-In-Time (JIT) Access**: Request-approval flow for obtaining `Super Admin` write permissions for a limited time window (4 hours).\n- [ ] **Admin Activity Dashboard**: Real-time visual view of active admin sessions for the Security team.\n",
+  "title": "Implement platform admin roles and permissions system",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "verified",
+  "id": "feature-1767722910689-aih62dkeh",
+  "startedAt": "2026-01-06T18:59:48.349Z",
+  "updatedAt": "2026-01-06T19:14:49.714Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "# Admin Roles & Platform Management Specification\n\n## 1. Problem Statement\n\nRawDrive currently lacks a platform-level administrative system for managing the SaaS business operations. Without proper admin roles, there's no way to provide customer support, moderate content, manage billing, or configure the platform with appropriate access controls. This creates operational risk and prevents scaling support and trust & safety operations.\n\n## 2. User Story\n\nAs a **platform operator**, I want **a comprehensive admin role system with granular permissions**, so that **my team can safely manage workspaces, billing, content moderation, and system configuration with proper access controls and audit trails**.\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** a Super Admin user, **WHEN** they access the admin dashboard, **THEN** they can view all platform management features and manage other admin roles\n- **GIVEN** a Support Admin user, **WHEN** they search for a workspace, **THEN** they can view workspace metadata and initiate support access sessions\n- **GIVEN** a Content Moderator, **WHEN** they review flagged content, **THEN** they can suspend or ban violating content/users\n- **GIVEN** a Platform Admin, **WHEN** they access feature flags, **THEN** they can toggle flags for controlled rollouts\n\n### Edge Cases\n- **GIVEN** a user with multiple platform roles, **WHEN** checking permissions, **THEN** permissions are aggregated from all assigned roles\n- **GIVEN** an admin with revoked role, **WHEN** they attempt to access admin features, **THEN** access is denied immediately\n- **GIVEN** a Support Access session in progress, **WHEN** the session expires, **THEN** access is automatically terminated\n\n### Error Handling\n- **GIVEN** an unauthorized user, **WHEN** they attempt admin API access, **THEN** they receive 403 Forbidden with clear error message\n- **GIVEN** a Super Admin without hardware 2FA, **WHEN** they attempt sensitive operations, **THEN** they are required to set up hardware 2FA first\n- **GIVEN** invalid support access request, **WHEN** reason code or ticket ID is missing, **THEN** validation error is returned\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `backend/src/app/models/`, `backend/src/app/api/v1/`, `backend/src/app/services/`, `backend/migrations/versions/`, `packages/shared-types/`, `packages/shared-constants/`, `frontend/src/pages/`, `frontend/src/services/`, `frontend/src/components/features/admin/` |\n| Dependencies | Existing auth system, audit logging, PostgreSQL, Redis |\n| Constraints | Must not break existing workspace RBAC, audit logs must be immutable |\n| Patterns to Follow | Existing repository pattern, service layer pattern, FastAPI dependencies for auth |\n\n## 5. Non-Goals\n\n- **Region-scoped admin roles** - Future enhancement for jurisdiction-specific moderation\n- **Just-In-Time (JIT) access** - Request-approval workflows for temporary elevated access\n- **Admin activity real-time dashboard** - Visual monitoring of active admin sessions\n- **Hardware 2FA enforcement** - Will use existing 2FA, hardware key enforcement is future work\n- **Full admin UI** - This implementation focuses on API and core backend; admin UI will be minimal/placeholder\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation - Database & Types\n\n- [ ] T001: Create platform admin types in shared-types package | File: packages/shared-types/src/admin.ts\n- [ ] T002: Create platform admin constants in shared-constants | File: packages/shared-constants/src/admin.ts\n- [ ] T003: Create Alembic migration for platform_roles table | File: backend/migrations/versions/0105_platform_admin_roles.py\n- [ ] T004: Create Alembic migration for user_platform_roles junction table | File: backend/migrations/versions/0106_user_platform_roles.py\n- [ ] T005: Create Alembic migration for admin_audit_logs table | File: backend/migrations/versions/0107_admin_audit_logs.py\n- [ ] T006: Create Alembic migration for support_access_sessions table | File: backend/migrations/versions/0108_support_access_sessions.py\n\n## Phase 2: Backend Models & Repository\n\n- [ ] T007: Create PlatformRole SQLAlchemy model | File: backend/src/app/models/platform_role.py\n- [ ] T008: Create UserPlatformRole SQLAlchemy model | File: backend/src/app/models/user_platform_role.py\n- [ ] T009: Create AdminAuditLog SQLAlchemy model | File: backend/src/app/models/admin_audit_log.py\n- [ ] T010: Create SupportAccessSession SQLAlchemy model | File: backend/src/app/models/support_access_session.py\n- [ ] T011: Update models __init__.py to export new models | File: backend/src/app/models/__init__.py\n- [ ] T012: Create PlatformAdminRepository for role management | File: backend/src/app/repositories/platform_admin_repository.py\n- [ ] T013: Create AdminAuditRepository for audit logging | File: backend/src/app/repositories/admin_audit_repository.py\n\n## Phase 3: Core Services\n\n- [ ] T014: Create PlatformRBACService for permission checking | File: backend/src/app/services/platform_rbac_service.py\n- [ ] T015: Create PlatformAdminService for admin management | File: backend/src/app/services/platform_admin_service.py\n- [ ] T016: Create SupportAccessService for impersonation | File: backend/src/app/services/support_access_service.py\n- [ ] T017: Create AdminAuditService for audit logging | File: backend/src/app/services/admin_audit_service.py\n\n## Phase 4: API Endpoints\n\n- [ ] T018: Create platform admin API schemas | File: backend/src/app/api/v1/schemas/admin_schemas.py\n- [ ] T019: Create platform admin dependency for auth | File: backend/src/app/api/dependencies/platform_admin.py\n- [ ] T020: Create admin management API endpoints | File: backend/src/app/api/v1/admin.py\n- [ ] T021: Create support access API endpoints | File: backend/src/app/api/v1/support_access.py\n- [ ] T022: Create moderation API endpoints | File: backend/src/app/api/v1/moderation.py\n- [ ] T023: Register admin routes in API router | File: backend/src/app/api/v1/__init__.py\n\n## Phase 5: Frontend Foundation\n\n- [ ] T024: Create admin types for frontend | File: frontend/src/types/admin.ts\n- [ ] T025: Create admin API service | File: frontend/src/services/adminService.ts\n- [ ] T026: Create useAdminAuth hook for permission checking | File: frontend/src/hooks/useAdminAuth.ts\n- [ ] T027: Create AdminContext for admin state management | File: frontend/src/contexts/AdminContext.tsx\n\n## Phase 6: Frontend Components & Pages\n\n- [ ] T028: Create AdminLayout component | File: frontend/src/components/layout/AdminLayout.tsx\n- [ ] T029: Create AdminDashboard page | File: frontend/src/pages/admin/AdminDashboard.tsx\n- [ ] T030: Create WorkspaceSearch component | File: frontend/src/components/features/admin/WorkspaceSearch.tsx\n- [ ] T031: Create SupportAccessPanel component | File: frontend/src/components/features/admin/SupportAccessPanel.tsx\n- [ ] T032: Create AdminRolesManager component | File: frontend/src/components/features/admin/AdminRolesManager.tsx\n- [ ] T033: Add admin routes to router | File: frontend/src/router/routes.tsx\n\n## Phase 7: Integration & Testing\n\n- [ ] T034: Generate Python types from TypeScript | File: backend/src/app/shared/types/admin.py\n- [ ] T035: Create seed script for default platform roles | File: backend/scripts/seed_platform_roles.py\n- [ ] T036: Create backend unit tests for platform RBAC | File: backend/tests/unit/test_platform_rbac.py\n- [ ] T037: Create backend integration tests for admin API | File: backend/tests/integration/test_admin_api.py\n```\n\n## 7. Success Metrics\n\n| Metric | Target |\n|--------|--------|\n| All 9 platform roles defined with correct permissions | 100% |\n| Permission checks enforce access control | All admin endpoints protected |\n| Audit logs capture all admin actions | Every write operation logged |\n| Support access sessions are time-limited | 30-minute default expiry |\n| API response time for permission checks | < 50ms |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Permission escalation vulnerability | Strict permission inheritance, no wildcard except Super Admin |\n| Audit log tampering | Write-only table with no DELETE permissions for app user |\n| Support access abuse | Mandatory reason codes, ticket IDs, and short session expiry |\n| Performance impact from permission checks | Cache role permissions in Redis with short TTL |\n| Breaking existing workspace RBAC | Platform roles are completely separate scope, no overlap |\n\n---",
+    "generatedAt": "2026-01-06T18:32:11.826Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create platform admin types in shared-types package",
+        "filePath": "packages/shared-types/src/admin.ts",
+        "phase": "Phase 1: Foundation - Database & Types",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Create platform admin constants in shared-constants",
+        "filePath": "packages/shared-constants/src/admin.ts",
+        "phase": "Phase 1: Foundation - Database & Types",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create Alembic migration for platform_roles table",
+        "filePath": "backend/migrations/versions/0105_platform_admin_roles.py",
+        "phase": "Phase 1: Foundation - Database & Types",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Create Alembic migration for user_platform_roles junction table",
+        "filePath": "backend/migrations/versions/0106_user_platform_roles.py",
+        "phase": "Phase 1: Foundation - Database & Types",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create Alembic migration for admin_audit_logs table",
+        "filePath": "backend/migrations/versions/0107_admin_audit_logs.py",
+        "phase": "Phase 1: Foundation - Database & Types",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create Alembic migration for support_access_sessions table",
+        "filePath": "backend/migrations/versions/0108_support_access_sessions.py",
+        "phase": "Phase 1: Foundation - Database & Types",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create PlatformRole SQLAlchemy model",
+        "filePath": "backend/src/app/models/platform_role.py",
+        "phase": "Phase 2: Backend Models & Repository",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Create UserPlatformRole SQLAlchemy model",
+        "filePath": "backend/src/app/models/user_platform_role.py",
+        "phase": "Phase 2: Backend Models & Repository",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create AdminAuditLog SQLAlchemy model",
+        "filePath": "backend/src/app/models/admin_audit_log.py",
+        "phase": "Phase 2: Backend Models & Repository",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Create SupportAccessSession SQLAlchemy model",
+        "filePath": "backend/src/app/models/support_access_session.py",
+        "phase": "Phase 2: Backend Models & Repository",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Update models __init__.py to export new models",
+        "filePath": "backend/src/app/models/__init__.py",
+        "phase": "Phase 2: Backend Models & Repository",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create PlatformAdminRepository for role management",
+        "filePath": "backend/src/app/repositories/platform_admin_repository.py",
+        "phase": "Phase 2: Backend Models & Repository",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create AdminAuditRepository for audit logging",
+        "filePath": "backend/src/app/repositories/admin_audit_repository.py",
+        "phase": "Phase 2: Backend Models & Repository",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create PlatformRBACService for permission checking",
+        "filePath": "backend/src/app/services/platform_rbac_service.py",
+        "phase": "Phase 3: Core Services",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Create PlatformAdminService for admin management",
+        "filePath": "backend/src/app/services/platform_admin_service.py",
+        "phase": "Phase 3: Core Services",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create SupportAccessService for impersonation",
+        "filePath": "backend/src/app/services/support_access_service.py",
+        "phase": "Phase 3: Core Services",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Create AdminAuditService for audit logging",
+        "filePath": "backend/src/app/services/admin_audit_service.py",
+        "phase": "Phase 3: Core Services",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create platform admin API schemas",
+        "filePath": "backend/src/app/api/v1/schemas/admin_schemas.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Create platform admin dependency for auth",
+        "filePath": "backend/src/app/api/dependencies/platform_admin.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Create admin management API endpoints",
+        "filePath": "backend/src/app/api/v1/admin.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Create support access API endpoints",
+        "filePath": "backend/src/app/api/v1/support_access.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Create moderation API endpoints",
+        "filePath": "backend/src/app/api/v1/moderation.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Register admin routes in API router",
+        "filePath": "backend/src/app/api/v1/__init__.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create admin types for frontend",
+        "filePath": "frontend/src/types/admin.ts",
+        "phase": "Phase 5: Frontend Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Create admin API service",
+        "filePath": "frontend/src/services/adminService.ts",
+        "phase": "Phase 5: Frontend Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Create useAdminAuth hook for permission checking",
+        "filePath": "frontend/src/hooks/useAdminAuth.ts",
+        "phase": "Phase 5: Frontend Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Create AdminContext for admin state management",
+        "filePath": "frontend/src/contexts/AdminContext.tsx",
+        "phase": "Phase 5: Frontend Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Create AdminLayout component",
+        "filePath": "frontend/src/components/layout/AdminLayout.tsx",
+        "phase": "Phase 6: Frontend Components & Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Create AdminDashboard page",
+        "filePath": "frontend/src/pages/admin/AdminDashboard.tsx",
+        "phase": "Phase 6: Frontend Components & Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Create WorkspaceSearch component",
+        "filePath": "frontend/src/components/features/admin/WorkspaceSearch.tsx",
+        "phase": "Phase 6: Frontend Components & Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create SupportAccessPanel component",
+        "filePath": "frontend/src/components/features/admin/SupportAccessPanel.tsx",
+        "phase": "Phase 6: Frontend Components & Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Create AdminRolesManager component",
+        "filePath": "frontend/src/components/features/admin/AdminRolesManager.tsx",
+        "phase": "Phase 6: Frontend Components & Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Add admin routes to router",
+        "filePath": "frontend/src/router/routes.tsx",
+        "phase": "Phase 6: Frontend Components & Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Generate Python types from TypeScript",
+        "filePath": "backend/src/app/shared/types/admin.py",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Create seed script for default platform roles",
+        "filePath": "backend/scripts/seed_platform_roles.py",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Create backend unit tests for platform RBAC",
+        "filePath": "backend/tests/unit/test_platform_rbac.py",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Create backend integration tests for admin API",
+        "filePath": "backend/tests/integration/test_admin_api.py",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 37,
+    "tasksCompleted": 2,
+    "approvedAt": "2026-01-06T18:32:11.827Z",
+    "currentTaskId": "T003"
+  }
+}

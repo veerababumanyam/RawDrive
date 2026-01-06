@@ -24,10 +24,10 @@ RawDrive uses PostgreSQL with vector extensions for:
 
 ```bash
 # Start PostgreSQL with all extensions
-docker compose -f docker-compose.db.yml up -d
+docker compose -f ../infrastructure/docker/docker-compose.db.yml up -d
 
 # Wait for healthy status
-docker compose -f docker-compose.db.yml ps
+docker compose -f ../infrastructure/docker/docker-compose.db.yml ps
 
 # Run migrations to enable extensions
 cd backend
@@ -193,10 +193,10 @@ python -m alembic upgrade head
 **Solution:**
 ```bash
 # Check container status
-docker compose -f docker-compose.db.yml ps
+docker compose -f ../infrastructure/docker/docker-compose.db.yml ps
 
 # Check logs
-docker compose -f docker-compose.db.yml logs postgres
+docker compose -f ../infrastructure/docker/docker-compose.db.yml logs postgres
 ```
 
 ### Port Already in Use

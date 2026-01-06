@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from app.utils.security import hash_password
 
-DATABASE_URL = "postgresql://rawdrive:rawdrive@localhost:5432/rawdrive"
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://rawdrive:rawdrive@localhost:5432/rawdrive")
 
 # Test user definitions with deterministic UUIDs
 SUBSCRIPTION_TIER_USERS = [

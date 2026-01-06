@@ -13,6 +13,16 @@ http:
   # ===========================================================================
   routers:
     # -------------------------------------------------------------------------
+    # Traefik Dashboard (accessible at traefik.localhost)
+    # -------------------------------------------------------------------------
+    traefik-dashboard:
+      rule: "Host(`traefik.localhost`)"
+      entryPoints:
+        - web
+      service: api@internal
+      priority: 200
+
+    # -------------------------------------------------------------------------
     # Main API Router (localhost, HTTP only)
     # -------------------------------------------------------------------------
     api-router-local:
@@ -65,6 +75,21 @@ http:
         - security-headers-dev
         - large-body-size
       priority: 150
+
+    # -------------------------------------------------------------------------
+    # Upload Microservice - TUS chunked uploads
+    # -------------------------------------------------------------------------
+    upload-service-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/upload`)"
+      entryPoints:
+        - web
+      service: upload-service
+      middlewares:
+        - rate-limit-uploads
+        - security-headers-dev
+        - large-body-size
+        - cors-headers-dev
+      priority: 155
 
     # -------------------------------------------------------------------------
     # Invitations Microservice
@@ -195,7 +220,7 @@ http:
     invitations-service:
       loadBalancer:
         servers:
-          - url: "http://invitations-api:8000"
+          - url: "http://invitations-api:8007"
         healthCheck:
           path: /health
           interval: 10s
@@ -204,7 +229,7 @@ http:
     gallery-service:
       loadBalancer:
         servers:
-          - url: "http://gallery-service:8000"
+          - url: "http://gallery-service:8004"
         healthCheck:
           path: /health
           interval: 10s
@@ -217,7 +242,7 @@ http:
     onboarding-service:
       loadBalancer:
         servers:
-          - url: "http://onboarding-service:8000"
+          - url: "http://onboarding-service:8006"
         healthCheck:
           path: /health
           interval: 10s
@@ -226,7 +251,16 @@ http:
     billing-service:
       loadBalancer:
         servers:
-          - url: "http://billing-service:8000"
+          - url: "http://billing-service:8005"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    upload-service:
+      loadBalancer:
+        servers:
+          - url: "http://upload-service:8008"
         healthCheck:
           path: /health
           interval: 10s

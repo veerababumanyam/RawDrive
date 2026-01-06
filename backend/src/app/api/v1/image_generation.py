@@ -145,7 +145,7 @@ async def validate_provider(
         )
 
 
-@router.delete("/settings/{provider}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/settings/{provider}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_provider_settings(
     provider: AIProvider,
     current_user: dict = Depends(get_current_user),

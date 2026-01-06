@@ -183,7 +183,7 @@ async def update_sub_event(
     return sub_event
 
 
-@router.delete("/{sub_event_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{sub_event_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_sub_event(
     workspace_id: UUID,
     invitation_id: UUID,

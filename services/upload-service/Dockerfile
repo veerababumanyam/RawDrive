@@ -43,19 +43,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # - libjpeg/liblcms2: Image processing support
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       build-essential \
-       libpq-dev \
-       curl \
-       ca-certificates \
-       tini \
-       # LibRaw dependencies for RAW file processing
-       libraw-dev \
-       libraw20 \
-       libjpeg-dev \
-       liblcms2-dev \
-       # Additional image processing support
-       zlib1g-dev \
-       libpng-dev \
+    build-essential \
+    libpq-dev \
+    curl \
+    ca-certificates \
+    tini \
+    # LibRaw dependencies for RAW file processing
+    libraw-dev \
+    libraw20 \
+    libjpeg-dev \
+    liblcms2-dev \
+    # Additional image processing support
+    zlib1g-dev \
+    libpng-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -178,16 +178,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # LibRaw runtime libraries required for RAW file validation
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       libpq5 \
-       curl \
-       ca-certificates \
-       tini \
-       # LibRaw runtime library (not dev headers)
-       libraw20 \
-       libjpeg62-turbo \
-       liblcms2-2 \
-       libpng16-16 \
-       zlib1g \
+    libpq5 \
+    curl \
+    ca-certificates \
+    tini \
+    # LibRaw runtime library (not dev headers)
+    libraw20 \
+    libjpeg62-turbo \
+    liblcms2-2 \
+    libpng16-16 \
+    zlib1g \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean \
     && rm -rf /tmp/* /var/tmp/*
@@ -213,8 +213,9 @@ USER appuser
 EXPOSE 8000
 
 # Production health check with faster intervals
+# Production health check with faster intervals
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
 # Use tini as init system for proper signal handling (zombie process cleanup)
 ENTRYPOINT ["/usr/bin/tini", "--"]
@@ -223,7 +224,7 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 # Using shell form to allow environment variable substitution
 CMD uvicorn app.main:app \
     --host 0.0.0.0 \
-    --port ${PORT} \
+    --port ${PORT:-8000} \
     --workers ${WORKERS} \
     --loop uvloop \
     --http httptools \

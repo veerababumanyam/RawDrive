@@ -47,8 +47,9 @@ from app.api.v1.gemini_settings import models_router as gemini_models_router
 from app.api.v1.admin_gemini_models import router as admin_gemini_models_router
 from app.api.v1.client_favorites import router as client_favorites_router
 from app.api.v1.favorites_analytics import router as favorites_analytics_router
-from app.api.v1.digital_invitations import router as digital_invitations_router
-from app.api.v1.public_invitations import router as public_invitations_router
+# Temporarily commented out until all invitation types are generated
+# from app.api.v1.digital_invitations import router as digital_invitations_router
+# from app.api.v1.public_invitations import router as public_invitations_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -232,32 +233,33 @@ router.include_router(
 
 # Public Invitations routes (016-save-the-date)
 # Public endpoints for guest access to invitations and RSVP submission
-router.include_router(
-    public_invitations_router,
-    prefix="/api/v1/public/invitations",
-    tags=["public-invitations"],
-)
+# Temporarily commented out until all invitation types are generated
+# router.include_router(
+#     public_invitations_router,
+#     prefix="/api/v1/public/invitations",
+#     tags=["public-invitations"],
+# )
 
-from app.api.v1.invitation_media import router as invitation_media_router
-router.include_router(
-    invitation_media_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
-    tags=["invitation-media"],
-)
+# from app.api.v1.invitation_media import router as invitation_media_router  # Temporarily disabled
+# router.include_router(  # Temporarily disabled
+#     invitation_media_router,  # Temporarily disabled
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",  # Temporarily disabled
+#     tags=["invitation-media"],  # Temporarily disabled
+# )  # Temporarily disabled
 
-from app.api.v1.invitation_ai import router as invitation_ai_router
-router.include_router(
-    invitation_ai_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
-    tags=["invitation-ai"],
-)
+# from app.api.v1.invitation_ai import router as invitation_ai_router  # Temporarily disabled
+# router.include_router(  # Temporarily disabled
+#     invitation_ai_router,  # Temporarily disabled
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",  # Temporarily disabled
+#     tags=["invitation-ai"],  # Temporarily disabled
+# )  # Temporarily disabled
 
-from app.api.v1.invitation_sub_events import router as invitation_sub_events_router
-router.include_router(
-    invitation_sub_events_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/sub-events",
-    tags=["invitation-sub-events"],
-)
+# from app.api.v1.invitation_sub_events import router as invitation_sub_events_router  # Temporarily disabled
+# router.include_router(  # Temporarily disabled
+#     invitation_sub_events_router,  # Temporarily disabled
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/sub-events",  # Temporarily disabled
+#     tags=["invitation-sub-events"],  # Temporarily disabled
+# )  # Temporarily disabled
 
 from app.api.v1.image_generation import router as image_generation_router
 router.include_router(
@@ -266,38 +268,38 @@ router.include_router(
     tags=["image-generation"],
 )
 
-from app.api.v1.invitation_exports import router as invitation_exports_router
-router.include_router(
-    invitation_exports_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/exports",
-    tags=["invitation-exports"],
-)
+# from app.api.v1.invitation_exports import router as invitation_exports_router  # Temporarily disabled
+# router.include_router(  # Temporarily disabled
+#     invitation_exports_router,  # Temporarily disabled
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/exports",  # Temporarily disabled
+#     tags=["invitation-exports"],  # Temporarily disabled
+# )  # Temporarily disabled
 
-from app.api.v1.invitation_analytics import router as invitation_analytics_router
-router.include_router(
-    invitation_analytics_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/analytics",
-    tags=["invitation-analytics"],
-)
+# from app.api.v1.invitation_analytics import router as invitation_analytics_router  # Temporarily disabled
+# router.include_router(  # Temporarily disabled
+#     invitation_analytics_router,  # Temporarily disabled
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/analytics",  # Temporarily disabled
+#     tags=["invitation-analytics"],  # Temporarily disabled
+# )  # Temporarily disabled
 
 # Event Analytics Views routes (api-analytics-views)
 # Comprehensive analytics endpoint with 10-minute caching for view counts,
 # unique visitors, device breakdown, geographic distribution, and RSVP rates
 from app.api.v1.event_analytics_views import router as event_analytics_views_router
-router.include_router(
-    event_analytics_views_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/analytics",
-    tags=["event-analytics-views"],
-)
+# router.include_router(  # Temporarily disabled
+#     event_analytics_views_router,  # Temporarily disabled
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/analytics",  # Temporarily disabled
+#     tags=["event-analytics-views"],  # Temporarily disabled
+# )  # Temporarily disabled
 
 # Invitation Templates routes (016-save-the-date)
 # CRUD endpoints for managing invitation templates
-from app.api.v1.invitation_templates import router as invitation_templates_router
-router.include_router(
-    invitation_templates_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
-    tags=["invitation-templates"],
-)
+# from app.api.v1.invitation_templates import router as invitation_templates_router  # Temporarily disabled
+# router.include_router(  # Temporarily disabled
+#     invitation_templates_router,  # Temporarily disabled
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",  # Temporarily disabled
+#     tags=["invitation-templates"],  # Temporarily disabled
+# )  # Temporarily disabled
 
 # Invitations Microservice Proxy Routes (018-invitations-production-readiness)
 # Proxies requests to the dedicated invitations microservice for production-ready features:
@@ -306,34 +308,144 @@ router.include_router(
 # - Analytics with Redis caching
 # - Bulk invite with Celery workers
 from app.api.v1.invitations_microservice_proxy import router as invitations_microservice_proxy_router
-router.include_router(
-    invitations_microservice_proxy_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/microservice",
-    tags=["invitations-microservice"],
-)
+# router.include_router(  # Temporarily disabled
+#     invitations_microservice_proxy_router,  # Temporarily disabled
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/microservice",  # Temporarily disabled
+#     tags=["invitations-microservice"],  # Temporarily disabled
+# )  # Temporarily disabled
 # Also add public RSVP proxy routes
-router.include_router(
-    invitations_microservice_proxy_router,
-    prefix="/api/v1/invitations-microservice",
-    tags=["invitations-microservice-public"],
-)
+# router.include_router(  # Temporarily disabled
+#     invitations_microservice_proxy_router,  # Temporarily disabled
+#     prefix="/api/v1/invitations-microservice",  # Temporarily disabled
+#     tags=["invitations-microservice-public"],  # Temporarily disabled
+# )  # Temporarily disabled
 
 # Invitation Custom Fonts routes (019-invitation-indian-languages)
 # Endpoints for uploading and managing custom fonts for invitations
-from app.api.v1.invitation_fonts import router as invitation_fonts_router
-router.include_router(
-    invitation_fonts_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/fonts",
-    tags=["invitation-fonts"],
-)
+# from app.api.v1.invitation_fonts import router as invitation_fonts_router  # Temporarily disabled
+# router.include_router(  # Temporarily disabled
+#     invitation_fonts_router,  # Temporarily disabled
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/fonts",  # Temporarily disabled
+#     tags=["invitation-fonts"],  # Temporarily disabled
+# )  # Temporarily disabled
 
 # Digital Invitations routes (016-save-the-date)
 # Host endpoints for managing digital event invitations
 # NOTE: Using /digital-invitations to avoid conflict with workspace member invitations
 # in workspaces.py which uses /{workspace_id}/invitations
+# Temporarily commented out until all invitation types are generated
+# router.include_router(
+#     digital_invitations_router,
+#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
+#     tags=["digital-invitations"],
+# )
+
+# Engagement Scoring routes (Automated Engagement Scoring System)
+# Tracks client interaction patterns and provides predictive scoring
+from app.api.v1.engagement import router as engagement_router
 router.include_router(
-    digital_invitations_router,
-    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
-    tags=["digital-invitations"],
+    engagement_router,
+    prefix="/api/v1/workspaces/{workspace_id}/engagement",
+    tags=["engagement-scoring"],
+)
+
+# Collaborative Editing routes
+# Real-time multi-user gallery editing with presence, actions, and conflict resolution
+# Temporarily commented out - missing dependencies.db module
+# from app.api.v1.collaboration import router as collaboration_router
+# router.include_router(collaboration_router, tags=["collaboration"])
+
+# Calendar & Booking Management routes (Calendar Integrations & Booking Management feature)
+# Booking management for photographers
+from app.api.v1.bookings import router as bookings_router
+router.include_router(
+    bookings_router,
+    prefix="/api/v1/workspaces/{workspace_id}/bookings",
+    tags=["bookings"],
+)
+
+# Service Types management
+from app.api.v1.service_types import router as service_types_router
+router.include_router(
+    service_types_router,
+    prefix="/api/v1/workspaces/{workspace_id}/service-types",
+    tags=["service-types"],
+)
+
+# Public Booking routes (no auth required for client self-service)
+from app.api.v1.public_bookings import router as public_bookings_router
+router.include_router(
+    public_bookings_router,
+    prefix="/api/v1/public/book",
+    tags=["public-booking"],
+)
+
+# Asset Cleanup routes (Automatic Asset Cleanup feature)
+# Storage optimization with duplicate detection and cleanup recommendations
+from app.api.v1.cleanup import router as cleanup_router
+router.include_router(
+    cleanup_router,
+    prefix="/api/v1/workspaces/{workspace_id}/cleanup",
+    tags=["asset-cleanup"],
+)
+
+# Gallery Export routes (Multi-format Gallery Export feature)
+# ZIP archives, PDF albums, slideshows, and cloud sync
+from app.api.v1.gallery_exports import router as gallery_exports_router
+router.include_router(
+    gallery_exports_router,
+    prefix="/api/v1/workspaces/{workspace_id}",
+    tags=["gallery-exports"],
+)
+
+# Granular Permissions routes (Expanded RBAC feature)
+# Conditional permissions, time-based access, role audit trails
+from app.api.v1.permissions import router as permissions_router
+router.include_router(permissions_router)
+
+# Audit Logs routes (Audit & Compliance System)
+# Query, search, and export audit log entries for compliance
+from app.api.v1.audit_logs import router as audit_logs_router
+router.include_router(
+    audit_logs_router,
+    prefix="/api/v1/workspaces/{workspace_id}/audit-logs",
+    tags=["audit-logs"],
+)
+
+# Data Subject Requests routes (Audit & Compliance System)
+# GDPR/CCPA/DPDP data subject request management
+from app.api.v1.compliance import router as compliance_router
+router.include_router(
+    compliance_router,
+    prefix="/api/v1/workspaces/{workspace_id}/compliance/data-subject-requests",
+    tags=["data-subject-requests"],
+)
+
+# Legal Holds routes (Audit & Compliance System)
+# Legal hold management for litigation and compliance
+from app.api.v1.legal_holds import router as legal_holds_router
+router.include_router(
+    legal_holds_router,
+    prefix="/api/v1/workspaces/{workspace_id}/legal-holds",
+    tags=["legal-holds"],
+)
+
+# Incidents routes (Audit & Compliance System)
+# Security incident and data breach management
+from app.api.v1.incidents import router as incidents_router
+router.include_router(
+    incidents_router,
+    prefix="/api/v1/workspaces/{workspace_id}/incidents",
+    tags=["incidents"],
+)
+
+# Analytics & Reporting routes (Analytics & Reporting feature)
+# Comprehensive workspace analytics: dashboard metrics, gallery/client analytics,
+# custom reports, and data exports
+from app.api.v1.analytics import router as analytics_router
+router.include_router(
+    analytics_router,
+    prefix="/api/v1/workspaces/{workspace_id}/analytics",
+    tags=["analytics"],
 )
 

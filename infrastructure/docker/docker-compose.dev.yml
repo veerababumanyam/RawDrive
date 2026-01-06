@@ -11,7 +11,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-rawdrive}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rawdrive}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${PORT_POSTGRES}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./init/enable_pgvector.sql:/docker-entrypoint-initdb.d/enable_pgvector.sql:ro
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     command: [ "redis-server", "--save", "", "--appendonly", "no" ]
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${PORT_REDIS}:6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -42,8 +42,8 @@ services:
     restart: unless-stopped
     environment:
       - APP_ENV=${APP_ENV:-development}
-      - DATABASE_URL=postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql+asyncpg://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
+      - REDIS_URL=redis://redis:${PORT_REDIS}/0
       - JWT_PRIVATE_KEY_PATH=/app/secrets/jwtEd25519.key
       - JWT_PUBLIC_KEY_PATH=/app/secrets/jwtEd25519.key.pub
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
@@ -55,8 +55,10 @@ services:
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
       - R2_ENDPOINT=${R2_ENDPOINT}
+      - API_PORT=${PORT_BACKEND}
+      - PORT=${PORT_BACKEND}
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${PORT_BACKEND}:${PORT_BACKEND}"
     volumes:
       - ../../backend:/app
       - /app/__pycache__
@@ -67,7 +69,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_BACKEND}/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -82,16 +84,17 @@ services:
       - SERVICE_NAME=gallery-service
       - DEBUG=true
       - LOG_LEVEL=DEBUG
-      - DATABASE_URL=postgresql://rawdrive:rawdrive@postgres:5432/rawdrive
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
+      - REDIS_URL=redis://redis:${PORT_REDIS}/0
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
       - R2_ENDPOINT=${R2_ENDPOINT}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
       - RATE_LIMIT_ENABLED=false
+      - PORT=${PORT_GALLERY}
     ports:
-      - "127.0.0.1:8004:8000"
+      - "127.0.0.1:${PORT_GALLERY}:${PORT_GALLERY}"
     volumes:
       - ../../services/gallery-service:/app
     depends_on:
@@ -100,7 +103,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_GALLERY}/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -114,11 +117,11 @@ services:
     environment:
       - SERVICE_NAME=upload-service
       - HOST=0.0.0.0
-      - PORT=8080
+      - PORT=${PORT_UPLOAD}
       - APP_ENV=development
       - LOG_LEVEL=DEBUG
-      - DATABASE_URL=postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql+asyncpg://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
+      - REDIS_URL=redis://redis:${PORT_REDIS}/0
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
       - R2_ENDPOINT_URL=${R2_ENDPOINT}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
@@ -128,8 +131,9 @@ services:
       - RATE_LIMIT_WINDOW=60
       - MAX_CONCURRENT_UPLOADS_PER_WORKSPACE=10
       - UPLOAD_SESSION_TTL_HOURS=24
+      - PORT=${PORT_UPLOAD}
     ports:
-      - "127.0.0.1:8005:8080"
+      - "127.0.0.1:${PORT_UPLOAD}:${PORT_UPLOAD}"
     volumes:
       - ../../services/upload-service:/app
     depends_on:
@@ -138,7 +142,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_UPLOAD}/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -153,8 +157,8 @@ services:
       - SERVICE_NAME=billing-service
       - DEBUG=true
       - LOG_LEVEL=DEBUG
-      - DATABASE_URL=postgresql://rawdrive:rawdrive@postgres:5432/rawdrive
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
+      - REDIS_URL=redis://redis:${PORT_REDIS}/0
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
@@ -168,8 +172,9 @@ services:
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
       - RATE_LIMIT_ENABLED=false
+      - PORT=${PORT_BILLING}
     ports:
-      - "127.0.0.1:8006:8000"
+      - "127.0.0.1:${PORT_BILLING}:${PORT_BILLING}"
     volumes:
       - ../../services/billing-service:/app
     depends_on:
@@ -178,13 +183,14 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_BILLING}/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
 
 volumes:
   pg_data:
+
 
 networks:
   default:

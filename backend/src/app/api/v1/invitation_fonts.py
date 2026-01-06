@@ -230,6 +230,7 @@ async def list_custom_fonts(
 @router.delete(
     "/{font_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete custom font",
     description="Delete a custom font from the workspace.",
 )

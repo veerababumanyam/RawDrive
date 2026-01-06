@@ -2,12 +2,13 @@
  * TUS Upload Service
  * Implements TUS (Resumable Upload Protocol) for resumable file uploads
  * Supports pause/resume functionality and auto-resume on connection restoration
- * 
+ *
  * TUS Protocol Specification: https://tus.io/protocols/resumable-upload.html
  */
 
 import { galleryService } from './galleryService';
 import { getStoredTokens } from './tokenStorage';
+import { getApiBaseUrl } from './api';
 
 export interface TusUploadOptions {
   /** Workspace ID */
@@ -244,10 +245,8 @@ export class TusUploadClient {
       headers['Authorization'] = `Bearer ${tokens.accessToken}`;
     }
 
-    // Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
-    const apiUrl = import.meta.env.VITE_API_URL !== undefined
-      ? import.meta.env.VITE_API_URL
-      : 'http://localhost:8000';
+    // Use centralized API base URL logic
+    const apiUrl = getApiBaseUrl();
     const endpoint = `${apiUrl}/api/v1/workspaces/${this.options.workspaceId}/uploads/${this.uploadId}/chunk`;
 
     const response = await fetch(endpoint, {

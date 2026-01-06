@@ -21,7 +21,7 @@ services:
       APP_ENV: production
       # Enable PgBouncer
       PGBOUNCER_ENABLED: "true"
-      DATABASE_URL: postgresql+asyncpg://rawdrive:rawdrive@pgbouncer:6432/rawdrive
+      DATABASE_URL: postgresql+asyncpg://rawdrive:rawdrive@pgbouncer:${PORT_PGBOUNCER}/rawdrive
       # Production pool sizes
       DB_POOL_MIN_SIZE: 2
       DB_POOL_MAX_SIZE: 10
@@ -51,7 +51,7 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
     ports:
-      - "127.0.0.1:9090:9090"
+      - "127.0.0.1:${PORT_PROMETHEUS}:9090"
     volumes:
       - ../monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
       - ../monitoring/prometheus/alerts.yaml:/etc/prometheus/alerts.yaml:ro
@@ -60,7 +60,7 @@ services:
       backend:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${PORT_PROMETHEUS}/-/healthy" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -77,12 +77,12 @@ services:
       - '--storage.path=/alertmanager'
       - '--cluster.listen-address='
     ports:
-      - "127.0.0.1:9093:9093"
+      - "127.0.0.1:${PORT_ALERTMANAGER}:9093"
     volumes:
       - ../monitoring/prometheus/alertmanager.yaml:/etc/alertmanager/alertmanager.yaml:ro
       - alertmanager_data:/alertmanager
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${PORT_ALERTMANAGER}/-/healthy" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -98,23 +98,23 @@ services:
       - '--path.rootfs=/host'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     expose:
-      - "9100"
+      - "${PORT_NODE_EXPORTER}"
     volumes:
       - /:/host:ro,rslave
     pid: host
     # Note: On macOS, some collectors may not work
 
-  # ============================================================================
-  # Redis Exporter - Cache Metrics
-  # ============================================================================
+    # ============================================================================
+    # Redis Exporter - Cache Metrics
+    # ============================================================================
   redis-exporter:
     image: oliver006/redis_exporter:v1.55.0
     container_name: rawdrive-redis-exporter
     restart: unless-stopped
     environment:
-      REDIS_ADDR: redis://redis:6379
+      REDIS_ADDR: redis://redis:${PORT_REDIS}
     expose:
-      - "9121"
+      - "${PORT_REDIS_EXPORTER}"
     depends_on:
       redis:
         condition: service_healthy
@@ -134,7 +134,7 @@ services:
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/capacity.json
     ports:
       # Expose Grafana for local access
-      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:${PORT_GRAFANA}:3000"
 
   # ============================================================================
   # k6 Load Testing (run on-demand)
@@ -148,10 +148,10 @@ services:
       - ../../../backend/tests/load/results:/results
     environment:
       K6_OUT: json=/results/latest.json
-      BASE_URL: http://backend:8000
-    command: ["run", "/scripts/concurrent-users.js"]
+      BASE_URL: http://backend:${PORT_BACKEND}
+    command: [ "run", "/scripts/concurrent-users.js" ]
     profiles:
-      - loadtest  # Only start with: docker compose --profile loadtest up k6
+      - loadtest # Only start with: docker compose --profile loadtest up k6
     depends_on:
       backend:
         condition: service_started

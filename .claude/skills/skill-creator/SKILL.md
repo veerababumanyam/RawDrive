@@ -39,7 +39,7 @@ RawDrive/
 │       ├── repositories/      # Database access
 │       └── models/            # SQLAlchemy models
 │
-├── ai-service/            # Python FastAPI + MCP
+├── services/ai-service/            # Python FastAPI + MCP
 │   └── src/
 │       └── mcp/               # MCP server tools
 │

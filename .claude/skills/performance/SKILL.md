@@ -260,7 +260,7 @@ engine.execute("SET statement_timeout = '30s'")
 ## AI Service Performance
 
 ```python
-# ai-service/src/services/face_detection.py
+# services/ai-service/src/services/face_detection.py
 
 import asyncio
 from functools import lru_cache

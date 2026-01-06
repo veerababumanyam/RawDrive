@@ -3,7 +3,11 @@
   "description": "Build an automated engagement scoring system that tracks client interaction patterns (gallery views, favorites saved, RSVP speed, download frequency) and recommends personalized follow-ups (email timing, photo highlights, special offers). Include predictive scoring to identify high-intent clients and churn risk.",
   "id": "feature-1767713716915-2mnsuav2y",
   "steps": [],
-  "status": "backlog",
+  "status": "verified",
   "skipTests": true,
-  "priority": 1
+  "priority": 1,
+  "branchName": "main",
+  "startedAt": "2026-01-06T18:12:24.256Z",
+  "updatedAt": "2026-01-06T18:27:18.379Z",
+  "justFinishedAt": "2026-01-06T18:27:18.379Z"
 }

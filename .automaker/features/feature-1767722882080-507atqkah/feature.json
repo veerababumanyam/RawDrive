@@ -1,0 +1,454 @@
+{
+  "category": "Uncategorized",
+  "description": "# Calendar Integrations & Booking Management\n\n> **Status**: Required - Production Ready\n\n## Business Value Proposition\n\nThe Calendar & Booking module transforms RawDrive from a delivery tool into a revenue-generating business hub. By allowing photographers to manage their availability and accept bookings directly, it streamlines the client acquisition process, reduces administrative overhead, and prevents double-booking errors.\n\n### Key Business Benefits\n- **Direct Revenue**: Capture bookings and deposits 24/7 without back-and-forth emails.\n- **Efficiency**: Automated scheduling and calendar syncing save hours of admin time.\n- **Professionalism**: seamless booking experience enhances the client's perception of the studio.\n- **Reliability**: Two-way sync prevents double-booking conflicts.\n- **Cash Flow**: Integrated payments ensure deposits are collected at the time of booking.\n\n---\n\n## User Personas\n\n### Primary Users\n1. **Photographer**\n   - Sets working hours and availability.\n   - Syncs personal/business calendars (Google, Outlook).\n   - Defines service types and pricing.\n\n2. **Client**\n   - Views real-time availability.\n   - Books sessions and pays deposits.\n   - Receives calendar invites and reminders.\n\n3. **Studio Manager**\n   - Manages schedules for multiple photographers (Enterprise).\n   - Oversees booking conflicts and rescheduling.\n\n---\n\n## Key Capabilities\n\n### 1. Availability Management\n- **Working Hours**: Define standard operating hours (e.g., Mon-Fri, 9-5).\n- **Buffer Times**: Automatic padding between sessions to allow for travel/setup.\n- **Block-out Dates**: Manually block off holidays or personal time.\n - **Per-Service Calendars**: Different availability windows per service type (e.g., \"Studio\" vs \"Outdoor\").\n\n### 2. Calendar Synchronization\n- **Two-Way Sync**:\n    - **Read**: Checks external calendars (Google, Outlook) to block busy slots.\n    - **Write**: Pushes new RawDrive bookings to the external calendar.\n- **Multiple Calendars**: Support for checking multiple calendars for conflicts.\n\n### 3. Booking Workflow\n- **Service Menu**: Define session types (e.g., \"Wedding Consultation\", \"Portrait Session\") with duration and price.\n- **Self-Service Booking**: Public booking page for clients to select slots.\n- **Approval Mode**: Option to require photographer approval before confirming a booking.\n- **Rescheduling**: Self-service rescheduling options within defined policy limits.\n\n### 4. Booking Policies\n\n- **Cancellation Windows**: Configure free cancellation/reschedule periods (e.g., up to 48 hours before start).\n- **Fees & Refunds**: Define whether deposits are refundable and under what conditions.\n- **No-Show Handling**: Mark bookings as no-show and optionally block future self-service bookings until manual review.\n- **Policy Surfacing**: Policies are displayed on the booking page and in confirmation emails.\n\n### 5. Payments & Deposits\n- **Integrated Checkout**: Collect full payment or deposit during the booking flow.\n- **Refund Handling**: Automated or manual refund processing for cancellations.\n\n### 6. Timezones & UX\n\n- All availability is stored in the photographer's workspace timezone; clients see slots converted to their local timezone.\n- Calendar invites (.ics) use the canonical timezone with proper `VTIMEZONE` blocks to avoid daylight savings drift.\n- Confirmation pages and emails clearly display both photographer and client local times where they differ.\n\n---\n\n## Integration Points\n\n- **Client CRM**: Automatically creates or updates client profiles upon booking.\n- **Billing**: Generates invoices and records payments.\n- **Notifications**: Sends confirmation emails, calendar invites (.ics), and SMS reminders.\n- **Company Profile**: Branding applied to the booking page.\n\n---\n\n## Scalability Considerations\n\n- **Concurrency**: Locking mechanisms to prevent two clients from booking the same slot simultaneously.\n- **Timezones**: Robust handling of timezone conversions between photographer and client.\n- **Performance**: Efficient querying of availability across months of data.\n",
+  "title": "Add calendar integrations and booking management",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "verified",
+  "id": "feature-1767722882080-507atqkah",
+  "startedAt": "2026-01-06T18:59:42.391Z",
+  "updatedAt": "2026-01-06T19:18:02.527Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Task\nInput: {\n  \"description\": \"Explore calendar booking codebase\",\n  \"prompt\": \"Explore the RawDrive codebase to understand the existing structure for implementing a Calendar Integrations & Booking Management feature. I need to understand:\\n\\n1. **Database Models**: Look at existing models in `backend/src/app/models/` to understand the patterns used for related features like galleries, clients, etc.\\n\\n2. **Service Architecture**: Check `backend/src/app/services/` for patterns on how business logic is organized\\n\\n3. **API Endpoints**: Review `backend/src/app/api/v1/` to understand the API structure and conventions\\n\\n4. **Frontend Structure**: Look at `frontend/src/` to understand:\\n   - How feature components are organized in `components/features/`\\n   - How services/API calls are structured in `services/`\\n   - How pages are organized in `pages/`\\n\\n5. **Existing Related Features**: Check if there are any existing calendar, booking, or scheduling-related files\\n\\n6. **Billing Integration**: Look at `services/billing-service/` to understand payment integration patterns\\n\\n7. **Notification Patterns**: Check how notifications/emails are handled in the codebase\\n\\n8. **Shared Types**: Look at `packages/shared-types/src/` and `packages/shared-constants/src/` for existing types and constants\\n\\nProvide a comprehensive summary of:\\n- Existing patterns I should follow\\n- Related models/services that this feature will integrate with\\n- Key files that will be affected\\n- Any existing calendar or booking functionality\",\n  \"subagent_type\": \"Explore\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/models/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/services/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/api/v1/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/components/features/*\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/services/*.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"packages/shared-types/src/*.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"packages/shared-constants/src/*.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"services/billing-service/src/**/*.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\calendar_service.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\models\\\\subscription.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-types\\\\src\\\\index.ts\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/backend/src/app/models -type f -name \\\"*.py\\\" | head -20\",\n  \"description\": \"List all backend model files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\models\\\\__init__.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\gallery_service.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\galleries.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\services\\\\galleryService.ts\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\notification_service.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\client_service.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/backend/migrations/versions -type f -name \\\"*.py\\\" | tail -20\",\n  \"description\": \"List recent database migrations\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\components\\\\features\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la /c/Users/admin/Desktop/RawDrive/frontend/src/components/features/\",\n  \"description\": \"List frontend feature directories\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/frontend/src/pages -type d | head -20\",\n  \"description\": \"List frontend page directories\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/backend/src/app/repositories -type f -name \\\"*.py\\\" | head -20\",\n  \"description\": \"List backend repository files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-constants\\\\src\\\\index.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\invitation_service.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"wc -l /c/Users/admin/Desktop/RawDrive/backend/src/app/services/invitation_service.py\",\n  \"description\": \"Count lines in invitation service\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\models\\\\invitation_sub_event.py\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/backend/migrations/versions -name \\\"*0104*\\\" -o -name \\\"*0103*\\\" | xargs head -50\",\n  \"description\": \"Show recent migrations for sync and collaboration\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/backend/src/app/api/schemas -type f -name \\\"*.py\\\" | head -20\",\n  \"description\": \"List API schema files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\billing-service\\\\src\\\\api\\\\v1\\\\subscription.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\clients.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la /c/Users/admin/Desktop/RawDrive/frontend/src/hooks/ | grep -i \\\"use\\\"\",\n  \"description\": \"List frontend custom hooks\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive -name \\\"*schemas*.py\\\" | grep -E \\\"(api|backend)\\\" | head -10\",\n  \"description\": \"Find schema files in backend API\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"class.*Request\\\" /c/Users/admin/Desktop/RawDrive/backend/src/app/api --include=\\\"*.py\\\" | head -10\",\n  \"description\": \"Find request schema definitions\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/specs -type f -name \\\"*.md\\\" | head -10\",\n  \"description\": \"Find specification files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\invitations_microservice_proxy.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"calendar\\\\|booking\\\\|schedule\\\" /c/Users/admin/Desktop/RawDrive --include=\\\"*.py\\\" --include=\\\"*.ts\\\" | grep -v \\\".pyc\\\" | head -20\",\n  \"description\": \"Search for calendar/booking references\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-types\\\\src\\\\common.ts\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"CREATE TABLE\\\" /c/Users/admin/Desktop/RawDrive/backend/migrations/versions --include=\\\"*.py\\\" | grep -i \\\"calendar\\\\|booking\\\\|appointment\\\\|schedule\\\" | head -10\",\n  \"description\": \"Search for calendar/booking tables in migrations\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\invitation_schemas.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive -name \\\"README.md\\\" -path \\\"*/services/*\\\" | head -5\",\n  \"description\": \"Find service README files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\hooks\\\\useGallery.ts\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/backend/src/app -type f -name \\\"*.py\\\" | xargs grep -l \\\"appointment\\\\|session\\\\|availability\\\\|booking\\\" | head -10\",\n  \"description\": \"Find files with session/availability related code\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\checkin_service.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la /c/Users/admin/Desktop/RawDrive/docs/ | grep -E \\\"^-\\\" | awk '{print $NF}' | head -20\",\n  \"description\": \"List documentation files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\client_schemas.py\",\n  \"limit\": 100\n}\n\n# Comprehensive Specification: Calendar Integrations & Booking Management\n\n## 1. Problem Statement\n\nPhotographers using RawDrive currently manage their bookings outside the platform through manual calendar coordination, email exchanges, and separate scheduling tools. This fragmented workflow leads to double-booking conflicts, missed appointments, delayed deposit collection, and significant administrative overhead. The platform needs integrated calendar synchronization and self-service booking capabilities to transform RawDrive from a delivery tool into a complete business management hub.\n\n## 2. User Story\n\n**As a** professional photographer,  \n**I want** to manage my availability, sync my calendars, and allow clients to book sessions directly,  \n**So that** I can reduce administrative overhead, prevent double-bookings, and capture bookings with deposits 24/7.\n\n## 3. Acceptance Criteria\n\n### Happy Path Scenarios\n\n**Scenario 1: Availability Management**\n- **GIVEN** a photographer with an active workspace\n- **WHEN** they configure their working hours (Mon-Fri, 9 AM - 5 PM)\n- **THEN** the system stores availability settings with proper timezone handling\n- **AND** clients see only available slots during these hours\n\n**Scenario 2: Calendar Integration (Google)**\n- **GIVEN** a photographer wanting to sync their Google Calendar\n- **WHEN** they complete OAuth2 authorization\n- **THEN** the system fetches busy slots from Google Calendar\n- **AND** pushes new RawDrive bookings to Google Calendar\n- **AND** prevents double-booking across both systems\n\n**Scenario 3: Client Self-Service Booking**\n- **GIVEN** a client visiting the photographer's public booking page\n- **WHEN** they select an available time slot and service type\n- **THEN** the system reserves the slot temporarily (15-minute hold)\n- **AND** collects payment/deposit via integrated checkout\n- **AND** creates a confirmed booking with calendar invite\n\n**Scenario 4: Booking Confirmation Flow**\n- **GIVEN** a successfully completed booking\n- **WHEN** payment is processed\n- **THEN** both parties receive confirmation emails with .ics attachments\n- **AND** the booking appears in the photographer's calendar\n- **AND** the client receives reminder notifications\n\n### Edge Cases\n\n**Scenario 5: Concurrent Booking Attempt**\n- **GIVEN** two clients attempting to book the same slot simultaneously\n- **WHEN** both submit booking requests\n- **THEN** only the first successful payment secures the slot\n- **AND** the second client is notified the slot is no longer available\n- **AND** they are offered alternative time slots\n\n**Scenario 6: Calendar Sync Conflict**\n- **GIVEN** a photographer with synced external calendar\n- **WHEN** they manually add an event in Google Calendar during an available slot\n- **THEN** the next sync (within 5 minutes) blocks that slot in RawDrive\n- **AND** existing unconfirmed holds are released\n- **AND** affected clients are notified if they had pending bookings\n\n**Scenario 7: Timezone Handling**\n- **GIVEN** a photographer in IST (Asia/Kolkata) and client in PST (America/Los_Angeles)\n- **WHEN** the client views available slots\n- **THEN** slots are displayed in client's local timezone (PST)\n- **AND** booking confirmation shows both timezones\n- **AND** .ics file uses canonical timezone with VTIMEZONE blocks\n\n### Error Handling\n\n**Scenario 8: OAuth Token Expiration**\n- **GIVEN** an expired Google Calendar refresh token\n- **WHEN** the system attempts to sync\n- **THEN** the calendar is marked as \"needs reauthorization\"\n- **AND** the photographer receives notification to reconnect\n- **AND** bookings continue to work in RawDrive-only mode\n\n**Scenario 9: Payment Failure During Booking**\n- **GIVEN** a client completing the booking flow\n- **WHEN** payment processing fails\n- **THEN** the temporary slot hold is released\n- **AND** the client sees a clear error message with retry option\n- **AND** no booking is created\n\n**Scenario 10: Cancellation Within Policy Window**\n- **GIVEN** a booking with 48-hour free cancellation policy\n- **WHEN** client cancels 72 hours before the appointment\n- **THEN** the deposit is refunded automatically\n- **AND** the slot is released back to availability\n- **AND** both parties receive cancellation confirmation\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| **Affected Backend Files** | `backend/src/app/models/calendar.py` (new), `backend/src/app/models/booking.py` (new), `backend/src/app/services/calendar_integration_service.py` (new), `backend/src/app/services/booking_service.py` (new), `backend/src/app/repositories/calendar_repository.py` (new), `backend/src/app/repositories/booking_repository.py` (new), `backend/src/app/api/v1/calendars.py` (new), `backend/src/app/api/v1/bookings.py` (new), `backend/src/app/api/calendar_schemas.py` (new), `backend/migrations/versions/0105_calendar_bookings.py` (new) |\n| **Affected Frontend Files** | `frontend/src/components/features/calendar/` (new directory), `frontend/src/services/calendarService.ts` (new), `frontend/src/services/bookingService.ts` (new), `frontend/src/hooks/useCalendar.ts` (new), `frontend/src/hooks/useBooking.ts` (new), `frontend/src/pages/workspace/calendar/` (new directory) |\n| **Affected Shared Packages** | `packages/shared-types/src/calendar.ts` (new), `packages/shared-constants/src/calendar.ts` (new) |\n| **Dependencies** | `google-api-python-client`, `google-auth-oauthlib` (Google Calendar), `O365` (Microsoft Outlook), `icalendar` (already installed), `pytz` (already installed), `redis` (locking), `stripe` (existing) |\n| **Constraints** | Multi-tenant isolation required (workspace_id on all queries), OAuth tokens must be encrypted at rest (AES-256), Calendar sync polling interval: 5 minutes minimum, Booking slot hold timeout: 15 minutes, Rate limits: 100 req/min for booking endpoints |\n| **Patterns to Follow** | Repository → Service → API (3-layer), Custom exception classes with codes, Pydantic schemas for validation, React Query for data fetching, Shared types across stack |\n\n## 5. Non-Goals\n\nThis feature explicitly does **NOT** include:\n\n1. **Multi-Staff Team Scheduling** - This version focuses on single-photographer bookings; team scheduling for enterprises is a future enhancement\n2. **Recurring Bookings** - Only one-time session bookings are supported\n3. **In-Person Point-of-Sale** - This is for online/self-service bookings only\n4. **Custom Booking Page Builder** - Basic branding only; advanced page customization is future work\n5. **SMS Notifications** - Email notifications only for this phase\n6. **Wait List Management** - No automated wait list for fully booked slots\n7. **Package/Bundle Bookings** - Single service type per booking only\n8. **Apple Calendar Integration** - Only Google and Microsoft calendars for initial release\n9. **Calendar Import from External .ics Files** - Only OAuth-based sync\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation - Shared Types & Database Schema\n\n- [ ] T001: Create calendar types in shared-types package | File: packages/shared-types/src/calendar.ts\n- [ ] T002: Create calendar constants in shared-constants package | File: packages/shared-constants/src/calendar.ts\n- [ ] T003: Export new types from shared-types index | File: packages/shared-types/src/index.ts\n- [ ] T004: Export new constants from shared-constants index | File: packages/shared-constants/src/index.ts\n- [ ] T005: Create database migration for calendar and booking tables | File: backend/migrations/versions/0105_calendar_bookings.py\n- [ ] T006: Create Calendar SQLAlchemy model | File: backend/src/app/models/calendar.py\n- [ ] T007: Create Booking SQLAlchemy model | File: backend/src/app/models/booking.py\n- [ ] T008: Create ServiceType SQLAlchemy model | File: backend/src/app/models/service_type.py\n- [ ] T009: Register models in models __init__.py | File: backend/src/app/models/__init__.py\n\n## Phase 2: Backend Services & Repositories\n\n- [ ] T010: Create calendar repository for data access | File: backend/src/app/repositories/calendar_repository.py\n- [ ] T011: Create booking repository for data access | File: backend/src/app/repositories/booking_repository.py\n- [ ] T012: Create calendar integration service for OAuth & sync | File: backend/src/app/services/calendar_integration_service.py\n- [ ] T013: Create booking service with business logic | File: backend/src/app/services/booking_service.py\n- [ ] T014: Create availability service for slot calculation | File: backend/src/app/services/availability_service.py\n- [ ] T015: Create Pydantic schemas for calendar API | File: backend/src/app/api/calendar_schemas.py\n- [ ] T016: Create Pydantic schemas for booking API | File: backend/src/app/api/booking_schemas.py\n\n## Phase 3: Backend API Endpoints\n\n- [ ] T017: Create calendar management endpoints | File: backend/src/app/api/v1/calendars.py\n- [ ] T018: Create booking management endpoints | File: backend/src/app/api/v1/bookings.py\n- [ ] T019: Create public booking page endpoints | File: backend/src/app/api/v1/public_booking.py\n- [ ] T020: Create service type management endpoints | File: backend/src/app/api/v1/service_types.py\n- [ ] T021: Register all new routes in v1 __init__.py | File: backend/src/app/api/v1/__init__.py\n- [ ] T022: Add Google OAuth callback endpoint | File: backend/src/app/api/v1/calendars.py\n- [ ] T023: Add Microsoft OAuth callback endpoint | File: backend/src/app/api/v1/calendars.py\n\n## Phase 4: Frontend Services & Hooks\n\n- [ ] T024: Create calendar API service | File: frontend/src/services/calendarService.ts\n- [ ] T025: Create booking API service | File: frontend/src/services/bookingService.ts\n- [ ] T026: Export services from index | File: frontend/src/services/index.ts\n- [ ] T027: Create useCalendar hook | File: frontend/src/hooks/useCalendar.ts\n- [ ] T028: Create useBooking hook | File: frontend/src/hooks/useBooking.ts\n- [ ] T029: Create useAvailability hook for slot fetching | File: frontend/src/hooks/useAvailability.ts\n\n## Phase 5: Frontend Components - Calendar Management\n\n- [ ] T030: Create CalendarSettings component for availability | File: frontend/src/components/features/calendar/CalendarSettings.tsx\n- [ ] T031: Create CalendarIntegrations component | File: frontend/src/components/features/calendar/CalendarIntegrations.tsx\n- [ ] T032: Create CalendarView weekly/monthly display | File: frontend/src/components/features/calendar/CalendarView.tsx\n- [ ] T033: Create ServiceTypeManager component | File: frontend/src/components/features/calendar/ServiceTypeManager.tsx\n- [ ] T034: Create BookingPolicies configuration component | File: frontend/src/components/features/calendar/BookingPolicies.tsx\n- [ ] T035: Create calendar components index | File: frontend/src/components/features/calendar/index.ts\n\n## Phase 6: Frontend Components - Booking Management\n\n- [ ] T036: Create BookingList component | File: frontend/src/components/features/booking/BookingList.tsx\n- [ ] T037: Create BookingDetail component | File: frontend/src/components/features/booking/BookingDetail.tsx\n- [ ] T038: Create BookingForm for manual creation | File: frontend/src/components/features/booking/BookingForm.tsx\n- [ ] T039: Create UpcomingBookings dashboard widget | File: frontend/src/components/features/booking/UpcomingBookings.tsx\n- [ ] T040: Create booking components index | File: frontend/src/components/features/booking/index.ts\n\n## Phase 7: Frontend Pages\n\n- [ ] T041: Create calendar settings page | File: frontend/src/pages/workspace/calendar/settings.tsx\n- [ ] T042: Create calendar view page | File: frontend/src/pages/workspace/calendar/index.tsx\n- [ ] T043: Create bookings list page | File: frontend/src/pages/workspace/bookings/index.tsx\n- [ ] T044: Create booking detail page | File: frontend/src/pages/workspace/bookings/[bookingId].tsx\n- [ ] T045: Create public booking page | File: frontend/src/pages/public/book/[workspaceSlug].tsx\n- [ ] T046: Add routes for new pages | File: frontend/src/router/routes.tsx\n\n## Phase 8: Public Booking Flow\n\n- [ ] T047: Create PublicBookingPage component | File: frontend/src/components/features/public-booking/PublicBookingPage.tsx\n- [ ] T048: Create SlotPicker component | File: frontend/src/components/features/public-booking/SlotPicker.tsx\n- [ ] T049: Create ServiceSelector component | File: frontend/src/components/features/public-booking/ServiceSelector.tsx\n- [ ] T050: Create BookingCheckout component with payment | File: frontend/src/components/features/public-booking/BookingCheckout.tsx\n- [ ] T051: Create BookingConfirmation component | File: frontend/src/components/features/public-booking/BookingConfirmation.tsx\n- [ ] T052: Create public-booking components index | File: frontend/src/components/features/public-booking/index.ts\n\n## Phase 9: Notifications & Calendar Sync\n\n- [ ] T053: Add booking notification templates | File: backend/src/app/services/notification_service.py\n- [ ] T054: Update calendar_service for booking ICS generation | File: backend/src/app/services/calendar_service.py\n- [ ] T055: Create calendar sync background worker | File: backend/src/app/workers/calendar_sync_worker.py\n- [ ] T056: Add booking reminder Celery task | File: backend/src/app/workers/booking_reminders.py\n\n## Phase 10: Integration & Polish\n\n- [ ] T057: Integrate with client service for booking-client linking | File: backend/src/app/services/booking_service.py\n- [ ] T058: Add booking activity logging | File: backend/src/app/services/activity_service.py\n- [ ] T059: Add booking subscription limits check | File: backend/src/app/services/booking_service.py\n- [ ] T060: Create Playwright verification test | File: tests/e2e/calendar-booking.spec.ts\n```\n\n## 7. Success Metrics\n\n| Metric | Target | Measurement |\n|--------|--------|-------------|\n| **Booking Creation** | Photographers can create service types and accept bookings | Manual verification via UI |\n| **Calendar Sync** | Google Calendar OAuth flow completes successfully | OAuth callback returns success, events sync |\n| **Slot Calculation** | Available slots respect working hours, buffer times, and external calendar blocks | Unit tests pass, manual verification |\n| **Concurrent Booking Prevention** | Only one booking per slot even with simultaneous attempts | Load test with concurrent requests |\n| **Timezone Accuracy** | Times display correctly across timezones | Manual test with different browser timezones |\n| **Payment Integration** | Deposits collected during booking flow | Stripe test mode transaction completes |\n| **Notification Delivery** | Confirmation and reminder emails sent | Email delivery verification |\n| **ICS Generation** | .ics attachments work in major calendar apps | Import test in Google Calendar, Outlook |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| **OAuth Token Security** | Encrypt tokens at rest using AES-256; store in database with workspace isolation; implement token refresh before expiration |\n| **Race Conditions on Slot Booking** | Use Redis distributed locking with 15-minute TTL; database-level unique constraint on (calendar_id, start_time) |\n| **Calendar API Rate Limits** | Implement exponential backoff; batch sync requests; cache availability for 5 minutes minimum |\n| **Timezone Confusion** | Store all times in UTC; convert on display; include both timezones in confirmations; use IANA timezone identifiers |\n| **Payment Failure Mid-Booking** | Temporary slot hold mechanism; automatic release on timeout; clear error messaging; retry capability |\n| **External Calendar Unavailability** | Graceful degradation to RawDrive-only mode; clear status indicators; manual override capability |\n| **Double-Booking Edge Cases** | Database constraint prevents duplicate bookings; sync checks before confirmation; conflict resolution UI |\n| **Large Calendar History** | Paginated sync with configurable lookback period; incremental sync after initial import |\n\n---",
+    "generatedAt": "2026-01-06T18:34:18.502Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create calendar types in shared-types package",
+        "filePath": "packages/shared-types/src/calendar.ts",
+        "phase": "Phase 1: Foundation - Shared Types & Database Schema",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Create calendar constants in shared-constants package",
+        "filePath": "packages/shared-constants/src/calendar.ts",
+        "phase": "Phase 1: Foundation - Shared Types & Database Schema",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Export new types from shared-types index",
+        "filePath": "packages/shared-types/src/index.ts",
+        "phase": "Phase 1: Foundation - Shared Types & Database Schema",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Export new constants from shared-constants index",
+        "filePath": "packages/shared-constants/src/index.ts",
+        "phase": "Phase 1: Foundation - Shared Types & Database Schema",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create database migration for calendar and booking tables",
+        "filePath": "backend/migrations/versions/0105_calendar_bookings.py",
+        "phase": "Phase 1: Foundation - Shared Types & Database Schema",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create Calendar SQLAlchemy model",
+        "filePath": "backend/src/app/models/calendar.py",
+        "phase": "Phase 1: Foundation - Shared Types & Database Schema",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create Booking SQLAlchemy model",
+        "filePath": "backend/src/app/models/booking.py",
+        "phase": "Phase 1: Foundation - Shared Types & Database Schema",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Create ServiceType SQLAlchemy model",
+        "filePath": "backend/src/app/models/service_type.py",
+        "phase": "Phase 1: Foundation - Shared Types & Database Schema",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Register models in models __init__.py",
+        "filePath": "backend/src/app/models/__init__.py",
+        "phase": "Phase 1: Foundation - Shared Types & Database Schema",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Create calendar repository for data access",
+        "filePath": "backend/src/app/repositories/calendar_repository.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Create booking repository for data access",
+        "filePath": "backend/src/app/repositories/booking_repository.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create calendar integration service for OAuth & sync",
+        "filePath": "backend/src/app/services/calendar_integration_service.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create booking service with business logic",
+        "filePath": "backend/src/app/services/booking_service.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create availability service for slot calculation",
+        "filePath": "backend/src/app/services/availability_service.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Create Pydantic schemas for calendar API",
+        "filePath": "backend/src/app/api/calendar_schemas.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create Pydantic schemas for booking API",
+        "filePath": "backend/src/app/api/booking_schemas.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Create calendar management endpoints",
+        "filePath": "backend/src/app/api/v1/calendars.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create booking management endpoints",
+        "filePath": "backend/src/app/api/v1/bookings.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Create public booking page endpoints",
+        "filePath": "backend/src/app/api/v1/public_booking.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Create service type management endpoints",
+        "filePath": "backend/src/app/api/v1/service_types.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Register all new routes in v1 __init__.py",
+        "filePath": "backend/src/app/api/v1/__init__.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Add Google OAuth callback endpoint",
+        "filePath": "backend/src/app/api/v1/calendars.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Add Microsoft OAuth callback endpoint",
+        "filePath": "backend/src/app/api/v1/calendars.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create calendar API service",
+        "filePath": "frontend/src/services/calendarService.ts",
+        "phase": "Phase 4: Frontend Services & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Create booking API service",
+        "filePath": "frontend/src/services/bookingService.ts",
+        "phase": "Phase 4: Frontend Services & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Export services from index",
+        "filePath": "frontend/src/services/index.ts",
+        "phase": "Phase 4: Frontend Services & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Create useCalendar hook",
+        "filePath": "frontend/src/hooks/useCalendar.ts",
+        "phase": "Phase 4: Frontend Services & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Create useBooking hook",
+        "filePath": "frontend/src/hooks/useBooking.ts",
+        "phase": "Phase 4: Frontend Services & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Create useAvailability hook for slot fetching",
+        "filePath": "frontend/src/hooks/useAvailability.ts",
+        "phase": "Phase 4: Frontend Services & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Create CalendarSettings component for availability",
+        "filePath": "frontend/src/components/features/calendar/CalendarSettings.tsx",
+        "phase": "Phase 5: Frontend Components - Calendar Management",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create CalendarIntegrations component",
+        "filePath": "frontend/src/components/features/calendar/CalendarIntegrations.tsx",
+        "phase": "Phase 5: Frontend Components - Calendar Management",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Create CalendarView weekly/monthly display",
+        "filePath": "frontend/src/components/features/calendar/CalendarView.tsx",
+        "phase": "Phase 5: Frontend Components - Calendar Management",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Create ServiceTypeManager component",
+        "filePath": "frontend/src/components/features/calendar/ServiceTypeManager.tsx",
+        "phase": "Phase 5: Frontend Components - Calendar Management",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Create BookingPolicies configuration component",
+        "filePath": "frontend/src/components/features/calendar/BookingPolicies.tsx",
+        "phase": "Phase 5: Frontend Components - Calendar Management",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Create calendar components index",
+        "filePath": "frontend/src/components/features/calendar/index.ts",
+        "phase": "Phase 5: Frontend Components - Calendar Management",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Create BookingList component",
+        "filePath": "frontend/src/components/features/booking/BookingList.tsx",
+        "phase": "Phase 6: Frontend Components - Booking Management",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Create BookingDetail component",
+        "filePath": "frontend/src/components/features/booking/BookingDetail.tsx",
+        "phase": "Phase 6: Frontend Components - Booking Management",
+        "status": "pending"
+      },
+      {
+        "id": "T038",
+        "description": "Create BookingForm for manual creation",
+        "filePath": "frontend/src/components/features/booking/BookingForm.tsx",
+        "phase": "Phase 6: Frontend Components - Booking Management",
+        "status": "pending"
+      },
+      {
+        "id": "T039",
+        "description": "Create UpcomingBookings dashboard widget",
+        "filePath": "frontend/src/components/features/booking/UpcomingBookings.tsx",
+        "phase": "Phase 6: Frontend Components - Booking Management",
+        "status": "pending"
+      },
+      {
+        "id": "T040",
+        "description": "Create booking components index",
+        "filePath": "frontend/src/components/features/booking/index.ts",
+        "phase": "Phase 6: Frontend Components - Booking Management",
+        "status": "pending"
+      },
+      {
+        "id": "T041",
+        "description": "Create calendar settings page",
+        "filePath": "frontend/src/pages/workspace/calendar/settings.tsx",
+        "phase": "Phase 7: Frontend Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T042",
+        "description": "Create calendar view page",
+        "filePath": "frontend/src/pages/workspace/calendar/index.tsx",
+        "phase": "Phase 7: Frontend Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T043",
+        "description": "Create bookings list page",
+        "filePath": "frontend/src/pages/workspace/bookings/index.tsx",
+        "phase": "Phase 7: Frontend Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T044",
+        "description": "Create booking detail page",
+        "filePath": "frontend/src/pages/workspace/bookings/[bookingId].tsx",
+        "phase": "Phase 7: Frontend Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T045",
+        "description": "Create public booking page",
+        "filePath": "frontend/src/pages/public/book/[workspaceSlug].tsx",
+        "phase": "Phase 7: Frontend Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T046",
+        "description": "Add routes for new pages",
+        "filePath": "frontend/src/router/routes.tsx",
+        "phase": "Phase 7: Frontend Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T047",
+        "description": "Create PublicBookingPage component",
+        "filePath": "frontend/src/components/features/public-booking/PublicBookingPage.tsx",
+        "phase": "Phase 8: Public Booking Flow",
+        "status": "pending"
+      },
+      {
+        "id": "T048",
+        "description": "Create SlotPicker component",
+        "filePath": "frontend/src/components/features/public-booking/SlotPicker.tsx",
+        "phase": "Phase 8: Public Booking Flow",
+        "status": "pending"
+      },
+      {
+        "id": "T049",
+        "description": "Create ServiceSelector component",
+        "filePath": "frontend/src/components/features/public-booking/ServiceSelector.tsx",
+        "phase": "Phase 8: Public Booking Flow",
+        "status": "pending"
+      },
+      {
+        "id": "T050",
+        "description": "Create BookingCheckout component with payment",
+        "filePath": "frontend/src/components/features/public-booking/BookingCheckout.tsx",
+        "phase": "Phase 8: Public Booking Flow",
+        "status": "pending"
+      },
+      {
+        "id": "T051",
+        "description": "Create BookingConfirmation component",
+        "filePath": "frontend/src/components/features/public-booking/BookingConfirmation.tsx",
+        "phase": "Phase 8: Public Booking Flow",
+        "status": "pending"
+      },
+      {
+        "id": "T052",
+        "description": "Create public-booking components index",
+        "filePath": "frontend/src/components/features/public-booking/index.ts",
+        "phase": "Phase 8: Public Booking Flow",
+        "status": "pending"
+      },
+      {
+        "id": "T053",
+        "description": "Add booking notification templates",
+        "filePath": "backend/src/app/services/notification_service.py",
+        "phase": "Phase 9: Notifications & Calendar Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T054",
+        "description": "Update calendar_service for booking ICS generation",
+        "filePath": "backend/src/app/services/calendar_service.py",
+        "phase": "Phase 9: Notifications & Calendar Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T055",
+        "description": "Create calendar sync background worker",
+        "filePath": "backend/src/app/workers/calendar_sync_worker.py",
+        "phase": "Phase 9: Notifications & Calendar Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T056",
+        "description": "Add booking reminder Celery task",
+        "filePath": "backend/src/app/workers/booking_reminders.py",
+        "phase": "Phase 9: Notifications & Calendar Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T057",
+        "description": "Integrate with client service for booking-client linking",
+        "filePath": "backend/src/app/services/booking_service.py",
+        "phase": "Phase 10: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T058",
+        "description": "Add booking activity logging",
+        "filePath": "backend/src/app/services/activity_service.py",
+        "phase": "Phase 10: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T059",
+        "description": "Add booking subscription limits check",
+        "filePath": "backend/src/app/services/booking_service.py",
+        "phase": "Phase 10: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T060",
+        "description": "Create Playwright verification test",
+        "filePath": "tests/e2e/calendar-booking.spec.ts",
+        "phase": "Phase 10: Integration & Polish",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 60,
+    "tasksCompleted": 4,
+    "approvedAt": "2026-01-06T18:34:18.503Z",
+    "currentTaskId": "T005"
+  }
+}

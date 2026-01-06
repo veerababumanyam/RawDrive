@@ -116,11 +116,13 @@ def main():
     logger.info("Starting Face Detection Worker Service...")
     
     # Run the FastAPI app with uvicorn
-    # Port 8001 to avoid conflict with main backend on 8000
+    # Port from environment or default to 8001
+    import os
+    port = int(os.getenv("PORT", 8001))
     uvicorn.run(
         "app.face_worker_main:app",
         host="0.0.0.0",
-        port=8001,
+        port=port,
         workers=1,  # Single worker - the async worker handles parallelism
         log_level="info",
     )

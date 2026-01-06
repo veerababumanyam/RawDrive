@@ -8,7 +8,7 @@ Run the automated test script that starts services and runs all tests:
 
 ```powershell
 cd C:\Users\admin\Desktop\RawDrive
-.\test-upload-service.ps1
+.\scripts\test-upload-service.ps1
 ```
 
 This script will:
@@ -25,10 +25,10 @@ This script will:
 cd C:\Users\admin\Desktop\RawDrive
 
 # Start services
-.\start-upload-service.ps1
+.\scripts\start-upload-service.ps1
 
 # Test endpoints (after services are up)
-.\test-endpoints.ps1
+.\scripts\test-endpoints.ps1
 ```
 
 ---
@@ -37,9 +37,9 @@ cd C:\Users\admin\Desktop\RawDrive
 
 | Script | Purpose |
 |--------|---------|
-| `test-upload-service.ps1` | Complete automated testing suite |
-| `start-upload-service.ps1` | Quick start for all services |
-| `test-endpoints.ps1` | Test endpoints after services are running |
+| `scripts/test-upload-service.ps1` | Complete automated testing suite |
+| `scripts/start-upload-service.ps1` | Quick start for all services |
+| `scripts/test-endpoints.ps1` | Test endpoints after services are running |
 
 ---
 

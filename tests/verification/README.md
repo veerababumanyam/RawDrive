@@ -18,7 +18,7 @@ These tests verify that the required PostgreSQL extensions are properly installe
    
    **Quick Start** (standalone database for local development):
    ```bash
-   docker compose -f docker-compose.db.yml up -d
+   docker compose -f ../../infrastructure/docker/docker-compose.db.yml up -d
    ```
    
    This image includes:
@@ -193,7 +193,7 @@ Add this to your CI pipeline to verify extensions after deployment:
 
 ## Related Files
 
-- `docker-compose.db.yml` - Standalone PostgreSQL with pgvectorscale (recommended for local dev)
+- `infrastructure/docker/docker-compose.db.yml` - Standalone PostgreSQL with pgvectorscale (recommended for local dev)
 - `backend/src/app/core/database.py` - Database initialization and extension verification
 - `backend/migrations/versions/0093_enable_pgvectorscale.py` - pgvectorscale migration
 - `infrastructure/docker/docker-compose.yml` - Full stack Docker configuration

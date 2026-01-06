@@ -1,3 +1,13 @@
 {
-  "files": {}
+  "files": {
+    "CLAUDE.md": {
+      "description": "Comprehensive project guidelines and architecture documentation for RawDrive, a microservices-based professional photography SaaS platform, covering strict file structure rules, naming conventions, command references, microservices specifications, security requirements, and development patterns for React/Python full-stack development."
+    },
+    "SKILL.md": {
+      "description": "API conventions and patterns for RawDrive including URL structure, HTTP methods, response formats, pagination, filtering, request validation, authentication, rate limiting, and versioning standards for building consistent REST endpoints."
+    },
+    "ARCHITECTURE_QUICK_REFERENCE.md": {
+      "description": "Comprehensive high-level architecture reference document for the RawDrive SaaS platform, covering system layers (client, edge, gateway, backend, data), microservices infrastructure with KEDA autoscaling, technology stack, deployment environments, performance targets, and troubleshooting guides. This document provides essential context for understanding the overall system design, component interactions, and common operational procedures."
+    }
+  }
 }

@@ -168,7 +168,7 @@ This implementation plan outlines the tasks required to audit and improve error 
 
 - [ ] 7. Improve AI service error handling
 - [x] 7.1 Create structured MCP error classes
-  - Implement `MCPError` base class in `ai-service/src/mcp/server.py`
+  - Implement `MCPError` base class in `services/ai-service/src/mcp/server.py`
   - Implement `MCPDatabaseError`, `MCPModelError`, `MCPTimeoutError`, `MCPValidationError`
   - Add `to_dict` method for structured responses
   - _Requirements: 4.1, 4.2, 4.3_

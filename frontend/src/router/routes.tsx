@@ -118,12 +118,25 @@ const InvitationCreatePage = lazy(() => import('../pages/workspace/InvitationCre
 const InvitationEditPage = lazy(() => import('../pages/workspace/InvitationEditPage'));
 const InvitationDetailPage = lazy(() => import('../pages/workspace/InvitationDetailPage'));
 
+// Live Camera Sync page
+const SyncPage = lazy(() => import('../pages/workspace/SyncPage'));
+
+// Calendar & Booking Management page
+const BookingsPage = lazy(() => import('../pages/workspace/BookingsPage'));
+
 // User Settings pages
 // Note: Individual settings pages are deprecated - use UserSettingsPage with tabs
 const UserSettingsPage = lazy(() => import('../pages/settings/UserSettingsPage'));
 
 // Admin pages
+const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
 const GeminiModelsPage = lazy(() => import('../pages/admin/GeminiModelsPage'));
+
+// Compliance pages (audit & compliance system)
+const AuditLogsPage = lazy(() => import('../pages/admin/AuditLogsPage'));
+const DataSubjectRequestsPage = lazy(() => import('../pages/admin/DataSubjectRequestsPage'));
+const LegalHoldsPage = lazy(() => import('../pages/admin/LegalHoldsPage'));
+const IncidentsPage = lazy(() => import('../pages/admin/IncidentsPage'));
 
 // Wrapper for lazy loaded components
 const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
@@ -376,6 +389,16 @@ export const workspaceRoutes: RouteObject[] = [
         path: 'invitations/:id/edit',
         element: <CriticalLazyPage component={InvitationEditPage} />,
       },
+      // Live Camera Sync route
+      {
+        path: 'sync',
+        element: <CriticalLazyPage component={SyncPage} />,
+      },
+      // Calendar & Booking Management routes
+      {
+        path: 'bookings',
+        element: <CriticalLazyPage component={BookingsPage} />,
+      },
     ],
   },
 ];
@@ -412,8 +435,33 @@ export const adminRoutes: RouteObject[] = [
     ),
     children: [
       {
+        index: true,
+        element: <CriticalLazyPage component={AdminDashboardPage} />,
+      },
+      {
+        path: 'dashboard',
+        element: <CriticalLazyPage component={AdminDashboardPage} />,
+      },
+      {
         path: 'gemini-models',
         element: <CriticalLazyPage component={GeminiModelsPage} />,
+      },
+      // Compliance routes (audit & compliance system)
+      {
+        path: 'audit-logs',
+        element: <CriticalLazyPage component={AuditLogsPage} />,
+      },
+      {
+        path: 'data-subject-requests',
+        element: <CriticalLazyPage component={DataSubjectRequestsPage} />,
+      },
+      {
+        path: 'legal-holds',
+        element: <CriticalLazyPage component={LegalHoldsPage} />,
+      },
+      {
+        path: 'incidents',
+        element: <CriticalLazyPage component={IncidentsPage} />,
       },
     ],
   },

@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, UploadFile, File, Form, status, Request
 
-from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
+from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep, WorkspaceIdDep
 from app.api.schemas import (
     CreateUploadSessionRequest,
     UploadSessionResponse,
@@ -92,7 +92,7 @@ async def create_upload_session(
     },
 )
 async def upload_file_data(
-    workspace_id: Annotated[UUID, WorkspaceAccessDep],
+    workspace_id: WorkspaceIdDep,
     upload_id: UUID,
     current_user: CurrentUserDep,
     request: Request,
@@ -136,6 +136,7 @@ async def upload_file_data(
     "/{upload_id}/chunk",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Upload file chunk (TUS protocol)",
+    response_model=None,
     responses={
         400: {"model": ErrorResponse, "description": "Validation error"},
         404: {"model": ErrorResponse, "description": "Upload session not found"},

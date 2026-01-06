@@ -59,9 +59,9 @@
 ### Phase 4: Testing & Documentation ✅
 
 **PowerShell Test Scripts:**
-- ✅ [test-upload-service.ps1](test-upload-service.ps1) - Complete automated testing
-- ✅ [start-upload-service.ps1](start-upload-service.ps1) - Quick start services
-- ✅ [test-endpoints.ps1](test-endpoints.ps1) - Endpoint validation
+- ✅ [test-upload-service.ps1](../scripts/test-upload-service.ps1) - Complete automated testing
+- ✅ [start-upload-service.ps1](../scripts/start-upload-service.ps1) - Quick start services
+- ✅ [test-endpoints.ps1](../scripts/test-endpoints.ps1) - Endpoint validation
 
 **Documentation:**
 - ✅ [UPLOAD_SERVICE_DEPLOYMENT_GUIDE.md](UPLOAD_SERVICE_DEPLOYMENT_GUIDE.md) - 350+ line comprehensive guide
@@ -77,7 +77,7 @@
 
 ```powershell
 cd C:\Users\admin\Desktop\RawDrive
-.\test-upload-service.ps1
+.\scripts\test-upload-service.ps1
 ```
 
 This script will:
@@ -96,12 +96,12 @@ This script will:
 ```powershell
 # 1. Start services
 cd C:\Users\admin\Desktop\RawDrive
-.\start-upload-service.ps1
+.\scripts\start-upload-service.ps1
 
 # Wait for services to initialize (15 seconds)
 
 # 2. Test endpoints
-.\test-endpoints.ps1
+.\scripts\test-endpoints.ps1
 ```
 
 ---

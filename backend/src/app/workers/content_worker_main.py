@@ -136,11 +136,13 @@ def main():
     logger.info("Starting Content Detection Worker Service...")
 
     # Run the FastAPI app with uvicorn
-    # Port 8002 to avoid conflict with main backend (8000) and face-worker (8001)
+    # Port from environment or default to 8002
+    import os
+    port = int(os.getenv("PORT", 8002))
     uvicorn.run(
         "app.workers.content_worker_main:app",
         host="0.0.0.0",
-        port=8002,
+        port=port,
         workers=1,  # Single worker - the async worker handles parallelism
         log_level="info",
     )

@@ -14,7 +14,7 @@ FastAPI-based backend for RawDrive authentication, RBAC, workspace management, a
 
 ```bash
 # Start PostgreSQL with required extensions (from project root)
-docker compose -f docker-compose.db.yml up -d
+docker compose -f ../infrastructure/docker/docker-compose.db.yml up -d
 
 # This uses timescale/timescaledb-ha:pg16 which includes:
 # - PostgreSQL 16

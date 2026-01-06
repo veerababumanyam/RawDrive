@@ -1,0 +1,9 @@
+{
+  "category": "Bundle Size",
+  "description": "Implement route-based code splitting with lazy loading for admin, workspace, and public sections; lazy-load face-api.js only on PeoplePage to reduce main bundle by 30%",
+  "id": "feature-1767728571188-rbjv4lq1u",
+  "steps": [],
+  "status": "backlog",
+  "skipTests": true,
+  "priority": 2
+}

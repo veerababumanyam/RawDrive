@@ -273,6 +273,7 @@ async def update_favorite_list(
 @router.delete(
     "/lists/{list_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     response_class=Response,
     summary="Delete a favorite list",
     description="Delete a favorite list (moves photos to default list).",
@@ -310,7 +311,7 @@ async def delete_favorite_list(
         logger.exception("Failed to delete favorite list")
         raise InternalError("Failed to delete list")
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 
 
 @router.post(
@@ -431,6 +432,7 @@ async def get_share_links(
 @router.delete(
     "/lists/{list_id}/share/{share_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     response_class=Response,
     summary="Revoke share link",
     description="Revoke a share link for a favorites list.",
@@ -462,7 +464,7 @@ async def revoke_share_link(
         logger.exception("Failed to revoke share link")
         raise InternalError("Failed to revoke share link")
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 
 
 # =============================================================================

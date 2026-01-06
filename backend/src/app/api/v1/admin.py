@@ -578,3 +578,188 @@ async def list_support_sessions(
         )
         for row in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Audit log endpoints
+# ---------------------------------------------------------------------------
+
+
+class AuditLogResponse(BaseModel):
+    """Audit log entry response."""
+
+    log_id: UUID
+    admin_user_id: UUID | None
+    admin_email: str | None
+    action_type: str
+    resource_type: str
+    resource_id: str | None
+    target_workspace_id: UUID | None
+    description: str
+    ip_address: str | None
+    created_at: datetime
+
+
+class AuditLogListResponse(PaginatedResponse):
+    """List of audit logs."""
+
+    items: list[AuditLogResponse]
+
+
+@router.get(
+    "/audit-logs",
+    response_model=AuditLogListResponse,
+    summary="List audit logs",
+    description="List admin audit logs with optional filtering.",
+)
+async def list_audit_logs(
+    current_user: CurrentUserDep,
+    rbac_service: RBACServiceDep,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=500),
+    admin_user_id: UUID | None = Query(None),
+    action_type: str | None = Query(None),
+    target_workspace_id: UUID | None = Query(None),
+    after: datetime | None = Query(None),
+    before: datetime | None = Query(None),
+) -> AuditLogListResponse:
+    """List audit logs with filtering."""
+    await require_platform_permission(current_user, rbac_service, "platform:audit:read")
+
+    pool = await get_postgres_pool()
+    offset = (page - 1) * per_page
+
+    # Build dynamic query
+    conditions = []
+    params: list = []
+    param_idx = 1
+
+    if admin_user_id:
+        conditions.append(f"al.user_id = ${param_idx}")
+        params.append(admin_user_id)
+        param_idx += 1
+
+    if action_type:
+        conditions.append(f"al.action = ${param_idx}")
+        params.append(action_type)
+        param_idx += 1
+
+    if target_workspace_id:
+        conditions.append(f"al.workspace_id = ${param_idx}")
+        params.append(target_workspace_id)
+        param_idx += 1
+
+    if after:
+        conditions.append(f"al.created_at >= ${param_idx}")
+        params.append(after)
+        param_idx += 1
+
+    if before:
+        conditions.append(f"al.created_at <= ${param_idx}")
+        params.append(before)
+        param_idx += 1
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    # Count total
+    count_query = f"SELECT COUNT(*) as count FROM audit_logs al {where_clause}"
+    total_row = await pool.fetchrow(count_query, *params)
+    total = total_row["count"] if total_row else 0
+
+    # Get logs
+    query = f"""
+        SELECT al.log_id, al.user_id, u.email as admin_email,
+               al.action, al.resource_type, al.resource_id, al.workspace_id,
+               COALESCE(al.details::text, al.action) as description,
+               al.ip_address, al.created_at
+        FROM audit_logs al
+        LEFT JOIN users u ON u.user_id = al.user_id
+        {where_clause}
+        ORDER BY al.created_at DESC
+        LIMIT ${param_idx} OFFSET ${param_idx + 1}
+    """
+    params.extend([per_page, offset])
+
+    rows = await pool.fetch(query, *params)
+
+    items = [
+        AuditLogResponse(
+            log_id=row["log_id"],
+            admin_user_id=row["user_id"],
+            admin_email=row["admin_email"],
+            action_type=row["action"],
+            resource_type=row["resource_type"] or "system",
+            resource_id=row["resource_id"],
+            target_workspace_id=row["workspace_id"],
+            description=row["description"],
+            ip_address=row["ip_address"],
+            created_at=row["created_at"],
+        )
+        for row in rows
+    ]
+
+    return AuditLogListResponse(
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=(total + per_page - 1) // per_page if total > 0 else 0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Dashboard stats endpoint
+# ---------------------------------------------------------------------------
+
+
+class DashboardStatsResponse(BaseModel):
+    """Dashboard statistics response."""
+
+    total_users: int
+    total_workspaces: int
+    active_workspaces_30d: int
+    active_support_sessions: int
+    pending_moderation_cases: int
+    calculated_at: datetime
+
+
+@router.get(
+    "/dashboard/stats",
+    response_model=DashboardStatsResponse,
+    summary="Get dashboard statistics",
+    description="Get platform administration dashboard statistics.",
+)
+async def get_dashboard_stats(
+    current_user: CurrentUserDep,
+    rbac_service: RBACServiceDep,
+) -> DashboardStatsResponse:
+    """Get dashboard statistics."""
+    await require_platform_permission(current_user, rbac_service, "platform:admins:read")
+
+    pool = await get_postgres_pool()
+
+    # Get counts
+    total_users = await pool.fetchval("SELECT COUNT(*) FROM users")
+    total_workspaces = await pool.fetchval("SELECT COUNT(*) FROM workspaces")
+    active_workspaces = await pool.fetchval(
+        """
+        SELECT COUNT(*) FROM workspaces w
+        WHERE EXISTS (
+            SELECT 1 FROM audit_logs al
+            WHERE al.workspace_id = w.workspace_id
+            AND al.created_at > NOW() - INTERVAL '30 days'
+        )
+        """
+    )
+    active_sessions = await pool.fetchval(
+        "SELECT COUNT(*) FROM support_access_sessions WHERE ended_at IS NULL AND expires_at > NOW()"
+    )
+
+    return DashboardStatsResponse(
+        total_users=total_users or 0,
+        total_workspaces=total_workspaces or 0,
+        active_workspaces_30d=active_workspaces or 0,
+        active_support_sessions=active_sessions or 0,
+        pending_moderation_cases=0,  # Moderation not yet implemented
+        calculated_at=datetime.now(timezone.utc),
+    )

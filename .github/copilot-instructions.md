@@ -3,7 +3,7 @@
 ## What this repo is
 - Multi-tenant SaaS for media delivery; **every operation scopes to `workspace_id`** (docs: `docs/Features/HLD.md`).
 - Docs/specs-driven: product behavior in `docs/Features/*.md`; canonical contracts in `docs/TechnicalSpecs/*.json` (validated by `_schema.json`). Keep names consistent (`workspace_id`, Share Links, download policies `view_only|web_only|watermarked_only|original_allowed`).
-- Major code roots: `frontend/` (React 19 + Vite + Tailwind tokens), `backend/` (FastAPI + SQLAlchemy + Alembic), `ai-service/` (MCP/LLM service), `services/invitations-service/` (microservice).
+- Major code roots: `frontend/` (React 19 + Vite + Tailwind tokens), `backend/` (FastAPI + SQLAlchemy + Alembic), `services/ai-service/` (MCP/LLM service), `services/invitations-service/` (microservice).
 
 ## Non-negotiable guardrails
 - Tenant safety: APIs/queries/events must filter by exactly one `workspace_id`; never trust client-provided IDs.

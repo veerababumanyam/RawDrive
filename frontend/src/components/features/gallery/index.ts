@@ -35,6 +35,9 @@ export type { PhotoCardProps } from './PhotoCard';
 export { PhotoGrid } from './PhotoGrid';
 export type { PhotoGridProps } from './PhotoGrid';
 
+export { VirtualPhotoGrid } from './VirtualPhotoGrid';
+export type { VirtualPhotoGridProps } from './VirtualPhotoGrid';
+
 export { PhotoListView } from './PhotoListView';
 export type { PhotoListViewProps } from './PhotoListView';
 

@@ -14,6 +14,399 @@
   "requirePlanApproval": false,
   "dependencies": [],
   "titleGenerating": false,
-  "status": "backlog",
-  "id": "feature-1767711401038-z57nekiwd"
+  "status": "verified",
+  "id": "feature-1767711401038-z57nekiwd",
+  "startedAt": "2026-01-06T18:59:48.218Z",
+  "updatedAt": "2026-01-06T19:19:54.555Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "I'll analyze this comprehensive feature request for RawDrive Live Camera Sync. This is a significant feature requiring a desktop application with folder watching, real-time synchronization, and integration with the existing gallery system.\n\nLet me first explore the codebase to understand the existing architecture and patterns.\n\n🔧 Tool: Task\nInput: {\n  \"description\": \"Explore codebase for sync feature\",\n  \"prompt\": \"Explore the RawDrive codebase to understand:\\n\\n1. The existing gallery service structure (services/gallery-service/)\\n2. The upload service structure (services/upload-service/)\\n3. How galleries are created and managed in the backend\\n4. The frontend gallery components and upload components\\n5. Existing WebSocket or real-time communication patterns\\n6. The shared packages structure (packages/)\\n7. Any existing desktop app or Electron/Tauri code\\n8. How file uploads currently work (TUS protocol)\\n\\nFocus on understanding:\\n- API endpoints for galleries and uploads\\n- How files are processed and stored\\n- Real-time update mechanisms\\n- Existing patterns for microservices\\n\\nBe very thorough - this is for implementing a major new feature (Live Camera Sync).\",\n  \"subagent_type\": \"Explore\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\" -type f -name \\\"*.ts\\\" -o -name \\\"*.tsx\\\" -o -name \\\"*.py\\\" | grep -E \\\"(services|packages|frontend)\\\" | head -50\",\n  \"description\": \"List key files in services, packages, and frontend directories\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\**\\\\*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\**\\\\src\\\\**\\\\*.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\**\\\\*.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\upload-service\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\\src\\\\api\\\\v1\\\\**\\\\*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\upload-service\\\\src\\\\app\\\\api\\\\v1\\\\**\\\\*.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\\src\\\\main.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\\src\\\\api\\\\v1\\\\galleries.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\\src\\\\api\\\\v1\\\\websocket.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\upload-service\\\\src\\\\main.py\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\upload-service\\\" -type f -name \\\"*.py\\\" | head -30\",\n  \"description\": \"List Python files in upload service\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\upload-service\\\\src\\\\app\\\\main.py\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\" 2>&1 | head -20\",\n  \"description\": \"List shared packages\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-types\\\\src\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-types\\\\src\\\\**\\\\*.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-types\\\\src\\\\index.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-constants\\\\src\\\\index.ts\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\" -type f \\\\( -name \\\"*upload*\\\" -o -name \\\"*electron*\\\" -o -name \\\"*tauri*\\\" -o -name \\\"*desktop*\\\" \\\\) | grep -E \\\"\\\\.(tsx?|py)$\\\"\",\n  \"description\": \"Search for upload, electron, tauri, desktop files\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\components\\\\features\\\\upload\\\\**\\\\*.tsx\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\hooks\\\\**\\\\*.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\hooks\\\\useUpload.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\workers\\\\uploadWorker.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\components\\\\features\\\\upload\\\\UploadDropzone.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\galleries.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\upload-service\\\\src\\\\app\\\\services\\\\upload_service.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\" -name \\\"*socket*\\\" -o -name \\\"*websocket*\\\" -o -name \\\"*realtime*\\\" | grep -v node_modules\",\n  \"description\": \"Search for WebSocket and real-time communication files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\websocket.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\" -type f -name \\\"*.json\\\" -o -name \\\"*.config.*\\\" | grep -E \\\"(package\\\\.json|tsconfig|vite\\\\.config)\\\" | head -10\",\n  \"description\": \"Find configuration files\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\" | head -20\",\n  \"description\": \"List main RawDrive directory\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\" -type f -name \\\"*.ts\\\" -o -name \\\"*.tsx\\\" | xargs grep -l \\\"camera\\\\|device\\\\|sync\\\\|realtime\\\\|stream\\\" 2>/dev/null | grep -v node_modules | head -20\",\n  \"description\": \"Search for camera, device, sync, realtime related code\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\\README.md\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\upload-service\\\\README.md\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\" -name \\\"tusUploadService*\\\" -o -name \\\"*tus*\\\" | grep -v node_modules\",\n  \"description\": \"Search for TUS upload service files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\services\\\\tusUploadService.ts\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\migrations\\\" -name \\\"*.py\\\" | tail -10\",\n  \"description\": \"Find latest database migrations\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\migrations\\\\versions\\\\0100_add_session_security_enhancements.py\",\n  \"limit\": 60\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"class Asset\\\\|class Gallery\\\\|class UploadSession\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\models\\\" | head -5\",\n  \"description\": \"Find key database models\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\docs\\\\Features\\\\**\\\\*.md\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-types\\\\src\\\\gallery.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-constants\\\\src\\\\api.ts\"\n}\n\nNow I have a comprehensive understanding of the codebase. Let me generate the detailed specification:\n\n---\n\n# RawDrive Live Camera Sync - Comprehensive Specification\n\n## 1. Problem Statement\n\nWedding photographers currently spend 8+ hours manually importing, organizing, and uploading photos from their cameras to client galleries after events. This delay prevents real-time client collaboration during live events (e.g., showing ceremony photos during receptions) and misses upsell opportunities. RawDrive Live Camera Sync eliminates this friction by automatically detecting new photos in watched folders and syncing them to cloud galleries within seconds of capture.\n\n## 2. User Story\n\n**As a** wedding photographer shooting live events,  \n**I want** automatic synchronization between my camera's output folder and my client's cloud gallery,  \n**So that** clients can view, favorite, and discuss photos in real-time during the event without any manual intervention.\n\n## 3. Acceptance Criteria\n\n### Happy Path Scenarios\n\n**Scenario 1: Initial Folder-Gallery Mapping**\n- **GIVEN** a photographer is authenticated with a valid workspace\n- **WHEN** they map a local folder path to an existing gallery\n- **THEN** the system creates a sync mapping record, validates the folder exists, and displays \"C:\\Photos\\Wedding ↔ Ananya Wedding Live\" confirmation\n\n**Scenario 2: Real-Time Photo Detection & Upload**\n- **GIVEN** a folder is actively mapped to a gallery with sync enabled\n- **WHEN** a new photo (JPEG/RAW) is saved to the watched folder\n- **THEN** the system detects the change within 2 seconds, queues the upload, and completes cloud sync within 10 seconds (for files <50MB on stable connection)\n\n**Scenario 3: Multi-Folder Team Shooting**\n- **GIVEN** two photographers have separate folders mapped to the same gallery\n- **WHEN** both photographers save photos simultaneously\n- **THEN** both photo streams merge into the single gallery with correct timestamps and photographer attribution\n\n**Scenario 4: Live Status Dashboard**\n- **GIVEN** an active sync session is running\n- **WHEN** the photographer checks the sync status\n- **THEN** they see real-time progress: \"247/1,234 photos synced 🔄\", upload speed, and ETA\n\n### Edge Case Scenarios\n\n**Scenario 5: Offline Operation & Resume**\n- **GIVEN** the network connection is lost during sync\n- **WHEN** the connection is restored\n- **THEN** the system automatically resumes uploading from where it stopped with no duplicate uploads\n\n**Scenario 6: Rapid File Changes (Burst Mode)**\n- **GIVEN** a photographer shoots 10+ photos per second in burst mode\n- **WHEN** files are written rapidly to the watched folder\n- **THEN** the system batches file detection efficiently without missing any files or overwhelming the upload queue\n\n**Scenario 7: File Rename/Move Within Folder**\n- **GIVEN** a photo exists in the watched folder and has been synced\n- **WHEN** the photographer renames or moves the file within the folder structure\n- **THEN** the system updates the cloud asset metadata without re-uploading the file content\n\n**Scenario 8: Duplicate Detection**\n- **GIVEN** a photo has already been synced to the gallery\n- **WHEN** the same file (by SHA256 hash) is added again\n- **THEN** the system skips the duplicate upload and logs the detection\n\n### Error Handling Scenarios\n\n**Scenario 9: Invalid Folder Path**\n- **GIVEN** a photographer attempts to map a non-existent folder\n- **WHEN** the mapping request is submitted\n- **THEN** the system returns error: \"Folder path does not exist: {path}\" and does not create the mapping\n\n**Scenario 10: Insufficient Storage**\n- **GIVEN** the workspace has reached its storage quota\n- **WHEN** new photos are detected in the watched folder\n- **THEN** the system pauses sync, notifies the user \"Storage quota exceeded\", and queues files for retry when space is available\n\n**Scenario 11: Corrupted/Incomplete File**\n- **GIVEN** a file is being written to the watched folder (incomplete)\n- **WHEN** the system detects the new file\n- **THEN** the system waits for file stability (no changes for 2 seconds) before initiating upload\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| **Affected Services** | New: `sync-service` microservice; Modified: `gallery-service`, `upload-service`, `backend` |\n| **Frontend Changes** | New: `SyncDashboard` page, `useFolderSync` hook, `SyncStatusWidget` component |\n| **Database** | New tables: `sync_mappings`, `sync_sessions`, `sync_events` |\n| **Dependencies** | Backend: `watchdog` (file watching), `aiofiles`; Frontend: File System Access API |\n| **Constraints** | Browser-based folder watching limited to File System Access API (Chrome/Edge); Full tethering requires desktop app (future phase) |\n| **Patterns to Follow** | WebSocket from gallery-service, TUS upload from upload-service, useUpload queue pattern |\n| **Rate Limits** | 50 req/min sync status updates, 200 file events/min per session |\n| **Storage** | Uses existing R2/BYOS infrastructure |\n\n## 5. Non-Goals (Explicitly Out of Scope)\n\n1. **Native Desktop App (Tauri/Electron)** - Phase 1 uses browser File System Access API; native app is future phase\n2. **Camera Tethering Protocol (PTP/MTP)** - Not implementing direct USB camera communication; photographers use camera software's output folder\n3. **Cloud-to-Local Sync (Bidirectional Delete)** - Only local→cloud sync; deletions do NOT propagate\n4. **RAW File Processing/Conversion** - Files sync as-is; processing handled by existing pipeline\n5. **Multi-Device Sync** - Single browser session per mapping; no cross-device folder sync\n6. **Video File Support** - Focus on still images only (JPEG, RAW formats)\n7. **Free Tier** - Feature requires PRO ($49/mo) or STUDIO ($149/mo) subscription\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Database & Types Foundation\n- [ ] T001: Create sync-related TypeScript types in shared-types package | File: packages/shared-types/src/sync.ts\n- [ ] T002: Create sync constants (sync status, file states, limits) | File: packages/shared-constants/src/sync.ts\n- [ ] T003: Generate Python types from TypeScript definitions | File: backend/src/app/shared/types/sync.py\n- [ ] T004: Create Alembic migration for sync_mappings table | File: backend/migrations/versions/0101_sync_mappings.py\n- [ ] T005: Create Alembic migration for sync_sessions table | File: backend/migrations/versions/0102_sync_sessions.py\n- [ ] T006: Create Alembic migration for sync_events table | File: backend/migrations/versions/0103_sync_events.py\n\n## Phase 2: Backend Sync Service Foundation\n- [ ] T007: Create sync-service microservice scaffolding | File: services/sync-service/src/main.py\n- [ ] T008: Implement sync-service configuration module | File: services/sync-service/src/config.py\n- [ ] T009: Create sync-service database connection module | File: services/sync-service/src/database.py\n- [ ] T010: Implement sync-service Redis client with pub/sub | File: services/sync-service/src/cache/redis_client.py\n- [ ] T011: Create health and metrics endpoints | File: services/sync-service/src/observability/health.py\n- [ ] T012: Implement rate limiting middleware | File: services/sync-service/src/middleware/rate_limiter.py\n\n## Phase 3: Sync Mapping API\n- [ ] T013: Create Pydantic schemas for sync mappings | File: services/sync-service/src/schemas/sync_mapping.py\n- [ ] T014: Implement sync mapping repository (CRUD) | File: services/sync-service/src/repositories/sync_mapping_repository.py\n- [ ] T015: Implement sync mapping service (business logic) | File: services/sync-service/src/services/sync_mapping_service.py\n- [ ] T016: Create sync mapping API endpoints | File: services/sync-service/src/api/v1/mappings.py\n- [ ] T017: Add sync mapping routes to main application | File: services/sync-service/src/main.py\n\n## Phase 4: Sync Session & Event Management\n- [ ] T018: Create Pydantic schemas for sync sessions and events | File: services/sync-service/src/schemas/sync_session.py\n- [ ] T019: Implement sync session repository | File: services/sync-service/src/repositories/sync_session_repository.py\n- [ ] T020: Implement sync event repository | File: services/sync-service/src/repositories/sync_event_repository.py\n- [ ] T021: Create sync session service with state management | File: services/sync-service/src/services/sync_session_service.py\n- [ ] T022: Create sync session API endpoints | File: services/sync-service/src/api/v1/sessions.py\n\n## Phase 5: Real-Time WebSocket Communication\n- [ ] T023: Implement WebSocket connection manager for sync | File: services/sync-service/src/api/v1/websocket.py\n- [ ] T024: Create sync status broadcast service | File: services/sync-service/src/services/sync_broadcast_service.py\n- [ ] T025: Integrate Redis pub/sub for cross-instance sync events | File: services/sync-service/src/services/sync_pubsub_service.py\n\n## Phase 6: File Event Processing\n- [ ] T026: Create file event schemas | File: services/sync-service/src/schemas/file_event.py\n- [ ] T027: Implement file event processing service | File: services/sync-service/src/services/file_event_service.py\n- [ ] T028: Create upload orchestration service (integrates with upload-service) | File: services/sync-service/src/services/upload_orchestrator.py\n- [ ] T029: Implement duplicate detection service | File: services/sync-service/src/services/duplicate_detector.py\n- [ ] T030: Create file event API endpoint (receives events from frontend) | File: services/sync-service/src/api/v1/events.py\n\n## Phase 7: Infrastructure & Deployment\n- [ ] T031: Create sync-service Dockerfile | File: services/sync-service/Dockerfile\n- [ ] T032: Create sync-service requirements.txt | File: services/sync-service/requirements.txt\n- [ ] T033: Add sync-service to docker-compose.yml | File: infrastructure/docker/docker-compose.yml\n- [ ] T034: Add Traefik routing for sync-service | File: infrastructure/docker/traefik/dynamic.yaml\n- [ ] T035: Create KEDA ScaledObject for sync-service | File: infrastructure/kubernetes/base/keda/sync-scaledobject.yaml\n- [ ] T036: Create dev script for sync-service | File: scripts/dev-sync-service.sh\n\n## Phase 8: Frontend Sync Hook & State Management\n- [ ] T037: Create useFolderSync hook with File System Access API | File: frontend/src/hooks/useFolderSync.ts\n- [ ] T038: Create SyncContext for global sync state | File: frontend/src/contexts/SyncContext.tsx\n- [ ] T039: Create sync API service functions | File: frontend/src/services/sync.ts\n- [ ] T040: Create WebSocket hook for sync status updates | File: frontend/src/hooks/useSyncWebSocket.ts\n\n## Phase 9: Frontend UI Components\n- [ ] T041: Create SyncMappingCard component | File: frontend/src/components/features/sync/SyncMappingCard.tsx\n- [ ] T042: Create SyncStatusWidget component (shows progress) | File: frontend/src/components/features/sync/SyncStatusWidget.tsx\n- [ ] T043: Create FolderPicker component (File System Access API) | File: frontend/src/components/features/sync/FolderPicker.tsx\n- [ ] T044: Create SyncDashboard page | File: frontend/src/pages/workspace/SyncDashboard.tsx\n- [ ] T045: Create NewSyncMapping modal/form | File: frontend/src/components/features/sync/NewSyncMappingModal.tsx\n- [ ] T046: Add sync routes to router configuration | File: frontend/src/router/routes.tsx\n\n## Phase 10: Integration & Polish\n- [ ] T047: Add sync navigation item to workspace sidebar | File: frontend/src/components/layout/WorkspaceSidebar.tsx\n- [ ] T048: Create sync notification system (toast + badge) | File: frontend/src/components/features/sync/SyncNotifications.tsx\n- [ ] T049: Implement sync pause/resume functionality in hook | File: frontend/src/hooks/useFolderSync.ts\n- [ ] T050: Add sync metrics to gallery-service dashboard | File: infrastructure/monitoring/grafana/dashboards/sync-service.json\n\n## Phase 11: Testing & Verification\n- [ ] T051: Create sync-service unit tests | File: services/sync-service/tests/unit/test_sync_service.py\n- [ ] T052: Create sync-service integration tests | File: services/sync-service/tests/integration/test_sync_api.py\n- [ ] T053: Create frontend sync hook unit tests | File: frontend/src/hooks/__tests__/useFolderSync.test.ts\n- [ ] T054: Create Playwright E2E verification test | File: tests/sync-verification.spec.ts\n```\n\n## 7. Success Metrics\n\n| Metric | Target | Measurement Method |\n|--------|--------|-------------------|\n| File detection latency | < 2 seconds | Prometheus histogram `sync_file_detection_latency_seconds` |\n| Upload completion latency | < 10 seconds (for <50MB files) | Prometheus histogram `sync_upload_latency_seconds` |\n| Sync success rate | 99.9% | `sync_events_succeeded / sync_events_total` |\n| Concurrent sync sessions | 1,000+ per instance | Load test with KEDA scaling |\n| WebSocket connection stability | < 0.1% disconnect rate | `sync_ws_disconnects_total / sync_ws_connections_total` |\n| Memory footprint (frontend) | < 50MB additional | Chrome DevTools memory profiler |\n| PRO/STUDIO conversion | 25% of photographers with >5 syncs | Analytics funnel tracking |\n\n## 8. Risks & Mitigations\n\n| Risk | Likelihood | Impact | Mitigation |\n|------|------------|--------|------------|\n| File System Access API browser support limited (Chrome/Edge only) | High | Medium | Clear browser requirements in UI; roadmap native desktop app for Phase 2 |\n| Rapid burst mode overwhelms upload queue | Medium | High | Implement adaptive batching (debounce 500ms), queue depth limits (100 files), and backpressure signaling |\n| Large RAW files (100MB+) cause timeout | Medium | Medium | Increase TUS chunk size to 10MB, implement parallel chunk uploads, extend timeout to 5 minutes |\n| Network instability during sync | High | Medium | Implement robust retry with exponential backoff, local queue persistence in IndexedDB |\n| Storage quota exceeded mid-sync | Low | High | Pre-flight quota check, graceful pause with user notification, queue files for retry |\n| WebSocket connection limits per gallery | Medium | Low | Implement connection pooling, limit to 100 connections per sync session |\n| Cross-instance sync state inconsistency | Low | High | Use Redis as source of truth for session state, implement event sourcing pattern |\n\n---",
+    "generatedAt": "2026-01-06T18:15:39.483Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create sync-related TypeScript types in shared-types package",
+        "filePath": "packages/shared-types/src/sync.ts",
+        "phase": "Phase 1: Database & Types Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Create sync constants (sync status, file states, limits)",
+        "filePath": "packages/shared-constants/src/sync.ts",
+        "phase": "Phase 1: Database & Types Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Generate Python types from TypeScript definitions",
+        "filePath": "backend/src/app/shared/types/sync.py",
+        "phase": "Phase 1: Database & Types Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Create Alembic migration for sync_mappings table",
+        "filePath": "backend/migrations/versions/0101_sync_mappings.py",
+        "phase": "Phase 1: Database & Types Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create Alembic migration for sync_sessions table",
+        "filePath": "backend/migrations/versions/0102_sync_sessions.py",
+        "phase": "Phase 1: Database & Types Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create Alembic migration for sync_events table",
+        "filePath": "backend/migrations/versions/0103_sync_events.py",
+        "phase": "Phase 1: Database & Types Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create sync-service microservice scaffolding",
+        "filePath": "services/sync-service/src/main.py",
+        "phase": "Phase 2: Backend Sync Service Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Implement sync-service configuration module",
+        "filePath": "services/sync-service/src/config.py",
+        "phase": "Phase 2: Backend Sync Service Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create sync-service database connection module",
+        "filePath": "services/sync-service/src/database.py",
+        "phase": "Phase 2: Backend Sync Service Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Implement sync-service Redis client with pub/sub",
+        "filePath": "services/sync-service/src/cache/redis_client.py",
+        "phase": "Phase 2: Backend Sync Service Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Create health and metrics endpoints",
+        "filePath": "services/sync-service/src/observability/health.py",
+        "phase": "Phase 2: Backend Sync Service Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Implement rate limiting middleware",
+        "filePath": "services/sync-service/src/middleware/rate_limiter.py",
+        "phase": "Phase 2: Backend Sync Service Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create Pydantic schemas for sync mappings",
+        "filePath": "services/sync-service/src/schemas/sync_mapping.py",
+        "phase": "Phase 3: Sync Mapping API",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Implement sync mapping repository (CRUD)",
+        "filePath": "services/sync-service/src/repositories/sync_mapping_repository.py",
+        "phase": "Phase 3: Sync Mapping API",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Implement sync mapping service (business logic)",
+        "filePath": "services/sync-service/src/services/sync_mapping_service.py",
+        "phase": "Phase 3: Sync Mapping API",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create sync mapping API endpoints",
+        "filePath": "services/sync-service/src/api/v1/mappings.py",
+        "phase": "Phase 3: Sync Mapping API",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Add sync mapping routes to main application",
+        "filePath": "services/sync-service/src/main.py",
+        "phase": "Phase 3: Sync Mapping API",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create Pydantic schemas for sync sessions and events",
+        "filePath": "services/sync-service/src/schemas/sync_session.py",
+        "phase": "Phase 4: Sync Session & Event Management",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Implement sync session repository",
+        "filePath": "services/sync-service/src/repositories/sync_session_repository.py",
+        "phase": "Phase 4: Sync Session & Event Management",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Implement sync event repository",
+        "filePath": "services/sync-service/src/repositories/sync_event_repository.py",
+        "phase": "Phase 4: Sync Session & Event Management",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Create sync session service with state management",
+        "filePath": "services/sync-service/src/services/sync_session_service.py",
+        "phase": "Phase 4: Sync Session & Event Management",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Create sync session API endpoints",
+        "filePath": "services/sync-service/src/api/v1/sessions.py",
+        "phase": "Phase 4: Sync Session & Event Management",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Implement WebSocket connection manager for sync",
+        "filePath": "services/sync-service/src/api/v1/websocket.py",
+        "phase": "Phase 5: Real-Time WebSocket Communication",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create sync status broadcast service",
+        "filePath": "services/sync-service/src/services/sync_broadcast_service.py",
+        "phase": "Phase 5: Real-Time WebSocket Communication",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Integrate Redis pub/sub for cross-instance sync events",
+        "filePath": "services/sync-service/src/services/sync_pubsub_service.py",
+        "phase": "Phase 5: Real-Time WebSocket Communication",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Create file event schemas",
+        "filePath": "services/sync-service/src/schemas/file_event.py",
+        "phase": "Phase 6: File Event Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Implement file event processing service",
+        "filePath": "services/sync-service/src/services/file_event_service.py",
+        "phase": "Phase 6: File Event Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Create upload orchestration service (integrates with upload-service)",
+        "filePath": "services/sync-service/src/services/upload_orchestrator.py",
+        "phase": "Phase 6: File Event Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Implement duplicate detection service",
+        "filePath": "services/sync-service/src/services/duplicate_detector.py",
+        "phase": "Phase 6: File Event Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Create file event API endpoint (receives events from frontend)",
+        "filePath": "services/sync-service/src/api/v1/events.py",
+        "phase": "Phase 6: File Event Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create sync-service Dockerfile",
+        "filePath": "services/sync-service/Dockerfile",
+        "phase": "Phase 7: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Create sync-service requirements.txt",
+        "filePath": "services/sync-service/requirements.txt",
+        "phase": "Phase 7: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Add sync-service to docker-compose.yml",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 7: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Add Traefik routing for sync-service",
+        "filePath": "infrastructure/docker/traefik/dynamic.yaml",
+        "phase": "Phase 7: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Create KEDA ScaledObject for sync-service",
+        "filePath": "infrastructure/kubernetes/base/keda/sync-scaledobject.yaml",
+        "phase": "Phase 7: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Create dev script for sync-service",
+        "filePath": "scripts/dev-sync-service.sh",
+        "phase": "Phase 7: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Create useFolderSync hook with File System Access API",
+        "filePath": "frontend/src/hooks/useFolderSync.ts",
+        "phase": "Phase 8: Frontend Sync Hook & State Management",
+        "status": "pending"
+      },
+      {
+        "id": "T038",
+        "description": "Create SyncContext for global sync state",
+        "filePath": "frontend/src/contexts/SyncContext.tsx",
+        "phase": "Phase 8: Frontend Sync Hook & State Management",
+        "status": "pending"
+      },
+      {
+        "id": "T039",
+        "description": "Create sync API service functions",
+        "filePath": "frontend/src/services/sync.ts",
+        "phase": "Phase 8: Frontend Sync Hook & State Management",
+        "status": "pending"
+      },
+      {
+        "id": "T040",
+        "description": "Create WebSocket hook for sync status updates",
+        "filePath": "frontend/src/hooks/useSyncWebSocket.ts",
+        "phase": "Phase 8: Frontend Sync Hook & State Management",
+        "status": "pending"
+      },
+      {
+        "id": "T041",
+        "description": "Create SyncMappingCard component",
+        "filePath": "frontend/src/components/features/sync/SyncMappingCard.tsx",
+        "phase": "Phase 9: Frontend UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T042",
+        "description": "Create SyncStatusWidget component (shows progress)",
+        "filePath": "frontend/src/components/features/sync/SyncStatusWidget.tsx",
+        "phase": "Phase 9: Frontend UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T043",
+        "description": "Create FolderPicker component (File System Access API)",
+        "filePath": "frontend/src/components/features/sync/FolderPicker.tsx",
+        "phase": "Phase 9: Frontend UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T044",
+        "description": "Create SyncDashboard page",
+        "filePath": "frontend/src/pages/workspace/SyncDashboard.tsx",
+        "phase": "Phase 9: Frontend UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T045",
+        "description": "Create NewSyncMapping modal/form",
+        "filePath": "frontend/src/components/features/sync/NewSyncMappingModal.tsx",
+        "phase": "Phase 9: Frontend UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T046",
+        "description": "Add sync routes to router configuration",
+        "filePath": "frontend/src/router/routes.tsx",
+        "phase": "Phase 9: Frontend UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T047",
+        "description": "Add sync navigation item to workspace sidebar",
+        "filePath": "frontend/src/components/layout/WorkspaceSidebar.tsx",
+        "phase": "Phase 10: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T048",
+        "description": "Create sync notification system (toast + badge)",
+        "filePath": "frontend/src/components/features/sync/SyncNotifications.tsx",
+        "phase": "Phase 10: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T049",
+        "description": "Implement sync pause/resume functionality in hook",
+        "filePath": "frontend/src/hooks/useFolderSync.ts",
+        "phase": "Phase 10: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T050",
+        "description": "Add sync metrics to gallery-service dashboard",
+        "filePath": "infrastructure/monitoring/grafana/dashboards/sync-service.json",
+        "phase": "Phase 10: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T051",
+        "description": "Create sync-service unit tests",
+        "filePath": "services/sync-service/tests/unit/test_sync_service.py",
+        "phase": "Phase 11: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T052",
+        "description": "Create sync-service integration tests",
+        "filePath": "services/sync-service/tests/integration/test_sync_api.py",
+        "phase": "Phase 11: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T053",
+        "description": "Create frontend sync hook unit tests",
+        "filePath": "frontend/src/hooks/__tests__/useFolderSync.test.ts",
+        "phase": "Phase 11: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T054",
+        "description": "Create Playwright E2E verification test",
+        "filePath": "tests/sync-verification.spec.ts",
+        "phase": "Phase 11: Testing & Verification",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 54,
+    "tasksCompleted": 8,
+    "approvedAt": "2026-01-06T18:15:39.484Z",
+    "currentTaskId": "T009"
+  }
 }

@@ -497,6 +497,7 @@ async def name_face_group(
 @router.delete(
     "/workspaces/{workspace_id}/face-groups/{group_id}/name",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Remove person from face group",
     description="Unassign the person from a face group.",
 )
@@ -525,6 +526,7 @@ async def unname_face_group(
 @router.delete(
     "/face-groups/{group_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete face group",
     description="Delete a face group. Faces in the group become ungrouped.",
 )

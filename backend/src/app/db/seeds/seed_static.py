@@ -252,6 +252,7 @@ async def seed_tier_users(conn: asyncpg.Connection):
 async def seed_admin_users(conn: asyncpg.Connection):
     for user_id, email, name, role_name in ADMIN_USERS:
         actual_user_id = await seed_user(conn, user_id, email, name)
+        # Grant platform role
         await conn.execute(
             """
             INSERT INTO user_platform_roles (assignment_id, user_id, role_id)
@@ -261,6 +262,10 @@ async def seed_admin_users(conn: asyncpg.Connection):
             actual_user_id,
             role_name,
         )
+        # Create a workspace for admin users so they can log in
+        workspace_id = uuid.uuid5(actual_user_id, "admin-workspace")
+        slug = email.split("@")[0] + "-admin"
+        await seed_workspace_with_roles(conn, workspace_id, f"{name} Admin Workspace", slug, actual_user_id, "enterprise")
 
 
 async def seed_workspace_role_users(conn: asyncpg.Connection):

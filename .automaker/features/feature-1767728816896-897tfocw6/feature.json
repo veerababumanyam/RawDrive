@@ -1,0 +1,19 @@
+{
+  "category": "Uncategorized",
+  "description": "# Growth & Referrals (The Viral Engine)\n\n> **Status**: Required - Production Ready\n\n## Business Value Proposition\n\nTo reduce Customer Acquisition Cost (CAC) and drive organic growth, RawDrive implements a multi-tiered **Growth Engine**. This system incentivizes existing users to invite peers, rewards partners for driving volume, and gamifies the onboarding process to ensure activation.\n\n### Key Business Benefits\n- **Lower CAC**: Organic referrals are cheaper than paid ads.\n- **Higher LTV**: Referred users typically have higher retention rates.\n- **Network Effects**: Encourages photographers to bring their entire ecosystem (second shooters, editors) onto the platform.\n\n---\n\n## Capabilities\n\n### 1. Peer-to-Peer Referral Program\n**The \"Give $20, Get $20\" Model**\n*   **Mechanism**: Each user has a unique referral code/link.\n*   **Incentive**:\n    *   **Referee (New User)**: Gets 1 Month FREE (or credit equivalent) on the Pro plan.\n    *   **Referrer (Existing User)**: Gets bill credits applied to their next renewal.\n*   **Tracking**: integrated into the Billing settings.\n\n### 2. Partner Program (Affiliate)\nDesigned for YouTube educators, influencers, and photography workshops.\n*   **Commission Model**: Revenue share (e.g., 20% recurring for 1 year).\n*   **Dashboard**: Dedicated view for partners to track clicks, signups, and earnings.\n*   **Payouts**: Automated monthly payouts via PayPal/Stripe Connect/UPI.\n*   **Assets**: Downloadable banners and marketing assets.\n\n### 3. \"Setup Goals\" Gamification\nIncentivizes users to complete critical setup steps that correlate with retention.\n*   **Concept**: \"Complete these 5 steps to verify your account and get 500 bonus AI credits.\"\n*   **Steps**:\n    1.  Upload profile logo.\n    2.  Create first gallery.\n    3.  Share a gallery.\n    4.  Enable 2FA.\n    5.  Connect payment method.\n\n---\n\n## Technical Architecture\n\n### Backend Services\n\n```\nreferral_service.py         - Manages codes and tracking\ncredit_ledger_service.py    - Handles \"store credit\" balance\npartner_service.py          - Affiliate payout logic\n```\n\n### Database Schema\n\n*   `referral_codes`: `(user_id, code, campaign)`\n*   `referral_conversions`: `(referrer_id, referee_id, status, reward_amount)`\n*   `user_credits`: `(user_id, balance, currency)`\n*   `partner_payouts`: `(partner_id, amount, status, transaction_id)`\n\n---\n\n## Integration Points\n\n*   **Billing**: Credits automatically applied to invoices before charging cards.\n*   **Onboarding**: Referral code entry during sign-up.\n*   **Notification**: Alerts when a referral converts (\"You just earned $20!\").\n",
+  "title": "Implement multi-tier growth engine with referrals",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "backlog",
+  "id": "feature-1767728816896-897tfocw6"
+}

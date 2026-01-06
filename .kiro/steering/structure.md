@@ -50,7 +50,7 @@ RawDrive/
 │   ├── pyproject.toml             # Project configuration
 │   └── requirements.txt           # Python dependencies
 │
-├── ai-service/                  # Python FastAPI (optional, Phase 6+)
+├── services/ai-service/                  # Python FastAPI (optional, Phase 6+)
 │   ├── src/
 │   │   ├── main.py            # FastAPI application
 │   │   ├── models/            # ML models and inference

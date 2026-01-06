@@ -20,6 +20,8 @@ import {
   UserCircle,
   User,
   Mail,
+  Shield,
+  Cpu,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -32,6 +34,7 @@ import {
 import { useAppShell } from '../layout/AppShell';
 import { useAuth } from '../../contexts/AuthContext';
 import { AppButton } from '../ui/AppButton';
+import { useAdminAccess } from '../../hooks/useAdminAccess';
 
 /* =============================================================================
    WorkspaceSidebar Component
@@ -64,6 +67,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const { t } = useTranslation('common');
   const { sidebarCollapsed, toggleCollapse } = useAppShell();
   const { logout } = useAuth();
+  const { isAdmin } = useAdminAccess();
 
   const currentPath = location.pathname;
 
@@ -99,6 +103,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     { id: 'myProfile', label: t('nav.myProfile', 'My Profile'), icon: <User size={20} />, path: '/settings' },
     { id: 'help', label: t('nav.help'), icon: <HelpCircle size={20} />, path: '/workspace/help' },
   ], [t]);
+
+  // Admin navigation items (only shown to platform admins)
+  const adminNavItems = React.useMemo(() => [
+    { id: 'admin-dashboard', label: 'Admin Dashboard', icon: <Shield size={20} />, path: '/admin' },
+    { id: 'admin-models', label: 'AI Models', icon: <Cpu size={20} />, path: '/admin/gemini-models' },
+  ], []);
 
   // Helper to check if a path is active using segment-based matching
   // This prevents false positives like /workspace/galleries-archive matching /workspace/galleries
@@ -207,6 +217,25 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             />
           ))}
         </SidebarSection>
+
+        {/* Admin Section - Only shown to platform admins */}
+        {isAdmin && (
+          <>
+            <SidebarDivider />
+            <SidebarSection title={sidebarCollapsed ? undefined : 'Platform Admin'}>
+              {adminNavItems.map((item) => (
+                <SidebarItem
+                  key={item.id}
+                  id={item.path}
+                  label={item.label}
+                  icon={item.icon}
+                  active={isPathActive(item.path, currentPath)}
+                  onClick={() => handleNavigation(item.path)}
+                />
+              ))}
+            </SidebarSection>
+          </>
+        )}
       </SidebarContent>
 
       {/* Footer */}

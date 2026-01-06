@@ -88,6 +88,23 @@ http:
         certResolver: letsencrypt
 
     # -------------------------------------------------------------------------
+    # Upload Microservice - TUS chunked uploads
+    # -------------------------------------------------------------------------
+    upload-service-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/upload`)"
+      entryPoints:
+        - websecure
+      service: upload-service
+      middlewares:
+        - rate-limit-uploads
+        - security-headers
+        - large-body-size
+        - cors-headers
+      priority: 135
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
     # Magic Links - Public gallery access
     # -------------------------------------------------------------------------
     magic-link-router:
@@ -172,6 +189,15 @@ http:
       loadBalancer:
         servers:
           - url: "http://invitations-api:8000"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    upload-service:
+      loadBalancer:
+        servers:
+          - url: "http://upload-service:8000"
         healthCheck:
           path: /health
           interval: 10s

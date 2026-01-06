@@ -93,6 +93,7 @@ async def list_invitation_media(
 @router.delete(
     "/{invitation_id}/media/{media_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
 )
 async def delete_invitation_media(
     invitation_id: UUID,

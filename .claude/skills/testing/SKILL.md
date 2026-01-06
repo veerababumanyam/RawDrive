@@ -12,7 +12,7 @@ description: Testing standards for RawDrive. Use when writing tests, setting up 
 |------|-----------|----------|
 | Frontend | Vitest + React Testing Library | `frontend/src/test/` |
 | Backend | pytest + pytest-asyncio | `backend/tests/` |
-| AI Service | pytest | `ai-service/tests/` |
+| AI Service | pytest | `services/ai-service/tests/` |
 | Shared Packages | Vitest (TS) + pytest (parity) | `packages/*/tests/` |
 
 ## Commands

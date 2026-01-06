@@ -348,7 +348,7 @@ async def require_workspace_access(
 
 
 async def get_workspace_id_from_access(
-    workspace_access: Annotated[tuple[CurrentUser, uuid.UUID], Depends(require_workspace_access)],
+    workspace_access: tuple[CurrentUser, uuid.UUID] = Depends(require_workspace_access),
 ) -> uuid.UUID:
     """Extract workspace_id from workspace access tuple."""
     _, workspace_id = workspace_access
@@ -357,3 +357,7 @@ async def get_workspace_id_from_access(
 
 WorkspaceAccessDep = Annotated[tuple[CurrentUser, uuid.UUID], Depends(require_workspace_access)]
 WorkspaceIdDep = Annotated[uuid.UUID, Depends(get_workspace_id_from_access)]
+
+# Alias for backward compatibility
+get_current_workspace_id = get_workspace_id_from_access
+get_workspace_id = get_workspace_id_from_access

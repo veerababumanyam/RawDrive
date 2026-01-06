@@ -3,7 +3,11 @@
   "description": "Enable photographers to export galleries in multiple formats: print-ready PDF albums (with layouts), animated slideshows (MP4/WebM), shareable ZIP archives, and cloud sync to Google Photos/Amazon Photos/Dropbox. Include batch export scheduling for large catalogs.",
   "id": "feature-1767713716915-czs5ui83i",
   "steps": [],
-  "status": "backlog",
+  "status": "verified",
   "skipTests": true,
-  "priority": 2
+  "priority": 2,
+  "branchName": "main",
+  "startedAt": "2026-01-06T19:27:09.523Z",
+  "updatedAt": "2026-01-06T19:39:38.433Z",
+  "justFinishedAt": "2026-01-06T19:39:38.433Z"
 }

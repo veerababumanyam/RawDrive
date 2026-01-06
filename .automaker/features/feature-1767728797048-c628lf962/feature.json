@@ -1,0 +1,19 @@
+{
+  "category": "Uncategorized",
+  "description": "# Mobile Companion App\n\n> **Status**: Required - Production Ready\n\n## Business Value Proposition\n\nWhile the **Customer Web Portal** is optimized for *clients* to view photos, the **Mobile Companion App** is a native iOS and Android application built specifically for *photographers* and *studio owners*. It brings the power of RawDrive to their pocket, enabling them to manage their business from anywhere, shoot-and-deliver instantly, and maintain rapid responsiveness with clients.\n\n### Key Business Benefits\n- **Shoot-to-Delivery Speed**: Mobile upload enables \"Behind-the-Scenes\" (BTS) content delivery while still on location.\n- **Responsiveness**: Push notifications for bookings and inquiries ensure zero missed leads.\n- **Offline Productivity**: Access calendar and client details without internet connectivity.\n- **Brand Professionalism**: Dedicated app reinforces the studio's operational maturity.\n\n---\n\n## User Personas\n\n### Primary Users\n1.  **Lead Photographer**\n    *   Needs to see the day's schedule.\n    *   Uploads BTS photos/videos immediately.\n    *   Checks payments on the go.\n\n2.  **Studio Manager**\n    *   Responds to inquiries via WhatsApp integration.\n    *   Approves proofing selections.\n\n3.  **Freelance Shooter**\n    *   Uses app to check assignment details (location, call time).\n    *   Uploads RAWs (if tethering supported) or JPEGs for social.\n\n---\n\n## Key Capabilities\n\n### 1. Business Dashboard on the Go\n*   **Today's Overview**: Schedule, upcoming shoots, pending invoices.\n*   **Quick Actions**: \"Create Gallery\", \"Send Invoice\", \"Share Link\".\n*   **Analytics Pulse**: Real-time view count on active galleries.\n\n### 2. Mobile Gallery Management\n*   **Create & Share**: Spin up a new gallery in seconds.\n*   **Direct Upload**: Upload photos/videos directly from the phone's camera roll.\n*   **Curate**: Star/Reject photos while commuting.\n*   **Magic Link Sharing**: Generate links and share via WhatsApp/Instagram DM.\n\n### 3. Client Communication Hub\n*   **WhatsApp Integration**: \"Click to Chat\" with clients using pre-filled templates (e.g., \"Here is your gallery link...\").\n*   **Inquiry Management**: View and reply to contact form submissions.\n*   **Push Notifications**: Instant alerts for:\n    *   Payments received.\n    *   Client favorites/comments.\n    *   New bookings.\n\n### 4. Offline Mode\n*   **Cached Data**: Schedule, client contact info, and active gallery metadata available offline.\n*   **Queueing**: Queue actions (like changing a gallery status) to sync when online.\n\n---\n\n## Technical Architecture\n\n### Tech Stack\n*   **Framework**: React Native (Shared codebase with web where possible).\n*   **Local Database**: WatermelonDB or Realm for offline sync.\n*   **API**: Uses existing REST API with mobile-specific optimizations (smaller payloads).\n\n### Security\n*   **Biometric Auth**: FaceID/TouchID login.\n*   **Device Management**: Admin can revoke access to lost devices via the Web Dashboard (Mobile Device Management - MDM Lite).\n\n---\n\n## Future Enhancements\n*   **Tethering Support**: Wireless tethering from camera to app for instant backup.\n*   **Softproofing Mode**: \"In-Person Sales\" (IPS) mode to show photos on an iPad without UI clutter.\n*   **Mobile Editing**: Basic cropping/preset application (Integration with Lightroom Mobile intent).\n",
+  "title": "Build native iOS and Android mobile app",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "backlog",
+  "id": "feature-1767728797048-c628lf962"
+}

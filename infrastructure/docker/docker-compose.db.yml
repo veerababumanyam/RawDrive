@@ -1,0 +1,78 @@
+# =============================================================================
+# RawDrive Database - Minimal Docker Compose
+# =============================================================================
+#
+# This file provides a MINIMAL PostgreSQL + Redis setup for local development.
+# Use this ONLY when you need just database services without backend containers.
+#
+# IMPORTANT: This uses the same network (rawdrive-network) as the main 
+# docker-compose.yml so containers can communicate.
+#
+# For full stack development, use instead:
+#   docker compose -f infrastructure/docker/docker-compose.yml up -d
+#
+# Usage (minimal - database only):
+#   docker compose -f docker-compose.db.yml up -d
+#
+# Image: timescale/timescaledb-ha:pg16
+#   - PostgreSQL 16
+#   - pgvector 0.8.1 (vector similarity search)
+#   - pgvectorscale 0.9.0 (StreamingDiskANN indexes)
+#   - TimescaleDB 2.24.0
+#
+# After starting, run migrations:
+#   cd backend
+#   $env:DATABASE_URL = "postgresql://rawdrive:rawdrive@localhost:5432/rawdrive"
+#   python -m alembic upgrade head
+#
+# Verify extensions:
+#   python -m tests.verification.test_database_extensions --extensions-only
+#
+# =============================================================================
+
+services:
+  postgres:
+    # timescaledb-ha:pg16 - Official TimescaleDB High Availability image
+    # Includes: PostgreSQL 16, pgvector (0.8.1), pgvectorscale (0.9.0), TimescaleDB (2.24.0)
+    # pgvectorscale provides StreamingDiskANN indexes for optimal vector search at scale
+    image: timescale/timescaledb-ha:pg16
+    container_name: rawdrive-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rawdrive}
+      POSTGRES_USER: ${POSTGRES_USER:-rawdrive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rawdrive}
+    ports:
+      # Expose to localhost for local development
+      - "127.0.0.1:${PORT_POSTGRES}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # Enable extensions on database init
+      - ./infrastructure/docker/init/enable_pgvector.sql:/docker-entrypoint-initdb.d/enable_pgvector.sql:ro
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER:-rawdrive}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: rawdrive-redis
+    restart: unless-stopped
+    command: [ "redis-server", "--save", "", "--appendonly", "no" ]
+    ports:
+      - "127.0.0.1:${PORT_REDIS}:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:
+
+    # Use the same network as main docker-compose.yml for container interoperability
+networks:
+  default:
+    name: rawdrive-network
+    driver: bridge
