@@ -1,0 +1,75 @@
+---
+# Horizontal Pod Autoscaler for RawDrive Backend
+# Configured for 5000 concurrent users (US2 - Automatic Resource Scaling)
+#
+# Scaling behavior:
+# - Target: 70% CPU utilization (per research.md recommendations)
+# - Min replicas: 10 (production baseline)
+# - Max replicas: 100 (5000 users / ~50 users per pod)
+# - Scale-up: Aggressive (100% increase in 60s stabilization)
+# - Scale-down: Conservative (10% decrease in 300s stabilization)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rawdrive-backend
+  labels:
+    app: rawdrive-backend
+    component: autoscaling
+    part-of: rawdrive
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rawdrive-backend
+
+  # Replica bounds
+  minReplicas: 10
+  maxReplicas: 100
+
+  # Scaling metrics
+  metrics:
+    # Primary metric: CPU utilization
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+    # Secondary metric: Memory (prevent OOM during traffic spikes)
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+  # Scaling behavior tuning
+  behavior:
+    # Scale-up: Aggressive to handle traffic spikes
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        # Allow doubling pods in 60 seconds
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+        # Or add up to 10 pods at once
+        - type: Pods
+          value: 10
+          periodSeconds: 60
+      selectPolicy: Max
+
+    # Scale-down: Conservative to avoid thrashing
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        # Only remove 10% of pods per period
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+        # Or remove up to 5 pods at once
+        - type: Pods
+          value: 5
+          periodSeconds: 60
+      selectPolicy: Min

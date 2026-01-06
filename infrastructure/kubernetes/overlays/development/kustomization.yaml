@@ -1,0 +1,73 @@
+# Development overlay for RawDrive
+# Reduced resource requirements for local development
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: rawdrive-development
+
+# Reference the base configuration
+resources:
+  - ../../base
+
+# Development-specific labels
+commonLabels:
+  environment: development
+
+# Namespace for development
+namespace: rawdrive-dev
+
+# Patches for development environment
+patches:
+  # Reduce HPA min/max replicas for development
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: rawdrive-backend
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 5
+
+  # Reduce resource requests for development
+  - target:
+      kind: Deployment
+      name: rawdrive-backend
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 256Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 512Mi
+
+  # Reduce PgBouncer replicas for development
+  - target:
+      kind: Deployment
+      name: pgbouncer
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+# Override config for development
+configMapGenerator:
+  - name: rawdrive-backend-config
+    behavior: merge
+    literals:
+      - APP_ENV=development
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=console
+
+# Use development image tags
+images:
+  - name: rawdrive-backend
+    newTag: dev

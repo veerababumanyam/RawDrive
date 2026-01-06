@@ -1,0 +1,26 @@
+---
+# RawDrive Backend Service
+# ClusterIP service for internal access to the backend API
+apiVersion: v1
+kind: Service
+metadata:
+  name: rawdrive-backend
+  labels:
+    app: rawdrive-backend
+    component: api
+    part-of: rawdrive
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: rawdrive-backend
+  # Use IPVS for better load balancing at scale
+  sessionAffinity: None

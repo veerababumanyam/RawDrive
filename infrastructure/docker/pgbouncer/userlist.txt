@@ -1,0 +1,12 @@
+;; PgBouncer authentication file
+;; Format: "username" "password"
+;;
+;; IMPORTANT: In production, use environment variable substitution or secrets management
+;; The password should be MD5 hashed: md5(password + username)
+;; Use: echo -n "password${username}" | md5sum
+;;
+;; For development, using plaintext (auth_type = md5 will handle hashing)
+;; In production, use auth_query for dynamic authentication from PostgreSQL
+
+"rawdrive" "${POSTGRES_PASSWORD:-rawdrive}"
+"rawdrive_admin" "${PGBOUNCER_ADMIN_PASSWORD:-rawdrive_admin}"

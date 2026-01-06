@@ -1,0 +1,463 @@
+# Prometheus Alert Rules for RawDrive
+# Implements alerting for 5000 concurrent user scaling (024-5k-concurrent-autoscale)
+#
+# Alert Severity Levels:
+# - critical: Immediate action required, paging enabled
+# - warning: Attention needed, no immediate action required
+# - info: Informational, for dashboards and logging
+
+groups:
+  # ==========================================================================
+  # US3 - Database Connection Stability Alerts
+  # ==========================================================================
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # High database connection usage - warning threshold
+      - alert: HighDBConnectionUsage
+        expr: rawdrive_db_pool_connections_active > 40
+        for: 2m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: database
+        annotations:
+          summary: "High database connection usage detected"
+          description: |
+            Database connection pool has {{ $value }} active connections.
+            This is above the warning threshold of 40.
+            Pod: {{ $labels.pod }}
+            Namespace: {{ $labels.namespace }}
+          runbook_url: "https://docs.rawdrive.ai/runbooks/database-connections"
+
+      # Critical database connection usage - approaching limit
+      - alert: CriticalDBConnectionUsage
+        expr: rawdrive_db_pool_connections_active > 45
+        for: 1m
+        labels:
+          severity: critical
+          service: rawdrive
+          component: database
+        annotations:
+          summary: "Critical database connection usage - approaching limit"
+          description: |
+            Database connection pool has {{ $value }} active connections.
+            This is above the critical threshold of 45 (max is typically 50-60).
+            Immediate action required to prevent connection exhaustion.
+            Pod: {{ $labels.pod }}
+            Namespace: {{ $labels.namespace }}
+          runbook_url: "https://docs.rawdrive.ai/runbooks/database-connections-critical"
+
+      # Database pool exhausted
+      - alert: DBPoolExhausted
+        expr: rawdrive_db_pool_connections_idle == 0 and rawdrive_db_pool_connections_active >= rawdrive_db_pool_connections_max
+        for: 30s
+        labels:
+          severity: critical
+          service: rawdrive
+          component: database
+        annotations:
+          summary: "Database connection pool exhausted"
+          description: |
+            No idle connections available and pool is at maximum capacity.
+            New requests will be queued or fail.
+            Active: {{ $value }}
+            Pod: {{ $labels.pod }}
+          runbook_url: "https://docs.rawdrive.ai/runbooks/database-pool-exhausted"
+
+      # Database health check failing
+      - alert: DatabaseUnhealthy
+        expr: dependency_health{dependency="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: rawdrive
+          component: database
+        annotations:
+          summary: "PostgreSQL health check failing"
+          description: |
+            PostgreSQL health checks are failing.
+            This may indicate database connectivity issues.
+            Pod: {{ $labels.pod }}
+          runbook_url: "https://docs.rawdrive.ai/runbooks/database-unhealthy"
+
+  # ==========================================================================
+  # US2 - Automatic Resource Scaling Alerts
+  # ==========================================================================
+  - name: scaling_alerts
+    interval: 30s
+    rules:
+      # Approaching maximum replicas - warning
+      - alert: ApproachingMaxReplicas
+        expr: |
+          kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler="rawdrive-backend"}
+          /
+          kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler="rawdrive-backend"}
+          >= 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: scaling
+        annotations:
+          summary: "Approaching maximum HPA replicas"
+          description: |
+            Backend is at {{ $value | humanizePercentage }} of maximum replicas.
+            Current: {{ with query "kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler='rawdrive-backend'}" }}{{ . | first | value }}{{ end }}
+            Max: {{ with query "kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler='rawdrive-backend'}" }}{{ . | first | value }}{{ end }}
+            Consider increasing max replicas or optimizing application.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/approaching-max-replicas"
+
+      # At maximum replicas - critical
+      - alert: AtMaxReplicas
+        expr: |
+          kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler="rawdrive-backend"}
+          ==
+          kube_horizontalpodautoscaler_spec_max_replicas{horizontalpodautoscaler="rawdrive-backend"}
+        for: 10m
+        labels:
+          severity: critical
+          service: rawdrive
+          component: scaling
+        annotations:
+          summary: "HPA at maximum replicas for 10+ minutes"
+          description: |
+            Backend has been at maximum replicas ({{ $value }}) for over 10 minutes.
+            The system cannot scale further to handle additional load.
+            Immediate action required.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/at-max-replicas"
+
+      # Scale-up failed
+      - alert: ScaleUpFailed
+        expr: |
+          increase(kube_horizontalpodautoscaler_status_condition{condition="ScalingActive", status="false", horizontalpodautoscaler="rawdrive-backend"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: rawdrive
+          component: scaling
+        annotations:
+          summary: "HPA scale-up operation failed"
+          description: |
+            Horizontal Pod Autoscaler failed to scale up.
+            This may be due to resource constraints, node capacity, or configuration issues.
+            Check cluster resources and HPA events.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/scale-up-failed"
+
+      # HPA unable to compute metrics
+      - alert: HPAMetricsUnavailable
+        expr: |
+          kube_horizontalpodautoscaler_status_condition{condition="ScalingActive", status="false", horizontalpodautoscaler="rawdrive-backend"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: scaling
+        annotations:
+          summary: "HPA unable to compute scaling metrics"
+          description: |
+            HPA cannot compute scaling metrics. Auto-scaling may not be functioning correctly.
+            Check metrics-server and resource metrics availability.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/hpa-metrics-unavailable"
+
+  # ==========================================================================
+  # US1 - Consistent Performance Under Load Alerts
+  # ==========================================================================
+  - name: performance_alerts
+    interval: 30s
+    rules:
+      # High latency - p95 exceeds 3s threshold
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(rawdrive_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 3
+        for: 5m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: performance
+        annotations:
+          summary: "High request latency detected (p95 > 3s)"
+          description: |
+            95th percentile request latency is {{ $value | humanizeDuration }}.
+            This exceeds the 3 second SLO threshold.
+            Users may experience degraded performance.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/high-latency"
+
+      # Very high latency - p99 exceeds 5s
+      - alert: VeryHighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(rawdrive_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 3m
+        labels:
+          severity: critical
+          service: rawdrive
+          component: performance
+        annotations:
+          summary: "Very high request latency (p99 > 5s)"
+          description: |
+            99th percentile request latency is {{ $value | humanizeDuration }}.
+            This indicates severe performance degradation.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/very-high-latency"
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(rawdrive_http_requests_total{status_code=~"5.."}[5m]))
+          /
+          sum(rate(rawdrive_http_requests_total[5m]))
+          > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: performance
+        annotations:
+          summary: "High error rate detected (> 1%)"
+          description: |
+            Error rate is {{ $value | humanizePercentage }}.
+            This exceeds the 1% threshold.
+            Endpoint: {{ $labels.endpoint }}
+          runbook_url: "https://docs.rawdrive.ai/runbooks/high-error-rate"
+
+      # Critical error rate
+      - alert: CriticalErrorRate
+        expr: |
+          sum(rate(rawdrive_http_requests_total{status_code=~"5.."}[5m]))
+          /
+          sum(rate(rawdrive_http_requests_total[5m]))
+          > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: rawdrive
+          component: performance
+        annotations:
+          summary: "Critical error rate (> 5%)"
+          description: |
+            Error rate is {{ $value | humanizePercentage }}.
+            This is a critical level indicating major system issues.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/critical-error-rate"
+
+      # Elevated 4xx errors (may indicate bad requests or auth issues)
+      - alert: Elevated4xxErrors
+        expr: |
+          sum(rate(rawdrive_http_requests_total{status_code=~"4.."}[5m]))
+          /
+          sum(rate(rawdrive_http_requests_total[5m]))
+          > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: performance
+        annotations:
+          summary: "Elevated 4xx error rate (> 10%)"
+          description: |
+            4xx error rate is {{ $value | humanizePercentage }}.
+            This may indicate authentication issues or client errors.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/elevated-4xx"
+
+  # ==========================================================================
+  # US4 - Cache Layer Scalability Alerts
+  # ==========================================================================
+  - name: redis_alerts
+    interval: 30s
+    rules:
+      # High Redis connections per pod
+      - alert: HighRedisConnections
+        expr: rawdrive_redis_pool_connections_active > 15
+        for: 5m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: cache
+        annotations:
+          summary: "High Redis connection usage (> 15 per pod)"
+          description: |
+            Pod {{ $labels.pod }} has {{ $value }} active Redis connections.
+            This is above the recommended threshold of 15 per pod.
+            With 100 pods, this could exhaust Redis connection limits.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/high-redis-connections"
+
+      # Redis pool exhausted
+      - alert: RedisPoolExhausted
+        expr: rawdrive_redis_pool_connections_active >= rawdrive_redis_pool_connections_max
+        for: 1m
+        labels:
+          severity: critical
+          service: rawdrive
+          component: cache
+        annotations:
+          summary: "Redis connection pool exhausted"
+          description: |
+            Redis connection pool is at maximum capacity.
+            New cache operations may fail or queue.
+            Active: {{ $value }}, Max: {{ $labels.max }}
+          runbook_url: "https://docs.rawdrive.ai/runbooks/redis-pool-exhausted"
+
+      # Redis health check failing
+      - alert: RedisUnhealthy
+        expr: dependency_health{dependency="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: rawdrive
+          component: cache
+        annotations:
+          summary: "Redis health check failing"
+          description: |
+            Redis health checks are failing.
+            Cache operations may fail, degrading application performance.
+            Pod: {{ $labels.pod }}
+          runbook_url: "https://docs.rawdrive.ai/runbooks/redis-unhealthy"
+
+      # Low cache hit rate
+      - alert: LowCacheHitRate
+        expr: rawdrive_cache_hit_rate < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: cache
+        annotations:
+          summary: "Low cache hit rate (< 80%)"
+          description: |
+            Cache hit rate is {{ $value | humanizePercentage }}.
+            This is below the expected 80% threshold.
+            Cache type: {{ $labels.cache_type }}
+            Low hit rates increase database load.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/low-cache-hit-rate"
+
+  # ==========================================================================
+  # US6 - Availability SLO Alerts
+  # ==========================================================================
+  - name: slo_alerts
+    interval: 30s
+    rules:
+      # Availability SLO breach (99.9% uptime)
+      - alert: AvailabilitySLOBreach
+        expr: |
+          (
+            sum(rate(rawdrive_http_requests_total{status_code!~"5.."}[1h]))
+            /
+            sum(rate(rawdrive_http_requests_total[1h]))
+          ) < 0.999
+        for: 5m
+        labels:
+          severity: critical
+          service: rawdrive
+          component: slo
+        annotations:
+          summary: "Availability SLO breach (< 99.9%)"
+          description: |
+            Current availability is {{ $value | humanizePercentage }}.
+            This is below the 99.9% SLO target.
+            Immediate investigation required.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/availability-slo-breach"
+
+      # Error budget consumption warning
+      - alert: ErrorBudgetConsuming
+        expr: |
+          (
+            1 - (
+              sum(rate(rawdrive_http_requests_total{status_code!~"5.."}[24h]))
+              /
+              sum(rate(rawdrive_http_requests_total[24h]))
+            )
+          ) / 0.001 > 0.5
+        for: 1h
+        labels:
+          severity: warning
+          service: rawdrive
+          component: slo
+        annotations:
+          summary: "Error budget consumption > 50% in 24h"
+          description: |
+            Error budget consumption rate is high.
+            At this rate, the monthly error budget will be exhausted early.
+            Consider reducing deployments or investigating issues.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/error-budget-consumption"
+
+  # ==========================================================================
+  # Pod and Container Health Alerts
+  # ==========================================================================
+  - name: pod_alerts
+    interval: 30s
+    rules:
+      # Pod not ready
+      - alert: PodNotReady
+        expr: |
+          kube_pod_status_ready{condition="true", namespace="rawdrive", pod=~"rawdrive-backend.*"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: kubernetes
+        annotations:
+          summary: "Pod not ready for 5+ minutes"
+          description: |
+            Pod {{ $labels.pod }} has been not ready for more than 5 minutes.
+            This pod is not serving traffic.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/pod-not-ready"
+
+      # Container restarts
+      - alert: ContainerRestarting
+        expr: |
+          increase(kube_pod_container_status_restarts_total{namespace="rawdrive", container="backend"}[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: kubernetes
+        annotations:
+          summary: "Container restarting frequently"
+          description: |
+            Container {{ $labels.container }} in pod {{ $labels.pod }} has restarted {{ $value }} times in the last hour.
+            This may indicate crashloops or OOM kills.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/container-restarts"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            container_memory_working_set_bytes{namespace="rawdrive", container="backend"}
+            /
+            container_spec_memory_limit_bytes{namespace="rawdrive", container="backend"}
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: kubernetes
+        annotations:
+          summary: "Container memory usage > 90%"
+          description: |
+            Container {{ $labels.container }} is using {{ $value | humanizePercentage }} of its memory limit.
+            OOM kill is imminent if memory pressure continues.
+            Pod: {{ $labels.pod }}
+          runbook_url: "https://docs.rawdrive.ai/runbooks/high-memory-usage"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          (
+            sum(rate(container_cpu_usage_seconds_total{namespace="rawdrive", container="backend"}[5m])) by (pod, container)
+            /
+            sum(container_spec_cpu_quota{namespace="rawdrive", container="backend"}/container_spec_cpu_period{namespace="rawdrive", container="backend"}) by (pod, container)
+          ) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: rawdrive
+          component: kubernetes
+        annotations:
+          summary: "Container CPU usage > 90%"
+          description: |
+            Container {{ $labels.container }} is using {{ $value | humanizePercentage }} of its CPU limit.
+            This may cause throttling and degraded performance.
+            Pod: {{ $labels.pod }}
+          runbook_url: "https://docs.rawdrive.ai/runbooks/high-cpu-usage"

@@ -1,0 +1,39 @@
+# Kustomize base configuration for RawDrive
+# Contains all shared resources for the application
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: rawdrive-base
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: rawdrive
+  app.kubernetes.io/managed-by: kustomize
+
+# Resources included in the base
+resources:
+  # Backend API
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+
+  # PgBouncer (connection pooler)
+  - pgbouncer.yaml
+  - pgbouncer-service.yaml
+  - pgbouncer-configmap.yaml
+
+# ConfigMaps generated from files
+configMapGenerator:
+  - name: rawdrive-backend-config
+    literals:
+      - APP_ENV=production
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+
+# Images can be overridden by overlays
+images:
+  - name: rawdrive-backend
+    newTag: latest

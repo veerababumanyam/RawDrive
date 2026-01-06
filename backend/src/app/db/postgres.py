@@ -87,10 +87,64 @@ async def _setup_connection(conn: asyncpg.Connection) -> None:
     )
 
 
+def _build_connection_dsn(settings: AppSettings) -> str:
+    """Build the database connection DSN, optionally routing through PgBouncer.
+
+    When PGBOUNCER_ENABLED=true, constructs a DSN that connects through the
+    PgBouncer connection pooler instead of directly to PostgreSQL.
+
+    PgBouncer handles connection pooling at the server level, allowing
+    hundreds of application pods to share a smaller pool of actual
+    PostgreSQL connections (critical for scaling to 5000+ concurrent users).
+    """
+    dsn = str(settings.database_url)
+
+    # Normalize SQLAlchemy DSN to standard PostgreSQL format
+    if dsn.startswith("postgresql+asyncpg://"):
+        dsn = dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+    # Route through PgBouncer if enabled
+    if settings.pgbouncer_enabled:
+        try:
+            from urllib.parse import urlparse, urlunparse
+
+            parsed = urlparse(dsn)
+            # Replace host and port with PgBouncer settings
+            # Keep the original username, password, database, and query params
+            pgbouncer_netloc = f"{parsed.username}:{parsed.password}@{settings.pgbouncer_host}:{settings.pgbouncer_port}"
+            pgbouncer_dsn = urlunparse((
+                parsed.scheme,
+                pgbouncer_netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            ))
+
+            logger.info(
+                "PgBouncer enabled - routing connections through connection pooler",
+                extra={
+                    "pgbouncer_host": settings.pgbouncer_host,
+                    "pgbouncer_port": settings.pgbouncer_port,
+                },
+            )
+            return pgbouncer_dsn
+        except Exception as e:
+            logger.warning(
+                "Failed to construct PgBouncer DSN, falling back to direct connection",
+                extra={"error": str(e)},
+            )
+
+    return dsn
+
+
 async def init_postgres_pool(settings: Optional[AppSettings] = None) -> asyncpg.Pool:
     """Initialize and cache a global asyncpg pool.
 
     Idempotent: subsequent calls return the existing pool.
+
+    When PGBOUNCER_ENABLED=true, connections are routed through PgBouncer
+    for efficient connection pooling at scale (50+ application pods).
     """
 
     global _pool
@@ -98,18 +152,25 @@ async def init_postgres_pool(settings: Optional[AppSettings] = None) -> asyncpg.
         return _pool
 
     settings = settings or get_settings()
+    dsn = _build_connection_dsn(settings)
 
-    dsn = str(settings.database_url)
-    if dsn.startswith("postgresql+asyncpg://"):
-        dsn = dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
+    # When using PgBouncer in transaction mode, we should:
+    # 1. Use a smaller local pool (PgBouncer handles the actual pooling)
+    # 2. Avoid server-side prepared statements (incompatible with transaction pooling)
+    pool_kwargs: dict = {
+        "dsn": dsn,
+        "min_size": settings.db_pool_min_size,
+        "max_size": settings.db_pool_max_size,
+        "max_inactive_connection_lifetime": float(settings.db_pool_max_lifetime_sec),
+        "init": _setup_connection,
+    }
 
-    _pool = await asyncpg.create_pool(
-        dsn=dsn,
-        min_size=settings.db_pool_min_size,
-        max_size=settings.db_pool_max_size,
-        max_inactive_connection_lifetime=float(settings.db_pool_max_lifetime_sec),
-        init=_setup_connection,  # Set up JSON codecs for each connection
-    )
+    if settings.pgbouncer_enabled:
+        # Disable statement caching - incompatible with PgBouncer transaction mode
+        # PgBouncer may route different queries to different backend connections
+        pool_kwargs["statement_cache_size"] = 0
+
+    _pool = await asyncpg.create_pool(**pool_kwargs)
 
     logger.info(
         "PostgreSQL pool initialized",
@@ -117,6 +178,7 @@ async def init_postgres_pool(settings: Optional[AppSettings] = None) -> asyncpg.
             "min_size": settings.db_pool_min_size,
             "max_size": settings.db_pool_max_size,
             "max_inactive_connection_lifetime": settings.db_pool_max_lifetime_sec,
+            "pgbouncer_enabled": settings.pgbouncer_enabled,
         },
     )
 
@@ -135,24 +197,46 @@ async def get_postgres_pool() -> asyncpg.Pool:
 
 @asynccontextmanager
 async def acquire_conn(pool):
-    """Normalize pool.acquire() to support both asyncpg pools and AsyncMock pools."""
+    """Normalize pool.acquire() to support both asyncpg pools and AsyncMock pools.
 
-    ctx = pool.acquire()
-    if isawaitable(ctx):
-        ctx = await ctx
-    async with ctx as conn:
-        yield conn
+    asyncpg pools return a PoolAcquireContext from acquire() which is an
+    async context manager. AsyncMock pools may return awaitables or mock
+    context managers. This function handles both cases.
+    """
+    # For real asyncpg pools, pool.acquire() returns an async context manager
+    # For AsyncMock pools in tests, it may return an awaitable or mock
+    if isinstance(pool, AsyncMock):
+        # Handle mocked pools
+        ctx = pool.acquire()
+        if isawaitable(ctx):
+            ctx = await ctx
+        async with ctx as conn:
+            yield conn
+    else:
+        # Handle real asyncpg pools - acquire() returns PoolAcquireContext
+        async with pool.acquire() as conn:
+            yield conn
 
 
 @asynccontextmanager
 async def normalize_async_cm(cm):
-    """Allow AsyncMock-based context managers to behave like asyncpg ones."""
+    """Allow AsyncMock-based context managers to behave like asyncpg ones.
 
-    ctx = cm
-    if isawaitable(ctx):
-        ctx = await ctx
-    async with ctx:
-        yield ctx
+    asyncpg Transaction objects from conn.transaction() are async context managers.
+    AsyncMock transaction objects in tests may behave differently.
+    This normalizes both to work with async with.
+    """
+    # Check if cm is already the result of awaiting (e.g., from AsyncMock)
+    if isinstance(cm, AsyncMock):
+        ctx = cm
+        if isawaitable(ctx):
+            ctx = await ctx
+        async with ctx:
+            yield ctx
+    else:
+        # For real asyncpg transactions - they're async context managers
+        async with cm:
+            yield cm
 
 
 async def close_postgres_pool() -> None:

@@ -337,17 +337,37 @@ def get_redis_pool_stats() -> dict[str, Any]:
     """Get connection pool statistics for monitoring.
 
     Returns:
-        dict with pool stats or empty dict if pool not initialized
+        dict with pool stats including:
+        - max_connections: Maximum allowed connections
+        - active_connections: Currently in-use connections
+        - idle_connections: Available connections in pool
+        - status: Pool initialization status
     """
     if _pool is None:
-        return {"status": "not_initialized"}
+        return {
+            "status": "not_initialized",
+            "max_connections": 0,
+            "active_connections": 0,
+            "idle_connections": 0,
+        }
+
+    # Get connection counts from pool internals
+    # Note: redis-py's ConnectionPool uses _in_use_connections and _available_connections
+    active = len(_pool._in_use_connections) if hasattr(_pool, "_in_use_connections") else 0
+    idle = len(_pool._available_connections) if hasattr(_pool, "_available_connections") else 0
 
     return {
         "status": "initialized",
         "max_connections": _pool.max_connections,
-        "current_connections": len(_pool._in_use_connections) if hasattr(_pool, "_in_use_connections") else "N/A",
-        "available_connections": len(_pool._available_connections) if hasattr(_pool, "_available_connections") else "N/A",
+        "active_connections": active,
+        "idle_connections": idle,
+        "total_connections": active + idle,
     }
+
+
+async def get_redis_pool_stats_async() -> dict[str, Any]:
+    """Async wrapper for get_redis_pool_stats for consistency with other async functions."""
+    return get_redis_pool_stats()
 
 
 async def redis_healthcheck(timeout: float = 1.0) -> bool:

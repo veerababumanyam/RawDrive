@@ -239,16 +239,38 @@ async def readiness_check(response: Response) -> dict:
 
     # Additional pool availability check
     pool_available = True
+    db_pool_stats = {}
     try:
         pool_stats = await get_pool_stats()
         # Consider not ready if pool is fully utilized
         pool_available = pool_stats.free_size > 0 or pool_stats.used_size < pool_stats.max_size
+        db_pool_stats = {
+            "active": pool_stats.used_size,
+            "idle": pool_stats.free_size,
+            "max": pool_stats.max_size,
+            "utilization_percent": round(pool_stats.utilization_percent, 2),
+        }
     except Exception as e:
         logger.warning(f"Readiness check - Pool stats unavailable: {e}")
         pool_available = True  # Don't fail readiness if we can't get stats
 
+    # Redis pool availability check (T047 - US4 Cache Layer Scalability)
+    redis_pool_available = True
+    redis_pool_stats = get_redis_pool_stats()
+    if redis_pool_stats.get("status") == "initialized":
+        max_conns = redis_pool_stats.get("max_connections", 0)
+        active_conns = redis_pool_stats.get("active_connections", 0)
+        # Consider not ready if Redis pool is >90% utilized
+        if max_conns > 0:
+            redis_pool_available = (active_conns / max_conns) < 0.9
+
     elapsed_ms = (time.perf_counter() - start) * 1000
-    all_ready = pg_check["healthy"] and redis_check["healthy"] and pool_available
+    all_ready = (
+        pg_check["healthy"]
+        and redis_check["healthy"]
+        and pool_available
+        and redis_pool_available
+    )
 
     if not all_ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -259,7 +281,12 @@ async def readiness_check(response: Response) -> dict:
         "checks": {
             "postgres": pg_check["healthy"],
             "redis": redis_check["healthy"],
-            "pool_available": pool_available,
+            "db_pool_available": pool_available,
+            "redis_pool_available": redis_pool_available,
+        },
+        "pools": {
+            "postgres": db_pool_stats,
+            "redis": redis_pool_stats,
         },
         "latency_ms": round(elapsed_ms, 2),
     }
@@ -362,6 +389,16 @@ async def detailed_health_check(response: Response, settings: SettingsDep) -> di
 
     redis_pool = get_redis_pool_stats()
 
+    # PgBouncer status (T064 - US6 Operational Visibility)
+    pgbouncer_status: dict[str, Any] = {"enabled": settings.pgbouncer_enabled}
+    if settings.pgbouncer_enabled:
+        pgbouncer_status.update({
+            "host": settings.pgbouncer_host,
+            "port": settings.pgbouncer_port,
+            # In production, can add actual PgBouncer stats via SHOW STATS query
+            "note": "PgBouncer connection pooling active",
+        })
+
     elapsed_ms = (time.perf_counter() - start) * 1000
     all_healthy = pg_check["healthy"] and redis_check["healthy"]
 
@@ -382,6 +419,7 @@ async def detailed_health_check(response: Response, settings: SettingsDep) -> di
                 "latency_ms": pg_check["latency_ms"],
                 "error": pg_check["error"],
                 "pool": postgres_pool,
+                "pgbouncer": pgbouncer_status,
             },
             "redis": {
                 "healthy": redis_check["healthy"],

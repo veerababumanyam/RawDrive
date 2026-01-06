@@ -1,0 +1,27 @@
+---
+# PgBouncer Service
+# ClusterIP service for internal access to PgBouncer connection pooler
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer
+  labels:
+    app: pgbouncer
+    component: database
+    part-of: rawdrive
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9127"
+spec:
+  type: ClusterIP
+  ports:
+    - name: pgbouncer
+      port: 6432
+      targetPort: pgbouncer
+      protocol: TCP
+    - name: metrics
+      port: 9127
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    app: pgbouncer

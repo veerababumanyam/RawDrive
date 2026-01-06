@@ -1,0 +1,164 @@
+# Production-like Docker Compose for local testing
+# Includes full monitoring stack (Prometheus, Grafana, AlertManager)
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This extends the base docker-compose.yml with:
+# - Prometheus for metrics collection
+# - AlertManager for alert routing
+# - Node Exporter for host metrics
+# - Redis Exporter for cache metrics
+# - Production-like resource limits
+#
+# See: specs/024-5k-concurrent-autoscale/tasks.md T068
+
+services:
+  # ============================================================================
+  # Override backend with production-like settings
+  # ============================================================================
+  backend:
+    environment:
+      APP_ENV: production
+      # Enable PgBouncer
+      PGBOUNCER_ENABLED: "true"
+      DATABASE_URL: postgresql+asyncpg://rawdrive:rawdrive@pgbouncer:6432/rawdrive
+      # Production pool sizes
+      DB_POOL_MIN_SIZE: 2
+      DB_POOL_MAX_SIZE: 10
+      # Redis pool for high concurrency
+      REDIS_MAX_CONNECTIONS: 50
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================================================
+  # Prometheus - Metrics Collection
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: rawdrive-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ../monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ../monitoring/prometheus/alerts.yaml:/etc/prometheus/alerts.yaml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # AlertManager - Alert Routing
+  # ============================================================================
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: rawdrive-alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yaml'
+      - '--storage.path=/alertmanager'
+      - '--cluster.listen-address='
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ../monitoring/prometheus/alertmanager.yaml:/etc/alertmanager/alertmanager.yaml:ro
+      - alertmanager_data:/alertmanager
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # Node Exporter - Host Metrics
+  # ============================================================================
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: rawdrive-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    expose:
+      - "9100"
+    volumes:
+      - /:/host:ro,rslave
+    pid: host
+    # Note: On macOS, some collectors may not work
+
+  # ============================================================================
+  # Redis Exporter - Cache Metrics
+  # ============================================================================
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: rawdrive-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    expose:
+      - "9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ============================================================================
+  # Grafana override with dashboard provisioning
+  # ============================================================================
+  grafana:
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Provisioning settings
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/capacity.json
+    ports:
+      # Expose Grafana for local access
+      - "127.0.0.1:3001:3000"
+
+  # ============================================================================
+  # k6 Load Testing (run on-demand)
+  # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml run k6
+  # ============================================================================
+  k6:
+    image: grafana/k6:0.47.0
+    container_name: rawdrive-k6
+    volumes:
+      - ../../../backend/tests/load/k6:/scripts:ro
+      - ../../../backend/tests/load/results:/results
+    environment:
+      K6_OUT: json=/results/latest.json
+      BASE_URL: http://backend:8000
+    command: ["run", "/scripts/concurrent-users.js"]
+    profiles:
+      - loadtest  # Only start with: docker compose --profile loadtest up k6
+    depends_on:
+      backend:
+        condition: service_started
+      prometheus:
+        condition: service_healthy
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:

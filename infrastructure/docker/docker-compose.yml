@@ -33,6 +33,43 @@ services:
       timeout: 5s
       retries: 5
 
+  # ============================================================================
+  # PgBouncer - Connection Pooler for PostgreSQL
+  # Required for scaling to 5000+ concurrent users (50+ pods × 20 connections each)
+  # Uses transaction pooling mode for optimal connection reuse
+  # ============================================================================
+  pgbouncer:
+    image: edoburu/pgbouncer:1.21.0
+    container_name: rawdrive-pgbouncer
+    restart: unless-stopped
+    environment:
+      # PostgreSQL connection settings
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-rawdrive}
+      POSTGRES_USER: ${POSTGRES_USER:-rawdrive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rawdrive}
+      # PgBouncer admin password
+      PGBOUNCER_ADMIN_PASSWORD: ${PGBOUNCER_ADMIN_PASSWORD:-rawdrive_admin}
+      # Use custom config file
+      PGBOUNCER_CONFIG_FILE: /etc/pgbouncer/pgbouncer.ini
+    ports:
+      # Expose port 6432 for connections through PgBouncer
+      - "127.0.0.1:6432:6432"
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Check if pgbouncer is accepting connections
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432 -U ${POSTGRES_USER:-rawdrive}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   loki:
     image: grafana/loki:2.9.0
     container_name: rawdrive-loki
@@ -95,8 +132,9 @@ services:
       APP_ENV: ${APP_ENV:-development}
       API_HOST: 0.0.0.0
       API_PORT: 8000
-      JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-/run/secrets/jwt_private_key}
-      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/secrets/jwt_public_key}
+      # Force Docker secrets path (ignore .env JWT paths which use host paths)
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private_key
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public_key
       JWT_ALGORITHM: ${JWT_ALGORITHM:-EdDSA}
       ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-15}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
@@ -366,10 +404,41 @@ services:
           cpus: '0.1'
           memory: 128M
 
+  # ============================================================================
+  # Prometheus - Metrics Collection (for production monitoring)
+  # Use docker-compose.prod.yml for full stack with AlertManager
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: rawdrive-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ../monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ../monitoring/prometheus/alerts.yaml:/etc/prometheus/alerts.yaml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      backend:
+        condition: service_started
+    profiles:
+      - monitoring  # Only start with: docker compose --profile monitoring up
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   pg_data:
   loki_data:
   grafana_data:
+  prometheus_data:
 
 
 networks:

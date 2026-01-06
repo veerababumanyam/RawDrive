@@ -1,0 +1,152 @@
+---
+# RawDrive Backend Deployment
+# Configured for autoscaling to support 5000 concurrent users
+# Resource limits optimized for HPA scaling (10-100 replicas)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rawdrive-backend
+  labels:
+    app: rawdrive-backend
+    component: api
+    part-of: rawdrive
+spec:
+  # Managed by HPA - do not set replicas here
+  selector:
+    matchLabels:
+      app: rawdrive-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 10%
+      maxSurge: 25%
+  template:
+    metadata:
+      labels:
+        app: rawdrive-backend
+        component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        # Spread pods across nodes for better resource utilization
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: rawdrive-backend
+                topologyKey: kubernetes.io/hostname
+        # Prefer nodes with available resources
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: node.kubernetes.io/instance-type
+                    operator: In
+                    values:
+                      - c5.xlarge
+                      - c5.2xlarge
+                      - m5.xlarge
+                      - m5.2xlarge
+      topologySpreadConstraints:
+        - maxSkew: 2
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: rawdrive-backend
+      containers:
+        - name: backend
+          image: rawdrive-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: rawdrive-backend-config
+            - secretRef:
+                name: rawdrive-backend-secrets
+          env:
+            # PgBouncer enabled for production scaling
+            - name: PGBOUNCER_ENABLED
+              value: "true"
+            - name: PGBOUNCER_HOST
+              value: "pgbouncer"
+            - name: PGBOUNCER_PORT
+              value: "6432"
+            # Pod identification for logging/metrics
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: jwt-keys
+              mountPath: /run/secrets
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: jwt-keys
+          secret:
+            secretName: rawdrive-jwt-keys
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+      serviceAccountName: rawdrive-backend
+      terminationGracePeriodSeconds: 30

@@ -95,6 +95,23 @@ class AppSettings(BaseSettings):
     redis_retry_on_timeout: bool = Field(True, alias="REDIS_RETRY_ON_TIMEOUT")
     redis_health_check_interval: int = Field(30, alias="REDIS_HEALTH_CHECK_INTERVAL")
 
+    # PgBouncer connection pooler settings (024-5k-concurrent-autoscale)
+    pgbouncer_enabled: bool = Field(
+        default=False,
+        alias="PGBOUNCER_ENABLED",
+        description="Enable PgBouncer connection pooling for production scaling",
+    )
+    pgbouncer_host: str = Field(
+        default="pgbouncer",
+        alias="PGBOUNCER_HOST",
+        description="PgBouncer hostname (used when PGBOUNCER_ENABLED=true)",
+    )
+    pgbouncer_port: int = Field(
+        default=6432,
+        alias="PGBOUNCER_PORT",
+        description="PgBouncer port (default: 6432)",
+    )
+
     # JWT and token lifetimes (Requirements 3, 5)
     jwt_private_key_path: Path = Field(..., alias="JWT_PRIVATE_KEY_PATH")
     jwt_public_key_path: Path = Field(..., alias="JWT_PUBLIC_KEY_PATH")

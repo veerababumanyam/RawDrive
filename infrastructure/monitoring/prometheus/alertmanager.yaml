@@ -1,0 +1,230 @@
+# AlertManager configuration for RawDrive
+# Handles routing and notification of Prometheus alerts
+#
+# See: specs/024-5k-concurrent-autoscale/tasks.md T066
+#
+# Routes alerts to operators via:
+# - Slack for warnings and info
+# - PagerDuty for critical alerts
+# - Email as fallback
+
+global:
+  # How long to wait before sending a notification about new alerts
+  resolve_timeout: 5m
+
+  # SMTP settings for email notifications
+  smtp_smarthost: 'smtp.example.com:587'
+  smtp_from: 'alertmanager@rawdrive.ai'
+  smtp_auth_username: '${SMTP_USERNAME}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: true
+
+  # Slack API URL (webhook)
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+  # PagerDuty service key
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# The directory from which notification templates are read.
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# The root route on which each incoming alert enters.
+route:
+  # The labels by which incoming alerts are grouped together.
+  group_by: ['alertname', 'severity', 'service']
+
+  # When a new group of alerts is created, wait this long before sending notification
+  group_wait: 30s
+
+  # When new alerts are added to a group, wait this long before sending more notifications
+  group_interval: 5m
+
+  # How long to wait before sending a notification about resolved alerts
+  repeat_interval: 4h
+
+  # Default receiver
+  receiver: 'slack-warnings'
+
+  # Child routes for different severity levels
+  routes:
+    # Critical alerts go to PagerDuty
+    - match:
+        severity: critical
+      receiver: 'pagerduty-critical'
+      continue: true  # Also send to Slack
+
+    # Critical alerts also go to Slack critical channel
+    - match:
+        severity: critical
+      receiver: 'slack-critical'
+
+    # Warning alerts
+    - match:
+        severity: warning
+      receiver: 'slack-warnings'
+
+    # SLO alerts (availability, latency, error rate)
+    - match:
+        category: slo
+      receiver: 'slack-slo'
+      group_by: ['alertname']
+      group_wait: 1m
+      repeat_interval: 1h
+
+    # Scaling alerts
+    - match_re:
+        alertname: 'Approaching.*|AtMax.*|ScaleUp.*'
+      receiver: 'slack-scaling'
+      group_by: ['alertname']
+      group_wait: 2m
+
+    # Database alerts
+    - match_re:
+        alertname: '.*DB.*|.*Database.*|.*PgBouncer.*'
+      receiver: 'slack-database'
+
+    # Redis/Cache alerts
+    - match_re:
+        alertname: '.*Redis.*|.*Cache.*'
+      receiver: 'slack-cache'
+
+# Inhibition rules prevent certain alerts from firing when others are already firing
+inhibit_rules:
+  # If critical DB connectivity issue, suppress warning-level DB alerts
+  - source_match:
+      severity: 'critical'
+      alertname: 'CriticalDBConnectionUsage'
+    target_match:
+      severity: 'warning'
+    target_match_re:
+      alertname: '.*DB.*'
+    equal: ['service']
+
+  # If at max replicas, suppress approaching max replicas
+  - source_match:
+      alertname: 'AtMaxReplicas'
+    target_match:
+      alertname: 'ApproachingMaxReplicas'
+
+  # If SLO breach, suppress individual latency warnings
+  - source_match:
+      alertname: 'SLOAvailabilityBreach'
+    target_match:
+      alertname: 'HighRequestLatency'
+
+# Receiver definitions
+receivers:
+  # Default receiver for warnings
+  - name: 'slack-warnings'
+    slack_configs:
+      - channel: '#rawdrive-alerts'
+        send_resolved: true
+        icon_emoji: ':warning:'
+        title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+        text: |-
+          *Alert:* {{ .CommonLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Description:* {{ .CommonAnnotations.description }}
+          *Details:*
+          {{ range .Alerts }}
+            - *{{ .Labels.alertname }}*: {{ .Annotations.description }}
+          {{ end }}
+        actions:
+          - type: button
+            text: 'View in Grafana'
+            url: '{{ (index .Alerts 0).GeneratorURL }}'
+          - type: button
+            text: 'Runbook'
+            url: '{{ .CommonAnnotations.runbook_url }}'
+
+  # Critical alerts channel
+  - name: 'slack-critical'
+    slack_configs:
+      - channel: '#rawdrive-critical'
+        send_resolved: true
+        icon_emoji: ':rotating_light:'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: ':fire: [CRITICAL] {{ .CommonLabels.alertname }}'
+        text: |-
+          *Alert:* {{ .CommonLabels.alertname }}
+          *Service:* {{ .CommonLabels.service }}
+          *Description:* {{ .CommonAnnotations.description }}
+          *Action Required:* {{ .CommonAnnotations.runbook_url }}
+          {{ range .Alerts }}
+            - {{ .Annotations.summary }}
+          {{ end }}
+
+  # PagerDuty for critical on-call alerts
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        send_resolved: true
+        severity: critical
+        description: '{{ .CommonLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        details:
+          alertname: '{{ .CommonLabels.alertname }}'
+          severity: '{{ .CommonLabels.severity }}'
+          description: '{{ .CommonAnnotations.description }}'
+          runbook: '{{ .CommonAnnotations.runbook_url }}'
+
+  # SLO-specific channel
+  - name: 'slack-slo'
+    slack_configs:
+      - channel: '#rawdrive-slo'
+        send_resolved: true
+        icon_emoji: ':chart_with_upwards_trend:'
+        title: '[SLO] {{ .CommonLabels.alertname }}'
+        text: |-
+          *SLO Alert:* {{ .CommonLabels.alertname }}
+          *Current Value:* {{ .CommonAnnotations.current_value }}
+          *Target:* {{ .CommonAnnotations.target }}
+          *Description:* {{ .CommonAnnotations.description }}
+
+  # Scaling-specific channel
+  - name: 'slack-scaling'
+    slack_configs:
+      - channel: '#rawdrive-scaling'
+        send_resolved: true
+        icon_emoji: ':scales:'
+        title: '[SCALING] {{ .CommonLabels.alertname }}'
+        text: |-
+          *Scaling Alert:* {{ .CommonLabels.alertname }}
+          *Current Replicas:* {{ .CommonAnnotations.current_replicas }}
+          *Max Replicas:* {{ .CommonAnnotations.max_replicas }}
+          *Description:* {{ .CommonAnnotations.description }}
+
+  # Database-specific channel
+  - name: 'slack-database'
+    slack_configs:
+      - channel: '#rawdrive-database'
+        send_resolved: true
+        icon_emoji: ':elephant:'
+        title: '[DATABASE] {{ .CommonLabels.alertname }}'
+        text: |-
+          *Database Alert:* {{ .CommonLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Description:* {{ .CommonAnnotations.description }}
+          {{ range .Alerts }}
+            - Connections: {{ .Labels.connections }}
+          {{ end }}
+
+  # Cache-specific channel
+  - name: 'slack-cache'
+    slack_configs:
+      - channel: '#rawdrive-cache'
+        send_resolved: true
+        icon_emoji: ':zap:'
+        title: '[CACHE] {{ .CommonLabels.alertname }}'
+        text: |-
+          *Cache Alert:* {{ .CommonLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Description:* {{ .CommonAnnotations.description }}
+
+  # Email fallback (if Slack/PagerDuty fails)
+  - name: 'email-fallback'
+    email_configs:
+      - to: 'oncall@rawdrive.ai'
+        send_resolved: true
+        headers:
+          Subject: '[RawDrive Alert] {{ .CommonLabels.alertname }} - {{ .Status | toUpper }}'

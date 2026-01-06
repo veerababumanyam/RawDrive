@@ -1,0 +1,76 @@
+# Production overlay for RawDrive
+# Full resource allocation for 5000 concurrent users
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: rawdrive-production
+
+# Reference the base configuration
+resources:
+  - ../../base
+
+# Production-specific labels
+commonLabels:
+  environment: production
+
+# Namespace for production
+namespace: rawdrive
+
+# Patches for production environment
+patches:
+  # Production HPA settings (10-100 replicas)
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: rawdrive-backend
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 10
+      - op: replace
+        path: /spec/maxReplicas
+        value: 100
+
+  # Full resource allocation for production
+  - target:
+      kind: Deployment
+      name: rawdrive-backend
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 512Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 2000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 2Gi
+
+  # High availability PgBouncer for production
+  - target:
+      kind: Deployment
+      name: pgbouncer
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+# Production configuration
+configMapGenerator:
+  - name: rawdrive-backend-config
+    behavior: merge
+    literals:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+
+# Use versioned production images
+images:
+  - name: rawdrive-backend
+    newTag: v1.0.0
+
+# Replica count annotations for reference
+# (managed by HPA in production)

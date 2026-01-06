@@ -1,0 +1,88 @@
+---
+# PgBouncer ConfigMap
+# Contains the main configuration file for PgBouncer
+# Sensitive values (passwords) are in the Secret
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  labels:
+    app: pgbouncer
+    component: database
+    part-of: rawdrive
+data:
+  # PostgreSQL connection settings (non-sensitive)
+  POSTGRES_HOST: "postgresql"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "rawdrive"
+
+  # PgBouncer configuration file
+  pgbouncer.ini: |
+    ;; PgBouncer configuration for RawDrive Kubernetes deployment
+    ;; Optimized for 5000 concurrent users with autoscaling (10-100 pods)
+
+    [databases]
+    ;; Use environment variables for host/port
+    rawdrive = host=${POSTGRES_HOST} port=${POSTGRES_PORT} dbname=${POSTGRES_DB}
+
+    [pgbouncer]
+    ;; Listen on all interfaces
+    listen_addr = 0.0.0.0
+    listen_port = 6432
+
+    ;; Authentication
+    auth_type = md5
+    auth_file = /etc/pgbouncer/userlist.txt
+
+    ;; Pool Mode: transaction is optimal for web applications
+    pool_mode = transaction
+
+    ;; Connection Limits
+    ;; max_client_conn: 100 pods × 20 connections/pod = 2000
+    max_client_conn = 2000
+
+    ;; default_pool_size: Actual PostgreSQL connections per database
+    default_pool_size = 50
+
+    ;; min_pool_size: Maintain connections even when idle
+    min_pool_size = 10
+
+    ;; reserve_pool_size: Extra connections for burst traffic
+    reserve_pool_size = 10
+    reserve_pool_timeout = 5
+
+    ;; max_db_connections: Hard limit < PostgreSQL max_connections
+    max_db_connections = 60
+    max_user_connections = 60
+
+    ;; Timeouts
+    server_connect_timeout = 15
+    server_idle_timeout = 600
+    server_lifetime = 3600
+    client_idle_timeout = 0
+    client_login_timeout = 60
+    query_timeout = 0
+    query_wait_timeout = 120
+
+    ;; Admin/stats access
+    admin_users = rawdrive_admin
+    stats_users = rawdrive_admin,rawdrive
+
+    ;; Logging
+    log_connections = 1
+    log_disconnections = 1
+    log_pooler_errors = 1
+    stats_period = 60
+    verbose = 0
+
+    ;; TCP keepalive
+    tcp_keepalive = 1
+    tcp_keepidle = 60
+    tcp_keepintvl = 30
+    tcp_keepcnt = 3
+
+    ;; Application name for tracking
+    application_name_add_host = 1
+
+    ;; Ignore unsupported parameters
+    ignore_startup_parameters = extra_float_digits,geqo

@@ -1,0 +1,143 @@
+---
+# PgBouncer Deployment
+# Connection pooler for PostgreSQL - critical for scaling to 5000+ concurrent users
+# Runs 2 replicas for high availability
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  labels:
+    app: pgbouncer
+    component: database
+    part-of: rawdrive
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pgbouncer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+        component: database
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9127"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: pgbouncer
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: pgbouncer
+          image: edoburu/pgbouncer:1.21.0
+          ports:
+            - name: pgbouncer
+              containerPort: 6432
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: pgbouncer-config
+            - secretRef:
+                name: pgbouncer-secrets
+          volumeMounts:
+            - name: pgbouncer-config-volume
+              mountPath: /etc/pgbouncer/pgbouncer.ini
+              subPath: pgbouncer.ini
+              readOnly: true
+            - name: pgbouncer-userlist-volume
+              mountPath: /etc/pgbouncer/userlist.txt
+              subPath: userlist.txt
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            tcpSocket:
+              port: pgbouncer
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: pgbouncer
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+        # Prometheus exporter sidecar for PgBouncer metrics
+        - name: pgbouncer-exporter
+          image: prometheuscommunity/pgbouncer-exporter:v0.7.0
+          ports:
+            - name: metrics
+              containerPort: 9127
+              protocol: TCP
+          env:
+            - name: PGBOUNCER_EXPORTER_HOST
+              value: "localhost"
+            - name: PGBOUNCER_EXPORTER_PORT
+              value: "6432"
+            - name: PGBOUNCER_EXPORTER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pgbouncer-secrets
+                  key: PGBOUNCER_ADMIN_USER
+            - name: PGBOUNCER_EXPORTER_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: pgbouncer-secrets
+                  key: PGBOUNCER_ADMIN_PASSWORD
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: pgbouncer-config-volume
+          configMap:
+            name: pgbouncer-config
+            items:
+              - key: pgbouncer.ini
+                path: pgbouncer.ini
+        - name: pgbouncer-userlist-volume
+          secret:
+            secretName: pgbouncer-secrets
+            items:
+              - key: userlist.txt
+                path: userlist.txt
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 30
