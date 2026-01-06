@@ -48,6 +48,15 @@ async def create_upload_session(
     """Create upload session for file upload."""
     upload_service = get_upload_service()
 
+    # Log RAW file upload attempts for monitoring
+    ext = request.file_name.lower().split(".")[-1] if "." in request.file_name else ""
+    from app.shared.constants import SUPPORTED_RAW_EXTENSIONS
+    if ext in SUPPORTED_RAW_EXTENSIONS:
+        logger.info(
+            f"RAW file upload session requested: {request.file_name} "
+            f"(ext={ext}, mime={request.mime_type!r}, size={request.size_bytes})"
+        )
+
     try:
         result = await upload_service.create_upload_session(
             workspace_id=workspace_id,

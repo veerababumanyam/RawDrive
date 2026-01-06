@@ -1,6 +1,61 @@
 services:
+  # ============================================================================
+  # Traefik - Cloud-Native API Gateway
+  # ============================================================================
+  traefik:
+    image: traefik:v3.0
+    container_name: rawdrive-traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      # HTTP - redirects to HTTPS
+      - "80:80"
+      # HTTPS - main entry point
+      - "443:443"
+      # Dashboard (dev only, disable in prod)
+      - "127.0.0.1:8080:8080"
+      # Metrics for Prometheus/KEDA
+      - "127.0.0.1:8082:8082"
+    volumes:
+      # Traefik configuration (use dev config for local development)
+      - ./traefik/traefik.dev.yaml:/etc/traefik/traefik.yaml:ro
+      - ./traefik/dynamic.dev.yaml:/etc/traefik/dynamic.yaml:ro
+      # Docker socket for service discovery (Windows Docker Desktop)
+      - //var/run/docker.sock:/var/run/docker.sock:ro
+      # Let's Encrypt certificates
+      - traefik_letsencrypt:/letsencrypt
+      # Logs
+      - traefik_logs:/var/log/traefik
+    environment:
+      # Cloudflare DNS challenge (for wildcard certs)
+      # CF_API_EMAIL: ${CF_API_EMAIL:-}
+      # CF_API_KEY: ${CF_API_KEY:-}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@rawdrive.ai}
+    labels:
+      # Enable Traefik for this container
+      - "traefik.enable=true"
+      # Dashboard router
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=web"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+    healthcheck:
+      test: [ "CMD", "traefik", "healthcheck", "--ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - default
+    depends_on:
+      backend:
+        condition: service_started
+
   postgres:
-    image: pgvector/pgvector:pg16
+    # timescaledb-ha:pg16 - Official TimescaleDB High Availability image
+    # Includes: PostgreSQL 16, pgvector (0.8.1), pgvectorscale (0.9.0), TimescaleDB (2.24.0)
+    # pgvectorscale provides StreamingDiskANN indexes for optimal vector search at scale
+    image: timescale/timescaledb-ha:pg16
     container_name: rawdrive-postgres
     restart: unless-stopped
     environment:
@@ -39,32 +94,29 @@ services:
   # Uses transaction pooling mode for optimal connection reuse
   # ============================================================================
   pgbouncer:
-    image: edoburu/pgbouncer:1.21.0
+    image: pgbouncer/pgbouncer:latest
     container_name: rawdrive-pgbouncer
     restart: unless-stopped
     environment:
       # PostgreSQL connection settings
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-rawdrive}
-      POSTGRES_USER: ${POSTGRES_USER:-rawdrive}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rawdrive}
+      DATABASES_HOST: postgres
+      DATABASES_PORT: 5432
+      DATABASES_DB: ${POSTGRES_DB:-rawdrive}
+      DATABASES_USER: ${POSTGRES_USER:-rawdrive}
+      DATABASES_PASSWORD: ${POSTGRES_PASSWORD:-rawdrive}
       # PgBouncer admin password
       PGBOUNCER_ADMIN_PASSWORD: ${PGBOUNCER_ADMIN_PASSWORD:-rawdrive_admin}
-      # Use custom config file
-      PGBOUNCER_CONFIG_FILE: /etc/pgbouncer/pgbouncer.ini
     ports:
       # Expose port 6432 for connections through PgBouncer
       - "127.0.0.1:6432:6432"
     volumes:
-      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
       - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
       # Check if pgbouncer is accepting connections
-      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432 -U ${POSTGRES_USER:-rawdrive}"]
+      test: [ "CMD-SHELL", "pg_isready -h localhost -p 6432 -U ${POSTGRES_USER:-rawdrive}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -74,7 +126,6 @@ services:
     image: grafana/loki:2.9.0
     container_name: rawdrive-loki
     restart: unless-stopped
-    user: "10001:10001" # Run as loki user for security
     # Port 3100 only exposed internally via Docker network (not to host)
     expose:
       - "3100"
@@ -94,11 +145,39 @@ services:
         reservations:
           memory: 256M
 
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: rawdrive-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail/promtail-config.yaml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: rawdrive-alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yaml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ../monitoring/prometheus/alertmanager.yaml:/etc/alertmanager/alertmanager.yaml:ro
+      - alertmanager_data:/alertmanager
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   grafana:
     image: grafana/grafana:10.2.0
     container_name: rawdrive-grafana
     restart: unless-stopped
-    # Port 3000 only exposed internally - access via nginx proxy if needed
+    # Port 3000 only exposed internally - access via Traefik reverse proxy
     expose:
       - "3000"
     environment:
@@ -160,7 +239,7 @@ services:
       R2_BUCKET_NAME: ${R2_BUCKET_NAME}
       R2_ENDPOINT: ${R2_ENDPOINT}
     ports:
-      # Bind to localhost only - accessible via nginx reverse proxy, not directly from internet
+      # Bind to localhost only - accessible via Traefik reverse proxy, not directly from internet
       - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
@@ -173,7 +252,6 @@ services:
       - ../../backend:/app
       - ../../backend/secrets/jwtEd25519.key:/run/secrets/jwt_private_key:ro
       - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
-
   face-worker:
     build:
       context: ../../backend
@@ -281,7 +359,7 @@ services:
     volumes:
       - ../../backend:/app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8003/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -300,7 +378,7 @@ services:
     platform: linux/amd64
     container_name: rawdrive-one-api
     restart: unless-stopped
-    # Port 4000 only exposed internally - access via nginx proxy if needed
+    # Port 4000 only exposed internally - access via Traefik reverse proxy
     expose:
       - "3000"
     environment:
@@ -348,7 +426,7 @@ services:
       DEBUG: ${DEBUG:-false}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
     ports:
-      # Bind to localhost only - accessible via nginx reverse proxy
+      # Bind to localhost only - accessible via Traefik reverse proxy
       - "127.0.0.1:8003:8000"
     depends_on:
       postgres:
@@ -356,7 +434,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -390,7 +468,7 @@ services:
     # Celery worker health check - verify Redis broker connectivity
     # Python slim doesn't have ps/pgrep, so use redis-cli via Python
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import redis; r=redis.from_url('redis://redis:6379/3'); r.ping()\" || exit 1"]
+      test: [ "CMD-SHELL", "python -c \"import redis; r=redis.from_url('redis://redis:6379/3'); r.ping()\" || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -404,6 +482,293 @@ services:
           cpus: '0.1'
           memory: 128M
 
+
+  # ============================================================================
+  # Onboarding Microservice
+  # Dedicated service for user registration and onboarding flow
+  # ============================================================================
+  onboarding-service:
+    build:
+      context: ../../services/onboarding-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-onboarding-service
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Service identification
+      SERVICE_NAME: onboarding-service
+      SERVICE_VERSION: 1.0.0
+      DEBUG: ${DEBUG:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      
+      # Database connection (shared with main backend)
+      DATABASE_URL: postgresql://rawdrive:rawdrive@postgres:5432/rawdrive
+      DB_POOL_MIN_SIZE: 5
+      DB_POOL_MAX_SIZE: 20
+      
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      REDIS_MAX_CONNECTIONS: 20
+      
+      # JWT - CRITICAL: Must match backend exactly
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret-here}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-EdDSA}
+      ACCESS_TOKEN_EXPIRE_MINUTES: 15
+      
+      # Stripe
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      
+      # Email
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-noreply@rawdrive.ai}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-RawDrive}
+      
+      # Rate limiting
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_DEFAULT: 100/minute
+      RATE_LIMIT_ONBOARDING_START: 10/minute
+      RATE_LIMIT_EMAIL_VERIFICATION: 5/minute
+      RATE_LIMIT_PAYMENT: 20/minute
+      
+      # Cache TTLs
+      CACHE_TTL_SESSION: 600
+      CACHE_TTL_STATE: 120
+      CACHE_TTL_VALIDATION: 30
+      
+      # Metrics
+      METRICS_ENABLED: true
+      METRICS_CUSTOM_PREFIX: onboarding
+    ports:
+      # Bind to localhost only - accessible via Traefik reverse proxy
+      - "127.0.0.1:8005:8000"
+    volumes:
+      - ../../services/onboarding-service:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+  # ============================================================================
+  # Gallery Microservice
+  # Dedicated service for high-performance gallery viewing and proofing
+  # Optimized for 50K concurrent Magic Link views with KEDA autoscaling
+  # ============================================================================
+  gallery-service:
+    build:
+      context: ../../services/gallery-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-gallery-service
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Service
+      SERVICE_NAME: gallery-service
+      SERVICE_VERSION: "1.0.0"
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Database (shared with backend)
+      DATABASE_URL: postgresql://rawdrive:rawdrive@postgres:5432/rawdrive
+      DATABASE_READ_REPLICA_URL: ${DATABASE_READ_REPLICA_URL:-}
+      DB_POOL_MIN_SIZE: ${GALLERY_DB_POOL_MIN_SIZE:-10}
+      DB_POOL_MAX_SIZE: ${GALLERY_DB_POOL_MAX_SIZE:-100}
+      DB_COMMAND_TIMEOUT: ${DB_COMMAND_TIMEOUT:-60}
+
+      # Redis - Multi-tier caching
+      REDIS_URL: redis://redis:6379/0
+      REDIS_MAX_CONNECTIONS: ${GALLERY_REDIS_MAX_CONNECTIONS:-50}
+
+      # JWT (must match backend)
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+
+      # CORS
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+
+      # Rate Limiting
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_DEFAULT: "1000/minute"
+
+      # Cache TTLs (seconds)
+      CACHE_TTL_GALLERY_METADATA: 300
+      CACHE_TTL_GALLERY_ASSETS: 120
+      CACHE_TTL_PROOFING_STATE: 30
+      CACHE_TTL_SIGNED_URL: 3600
+      CACHE_TTL_MAGIC_LINK: 600
+
+      # Storage (R2)
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-rawdrive}
+      R2_SIGNED_URL_EXPIRY: 3600
+
+      # WebSocket configuration
+      WS_MAX_CONNECTIONS_PER_GALLERY: 1000
+      WS_HEARTBEAT_INTERVAL: 30
+      WS_MESSAGE_QUEUE_SIZE: 100
+
+      # Metrics
+      METRICS_ENABLED: true
+      METRICS_CUSTOM_PREFIX: gallery
+
+      # Security
+      PIN_MAX_ATTEMPTS: 5
+      PIN_LOCKOUT_MINUTES: 15
+      PASSWORD_MAX_ATTEMPTS: 5
+      PASSWORD_LOCKOUT_MINUTES: 30
+
+      # Circuit Breaker
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: 5
+      CIRCUIT_BREAKER_RECOVERY_TIMEOUT: 30
+
+    ports:
+      # Bind to localhost only - accessible via Traefik reverse proxy
+      - "127.0.0.1:8004:8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================================================
+  # Billing Microservice
+  # Dedicated service for subscriptions, payments, and invoice management
+  # Enforces billing:read and billing:write permissions at service boundary
+  # ============================================================================
+  billing-service:
+    build:
+      context: ../../services/billing-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-billing-service
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Service
+      SERVICE_NAME: billing-service
+      SERVICE_VERSION: "1.0.0"
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Database (shared with backend)
+      DATABASE_URL: postgresql://rawdrive:rawdrive@postgres:5432/rawdrive
+      DATABASE_READ_REPLICA_URL: ${DATABASE_READ_REPLICA_URL:-}
+      DB_POOL_MIN_SIZE: ${BILLING_DB_POOL_MIN_SIZE:-10}
+      DB_POOL_MAX_SIZE: ${BILLING_DB_POOL_MAX_SIZE:-50}
+      DB_COMMAND_TIMEOUT: ${DB_COMMAND_TIMEOUT:-60}
+
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      REDIS_MAX_CONNECTIONS: ${BILLING_REDIS_MAX_CONNECTIONS:-20}
+      REDIS_KEY_PREFIX: "billing:"
+
+      # JWT (must match backend)
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+
+      # CORS
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+
+      # Rate Limiting
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_API: "1000/minute"
+      RATE_LIMIT_WEBHOOK: "100/minute"
+
+      # Payment Providers
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+
+      # Invoice Settings
+      INVOICE_PDF_STORAGE_PATH: workspaces/{workspace_id}/invoices/
+      GST_NUMBER: ${GST_NUMBER:-}
+      COMPANY_ADDRESS: ${COMPANY_ADDRESS:-}
+      COMPANY_NAME: ${COMPANY_NAME:-RawDrive}
+
+      # Subscription Settings
+      TRIAL_DAYS: ${TRIAL_DAYS:-14}
+      GRACE_PERIOD_DAYS: ${GRACE_PERIOD_DAYS:-7}
+
+      # Storage (R2) for invoice PDFs
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-rawdrive}
+
+      # Circuit Breaker
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      CIRCUIT_BREAKER_RECOVERY_TIMEOUT: ${CIRCUIT_BREAKER_RECOVERY_TIMEOUT:-30}
+
+      # Metrics
+      METRICS_ENABLED: true
+      METRICS_CUSTOM_PREFIX: billing
+
+    ports:
+      # Bind to localhost only - accessible via Traefik reverse proxy
+      - "127.0.0.1:8005:8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
   # ============================================================================
   # Prometheus - Metrics Collection (for production monitoring)
   # Use docker-compose.prod.yml for full stack with AlertManager
@@ -412,6 +777,7 @@ services:
     image: prom/prometheus:v2.47.0
     container_name: rawdrive-prometheus
     restart: unless-stopped
+    user: root
     command:
       - '--config.file=/etc/prometheus/prometheus.yaml'
       - '--storage.tsdb.path=/prometheus'
@@ -426,10 +792,8 @@ services:
     depends_on:
       backend:
         condition: service_started
-    profiles:
-      - monitoring  # Only start with: docker compose --profile monitoring up
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -439,7 +803,11 @@ volumes:
   loki_data:
   grafana_data:
   prometheus_data:
-
+  alertmanager_data:
+  traefik_letsencrypt:
+    name: rawdrive-traefik-letsencrypt
+  traefik_logs:
+    name: rawdrive-traefik-logs
 
 networks:
   default:

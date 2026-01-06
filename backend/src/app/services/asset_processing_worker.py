@@ -120,6 +120,19 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                         f"{preview_width}x{preview_height}"
                     )
 
+                # Generate medium variant from preview
+                try:
+                    medium_data, medium_width, medium_height = (
+                        image_processing_service.generate_medium(
+                            preview_data, workspace_id
+                        )
+                    )
+                except ImageProcessingError as e:
+                    logger.error(
+                        f"Failed to generate medium variant for RAW asset {asset_id}: {e}"
+                    )
+                    raise
+
                 # Generate thumbnail from preview (smaller, faster)
                 try:
                     thumbnail_data, thumb_width, thumb_height = (
@@ -146,6 +159,13 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                         )
                     )
 
+                    # Generate medium variant
+                    medium_data, medium_width, medium_height = (
+                        image_processing_service.generate_medium(
+                            decrypted_data, workspace_id
+                        )
+                    )
+
                     # Generate preview
                     preview_data, preview_width, preview_height = (
                         image_processing_service.generate_preview(
@@ -164,6 +184,11 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                 encrypted_thumbnail, _, _, _ = (
                     await encryption_service.encrypt_file(
                         thumbnail_data, workspace_id, asset_id, variant="thumbnail"
+                    )
+                )
+                encrypted_medium, _, _, _ = (
+                    await encryption_service.encrypt_file(
+                        medium_data, workspace_id, asset_id, variant="medium"
                     )
                 )
                 encrypted_preview, _, _, _ = (
@@ -191,6 +216,16 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                     workspace_id=workspace_id,
                     gallery_id=gallery_id,
                     asset_id=asset_id,
+                    variant="medium",
+                    filename="medium.webp",
+                    encrypted_data=encrypted_medium,
+                    content_type="image/webp",
+                )
+
+                await storage_service.upload_encrypted_file(
+                    workspace_id=workspace_id,
+                    gallery_id=gallery_id,
+                    asset_id=asset_id,
                     variant="preview",
                     filename=preview_filename,
                     encrypted_data=encrypted_preview,
@@ -203,6 +238,7 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
             logger.info(
                 f"Successfully processed asset {asset_id}: "
                 f"thumbnail={thumb_width}x{thumb_height}, "
+                f"medium={medium_width}x{medium_height}, "
                 f"preview={preview_width}x{preview_height}"
             )
 

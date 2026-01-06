@@ -1,0 +1,128 @@
+# Traefik Static Configuration for RawDrive
+# Integrates with KEDA for autoscaling via Prometheus metrics
+#
+# See: docs/ARCHITECTURE_QUICK_REFERENCE.md
+
+# =============================================================================
+# Global Settings
+# =============================================================================
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# =============================================================================
+# API & Dashboard
+# =============================================================================
+api:
+  dashboard: true
+  insecure: true  # Disable in production, use middleware auth
+  debug: false
+
+# =============================================================================
+# Entry Points (Ports)
+# =============================================================================
+entryPoints:
+  # HTTP - Redirect to HTTPS in production
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  # HTTPS - Main entry point
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - security-headers@file
+        - rate-limit-global@file
+
+  # Metrics endpoint for Prometheus/KEDA
+  metrics:
+    address: ":8082"
+
+# =============================================================================
+# Providers
+# =============================================================================
+providers:
+  # Docker provider for local development
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: rawdrive-network
+    watch: true
+
+  # File provider for dynamic configuration
+  file:
+    filename: /etc/traefik/dynamic.yaml
+    watch: true
+
+# =============================================================================
+# Let's Encrypt Certificate Resolver
+# =============================================================================
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ${ACME_EMAIL:-admin@rawdrive.ai}
+      storage: /letsencrypt/acme.json
+      # Use staging for testing: https://acme-staging-v02.api.letsencrypt.org/directory
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+      httpChallenge:
+        entryPoint: web
+      # Alternative: DNS challenge for wildcard certs
+      # dnsChallenge:
+      #   provider: cloudflare
+      #   delayBeforeCheck: 10
+
+# =============================================================================
+# Metrics for Prometheus & KEDA
+# =============================================================================
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+    manualRouting: false
+
+# =============================================================================
+# Access Logs
+# =============================================================================
+accessLog:
+  filePath: /var/log/traefik/access.log
+  format: json
+  fields:
+    defaultMode: keep
+    names:
+      ClientUsername: drop
+    headers:
+      defaultMode: keep
+      names:
+        Authorization: redact
+        Cookie: redact
+  bufferingSize: 100
+
+# =============================================================================
+# Application Logs
+# =============================================================================
+log:
+  level: INFO
+  format: json
+  filePath: /var/log/traefik/traefik.log
+
+# =============================================================================
+# Ping (Health Check)
+# =============================================================================
+ping:
+  entryPoint: web
+  manualRouting: false

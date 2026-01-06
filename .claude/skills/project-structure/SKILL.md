@@ -57,7 +57,7 @@ RawDrive/
 ├── scripts/               # Build and generation scripts
 │   └── generate-python-types.ts  # TypeScript → Python generator
 │
-├── infrastructure/        # Docker, nginx, monitoring
+├── infrastructure/        # Docker, Traefik, K8s, monitoring
 ├── docs/                  # Documentation
 ├── specs/                 # Feature specifications
 └── .claude/               # Claude Code skills

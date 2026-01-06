@@ -1,0 +1,314 @@
+{
+  "category": "Uncategorized",
+  "description": " Gallery Microservice Extraction + KEDA Autoscaling\n\n**Extract gallery CRUD and proofing functionality** from the monolith into a **dedicated, high‑performance gallery microservice** capable of serving 50K concurrent Magic Link views and proofing interactions.\n\n## 🎯 **Migration Objectives**\n\n✅ EXTRACT → Independent gallery service (FastAPI)\n✅ CONTAINERIZE → Optimized Docker multi-stage build\n✅ ORCHESTRATE → Kubernetes Deployment + Service\n✅ AUTOSCALE → KEDA (Redis queue + Prometheus metrics)\n✅ ROUTE → Traefik Ingress (gallery-service.rawdrive.internal)\n✅ INTEGRATE → Frontend unchanged (endpoint URL update only)\n✅ CACHE → Redis (gallery metadata + proofing state)\n✅ STORAGE → R2 signed URLs (images bypass service)\n✅ REALTIME → WebSocket proofing updates\n\nInternet\n↓ HTTPS (Traefik TLS)\nGallery Microservice (5→20 pods)\n↓ KEDA Scaled Deployment\n├── API Layer (FastAPI):\n│ ├── /v1/gallery/{id} → cached metadata\n│ ├── /v1/proof/{photoId} → Redis + WebSocket\n│ └── /v1/export → async ZIP generation\n├── Cache Layer:\n│ ├── Redis: Gallery metadata (TTL 5m)\n│ └── Redis Streams: Proofing events\n├── Storage:\n│ └── R2 Signed URLs (images bypass service)\n└── Database:\n└── Gallery + Asset + Proofing tables (read replicas)\n\nExpected Outcomes\n✅ 50K concurrent gallery views (vs 1K monolith)\n✅ Proofing scales independently (no upload blocking)\n✅ 99.99% uptime (isolated failures)\n✅ 40% lower infra costs (scale only what's needed)\n✅ Real-time proofing (WebSocket updates)",
+  "title": "Extract gallery service with KEDA autoscaling",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1767709892872-0jpdzduan",
+  "startedAt": "2026-01-06T15:09:59.641Z",
+  "updatedAt": "2026-01-06T15:30:13.327Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Task\nInput: {\n  \"description\": \"Explore gallery codebase structure\",\n  \"prompt\": \"Explore the RawDrive codebase to understand the existing gallery functionality that needs to be extracted into a microservice. I need to find:\\n\\n1. Gallery-related API routes in backend/src/app/api/v1/\\n2. Gallery models and database schemas\\n3. Gallery services and business logic\\n4. Proofing functionality (photo approval/rejection)\\n5. Any existing WebSocket implementations\\n6. Redis caching patterns used\\n7. R2 storage integration for galleries\\n8. How Magic Links work for gallery sharing\\n\\nFocus on understanding:\\n- Current gallery CRUD operations\\n- Proofing workflow (how clients approve/reject photos)\\n- How galleries are shared via Magic Links\\n- Current caching strategies\\n- Database relationships (Gallery, Asset, Proofing tables)\\n\\nBe thorough - this is a major extraction task and I need complete understanding of all gallery-related code.\",\n  \"subagent_type\": \"Explore\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\kubernetes\\\\base\\\\keda\\\\\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"infrastructure/kubernetes/**/*.yaml\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"infrastructure/docker/traefik/**/*\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/api/v1/**/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/models/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/services/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/repositories/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/services/**/*.ts\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"class Gallery|def.*gallery|proofing|magic.*link\",\n  \"type\": \"py\",\n  \"path\": \"backend/src/app/models\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"class Asset|class Proofing|class.*Approval\",\n  \"type\": \"py\",\n  \"path\": \"backend/src/app\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\galleries.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\gallery_assets.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\gallery_service.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\magic_links.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\websocket.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\magic_link_service.py\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"proofing|proof|approval|reject|client_interaction\",\n  \"type\": \"py\",\n  \"path\": \"backend/src/app/api/v1\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive -name \\\"*.sql\\\" -o -name \\\"*migration*\\\" -type f | grep -E \\\"(migration|schema)\\\" | head -20\",\n  \"description\": \"Find database migration and schema files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\r2_storage_service.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"class.*Proofing|client_interaction|approval|rejection\",\n  \"type\": \"py\",\n  \"path\": \"backend/src/app\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\" -name \\\"*.sql\\\" 2>/dev/null | head -10\",\n  \"description\": \"Find SQL migration files\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"CREATE TABLE.*gallery|CREATE TABLE.*asset|CREATE TABLE.*magic\",\n  \"type\": \"sql\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\cache_service.py\",\n  \"limit\": 150\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\gallery_link_service.py\",\n  \"limit\": 150\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\public_galleries.py\",\n  \"limit\": 200\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"gallery_stories|smart_curation|favorites_service|client_interaction\",\n  \"type\": \"py\",\n  \"path\": \"backend/src/app/services\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"class.*Gallery|class.*Asset|class.*MagicLink\",\n  \"type\": \"py\",\n  \"path\": \"backend/src/app/api/schemas.py\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"limit\": 250\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -n \\\"class.*Gallery\\\\|class.*Asset\\\\|class.*MagicLink\\\\|class.*Magic\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\\\" | head -50\",\n  \"description\": \"Find all Gallery-related schema classes\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"limit\": 300,\n  \"offset\": 250\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"limit\": 200,\n  \"offset\": 760\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"class FaceSearchRequest|class FaceSearchResponse|gallery_asset|class.*Asset\",\n  \"type\": \"py\",\n  \"path\": \"backend/src/app/api/schemas.py\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 20\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\kubernetes\\\\base\\\\keda\\\\scaledobjects.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\kubernetes\\\\base\\\\traefik\\\\ingressroutes.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\kubernetes\\\\base\\\\deployment.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\docker\\\\traefik\\\\traefik.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\invitations-service\\\\\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"services/invitations-service/**/*\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\docker\\\\traefik\\\\dynamic.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\galleries.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\invitations-service\\\\src\\\\main.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\invitations-service\\\\Dockerfile\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\magic_links.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\gallery_assets.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\public_galleries.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\websocket.py\"\n}\n\nNow I have comprehensive understanding of the codebase. Let me generate the specification:\n\n---\n\n# Gallery Microservice Extraction + KEDA Autoscaling\n\n## 1. Problem Statement\n\nThe monolithic RawDrive backend cannot scale gallery/proofing operations independently from upload processing, limiting concurrent Magic Link views to ~1K users. High-traffic gallery viewing events (e.g., wedding photo releases) cause system-wide degradation. Extracting gallery functionality into a dedicated microservice with KEDA autoscaling will enable 50K concurrent gallery views while maintaining system stability for other operations.\n\n## 2. User Story\n\nAs a **professional photographer**, I want **my client gallery to handle viral traffic spikes** when I share Magic Links, so that **clients can view and proof photos without timeouts or errors during high-demand periods** (wedding photo releases, event galleries).\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** a gallery with 500 photos is published with a Magic Link, **WHEN** 50,000 concurrent users access the link, **THEN** all users receive gallery content within 2 seconds with 99.9% success rate\n- **GIVEN** a client is proofing photos, **WHEN** they favorite or select photos, **THEN** the action completes in <200ms and other viewers see updates via WebSocket within 500ms\n- **GIVEN** KEDA monitors gallery service metrics, **WHEN** request rate exceeds 100 RPS, **THEN** pods scale from 5→20 within 60 seconds\n\n### Edge Cases\n- **GIVEN** gallery service is restarting, **WHEN** user requests arrive, **THEN** Traefik routes to healthy pods with zero downtime\n- **GIVEN** Redis cache is unavailable, **WHEN** gallery requests arrive, **THEN** service falls back to direct database queries with circuit breaker protection\n- **GIVEN** database connection pool is exhausted, **WHEN** new requests arrive, **THEN** service returns 503 with Retry-After header\n\n### Error Handling\n- **GIVEN** an invalid Magic Link token, **WHEN** user accesses the gallery, **THEN** service returns 404 with generic \"link not valid\" message (no information leakage)\n- **GIVEN** gallery PIN verification fails, **WHEN** user submits wrong PIN, **THEN** rate limiting kicks in after 5 failed attempts per IP per minute\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `services/gallery-service/` (new), `infrastructure/kubernetes/base/keda/`, `infrastructure/kubernetes/base/traefik/`, `infrastructure/docker/traefik/dynamic.yaml` |\n| Dependencies | FastAPI, asyncpg, redis, pydantic, uvicorn, prometheus-client, websockets |\n| Constraints | Must maintain API compatibility with frontend (no breaking changes), PostgreSQL read replicas for high-read scenarios |\n| Patterns to Follow | Existing `services/invitations-service/` structure, KEDA ScaledObject patterns from `scaledobjects.yaml`, Traefik IngressRoute from `ingressroutes.yaml` |\n\n## 5. Non-Goals\n\n- **NOT** migrating upload functionality (stays in monolith)\n- **NOT** implementing new features beyond extraction\n- **NOT** changing database schema (uses existing tables)\n- **NOT** modifying frontend code beyond endpoint URL updates\n- **NOT** handling asset storage/processing (R2 signed URLs bypass service)\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Microservice Foundation (Core Infrastructure)\n- [ ] T001: Create gallery-service directory structure following invitations-service pattern | File: services/gallery-service/\n- [ ] T002: Implement FastAPI main.py with lifespan, CORS, and health endpoints | File: services/gallery-service/src/main.py\n- [ ] T003: Create config.py with environment settings and Redis/DB connections | File: services/gallery-service/src/config.py\n- [ ] T004: Implement database.py with asyncpg connection pool and PgBouncer support | File: services/gallery-service/src/database.py\n- [ ] T005: Create Redis client with circuit breaker and 3-tier caching (session/api/computed) | File: services/gallery-service/src/cache/redis_client.py\n- [ ] T006: Implement Prometheus metrics endpoint for KEDA scaling | File: services/gallery-service/src/observability/metrics.py\n- [ ] T007: Create health check endpoints (live, ready, startup probes) | File: services/gallery-service/src/observability/health.py\n- [ ] T008: Implement correlation middleware for request tracing | File: services/gallery-service/src/middleware/correlation.py\n- [ ] T009: Create rate limiter middleware with Redis sliding window | File: services/gallery-service/src/middleware/rate_limiter.py\n- [ ] T010: Create multi-stage Dockerfile optimized for production | File: services/gallery-service/Dockerfile\n\n## Phase 2: Gallery API Endpoints\n- [ ] T011: Implement gallery CRUD schemas (Pydantic models) | File: services/gallery-service/src/schemas/gallery.py\n- [ ] T012: Create gallery service layer with caching integration | File: services/gallery-service/src/services/gallery_service.py\n- [ ] T013: Implement authenticated gallery API endpoints (list, get, update) | File: services/gallery-service/src/api/v1/galleries.py\n- [ ] T014: Create sub-gallery management endpoints | File: services/gallery-service/src/api/v1/sub_galleries.py\n- [ ] T015: Implement gallery assets endpoints (list, sort, move, favorite, select) | File: services/gallery-service/src/api/v1/gallery_assets.py\n- [ ] T016: Create gallery publication workflow endpoint | File: services/gallery-service/src/api/v1/publish.py\n\n## Phase 3: Magic Links & Public Access\n- [ ] T017: Implement Magic Link schemas and service | File: services/gallery-service/src/services/magic_link_service.py\n- [ ] T018: Create authenticated Magic Link management endpoints | File: services/gallery-service/src/api/v1/magic_links.py\n- [ ] T019: Implement public Magic Link validation endpoint with rate limiting | File: services/gallery-service/src/api/v1/public/magic_links.py\n- [ ] T020: Create public gallery view endpoints (no auth required) | File: services/gallery-service/src/api/v1/public/galleries.py\n- [ ] T021: Implement QR code generation service | File: services/gallery-service/src/services/qr_service.py\n- [ ] T022: Add visitor registration and PIN/password verification | File: services/gallery-service/src/api/v1/public/visitors.py\n\n## Phase 4: Proofing & Real-time\n- [ ] T023: Implement proofing state service (favorites, selections, comments) | File: services/gallery-service/src/services/proofing_service.py\n- [ ] T024: Create WebSocket endpoint for real-time proofing updates | File: services/gallery-service/src/api/v1/websocket.py\n- [ ] T025: Implement Redis pub/sub for gallery event broadcasting | File: services/gallery-service/src/events/publisher.py\n- [ ] T026: Add face search endpoint using pgvector similarity | File: services/gallery-service/src/api/v1/public/face_search.py\n- [ ] T027: Implement download list endpoint with policy enforcement | File: services/gallery-service/src/api/v1/downloads.py\n\n## Phase 5: Infrastructure & Deployment\n- [ ] T028: Create Kubernetes Deployment manifest for gallery-service | File: infrastructure/kubernetes/base/gallery-service/deployment.yaml\n- [ ] T029: Create Kubernetes Service manifest | File: infrastructure/kubernetes/base/gallery-service/service.yaml\n- [ ] T030: Implement KEDA ScaledObject with Prometheus and Redis triggers | File: infrastructure/kubernetes/base/keda/gallery-scaledobject.yaml\n- [ ] T031: Add Traefik IngressRoute for gallery-service routing | File: infrastructure/kubernetes/base/traefik/gallery-ingressroute.yaml\n- [ ] T032: Update Traefik dynamic config with gallery-service router | File: infrastructure/docker/traefik/dynamic.yaml\n- [ ] T033: Create ConfigMap for gallery-service environment | File: infrastructure/kubernetes/base/gallery-service/configmap.yaml\n- [ ] T034: Add gallery-service to base kustomization | File: infrastructure/kubernetes/base/kustomization.yaml\n\n## Phase 6: Testing & Documentation\n- [ ] T035: Create pytest configuration and fixtures | File: services/gallery-service/tests/conftest.py\n- [ ] T036: Implement unit tests for gallery service | File: services/gallery-service/tests/unit/test_gallery_service.py\n- [ ] T037: Create integration tests for API endpoints | File: services/gallery-service/tests/integration/test_api.py\n- [ ] T038: Add load testing configuration for 50K concurrent users | File: services/gallery-service/tests/load/locustfile.py\n- [ ] T039: Create requirements.txt with pinned dependencies | File: services/gallery-service/requirements.txt\n- [ ] T040: Write service README with architecture documentation | File: services/gallery-service/README.md\n```\n\n## 7. Success Metrics\n\n| Metric | Target |\n|--------|--------|\n| Concurrent Magic Link views | 50,000 users |\n| P95 gallery load latency | <2 seconds |\n| P95 proofing action latency | <200ms |\n| WebSocket update propagation | <500ms |\n| KEDA scale-up time | <60 seconds |\n| Service availability | 99.99% uptime |\n| Cache hit rate | >90% for gallery metadata |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Database connection exhaustion at scale | PgBouncer connection pooling (100 connections per pod), read replicas for public endpoints |\n| Redis failure causing service degradation | Circuit breaker pattern, graceful fallback to direct DB queries with request throttling |\n| WebSocket connection storms | Connection rate limiting, per-IP limits, sticky sessions via Traefik |\n| Cache invalidation consistency | Event-driven invalidation via Redis pub/sub, short TTLs (5 min) for gallery metadata |\n| Frontend integration breaking changes | Maintain exact API contract, feature flag for gradual rollout |\n| Cold start latency during scale-up | Pre-warmed pod pool (minReplicas=5), startup probe with 30s tolerance |",
+    "generatedAt": "2026-01-06T14:36:07.347Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create gallery-service directory structure following invitations-service pattern",
+        "filePath": "services/gallery-service/",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Implement FastAPI main.py with lifespan, CORS, and health endpoints",
+        "filePath": "services/gallery-service/src/main.py",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create config.py with environment settings and Redis/DB connections",
+        "filePath": "services/gallery-service/src/config.py",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Implement database.py with asyncpg connection pool and PgBouncer support",
+        "filePath": "services/gallery-service/src/database.py",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create Redis client with circuit breaker and 3-tier caching (session/api/computed)",
+        "filePath": "services/gallery-service/src/cache/redis_client.py",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Implement Prometheus metrics endpoint for KEDA scaling",
+        "filePath": "services/gallery-service/src/observability/metrics.py",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create health check endpoints (live, ready, startup probes)",
+        "filePath": "services/gallery-service/src/observability/health.py",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Implement correlation middleware for request tracing",
+        "filePath": "services/gallery-service/src/middleware/correlation.py",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create rate limiter middleware with Redis sliding window",
+        "filePath": "services/gallery-service/src/middleware/rate_limiter.py",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Create multi-stage Dockerfile optimized for production",
+        "filePath": "services/gallery-service/Dockerfile",
+        "phase": "Phase 1: Microservice Foundation (Core Infrastructure)",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Implement gallery CRUD schemas (Pydantic models)",
+        "filePath": "services/gallery-service/src/schemas/gallery.py",
+        "phase": "Phase 2: Gallery API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create gallery service layer with caching integration",
+        "filePath": "services/gallery-service/src/services/gallery_service.py",
+        "phase": "Phase 2: Gallery API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Implement authenticated gallery API endpoints (list, get, update)",
+        "filePath": "services/gallery-service/src/api/v1/galleries.py",
+        "phase": "Phase 2: Gallery API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create sub-gallery management endpoints",
+        "filePath": "services/gallery-service/src/api/v1/sub_galleries.py",
+        "phase": "Phase 2: Gallery API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Implement gallery assets endpoints (list, sort, move, favorite, select)",
+        "filePath": "services/gallery-service/src/api/v1/gallery_assets.py",
+        "phase": "Phase 2: Gallery API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create gallery publication workflow endpoint",
+        "filePath": "services/gallery-service/src/api/v1/publish.py",
+        "phase": "Phase 2: Gallery API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Implement Magic Link schemas and service",
+        "filePath": "services/gallery-service/src/services/magic_link_service.py",
+        "phase": "Phase 3: Magic Links & Public Access",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create authenticated Magic Link management endpoints",
+        "filePath": "services/gallery-service/src/api/v1/magic_links.py",
+        "phase": "Phase 3: Magic Links & Public Access",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Implement public Magic Link validation endpoint with rate limiting",
+        "filePath": "services/gallery-service/src/api/v1/public/magic_links.py",
+        "phase": "Phase 3: Magic Links & Public Access",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Create public gallery view endpoints (no auth required)",
+        "filePath": "services/gallery-service/src/api/v1/public/galleries.py",
+        "phase": "Phase 3: Magic Links & Public Access",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Implement QR code generation service",
+        "filePath": "services/gallery-service/src/services/qr_service.py",
+        "phase": "Phase 3: Magic Links & Public Access",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Add visitor registration and PIN/password verification",
+        "filePath": "services/gallery-service/src/api/v1/public/visitors.py",
+        "phase": "Phase 3: Magic Links & Public Access",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Implement proofing state service (favorites, selections, comments)",
+        "filePath": "services/gallery-service/src/services/proofing_service.py",
+        "phase": "Phase 4: Proofing & Real-time",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create WebSocket endpoint for real-time proofing updates",
+        "filePath": "services/gallery-service/src/api/v1/websocket.py",
+        "phase": "Phase 4: Proofing & Real-time",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Implement Redis pub/sub for gallery event broadcasting",
+        "filePath": "services/gallery-service/src/events/publisher.py",
+        "phase": "Phase 4: Proofing & Real-time",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Add face search endpoint using pgvector similarity",
+        "filePath": "services/gallery-service/src/api/v1/public/face_search.py",
+        "phase": "Phase 4: Proofing & Real-time",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Implement download list endpoint with policy enforcement",
+        "filePath": "services/gallery-service/src/api/v1/downloads.py",
+        "phase": "Phase 4: Proofing & Real-time",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Create Kubernetes Deployment manifest for gallery-service",
+        "filePath": "infrastructure/kubernetes/base/gallery-service/deployment.yaml",
+        "phase": "Phase 5: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Create Kubernetes Service manifest",
+        "filePath": "infrastructure/kubernetes/base/gallery-service/service.yaml",
+        "phase": "Phase 5: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Implement KEDA ScaledObject with Prometheus and Redis triggers",
+        "filePath": "infrastructure/kubernetes/base/keda/gallery-scaledobject.yaml",
+        "phase": "Phase 5: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Add Traefik IngressRoute for gallery-service routing",
+        "filePath": "infrastructure/kubernetes/base/traefik/gallery-ingressroute.yaml",
+        "phase": "Phase 5: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Update Traefik dynamic config with gallery-service router",
+        "filePath": "infrastructure/docker/traefik/dynamic.yaml",
+        "phase": "Phase 5: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Create ConfigMap for gallery-service environment",
+        "filePath": "infrastructure/kubernetes/base/gallery-service/configmap.yaml",
+        "phase": "Phase 5: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Add gallery-service to base kustomization",
+        "filePath": "infrastructure/kubernetes/base/kustomization.yaml",
+        "phase": "Phase 5: Infrastructure & Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Create pytest configuration and fixtures",
+        "filePath": "services/gallery-service/tests/conftest.py",
+        "phase": "Phase 6: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Implement unit tests for gallery service",
+        "filePath": "services/gallery-service/tests/unit/test_gallery_service.py",
+        "phase": "Phase 6: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Create integration tests for API endpoints",
+        "filePath": "services/gallery-service/tests/integration/test_api.py",
+        "phase": "Phase 6: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T038",
+        "description": "Add load testing configuration for 50K concurrent users",
+        "filePath": "services/gallery-service/tests/load/locustfile.py",
+        "phase": "Phase 6: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T039",
+        "description": "Create requirements.txt with pinned dependencies",
+        "filePath": "services/gallery-service/requirements.txt",
+        "phase": "Phase 6: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T040",
+        "description": "Write service README with architecture documentation",
+        "filePath": "services/gallery-service/README.md",
+        "phase": "Phase 6: Testing & Documentation",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 40,
+    "tasksCompleted": 1,
+    "approvedAt": "2026-01-06T14:36:07.349Z",
+    "currentTaskId": "T002"
+  }
+}

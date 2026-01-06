@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: upload-service-config
+  labels:
+    app: upload-service
+    component: uploads
+data:
+  # Environment
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+
+  # Service discovery
+  SERVICE_NAME: "upload-service"
+  SERVICE_VERSION: "1.0.0"
+
+  # Kafka
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_TOPIC_ASSET_PROCESSING: "asset-processing"
+  KAFKA_TOPIC_UPLOAD_COMPLETED: "upload-completed"
+
+  # CORS (comma-separated list)
+  CORS_ORIGINS: "https://app.rawdrive.io,https://rawdrive.io"
+
+  # Rate limiting
+  RATE_LIMIT_PER_WORKSPACE: "500"
+  RATE_LIMIT_WINDOW: "60"
+  MAX_CONCURRENT_UPLOADS_PER_WORKSPACE: "10"
+
+  # Upload configuration
+  UPLOAD_SESSION_TTL_HOURS: "24"
+  MAX_CHUNK_SIZE_BYTES: "10485760"
+  TUS_RESUMABLE_VERSION: "1.0.0"
+  TUS_MAX_SIZE: "536870912"
+  TUS_EXTENSIONS: "creation,creation-with-upload,termination,checksum"
+
+  # Storage retry
+  STORAGE_RETRY_ATTEMPTS: "5"
+  STORAGE_RETRY_WAIT_MIN: "1"
+  STORAGE_RETRY_WAIT_MAX: "30"
+  STORAGE_RETRY_MULTIPLIER: "2"

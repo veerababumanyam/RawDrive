@@ -1,0 +1,122 @@
+# Docker Compose - Traefik API Gateway for RawDrive
+# Integrates with KEDA via Prometheus metrics
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
+#
+# This file extends the base docker-compose.yml with Traefik
+
+services:
+  # ============================================================================
+  # Traefik - Cloud-Native API Gateway
+  # ============================================================================
+  traefik:
+    image: traefik:v3.0
+    container_name: rawdrive-traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      # HTTP - redirects to HTTPS
+      - "80:80"
+      # HTTPS - main entry point
+      - "443:443"
+      # Dashboard (dev only, disable in prod)
+      - "127.0.0.1:8080:8080"
+      # Metrics for Prometheus/KEDA
+      - "127.0.0.1:8082:8082"
+    volumes:
+      # Traefik configuration
+      - ./traefik/traefik.yaml:/etc/traefik/traefik.yaml:ro
+      - ./traefik/dynamic.yaml:/etc/traefik/dynamic.yaml:ro
+      # Docker socket for service discovery
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Let's Encrypt certificates
+      - traefik_letsencrypt:/letsencrypt
+      # Logs
+      - traefik_logs:/var/log/traefik
+    environment:
+      # Cloudflare DNS challenge (for wildcard certs)
+      # CF_API_EMAIL: ${CF_API_EMAIL:-}
+      # CF_API_KEY: ${CF_API_KEY:-}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@rawdrive.ai}
+    labels:
+      # Enable Traefik for this container
+      - "traefik.enable=true"
+      # Dashboard router
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=web"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+    healthcheck:
+      test: [ "CMD", "traefik", "healthcheck", "--ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - default
+    depends_on:
+      backend:
+        condition: service_started
+
+  # ============================================================================
+  # Backend - Add Traefik labels for routing
+  # ============================================================================
+  backend:
+    labels:
+      - "traefik.enable=true"
+      # API router
+      - "traefik.http.routers.backend.rule=Host(`localhost`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.interval=10s"
+
+  # ============================================================================
+  # Frontend - Add Traefik labels (if running in Docker)
+  # ============================================================================
+  # Uncomment when frontend is containerized
+  # frontend:
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.frontend.rule=Host(`localhost`)"
+  #     - "traefik.http.routers.frontend.entrypoints=web"
+  #     - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+
+  # ============================================================================
+  # Invitations Service - Add Traefik labels
+  # ============================================================================
+  invitations-api:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.invitations.rule=Host(`localhost`) && PathPrefix(`/api/v1/invitations`)"
+      - "traefik.http.routers.invitations.entrypoints=web"
+      - "traefik.http.services.invitations.loadbalancer.server.port=8000"
+
+  # ============================================================================
+  # Grafana - Add Traefik labels
+  # ============================================================================
+  grafana:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`localhost`) && PathPrefix(`/grafana`)"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      - "traefik.http.middlewares.grafana-strip.stripprefix.prefixes=/grafana"
+      - "traefik.http.routers.grafana.middlewares=grafana-strip"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+# ============================================================================
+# Volumes for Traefik
+# ============================================================================
+volumes:
+  traefik_letsencrypt:
+    name: rawdrive-traefik-letsencrypt
+  traefik_logs:
+    name: rawdrive-traefik-logs
+
+# ============================================================================
+# Network
+# ============================================================================
+networks:
+  default:
+    name: rawdrive-network
+    external: true

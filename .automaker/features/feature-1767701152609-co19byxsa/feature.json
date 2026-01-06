@@ -1,0 +1,76 @@
+{
+  "category": "Uncategorized",
+  "description": "Install and enable pgvectorscale for postgresql and update as required",
+  "title": "Update PostgreSQL with pgvectorscale installation and enabling",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1767701152609-co19byxsa",
+  "startedAt": "2026-01-06T12:05:55.182Z",
+  "updatedAt": "2026-01-06T12:15:33.726Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "# Specification: Install and Enable pgvectorscale for PostgreSQL\n\n## 1. Problem Statement\n\nRawDrive uses PostgreSQL with pgvector for vector similarity search (image embeddings, AI features). The current setup lacks pgvectorscale, an extension that provides advanced indexing algorithms (DiskANN) for dramatically improved vector search performance at scale. This enhancement will enable faster similarity searches and better handling of large embedding datasets.\n\n## 2. User Story\n\nAs a **platform administrator**, I want **pgvectorscale installed and enabled in our PostgreSQL database**, so that **vector similarity searches perform better at scale with optimized indexing**.\n\n## 3. Acceptance Criteria\n\n- **Happy Path**: GIVEN the PostgreSQL database is running, WHEN pgvectorscale is installed and enabled, THEN the `vectorscale` extension is available and can be used for creating StreamingDiskANN indexes.\n\n- **Migration Success**: GIVEN existing vector columns exist, WHEN the migration runs, THEN pgvectorscale is enabled without affecting existing pgvector functionality.\n\n- **Docker Integration**: GIVEN the Docker compose stack, WHEN containers are started, THEN PostgreSQL includes both pgvector and pgvectorscale extensions.\n\n- **Error Handling**: GIVEN pgvectorscale cannot be installed, WHEN the migration attempts to enable it, THEN a clear error message is logged and the system continues with standard pgvector.\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `infrastructure/docker/docker-compose.yml`, `infrastructure/docker/docker-compose.dev.yml`, `backend/migrations/versions/`, `backend/src/app/core/database.py` |\n| Dependencies | pgvectorscale extension (Timescale), pgvector (prerequisite) |\n| Constraints | pgvectorscale requires pgvector to be installed first; requires PostgreSQL 15+ |\n| Patterns to Follow | Existing Alembic migration patterns, Docker compose service definitions |\n\n## 5. Non-Goals\n\n- Migrating existing indexes to StreamingDiskANN (future optimization task)\n- Implementing new vector search queries using pgvectorscale features\n- Performance benchmarking (separate task)\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Docker Infrastructure\n\n- [ ] T001: Update PostgreSQL Docker image to use timescale/timescaledb-ha with pgvectorscale | File: infrastructure/docker/docker-compose.yml\n- [ ] T002: Update dev Docker compose with same PostgreSQL image | File: infrastructure/docker/docker-compose.dev.yml\n\n## Phase 2: Database Migration\n\n- [ ] T003: Create Alembic migration to enable pgvectorscale extension | File: backend/migrations/versions/\n- [ ] T004: Update database initialization to verify pgvectorscale availability | File: backend/src/app/core/database.py\n\n## Phase 3: Documentation & Verification\n\n- [ ] T005: Update CLAUDE.md with pgvectorscale information | File: CLAUDE.md\n- [ ] T006: Verify installation with Playwright test checking database extensions | File: tests/verification/\n```\n\n## 7. Success Metrics\n\n- PostgreSQL container starts successfully with pgvectorscale extension available\n- `SELECT * FROM pg_extension WHERE extname = 'vectorscale';` returns a row\n- Alembic migration completes without errors\n- Existing vector operations continue to work unchanged\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Docker image size increase | timescaledb-ha is well-maintained and includes necessary optimizations |\n| Extension compatibility | pgvectorscale is designed to work alongside pgvector, not replace it |\n| Migration failure on existing data | Migration only enables extension, doesn't modify existing indexes |\n| Production deployment complexity | Document rollback procedure in migration comments |",
+    "generatedAt": "2026-01-06T12:06:32.509Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Update PostgreSQL Docker image to use timescale/timescaledb-ha with pgvectorscale",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 1: Docker Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Update dev Docker compose with same PostgreSQL image",
+        "filePath": "infrastructure/docker/docker-compose.dev.yml",
+        "phase": "Phase 1: Docker Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create Alembic migration to enable pgvectorscale extension",
+        "filePath": "backend/migrations/versions/",
+        "phase": "Phase 2: Database Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Update database initialization to verify pgvectorscale availability",
+        "filePath": "backend/src/app/core/database.py",
+        "phase": "Phase 2: Database Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Update CLAUDE.md with pgvectorscale information",
+        "filePath": "CLAUDE.md",
+        "phase": "Phase 3: Documentation & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Verify installation with Playwright test checking database extensions",
+        "filePath": "tests/verification/",
+        "phase": "Phase 3: Documentation & Verification",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 6,
+    "tasksCompleted": 6,
+    "approvedAt": "2026-01-06T12:06:32.510Z",
+    "currentTaskId": "T006"
+  }
+}

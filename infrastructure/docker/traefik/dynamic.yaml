@@ -1,0 +1,322 @@
+# Traefik Dynamic Configuration for RawDrive
+# Defines routers, middlewares, and services
+#
+# This file is watched by Traefik and changes are applied without restart
+
+# =============================================================================
+# HTTP Configuration
+# =============================================================================
+http:
+
+  # ===========================================================================
+  # Routers - Define how requests are routed to services
+  # ===========================================================================
+  routers:
+    # -------------------------------------------------------------------------
+    # Main API Router
+    # -------------------------------------------------------------------------
+    api-router:
+      rule: "Host(`api.rawdrive.ai`) || (Host(`rawdrive.ai`) && PathPrefix(`/api`))"
+      entryPoints:
+        - websecure
+      service: backend-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+        - cors-headers
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Frontend Web App Router
+    # -------------------------------------------------------------------------
+    web-router:
+      rule: "Host(`rawdrive.ai`) || Host(`www.rawdrive.ai`)"
+      entryPoints:
+        - websecure
+      service: frontend-service
+      middlewares:
+        - security-headers
+        - compress
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Multi-tenant Studio Subdomains (*.rawdrive.ai)
+    # -------------------------------------------------------------------------
+    studio-router:
+      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.rawdrive.ai`)"
+      entryPoints:
+        - websecure
+      service: frontend-service
+      middlewares:
+        - security-headers
+        - compress
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "rawdrive.ai"
+            sans:
+              - "*.rawdrive.ai"
+
+    # -------------------------------------------------------------------------
+    # Local Development Multi-tenant Subdomains (*.localhost)
+    # -------------------------------------------------------------------------
+    studio-localhost-router:
+      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.localhost`)"
+      entryPoints:
+        - web
+      service: frontend-service
+      middlewares:
+        - security-headers
+        - compress
+
+    # -------------------------------------------------------------------------
+    # Upload Endpoint - Higher rate limits, larger body size
+    # -------------------------------------------------------------------------
+    upload-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/photos/upload`)"
+      entryPoints:
+        - websecure
+      service: backend-service
+      middlewares:
+        - rate-limit-uploads
+        - security-headers
+        - large-body-size
+      priority: 100
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Magic Links - Public gallery access
+    # -------------------------------------------------------------------------
+    magic-link-router:
+      rule: "Host(`rawdrive.ai`) && PathPrefix(`/g/`)"
+      entryPoints:
+        - websecure
+      service: frontend-service
+      middlewares:
+        - rate-limit-public
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Invitations Microservice
+    # -------------------------------------------------------------------------
+    invitations-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/invitations`)"
+      entryPoints:
+        - websecure
+      service: invitations-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # AI Service - Stricter rate limiting
+    # -------------------------------------------------------------------------
+    ai-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/ai`)"
+      entryPoints:
+        - websecure
+      service: backend-service
+      middlewares:
+        - rate-limit-ai
+        - security-headers
+      priority: 100
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Monitoring (Internal access only)
+    # -------------------------------------------------------------------------
+    grafana-router:
+      rule: "Host(`monitoring.rawdrive.ai`) && PathPrefix(`/grafana`)"
+      entryPoints:
+        - websecure
+      service: grafana-service
+      middlewares:
+        - strip-grafana-prefix
+        - basic-auth
+      tls:
+        certResolver: letsencrypt
+
+  # ===========================================================================
+  # Services - Backend targets
+  # ===========================================================================
+  services:
+    backend-service:
+      loadBalancer:
+        servers:
+          - url: "http://backend:8000"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+        sticky:
+          cookie:
+            name: rawdrive_backend
+            secure: true
+            httpOnly: true
+
+    frontend-service:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:3000"
+        passHostHeader: true
+
+    invitations-service:
+      loadBalancer:
+        servers:
+          - url: "http://invitations-api:8000"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    grafana-service:
+      loadBalancer:
+        servers:
+          - url: "http://grafana:3000"
+
+  # ===========================================================================
+  # Middlewares
+  # ===========================================================================
+  middlewares:
+    # -------------------------------------------------------------------------
+    # Rate Limiting (Critical for KEDA scaling decisions)
+    # -------------------------------------------------------------------------
+    rate-limit-global:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1s
+
+    rate-limit-api:
+      rateLimit:
+        average: 50
+        burst: 100
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-uploads:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-ai:
+      rateLimit:
+        average: 5
+        burst: 10
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-public:
+      rateLimit:
+        average: 30
+        burst: 60
+        period: 1s
+
+    # -------------------------------------------------------------------------
+    # Security Headers
+    # -------------------------------------------------------------------------
+    security-headers:
+      headers:
+        browserXssFilter: true
+        contentTypeNosniff: true
+        frameDeny: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customFrameOptionsValue: "SAMEORIGIN"
+        customResponseHeaders:
+          X-Powered-By: ""
+          Server: ""
+
+    # -------------------------------------------------------------------------
+    # CORS Configuration
+    # -------------------------------------------------------------------------
+    cors-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Request-ID
+          - X-Workspace-ID
+        accessControlAllowOriginList:
+          - "https://rawdrive.ai"
+          - "https://www.rawdrive.ai"
+          - "https://*.rawdrive.ai"
+        accessControlMaxAge: 86400
+        addVaryHeader: true
+
+    # -------------------------------------------------------------------------
+    # Compression
+    # -------------------------------------------------------------------------
+    compress:
+      compress:
+        excludedContentTypes:
+          - text/event-stream
+
+    # -------------------------------------------------------------------------
+    # Large Body Size for Uploads
+    # -------------------------------------------------------------------------
+    large-body-size:
+      buffering:
+        maxRequestBodyBytes: 524288000  # 500MB
+
+    # -------------------------------------------------------------------------
+    # Basic Auth for Admin Routes
+    # -------------------------------------------------------------------------
+    basic-auth:
+      basicAuth:
+        users:
+          - "admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/"  # Change in production!
+        removeHeader: true
+
+    # -------------------------------------------------------------------------
+    # Strip Prefix
+    # -------------------------------------------------------------------------
+    strip-grafana-prefix:
+      stripPrefix:
+        prefixes:
+          - /grafana
+
+# =============================================================================
+# TCP Configuration (for future use)
+# =============================================================================
+tcp: {}
+
+# =============================================================================
+# TLS Options
+# =============================================================================
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256

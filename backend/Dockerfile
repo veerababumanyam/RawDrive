@@ -17,13 +17,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system deps for asyncpg
+# Install system deps for asyncpg and LibRaw (RAW image processing)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        build-essential \
        libpq-dev \
        curl \
        ca-certificates \
+       # LibRaw dependencies for RAW file processing
+       libraw-dev \
+       libraw20 \
+       libjpeg-dev \
+       liblcms2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

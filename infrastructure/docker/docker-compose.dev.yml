@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    # timescaledb-ha:pg16 - Official TimescaleDB High Availability image
+    # Includes: PostgreSQL 16, pgvector (0.8.1), pgvectorscale (0.9.0), TimescaleDB (2.24.0)
+    # pgvectorscale provides StreamingDiskANN indexes for optimal vector search at scale
+    image: timescale/timescaledb-ha:pg16
     container_name: rawdrive-postgres
     restart: unless-stopped
     environment:
@@ -69,5 +72,121 @@ services:
       timeout: 10s
       retries: 3
 
+  gallery-service:
+    build:
+      context: ../../services/gallery-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-gallery-service
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=gallery-service
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - DATABASE_URL=postgresql://rawdrive:rawdrive@postgres:5432/rawdrive
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - R2_ENDPOINT=${R2_ENDPOINT}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - RATE_LIMIT_ENABLED=false
+    ports:
+      - "127.0.0.1:8004:8000"
+    volumes:
+      - ../../services/gallery-service:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  upload-service:
+    build:
+      context: ../../services/upload-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-upload-service
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=upload-service
+      - HOST=0.0.0.0
+      - PORT=8080
+      - APP_ENV=development
+      - LOG_LEVEL=DEBUG
+      - DATABASE_URL=postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - R2_ENDPOINT_URL=${R2_ENDPOINT}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - RATE_LIMIT_PER_WORKSPACE=500
+      - RATE_LIMIT_WINDOW=60
+      - MAX_CONCURRENT_UPLOADS_PER_WORKSPACE=10
+      - UPLOAD_SESSION_TTL_HOURS=24
+    ports:
+      - "127.0.0.1:8005:8080"
+    volumes:
+      - ../../services/upload-service:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  billing-service:
+    build:
+      context: ../../services/billing-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-billing-service
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=billing-service
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - DATABASE_URL=postgresql://rawdrive:rawdrive@postgres:5432/rawdrive
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - GST_NUMBER=${GST_NUMBER}
+      - COMPANY_ADDRESS=${COMPANY_ADDRESS}
+      - R2_ENDPOINT=${R2_ENDPOINT}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - RATE_LIMIT_ENABLED=false
+    ports:
+      - "127.0.0.1:8006:8000"
+    volumes:
+      - ../../services/billing-service:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   pg_data:
+
+networks:
+  default:
+    name: rawdrive-network
+    external: true

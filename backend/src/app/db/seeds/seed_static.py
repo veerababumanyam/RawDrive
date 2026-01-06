@@ -223,6 +223,12 @@ async def seed_workspace_with_roles(conn: asyncpg.Connection, workspace_id: uuid
             )
 
     plan = next(p for p in PLANS if p.code == plan_code)
+    actual_plan_id = await conn.fetchval("SELECT plan_id FROM plans WHERE code = $1", plan.code)
+    
+    if not actual_plan_id:
+        # Fallback to hardcoded if not found (should be inserted by seed_plans)
+        actual_plan_id = plan.plan_id
+
     await conn.execute(
         """
         INSERT INTO workspace_subscriptions (
@@ -231,7 +237,7 @@ async def seed_workspace_with_roles(conn: asyncpg.Connection, workspace_id: uuid
         ON CONFLICT (workspace_id) DO NOTHING;
         """,
         actual_workspace_id,
-        plan.plan_id,
+        actual_plan_id,
     )
 
 

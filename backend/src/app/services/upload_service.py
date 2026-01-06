@@ -9,8 +9,20 @@ from __future__ import annotations
 import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from functools import wraps
+from typing import Callable, Optional, TypeVar
 from uuid import UUID, uuid4
+
+from botocore.exceptions import ClientError, BotoCoreError
+from tenacity import (
+    AsyncRetrying,
+    RetryError,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    before_sleep_log,
+)
 
 from app.db.postgres import get_postgres_pool
 from app.services.chunked_upload_service import get_chunked_upload_service
@@ -21,26 +33,141 @@ from app.services.encryption_service import (
 )
 from app.services.image_processing_service import get_image_processing_service
 from app.services.metadata_service import get_metadata_service
-from app.services.r2_storage_service import get_r2_storage_service, MULTIPART_PART_SIZE
+from app.services.r2_storage_service import get_r2_storage_service, MULTIPART_PART_SIZE, StorageError
 from app.services.storage_service import get_storage_service
 from app.services.task_queue import TaskPriority, get_task_queue
 
 logger = logging.getLogger(__name__)
 
-# File validation constants
-ALLOWED_IMAGE_TYPES = {
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/webp",
-    "image/heic",
-    "image/heif",
-}
-ALLOWED_VIDEO_TYPES = {"video/mp4", "video/mov", "video/quicktime"}
-ALLOWED_MIME_TYPES = ALLOWED_IMAGE_TYPES | ALLOWED_VIDEO_TYPES
+# Type variable for generic retry wrapper
+T = TypeVar("T")
 
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB for images
-MAX_VIDEO_SIZE = 500 * 1024 * 1024  # 500MB for videos
+# Retry configuration for storage operations
+# These values are tuned for cloud storage resilience:
+# - 5 attempts: handles transient failures without excessive delay
+# - exponential backoff: 1s, 2s, 4s, 8s, 16s (max) between retries
+# - max wait 30s: prevents excessive delays
+STORAGE_RETRY_ATTEMPTS = 5
+STORAGE_RETRY_WAIT_MIN = 1  # seconds
+STORAGE_RETRY_WAIT_MAX = 30  # seconds
+STORAGE_RETRY_WAIT_MULTIPLIER = 2
+
+# Exceptions that are safe to retry (transient network/service errors)
+RETRYABLE_STORAGE_EXCEPTIONS = (
+    ClientError,
+    BotoCoreError,
+    StorageError,
+    ConnectionError,
+    TimeoutError,
+)
+
+
+def is_retryable_storage_error(exception: BaseException) -> bool:
+    """Determine if an exception is retryable for storage operations.
+
+    Some errors should not be retried:
+    - 4xx client errors (bad request, not found, forbidden)
+    - Authentication errors
+    - Validation errors
+
+    Retryable errors include:
+    - 5xx server errors
+    - Network timeouts
+    - Connection errors
+    - Throttling (429)
+    """
+    if isinstance(exception, ClientError):
+        error_code = exception.response.get("Error", {}).get("Code", "")
+        http_status = exception.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0)
+
+        # Don't retry client errors (4xx) except throttling
+        if 400 <= http_status < 500 and error_code not in ("Throttling", "SlowDown", "RequestTimeout"):
+            return False
+
+        # Retry 5xx server errors and throttling
+        return True
+
+    if isinstance(exception, StorageError):
+        # Don't retry validation errors
+        if exception.code in ("INVALID_VARIANT", "FILE_NOT_FOUND"):
+            return False
+        return True
+
+    # Retry network-related errors
+    return isinstance(exception, (BotoCoreError, ConnectionError, TimeoutError))
+
+
+# Custom retry predicate that uses our classification function
+storage_retry_predicate = retry_if_exception_type(RETRYABLE_STORAGE_EXCEPTIONS)
+
+
+def storage_retry_config():
+    """Get retry configuration for storage operations.
+
+    Returns a dict of tenacity retry parameters suitable for async operations.
+    """
+    return {
+        "stop": stop_after_attempt(STORAGE_RETRY_ATTEMPTS),
+        "wait": wait_exponential(
+            multiplier=STORAGE_RETRY_WAIT_MULTIPLIER,
+            min=STORAGE_RETRY_WAIT_MIN,
+            max=STORAGE_RETRY_WAIT_MAX,
+        ),
+        "retry": storage_retry_predicate,
+        "before_sleep": before_sleep_log(logger, logging.WARNING),
+        "reraise": True,
+    }
+
+
+async def with_storage_retry(
+    operation: Callable[..., T],
+    *args,
+    operation_name: str = "storage_operation",
+    **kwargs,
+) -> T:
+    """Execute a storage operation with retry logic.
+
+    This wrapper provides exponential backoff retry for transient storage failures.
+
+    Args:
+        operation: Async callable to execute
+        *args: Positional arguments for the operation
+        operation_name: Name for logging purposes
+        **kwargs: Keyword arguments for the operation
+
+    Returns:
+        Result of the operation
+
+    Raises:
+        The original exception after all retries are exhausted
+    """
+    attempt = 0
+    async for attempt_ctx in AsyncRetrying(**storage_retry_config()):
+        with attempt_ctx:
+            attempt += 1
+            if attempt > 1:
+                logger.info(f"Retry attempt {attempt} for {operation_name}")
+            result = await operation(*args, **kwargs)
+            return result
+
+# File validation constants
+from app.shared.constants import (
+    SUPPORTED_IMAGE_MIME_TYPES,
+    SUPPORTED_VIDEO_MIME_TYPES,
+    SUPPORTED_RAW_EXTENSIONS,
+    RAW_MIME_TYPES,
+    FILE_SIZE_LIMITS,
+)
+
+# Convert lists to sets for faster lookups
+ALLOWED_IMAGE_TYPES = set(SUPPORTED_IMAGE_MIME_TYPES)
+ALLOWED_VIDEO_TYPES = set(SUPPORTED_VIDEO_MIME_TYPES)
+ALLOWED_RAW_MIME_TYPES = set(RAW_MIME_TYPES)
+ALLOWED_MIME_TYPES = ALLOWED_IMAGE_TYPES | ALLOWED_VIDEO_TYPES | ALLOWED_RAW_MIME_TYPES
+
+MAX_FILE_SIZE = FILE_SIZE_LIMITS["PHOTO"]
+MAX_RAW_SIZE = FILE_SIZE_LIMITS["RAW"]
+MAX_VIDEO_SIZE = FILE_SIZE_LIMITS["VIDEO"]
 UPLOAD_SESSION_TTL_HOURS = 24
 
 # Streaming upload thresholds
@@ -69,48 +196,127 @@ class UploadService:
     def validate_file(
         self, filename: str, mime_type: str, size_bytes: int
     ) -> tuple[str, str]:
-        """Validate file type and size.
+        """Validate file type and size with extension fallback for RAW files.
 
         Args:
             filename: Original filename
-            mime_type: MIME type
+            mime_type: MIME type (may be empty for RAW files)
             size_bytes: File size in bytes
 
         Returns:
-            Tuple of (file_type, normalized_mime_type)
+            Tuple of (file_type, normalized_mime_type_or_extension)
 
         Raises:
             UploadError: If validation fails
         """
         # Normalize MIME type
-        mime_type = mime_type.lower().strip()
+        mime_type = mime_type.lower().strip() if mime_type else ""
 
-        # Validate MIME type
-        if mime_type not in ALLOWED_MIME_TYPES:
+        # Extract file extension
+        ext = filename.lower().split(".")[-1] if "." in filename else ""
+
+        # Determine if this is a RAW file by extension
+        is_raw_extension = ext in SUPPORTED_RAW_EXTENSIONS
+
+        # Case 1: Empty or generic MIME type + RAW extension
+        if (not mime_type or mime_type == "application/octet-stream") and is_raw_extension:
+            logger.info(
+                f"Detected RAW file by extension: {filename} (MIME: {mime_type!r})"
+            )
+            # Use extension as pseudo-mime-type for storage
+            normalized_mime_type = f"image/x-raw-{ext}"
+            file_type = "photo"
+            max_size = MAX_RAW_SIZE
+
+        # Case 2: Valid MIME type in allowed list
+        elif mime_type in ALLOWED_MIME_TYPES:
+            normalized_mime_type = mime_type
+            if mime_type in ALLOWED_IMAGE_TYPES or mime_type in ALLOWED_RAW_MIME_TYPES:
+                file_type = "photo"
+                max_size = MAX_RAW_SIZE if is_raw_extension else MAX_FILE_SIZE
+            elif mime_type in ALLOWED_VIDEO_TYPES:
+                file_type = "video"
+                max_size = MAX_VIDEO_SIZE
+            else:
+                raise UploadError(
+                    f"Unknown file type: {mime_type}", "UNKNOWN_FILE_TYPE"
+                )
+
+        # Case 3: RAW extension with RAW-like MIME type
+        elif is_raw_extension:
+            logger.info(
+                f"Detected RAW file by extension with non-standard MIME: {filename} "
+                f"(MIME: {mime_type!r})"
+            )
+            normalized_mime_type = f"image/x-raw-{ext}"
+            file_type = "photo"
+            max_size = MAX_RAW_SIZE
+
+        # Case 4: Invalid - no valid MIME and no RAW extension
+        else:
             raise UploadError(
-                f"Unsupported file type: {mime_type}. "
-                f"Allowed types: {', '.join(sorted(ALLOWED_MIME_TYPES))}",
+                f"Unsupported file type: {mime_type or 'empty'} for file {filename}. "
+                f"Allowed MIME types: {', '.join(sorted(list(ALLOWED_IMAGE_TYPES | ALLOWED_VIDEO_TYPES)))}. "
+                f"Allowed RAW extensions: {', '.join(SUPPORTED_RAW_EXTENSIONS)}",
                 "INVALID_FILE_TYPE",
             )
 
-        # Determine file type
-        if mime_type in ALLOWED_IMAGE_TYPES:
-            file_type = "photo"
-            max_size = MAX_FILE_SIZE
-        elif mime_type in ALLOWED_VIDEO_TYPES:
-            file_type = "video"
-            max_size = MAX_VIDEO_SIZE
-        else:
-            raise UploadError(f"Unknown file type: {mime_type}", "UNKNOWN_FILE_TYPE")
-
         # Validate file size
         if size_bytes > max_size:
+            max_size_mb = max_size / (1024 * 1024)
             raise UploadError(
-                f"File too large: {size_bytes} bytes. Maximum: {max_size} bytes",
+                f"File too large: {size_bytes} bytes. Maximum: {max_size_mb}MB",
                 "FILE_TOO_LARGE",
             )
 
-        return file_type, mime_type
+        # Security: Log RAW file uploads for monitoring
+        if is_raw_extension:
+            logger.info(
+                f"RAW file accepted: {filename} ({ext.upper()}, {size_bytes} bytes)"
+            )
+
+        return file_type, normalized_mime_type
+
+    async def verify_raw_file_content(
+        self, file_data: bytes, filename: str, expected_ext: str
+    ) -> bool:
+        """Verify RAW file content matches declared extension.
+
+        Security measure to prevent extension spoofing.
+
+        Args:
+            file_data: File bytes
+            filename: Original filename
+            expected_ext: Expected extension (e.g., 'cr2')
+
+        Returns:
+            True if content matches, False otherwise
+        """
+        from app.services.raw_processing_service import get_raw_processing_service
+
+        raw_service = get_raw_processing_service()
+
+        try:
+            detected_format = raw_service.detect_raw_format(file_data, filename)
+            if detected_format is None:
+                logger.warning(
+                    f"RAW file content verification failed: {filename} "
+                    f"(expected {expected_ext}, detected None)"
+                )
+                return False
+
+            # Check if detected format matches expected extension
+            matches = detected_format.value == expected_ext
+            if not matches:
+                logger.warning(
+                    f"RAW file extension mismatch: {filename} "
+                    f"(expected {expected_ext}, detected {detected_format.value})"
+                )
+            return matches
+
+        except Exception as e:
+            logger.error(f"RAW file verification error for {filename}: {e}")
+            return False
 
     async def _get_or_create_sub_gallery(
         self,
@@ -403,9 +609,19 @@ class UploadService:
             )
 
             # Determine file type
-            file_type, _ = self.validate_file(
+            file_type, normalized_mime = self.validate_file(
                 session["file_name"], session["mime_type"], len(file_data)
             )
+
+            # Security: Verify RAW file content matches extension
+            if normalized_mime.startswith("image/x-raw-"):
+                ext = session["file_name"].lower().split(".")[-1]
+                if not await self.verify_raw_file_content(file_data, session["file_name"], ext):
+                    raise UploadError(
+                        f"RAW file content verification failed for {session['file_name']}. "
+                        f"File may be corrupted or extension is incorrect.",
+                        "RAW_VERIFICATION_FAILED",
+                    )
 
             # Create asset record
             asset_id = uuid4()
@@ -497,8 +713,9 @@ class UploadService:
                 except Exception:
                     pass  # Non-critical
 
-                # Upload original to R2
-                await self.storage_service.upload_encrypted_file(
+                # Upload original to R2 with retry logic
+                await with_storage_retry(
+                    self.storage_service.upload_encrypted_file,
                     workspace_id=workspace_id,
                     gallery_id=gallery_id,
                     asset_id=asset_id,
@@ -506,6 +723,7 @@ class UploadService:
                     filename=session["file_name"],
                     encrypted_data=encrypted_original,
                     content_type=session["mime_type"],
+                    operation_name="upload_encrypted_original",
                 )
 
             except Exception as e:
@@ -685,8 +903,8 @@ class UploadService:
             session = await conn.fetchrow(
                 """
                 SELECT upload_id, workspace_id, gallery_id, sub_gallery_id,
-                       file_name, mime_type, file_bytes, sha256,
-                       state, created_by_user_id
+                       file_name, mime_type, size_bytes, sha256,
+                       state, created_by_user_id, asset_id
                 FROM upload_sessions
                 WHERE upload_id = $1 AND workspace_id = $2
                 """,
@@ -778,9 +996,12 @@ class UploadService:
         chunked_service = get_chunked_upload_service()
 
         try:
-            # Start R2 multipart upload
-            r2_upload_id = await self.storage_service.create_multipart_upload(
-                original_object_key, session["mime_type"]
+            # Start R2 multipart upload with retry logic
+            r2_upload_id = await with_storage_retry(
+                self.storage_service.create_multipart_upload,
+                original_object_key,
+                session["mime_type"],
+                operation_name="create_multipart_upload",
             )
 
             parts = []
@@ -803,8 +1024,14 @@ class UploadService:
                     part_data = bytes(encrypted_buffer[:MULTIPART_PART_SIZE])
                     encrypted_buffer = encrypted_buffer[MULTIPART_PART_SIZE:]
 
-                    part_info = await self.storage_service.upload_part(
-                        original_object_key, r2_upload_id, part_number, part_data
+                    # Upload part with retry logic
+                    part_info = await with_storage_retry(
+                        self.storage_service.upload_part,
+                        original_object_key,
+                        r2_upload_id,
+                        part_number,
+                        part_data,
+                        operation_name=f"upload_part_{part_number}",
                     )
                     parts.append(part_info)
                     part_number += 1
@@ -822,17 +1049,26 @@ class UploadService:
             # Finalize encryption and get HMAC
             hmac_tag = encryptor.finalize()
 
-            # Upload remaining buffer (must be > 0 for last part)
+            # Upload remaining buffer (must be > 0 for last part) with retry logic
             if encrypted_buffer:
-                part_info = await self.storage_service.upload_part(
-                    original_object_key, r2_upload_id, part_number, bytes(encrypted_buffer)
+                part_info = await with_storage_retry(
+                    self.storage_service.upload_part,
+                    original_object_key,
+                    r2_upload_id,
+                    part_number,
+                    bytes(encrypted_buffer),
+                    operation_name=f"upload_part_{part_number}_final",
                 )
                 parts.append(part_info)
                 total_encrypted += len(encrypted_buffer)
 
-            # Complete multipart upload
-            await self.storage_service.complete_multipart_upload(
-                original_object_key, r2_upload_id, parts
+            # Complete multipart upload with retry logic
+            await with_storage_retry(
+                self.storage_service.complete_multipart_upload,
+                original_object_key,
+                r2_upload_id,
+                parts,
+                operation_name="complete_multipart_upload",
             )
 
             # Store encryption metadata

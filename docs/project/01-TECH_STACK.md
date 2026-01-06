@@ -29,7 +29,7 @@ RawDrive is built on a modern, scalable technology stack designed to handle 20,0
                              │
 ┌────────────────────────────▼─────────────────────────────────────────┐
 │                   API GATEWAY & INGRESS                               │
-│    (Nginx Ingress, Load Balancing, Authentication, Rate Limiting)    │
+│    (Traefik v3, KEDA Autoscaling, Rate Limiting, TLS)                 │
 └────────────────────────────┬─────────────────────────────────────────┘
                              │
 ┌────────────────────────────▼─────────────────────────────────────────┐
@@ -99,7 +99,7 @@ graph TB
     
     Frontend["⚛️ Frontend<br/>(React 19, TypeScript, Vite)<br/>Hostinger VPS / K8s"]
     
-    Ingress["🚪 API Gateway<br/>(Nginx Ingress, Load Balancer)<br/>Authentication, Rate Limiting"]
+    Ingress["🚪 API Gateway<br/>(Traefik v3, KEDA)<br/>Rate Limiting, TLS"]
     
     Backend["🔧 Backend Services<br/>(Python, FastAPI)<br/>K8s Pods / VPS"]
     
@@ -196,7 +196,7 @@ graph TB
 
 **Data Flow:**
 - Clients connect via HTTPS through Cloudflare Edge (security & performance)
-- Frontend makes REST API calls to Backend through Nginx Ingress
+- Frontend makes REST API calls to Backend through Traefik API Gateway
 - Backend services query PostgreSQL for data and Redis for caching
 - File operations go to Cloudflare R2 with CDN delivery
 
@@ -652,7 +652,7 @@ graph TB
 
 **Hostinger VPS (KVM) + self-managed Kubernetes** (Default hosted deployment)
 - Kubernetes (kubeadm) on KVM nodes
-- Nginx Ingress + cert-manager (Let’s Encrypt)
+- Traefik v3 Ingress + KEDA autoscaling + cert-manager (Let's Encrypt)
 - Postgres + Redis + workers as Kubernetes workloads
 - Object storage via Cloudflare R2
 - Edge protection/delivery via Cloudflare CDN/WAF

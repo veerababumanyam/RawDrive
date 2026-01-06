@@ -827,38 +827,36 @@ interface WebhookRetryPolicy {
 
 ## API Gateway & Infrastructure
 
-### Nginx Ingress Configuration
+### Traefik IngressRoute Configuration
 
 **Ingress Setup:**
-- Load balancing across backend pods
-- SSL/TLS termination
-- Request routing by path and hostname
-- Rate limiting at ingress level
-- Request/response logging
+- Load balancing across backend pods via Traefik
+- SSL/TLS termination with automatic Let's Encrypt
+- Request routing by path and hostname using IngressRoute CRDs
+- Rate limiting at ingress level via Traefik middleware
+- KEDA autoscaling based on Traefik metrics
 
 **Configuration Example:**
 ```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
 metadata:
-  name: rawdrive-ingress
+  name: rawdrive-api
+  namespace: rawdrive
 spec:
-  ingressClassName: nginx
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`api.rawdrive.com`) && PathPrefix(`/api/v1`)
+      kind: Rule
+      middlewares:
+        - name: rate-limit-api
+        - name: security-headers
+      services:
+        - name: backend-service
+          port: 8000
   tls:
-    - hosts:
-        - api.rawdrive.com
-      secretName: tls-cert
-  rules:
-    - host: api.rawdrive.com
-      http:
-        paths:
-          - path: /api/v1
-            pathType: Prefix
-            backend:
-              service:
-                name: backend-service
-                port:
-                  number: 3000
+    certResolver: letsencrypt
 ```
 
 ### Rate Limiting at Edge

@@ -118,6 +118,18 @@ class AppSettings(BaseSettings):
     jwt_algorithm: str = Field("EdDSA", alias="JWT_ALGORITHM")
     access_token_ttl_minutes: int = Field(15, alias="ACCESS_TOKEN_TTL_MINUTES")
     refresh_token_ttl_days: int = Field(7, alias="REFRESH_TOKEN_TTL_DAYS")
+    extended_refresh_token_ttl_days: int = Field(
+        30,
+        alias="EXTENDED_REFRESH_TOKEN_TTL_DAYS",
+        description="Extended refresh token TTL when 'remember me' is selected (default: 30 days)",
+    )
+
+    # Session security settings
+    max_concurrent_sessions: int = Field(
+        5,
+        alias="MAX_CONCURRENT_SESSIONS",
+        description="Maximum number of concurrent sessions per user",
+    )
 
     # Argon2 parameters (Requirement 3.1 / 3.5)
     argon2_memory_cost: int = Field(65536, alias="ARGON2_MEMORY_COST")

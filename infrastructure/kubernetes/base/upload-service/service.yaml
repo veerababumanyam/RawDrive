@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: upload-service
+  labels:
+    app: upload-service
+    component: uploads
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: upload-service
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: upload-service
+  labels:
+    app: upload-service

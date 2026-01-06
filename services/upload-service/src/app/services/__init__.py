@@ -1,0 +1,156 @@
+# Services module - Business logic for upload operations
+
+from app.services.upload_service import (
+    UploadService,
+    get_upload_service,
+    reset_upload_service,
+    UploadError,
+    ValidationError,
+    SessionNotFoundError,
+    SessionExpiredError,
+    StorageLimitExceededError,
+    ChecksumMismatchError,
+)
+
+from app.services.chunked_upload_service import (
+    ChunkedUploadService,
+    get_chunked_upload_service,
+    reset_chunked_upload_service,
+    ChunkMetadata,
+    TUSHeaders,
+    ChunkError,
+    OffsetMismatchError,
+    ChunkTooLargeError,
+    ChunkNotFoundError,
+    AssemblyError,
+    ChecksumVerificationError,
+)
+
+from app.services.encryption_service import (
+    EncryptionService,
+    get_encryption_service,
+    reset_encryption_service,
+    StreamingEncryptor,
+    StreamingDecryptor,
+    EncryptionError,
+    MasterKeyError,
+    HMACVerificationError,
+    DecryptionError,
+    STREAMING_CHUNK_SIZE,
+    STREAMING_ALGORITHM,
+)
+
+from app.services.r2_storage_service import (
+    R2StorageService,
+    get_r2_storage_service,
+    reset_r2_storage_service,
+    StorageCircuitBreaker,
+    StorageCircuitBreakerConfig,
+    StorageCircuitBreakerStats,
+    StorageCircuitState,
+    StorageError,
+    StorageUnavailableError,
+    ObjectNotFoundError,
+    MultipartError,
+    MULTIPART_THRESHOLD,
+    MULTIPART_PART_SIZE,
+    MAX_CONCURRENT_PARTS,
+)
+
+from app.services.event_producer import (
+    EventProducer,
+    get_event_producer,
+    reset_event_producer,
+    EventType,
+    FileType,
+    AssetProcessingEvent,
+    UploadEvent,
+    KafkaCircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerStats,
+    CircuitState,
+    EventProducerError,
+    KafkaUnavailableError,
+    EventPublishError,
+    EventSerializationError,
+    publish_asset_processing_event,
+    publish_upload_completed_event,
+    publish_upload_failed_event,
+)
+
+__all__ = [
+    # Upload Service
+    "UploadService",
+    "get_upload_service",
+    "reset_upload_service",
+    # Chunked Upload Service
+    "ChunkedUploadService",
+    "get_chunked_upload_service",
+    "reset_chunked_upload_service",
+    "ChunkMetadata",
+    "TUSHeaders",
+    # Encryption Service
+    "EncryptionService",
+    "get_encryption_service",
+    "reset_encryption_service",
+    "StreamingEncryptor",
+    "StreamingDecryptor",
+    "STREAMING_CHUNK_SIZE",
+    "STREAMING_ALGORITHM",
+    # R2 Storage Service
+    "R2StorageService",
+    "get_r2_storage_service",
+    "reset_r2_storage_service",
+    "StorageCircuitBreaker",
+    "StorageCircuitBreakerConfig",
+    "StorageCircuitBreakerStats",
+    "StorageCircuitState",
+    "MULTIPART_THRESHOLD",
+    "MULTIPART_PART_SIZE",
+    "MAX_CONCURRENT_PARTS",
+    # Upload Exceptions
+    "UploadError",
+    "ValidationError",
+    "SessionNotFoundError",
+    "SessionExpiredError",
+    "StorageLimitExceededError",
+    "ChecksumMismatchError",
+    # Chunk Exceptions
+    "ChunkError",
+    "OffsetMismatchError",
+    "ChunkTooLargeError",
+    "ChunkNotFoundError",
+    "AssemblyError",
+    "ChecksumVerificationError",
+    # Encryption Exceptions
+    "EncryptionError",
+    "MasterKeyError",
+    "HMACVerificationError",
+    "DecryptionError",
+    # Storage Exceptions
+    "StorageError",
+    "StorageUnavailableError",
+    "ObjectNotFoundError",
+    "MultipartError",
+    # Event Producer
+    "EventProducer",
+    "get_event_producer",
+    "reset_event_producer",
+    "EventType",
+    "FileType",
+    "AssetProcessingEvent",
+    "UploadEvent",
+    "KafkaCircuitBreaker",
+    "CircuitBreakerConfig",
+    "CircuitBreakerStats",
+    "CircuitState",
+    # Event Producer Exceptions
+    "EventProducerError",
+    "KafkaUnavailableError",
+    "EventPublishError",
+    "EventSerializationError",
+    # Event Producer Convenience Functions
+    "publish_asset_processing_event",
+    "publish_upload_completed_event",
+    "publish_upload_failed_event",
+]

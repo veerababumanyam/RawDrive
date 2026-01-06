@@ -76,7 +76,7 @@ class SignedUrlService:
             Base64-encoded signed token
         """
         # Validate variant
-        valid_variants = {"thumbnail", "preview", "original"}
+        valid_variants = {"thumbnail", "medium", "preview", "original"}
         if variant not in valid_variants:
             raise SignedUrlError(
                 f"Invalid variant: {variant}. Must be one of {valid_variants}",
@@ -150,7 +150,7 @@ class SignedUrlService:
                 raise SignedUrlError("Token expired", "TOKEN_EXPIRED")
 
             # Validate variant
-            valid_variants = {"thumbnail", "preview", "original"}
+            valid_variants = {"thumbnail", "medium", "preview", "original"}
             if variant not in valid_variants:
                 raise SignedUrlError(
                     f"Invalid variant: {variant}", "INVALID_VARIANT"

@@ -11,6 +11,7 @@ import {
   clearStoredTokens,
   type StoredTokens
 } from './tokenStorage';
+import { generateDeviceFingerprint } from '../utils/deviceFingerprint';
 
 // Re-export token functions for backward compatibility
 export { getStoredTokens, setStoredTokens, clearStoredTokens };
@@ -39,6 +40,7 @@ export interface AuthTokens extends StoredTokens {}
 export interface LoginCredentials {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface SignupData {
@@ -168,7 +170,26 @@ export async function login(credentials: LoginCredentials): Promise<{
   user?: User;
   workspace?: Workspace;
 }> {
-  const response = await apiClient.post<AuthResponse>('/api/v1/auth/login', credentials);
+  // Generate device fingerprint for security tracking
+  let deviceFingerprint: string | undefined;
+  let deviceInfo: any | undefined;
+
+  try {
+    const fingerprintResult = await generateDeviceFingerprint();
+    deviceFingerprint = fingerprintResult.fingerprint;
+    deviceInfo = fingerprintResult.device_info;
+  } catch (error) {
+    console.warn('Failed to generate device fingerprint:', error);
+    // Continue without fingerprint - not critical for login
+  }
+
+  const response = await apiClient.post<AuthResponse>('/api/v1/auth/login', {
+    email: credentials.email,
+    password: credentials.password,
+    remember_me: credentials.rememberMe || false,
+    device_fingerprint: deviceFingerprint,
+    device_info: deviceInfo,
+  });
 
   if (response.error) {
     return {

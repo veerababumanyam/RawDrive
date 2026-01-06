@@ -20,7 +20,7 @@ if "DATABASE_URL" in os.environ:
     url = os.environ["DATABASE_URL"]
     # Alembic runs synchronously; drop asyncpg dialect if present
     if url.startswith("postgresql+asyncpg://"):
-        url = url.replace("postgresql+asyncpg://", "postgresql+pg8000://", 1)
+        url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
     config.set_main_option("sqlalchemy.url", url)
 
 

@@ -114,7 +114,7 @@ If another document uses a different term (e.g., “tenant”), treat this gloss
 
 ### Kubernetes (self-managed via kubeadm)
 - **Definition:** The default orchestration platform for RawDrive-hosted environments.
-- **Key components:** Nginx Ingress Controller, cert-manager (Let’s Encrypt), network policies, and cluster/DB backup jobs.
+- **Key components:** Traefik v3 API Gateway with KEDA autoscaling, cert-manager (Let’s Encrypt), network policies, and cluster/DB backup jobs.
 
 ---
 

@@ -70,3 +70,75 @@ RATE_LIMITS = {
   "UPLOADS_PER_HOUR": 1000,
   "AI_OPS_PER_MINUTE": 30,
 }
+
+
+# File Types and Upload Limits
+SUPPORTED_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  # Standard desktop/web formats
+  "image/bmp",
+  "image/x-ms-bmp",  # Alternative BMP MIME
+  "image/tiff",
+  "image/tiff-fx",   # Alternative TIFF MIME
+  "image/gif",
+  # Next-gen formats
+  "image/avif",
+]
+
+SUPPORTED_VIDEO_MIME_TYPES = [
+  "video/mp4",
+  "video/mov",
+  "video/quicktime",
+]
+
+# RAW file extensions (without leading dot)
+# Note: RAW files typically have empty MIME types or 'application/octet-stream'
+SUPPORTED_RAW_EXTENSIONS = [
+  "cr2",  # Canon Raw 2
+  "cr3",  # Canon Raw 3
+  "nef",  # Nikon Electronic Format
+  "arw",  # Sony Alpha Raw
+  "raf",  # Fujifilm Raw
+  "orf",  # Olympus Raw Format
+  "rw2",  # Panasonic Raw 2
+  "dng",  # Adobe Digital Negative
+  # Additional professional RAW formats
+  "pef",  # Pentax Electronic File
+  "rwl",  # Leica Raw
+  "srw",  # Samsung Raw
+  "x3f",  # Sigma X3F
+  "3fr",  # Hasselblad 3FR
+]
+
+# Common MIME types for RAW files (browser-dependent, unreliable)
+RAW_MIME_TYPES = [
+  "image/x-canon-cr2",
+  "image/x-canon-cr3",
+  "image/x-nikon-nef",
+  "image/x-sony-arw",
+  "image/x-fuji-raf",
+  "image/x-olympus-orf",
+  "image/x-panasonic-rw2",
+  "image/x-adobe-dng",
+  # Additional RAW MIME types
+  "image/x-pentax-pef",
+  "image/x-leica-rwl",
+  "image/x-samsung-srw",
+  "image/x-sigma-x3f",
+  "image/x-hasselblad-3fr",
+  "application/octet-stream",  # Generic fallback many browsers use
+]
+
+# File size limits by type (in bytes)
+FILE_SIZE_LIMITS = {
+  "PHOTO": 100 * STORAGE["MB"],  # 100MB for images
+  "RAW": 200 * STORAGE["MB"],    # 200MB for RAW files (typically larger)
+  "TIFF": 150 * STORAGE["MB"],   # 150MB for TIFF (can be large with layers)
+  "GIF": 50 * STORAGE["MB"],     # 50MB for GIF (animations)
+  "VIDEO": 500 * STORAGE["MB"],  # 500MB for videos
+}

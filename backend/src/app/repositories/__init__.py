@@ -8,6 +8,8 @@ Repositories:
 - FaceEmbeddingRepository: pgvector-based face embedding operations
 - FaceRepository: Face record CRUD operations
 - FaceGroupRepository: Face group (cluster) CRUD operations
+- PlanRepository: Subscription plan queries and management
+- SubscriptionRepository: Workspace subscription CRUD operations
 """
 
 from app.repositories.recycle_bin_repository import (
@@ -26,6 +28,14 @@ from app.repositories.face_group_repository import (
     FaceGroupRepository,
     get_face_group_repository,
 )
+from app.repositories.plan_repository import (
+    PlanRepository,
+    get_plan_repository,
+)
+from app.repositories.subscription_repository import (
+    SubscriptionRepository,
+    get_subscription_repository,
+)
 
 __all__ = [
     # Recycle bin
@@ -40,4 +50,10 @@ __all__ = [
     # Face detection - groups
     "FaceGroupRepository",
     "get_face_group_repository",
+    # Subscription plans
+    "PlanRepository",
+    "get_plan_repository",
+    # Workspace subscriptions
+    "SubscriptionRepository",
+    "get_subscription_repository",
 ]

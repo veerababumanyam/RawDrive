@@ -26,6 +26,24 @@ rule_files:
 # Scrape configurations
 scrape_configs:
   # ==========================================================================
+  # Traefik API Gateway (KEDA scaling source)
+  # Provides request rate, latency, and connection metrics for autoscaling
+  # ==========================================================================
+  - job_name: 'traefik'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['traefik:8082']
+        labels:
+          service: 'traefik'
+          component: 'gateway'
+    # In Kubernetes, use service discovery
+    # kubernetes_sd_configs:
+    #   - role: service
+    #     namespaces:
+    #       names: ['traefik']
+
+  # ==========================================================================
   # Backend API Service
   # Main FastAPI application exposing /metrics endpoint
   # ==========================================================================

@@ -42,7 +42,7 @@ Cloudflare Edge (WAF, DDoS, CDN, Rate Limiting)
     ↓ HTTP
 Frontend (React 19, TypeScript, Vite)
     ↓ REST API
-Nginx Ingress (Load Balancing, Authentication)
+Traefik API Gateway (Rate Limiting, TLS, KEDA Autoscaling)
     ↓
 Backend Services (Node.js, Express, TypeScript)
     ├─ Auth Service
@@ -208,10 +208,10 @@ Backend:
 └── Helmet.js (security headers)
 
 API Gateway & Ingress:
-├── Nginx Ingress (Kubernetes)
-├── Load balancing & SSL/TLS termination
-├── Authentication middleware
-├── Rate limiting
+├── Traefik v3 (Kubernetes IngressRoute CRDs)
+├── KEDA autoscaling based on request metrics
+├── Automatic TLS via Let's Encrypt
+├── Rate limiting via middleware
 └── Request/response logging
 
 Storage:

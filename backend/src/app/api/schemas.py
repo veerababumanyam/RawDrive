@@ -36,6 +36,9 @@ class LoginRequest(BaseModel):
     email: EmailStr = Field(..., description="User email address")
     password: str = Field(..., description="User password")
     workspace_id: Optional[UUID] = Field(None, description="Optional workspace to login to")
+    remember_me: bool = Field(False, description="Extend session to 30 days (vs default 7 days)")
+    device_fingerprint: Optional[str] = Field(None, max_length=64, description="SHA256 device fingerprint")
+    device_info: Optional[dict] = Field(None, description="Device metadata (browser, OS, screen)")
 
 
 class ClientInteractionRequest(BaseModel):

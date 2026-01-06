@@ -1,0 +1,246 @@
+# Traefik Alert Rules for RawDrive
+# Integrates with KEDA for autoscaling decisions
+#
+# These alerts monitor Traefik API gateway health and performance
+
+groups:
+  # ==========================================================================
+  # Traefik Gateway Alerts
+  # ==========================================================================
+  - name: traefik_alerts
+    interval: 30s
+    rules:
+      # -----------------------------------------------------------------------
+      # High Error Rate on Traefik
+      # -----------------------------------------------------------------------
+      - alert: TraefikHighErrorRate
+        expr: |
+          sum(rate(traefik_service_requests_total{code=~"5.."}[5m]))
+          /
+          sum(rate(traefik_service_requests_total[5m]))
+          > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: traefik
+          component: gateway
+        annotations:
+          summary: "Traefik high error rate (> 5%)"
+          description: |
+            Traefik is returning 5xx errors at {{ $value | humanizePercentage }} rate.
+            This indicates backend service issues or gateway problems.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/traefik-errors"
+
+      # -----------------------------------------------------------------------
+      # High Request Latency P95
+      # -----------------------------------------------------------------------
+      - alert: TraefikHighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(traefik_service_request_duration_seconds_bucket[5m])) by (le, service)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: traefik
+          component: gateway
+        annotations:
+          summary: "Traefik P95 latency > 2s"
+          description: |
+            Service {{ $labels.service }} has P95 latency of {{ $value | humanizeDuration }}.
+            Consider scaling backend pods or investigating bottlenecks.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/traefik-latency"
+
+      # -----------------------------------------------------------------------
+      # Very High Request Latency P99
+      # -----------------------------------------------------------------------
+      - alert: TraefikVeryHighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(traefik_service_request_duration_seconds_bucket[5m])) by (le, service)
+          ) > 5
+        for: 3m
+        labels:
+          severity: critical
+          service: traefik
+          component: gateway
+        annotations:
+          summary: "Traefik P99 latency > 5s"
+          description: |
+            Service {{ $labels.service }} has P99 latency of {{ $value | humanizeDuration }}.
+            This indicates severe performance degradation.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/traefik-critical-latency"
+
+      # -----------------------------------------------------------------------
+      # High Request Rate (potential KEDA trigger)
+      # -----------------------------------------------------------------------
+      - alert: TraefikHighRequestRate
+        expr: |
+          sum(rate(traefik_service_requests_total[1m])) > 500
+        for: 5m
+        labels:
+          severity: warning
+          service: traefik
+          component: gateway
+        annotations:
+          summary: "Traefik request rate > 500/s"
+          description: |
+            Current request rate is {{ $value | humanize }} requests/second.
+            KEDA should be scaling backend pods automatically.
+            Verify KEDA ScaledObjects are functioning.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/traefik-high-traffic"
+
+      # -----------------------------------------------------------------------
+      # Rate Limiting Active
+      # -----------------------------------------------------------------------
+      - alert: TraefikRateLimitingActive
+        expr: |
+          sum(rate(traefik_middleware_requests_total{middleware=~".*rate-limit.*", code="429"}[5m])) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: traefik
+          component: gateway
+        annotations:
+          summary: "Traefik rate limiting active (> 10 429s/s)"
+          description: |
+            Rate limiting is triggering for middleware {{ $labels.middleware }}.
+            This may indicate abuse or need to adjust rate limits.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/traefik-rate-limits"
+
+      # -----------------------------------------------------------------------
+      # TLS Certificate Expiring Soon
+      # -----------------------------------------------------------------------
+      - alert: TraefikCertificateExpiringSoon
+        expr: |
+          traefik_tls_certs_not_after - time() < 7 * 24 * 60 * 60
+        for: 1h
+        labels:
+          severity: warning
+          service: traefik
+          component: gateway
+        annotations:
+          summary: "TLS certificate expiring within 7 days"
+          description: |
+            Certificate for {{ $labels.cn }} expires in {{ $value | humanizeDuration }}.
+            Let's Encrypt should auto-renew. Check ACME configuration.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/traefik-certs"
+
+      # -----------------------------------------------------------------------
+      # TLS Certificate Expired
+      # -----------------------------------------------------------------------
+      - alert: TraefikCertificateExpired
+        expr: |
+          traefik_tls_certs_not_after - time() < 0
+        for: 0s
+        labels:
+          severity: critical
+          service: traefik
+          component: gateway
+        annotations:
+          summary: "TLS certificate has expired!"
+          description: |
+            Certificate for {{ $labels.cn }} has expired!
+            Users will see security warnings. Immediate action required.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/traefik-cert-expired"
+
+      # -----------------------------------------------------------------------
+      # Traefik Down
+      # -----------------------------------------------------------------------
+      - alert: TraefikDown
+        expr: up{job="traefik"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: traefik
+          component: gateway
+        annotations:
+          summary: "Traefik instance is down"
+          description: |
+            Traefik instance {{ $labels.instance }} is not responding.
+            This will cause all incoming traffic to fail.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/traefik-down"
+
+      # -----------------------------------------------------------------------
+      # High Open Connections
+      # -----------------------------------------------------------------------
+      - alert: TraefikHighOpenConnections
+        expr: |
+          sum(traefik_service_open_connections) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: traefik
+          component: gateway
+        annotations:
+          summary: "Traefik has > 1000 open connections"
+          description: |
+            Current open connections: {{ $value }}.
+            This may indicate slow backends or connection leaks.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/traefik-connections"
+
+  # ==========================================================================
+  # KEDA Scaling Alerts
+  # ==========================================================================
+  - name: keda_alerts
+    interval: 30s
+    rules:
+      # -----------------------------------------------------------------------
+      # KEDA ScaledObject Not Ready
+      # -----------------------------------------------------------------------
+      - alert: KEDAScaledObjectNotReady
+        expr: |
+          keda_scaledobject_status{status!="True"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: keda
+          component: autoscaler
+        annotations:
+          summary: "KEDA ScaledObject not ready"
+          description: |
+            ScaledObject {{ $labels.scaledObject }} in namespace {{ $labels.namespace }}
+            is not ready. Auto-scaling may not be functioning.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/keda-not-ready"
+
+      # -----------------------------------------------------------------------
+      # KEDA Trigger Error
+      # -----------------------------------------------------------------------
+      - alert: KEDAScalerError
+        expr: |
+          increase(keda_scaler_errors_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: keda
+          component: autoscaler
+        annotations:
+          summary: "KEDA scaler experiencing errors"
+          description: |
+            Scaler {{ $labels.scaler }} has {{ $value }} errors in last 5 minutes.
+            Check Prometheus connectivity and metric availability.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/keda-errors"
+
+      # -----------------------------------------------------------------------
+      # Scaling to Maximum
+      # -----------------------------------------------------------------------
+      - alert: KEDAAtMaxReplicas
+        expr: |
+          keda_scaledobject_status{status="True"}
+          and on(scaledObject, namespace)
+          (
+            kube_horizontalpodautoscaler_status_current_replicas
+            ==
+            kube_horizontalpodautoscaler_spec_max_replicas
+          )
+        for: 10m
+        labels:
+          severity: warning
+          service: keda
+          component: autoscaler
+        annotations:
+          summary: "KEDA ScaledObject at maximum replicas"
+          description: |
+            {{ $labels.scaledObject }} has been at maximum replicas for 10+ minutes.
+            Consider increasing maxReplicaCount or optimizing workload.
+          runbook_url: "https://docs.rawdrive.ai/runbooks/keda-max-replicas"

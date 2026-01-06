@@ -69,6 +69,14 @@ const PublicProfilePage = lazy(() => import('../pages/public/PublicProfilePage')
 const PublicGalleryPage = lazy(() => import('../pages/public/PublicGalleryPage'));
 const PublicInvitationPage = lazy(() => import('../pages/public/PublicInvitationPage'));
 
+// Onboarding pages (automated onboarding system)
+const OnboardingLayout = lazy(() => import('../pages/onboarding/OnboardingLayout'));
+const PlanSelectionPage = lazy(() => import('../pages/onboarding/PlanSelectionPage'));
+const RegistrationPage = lazy(() => import('../pages/onboarding/RegistrationPage'));
+const EmailVerificationPage = lazy(() => import('../pages/onboarding/EmailVerificationPage'));
+const PaymentPage = lazy(() => import('../pages/onboarding/PaymentPage'));
+const SetupPage = lazy(() => import('../pages/onboarding/SetupPage'));
+
 // Legal/Policy pages
 const TermsPage = lazy(() => import('../pages/public/legal/terms'));
 const PrivacyPage = lazy(() => import('../pages/public/legal/privacy'));
@@ -228,6 +236,45 @@ export const authRoutes: RouteObject[] = [
   {
     path: '/forgot-password',
     element: <CriticalLazyPage component={ForgotPasswordPage} />,
+  },
+];
+
+// Onboarding routes (automated onboarding system)
+// Public routes for new user registration flow
+export const onboardingRoutes: RouteObject[] = [
+  {
+    path: '/onboarding',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <OnboardingLayout />
+      </Suspense>
+    ),
+    children: [
+      {
+        index: true,
+        element: <LazyPage component={PlanSelectionPage} />,
+      },
+      {
+        path: 'plans',
+        element: <LazyPage component={PlanSelectionPage} />,
+      },
+      {
+        path: 'register',
+        element: <CriticalLazyPage component={RegistrationPage} />,
+      },
+      {
+        path: 'verify-email',
+        element: <CriticalLazyPage component={EmailVerificationPage} />,
+      },
+      {
+        path: 'payment',
+        element: <CriticalLazyPage component={PaymentPage} />,
+      },
+      {
+        path: 'setup',
+        element: <CriticalLazyPage component={SetupPage} />,
+      },
+    ],
   },
 ];
 
@@ -401,6 +448,7 @@ export const routes: RouteObject[] = [
     children: [
       ...publicRoutes,
       ...authRoutes,
+      ...onboardingRoutes,
       ...workspaceRoutes,
       ...userSettingsRoutes,
       ...adminRoutes,

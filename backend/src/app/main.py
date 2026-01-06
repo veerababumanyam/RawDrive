@@ -4,7 +4,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException  # type: ignore
+from fastapi import FastAPI, HTTPException, Request, Response  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 
 from app.api.exceptions import register_exception_handlers  # type: ignore
@@ -142,6 +142,13 @@ app.include_router(v1_router)  # type: ignore
 
 # Register exception handlers
 register_exception_handlers(app)  # type: ignore
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    """Expose Prometheus metrics."""
+    from app.metrics.registry import get_metrics_output
+    return Response(content=get_metrics_output(), media_type="text/plain")
 
 
 @app.get("/health", tags=["health"])  # type: ignore

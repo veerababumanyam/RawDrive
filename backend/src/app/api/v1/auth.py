@@ -19,6 +19,7 @@ def _hash_email_for_audit(email: str) -> str:
     """Hash email for audit logs to comply with GDPR/SOC2 - no PII in logs."""
     return hashlib.sha256(email.lower().encode()).hexdigest()[:16]
 
+from app.utils.request_helpers import get_client_ip, get_user_agent
 from app.api.schemas import (
     AuthResponse,
     ErrorResponse,
@@ -147,14 +148,20 @@ async def login(
     auth_service: AuthServiceDep,
 ) -> AuthResponse:
     """Authenticate with email/password."""
-    ip_address = request_obj.client.host if request_obj.client else None
-    user_agent = request_obj.headers.get("user-agent")
-    
+    # Extract client information (Traefik-aware)
+    ip_address = get_client_ip(request_obj)
+    user_agent = get_user_agent(request_obj)
+
     try:
         user, tokens = await auth_service.login_local(
             email=request.email,
             password=request.password,
             workspace_id=request.workspace_id,
+            remember_me=request.remember_me,
+            device_fingerprint=request.device_fingerprint,
+            device_info=request.device_info,
+            ip_address=ip_address,
+            user_agent=user_agent,
         )
         # Log successful login (non-blocking, don't fail on error)
         try:
@@ -163,7 +170,13 @@ async def login(
                 user_id=user.user_id,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                details={"email_hash": _hash_email_for_audit(user.email), "outcome": "success", "workspace_id": str(user.workspace_id)},
+                details={
+                    "email_hash": _hash_email_for_audit(user.email),
+                    "outcome": "success",
+                    "workspace_id": str(user.workspace_id),
+                    "remember_me": request.remember_me,
+                    "device_fingerprint": request.device_fingerprint[:16] if request.device_fingerprint else None,
+                },
             )
         except Exception as log_error:
             logger.warning(f"Failed to log auth event: {log_error}")

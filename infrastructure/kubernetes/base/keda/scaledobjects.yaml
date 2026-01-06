@@ -1,0 +1,233 @@
+# KEDA ScaledObjects for RawDrive
+# Scales backend pods based on Traefik metrics (via Prometheus)
+#
+# Prerequisites:
+# - KEDA installed: helm install keda kedacore/keda --namespace keda --create-namespace
+# - Prometheus running with Traefik metrics
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rawdrive-backend-scaler
+  namespace: rawdrive
+  labels:
+    app.kubernetes.io/name: rawdrive-backend
+spec:
+  # Target deployment to scale
+  scaleTargetRef:
+    name: rawdrive-backend
+    kind: Deployment
+  
+  # Scaling boundaries
+  minReplicaCount: 2
+  maxReplicaCount: 100
+  
+  # Cooldown periods
+  cooldownPeriod: 300         # 5 min after scale-down before scaling again
+  pollingInterval: 15         # Check metrics every 15 seconds
+  
+  # Advanced scaling behavior
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 10
+              periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+            - type: Pods
+              value: 4
+              periodSeconds: 15
+          selectPolicy: Max
+
+  triggers:
+    # =========================================================================
+    # Trigger 1: HTTP Request Rate (Traefik metrics)
+    # Scale when requests per second exceed threshold
+    # =========================================================================
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring:9090
+        metricName: traefik_requests_per_second
+        threshold: "100"
+        query: |
+          sum(rate(traefik_service_requests_total{service=~"rawdrive-backend.*"}[1m]))
+        activationThreshold: "10"
+
+    # =========================================================================
+    # Trigger 2: Request Latency P95 (Traefik metrics)
+    # Scale up when latency exceeds 1 second
+    # =========================================================================
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring:9090
+        metricName: traefik_request_latency_p95
+        threshold: "1"
+        query: |
+          histogram_quantile(0.95, 
+            sum(rate(traefik_service_request_duration_seconds_bucket{service=~"rawdrive-backend.*"}[5m])) by (le)
+          )
+        activationThreshold: "0.5"
+
+    # =========================================================================
+    # Trigger 3: Active Connections (Traefik metrics)
+    # Scale based on concurrent connections per pod
+    # =========================================================================
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring:9090
+        metricName: traefik_active_connections
+        threshold: "50"
+        query: |
+          sum(traefik_service_open_connections{service=~"rawdrive-backend.*"})
+        activationThreshold: "10"
+
+    # =========================================================================
+    # Trigger 4: CPU Usage (fallback metric)
+    # =========================================================================
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"
+
+---
+# =============================================================================
+# KEDA ScaledObject for Face Worker (Redis-based)
+# =============================================================================
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rawdrive-face-worker-scaler
+  namespace: rawdrive
+  labels:
+    app.kubernetes.io/name: rawdrive-face-worker
+spec:
+  scaleTargetRef:
+    name: rawdrive-face-worker
+    kind: Deployment
+  
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  cooldownPeriod: 300
+  pollingInterval: 30
+  
+  triggers:
+    # Scale based on Redis list length (face processing queue)
+    - type: redis
+      metadata:
+        address: redis.rawdrive:6379
+        listName: face_processing_queue
+        listLength: "5"
+        activationListLength: "1"
+
+---
+# =============================================================================
+# KEDA ScaledObject for Content Worker (Redis-based)
+# =============================================================================
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rawdrive-content-worker-scaler
+  namespace: rawdrive
+  labels:
+    app.kubernetes.io/name: rawdrive-content-worker
+spec:
+  scaleTargetRef:
+    name: rawdrive-content-worker
+    kind: Deployment
+  
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  cooldownPeriod: 300
+  pollingInterval: 30
+  
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.rawdrive:6379
+        listName: content_processing_queue
+        listLength: "10"
+        activationListLength: "1"
+
+---
+# =============================================================================
+# KEDA ScaledObject for Quality Worker (Redis-based)
+# =============================================================================
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rawdrive-quality-worker-scaler
+  namespace: rawdrive
+  labels:
+    app.kubernetes.io/name: rawdrive-quality-worker
+spec:
+  scaleTargetRef:
+    name: rawdrive-quality-worker
+    kind: Deployment
+  
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  cooldownPeriod: 300
+  pollingInterval: 30
+  
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.rawdrive:6379
+        listName: quality_processing_queue
+        listLength: "10"
+        activationListLength: "1"
+
+---
+# =============================================================================
+# KEDA ScaledObject for Invitations Worker (Celery-based)
+# =============================================================================
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rawdrive-invitations-worker-scaler
+  namespace: rawdrive
+  labels:
+    app.kubernetes.io/name: rawdrive-invitations-worker
+spec:
+  scaleTargetRef:
+    name: rawdrive-invitations-worker
+    kind: Deployment
+  
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  cooldownPeriod: 300
+  pollingInterval: 30
+  
+  triggers:
+    # Scale based on Celery queue length
+    - type: redis
+      metadata:
+        address: redis.rawdrive:6379
+        listName: celery
+        databaseIndex: "3"  # Celery uses Redis DB 3
+        listLength: "10"
+        activationListLength: "1"
+
+---
+# =============================================================================
+# TriggerAuthentication for Redis (if auth required)
+# =============================================================================
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-auth
+  namespace: rawdrive
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: redis-secret
+      key: redis-password

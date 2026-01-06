@@ -1,0 +1,97 @@
+{
+  "category": "Uncategorized",
+  "description": "Traefik Configuration Consolidation Plan\n\nGoal Description\nThe current setup defines Traefik routing rules in two places:\n\nCurrent setup access , Docker Desktop (Windows) use powershell or access Docker through WSL\ndocker-compose.yml\n (using labels)\ninfrastructure/docker/traefik/dynamic.dev.yaml\n (using File Provider)\nThis causes duplication (two routers for the same service) and confusion. The \ndynamic.dev.yaml\n file contains a richer configuration with rate limiting, security headers, and CORS settings which are essentially missing or simplified in the Docker labels.\n\nObjective: Consolidate all routing, middleware, and service definitions into \ndynamic.dev.yaml\n. Clean up \ndocker-compose.yml\n by removing Traefik labels. This ensures a single source of truth and enforces the \"architected\" policies (rate limits, security headers) consistently.\n\nUser Review Required\nIMPORTANT\n\nThis change will remove traefik.enable=true and associated labels from \ndocker-compose.yml\n. Routing will rely ENTIRELY on \ninfrastructure/docker/traefik/dynamic.dev.yaml\n. This assumes container names (backend, frontend, etc.) are stable and accessible via Docker DNS (which they are in the default network).\n\nProposed Changes\nInfrastructure\n[MODIFY] \ndocker-compose.yml\nRemove labels section from:\nbackend\ngrafana\ninvitations-api\nonboarding-service\ngallery-service\nRemove traefik.enable=true from most services as we are manually defining them in the file provider.\n[MODIFY] \ndynamic.dev.yaml\nVerify all services from \ndocker-compose.yml\n are correctly represented.\nEnsure backend-service health check paths match the code.\nEnsure any missing routers from labels are migrated if they exist (though review suggests \ndynamic.dev.yaml\n is more complete).\nVerification Plan\nAutomated Tests\nRun npx playwright test tests/traefik-routing.spec.ts to verify routing still works.\nVerify dashboard access at http://localhost:8080/dashboard/.",
+  "title": "Traefik Configuration Consolidation Plan",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "in_progress",
+  "id": "feature-1767720819618-e21c0ivdm",
+  "startedAt": "2026-01-06T17:33:47.620Z",
+  "updatedAt": "2026-01-06T17:37:52.701Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\docker\\\\docker-compose.yml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\docker\\\\traefik\\\\dynamic.dev.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\tests\\\\traefik-routing.spec.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\docker\\\\traefik\\\\traefik.dev.yaml\"\n}\n\n## Specification: Traefik Configuration Consolidation\n\n### 1. Problem Statement\n\nThe current Traefik setup has duplicate routing definitions: Docker labels in `docker-compose.yml` and File Provider in `dynamic.dev.yaml`. This causes confusion, potential routing conflicts, and inconsistent policy enforcement. The File Provider configuration contains richer settings (rate limiting, security headers, CORS) that are missing from Docker labels.\n\n### 2. User Story\n\nAs a **DevOps engineer**, I want **all Traefik routing consolidated into a single configuration file (dynamic.dev.yaml)**, so that **there is a single source of truth for routing rules and policies are consistently enforced across all services**.\n\n### 3. Acceptance Criteria\n\n**Happy Path:**\n- GIVEN the Traefik stack is running\n- WHEN a request is made to `http://localhost/api/health`\n- THEN the request is routed to the backend service with proper rate limiting and security headers\n\n**Happy Path - Grafana:**\n- GIVEN the Traefik stack is running\n- WHEN a request is made to `http://localhost/grafana`\n- THEN the request is routed to Grafana with the prefix stripped\n\n**Happy Path - Dashboard:**\n- GIVEN the Traefik stack is running\n- WHEN a request is made to `http://localhost:8080/dashboard/`\n- THEN the Traefik dashboard is accessible\n\n**Edge Case - Microservices:**\n- GIVEN the Traefik stack is running\n- WHEN requests are made to `/api/v1/invitations`, `/api/v1/galleries`, `/api/v1/onboarding`, `/api/v1/subscription`\n- THEN each request is routed to the appropriate microservice\n\n**Error Handling:**\n- GIVEN a service is not running\n- WHEN a request is made to that service's path\n- THEN Traefik returns a 502/503 error (not a misconfiguration error)\n\n### 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `infrastructure/docker/docker-compose.yml`, `infrastructure/docker/traefik/dynamic.dev.yaml` |\n| Dependencies | Traefik v3.0, Docker, existing services must maintain same container names |\n| Constraints | Services must use stable Docker DNS names; no changes to service ports |\n| Patterns to Follow | File Provider configuration (existing in `dynamic.dev.yaml`); router priority ordering |\n\n### 5. Non-Goals\n\n- Changes to production Traefik configuration (`traefik.yaml`, `dynamic.yaml`)\n- Modifying service ports or container names\n- Adding new routes or services\n- Changes to TLS/certificate configuration\n- Changing the `traefik.dev.yaml` static configuration\n\n### 6. Implementation Tasks\n\n```tasks\n## Phase 1: Remove Docker Labels from docker-compose.yml\n\n- [ ] T001: Remove Traefik labels from traefik service (keep only dashboard router) | File: infrastructure/docker/docker-compose.yml\n- [ ] T002: Remove Traefik labels from grafana service | File: infrastructure/docker/docker-compose.yml\n- [ ] T003: Remove Traefik labels from backend service | File: infrastructure/docker/docker-compose.yml\n- [ ] T004: Remove Traefik labels from invitations-api service | File: infrastructure/docker/docker-compose.yml\n- [ ] T005: Remove Traefik labels from onboarding-service service | File: infrastructure/docker/docker-compose.yml\n- [ ] T006: Remove Traefik labels from gallery-service service | File: infrastructure/docker/docker-compose.yml\n- [ ] T007: Remove Traefik labels from billing-service service | File: infrastructure/docker/docker-compose.yml\n\n## Phase 2: Update dynamic.dev.yaml (Verify Completeness)\n\n- [ ] T008: Verify Traefik dashboard router exists in dynamic.dev.yaml | File: infrastructure/docker/traefik/dynamic.dev.yaml\n\n## Phase 3: Verification\n\n- [ ] T009: Run Playwright tests to verify routing works | File: tests/traefik-routing.spec.ts\n```\n\n### 7. Success Metrics\n\n| Metric | Target |\n|--------|--------|\n| Docker labels in docker-compose.yml | Zero `traefik.http.routers.*` or `traefik.http.services.*` labels (except Traefik dashboard) |\n| All routes defined in dynamic.dev.yaml | 100% of services have corresponding routers |\n| Playwright tests pass | All routing tests succeed |\n| No duplicate router definitions | No warnings in Traefik logs about duplicate routers |\n\n### 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Service discovery fails after label removal | File Provider defines services by container name (Docker DNS); verify container names match |\n| Middleware definitions lost | dynamic.dev.yaml already contains all required middlewares; no migration needed |\n| Traefik service itself needs labels for dashboard | Keep traefik.enable=true and dashboard labels on traefik service only |",
+    "generatedAt": "2026-01-06T17:34:26.474Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Remove Traefik labels from traefik service (keep only dashboard router)",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 1: Remove Docker Labels from docker-compose.yml",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Remove Traefik labels from grafana service",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 1: Remove Docker Labels from docker-compose.yml",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Remove Traefik labels from backend service",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 1: Remove Docker Labels from docker-compose.yml",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Remove Traefik labels from invitations-api service",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 1: Remove Docker Labels from docker-compose.yml",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Remove Traefik labels from onboarding-service service",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 1: Remove Docker Labels from docker-compose.yml",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Remove Traefik labels from gallery-service service",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 1: Remove Docker Labels from docker-compose.yml",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Remove Traefik labels from billing-service service",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 1: Remove Docker Labels from docker-compose.yml",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Verify Traefik dashboard router exists in dynamic.dev.yaml",
+        "filePath": "infrastructure/docker/traefik/dynamic.dev.yaml",
+        "phase": "Phase 2: Update dynamic.dev.yaml (Verify Completeness)",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Run Playwright tests to verify routing works",
+        "filePath": "tests/traefik-routing.spec.ts",
+        "phase": "Phase 3: Verification",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 9,
+    "tasksCompleted": 8,
+    "approvedAt": "2026-01-06T17:34:26.475Z",
+    "currentTaskId": "T009"
+  }
+}

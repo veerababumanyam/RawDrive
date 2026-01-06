@@ -312,3 +312,31 @@ class FaceDetectionService:
 - [ ] Memory > 80%
 - [ ] CPU > 70% sustained
 - [ ] DB pool exhausted
+
+## Infrastructure Monitoring (Traefik + KEDA)
+
+### Prometheus Metrics
+
+```yaml
+# Key Traefik metrics for KEDA autoscaling
+traefik_service_requests_total      # Request count by service
+traefik_service_request_duration_seconds  # Latency histogram
+traefik_service_open_connections    # Active connections
+traefik_middleware_requests_total   # Rate limiting (429s)
+```
+
+### Key Alerts
+
+| Alert | Threshold | Severity |
+|-------|-----------|----------|
+| High Error Rate | 5xx > 5% | critical |
+| High Latency | P95 > 2s | warning |
+| Rate Limiting Active | 429s > 10/s | warning |
+| KEDA Not Scaling | ScaledObject not ready | warning |
+| At Max Replicas | 10+ min at max | warning |
+
+### Grafana Dashboards
+
+Key dashboards in `infrastructure/monitoring/grafana/dashboards/`:
+- `traefik-keda.json` - Traffic, latency, KEDA scaling
+- `rawdrive-overview.json` - System overview

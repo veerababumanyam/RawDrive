@@ -22,11 +22,25 @@ except ImportError:
     logger_init = logging.getLogger(__name__)
     logger_init.warning("pillow-heif not installed - HEIC/HEIF images will not be supported")
 
+# Register AVIF support (optional - graceful degradation if unavailable)
+try:
+    from pillow_avif import register_avif_opener
+    register_avif_opener()
+    logger_init = logging.getLogger(__name__)
+    logger_init.debug("AVIF support enabled via pillow-avif-plugin")
+    AVIF_SUPPORTED = True
+except ImportError:
+    logger_init = logging.getLogger(__name__)
+    logger_init.warning("pillow-avif-plugin not installed - AVIF images will not be supported")
+    AVIF_SUPPORTED = False
+
 logger = logging.getLogger(__name__)
 
 # Image processing constants
 THUMBNAIL_MAX_DIMENSION = 512
 THUMBNAIL_QUALITY = 80
+MEDIUM_MAX_DIMENSION = 1024
+MEDIUM_QUALITY = 85
 PREVIEW_MAX_DIMENSION = 2048
 PREVIEW_QUALITY = 85
 
@@ -66,6 +80,12 @@ class ImageProcessingService:
         try:
             # Open image
             image = Image.open(io.BytesIO(image_data))
+
+            # Handle animated images - extract first frame
+            if getattr(image, 'is_animated', False):
+                image.seek(0)
+                image = image.copy()
+                logger.debug(f"Extracted first frame from animated image (workspace={workspace_id})")
 
             # Auto-rotate based on EXIF orientation
             image = ImageOps.exif_transpose(image)
@@ -137,6 +157,12 @@ class ImageProcessingService:
             # Open image
             image = Image.open(io.BytesIO(image_data))
 
+            # Handle animated images - extract first frame
+            if getattr(image, 'is_animated', False):
+                image.seek(0)
+                image = image.copy()
+                logger.debug(f"Extracted first frame from animated image (workspace={workspace_id})")
+
             # Auto-rotate based on EXIF orientation
             image = ImageOps.exif_transpose(image)
 
@@ -193,6 +219,92 @@ class ImageProcessingService:
             logger.error(f"Failed to generate preview: {e}")
             raise ImageProcessingError(
                 f"Preview generation failed: {e}", "PREVIEW_FAILED"
+            ) from e
+
+    def generate_medium(
+        self, image_data: bytes, workspace_id: UUID
+    ) -> Tuple[bytes, int, int]:
+        """Generate medium WebP variant (1024px max dimension, quality 85).
+
+        Optimized for gallery grid views and provides a balance between
+        quality and loading performance.
+
+        Args:
+            image_data: Original image bytes
+            workspace_id: Workspace UUID (for logging)
+
+        Returns:
+            Tuple of (medium_bytes, width, height)
+
+        Raises:
+            ImageProcessingError: If processing fails
+        """
+        try:
+            # Open image
+            image = Image.open(io.BytesIO(image_data))
+
+            # Handle animated images - extract first frame
+            if getattr(image, 'is_animated', False):
+                image.seek(0)
+                image = image.copy()
+                logger.debug(f"Extracted first frame from animated image (workspace={workspace_id})")
+
+            # Auto-rotate based on EXIF orientation
+            image = ImageOps.exif_transpose(image)
+
+            # Calculate medium size (preserve aspect ratio)
+            width, height = image.size
+            if width <= MEDIUM_MAX_DIMENSION and height <= MEDIUM_MAX_DIMENSION:
+                # Image is already small enough, just convert to WebP
+                medium = image
+                new_width, new_height = width, height
+            else:
+                if width > height:
+                    new_width = MEDIUM_MAX_DIMENSION
+                    new_height = int(height * (MEDIUM_MAX_DIMENSION / width))
+                else:
+                    new_height = MEDIUM_MAX_DIMENSION
+                    new_width = int(width * (MEDIUM_MAX_DIMENSION / height))
+
+                # Resize with high-quality resampling
+                medium = image.resize(
+                    (new_width, new_height), Image.Resampling.LANCZOS
+                )
+
+            # Convert to RGB for WebP
+            if medium.mode in ("RGBA", "LA", "P"):
+                # Create white background for transparency
+                rgb_image = Image.new("RGB", medium.size, (255, 255, 255))
+                if medium.mode == "P":
+                    medium = medium.convert("RGBA")
+                rgb_image.paste(
+                    medium, mask=medium.split()[-1] if medium.mode == "RGBA" else None
+                )
+                medium = rgb_image
+            elif medium.mode != "RGB":
+                medium = medium.convert("RGB")
+
+            # Save as WebP
+            output = io.BytesIO()
+            medium.save(
+                output,
+                format="WEBP",
+                quality=MEDIUM_QUALITY,
+                method=6,  # Best quality compression
+            )
+            medium_bytes = output.getvalue()
+
+            logger.debug(
+                f"Generated medium variant: {new_width}x{new_height} "
+                f"(workspace={workspace_id}, original={width}x{height})"
+            )
+
+            return medium_bytes, new_width, new_height
+
+        except Exception as e:
+            logger.error(f"Failed to generate medium variant: {e}")
+            raise ImageProcessingError(
+                f"Medium variant generation failed: {e}", "MEDIUM_FAILED"
             ) from e
 
     def get_image_dimensions(self, image_data: bytes) -> Tuple[int, int]:

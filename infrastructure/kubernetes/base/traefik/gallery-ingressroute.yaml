@@ -1,0 +1,152 @@
+# Traefik IngressRoute for Gallery Service
+# Routes gallery API traffic with WebSocket support
+
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gallery-service-route
+  labels:
+    app: gallery-service
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    # Public gallery API endpoints (high traffic)
+    - match: PathPrefix(`/api/v1/public/galleries`)
+      kind: Rule
+      priority: 100
+      services:
+        - name: gallery-service
+          port: 8000
+          passHostHeader: true
+      middlewares:
+        - name: rate-limit-gallery-public
+        - name: compress
+        - name: security-headers
+
+    # Magic link validation
+    - match: PathPrefix(`/api/v1/magic-links`)
+      kind: Rule
+      priority: 100
+      services:
+        - name: gallery-service
+          port: 8000
+          passHostHeader: true
+      middlewares:
+        - name: rate-limit-magic-links
+        - name: compress
+        - name: security-headers
+
+    # Authenticated gallery endpoints
+    - match: PathPrefix(`/api/v1/galleries`) && !PathPrefix(`/api/v1/galleries/public`)
+      kind: Rule
+      priority: 90
+      services:
+        - name: gallery-service
+          port: 8000
+          passHostHeader: true
+      middlewares:
+        - name: rate-limit-gallery-auth
+        - name: compress
+        - name: security-headers
+
+    # WebSocket endpoint for real-time proofing
+    - match: PathPrefix(`/api/v1/ws/`)
+      kind: Rule
+      priority: 110
+      services:
+        - name: gallery-service
+          port: 8000
+          passHostHeader: true
+      middlewares:
+        - name: ws-upgrade
+
+    # Health and metrics endpoints (internal only)
+    - match: Path(`/health`) || Path(`/ready`) || PathPrefix(`/health/`)
+      kind: Rule
+      priority: 120
+      services:
+        - name: gallery-service
+          port: 8000
+
+    # Prometheus metrics (internal only)
+    - match: Path(`/metrics`)
+      kind: Rule
+      priority: 120
+      services:
+        - name: gallery-service
+          port: 8000
+      middlewares:
+        - name: internal-only
+
+  tls:
+    secretName: rawdrive-tls
+
+---
+# Rate limit middleware for public gallery endpoints
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-gallery-public
+spec:
+  rateLimit:
+    average: 1000  # 1000 requests per second average
+    burst: 2000    # Allow bursts up to 2000
+    period: 1s
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+
+---
+# Rate limit middleware for magic links
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-magic-links
+spec:
+  rateLimit:
+    average: 100
+    burst: 200
+    period: 1s
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+
+---
+# Rate limit middleware for authenticated gallery endpoints
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-gallery-auth
+spec:
+  rateLimit:
+    average: 200
+    burst: 400
+    period: 1s
+    sourceCriterion:
+      requestHeaderName: X-User-ID
+
+---
+# WebSocket upgrade middleware
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ws-upgrade
+spec:
+  headers:
+    customRequestHeaders:
+      Connection: "Upgrade"
+      Upgrade: "websocket"
+
+---
+# Internal-only access middleware (for metrics endpoint)
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: internal-only
+spec:
+  ipAllowList:
+    sourceRange:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16

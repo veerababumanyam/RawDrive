@@ -40,6 +40,7 @@ import type {
   AddressType,
 } from '../../types/client';
 import { useClientAvatar } from '../../hooks/useClientAvatar';
+import { SUPPORTED_LANGUAGES } from '../../i18n/config';
 
 /* =============================================================================
    ClientFormPage Component
@@ -788,13 +789,11 @@ const ClientFormPage: React.FC = () => {
                     className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                   >
                     <option value="">Select language</option>
-                    <option value="en-US">English (US)</option>
-                    <option value="en-GB">English (UK)</option>
-                    <option value="en-IN">English (India)</option>
-                    <option value="hi-IN">Hindi</option>
-                    <option value="es-ES">Spanish</option>
-                    <option value="fr-FR">French</option>
-                    <option value="de-DE">German</option>
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <option key={lang.code} value={lang.code}>
+                        {lang.nativeName} ({lang.name})
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>

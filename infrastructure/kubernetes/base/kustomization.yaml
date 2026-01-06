@@ -23,6 +23,21 @@ resources:
   - pgbouncer-service.yaml
   - pgbouncer-configmap.yaml
 
+  # Traefik API Gateway
+  - traefik/
+
+  # KEDA Autoscaling
+  - keda/
+
+  # Gallery Microservice (50K concurrent users)
+  - gallery-service/
+
+  # Billing Microservice (subscription & payment processing)
+  - billing-service/
+
+  # Upload Microservice (50K concurrent uploads)
+  - upload-service/
+
 # ConfigMaps generated from files
 configMapGenerator:
   - name: rawdrive-backend-config

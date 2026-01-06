@@ -1,0 +1,99 @@
+# Traefik Static Configuration for RawDrive (Local Development)
+# Disables HTTPS redirect and Let's Encrypt for local dev
+#
+# See: docs/ARCHITECTURE_QUICK_REFERENCE.md
+
+# =============================================================================
+# Global Settings
+# =============================================================================
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# =============================================================================
+# API & Dashboard
+# =============================================================================
+api:
+  dashboard: true
+  insecure: true  # Allow insecure dashboard for local dev
+  debug: true
+
+# =============================================================================
+# Entry Points (Ports)
+# =============================================================================
+entryPoints:
+  # HTTP - No redirect for local development
+  web:
+    address: ":80"
+
+  # HTTPS - Available but not required for local dev
+  websecure:
+    address: ":443"
+
+  # Metrics endpoint for Prometheus/KEDA
+  metrics:
+    address: ":8082"
+
+# =============================================================================
+# Providers
+# =============================================================================
+providers:
+  # Docker provider for local development
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: rawdrive-network
+    watch: true
+
+  # File provider for dynamic configuration
+  file:
+    filename: /etc/traefik/dynamic.yaml
+    watch: true
+
+# =============================================================================
+# Metrics for Prometheus & KEDA
+# =============================================================================
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+    manualRouting: false
+
+# =============================================================================
+# Access Logs
+# =============================================================================
+accessLog:
+  filePath: /var/log/traefik/access.log
+  format: json
+  fields:
+    defaultMode: keep
+    names:
+      ClientUsername: drop
+    headers:
+      defaultMode: keep
+      names:
+        Authorization: redact
+        Cookie: redact
+  bufferingSize: 100
+
+# =============================================================================
+# Application Logs
+# =============================================================================
+log:
+  level: DEBUG  # More verbose for local dev
+  format: json
+  filePath: /var/log/traefik/traefik.log
+
+# =============================================================================
+# Ping (Health Check)
+# =============================================================================
+ping:
+  entryPoint: web
+  manualRouting: false

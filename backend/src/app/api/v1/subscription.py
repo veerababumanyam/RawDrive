@@ -82,6 +82,7 @@ SubscriptionServiceDep = Annotated[
     response_model=SubscriptionStatusResponse,
     summary="Get subscription status",
     description="Get current subscription status with plan details and usage metrics.",
+    deprecated=True,
 )
 async def get_subscription_status(
     workspace_access: WorkspaceAccessDep,
@@ -89,9 +90,19 @@ async def get_subscription_status(
 ) -> SubscriptionStatusResponse:
     """Get workspace subscription status.
 
+    DEPRECATED: This endpoint has been moved to the billing-service microservice.
+    Use /api/v1/subscription endpoints via Traefik routing (priority 145) which will
+    automatically route to billing-service. This backend endpoint is kept for rollback
+    purposes only and will be removed in a future release.
+
     Returns current plan, billing cycle dates, trial status, and usage metrics.
     Requires billing:read permission.
     """
+    logger.warning(
+        "DEPRECATED: subscription endpoint called on backend. "
+        "This endpoint has been moved to billing-service. "
+        f"workspace_id={workspace_id}"
+    )
     user, workspace_id = workspace_access
 
     try:

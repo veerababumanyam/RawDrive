@@ -1,0 +1,349 @@
+{
+  "category": "Uncategorized",
+  "description": "Upload Microservice Extraction + KEDA Autoscaling\n\n**Transform the existing upload functionality** into a **production‑ready, Kubernetes‑native microservice** with intelligent autoscaling based on concurrent upload demand.\n\nBackend (Python):\nbackend/Dockerfile - LibRaw installation\nbackend/requirements.txt - Dependencies (rawpy, pillow-avif-plugin)\nbackend/src/app/services/image_processing_service.py - Medium tier + animation\nbackend/src/app/services/raw_processing_service.py - Extended RAW formats\nbackend/src/app/services/asset_processing_worker.py - Three-tier generation\nbackend/src/app/services/r2_storage_service.py - Medium variant support\nbackend/src/app/services/signed_url_service.py - Medium variant + fallback\nShared Packages:\npackages/shared-constants/src/file-types.ts - New MIME types and extensions\nbackend/src/app/shared/constants.py - Auto-generated from TypeScript\nFrontend (TypeScript):\nfrontend/src/utils/fileUtils.ts - Animation/AVIF/TIFF utilities\n\n## 🎯 **Migration Goals**\n\n✅ EXTRACT → Independent upload service (FastAPI)\n✅ CONTAINERIZE → Optimized Docker image\n✅ ORCHESTRATE → Kubernetes Deployment + Service\n✅ AUTOSCALE → KEDA (Kafka queue + Prometheus metrics)\n✅ ROUTE → Traefik Ingress (upload-service.rawdrive.internal)\n✅ INTEGRATE → Frontend unchanged (new endpoint URL only)\n✅ ZERO DOWNTIME → Blue-green deployment\n\n## 📋 **Current Components to Migrate**\n\nFRONTEND: UploadDropzone.tsx\n✅ Drag-drop UI + progress tracking\n✅ Chunked upload logic\n✅ Resume capability\n\nBACKEND: upload_service.py (UploadService class)\n✅ File validation + encryption (AES-256)\n✅ Proxy vs streaming strategies (>10MB chunked)\n✅ Cloudflare R2 storage (S3 multipart)\n✅ Redis chunk buffering\n✅ Workspace/Gallery isolation\n✅ Asset database registration\n\n## 🏗️ **Target Architecture**\n\nInternet\n↓ HTTPS + TLS (Traefik)\nUpload Microservice (upload-service)\n↓ KEDA Scaled Deployment (2→50 pods)\n├── API Endpoints:\n│ ├── POST /v1/upload/session\n│ ├── POST /v1/upload/chunk/{upload_id}\n│ └── POST /v1/upload/complete\n├── Triggers:\n│ ├── Kafka: upload-queue (lag > 100)\n│ └── Prometheus: uploads_concurrent > 50\n├── Storage Pipeline:\n│ Redis (chunks) → Encryption → R2 Multipart\n└── Database: UploadSession + Asset records\n\n## 🔧 **Technical Implementation**\n\n### **Microservice (FastAPI)**\n✅ uvicorn[standard] workers (8 processes)\n✅ Health endpoints (/health, /ready)\n✅ Graceful shutdown (drain in-progress)\n✅ Prometheus metrics (/metrics)\n✅ Structured JSON logging\n✅ Pydantic validation everywhere\n\n### **KEDA Configuration**\n```yaml\ntriggers:\n- type: kafka\n  metadata:\n    topic: upload-queue\n    lagThreshold: \"100\"\n    bootstrapServers: \"kafka:9092\"\n- type: prometheus\n  metadata:\n    query: \"sum(rate(uploads_concurrent[2m])) > 50\"\n    serverAddress: \"http://prometheus:9090\"\nminReplicaCount: 2\nmaxReplicaCount: 50\nTraefik Ingress\ntext\nIngressRoute:\n  match: Host(`upload-service.rawdrive.internal`)\n  middlewares:\n    - name: rate-limit-100rps\n    - name: auth-header-required\n  services:\n    - name: upload-service\n      port: 8080\nFrontend Integration\n✅ Single config change: baseURL\n✅ Existing drag-drop + progress UI unchanged\n✅ WebSocket for real-time upload status\n✅ Circuit breaker fallback (upload failure → retry)\n🧪 Production Validation\nLOAD TESTING:\n✅ 5K concurrent uploads (Locust)\n✅ Scale 2→10 pods <90 seconds\n✅ P95 latency <300ms\n\nSECURITY SCANNING:\n✅ Trivy vulnerability scan (A‑rated)\n✅ Snyk dependency check\n\nDEPLOYMENT:\n✅ Blue-green rollout (zero downtime)\n✅ Automated rollback capability\n✅ 24h canary monitoring\n📈 Success Criteria\n\n✅ 50K concurrent uploads supported\n✅ P95 upload time <30s (100MB photo)\n✅ 99.99% success rate\n✅ Memory <500MB/pod at peak\n✅ CPU <80% average utilization\n✅ Zero frontend changes required\n🚀 Deployment Sequence\n1. FEATURE FLAG: upload_microservice_enabled=false\n2. DEPLOY: upload-service + KEDA + Traefik\n3. CANARY: 10% traffic → new service\n4. FLIP FLAG: upload_microservice_enabled=true  \n5. MONITOR: 24h stability metrics\n6. CLEANUP: Remove monolith upload code\nResult: Uploads scale independently from 500 → 50K concurrent users while maintaining YouTube‑level reliability. Frontend experience unchanged",
+  "title": "Upload Microservice",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "verified",
+  "id": "feature-1767708938507-cqn80891j",
+  "startedAt": "2026-01-06T16:15:07.107Z",
+  "updatedAt": "2026-01-06T16:29:28.830Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Task\nInput: {\n  \"subagent_type\": \"Explore\",\n  \"prompt\": \"Explore the RawDrive codebase to understand the current upload functionality architecture. I need to extract it into a microservice.\\n\\nFocus on:\\n1. Backend upload service: backend/src/app/services/upload_service.py - understand the full UploadService class\\n2. Upload API routes: backend/src/app/api/v1/uploads.py - understand endpoints\\n3. Frontend upload components: frontend/src/components/features/upload/ - understand UploadDropzone.tsx\\n4. Frontend upload hooks: frontend/src/hooks/useUpload.ts\\n5. Existing microservices structure: services/ directory - understand how other services are structured\\n6. KEDA configuration: infrastructure/kubernetes/base/keda/ - understand existing KEDA setup\\n7. Traefik configuration: infrastructure/kubernetes/base/traefik/ - understand routing patterns\\n8. Docker compose files for service patterns\\n9. Asset processing worker: backend/src/app/services/asset_processing_worker.py\\n10. R2 storage service: backend/src/app/services/r2_storage_service.py\\n\\nBe very thorough - I need to understand:\\n- All upload-related models and schemas\\n- Redis chunk buffering patterns\\n- Multipart upload handling\\n- Workspace isolation patterns\\n- How existing services (like gallery-service) are structured\\n- KEDA ScaledObject patterns\\n- Traefik IngressRoute patterns\",\n  \"description\": \"Explore upload architecture\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\upload_service.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\uploads.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\components\\\\features\\\\upload\\\\UploadDropzone.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\hooks\\\\useUpload.ts\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\" -type f -name \\\"*.py\\\" -o -name \\\"*.ts\\\" -o -name \\\"*.json\\\" | head -20\",\n  \"description\": \"Find files in services directory\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\\\\"\",\n  \"description\": \"List services directory contents\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\asset_processing_worker.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\r2_storage_service.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\"\",\n  \"description\": \"List gallery-service directory\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\kubernetes\\\\base\\\"\",\n  \"description\": \"List kubernetes base directory\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"infrastructure/kubernetes/base/**/*.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\kubernetes\\\\base\\\\keda\\\\scaledobjects.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\kubernetes\\\\base\\\\traefik\\\\ingressroutes.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\kubernetes\\\\base\\\\deployment.yaml\",\n  \"limit\": 80\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\infrastructure\\\\docker\\\\docker-compose.yml\",\n  \"limit\": 100\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/services/chunked*.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\chunked_upload_service.py\",\n  \"limit\": 150\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\" -name \\\"*.py\\\" -type f | head -20\",\n  \"description\": \"Find Python files in gallery-service\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/api/schemas.py\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"CreateUploadSession\\\\|UploadSessionResponse\\\\|UploadCommitResponse\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\" --include=\\\"*.py\\\" | head -10\",\n  \"description\": \"Find upload schema definitions\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"limit\": 200\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -n \\\"class.*Upload\\\\|class DuplicateAsset\\\\|class CheckDuplicate\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\\\"\",\n  \"description\": \"Find upload-related schema classes\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"offset\": 584,\n  \"limit\": 80\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\\src\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\\src\\\" -name \\\"main.py\\\" -o -name \\\"__init__.py\\\" | grep -E \\\"(main|src/__init__)\\\" | head -5\",\n  \"description\": \"Find entry point in gallery-service\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\gallery-service\\\\src\\\\api\\\\v1\\\\\\\"\",\n  \"description\": \"List v1 API routes\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/models/*.py\",\n  \"path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\models\\\\__init__.py\"\n}\n\nNow I have a comprehensive understanding of the upload architecture. Let me create the full specification.\n\n---\n\n# Upload Microservice Extraction + KEDA Autoscaling\n\n## 1. Problem Statement\n\nThe current upload functionality is tightly coupled to the monolithic backend, making it impossible to scale upload capacity independently from the main API. During peak photo session periods, upload bottlenecks limit the platform to ~500 concurrent uploads, far below the 50K target. Extracting uploads into a dedicated microservice with KEDA autoscaling will enable independent scaling from 2→50 pods based on real-time demand.\n\n## 2. User Story\n\nAs a **professional photographer**, I want **uploads to remain fast and reliable during peak demand** (e.g., event season), so that **I can upload thousands of photos without delays or failures, even when other photographers are uploading simultaneously**.\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** a photographer with valid credentials, **WHEN** they upload a 100MB RAW file during peak hours (5000 concurrent uploads), **THEN** the upload completes within 30 seconds with P95 latency <300ms for chunk acknowledgments\n- **GIVEN** KEDA monitoring upload queue lag, **WHEN** Kafka lag exceeds 100 messages, **THEN** pods scale from 2→10 within 90 seconds\n- **GIVEN** the upload microservice endpoint, **WHEN** frontend sends requests to `/api/v1/upload/*`, **THEN** Traefik routes to `upload-service.rawdrive.internal` with proper auth headers\n\n### Edge Cases\n- **GIVEN** a partially uploaded file (network interruption), **WHEN** the user resumes upload, **THEN** TUS protocol continues from last verified offset without re-uploading completed chunks\n- **GIVEN** Kafka broker temporarily unavailable, **WHEN** upload completes, **THEN** event queued to local Redis fallback and delivered when Kafka recovers\n- **GIVEN** upload service at max replicas (50 pods), **WHEN** additional load arrives, **THEN** requests queue gracefully with 429 rate limiting and retry-after headers\n\n### Error Handling\n- **GIVEN** invalid auth token, **WHEN** upload request received, **THEN** return 401 with clear error message, no partial session created\n- **GIVEN** R2 storage unavailable, **WHEN** upload commit attempted, **THEN** circuit breaker opens, returns 503 with retry guidance, session preserved for retry\n- **GIVEN** corrupted chunk (SHA256 mismatch), **WHEN** chunk verification fails, **THEN** return 400 with specific chunk offset, client re-uploads only failed chunk\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| **Affected Files** | `services/upload-service/` (new), `frontend/src/services/galleryService.ts`, `infrastructure/kubernetes/base/upload-service/`, `infrastructure/kubernetes/base/keda/`, `infrastructure/kubernetes/base/traefik/` |\n| **Dependencies** | FastAPI, uvicorn, boto3, redis, kafka-python, prometheus-client, rawpy, pillow |\n| **Constraints** | Zero frontend code changes (URL config only), backward-compatible API, shared database access, workspace isolation |\n| **Patterns to Follow** | gallery-service microservice structure, existing KEDA ScaledObject patterns, Traefik IngressRoute patterns |\n\n## 5. Non-Goals\n\n- **NOT** changing the upload UI/UX or frontend upload logic\n- **NOT** migrating asset processing workers (remains in backend)\n- **NOT** changing encryption key management (shared service)\n- **NOT** modifying the database schema (uses existing tables)\n- **NOT** implementing new upload protocols (TUS/S3 multipart unchanged)\n- **NOT** adding new file type support (existing formats only)\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation - Microservice Scaffold\n\n- [ ] T001: Create upload-service directory structure with FastAPI scaffold | File: services/upload-service/src/app/main.py\n- [ ] T002: Configure pyproject.toml with dependencies (FastAPI, uvicorn, boto3, redis, kafka-python, prometheus-client) | File: services/upload-service/pyproject.toml\n- [ ] T003: Create Dockerfile with LibRaw and multi-stage build | File: services/upload-service/Dockerfile\n- [ ] T004: Implement core config module with environment variables | File: services/upload-service/src/app/core/config.py\n- [ ] T005: Create database connection module with async SQLAlchemy | File: services/upload-service/src/app/core/database.py\n- [ ] T006: Implement Redis connection module for chunk buffering | File: services/upload-service/src/app/core/redis.py\n\n## Phase 2: Core Services Migration\n\n- [ ] T007: Migrate UploadService class with validation and session management | File: services/upload-service/src/app/services/upload_service.py\n- [ ] T008: Migrate ChunkedUploadService for TUS protocol handling | File: services/upload-service/src/app/services/chunked_upload_service.py\n- [ ] T009: Migrate EncryptionService for AES-256-CTR file encryption | File: services/upload-service/src/app/services/encryption_service.py\n- [ ] T010: Migrate R2StorageService with multipart upload support | File: services/upload-service/src/app/services/r2_storage_service.py\n- [ ] T011: Implement Kafka producer for asset processing events | File: services/upload-service/src/app/services/event_producer.py\n- [ ] T012: Create Pydantic schemas for request/response validation | File: services/upload-service/src/app/schemas/upload.py\n\n## Phase 3: API Routes & Middleware\n\n- [ ] T013: Implement POST /v1/upload/session endpoint | File: services/upload-service/src/app/api/v1/upload.py\n- [ ] T014: Implement PATCH /v1/upload/chunk/{upload_id} with TUS headers | File: services/upload-service/src/app/api/v1/upload.py\n- [ ] T015: Implement POST /v1/upload/complete endpoint | File: services/upload-service/src/app/api/v1/upload.py\n- [ ] T016: Implement POST /v1/upload/check-duplicate endpoint | File: services/upload-service/src/app/api/v1/upload.py\n- [ ] T017: Create auth middleware for JWT validation and workspace extraction | File: services/upload-service/src/app/middleware/auth.py\n- [ ] T018: Create rate limiting middleware with workspace-level limits | File: services/upload-service/src/app/middleware/rate_limit.py\n\n## Phase 4: Observability & Resilience\n\n- [ ] T019: Implement Prometheus metrics endpoint (/metrics) | File: services/upload-service/src/app/observability/metrics.py\n- [ ] T020: Configure structured JSON logging with correlation IDs | File: services/upload-service/src/app/observability/logging.py\n- [ ] T021: Implement health check endpoints (/health, /ready) | File: services/upload-service/src/app/api/health.py\n- [ ] T022: Add circuit breaker for R2 storage operations | File: services/upload-service/src/app/resilience/circuit_breaker.py\n- [ ] T023: Implement graceful shutdown with drain for in-progress uploads | File: services/upload-service/src/app/core/lifecycle.py\n\n## Phase 5: Kubernetes Deployment\n\n- [ ] T024: Create Kubernetes Deployment manifest with resource limits | File: infrastructure/kubernetes/base/upload-service/deployment.yaml\n- [ ] T025: Create Kubernetes Service manifest | File: infrastructure/kubernetes/base/upload-service/service.yaml\n- [ ] T026: Create ConfigMap for environment configuration | File: infrastructure/kubernetes/base/upload-service/configmap.yaml\n- [ ] T027: Create Secret manifest template for sensitive config | File: infrastructure/kubernetes/base/upload-service/secret.yaml\n- [ ] T028: Create Kustomization file for upload-service | File: infrastructure/kubernetes/base/upload-service/kustomization.yaml\n\n## Phase 6: KEDA Autoscaling\n\n- [ ] T029: Create KEDA ScaledObject with Kafka trigger (lag threshold 100) | File: infrastructure/kubernetes/base/upload-service/scaledobject.yaml\n- [ ] T030: Add Prometheus trigger for concurrent uploads metric | File: infrastructure/kubernetes/base/upload-service/scaledobject.yaml\n- [ ] T031: Configure TriggerAuthentication for Kafka credentials | File: infrastructure/kubernetes/base/upload-service/triggerauthentication.yaml\n- [ ] T032: Update base kustomization to include upload-service | File: infrastructure/kubernetes/base/kustomization.yaml\n\n## Phase 7: Traefik Routing\n\n- [ ] T033: Create Traefik IngressRoute for upload-service | File: infrastructure/kubernetes/base/upload-service/ingressroute.yaml\n- [ ] T034: Configure rate limiting middleware (100 req/s) | File: infrastructure/kubernetes/base/upload-service/middleware.yaml\n- [ ] T035: Add upload-service to Traefik dashboard routing | File: infrastructure/kubernetes/base/traefik/ingressroutes.yaml\n\n## Phase 8: Frontend Integration\n\n- [ ] T036: Add upload service base URL to frontend config | File: frontend/src/config/api.ts\n- [ ] T037: Update galleryService to use upload service endpoints | File: frontend/src/services/galleryService.ts\n- [ ] T038: Add feature flag for upload microservice routing | File: frontend/src/config/features.ts\n\n## Phase 9: Docker Compose Development\n\n- [ ] T039: Add upload-service to docker-compose.dev.yml | File: infrastructure/docker/docker-compose.dev.yml\n- [ ] T040: Add upload-service to docker-compose.yml | File: infrastructure/docker/docker-compose.yml\n- [ ] T041: Create .env.example for upload-service | File: services/upload-service/.env.example\n\n## Phase 10: Testing & Documentation\n\n- [ ] T042: Create unit tests for upload service | File: services/upload-service/tests/test_upload_service.py\n- [ ] T043: Create integration tests for API endpoints | File: services/upload-service/tests/test_api.py\n- [ ] T044: Create load test script with Locust | File: services/upload-service/tests/load/locustfile.py\n- [ ] T045: Update README with deployment instructions | File: services/upload-service/README.md\n```\n\n## 7. Success Metrics\n\n| Metric | Target | Measurement |\n|--------|--------|-------------|\n| Concurrent uploads supported | 50,000 | Load test with Locust |\n| P95 upload time (100MB) | <30 seconds | Prometheus histogram |\n| P95 chunk acknowledgment | <300ms | Prometheus histogram |\n| Upload success rate | 99.99% | Error rate metrics |\n| Scale-up time (2→10 pods) | <90 seconds | KEDA metrics |\n| Memory per pod at peak | <500MB | Kubernetes metrics |\n| CPU average utilization | <80% | Kubernetes metrics |\n| Frontend code changes | 0 (config only) | Git diff |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Database connection pool exhaustion | PgBouncer connection pooling, connection limits per pod (5 max) |\n| Kafka broker unavailability | Local Redis fallback queue with retry, dead letter topic |\n| R2 storage latency spikes | Circuit breaker pattern, multipart timeout extension |\n| Chunk data loss in Redis | TTL extension on active uploads, chunk verification at commit |\n| Token expiry during large upload | Token refresh middleware, 24-hour session validity |\n| Workspace isolation bypass | Workspace ID extracted from JWT, not request body |\n| Memory pressure from large files | Streaming encryption, 5MB chunk limit, no full-file buffering |\n\n---",
+    "generatedAt": "2026-01-06T15:12:40.402Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create upload-service directory structure with FastAPI scaffold",
+        "filePath": "services/upload-service/src/app/main.py",
+        "phase": "Phase 1: Foundation - Microservice Scaffold",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Configure pyproject.toml with dependencies (FastAPI, uvicorn, boto3, redis, kafka-python, prometheus-client)",
+        "filePath": "services/upload-service/pyproject.toml",
+        "phase": "Phase 1: Foundation - Microservice Scaffold",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create Dockerfile with LibRaw and multi-stage build",
+        "filePath": "services/upload-service/Dockerfile",
+        "phase": "Phase 1: Foundation - Microservice Scaffold",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Implement core config module with environment variables",
+        "filePath": "services/upload-service/src/app/core/config.py",
+        "phase": "Phase 1: Foundation - Microservice Scaffold",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create database connection module with async SQLAlchemy",
+        "filePath": "services/upload-service/src/app/core/database.py",
+        "phase": "Phase 1: Foundation - Microservice Scaffold",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Implement Redis connection module for chunk buffering",
+        "filePath": "services/upload-service/src/app/core/redis.py",
+        "phase": "Phase 1: Foundation - Microservice Scaffold",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Migrate UploadService class with validation and session management",
+        "filePath": "services/upload-service/src/app/services/upload_service.py",
+        "phase": "Phase 2: Core Services Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Migrate ChunkedUploadService for TUS protocol handling",
+        "filePath": "services/upload-service/src/app/services/chunked_upload_service.py",
+        "phase": "Phase 2: Core Services Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Migrate EncryptionService for AES-256-CTR file encryption",
+        "filePath": "services/upload-service/src/app/services/encryption_service.py",
+        "phase": "Phase 2: Core Services Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Migrate R2StorageService with multipart upload support",
+        "filePath": "services/upload-service/src/app/services/r2_storage_service.py",
+        "phase": "Phase 2: Core Services Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Implement Kafka producer for asset processing events",
+        "filePath": "services/upload-service/src/app/services/event_producer.py",
+        "phase": "Phase 2: Core Services Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create Pydantic schemas for request/response validation",
+        "filePath": "services/upload-service/src/app/schemas/upload.py",
+        "phase": "Phase 2: Core Services Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Implement POST /v1/upload/session endpoint",
+        "filePath": "services/upload-service/src/app/api/v1/upload.py",
+        "phase": "Phase 3: API Routes & Middleware",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Implement PATCH /v1/upload/chunk/{upload_id} with TUS headers",
+        "filePath": "services/upload-service/src/app/api/v1/upload.py",
+        "phase": "Phase 3: API Routes & Middleware",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Implement POST /v1/upload/complete endpoint",
+        "filePath": "services/upload-service/src/app/api/v1/upload.py",
+        "phase": "Phase 3: API Routes & Middleware",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Implement POST /v1/upload/check-duplicate endpoint",
+        "filePath": "services/upload-service/src/app/api/v1/upload.py",
+        "phase": "Phase 3: API Routes & Middleware",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Create auth middleware for JWT validation and workspace extraction",
+        "filePath": "services/upload-service/src/app/middleware/auth.py",
+        "phase": "Phase 3: API Routes & Middleware",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create rate limiting middleware with workspace-level limits",
+        "filePath": "services/upload-service/src/app/middleware/rate_limit.py",
+        "phase": "Phase 3: API Routes & Middleware",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Implement Prometheus metrics endpoint (/metrics)",
+        "filePath": "services/upload-service/src/app/observability/metrics.py",
+        "phase": "Phase 4: Observability & Resilience",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Configure structured JSON logging with correlation IDs",
+        "filePath": "services/upload-service/src/app/observability/logging.py",
+        "phase": "Phase 4: Observability & Resilience",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Implement health check endpoints (/health, /ready)",
+        "filePath": "services/upload-service/src/app/api/health.py",
+        "phase": "Phase 4: Observability & Resilience",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Add circuit breaker for R2 storage operations",
+        "filePath": "services/upload-service/src/app/resilience/circuit_breaker.py",
+        "phase": "Phase 4: Observability & Resilience",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Implement graceful shutdown with drain for in-progress uploads",
+        "filePath": "services/upload-service/src/app/core/lifecycle.py",
+        "phase": "Phase 4: Observability & Resilience",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create Kubernetes Deployment manifest with resource limits",
+        "filePath": "infrastructure/kubernetes/base/upload-service/deployment.yaml",
+        "phase": "Phase 5: Kubernetes Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Create Kubernetes Service manifest",
+        "filePath": "infrastructure/kubernetes/base/upload-service/service.yaml",
+        "phase": "Phase 5: Kubernetes Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Create ConfigMap for environment configuration",
+        "filePath": "infrastructure/kubernetes/base/upload-service/configmap.yaml",
+        "phase": "Phase 5: Kubernetes Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Create Secret manifest template for sensitive config",
+        "filePath": "infrastructure/kubernetes/base/upload-service/secret.yaml",
+        "phase": "Phase 5: Kubernetes Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Create Kustomization file for upload-service",
+        "filePath": "infrastructure/kubernetes/base/upload-service/kustomization.yaml",
+        "phase": "Phase 5: Kubernetes Deployment",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Create KEDA ScaledObject with Kafka trigger (lag threshold 100)",
+        "filePath": "infrastructure/kubernetes/base/upload-service/scaledobject.yaml",
+        "phase": "Phase 6: KEDA Autoscaling",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Add Prometheus trigger for concurrent uploads metric",
+        "filePath": "infrastructure/kubernetes/base/upload-service/scaledobject.yaml",
+        "phase": "Phase 6: KEDA Autoscaling",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Configure TriggerAuthentication for Kafka credentials",
+        "filePath": "infrastructure/kubernetes/base/upload-service/triggerauthentication.yaml",
+        "phase": "Phase 6: KEDA Autoscaling",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Update base kustomization to include upload-service",
+        "filePath": "infrastructure/kubernetes/base/kustomization.yaml",
+        "phase": "Phase 6: KEDA Autoscaling",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Create Traefik IngressRoute for upload-service",
+        "filePath": "infrastructure/kubernetes/base/upload-service/ingressroute.yaml",
+        "phase": "Phase 7: Traefik Routing",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Configure rate limiting middleware (100 req/s)",
+        "filePath": "infrastructure/kubernetes/base/upload-service/middleware.yaml",
+        "phase": "Phase 7: Traefik Routing",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Add upload-service to Traefik dashboard routing",
+        "filePath": "infrastructure/kubernetes/base/traefik/ingressroutes.yaml",
+        "phase": "Phase 7: Traefik Routing",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Add upload service base URL to frontend config",
+        "filePath": "frontend/src/config/api.ts",
+        "phase": "Phase 8: Frontend Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Update galleryService to use upload service endpoints",
+        "filePath": "frontend/src/services/galleryService.ts",
+        "phase": "Phase 8: Frontend Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T038",
+        "description": "Add feature flag for upload microservice routing",
+        "filePath": "frontend/src/config/features.ts",
+        "phase": "Phase 8: Frontend Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T039",
+        "description": "Add upload-service to docker-compose.dev.yml",
+        "filePath": "infrastructure/docker/docker-compose.dev.yml",
+        "phase": "Phase 9: Docker Compose Development",
+        "status": "pending"
+      },
+      {
+        "id": "T040",
+        "description": "Add upload-service to docker-compose.yml",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 9: Docker Compose Development",
+        "status": "pending"
+      },
+      {
+        "id": "T041",
+        "description": "Create .env.example for upload-service",
+        "filePath": "services/upload-service/.env.example",
+        "phase": "Phase 9: Docker Compose Development",
+        "status": "pending"
+      },
+      {
+        "id": "T042",
+        "description": "Create unit tests for upload service",
+        "filePath": "services/upload-service/tests/test_upload_service.py",
+        "phase": "Phase 10: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T043",
+        "description": "Create integration tests for API endpoints",
+        "filePath": "services/upload-service/tests/test_api.py",
+        "phase": "Phase 10: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T044",
+        "description": "Create load test script with Locust",
+        "filePath": "services/upload-service/tests/load/locustfile.py",
+        "phase": "Phase 10: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T045",
+        "description": "Update README with deployment instructions",
+        "filePath": "services/upload-service/README.md",
+        "phase": "Phase 10: Testing & Documentation",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 45,
+    "tasksCompleted": 16,
+    "approvedAt": "2026-01-06T15:12:40.403Z",
+    "currentTaskId": "T017"
+  }
+}

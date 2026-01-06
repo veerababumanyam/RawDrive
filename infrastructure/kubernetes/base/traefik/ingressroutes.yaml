@@ -1,0 +1,246 @@
+# Traefik IngressRoute and Middleware CRDs for RawDrive
+# These define the routing rules and middlewares using Traefik's native CRDs
+
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-api
+  namespace: rawdrive
+spec:
+  rateLimit:
+    average: 50
+    burst: 100
+    period: 1s
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-uploads
+  namespace: rawdrive
+spec:
+  rateLimit:
+    average: 10
+    burst: 20
+    period: 1s
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-ai
+  namespace: rawdrive
+spec:
+  rateLimit:
+    average: 5
+    burst: 10
+    period: 1s
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+  namespace: rawdrive
+spec:
+  headers:
+    browserXssFilter: true
+    contentTypeNosniff: true
+    frameDeny: true
+    stsIncludeSubdomains: true
+    stsPreload: true
+    stsSeconds: 31536000
+    customFrameOptionsValue: SAMEORIGIN
+    customResponseHeaders:
+      X-Powered-By: ""
+      Server: ""
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: cors-headers
+  namespace: rawdrive
+spec:
+  headers:
+    accessControlAllowMethods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+    accessControlAllowHeaders:
+      - Content-Type
+      - Authorization
+      - X-Request-ID
+      - X-Workspace-ID
+    accessControlAllowOriginList:
+      - https://rawdrive.ai
+      - https://www.rawdrive.ai
+    accessControlMaxAge: 86400
+    addVaryHeader: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: compress
+  namespace: rawdrive
+spec:
+  compress:
+    excludedContentTypes:
+      - text/event-stream
+---
+# =============================================================================
+# IngressRoute - Main API
+# =============================================================================
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rawdrive-api
+  namespace: rawdrive
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`api.rawdrive.ai`) && PathPrefix(`/api`)
+      kind: Rule
+      middlewares:
+        - name: rate-limit-api
+        - name: security-headers
+        - name: cors-headers
+      services:
+        - name: rawdrive-backend
+          port: 8000
+          healthCheck:
+            path: /health
+            interval: 10s
+            timeout: 3s
+  tls:
+    certResolver: letsencrypt
+---
+# =============================================================================
+# IngressRoute - Upload Endpoint (higher limits)
+# =============================================================================
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rawdrive-uploads
+  namespace: rawdrive
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/photos/upload`)
+      kind: Rule
+      priority: 100
+      middlewares:
+        - name: rate-limit-uploads
+        - name: security-headers
+      services:
+        - name: rawdrive-backend
+          port: 8000
+  tls:
+    certResolver: letsencrypt
+---
+# =============================================================================
+# IngressRoute - AI Endpoints (stricter limits)
+# =============================================================================
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rawdrive-ai
+  namespace: rawdrive
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/ai`)
+      kind: Rule
+      priority: 100
+      middlewares:
+        - name: rate-limit-ai
+        - name: security-headers
+      services:
+        - name: rawdrive-backend
+          port: 8000
+  tls:
+    certResolver: letsencrypt
+---
+# =============================================================================
+# IngressRoute - Frontend Web App
+# =============================================================================
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rawdrive-web
+  namespace: rawdrive
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`rawdrive.ai`) || Host(`www.rawdrive.ai`)
+      kind: Rule
+      middlewares:
+        - name: security-headers
+        - name: compress
+      services:
+        - name: rawdrive-frontend
+          port: 3000
+  tls:
+    certResolver: letsencrypt
+---
+# =============================================================================
+# IngressRoute - Multi-tenant Studios (*.rawdrive.ai)
+# =============================================================================
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rawdrive-studios
+  namespace: rawdrive
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: HostRegexp(`{subdomain:[a-z0-9-]+}.rawdrive.ai`)
+      kind: Rule
+      middlewares:
+        - name: security-headers
+        - name: compress
+      services:
+        - name: rawdrive-frontend
+          port: 3000
+  tls:
+    certResolver: letsencrypt
+    domains:
+      - main: rawdrive.ai
+        sans:
+          - "*.rawdrive.ai"
+---
+# =============================================================================
+# IngressRoute - Invitations Microservice
+# =============================================================================
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rawdrive-invitations
+  namespace: rawdrive
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/invitations`)
+      kind: Rule
+      middlewares:
+        - name: rate-limit-api
+        - name: security-headers
+      services:
+        - name: rawdrive-invitations
+          port: 8000
+  tls:
+    certResolver: letsencrypt

@@ -415,7 +415,7 @@ The default hosted deployment assumptions for RawDrive are:
 - **CAPTCHA:** Cloudflare Turnstile for bot mitigation.
 - **Object storage:** Cloudflare R2 for managed media/derivatives and backup artifacts.
 - **Compute:** Hostinger VPS (KVM) running a self-managed Kubernetes cluster (kubeadm).
-- **Ingress/TLS:** Nginx Ingress Controller with cert-manager (Let’s Encrypt).
+- **Ingress/TLS:** Traefik v3 API Gateway with KEDA autoscaling and cert-manager (Let's Encrypt).
 - **Backups:** automated Postgres backups to R2 (PITR-capable) and cluster backup/restore to R2 (e.g., Velero).
 
 ### 9.2 Performance & reliability

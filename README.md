@@ -138,13 +138,15 @@ graph TB
 | **Frontend** | React 19 + TypeScript + Vite + Tailwind CSS | Modern web application with design system |
 | **Backend** | Python FastAPI + SQLAlchemy | RESTful API services with async support |
 | **AI Service** | Python FastAPI + FastMCP | AI/ML processing and Model Context Protocol |
-| **Database** | PostgreSQL 16 + pgvector + PostGIS | Relational data + vector embeddings + geo search |
+| **Database** | PostgreSQL 16 + pgvector + pgvectorscale + TimescaleDB | Relational data + vector embeddings + DiskANN indexes |
 | **Cache** | Redis 7 + BullMQ | Caching, sessions, job queues |
 | **Storage** | Cloudflare R2 / BYOS S3 | Object storage with CDN |
 | **AI Provider** | Google Gemini (BYOA) | Bring Your Own API - users provide their own Gemini API key |
 | **Infrastructure** | Docker + Kubernetes | Container orchestration |
 | **Monitoring** | Grafana + Loki + Prometheus | Observability and alerting |
 | **Authentication** | Google OAuth (OIDC) + Local Auth | Enterprise authentication with MFA |
+
+> **Note:** Use `timescale/timescaledb-ha:pg16` Docker image for full vector search support including StreamingDiskANN indexes.
 
 ### 🎨 Design System
 
@@ -177,10 +179,14 @@ RawDrive includes a comprehensive design system with:
 
 2. **Start development infrastructure**
    ```bash
-   # Full stack (all services)
+   # Option A: Database only (recommended for local backend development)
+   # Uses timescale/timescaledb-ha:pg16 with pgvector + pgvectorscale
+   docker compose -f docker-compose.db.yml up -d
+   
+   # Option B: Full stack (all services including backend in Docker)
    docker compose -f infrastructure/docker/docker-compose.yml up -d
    
-   # OR backend-only development (faster for backend work)
+   # Option C: Backend-only development (faster for backend work)
    docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
    ```
 
@@ -215,6 +221,35 @@ RawDrive includes a comprehensive design system with:
    # Backend and microservices (using Docker)
    # Services are already running in Docker containers
    # Access backend at: http://localhost:8000
+   ```
+
+7. **Gallery Microservice (Optional)**
+   ```bash
+   # Start gallery service for development
+   ./scripts/dev-gallery-service.sh        # Unix/macOS/WSL
+   .\scripts\dev-gallery-service.ps1      # Windows
+
+   # Test gallery integration
+   ./scripts/test-gallery-integration.sh
+
+   # Access gallery service:
+   # - Direct: http://localhost:8004/health
+   # - Via Traefik: http://localhost/api/v1/galleries
+   ```
+
+8. **Billing Microservice (Optional)**
+   ```bash
+   # Start billing service for development
+   ./scripts/dev-billing-service.sh        # Unix/macOS/WSL
+   .\scripts\start-billing-dev.ps1        # Windows
+
+   # Test billing integration
+   .\scripts\test-billing-setup.ps1
+
+   # Access billing service:
+   # - Direct: http://localhost:8006/health (dev) or http://localhost:8005/health (prod)
+   # - Via Traefik: http://localhost/api/v1/subscription
+   # - Webhooks: http://localhost/webhooks/razorpay, /webhooks/stripe
    ```
 
 ### 🧪 Testing
@@ -280,7 +315,7 @@ RawDrive/
 │   └── tests/              # AI service tests
 ├── scripts/                 # Build scripts
 │   └── generate-python-types.ts  # TypeScript → Python generator
-├── infrastructure/          # Docker, nginx, monitoring
+├── infrastructure/          # Docker, Traefik, monitoring
 ├── docs/                   # Comprehensive documentation
 └── CLAUDE.md               # AI assistant context
 ```

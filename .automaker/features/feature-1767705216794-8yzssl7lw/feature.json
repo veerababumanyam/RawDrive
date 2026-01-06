@@ -1,0 +1,412 @@
+{
+  "category": "Uncategorized",
+  "description": "Business Overview\nRawDrive requires a comprehensive automated onboarding system which should be a microservice with KEDA auto scaling to streamline customer acquisition and reduce time-to-value. The system must guide new users through account creation, payment processing, and initial setup with minimal friction while ensuring security, compliance, and user engagement.\n\nBusiness Objectives\nReduce Churn: Provide guided setup to help customers get value quickly\nIncrease Conversion: Streamline signup with minimal barriers\nEnsure Compliance: Collect necessary agreements and verify customer information\nAutomate Operations: Minimize manual intervention in customer setup\nCollect Data: Gather essential information for account setup and personalization\nFacilitate Payment: Integrate payment processing seamlessly into the signup flow\nFunctional Requirements\nFR-1: Plan Selection Interface\nDescription: Customers must be able to select their subscription tier before creating an account.\n\nRequirements:\n\nDisplay plan cards with features, pricing, and billing cycles\nSupport monthly and annual billing with savings calculation\nPersist selected plan through the entire onboarding flow\nProvide clear feature comparison matrix\nInclude accessibility features for screen readers and keyboard navigation\nFR-2: User Registration\nDescription: Collect and validate user information for account creation.\n\nRequirements:\n\nSupport email/password registration and Google OAuth\nValidate email uniqueness and format\nEnforce strong password policies (8+ chars, uppercase, lowercase, numbers, special chars)\nRequire email verification before account activation\nCollect business information (name, description, website)\nInclude terms of service and privacy policy acceptance\nSupport account linking for existing users\nFR-3: Payment Processing\nDescription: Securely process subscription payments.\n\nRequirements:\n\nIntegrate with payment gateways (Stripe, Razorpay, etc.)\nSupport multiple payment methods (credit cards, digital wallets, bank transfers)\nImplement PCI DSS compliance measures\nProvide real-time payment validation and error handling\nGenerate order summaries with tax calculations\nSupport multiple currencies and regional payment methods\nFR-4: Payment Verification and Webhook Processing\nDescription: Verify payment completion and handle webhook notifications.\n\nRequirements:\n\nProcess payment gateway webhooks for status updates\nImplement idempotency to handle duplicate webhook events\nSupport exponential backoff retry logic for failed processing\nUpdate subscription status based on payment confirmation\nSend payment confirmation emails with invoice details\nFR-5: Automatic Tier Activation\nDescription: Instantly activate subscription benefits upon successful payment.\n\nRequirements:\n\nCreate subscription records with billing cycle and renewal dates\nInitialize resource limits based on selected tier\nGrant tier-specific features and permissions\nUpdate user account with subscription information\nSend tier activation confirmation emails\nFR-6: Guided Setup Wizard\nDescription: Provide step-by-step guidance for initial account configuration.\n\nRequirements:\n\nPresent welcome screen with product overview\nGuide profile setup (business info, branding, contact details)\nAssist with first gallery creation\nAllow progress saving and resumption\nProvide skip options for optional steps\nInclude tooltips and help text throughout\nFR-7: Email Communications\nDescription: Send automated emails throughout the onboarding process.\n\nRequirements:\n\nEmail verification during registration\nPayment confirmation with invoice attachment\nTier activation confirmation\nWelcome emails with next steps\nSupport email templates with branding\nInclude unsubscribe options for marketing emails\nNon-Functional Requirements\nNFR-1: Performance\nPage load times < 2 seconds\nPayment processing completion < 30 seconds\nEmail delivery within 5 minutes of trigger events\nSupport concurrent onboarding sessions for 1000+ users\nNFR-2: Security\nImplement TLS 1.3 for all data transmission\nEncrypt sensitive data at rest using AES-256-GCM\nComply with PCI DSS for payment processing\nImplement CSRF protection and rate limiting\nSupport 2FA for enhanced account security\nNFR-3: Scalability\nHandle peak signup periods (1000+ concurrent users)\nSupport horizontal scaling across multiple servers\nImplement database connection pooling\nCache frequently accessed data (plans, pricing)\nNFR-4: Reliability\n99.9% uptime for onboarding flows\nAutomatic retry mechanisms for failed operations\nGraceful error handling with user-friendly messages\nDatabase transaction consistency across all steps\nNFR-5: Usability\nMobile-responsive design for all devices\nSupport for 10+ languages and locales\nWCAG 2.1 AA accessibility compliance\nProgressive enhancement for older browsers\nNFR-6: Compliance\nGDPR compliance for EU users (data collection consent)\nCCPA compliance for California users\nSOC 2 Type II audit readiness\nRegular security assessments and penetration testing\nUser Stories\nUS-1: Plan Selection\nAs a prospective customer\nI want to compare subscription plans\nSo that I can choose the best option for my business\n\nAcceptance Criteria:\n\nPlan cards display pricing, features, and billing cycles\nMonthly/annual toggle updates pricing dynamically\nFeature comparison matrix is available\nSelected plan persists through registration\nUS-2: Account Registration\nAs a new user\nI want to create an account securely\nSo that I can access RawDrive services\n\nAcceptance Criteria:\n\nEmail verification required before account activation\nPassword strength indicator provides real-time feedback\nGoogle OAuth integration pre-fills user information\nTerms and privacy policy acceptance is required\nBusiness information collection is mandatory\nUS-3: Payment Processing\nAs a customer\nI want to complete payment securely\nSo that my subscription is activated immediately\n\nAcceptance Criteria:\n\nMultiple payment methods are supported\nPayment form is PCI compliant\nOrder summary shows all charges and taxes\nError messages are clear and actionable\nPayment confirmation is immediate\nUS-4: Guided Setup\nAs a new user\nI want to configure my account step-by-step\nSo that I can start using RawDrive effectively\n\nAcceptance Criteria:\n\nSetup wizard has clear progress indicators\nProfile setup includes branding options\nFirst gallery creation is guided\nSetup can be paused and resumed\nSkip options available for optional steps\nData Requirements\nDR-1: User Data Collection\nPersonal information: name, email, phone\nBusiness information: company name, description, website\nAuthentication data: password hash, OAuth tokens\nSubscription data: plan ID, billing cycle, payment method\nDR-2: Audit Trail\nTrack all onboarding steps with timestamps\nLog payment attempts and outcomes\nRecord email communications sent\nMaintain user consent records\nDR-3: Business Intelligence\nConversion funnel analytics\nDrop-off points identification\nPayment method preferences\nSetup completion rates\nIntegration Requirements\nIR-1: Payment Gateway Integration\nWebhook endpoints for payment status updates\nSecure API key management\nSupport for multiple currencies\nFraud detection integration\nIR-2: Email Service Integration\nSMTP or transactional email service\nTemplate management system\nDelivery tracking and analytics\nBounce and unsubscribe handling\nIR-3: Identity Provider Integration\nGoogle OAuth 2.0 / OIDC compliance\nUser profile data mapping\nAccount linking logic\nToken refresh handling\nSuccess Metrics\nConversion Rate: Percentage of visitors who complete onboarding\nTime to Value: Average time from signup to first gallery creation\nPayment Success Rate: Percentage of successful payment completions\nUser Satisfaction: NPS scores from onboarding surveys\nChurn Reduction: Decrease in trial-to-paid conversion drop-off\nRisk Mitigation\nPayment Failures: Implement retry logic and alternative payment methods\nData Loss: Regular backups and transaction consistency\nSecurity Breaches: Multi-layer security and regular audits\nUser Confusion: Clear UI/UX with help documentation\nTechnical Issues: Monitoring, alerting, and rollback procedures\nImplementation Priority\nHigh Priority: Core registration and payment flow\nMedium Priority: Guided setup wizard and email communications\nLow Priority: Advanced features (social login, multi-language support)\nTesting Requirements\nUnit tests for all business logic components\nIntegration tests for payment processing\nEnd-to-end tests for complete onboarding flows\nPerformance testing under load\nSecurity testing and vulnerability assessments\nUser acceptance testing with real customers\nMaintenance and Support\nRegular security updates and patches\nPayment gateway integration monitoring\nEmail deliverability monitoring\nPerformance optimization based on usage patterns\nCustomer support escalation procedures for onboarding issues\nFuture Enhancements\nAI-powered plan recommendations\nProgressive profiling for additional data collection\nAdvanced analytics and personalization\nMobile app onboarding flows\nIntegration with CRM systems for lead nurturing",
+  "title": "Automated User Onboarding Requirements",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "verified",
+  "id": "feature-1767705216794-8yzssl7lw",
+  "startedAt": "2026-01-06T14:42:56.651Z",
+  "updatedAt": "2026-01-06T15:02:46.401Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "# Comprehensive Specification: RawDrive Automated Onboarding System\n\n## 1. Problem Statement\n\nNew RawDrive customers currently face a fragmented signup experience that requires manual intervention for account setup, payment processing, and initial configuration. This leads to high drop-off rates during registration, delayed time-to-value, and increased support burden. The platform needs a streamlined, automated onboarding flow that guides users from plan selection through payment to their first gallery creation.\n\n## 2. User Story\n\n**Primary**: As a professional photographer, I want to sign up for RawDrive, complete payment, and set up my workspace in one seamless flow, so that I can start uploading and managing my photos immediately.\n\n**Secondary**: As a platform administrator, I want new user onboarding to be fully automated with proper compliance tracking, so that customer acquisition scales without manual intervention.\n\n## 3. Acceptance Criteria\n\n### Happy Path - Complete Onboarding Flow\n- **GIVEN** a visitor lands on the pricing page\n- **WHEN** they select a plan, complete registration, and submit payment\n- **THEN** their subscription is activated immediately, workspace is created, and they enter the guided setup wizard\n\n### Happy Path - Google OAuth Registration\n- **GIVEN** a visitor selects Google OAuth during registration\n- **WHEN** they authenticate with Google and complete plan selection/payment\n- **THEN** their account is created with pre-filled information from their Google profile\n\n### Edge Case - Existing Email Registration Attempt\n- **GIVEN** a user tries to register with an email that already exists\n- **WHEN** they submit the registration form\n- **THEN** they see a clear message with options to login or reset password\n\n### Edge Case - Payment Method Declined\n- **GIVEN** a user's payment method is declined\n- **WHEN** they submit payment\n- **THEN** they see a specific error message and can retry with a different payment method\n\n### Edge Case - Webhook Duplicate Processing\n- **GIVEN** a payment webhook is received multiple times (Stripe retries)\n- **WHEN** the system processes subsequent webhooks\n- **THEN** the operation is idempotent and subscription state remains consistent\n\n### Error Handling - Email Verification Timeout\n- **GIVEN** a user hasn't verified their email within 24 hours\n- **WHEN** they try to access their account\n- **THEN** they can request a new verification email with clear instructions\n\n### Error Handling - Payment Gateway Timeout\n- **GIVEN** the payment gateway times out during processing\n- **WHEN** the user submits payment\n- **THEN** the system shows a pending state and processes via webhook when available\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| **Affected Files** | `frontend/src/pages/onboarding/*`, `backend/src/app/api/v1/onboarding.py`, `backend/src/app/api/v1/payments.py`, `backend/src/app/services/onboarding_service.py`, `backend/src/app/services/payment_service.py`, `backend/src/app/services/subscription_service.py`, `backend/src/app/models/subscription.py`, `backend/src/app/models/onboarding.py` |\n| **Dependencies** | Stripe SDK, Google OAuth, Resend (email), Redis (session/cache) |\n| **Constraints** | PCI DSS compliance (no card data storage), GDPR consent tracking, multi-tenant workspace isolation |\n| **Patterns to Follow** | Repository → Service → API pattern, React Query for data fetching, Pydantic validation, Celery for async tasks |\n| **Database** | PostgreSQL with proper foreign keys to workspaces, audit trail tables |\n| **Auth Integration** | Existing JWT auth system in `backend/src/app/core/auth.py` |\n\n## 5. Non-Goals\n\n- **Mobile app onboarding**: This specification covers web-only; mobile apps are future work\n- **Enterprise SSO/SAML**: Only Google OAuth for social login; enterprise SSO is separate\n- **Multi-currency dynamic pricing**: Initial release supports USD/INR only with static conversion\n- **AI plan recommendations**: Plan selection is manual; AI recommendations are future enhancement\n- **CRM integration**: Lead nurturing via CRM is out of scope\n- **Affiliate/referral tracking**: Not included in initial implementation\n- **Free trial period**: All plans require immediate payment; trial logic is separate feature\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Database Schema & Models\n- [ ] T001: Create subscription plans table with features, pricing, limits | File: backend/migrations/versions/\n- [ ] T002: Create subscriptions table with workspace relationship | File: backend/migrations/versions/\n- [ ] T003: Create onboarding_sessions table for flow state tracking | File: backend/migrations/versions/\n- [ ] T004: Create payment_transactions table with idempotency keys | File: backend/migrations/versions/\n- [ ] T005: Create email_verifications table with tokens and expiry | File: backend/migrations/versions/\n- [ ] T006: Create user_consents table for GDPR/terms tracking | File: backend/migrations/versions/\n- [ ] T007: Add SQLAlchemy models for all new tables | File: backend/src/app/models/onboarding.py\n- [ ] T008: Add SQLAlchemy models for subscriptions | File: backend/src/app/models/subscription.py\n\n## Phase 2: Backend Services & Repositories\n- [ ] T009: Create PlanRepository for subscription plan queries | File: backend/src/app/repositories/plan_repository.py\n- [ ] T010: Create SubscriptionRepository for subscription CRUD | File: backend/src/app/repositories/subscription_repository.py\n- [ ] T011: Create OnboardingRepository for session management | File: backend/src/app/repositories/onboarding_repository.py\n- [ ] T012: Create PaymentService with Stripe integration | File: backend/src/app/services/payment_service.py\n- [ ] T013: Create SubscriptionService for tier activation | File: backend/src/app/services/subscription_service.py\n- [ ] T014: Create OnboardingService for flow orchestration | File: backend/src/app/services/onboarding_service.py\n- [ ] T015: Create EmailVerificationService | File: backend/src/app/services/email_verification_service.py\n\n## Phase 3: Backend API Endpoints\n- [ ] T016: Create GET /api/v1/plans endpoint for plan listing | File: backend/src/app/api/v1/plans.py\n- [ ] T017: Create POST /api/v1/onboarding/start endpoint | File: backend/src/app/api/v1/onboarding.py\n- [ ] T018: Create POST /api/v1/onboarding/register endpoint | File: backend/src/app/api/v1/onboarding.py\n- [ ] T019: Create POST /api/v1/onboarding/verify-email endpoint | File: backend/src/app/api/v1/onboarding.py\n- [ ] T020: Create POST /api/v1/payments/create-intent endpoint | File: backend/src/app/api/v1/payments.py\n- [ ] T021: Create POST /api/v1/payments/webhook endpoint (Stripe) | File: backend/src/app/api/v1/payments.py\n- [ ] T022: Create POST /api/v1/onboarding/complete-setup endpoint | File: backend/src/app/api/v1/onboarding.py\n- [ ] T023: Create GET /api/v1/onboarding/status endpoint | File: backend/src/app/api/v1/onboarding.py\n\n## Phase 4: Email & Background Tasks\n- [ ] T024: Create email templates for verification | File: backend/src/app/templates/emails/\n- [ ] T025: Create email templates for payment confirmation | File: backend/src/app/templates/emails/\n- [ ] T026: Create email templates for welcome/activation | File: backend/src/app/templates/emails/\n- [ ] T027: Create Celery task for sending verification emails | File: backend/src/app/tasks/email_tasks.py\n- [ ] T028: Create Celery task for payment confirmation emails | File: backend/src/app/tasks/email_tasks.py\n- [ ] T029: Create Celery task for subscription activation | File: backend/src/app/tasks/subscription_tasks.py\n\n## Phase 5: Frontend - Shared Components\n- [ ] T030: Create PlanCard component with feature display | File: frontend/src/components/features/onboarding/PlanCard.tsx\n- [ ] T031: Create PlanComparison component | File: frontend/src/components/features/onboarding/PlanComparison.tsx\n- [ ] T032: Create BillingToggle component (monthly/annual) | File: frontend/src/components/features/onboarding/BillingToggle.tsx\n- [ ] T033: Create OnboardingProgress component | File: frontend/src/components/features/onboarding/OnboardingProgress.tsx\n- [ ] T034: Create PasswordStrengthIndicator component | File: frontend/src/components/features/onboarding/PasswordStrengthIndicator.tsx\n\n## Phase 6: Frontend - Onboarding Pages\n- [ ] T035: Create PlanSelectionPage with pricing grid | File: frontend/src/pages/onboarding/PlanSelectionPage.tsx\n- [ ] T036: Create RegistrationPage with form validation | File: frontend/src/pages/onboarding/RegistrationPage.tsx\n- [ ] T037: Create EmailVerificationPage | File: frontend/src/pages/onboarding/EmailVerificationPage.tsx\n- [ ] T038: Create PaymentPage with Stripe Elements | File: frontend/src/pages/onboarding/PaymentPage.tsx\n- [ ] T039: Create SetupWizardPage with step navigation | File: frontend/src/pages/onboarding/SetupWizardPage.tsx\n- [ ] T040: Create OnboardingCompletePage | File: frontend/src/pages/onboarding/OnboardingCompletePage.tsx\n\n## Phase 7: Frontend - Hooks & State\n- [ ] T041: Create useOnboarding hook for flow state | File: frontend/src/hooks/useOnboarding.ts\n- [ ] T042: Create usePlans hook for plan fetching | File: frontend/src/hooks/usePlans.ts\n- [ ] T043: Create usePayment hook for Stripe integration | File: frontend/src/hooks/usePayment.ts\n- [ ] T044: Create OnboardingContext for cross-page state | File: frontend/src/contexts/OnboardingContext.tsx\n\n## Phase 8: Google OAuth Integration\n- [ ] T045: Add Google OAuth callback handler | File: backend/src/app/api/v1/auth.py\n- [ ] T046: Create useGoogleAuth hook | File: frontend/src/hooks/useGoogleAuth.ts\n- [ ] T047: Add Google sign-in button to RegistrationPage | File: frontend/src/pages/onboarding/RegistrationPage.tsx\n\n## Phase 9: Routing & Navigation\n- [ ] T048: Add onboarding routes to router configuration | File: frontend/src/routes/index.tsx\n- [ ] T049: Create OnboardingLayout wrapper | File: frontend/src/layouts/OnboardingLayout.tsx\n- [ ] T050: Add route guards for onboarding flow | File: frontend/src/components/guards/OnboardingGuard.tsx\n\n## Phase 10: Testing & Verification\n- [ ] T051: Write backend unit tests for OnboardingService | File: backend/tests/services/test_onboarding_service.py\n- [ ] T052: Write backend unit tests for PaymentService | File: backend/tests/services/test_payment_service.py\n- [ ] T053: Write API integration tests for onboarding endpoints | File: backend/tests/api/test_onboarding.py\n- [ ] T054: Write Playwright E2E test for complete onboarding flow | File: tests/e2e/onboarding.spec.ts\n```\n\n## 7. Success Metrics\n\n| Metric | Target | Measurement Method |\n|--------|--------|-------------------|\n| **Onboarding Completion Rate** | >80% of users who start complete payment | Analytics funnel tracking |\n| **Time to First Gallery** | <10 minutes from signup | Timestamp comparison |\n| **Payment Success Rate** | >95% first-attempt success | Payment transaction logs |\n| **Email Verification Rate** | >90% within 24 hours | Email verification table |\n| **Page Load Time** | <2s for all onboarding pages | Performance monitoring |\n| **Error Rate** | <1% of onboarding sessions | Error logging |\n\n## 8. Risks & Mitigations\n\n| Risk | Likelihood | Impact | Mitigation |\n|------|------------|--------|------------|\n| Stripe webhook failures | Medium | High | Implement idempotency keys, retry logic with exponential backoff, webhook signature verification |\n| User abandonment mid-flow | High | Medium | Persist session state, allow resume from any step, send reminder emails |\n| Email deliverability issues | Medium | Medium | Use transactional email service (Resend), implement SPF/DKIM/DMARC, monitor bounce rates |\n| Google OAuth token expiry | Low | Low | Implement proper token refresh, fallback to email login |\n| PCI compliance violations | Low | High | Never store card data, use Stripe Elements, regular security audits |\n| Database migration failures | Low | High | Test migrations in staging, implement rollback procedures |\n| High concurrent signups | Medium | Medium | Rate limiting, database connection pooling, Redis caching for plans |\n\n---",
+    "generatedAt": "2026-01-06T14:09:44.550Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create subscription plans table with features, pricing, limits",
+        "filePath": "backend/migrations/versions/",
+        "phase": "Phase 1: Database Schema & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Create subscriptions table with workspace relationship",
+        "filePath": "backend/migrations/versions/",
+        "phase": "Phase 1: Database Schema & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create onboarding_sessions table for flow state tracking",
+        "filePath": "backend/migrations/versions/",
+        "phase": "Phase 1: Database Schema & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Create payment_transactions table with idempotency keys",
+        "filePath": "backend/migrations/versions/",
+        "phase": "Phase 1: Database Schema & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create email_verifications table with tokens and expiry",
+        "filePath": "backend/migrations/versions/",
+        "phase": "Phase 1: Database Schema & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create user_consents table for GDPR/terms tracking",
+        "filePath": "backend/migrations/versions/",
+        "phase": "Phase 1: Database Schema & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Add SQLAlchemy models for all new tables",
+        "filePath": "backend/src/app/models/onboarding.py",
+        "phase": "Phase 1: Database Schema & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Add SQLAlchemy models for subscriptions",
+        "filePath": "backend/src/app/models/subscription.py",
+        "phase": "Phase 1: Database Schema & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create PlanRepository for subscription plan queries",
+        "filePath": "backend/src/app/repositories/plan_repository.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Create SubscriptionRepository for subscription CRUD",
+        "filePath": "backend/src/app/repositories/subscription_repository.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Create OnboardingRepository for session management",
+        "filePath": "backend/src/app/repositories/onboarding_repository.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create PaymentService with Stripe integration",
+        "filePath": "backend/src/app/services/payment_service.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create SubscriptionService for tier activation",
+        "filePath": "backend/src/app/services/subscription_service.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create OnboardingService for flow orchestration",
+        "filePath": "backend/src/app/services/onboarding_service.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Create EmailVerificationService",
+        "filePath": "backend/src/app/services/email_verification_service.py",
+        "phase": "Phase 2: Backend Services & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create GET /api/v1/plans endpoint for plan listing",
+        "filePath": "backend/src/app/api/v1/plans.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Create POST /api/v1/onboarding/start endpoint",
+        "filePath": "backend/src/app/api/v1/onboarding.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create POST /api/v1/onboarding/register endpoint",
+        "filePath": "backend/src/app/api/v1/onboarding.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Create POST /api/v1/onboarding/verify-email endpoint",
+        "filePath": "backend/src/app/api/v1/onboarding.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Create POST /api/v1/payments/create-intent endpoint",
+        "filePath": "backend/src/app/api/v1/payments.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Create POST /api/v1/payments/webhook endpoint (Stripe)",
+        "filePath": "backend/src/app/api/v1/payments.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Create POST /api/v1/onboarding/complete-setup endpoint",
+        "filePath": "backend/src/app/api/v1/onboarding.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Create GET /api/v1/onboarding/status endpoint",
+        "filePath": "backend/src/app/api/v1/onboarding.py",
+        "phase": "Phase 3: Backend API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create email templates for verification",
+        "filePath": "backend/src/app/templates/emails/",
+        "phase": "Phase 4: Email & Background Tasks",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Create email templates for payment confirmation",
+        "filePath": "backend/src/app/templates/emails/",
+        "phase": "Phase 4: Email & Background Tasks",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Create email templates for welcome/activation",
+        "filePath": "backend/src/app/templates/emails/",
+        "phase": "Phase 4: Email & Background Tasks",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Create Celery task for sending verification emails",
+        "filePath": "backend/src/app/tasks/email_tasks.py",
+        "phase": "Phase 4: Email & Background Tasks",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Create Celery task for payment confirmation emails",
+        "filePath": "backend/src/app/tasks/email_tasks.py",
+        "phase": "Phase 4: Email & Background Tasks",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Create Celery task for subscription activation",
+        "filePath": "backend/src/app/tasks/subscription_tasks.py",
+        "phase": "Phase 4: Email & Background Tasks",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Create PlanCard component with feature display",
+        "filePath": "frontend/src/components/features/onboarding/PlanCard.tsx",
+        "phase": "Phase 5: Frontend - Shared Components",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create PlanComparison component",
+        "filePath": "frontend/src/components/features/onboarding/PlanComparison.tsx",
+        "phase": "Phase 5: Frontend - Shared Components",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Create BillingToggle component (monthly/annual)",
+        "filePath": "frontend/src/components/features/onboarding/BillingToggle.tsx",
+        "phase": "Phase 5: Frontend - Shared Components",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Create OnboardingProgress component",
+        "filePath": "frontend/src/components/features/onboarding/OnboardingProgress.tsx",
+        "phase": "Phase 5: Frontend - Shared Components",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Create PasswordStrengthIndicator component",
+        "filePath": "frontend/src/components/features/onboarding/PasswordStrengthIndicator.tsx",
+        "phase": "Phase 5: Frontend - Shared Components",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Create PlanSelectionPage with pricing grid",
+        "filePath": "frontend/src/pages/onboarding/PlanSelectionPage.tsx",
+        "phase": "Phase 6: Frontend - Onboarding Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Create RegistrationPage with form validation",
+        "filePath": "frontend/src/pages/onboarding/RegistrationPage.tsx",
+        "phase": "Phase 6: Frontend - Onboarding Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Create EmailVerificationPage",
+        "filePath": "frontend/src/pages/onboarding/EmailVerificationPage.tsx",
+        "phase": "Phase 6: Frontend - Onboarding Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T038",
+        "description": "Create PaymentPage with Stripe Elements",
+        "filePath": "frontend/src/pages/onboarding/PaymentPage.tsx",
+        "phase": "Phase 6: Frontend - Onboarding Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T039",
+        "description": "Create SetupWizardPage with step navigation",
+        "filePath": "frontend/src/pages/onboarding/SetupWizardPage.tsx",
+        "phase": "Phase 6: Frontend - Onboarding Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T040",
+        "description": "Create OnboardingCompletePage",
+        "filePath": "frontend/src/pages/onboarding/OnboardingCompletePage.tsx",
+        "phase": "Phase 6: Frontend - Onboarding Pages",
+        "status": "pending"
+      },
+      {
+        "id": "T041",
+        "description": "Create useOnboarding hook for flow state",
+        "filePath": "frontend/src/hooks/useOnboarding.ts",
+        "phase": "Phase 7: Frontend - Hooks & State",
+        "status": "pending"
+      },
+      {
+        "id": "T042",
+        "description": "Create usePlans hook for plan fetching",
+        "filePath": "frontend/src/hooks/usePlans.ts",
+        "phase": "Phase 7: Frontend - Hooks & State",
+        "status": "pending"
+      },
+      {
+        "id": "T043",
+        "description": "Create usePayment hook for Stripe integration",
+        "filePath": "frontend/src/hooks/usePayment.ts",
+        "phase": "Phase 7: Frontend - Hooks & State",
+        "status": "pending"
+      },
+      {
+        "id": "T044",
+        "description": "Create OnboardingContext for cross-page state",
+        "filePath": "frontend/src/contexts/OnboardingContext.tsx",
+        "phase": "Phase 7: Frontend - Hooks & State",
+        "status": "pending"
+      },
+      {
+        "id": "T045",
+        "description": "Add Google OAuth callback handler",
+        "filePath": "backend/src/app/api/v1/auth.py",
+        "phase": "Phase 8: Google OAuth Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T046",
+        "description": "Create useGoogleAuth hook",
+        "filePath": "frontend/src/hooks/useGoogleAuth.ts",
+        "phase": "Phase 8: Google OAuth Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T047",
+        "description": "Add Google sign-in button to RegistrationPage",
+        "filePath": "frontend/src/pages/onboarding/RegistrationPage.tsx",
+        "phase": "Phase 8: Google OAuth Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T048",
+        "description": "Add onboarding routes to router configuration",
+        "filePath": "frontend/src/routes/index.tsx",
+        "phase": "Phase 9: Routing & Navigation",
+        "status": "pending"
+      },
+      {
+        "id": "T049",
+        "description": "Create OnboardingLayout wrapper",
+        "filePath": "frontend/src/layouts/OnboardingLayout.tsx",
+        "phase": "Phase 9: Routing & Navigation",
+        "status": "pending"
+      },
+      {
+        "id": "T050",
+        "description": "Add route guards for onboarding flow",
+        "filePath": "frontend/src/components/guards/OnboardingGuard.tsx",
+        "phase": "Phase 9: Routing & Navigation",
+        "status": "pending"
+      },
+      {
+        "id": "T051",
+        "description": "Write backend unit tests for OnboardingService",
+        "filePath": "backend/tests/services/test_onboarding_service.py",
+        "phase": "Phase 10: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T052",
+        "description": "Write backend unit tests for PaymentService",
+        "filePath": "backend/tests/services/test_payment_service.py",
+        "phase": "Phase 10: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T053",
+        "description": "Write API integration tests for onboarding endpoints",
+        "filePath": "backend/tests/api/test_onboarding.py",
+        "phase": "Phase 10: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T054",
+        "description": "Write Playwright E2E test for complete onboarding flow",
+        "filePath": "tests/e2e/onboarding.spec.ts",
+        "phase": "Phase 10: Testing & Verification",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 54,
+    "tasksCompleted": 10,
+    "approvedAt": "2026-01-06T14:09:44.551Z",
+    "currentTaskId": "T011"
+  }
+}

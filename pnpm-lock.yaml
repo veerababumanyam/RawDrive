@@ -42,6 +42,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@18.3.1)
+      '@fingerprintjs/fingerprintjs':
+        specifier: ^5.0.1
+        version: 5.0.1
       '@rawdrive/shared-constants':
         specifier: workspace:*
         version: link:../packages/shared-constants
@@ -680,6 +683,9 @@ packages:
     peerDependenciesMeta:
       '@exodus/crypto':
         optional: true
+
+  '@fingerprintjs/fingerprintjs@5.0.1':
+    resolution: {integrity: sha512-KbaeE/rk2WL8MfpRP6jTI4lSr42SJPjvkyrjP3QU6uUDkOMWWYC2Ts1sNSYcegHC8avzOoYTHBj+2fTqvZWQBA==}
 
   '@humanwhocodes/config-array@0.13.0':
     resolution: {integrity: sha512-DZLEEqFWQFiyK6h5YIeynKx7JlvCYWL0cImfSRXZ9l4Sg2efkFGTuFf6vzXjK1cq6IYkU+Eg/JizXw+TD2vRNw==}
@@ -2926,6 +2932,8 @@ snapshots:
   '@eslint/js@8.57.1': {}
 
   '@exodus/bytes@1.8.0': {}
+
+  '@fingerprintjs/fingerprintjs@5.0.1': {}
 
   '@humanwhocodes/config-array@0.13.0':
     dependencies:

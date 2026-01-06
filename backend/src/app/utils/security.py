@@ -153,15 +153,31 @@ def create_refresh_token(
     workspace_id: str | uuid.UUID | None = None,
     session_id: str | uuid.UUID | None = None,
     jti: str | None = None,
+    ttl_days: int | None = None,
     extra_claims: dict[str, Any] | None = None,
     settings: AppSettings | None = None,
 ) -> str:
-    """Create a signed refresh token."""
+    """Create a signed refresh token.
+
+    Args:
+        user_id: User ID
+        workspace_id: Optional workspace ID
+        session_id: Optional session ID for session tracking
+        jti: Optional JWT ID (generated if not provided)
+        ttl_days: Optional TTL in days (overrides settings.refresh_token_ttl_days)
+        extra_claims: Optional additional JWT claims
+        settings: Optional settings override
+
+    Returns:
+        Signed JWT refresh token string
+    """
 
     settings = settings or get_settings()
 
     now = _now()
-    expires = now + timedelta(days=settings.refresh_token_ttl_days)
+    # Use provided TTL or fall back to default setting
+    token_ttl_days = ttl_days if ttl_days is not None else settings.refresh_token_ttl_days
+    expires = now + timedelta(days=token_ttl_days)
 
     payload: dict[str, Any] = {
         "sub": str(user_id),

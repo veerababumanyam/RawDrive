@@ -1,0 +1,10 @@
+Inspecting workspace: d049a58f-0a4f-5b35-95cb-99b572886b5f
+Workspace found: Free User Workspace (free)
+Roles count: 4
+  Role: owner (System: True) - Permissions: ['workspace:*', 'members:*', 'roles:*', 'galleries:*', 'assets:*', 'billing:*', 'audit:read']
+  Role: admin (System: True) - Permissions: ['workspace:write', 'members:write', 'roles:write', 'galleries:*', 'assets:*', 'billing:read', 'audit:read']
+  Role: editor (System: True) - Permissions: ['galleries:write', 'galleries:read', 'assets:write', 'assets:read']
+  Role: viewer (System: True) - Permissions: ['galleries:read', 'assets:read']
+Members count: 1
+  Member: 11111111-1111-1111-1111-111111111001 (Status: active)
+    - Has Role: owner

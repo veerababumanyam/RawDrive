@@ -354,7 +354,7 @@ External mapping tables:
 - Environments: dev, staging, production.
 - Default hosted deployment:
   - **Hostinger VPS (KVM)** nodes running a **self-managed Kubernetes cluster (kubeadm)**.
-  - **Nginx Ingress Controller** for north/south traffic; **cert-manager** for Let’s Encrypt TLS.
+  - **Traefik v3 API Gateway** with KEDA autoscaling for north/south traffic; **cert-manager** for Let's Encrypt TLS.
   - **Cloudflare** in front of the cluster (CDN/WAF/DDoS/rate limits) and **Turnstile** for bot mitigation.
   - **Cloudflare R2** for managed object storage; media delivery via Cloudflare edge with signed URLs.
 - CI/CD:

@@ -24,6 +24,7 @@ const SignInPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +34,7 @@ const SignInPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const result = await login({ email, password });
+      const result = await login({ email, password, rememberMe });
       if (result.success) {
         navigate(redirectTo);
       } else {
@@ -170,7 +171,13 @@ const SignInPage: React.FC = () => {
 
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="auth-checkbox" />
+                  <input
+                    type="checkbox"
+                    id="remember-me"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="auth-checkbox"
+                  />
                   <span className="auth-text-muted">Remember me</span>
                 </label>
                 <Link to="/forgot-password" className="auth-link">

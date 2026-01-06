@@ -336,3 +336,4 @@ router.include_router(
     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
     tags=["digital-invitations"],
 )
+

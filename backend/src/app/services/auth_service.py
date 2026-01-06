@@ -385,11 +385,29 @@ class AuthService:
         email: str,
         password: str,
         workspace_id: Optional[uuid.UUID] = None,
+        remember_me: bool = False,
+        device_fingerprint: Optional[str] = None,
+        device_info: Optional[dict[str, Any]] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
     ) -> tuple[AuthUser, TokenPair]:
         """Authenticate user with email/password.
 
         Property 5 (Authentication Error Opacity): Always returns same error
         whether email or password is wrong.
+
+        Args:
+            email: User email
+            password: User password
+            workspace_id: Optional workspace ID
+            remember_me: If True, extends refresh token TTL to 30 days
+            device_fingerprint: SHA256 device fingerprint for tracking
+            device_info: Device metadata (browser, OS, etc.)
+            ip_address: Client IP address
+            user_agent: Client User-Agent header
+
+        Returns:
+            Tuple of (AuthUser, TokenPair)
         """
         pool = await get_postgres_pool()
 
@@ -440,11 +458,23 @@ class AuthService:
         if not permissions:
             permissions = ["workspace:read"]
 
-        # Create session
-        session_id = await self._create_session(user_id, workspace_id)
+        # Create session with device tracking
+        session_id = await self._create_session(
+            user_id,
+            workspace_id,
+            device_info=device_info,
+            device_fingerprint=device_fingerprint,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
+        # Issue tokens with appropriate TTL based on remember_me
         token_pair = self._issue_tokens(
-            user_id, workspace_id, permissions, session_id=session_id
+            user_id,
+            workspace_id,
+            permissions,
+            session_id=session_id,
+            remember_me=remember_me,
         )
 
         # Store refresh token hash in Redis for rotation/revocation
@@ -555,8 +585,20 @@ class AuthService:
         workspace_id: uuid.UUID,
         permissions: Sequence[str],
         session_id: Optional[uuid.UUID] = None,
+        remember_me: bool = False,
     ) -> TokenPair:
-        """Create access and refresh tokens."""
+        """Create access and refresh tokens.
+
+        Args:
+            user_id: User ID
+            workspace_id: Workspace ID
+            permissions: User permissions
+            session_id: Session ID for tracking
+            remember_me: If True, extends refresh token TTL to 30 days (vs default 7 days)
+
+        Returns:
+            TokenPair with access and refresh tokens
+        """
         access = create_access_token(
             user_id=user_id,
             workspace_id=workspace_id,
@@ -564,10 +606,19 @@ class AuthService:
             session_id=session_id,
             settings=self._settings,
         )
+
+        # Determine refresh token TTL based on remember_me flag
+        refresh_ttl_days = (
+            self._settings.extended_refresh_token_ttl_days
+            if remember_me
+            else self._settings.refresh_token_ttl_days
+        )
+
         refresh = create_refresh_token(
             user_id=user_id,
             workspace_id=workspace_id,
             session_id=session_id,
+            ttl_days=refresh_ttl_days,
             settings=self._settings,
         )
         return TokenPair(
@@ -581,10 +632,13 @@ class AuthService:
         user_id: uuid.UUID,
         workspace_id: uuid.UUID,
         device_info: Optional[dict[str, Any]] = None,
+        device_fingerprint: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
     ) -> uuid.UUID:
         """Create session record in DB and Redis using SessionService."""
         from app.services.session_service import SessionService
-        
+
         session_service = SessionService(settings=self._settings)
         # Create session with placeholder token (will be updated after token generation)
         placeholder_token = "placeholder_" + str(uuid.uuid4())
@@ -593,6 +647,9 @@ class AuthService:
             workspace_id=workspace_id,
             refresh_token=placeholder_token,
             device_info=device_info,
+            device_fingerprint=device_fingerprint,
+            ip_address=ip_address,
+            user_agent=user_agent,
         )
         return session.session_id
 

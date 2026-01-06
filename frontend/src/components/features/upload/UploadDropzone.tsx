@@ -9,6 +9,12 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { Upload, Folder, Image, FileVideo, File, X, Loader2 } from 'lucide-react';
 import heic2any from 'heic2any';
+import {
+  SUPPORTED_IMAGE_MIME_TYPES,
+  SUPPORTED_VIDEO_MIME_TYPES,
+  SUPPORTED_RAW_EXTENSIONS,
+} from '@rawdrive/shared-constants';
+import { isRawFileObject } from '@/utils/fileUtils';
 import { AppButton } from '../../ui/AppButton';
 import { AppCard } from '../../ui/AppCard';
 import { SmartUploadSuggestions } from './SmartUploadSuggestions';
@@ -32,31 +38,10 @@ interface FileWithPreview {
   error?: string;
 }
 
-// Supported file types
-const SUPPORTED_IMAGE_TYPES = [
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-];
-
-const SUPPORTED_RAW_TYPES = [
-  '.cr2', '.cr3', // Canon
-  '.nef', // Nikon
-  '.arw', // Sony
-  '.raf', // Fujifilm
-  '.orf', // Olympus
-  '.rw2', // Panasonic
-  '.dng', // Adobe DNG
-];
-
-const SUPPORTED_VIDEO_TYPES = [
-  'video/mp4',
-  'video/quicktime', // MOV
-  'video/x-msvideo', // AVI
-];
+// Supported file types (imported from shared constants)
+const SUPPORTED_IMAGE_TYPES = SUPPORTED_IMAGE_MIME_TYPES;
+const SUPPORTED_RAW_TYPES = SUPPORTED_RAW_EXTENSIONS.map(ext => `.${ext}`);
+const SUPPORTED_VIDEO_TYPES = SUPPORTED_VIDEO_MIME_TYPES;
 
 // Check if file is HEIC/HEIF format
 function isHeicFile(file: File): boolean {
@@ -235,8 +220,11 @@ export const UploadDropzone = React.memo<UploadDropzoneProps>(({
             file
           };
 
-          // Generate thumbnail preview for images (including HEIC which may have empty MIME)
-          if (file.type.startsWith('image/') || isHeicFile(file)) {
+          // Generate thumbnail preview for images (excluding RAW files)
+          // RAW files cannot be previewed in browser - backend will handle
+          const isRaw = isRawFileObject(file);
+
+          if ((file.type.startsWith('image/') || isHeicFile(file)) && !isRaw) {
             try {
               fileWithPreview.thumbnail = await generateThumbnail(file, 200);
               fileWithPreview.preview = URL.createObjectURL(file);
@@ -244,6 +232,9 @@ export const UploadDropzone = React.memo<UploadDropzoneProps>(({
               // Preview generation failed, but file is still valid
               console.warn('Failed to generate preview for', file.name, err);
             }
+          } else if (isRaw) {
+            // RAW files: no browser preview, will be processed server-side
+            console.debug(`RAW file detected: ${file.name}, skipping browser preview`);
           }
 
           return fileWithPreview;
@@ -522,8 +513,8 @@ export const UploadDropzone = React.memo<UploadDropzoneProps>(({
             </AppButton>
           </div>
           <p className="text-xs text-text-tertiary mt-4">
-            Supports: JPEG, PNG, WebP, HEIC, RAW (CR2, NEF, ARW, RAF, etc.), MP4, MOV, AVI
-            {maxSize && ` • Max size: ${formatFileSize(maxSize)}`}
+            Supports: JPEG, PNG, WebP, HEIC, RAW (CR2, NEF, ARW, RAF, ORF, RW2, DNG), MP4, MOV
+            {maxSize && ` • Max photo: ${formatFileSize(maxSize)}, RAW: 200MB`}
             {maxFiles && ` • Max files: ${maxFiles}`}
           </p>
         </div>

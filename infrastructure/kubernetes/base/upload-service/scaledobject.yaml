@@ -1,0 +1,79 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: upload-service-scaledobject
+  labels:
+    app: upload-service
+    component: uploads
+spec:
+  scaleTargetRef:
+    name: upload-service
+  # Minimum and maximum replicas
+  minReplicaCount: 2
+  maxReplicaCount: 50
+  # Polling interval in seconds
+  pollingInterval: 15
+  # Cooldown period before scaling down (seconds)
+  cooldownPeriod: 300
+  # Advanced configuration
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      name: upload-service-hpa
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 25
+              periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+            - type: Pods
+              value: 10
+              periodSeconds: 15
+          selectPolicy: Max
+  triggers:
+    # Kafka trigger - scale based on upload queue lag
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka:9092
+        consumerGroup: upload-service
+        topic: upload-queue
+        lagThreshold: "100"
+        offsetResetPolicy: latest
+      authenticationRef:
+        name: upload-service-kafka-auth
+    # Prometheus trigger - scale based on concurrent uploads
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring.svc.cluster.local:9090
+        metricName: upload_concurrent_total
+        query: sum(upload_concurrent_total)
+        threshold: "50"
+    # Prometheus trigger - scale based on request rate
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring.svc.cluster.local:9090
+        metricName: upload_requests_rate
+        query: sum(rate(upload_requests_total[2m])) * 60
+        threshold: "1000"
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: upload-service-kafka-auth
+  labels:
+    app: upload-service
+spec:
+  secretTargetRef:
+    - parameter: sasl_username
+      name: kafka-credentials
+      key: username
+    - parameter: sasl_password
+      name: kafka-credentials
+      key: password

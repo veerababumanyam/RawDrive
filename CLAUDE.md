@@ -44,7 +44,7 @@ RawDrive/
 ├── backend/           # Python 3.11 + FastAPI + SQLAlchemy + Alembic
 ├── ai-service/        # Python FastAPI + AI/LLM + MCP
 ├── services/          # Microservices (invitations-service)
-├── infrastructure/    # Docker, nginx configs
+├── infrastructure/    # Docker, Traefik configs
 ├── docs/              # Documentation
 ├── specs/             # Feature specifications
 ├── scripts/           # Build scripts (generate-python-types.ts)
@@ -149,6 +149,7 @@ Claude Code loads skills automatically based on context. Use `/skill <name>` to 
 | `ai-mcp-integration` | AI features, MCP tools |
 | `webapp-testing` | Playwright E2E |
 | `project-structure` | Codebase conventions |
+| `infrastructure` | Traefik, KEDA, Prometheus, K8s, Docker |
 
 ## Critical Rules
 
@@ -254,6 +255,8 @@ await redis.setex(f"gallery:{id}", 3600, json.dumps(result))
 | Face Worker | 8001 | Face detection |
 | Admin | 8002 | Platform admin |
 | Invitations | 8003 | Digital invitations |
+| Gallery | 8004 | High-performance gallery viewing (50K concurrent) |
+| Billing | 8005 (8006 dev) | Subscription & payment processing |
 
 ### Auth Flow
 
@@ -264,9 +267,26 @@ await redis.setex(f"gallery:{id}", 3600, json.dumps(result))
 
 ### Database
 
-- PostgreSQL 16 + pgvector
+- PostgreSQL 16 + pgvector + pgvectorscale (via timescale/timescaledb-ha image)
 - Redis 7 (cache, sessions, Celery)
 - Alembic migrations
+
+#### Vector Extensions
+
+| Extension | Purpose | Index Types |
+|-----------|---------|-------------|
+| pgvector | Vector similarity search | HNSW, IVFFlat |
+| pgvectorscale | Enhanced vector indexing | StreamingDiskANN (better memory efficiency at scale) |
+
+```python
+# Check pgvectorscale availability
+from app.core.database import verify_vector_extensions, check_pgvectorscale_ready
+
+status = await verify_vector_extensions()
+if status.can_use_diskann:
+    # Use StreamingDiskANN for large datasets (millions+ vectors)
+    pass
+```
 
 ## Tech Stack
 
@@ -274,7 +294,7 @@ await redis.setex(f"gallery:{id}", 3600, json.dumps(result))
 |-------|--------------|
 | Frontend | React 19, TypeScript, Vite, TailwindCSS, React Query |
 | Backend | Python 3.11, FastAPI, SQLAlchemy, Pydantic, Celery |
-| Database | PostgreSQL 16, pgvector, Redis 7 |
+| Database | PostgreSQL 16, pgvector, pgvectorscale, Redis 7 |
 | Storage | Cloudflare R2, BYOS (S3-compatible) |
 | AI | Cloud Vision, Gemini, local DeepFace |
 
@@ -286,12 +306,14 @@ await redis.setex(f"gallery:{id}", 3600, json.dumps(result))
 
 ## Active Technologies
 - Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 19, Celery, CLIP (image embeddings), Gemini Vision API
-- PostgreSQL 16 + pgvector extension, Redis 7, Cloudflare R2
+- PostgreSQL 16 + pgvector + pgvectorscale (timescale/timescaledb-ha image), Redis 7, Cloudflare R2
+- **Traefik v3** (API Gateway), **KEDA** (autoscaling), Prometheus, Grafana, Loki
 - pnpm workspaces for monorepo package management
 - Zod 4.2+ for validation schemas, Pydantic 2.7+ for Python models
-- Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, SQLAlchemy (asyncpg), Redis 7, PgBouncer 1.21+ (024-5k-concurrent-autoscale)
-- PostgreSQL 16 + pgvector, Cloudflare R2, Redis 7 (024-5k-concurrent-autoscale)
+- SQLAlchemy (asyncpg), PgBouncer 1.21+ (024-5k-concurrent-autoscale)
 
 ## Recent Changes
+- 026-traefik-keda: Traefik v3 API Gateway replaces Nginx Ingress, KEDA autoscaling with Prometheus metrics, Grafana dashboards for traffic monitoring
+- 025-pgvectorscale: Enabled pgvectorscale extension for enhanced vector search (StreamingDiskANN indexes), switched to timescale/timescaledb-ha Docker image
 - 022-shared-packages: Implemented shared packages infrastructure with 4 npm packages (`@rawdrive/shared-types`, `@rawdrive/shared-constants`, `@rawdrive/shared-validation`, `@rawdrive/shared-utils`), TypeScript-to-Python type generation, pnpm workspaces
 - 023-enhanced-smart-curate: Added Python 3.11 (Backend), TypeScript 5.2+ (Frontend) + FastAPI 0.115+, React 19, Celery, CLIP (image embeddings), Gemini Vision API

@@ -15,12 +15,12 @@ global:
   # SMTP settings for email notifications
   smtp_smarthost: 'smtp.example.com:587'
   smtp_from: 'alertmanager@rawdrive.ai'
-  smtp_auth_username: '${SMTP_USERNAME}'
-  smtp_auth_password: '${SMTP_PASSWORD}'
-  smtp_require_tls: true
+  smtp_auth_username: 'user'
+  smtp_auth_password: 'password'
+  smtp_require_tls: false
 
   # Slack API URL (webhook)
-  slack_api_url: '${SLACK_WEBHOOK_URL}'
+  slack_api_url: 'https://hooks.slack.com/services/dummy/webhook/url'
 
   # PagerDuty service key
   pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'

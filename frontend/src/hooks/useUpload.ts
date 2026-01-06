@@ -12,9 +12,84 @@ import { getStoredTokens, isTokenExpired } from '../services/tokenStorage';
 import { refreshAccessToken, API_BASE_URL } from '../services/api';
 import { createTusUpload, type TusUploadClient } from '../services/tusUploadService';
 import type { DuplicateAssetResponse } from '../types/gallery';
+import { isRawFile } from '../utils/fileUtils';
+import { featureFlags, getUploadServiceUrl } from '../config/featureFlags';
 
 // Files larger than this threshold use TUS chunked upload (10MB)
 const TUS_UPLOAD_THRESHOLD = 10 * 1024 * 1024;
+
+/**
+ * Helper function to create upload session via upload microservice
+ */
+async function createUploadSessionViaService(
+  workspaceId: string,
+  request: {
+    gallery_id?: string;
+    sub_gallery_id?: string | null;
+    file_name: string;
+    mime_type: string;
+    size_bytes: number;
+    sha256: string;
+    relative_path?: string;
+  }
+): Promise<{ upload_id: string; upload_url: string }> {
+  const baseUrl = featureFlags.uploadMicroservice
+    ? getUploadServiceUrl()
+    : API_BASE_URL;
+
+  const tokens = getStoredTokens();
+  const response = await fetch(`${baseUrl}/api/v1/upload/session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': tokens ? `Bearer ${tokens.accessToken}` : '',
+      'X-Workspace-ID': workspaceId,
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Upload service error: ${response.statusText} - ${errorText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Helper function to commit upload via upload microservice
+ */
+async function commitUploadViaService(
+  workspaceId: string,
+  uploadId: string,
+  data: {
+    sha256: string;
+    etag?: string;
+    client_metadata?: Record<string, any>;
+  }
+): Promise<{ asset_id: string }> {
+  const baseUrl = featureFlags.uploadMicroservice
+    ? getUploadServiceUrl()
+    : API_BASE_URL;
+
+  const tokens = getStoredTokens();
+  const response = await fetch(`${baseUrl}/api/v1/upload/complete/${uploadId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': tokens ? `Bearer ${tokens.accessToken}` : '',
+      'X-Workspace-ID': workspaceId,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Upload commit error: ${response.statusText} - ${errorText}`);
+  }
+
+  return response.json();
+}
 
 export interface UploadFile {
   id: string;
@@ -460,15 +535,37 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
           if (!sessionUploadId) {
             // Create upload session only if we don't have one
-            const session = await galleryService.createUploadSession(workspaceId, {
-              gallery_id: galleryId || undefined,
-              sub_gallery_id: subGalleryId || null,
-              file_name: uploadFile.file.name,
-              mime_type: uploadFile.file.type,
-              size_bytes: uploadFile.file.size,
-              sha256,
-              relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
-            });
+            const isRaw = isRawFile(uploadFile.file.name);
+            const mimeType = uploadFile.file.type || (isRaw ? '' : 'application/octet-stream');
+
+            // Log RAW file uploads
+            if (isRaw) {
+              console.info(
+                `Uploading RAW file: ${uploadFile.file.name} ` +
+                `(MIME: ${uploadFile.file.type || 'empty'}, size: ${uploadFile.file.size})`
+              );
+            }
+
+            // Use upload microservice if feature flag is enabled
+            const session = featureFlags.uploadMicroservice
+              ? await createUploadSessionViaService(workspaceId, {
+                  gallery_id: galleryId || undefined,
+                  sub_gallery_id: subGalleryId || null,
+                  file_name: uploadFile.file.name,
+                  mime_type: mimeType,
+                  size_bytes: uploadFile.file.size,
+                  sha256,
+                  relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
+                })
+              : await galleryService.createUploadSession(workspaceId, {
+                  gallery_id: galleryId || undefined,
+                  sub_gallery_id: subGalleryId || null,
+                  file_name: uploadFile.file.name,
+                  mime_type: mimeType, // Pass empty string for RAW if browser doesn't provide
+                  size_bytes: uploadFile.file.size,
+                  sha256,
+                  relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
+                });
             sessionUploadId = session.upload_id;
             // CRITICAL: Always use the upload_url returned by the backend
             // This ensures correct environment (dev vs prod) URL is used
@@ -552,16 +649,26 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
           updateFile(fileId, { progress: 90, status: 'verifying' });
 
-          // Commit upload
-          const commitResult = await galleryService.commitUpload(
-            workspaceId,
-            sessionUploadId,
-            {
-              sha256,
-              etag: undefined,
-              client_metadata: uploadFile.clientMetadata
-            }
-          );
+          // Commit upload - use upload microservice if feature flag is enabled
+          const commitResult = featureFlags.uploadMicroservice
+            ? await commitUploadViaService(
+                workspaceId,
+                sessionUploadId,
+                {
+                  sha256,
+                  etag: undefined,
+                  client_metadata: uploadFile.clientMetadata
+                }
+              )
+            : await galleryService.commitUpload(
+                workspaceId,
+                sessionUploadId,
+                {
+                  sha256,
+                  etag: undefined,
+                  client_metadata: uploadFile.clientMetadata
+                }
+              );
 
           assetId = commitResult.asset_id;
         }

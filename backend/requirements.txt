@@ -22,7 +22,8 @@ boto3==1.35.0
 Pillow==10.4.0
 pillow-heif>=0.18.0  # HEIC/HEIF support for iPhone photos
 exifread==3.0.0
-# rawpy==0.25.1  # RAW file processing (requires LibRaw system library)
+rawpy==0.25.1  # RAW file processing (requires LibRaw system library)
+pillow-avif-plugin>=1.4.2  # AVIF support (optional, graceful degradation)
 pg8000==1.31.5
 
 # AI Providers for face detection
@@ -48,6 +49,9 @@ opentelemetry-instrumentation-asyncpg>=0.47b0
 
 # Structured logging
 structlog>=24.1.0
+
+# Retry with exponential backoff
+tenacity>=8.2.0
 
 # Dev and testing - Core testing framework
 pytest==8.3.3

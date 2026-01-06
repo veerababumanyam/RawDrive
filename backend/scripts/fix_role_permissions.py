@@ -37,8 +37,9 @@ CORRECT_VIEWER_PERMISSIONS = [
 
 async def fix_permissions():
     """Fix role permissions for all workspaces."""
-    from app.db.postgres import get_postgres_pool
+    from app.db.postgres import get_postgres_pool, init_postgres_pool
     
+    await init_postgres_pool()
     pool = await get_postgres_pool()
     
     print("\n" + "="*60)

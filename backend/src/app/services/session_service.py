@@ -33,7 +33,10 @@ class SessionData:
     workspace_id: uuid.UUID | None
     refresh_token_hash: str
     device_info: dict[str, Any] = field(default_factory=dict)
+    device_fingerprint: str | None = None
     ip_address: str | None = None
+    last_ip_address: str | None = None
+    ip_changed_at: datetime | None = None
     user_agent: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_used_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -46,7 +49,10 @@ class SessionData:
             "workspace_id": str(self.workspace_id) if self.workspace_id else None,
             "refresh_token_hash": self.refresh_token_hash,
             "device_info": self.device_info,
+            "device_fingerprint": self.device_fingerprint,
             "ip_address": self.ip_address,
+            "last_ip_address": self.last_ip_address,
+            "ip_changed_at": self.ip_changed_at.isoformat() if self.ip_changed_at else None,
             "user_agent": self.user_agent,
             "created_at": self.created_at.isoformat(),
             "last_used_at": self.last_used_at.isoformat(),
@@ -61,7 +67,10 @@ class SessionData:
             workspace_id=uuid.UUID(data["workspace_id"]) if data.get("workspace_id") else None,
             refresh_token_hash=data["refresh_token_hash"],
             device_info=data.get("device_info", {}),
+            device_fingerprint=data.get("device_fingerprint"),
             ip_address=data.get("ip_address"),
+            last_ip_address=data.get("last_ip_address"),
+            ip_changed_at=datetime.fromisoformat(data["ip_changed_at"]) if data.get("ip_changed_at") else None,
             user_agent=data.get("user_agent"),
             created_at=datetime.fromisoformat(data["created_at"]),
             last_used_at=datetime.fromisoformat(data["last_used_at"]),
@@ -99,6 +108,7 @@ class SessionService:
         workspace_id: uuid.UUID | None,
         refresh_token: str,
         device_info: dict[str, Any] | None = None,
+        device_fingerprint: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
     ) -> SessionData:
@@ -120,7 +130,10 @@ class SessionService:
             workspace_id=workspace_id,
             refresh_token_hash=token_hash,
             device_info=device_info or {},
+            device_fingerprint=device_fingerprint,
             ip_address=ip_address,
+            last_ip_address=ip_address,  # Initialize with current IP
+            ip_changed_at=None,  # No change yet
             user_agent=user_agent,
             created_at=now,
             last_used_at=now,
@@ -143,15 +156,23 @@ class SessionService:
         # Store in PostgreSQL for persistence/audit
         await pool.execute(
             """
-            INSERT INTO sessions (session_id, user_id, workspace_id, refresh_token_hash, device_info, ip_address, user_agent, created_at, last_used_at, expires_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+            INSERT INTO sessions (
+                session_id, user_id, workspace_id, refresh_token_hash,
+                device_info, device_fingerprint,
+                ip_address, last_ip_address, ip_changed_at,
+                user_agent, created_at, last_used_at, expires_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)
             """,
             session_id,
             user_id,
             workspace_id,
             token_hash,
             json.dumps(device_info or {}),
+            device_fingerprint,
             ip_address,
+            ip_address,  # last_ip_address initialized same as ip_address
+            None,  # ip_changed_at
             user_agent,
             now,
             expires_at,
@@ -372,3 +393,56 @@ class SessionService:
             extra={"user_id": str(user_id), "count": count, "kept": str(except_session_id) if except_session_id else None},
         )
         return count
+
+    async def update_session_ip(self, session_id: uuid.UUID, new_ip: str) -> SessionData | None:
+        """Update session with new IP address when it changes.
+
+        Tracks IP changes for security monitoring.
+        """
+        redis = await get_redis_client()
+        pool = await get_postgres_pool()
+
+        session = await self.get_session(session_id)
+        if session is None:
+            return None
+
+        now = datetime.now(timezone.utc)
+
+        # Update session data
+        old_ip = session.last_ip_address
+        session.last_ip_address = new_ip
+        session.ip_changed_at = now
+        session.last_used_at = now
+
+        # Update Redis
+        remaining_ttl = await redis.ttl(_session_key(session_id))
+        if remaining_ttl > 0:
+            await redis.setex(
+                _session_key(session_id),
+                remaining_ttl,
+                json.dumps(session.to_dict()),
+            )
+
+        # Update PostgreSQL
+        await pool.execute(
+            """
+            UPDATE sessions
+            SET last_ip_address = $1, ip_changed_at = $2, last_used_at = $3
+            WHERE session_id = $4
+            """,
+            new_ip,
+            now,
+            now,
+            session_id,
+        )
+
+        logger.warning(
+            "Session IP address changed",
+            extra={
+                "session_id": str(session_id),
+                "old_ip": old_ip,
+                "new_ip": new_ip,
+                "user_id": str(session.user_id),
+            },
+        )
+        return session

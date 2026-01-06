@@ -19,7 +19,7 @@ The Admin Microservice is a dedicated service for platform administration functi
                                                   │ HTTPS
                                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              Nginx Ingress / API Gateway                         │
+│                              Traefik API Gateway                                 │
 │                         (Route by path: /admin/* → Admin Service)                │
 └────────────┬────────────────────────────────────────────────────┬───────────────┘
              │                                                    │

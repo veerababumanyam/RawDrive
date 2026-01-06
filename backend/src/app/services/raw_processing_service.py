@@ -1,7 +1,8 @@
 """RAW File Processing Service.
 
 Supports RAW formats: CR2, CR3 (Canon), NEF (Nikon), ARW (Sony), RAF (Fuji),
-ORF (Olympus), RW2 (Panasonic), DNG.
+ORF (Olympus), RW2 (Panasonic), DNG, PEF (Pentax), RWL (Leica), SRW (Samsung),
+X3F (Sigma), 3FR (Hasselblad).
 
 Extracts embedded JPEG previews for immediate display.
 Generates high-quality JPEG/TIFF conversions in background.
@@ -40,6 +41,11 @@ class RawFormat(Enum):
     ORF = "orf"  # Olympus ORF
     RW2 = "rw2"  # Panasonic RW2
     DNG = "dng"  # Adobe DNG
+    PEF = "pef"  # Pentax PEF
+    RWL = "rwl"  # Leica RWL
+    SRW = "srw"  # Samsung SRW
+    X3F = "x3f"  # Sigma X3F
+    THREE_FR = "3fr"  # Hasselblad 3FR
 
 
 class RawProcessingError(Exception):
@@ -63,6 +69,12 @@ class RawProcessingService:
         b"IIRO": RawFormat.ORF,  # Olympus ORF
         b"IIU\x00": RawFormat.RW2,  # Panasonic RW2
         b"DNG": RawFormat.DNG,  # Adobe DNG
+        # Additional professional RAW formats
+        b"II*\x00": RawFormat.PEF,  # Pentax PEF (TIFF-based, generic signature)
+        b"Leica": RawFormat.RWL,  # Leica RWL
+        b"SRSA": RawFormat.SRW,  # Samsung SRW
+        b"FOVb": RawFormat.X3F,  # Sigma X3F
+        b"IIII": RawFormat.THREE_FR,  # Hasselblad 3FR
     }
 
     def detect_raw_format(self, file_data: bytes, filename: str) -> Optional[RawFormat]:

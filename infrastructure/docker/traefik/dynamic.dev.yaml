@@ -1,0 +1,356 @@
+# Traefik Dynamic Configuration for RawDrive (Local Development)
+# Defines routers, middlewares, and services for local dev (HTTP only)
+#
+# This file is watched by Traefik and changes are applied without restart
+
+# =============================================================================
+# HTTP Configuration
+# =============================================================================
+http:
+
+  # ===========================================================================
+  # Routers - Define how requests are routed to services
+  # ===========================================================================
+  routers:
+    # -------------------------------------------------------------------------
+    # Main API Router (localhost, HTTP only)
+    # -------------------------------------------------------------------------
+    api-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 100
+
+    # -------------------------------------------------------------------------
+    # Frontend Web App Router (localhost, HTTP only)
+    # -------------------------------------------------------------------------
+    web-router-local:
+      rule: "Host(`localhost`)"
+      entryPoints:
+        - web
+      service: frontend-service
+      middlewares:
+        - security-headers-dev
+        - compress
+      priority: 50
+
+    # -------------------------------------------------------------------------
+    # Multi-tenant Studio Subdomains (*.localhost, HTTP only)
+    # -------------------------------------------------------------------------
+    studio-localhost-router:
+      rule: "HostRegexp(`{subdomain:[a-z0-9-]+}.localhost`)"
+      entryPoints:
+        - web
+      service: frontend-service
+      middlewares:
+        - security-headers-dev
+        - compress
+      priority: 40
+
+    # -------------------------------------------------------------------------
+    # Upload Endpoint - Higher rate limits, larger body size
+    # -------------------------------------------------------------------------
+    upload-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/photos/upload`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-uploads
+        - security-headers-dev
+        - large-body-size
+      priority: 150
+
+    # -------------------------------------------------------------------------
+    # Invitations Microservice
+    # -------------------------------------------------------------------------
+    invitations-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/invitations`)"
+      entryPoints:
+        - web
+      service: invitations-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+      priority: 120
+
+    # -------------------------------------------------------------------------
+    # Gallery Microservice - Authenticated Endpoints
+    # -------------------------------------------------------------------------
+    gallery-auth-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/galleries`, `/api/v1/magic-links`, `/api/v1/ws`)"
+      entryPoints:
+        - web
+      service: gallery-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+      priority: 140
+
+    # -------------------------------------------------------------------------
+    # Gallery Microservice - Public Endpoints
+    # -------------------------------------------------------------------------
+    gallery-public-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/public/galleries`)"
+      entryPoints:
+        - web
+      service: gallery-service
+      middlewares:
+        - rate-limit-gallery-public
+        - security-headers-dev
+      priority: 135
+
+    # -------------------------------------------------------------------------
+    # Onboarding Microservice - User registration and onboarding flow
+    # -------------------------------------------------------------------------
+    onboarding-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/onboarding`)"
+      entryPoints:
+        - web
+      service: onboarding-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+      priority: 140
+
+    # -------------------------------------------------------------------------
+    # Billing Microservice - Webhooks (Highest Priority)
+    # -------------------------------------------------------------------------
+    billing-webhooks-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/webhooks/razorpay`, `/webhooks/stripe`)"
+      entryPoints:
+        - web
+      service: billing-service
+      middlewares:
+        - rate-limit-webhooks
+        - security-headers-dev
+      priority: 148
+
+    # -------------------------------------------------------------------------
+    # Billing Microservice - API Endpoints
+    # -------------------------------------------------------------------------
+    billing-api-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/subscription`)"
+      entryPoints:
+        - web
+      service: billing-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+      priority: 145
+
+    # -------------------------------------------------------------------------
+    # AI Service - Stricter rate limiting
+    # -------------------------------------------------------------------------
+    ai-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/ai`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-ai
+        - security-headers-dev
+      priority: 130
+
+    # -------------------------------------------------------------------------
+    # Monitoring - Grafana
+    # -------------------------------------------------------------------------
+    grafana-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/grafana`)"
+      entryPoints:
+        - web
+      service: grafana-service
+      middlewares:
+        - strip-grafana-prefix
+      priority: 110
+
+  # ===========================================================================
+  # Services - Backend targets
+  # ===========================================================================
+  services:
+    backend-service:
+      loadBalancer:
+        servers:
+          - url: "http://backend:8000"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+        sticky:
+          cookie:
+            name: rawdrive_backend
+            httpOnly: true
+
+    frontend-service:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:3000"
+        passHostHeader: true
+
+    invitations-service:
+      loadBalancer:
+        servers:
+          - url: "http://invitations-api:8000"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    gallery-service:
+      loadBalancer:
+        servers:
+          - url: "http://gallery-service:8000"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+        sticky:
+          cookie:
+            name: rawdrive_gallery
+            httpOnly: true
+
+    onboarding-service:
+      loadBalancer:
+        servers:
+          - url: "http://onboarding-service:8000"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    billing-service:
+      loadBalancer:
+        servers:
+          - url: "http://billing-service:8000"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    grafana-service:
+      loadBalancer:
+        servers:
+          - url: "http://grafana:3000"
+
+  # ===========================================================================
+  # Middlewares
+  # ===========================================================================
+  middlewares:
+    # -------------------------------------------------------------------------
+    # Rate Limiting (Relaxed for local dev)
+    # -------------------------------------------------------------------------
+    rate-limit-api:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-uploads:
+      rateLimit:
+        average: 20
+        burst: 40
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-ai:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-gallery-public:
+      rateLimit:
+        average: 1000
+        burst: 2000
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-webhooks:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # -------------------------------------------------------------------------
+    # Security Headers (Relaxed for local dev)
+    # -------------------------------------------------------------------------
+    security-headers-dev:
+      headers:
+        browserXssFilter: true
+        contentTypeNosniff: true
+        frameDeny: false  # Allow iframe for local dev
+        customFrameOptionsValue: "SAMEORIGIN"
+        customResponseHeaders:
+          X-Powered-By: ""
+          Server: ""
+
+    # -------------------------------------------------------------------------
+    # CORS Configuration (Permissive for local dev)
+    # -------------------------------------------------------------------------
+    cors-headers-dev:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Request-ID
+          - X-Workspace-ID
+        accessControlAllowOriginList:
+          - "http://localhost:3000"
+          - "http://localhost:80"
+          - "http://localhost"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 86400
+        addVaryHeader: true
+
+    # -------------------------------------------------------------------------
+    # Compression
+    # -------------------------------------------------------------------------
+    compress:
+      compress:
+        excludedContentTypes:
+          - text/event-stream
+
+    # -------------------------------------------------------------------------
+    # Large Body Size for Uploads
+    # -------------------------------------------------------------------------
+    large-body-size:
+      buffering:
+        maxRequestBodyBytes: 524288000  # 500MB
+
+    # -------------------------------------------------------------------------
+    # Strip Prefix
+    # -------------------------------------------------------------------------
+    strip-grafana-prefix:
+      stripPrefix:
+        prefixes:
+          - /grafana
+
+# =============================================================================
+# TCP Configuration (for future use)
+# =============================================================================
+# tcp: {} # Commented out - Traefik v3 doesn't allow empty tcp sections

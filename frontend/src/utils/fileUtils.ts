@@ -3,16 +3,10 @@
  * Helper functions for file type detection and handling
  */
 
-// RAW file extensions
-const RAW_EXTENSIONS = [
-  'cr2', 'cr3', // Canon
-  'nef',        // Nikon
-  'arw',        // Sony
-  'raf',        // Fujifilm
-  'orf',        // Olympus
-  'rw2',        // Panasonic
-  'dng',        // Adobe DNG
-];
+import { SUPPORTED_RAW_EXTENSIONS, RAW_MIME_TYPES } from '@rawdrive/shared-constants';
+
+// Re-export for backwards compatibility
+export const RAW_EXTENSIONS = SUPPORTED_RAW_EXTENSIONS;
 
 /**
  * Check if a file is a RAW format based on filename
@@ -20,33 +14,27 @@ const RAW_EXTENSIONS = [
 export function isRawFile(filename: string): boolean {
   if (!filename) return false;
   const ext = filename.toLowerCase().split('.').pop();
-  return ext ? RAW_EXTENSIONS.includes(ext) : false;
+  return ext ? SUPPORTED_RAW_EXTENSIONS.includes(ext as any) : false;
 }
 
 /**
  * Check if a file is a RAW format based on MIME type
+ * Note: This is unreliable - browsers often return empty or generic MIME for RAW
  */
 export function isRawMimeType(mimeType: string): boolean {
   if (!mimeType) return false;
   const mime = mimeType.toLowerCase();
-  // Common RAW MIME types (may vary by browser/system)
-  return (
-    mime.includes('raw') ||
-    mime.includes('cr2') ||
-    mime.includes('nef') ||
-    mime.includes('arw') ||
-    mime.includes('raf') ||
-    mime.includes('orf') ||
-    mime.includes('rw2') ||
-    mime.includes('dng') ||
-    mime === 'image/x-canon-cr2' ||
-    mime === 'image/x-nikon-nef' ||
-    mime === 'image/x-sony-arw' ||
-    mime === 'image/x-fuji-raf' ||
-    mime === 'image/x-olympus-orf' ||
-    mime === 'image/x-panasonic-rw2' ||
-    mime === 'image/x-adobe-dng'
+  return RAW_MIME_TYPES.some(rawMime =>
+    mime === rawMime || mime.includes('raw') || mime.includes(rawMime)
   );
+}
+
+/**
+ * Check if a File object is a RAW file
+ * Uses extension-based detection (more reliable than MIME type)
+ */
+export function isRawFileObject(file: File): boolean {
+  return isRawFile(file.name);
 }
 
 /**
@@ -70,8 +58,6 @@ export function getRawDownloadVariant(
       return 'original'; // Download original RAW file
     case 'web_only':
     case 'watermarked_only':
-      // For RAW files, "preview" should be converted JPEG
-      // Backend should handle this by converting RAW to JPEG on-the-fly
       return 'preview'; // Download converted JPEG
     case 'view_only':
       return null; // No download allowed
@@ -80,3 +66,43 @@ export function getRawDownloadVariant(
   }
 }
 
+/**
+ * Check if file is an animated format (GIF, APNG, animated WebP)
+ */
+export function isAnimatedFormat(file: File): boolean {
+  const animatedMimes = ['image/gif', 'image/apng', 'image/webp'];
+  return animatedMimes.includes(file.type.toLowerCase());
+}
+
+/**
+ * Check if file is AVIF format
+ */
+export function isAvifFile(file: File): boolean {
+  return (
+    file.type === 'image/avif' ||
+    file.name.toLowerCase().endsWith('.avif')
+  );
+}
+
+/**
+ * Check if file is TIFF format
+ */
+export function isTiffFile(file: File): boolean {
+  return (
+    file.type === 'image/tiff' ||
+    file.type === 'image/tiff-fx' ||
+    file.name.toLowerCase().endsWith('.tiff') ||
+    file.name.toLowerCase().endsWith('.tif')
+  );
+}
+
+/**
+ * Check if file is BMP format
+ */
+export function isBmpFile(file: File): boolean {
+  return (
+    file.type === 'image/bmp' ||
+    file.type === 'image/x-ms-bmp' ||
+    file.name.toLowerCase().endsWith('.bmp')
+  );
+}

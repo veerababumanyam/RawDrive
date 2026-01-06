@@ -18,5 +18,7 @@
         ".specify/scripts/powershell/": true
     },
     "css.lint.unknownAtRules": "ignore",
-    "scss.lint.unknownAtRules": "ignore"
+    "scss.lint.unknownAtRules": "ignore",
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.pythonProjects": []
 }

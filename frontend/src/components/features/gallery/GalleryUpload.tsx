@@ -11,6 +11,7 @@ import { UploadDropzone } from '../upload/UploadDropzone';
 import { UploadProgressPanel, type UploadFileProgress } from '../upload/UploadProgressPanel';
 import { DuplicateDetectionDialog } from '../upload/DuplicateDetectionDialog';
 import { DuplicateAssetResponse } from '../../../types/gallery';
+import { isRawFileObject } from '../../../utils/fileUtils';
 
 export interface GalleryUploadProps {
   galleryId: string;
@@ -114,7 +115,10 @@ export const GalleryUpload: React.FC<GalleryUploadProps> = ({
       const { frontendFaceService } = await import('../../../services/FrontendFaceService');
 
       // Process first 3 images to avoid freezing browser on bulk upload
-      const filesToScan = selectedFiles.slice(0, 3).filter(f => f.type.startsWith('image/'));
+      // Skip RAW files - browser cannot decode them, backend will handle face detection
+      const filesToScan = selectedFiles
+        .slice(0, 3)
+        .filter(f => f.type.startsWith('image/') && !isRawFileObject(f));
 
       if (filesToScan.length > 0) {
         console.log(`[Face Detection] Scanning ${filesToScan.length} images on client...`);
