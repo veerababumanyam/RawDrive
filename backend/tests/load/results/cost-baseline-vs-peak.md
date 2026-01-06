@@ -122,26 +122,45 @@ Ratio = Baseline / Peak
 - **Error rate (core endpoints)**: 0% (auth/galleries work perfectly)
 - **Redis pool utilization**: 0.11%
 
-### Peak Test
+### Stress Test (100 VUs - Local Docker)
 
-- **Date**: [To be filled during actual test]
+- **Date**: 2026-01-06
+- **Duration**: 2 minutes
+- **Traffic**: ~35 requests/second (100 VUs)
+- **Pod count**: 1 (local Docker development)
+- **CPU utilization**: ~159% (multi-core)
+- **p95 Latency**: 17.14ms
+- **Gallery view p95**: 21.55ms
+- **Health check p95**: 18.68ms
+- **Health check success rate**: 99.4%
+- **Redis pool utilization**: 0.47%
+- **Rate limiting**: Active and working correctly (429 responses)
+
+### Peak Test (5000 VUs - Kubernetes Required)
+
+- **Date**: [Pending - requires Kubernetes environment]
 - **Duration**: 1 hour at peak
 - **Traffic**: 5000 concurrent users
-- **Pod count**: 80-100 (auto-scaled)
-- **CPU utilization**: ~70%
+- **Pod count**: 80-100 (auto-scaled via HPA)
+- **CPU utilization**: Target ~70%
 
-### k6 Test Results
+**Note**: The 5000 VU test requires a Kubernetes cluster with HPA enabled.
+A single Docker container cannot realistically simulate 5000 concurrent users.
+The 100 VU local stress test validates the backend's efficiency.
+
+### k6 Stress Test Results (100 VUs)
 
 ```
-# To be filled after running:
-# k6 run backend/tests/load/k6/concurrent-users.js
+scenarios: (100.00%) 1 scenario, 100 max VUs, 2m30s max duration
+default: [=========================] 100/100 VUs  2m0s
 
-scenarios: (100.00%) 1 scenario, 5000 max VUs, ...
-default: [=========================] 5000/5000 VUs
+✓ http_req_duration..........: avg=10.83ms min=0s med=5.7ms max=384.8ms p95=17.14ms
+✓ health_check_duration......: avg=11.72ms p95=18.68ms
+✓ gallery_view_duration......: avg=13.33ms p95=21.55ms
+✓ redis_pool_utilization.....: avg=0.47% (threshold: 80%)
 
-✓ http_req_duration..........: avg=XXXms min=XXXms med=XXXms max=XXXms p95=XXXms p99=XXXms
-✓ http_req_failed............: X.XX% ✓ XXX ✗ XXXXX
-✓ http_requests..............: XXXXX XXX.XX/s
+http_reqs......................: 4390    34.71/s
+iterations.....................: 3424    27.07/s
 ```
 
 ---
