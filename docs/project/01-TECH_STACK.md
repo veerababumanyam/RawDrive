@@ -79,11 +79,11 @@ RawDrive is built on a modern, scalable technology stack designed to handle 20,0
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   EXTERNAL SERVICES & INTEGRATIONS                     │
 │                                                                        │
-│  AI: Google Gemini (default), OpenAI, Anthropic, Azure OpenAI         │
+│  AI: Google Gemini (via One-API), OpenAI, Anthropic, Azure OpenAI     │
 │  Payments: Razorpay (India-first), Stripe                             │
-│  Email: SendGrid, Mailgun                                             │
-│  Auth: Google OAuth, GitHub OAuth, SAML/OIDC (Enterprise)             │
-│  Storage (BYOS): Google Drive, Dropbox, AWS S3, Azure Blob            │
+│  Email: SendGrid                                                      │
+│  Auth: Google OAuth, local MFA                                         │
+│  Storage (BYOS): Google Drive, Dropbox, AWS S3                        │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -93,122 +93,66 @@ Note: RawDrive’s default hosted stack uses **Cloudflare R2** for managed objec
 
 ```mermaid
 graph TB
-    Client["🌐 Client Layer<br/>(Browser, Mobile, Desktop)"]
+    Client["🌐 Client Layer<br/>(Browser, Mobile)"]
     
     CF["☁️ Cloudflare Edge<br/>(WAF, DDoS, CDN, Rate Limit)"]
     
-    Frontend["⚛️ Frontend<br/>(React 19, TypeScript, Vite)<br/>Hostinger VPS / K8s"]
+    Frontend["⚛️ Frontend<br/>(React 19, TS, Vite)"]
     
-    Ingress["🚪 API Gateway<br/>(Traefik v3, KEDA)<br/>Rate Limiting, TLS"]
+    Ingress["🚪 Traefik Gateway<br/>(v3, KEDA)"]
     
-    Backend["🔧 Backend Services<br/>(Python, FastAPI)<br/>K8s Pods / VPS"]
+    subgraph "Microservices Cluster"
+        Backend["🏠 Backend API"]
+        Gallery["🖼️ Gallery Service"]
+        Billing["💳 Billing Service"]
+        Upload["📁 Upload Service"]
+        Invitations["💌 Invitations Svc"]
+        Notifications["🔔 Notifications Svc"]
+        Onboarding["🚀 Onboarding Svc"]
+    end
     
-    Auth["🔐 Auth Service"]
-    Gallery["🖼️ Gallery Service"]
-    Photo["📸 Photo Service"]
-    Album["📖 Album Service"]
-    Client_Svc["👥 Client Service"]
-    Booking["📅 Booking Service"]
-    Payment["💳 Payment Service"]
-    AI["🤖 AI Service"]
-    Email["📧 Email Service"]
-    Jobs["⚙️ Background Jobs"]
+    DB["🗄️ PostgreSQL 16<br/>(pgvector)"]
+    Cache["⚡ Redis 7<br/>(Cache/Queues)"]
+    Storage["📦 Cloudflare R2<br/>(Object Storage)"]
     
-    DB["🗄️ PostgreSQL<br/>(ACID, pgvector)"]
-    Cache["⚡ Redis<br/>(Sessions, Cache)"]
-    Storage["📦 Cloudflare R2<br/>(Object Storage + CDN)"]
+    Obs["📊 Observability stack<br/>(Prometheus, Grafana, Loki)"]
+    OneAPI["🤖 One-API / LLM Proxy"]
     
-    Obs["📊 Observability<br/>(Prometheus, Grafana,<br/>Loki, Tempo, Sentry)"]
+    Client --> CF
+    CF --> Frontend
+    Frontend --> Ingress
+    Ingress --> Backend
+    Ingress --> Gallery
+    Ingress --> Billing
+    Ingress --> Upload
+    Ingress --> Invitations
+    Ingress --> Notifications
+    Ingress --> Onboarding
     
-    Queue["📋 BullMQ<br/>(Job Queue)"]
+    Backend & Gallery & Billing & Upload & Invitations & Notifications & Onboarding --> DB
+    Backend & Gallery & Upload --> Storage
+    Backend & Billing & Upload --> Cache
+    Backend --> OneAPI
     
-    Gemini["🧠 Google Gemini<br/>(AI Provider)"]
-    Razorpay["💰 Razorpay<br/>(Payments)"]
-    SendGrid["📬 SendGrid<br/>(Email)"]
-    OAuth["🔑 OAuth Providers<br/>(Google, GitHub)"]
-    BYOS["💾 BYOS Storage<br/>(S3, Drive, Dropbox)"]
-    
-    Client -->|HTTPS/TLS 1.3| CF
-    CF -->|HTTP| Frontend
-    Frontend -->|REST API| Ingress
-    Ingress -->|Routes| Backend
-    
-    Backend --> Auth
-    Backend --> Gallery
-    Backend --> Photo
-    Backend --> Album
-    Backend --> Client_Svc
-    Backend --> Booking
-    Backend --> Payment
-    Backend --> AI
-    Backend --> Email
-    Backend --> Jobs
-    
-    Auth -->|Query| DB
-    Gallery -->|Query| DB
-    Photo -->|Query| DB
-    Album -->|Query| DB
-    Client_Svc -->|Query| DB
-    Booking -->|Query| DB
-    Payment -->|Query| DB
-    AI -->|Query| DB
-    
-    Auth -->|Cache| Cache
-    Gallery -->|Cache| Cache
-    Photo -->|Cache| Cache
-    
-    Photo -->|Upload/Download| Storage
-    Gallery -->|Serve Images| Storage
-    Album -->|Export| Storage
-    
-    Backend -->|Metrics & Logs| Obs
-    Jobs -->|Metrics & Logs| Obs
-    
-    Jobs -->|Queue| Queue
-    Queue -->|Process| Photo
-    Queue -->|Process| AI
-    Queue -->|Process| Email
-    
-    AI -->|API Call| Gemini
-    Payment -->|API Call| Razorpay
-    Email -->|API Call| SendGrid
-    Auth -->|API Call| OAuth
-    Photo -->|Sync| BYOS
-    
-    style Client fill:#e1f5ff
-    style CF fill:#fff3e0
-    style Frontend fill:#f3e5f5
-    style Ingress fill:#fce4ec
-    style Backend fill:#e8f5e9
-    style DB fill:#fff9c4
-    style Cache fill:#ffe0b2
-    style Storage fill:#f1f8e9
-    style Obs fill:#e0f2f1
-    style Queue fill:#f0f4c3
-    style Gemini fill:#c8e6c9
-    style Razorpay fill:#ffccbc
-    style SendGrid fill:#b3e5fc
-    style OAuth fill:#d1c4e9
-    style BYOS fill:#c5cae9
+    Backend & Gallery & Billing & Upload & Invitations & Notifications & Onboarding --> Obs
 ```
 
 ### Key Connections Explained
 
 **Data Flow:**
 - Clients connect via HTTPS through Cloudflare Edge (security & performance)
-- Frontend makes REST API calls to Backend through Traefik API Gateway
-- Backend services query PostgreSQL for data and Redis for caching
-- File operations go to Cloudflare R2 with CDN delivery
+- Frontend makes REST API calls to specific Microservices through Traefik Gateway
+- All services query PostgreSQL 16 (with pgvector for search) and Redis 7 (caching/queues)
+- File operations (Upload/Serve) go through dedicated services to Cloudflare R2
 
 **Processing Flow:**
-- Long-running tasks (photo processing, AI analysis) are queued in BullMQ
-- Background workers process jobs asynchronously
-- Results are stored in PostgreSQL and cached in Redis
+- Upload Service handles resumable TUS uploads and triggers processing
+- Local workers (face-worker, content-worker, quality-worker) process assets
+- AI operations are proxied via One-API to Google Gemini or other providers
 
 **Observability:**
-- All services emit metrics to Prometheus and logs to Loki
-- Grafana visualizes metrics, Tempo traces requests, Sentry tracks errors
-- Alertmanager sends notifications on anomalies
+- Full-stack monitoring via Prometheus (metrics), Loki (logs), and Grafana (dashboards)
+- Automatic alerting via Alertmanager
 
 **External Integrations:**
 - AI operations use Google Gemini (with fallback providers)

@@ -661,7 +661,17 @@ else:
 
 ## Version History
 
-### Current: v0.2.9 (2024-01-06)
+### Current: v0.3.0 (2025-01-27)
+
+Gallery Preview feature and platform stability:
+
+**New Features:**
+- Gallery Preview: "View as Client" mode for workspace users
+- Security: UUID validation for public URLs
+- Infrastructure: Traefik v3 and KEDA autoscaling maturity
+- Unified Type System: Generated Python types from TypeScript shared packages
+
+### Previous: v0.2.9 (2025-01-06)
 
 Major platform enhancements and microservices expansion:
 

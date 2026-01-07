@@ -1,10 +1,9 @@
 {
   "$schema": "./_schema.json",
-  "specId": "ports_allocation",
-  "title": "Service Ports Allocation",
-  "version": "1.0.0",
-  "lastUpdated": "2024-12-17",
-  "status": "active",
+  "specVersion": "1.0",
+  "featureId": "ports_allocation",
+  "name": "Service Ports Allocation",
+  "status": "draft",
   "description": "Canonical port assignments for all RawDrive services to prevent conflicts",
   "ports": {
     "infrastructure": {
@@ -37,99 +36,98 @@
         "notes": "Standard Grafana port - monitoring/visualization"
       }
     },
-    "backend": {
-      "fastapi": {
+    "microservices": {
+      "backend": {
         "port": 8000,
         "protocol": "HTTP",
-        "service": "FastAPI Backend",
+        "service": "Backend API",
         "container": "rawdrive-backend",
-        "notes": "Main Python API server"
+        "notes": "Main API, Core Features"
       },
-      "gateway": {
+      "gallery": {
+        "port": 8004,
+        "protocol": "HTTP",
+        "service": "Gallery Service",
+        "container": "rawdrive-gallery-service",
+        "notes": "Viewing, Proofing, Magic Links"
+      },
+      "billing": {
+        "port": 8005,
+        "protocol": "HTTP",
+        "service": "Billing Service",
+        "container": "rawdrive-billing-service",
+        "notes": "Subscriptions, Payments"
+      },
+      "onboarding": {
+        "port": 8006,
+        "protocol": "HTTP",
+        "service": "Onboarding Service",
+        "container": "rawdrive-onboarding-service",
+        "notes": "User Registration"
+      },
+      "invitations": {
+        "port": 8007,
+        "protocol": "HTTP",
+        "service": "Invitations API",
+        "container": "rawdrive-invitations-api",
+        "notes": "Digital Invitations"
+      },
+      "upload": {
+        "port": 8008,
+        "protocol": "HTTP",
+        "service": "Upload Service",
+        "container": "rawdrive-upload-service",
+        "notes": "Bulk Asset Uploads (TUS)"
+      },
+      "notifications": {
+        "port": 8010,
+        "protocol": "HTTP",
+        "service": "Notifications Service",
+        "container": "rawdrive-notifications-service",
+        "notes": "Transactional Comms"
+      },
+      "one_api": {
         "port": 3002,
         "protocol": "HTTP",
-        "service": "API Gateway (Node.js legacy)",
-        "container": null,
-        "notes": "Legacy Node.js gateway - will migrate to FastAPI"
-      }
-    },
-    "frontend": {
-      "vite_dev": {
-        "port": 5173,
-        "protocol": "HTTP",
-        "service": "Vite Dev Server",
-        "container": null,
-        "notes": "Standard Vite dev port - React frontend"
-      },
-      "vite_preview": {
-        "port": 4173,
-        "protocol": "HTTP",
-        "service": "Vite Preview Server",
-        "container": null,
-        "notes": "Standard Vite preview port"
-      }
-    },
-    "microservices_legacy": {
-      "auth": {
-        "port": 3001,
-        "protocol": "HTTP",
-        "service": "Auth Service (legacy)",
-        "notes": "Migrating to FastAPI backend"
-      },
-      "profile": {
-        "port": 3003,
-        "protocol": "HTTP",
-        "service": "Profile Service (legacy)",
-        "notes": "Migrating to FastAPI backend"
-      },
-      "tools": {
-        "port": 3004,
-        "protocol": "HTTP",
-        "service": "Tools Service (legacy)",
-        "notes": "Migrating to FastAPI backend"
-      },
-      "notification": {
-        "port": 3005,
-        "protocol": "HTTP",
-        "service": "Notification Service (legacy)",
-        "notes": "Migrating to FastAPI backend"
-      },
-      "analytics": {
-        "port": 3006,
-        "protocol": "HTTP",
-        "service": "Analytics Service (legacy)",
-        "notes": "Migrating to FastAPI backend"
-      },
-      "invitation": {
-        "port": 3007,
-        "protocol": "HTTP",
-        "service": "Invitation Service (legacy)",
-        "notes": "Migrating to FastAPI backend"
-      },
-      "worker": {
-        "port": 3008,
-        "protocol": "HTTP",
-        "service": "Worker Service (legacy)",
-        "notes": "Migrating to FastAPI backend"
+        "service": "One-API Dashboard",
+        "container": "rawdrive-one-api",
+        "notes": "AI Proxy Management"
       }
     },
     "reserved": {
       "description": "Ports reserved for future use or common conflicts to avoid",
       "ports": [
-        { "port": 80, "reason": "HTTP standard - use for production reverse proxy only" },
-        { "port": 443, "reason": "HTTPS standard - use for production reverse proxy only" },
-        { "port": 8080, "reason": "Common alternative HTTP port - keep free" },
-        { "port": 9090, "reason": "Prometheus default - reserve for metrics" },
-        { "port": 9200, "reason": "Elasticsearch default - reserve for search" },
-        { "port": 27017, "reason": "MongoDB default - not used but avoid" }
+        {
+          "port": 80,
+          "reason": "HTTP standard - use for production reverse proxy only"
+        },
+        {
+          "port": 443,
+          "reason": "HTTPS standard - use for production reverse proxy only"
+        },
+        {
+          "port": 8080,
+          "reason": "Common alternative HTTP port - keep free"
+        },
+        {
+          "port": 9090,
+          "reason": "Prometheus default - reserve for metrics"
+        },
+        {
+          "port": 9200,
+          "reason": "Elasticsearch default - reserve for search"
+        },
+        {
+          "port": 27017,
+          "reason": "MongoDB default - not used but avoid"
+        }
       ]
     }
   },
   "portRanges": {
-    "infrastructure": "3000-3199, 5432, 6379",
-    "backend_api": "8000-8099",
+    "microservices": "8000-8099",
+    "infrastructure": "3000-3199, 5432, 6379, 6432",
     "frontend": "4173, 5173",
-    "legacy_microservices": "3001-3099 (being phased out)",
     "monitoring": "9000-9099"
   },
   "rules": [
@@ -140,6 +138,47 @@
     "Update this spec when adding any new service port",
     "Legacy Node.js microservices in 3001-3008 range are being migrated"
   ],
+  "lastUpdated": "2026-01-27",
+  "tenancy": {
+    "scopingKey": "workspace_id",
+    "rules": [
+      "Ports are assigned globally for the infrastructure but mapping is aware of multi-tenant service discovery."
+    ]
+  },
+  "actors": [
+    {
+      "id": "system_admin",
+      "name": "System Administrator",
+      "description": "Manages infrastructure and port assignments."
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf.port.allocation",
+      "name": "Port Allocation Workflow",
+      "steps": [
+        "Check this spec for available ports.",
+        "Assign new port to service.",
+        "Update docker-compose.yml and .env."
+      ]
+    }
+  ],
+  "apis": [],
+  "dataModel": {
+    "entities": []
+  },
+  "security": {
+    "controls": [
+      "Ports for internal services (DB, Redis) are not exposed to the public internet.",
+      "Access to metrics ports is restricted to localhost/internal network."
+    ]
+  },
+  "observability": {
+    "metrics": [
+      "Traefik metrics on port 8082",
+      "Prometheus metrics on port 9090"
+    ]
+  },
   "dockerCompose": {
     "file": "infrastructure/docker/docker-compose.yml",
     "envFile": ".env"

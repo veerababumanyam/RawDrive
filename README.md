@@ -5,7 +5,7 @@
 
   ## Enterprise SaaS Professional Photography Management Platform
 
-  [![Version](https://img.shields.io/badge/version-0.2.9-blue.svg)](https://github.com/rawdrive/RawDrive)
+  [![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/rawdrive/RawDrive)
   [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
   [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -107,28 +107,39 @@ See [Smart Curate Documentation](docs/SMART_CURATE.md) for API details and usage
 
 ```mermaid
 graph TB
-    A[Client Applications] --> B[API Gateway]
-    B --> C[Authentication Service]
-    B --> D[Asset Management API]
-    B --> E[Gallery Service]
-    B --> F[AI Service]
+    A[Client Applications] --> B[Traefik API Gateway]
+    
+    subgraph "Microservices Cluster"
+        B --> C[Backend API]
+        B --> D[Gallery Service]
+        B --> E[Billing Service]
+        B --> F[Onboarding Service]
+        B --> G[Invitations Service]
+        B --> H[Upload Service]
+        B --> I[Notifications Service]
+    end
 
-    D --> G[(PostgreSQL + pgvector)]
-    D --> H[(Redis Cache)]
-    D --> I[(Object Storage)]
+    subgraph "Data Layer"
+        C & D & E & F & G & H & I --> J[(PostgreSQL 16 + pgvector)]
+        C & D & E & F & G & H & I --> K[(Redis 7 Cache)]
+        C & D & H --> L[(Cloudflare R2 / S3)]
+    end
 
-    F --> J[Face Recognition]
-    F --> K[Semantic Search]
-    F --> L[Auto Tagging]
+    subgraph "AI & ML Processing"
+        C --> M[One-API / LLM Proxy]
+        M --> N[Google Gemini / Claude]
+        O[Celery Workers] --> P[Face Recognition]
+        O --> Q[Content Analysis]
+        O --> R[Quality Scoring]
+    end
 
-    M[Background Workers] --> N[BullMQ Queues]
-    N --> O[Asset Processing]
-    N --> P[AI Analysis]
-    N --> Q[Storage Lifecycle]
+    subgraph "Observability"
+        S[Prometheus] --> T[Grafana Dashboards]
+        U[Loki] --> T
+        V[Promtail] --> U
+    end
 
-    R[External Integrations] --> S[Calendar APIs]
-    R --> T[Payment Processors]
-    R --> U[Email Services]
+    H -- Events --> W[Kafka / BullMQ]
 ```
 
 ### 🛠️ Tech Stack
@@ -136,15 +147,15 @@ graph TB
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | **Frontend** | React 19 + TypeScript + Vite + Tailwind CSS | Modern web application with design system |
-| **Backend** | Python FastAPI + SQLAlchemy | RESTful API services with async support |
-| **AI Service** | Python FastAPI + FastMCP | AI/ML processing and Model Context Protocol |
-| **Database** | PostgreSQL 16 + pgvector + pgvectorscale + TimescaleDB | Relational data + vector embeddings + DiskANN indexes |
-| **Cache** | Redis 7 + BullMQ | Caching, sessions, job queues |
-| **Storage** | Cloudflare R2 / BYOS S3 | Object storage with CDN |
-| **AI Provider** | Google Gemini (BYOA) | Bring Your Own API - users provide their own Gemini API key |
-| **Infrastructure** | Docker + Kubernetes | Container orchestration |
-| **Monitoring** | Grafana + Loki + Prometheus | Observability and alerting |
-| **Authentication** | Google OAuth (OIDC) + Local Auth | Enterprise authentication with MFA |
+| **Backend** | Python FastAPI + SQLAlchemy + Alembic | Core business logic and multi-tenant API |
+| **Microservices** | Python FastAPI | Specialized services (Gallery, Billing, Upload, etc.) |
+| **API Gateway** | Traefik v3 | Cloud-native routing, SSL, and rate limiting |
+| **Database** | PostgreSQL 16 + pgvector + pgvectorscale | Relational data + high-performance vector search |
+| **Cache & Queue** | Redis 7 + BullMQ + Celery | Caching, sessions, and background job queues |
+| **Storage** | Cloudflare R2 / S3-Compatible | Global object storage with CDN |
+| **Monitoring** | Grafana + Loki + Prometheus + Alertmanager | Full-stack observability and alerting |
+| **AI Integration** | One-API + Google Gemini | Standardized LLM proxy with BYOA support |
+| **Infrastructure** | Docker + Kubernetes + KEDA | Container orchestration and event-driven scaling |
 
 > **Note:** Use `timescale/timescaledb-ha:pg16` Docker image for full vector search support including StreamingDiskANN indexes.
 
@@ -171,7 +182,7 @@ RawDrive includes a comprehensive design system with:
 
 ### ⚡ One-Command Startup (Recommended)
 
-**Start all 20 services with auto-restart enabled:**
+**Start all 21 services with auto-restart enabled:**
 
 ```bash
 # Windows (Command Prompt) - Just double-click!
@@ -311,15 +322,18 @@ All users password: Test@123 Subscription Tier Users:
 ✅ enterprise@test.rawdrive.in - Enterprise Plan (Unlimited)
 7. **Service URLs (all running in Docker)**
    ```
-   Backend API:        http://localhost:8000
+   Frontend App:       http://localhost (via Traefik)
+   Backend API:        http://localhost/api (via Traefik)
    Gallery Service:    http://localhost:8004
    Billing Service:    http://localhost:8005
-   Onboarding:         http://localhost:8006
-   Invitations:        http://localhost:8007
+   Onboarding Service: http://localhost:8006
+   Invitations API:    http://localhost:8007
    Upload Service:     http://localhost:8008
-   Traefik Dashboard:  http://localhost:8080
+   Notifications:      http://localhost:8010
+   Traefik Dashboard:  http://traefik.localhost
    Grafana:            http://localhost:3000 (admin/admin)
    Prometheus:         http://localhost:9090
+   One-API Dashboard:  http://localhost:3002
    ```
 
 8. **Running individual services (alternative to Docker)**
@@ -369,10 +383,10 @@ start-all-services.bat  # Windows
 manage-services.bat status
 ```
 
-**Production Services (20 total):**
-- 6 Microservices: backend, gallery, billing, onboarding, invitations, upload
-- 4 Workers: face, content, quality, invitations-worker
-- 10 Infrastructure: postgres, redis, traefik, prometheus, grafana, loki, etc.
+**Production Services (21 total):**
+- 7 Microservices: backend, gallery, billing, onboarding, invitations, upload, notifications
+- 4 Workers: face-worker, content-worker, quality-worker, invitations-worker
+- 10 Infrastructure: postgres, redis, pgbouncer, traefik, prometheus, grafana, loki, promtail, alertmanager, one-api
 
 All services configured with `restart: unless-stopped` for automatic recovery.
 
@@ -404,17 +418,17 @@ RawDrive/
 │   │   └── config/         # Configuration modules
 │   ├── migrations/         # Alembic database migrations
 │   └── tests/              # Backend test suites
-├── services/ai-service/              # Python FastAPI + AI/ML
-│   ├── src/
-│   │   ├── mcp/            # Model Context Protocol tools
-│   │   ├── services/       # AI processing services
-│   │   └── models/         # ML model definitions
-│   └── tests/              # AI service tests
-├── scripts/                 # Build scripts
-│   └── generate-python-types.ts  # TypeScript → Python generator
-├── infrastructure/          # Docker, Traefik, monitoring
-├── docs/                   # Comprehensive documentation
-└── CLAUDE.md               # AI assistant context
+├── services/                 # Microservices (FastAPI)
+│   ├── billing-service/     # Subscriptions & Payments
+│   ├── gallery-service/     # Client-facing Gallery API
+│   ├── upload-service/      # Resumable TUS Uploads
+│   ├── onboarding-service/  # Registration & Setup
+│   ├── invitations-service/ # Digital RSVP & Events
+│   └── notifications-service/# Multi-channel Communications
+├── infrastructure/          # Traefik, Docker, K8s, Monitoring
+├── docs/                   # 150+ Documentation files
+├── specs/                  # Feature technical specifications
+└── CLAUDE.md               # AI assistant context & rules
 ```
 
 ---
@@ -589,40 +603,30 @@ RawDrive exclusively uses **Google Gemini** for all AI features:
 
 ### Latest Additions (2025-2026)
 
+#### Version 0.3.0 (Latest)
+- **"View as Client" Gallery Preview**: New high-fidelity preview mode that renders galleries exactly as they appear to end clients, accessible directly from the workspace.
+- **Security Hardening**: Implemented UUID validation for public URLs to prevent gallery ID exposure, complying with SOC 2 and GDPR/CCPA best practices.
+- **Magic Link Reliability**: Revamped magic link generation and validation logic for enterprise-scale reliability.
+- **Performance Optimization**: Optimized asset loading and pagination for large galleries (>10,000 photos).
+
 #### Digital Invitations & Events (Specs 016-020)
 - **Save The Date & Wedding Invitations**: Create beautiful digital event invitations with customizable templates and themes
 - **RSVP System**: Complete guest management with real-time responses, party size tracking, and dietary preferences
 - **Multi-Language Support**: Indian language support (Hindi, Tamil, Telugu, Malayalam, Marathi, Bengali, Gujarati)
 - **Guest List Management**: CSV imports, bulk operations, and export capabilities
 - **Event Check-In**: QR code-based check-in system for event venues
-- **Security Hardening**: Workspace isolation, duplicate RSVP prevention, and comprehensive audit logging
 
 #### Public Profile & Branding (Specs 013, 021)
-- **Photographer Profiles**: Showcase your work with custom public profiles
-- **Company Profiles**: Professional business profiles with service offerings
-- **Custom Branding**: Gradient themes, custom fonts, and logo integration
-- **Mobile Responsive**: Fully optimized for mobile devices and tablets
-- **SEO Optimization**: Search engine friendly pages for client discovery
+- **Photographer & Company Profiles**: Professional public-facing profiles with service offerings and portfolio showcase.
+- **Custom Branding**: Advanced gradient themes, custom fonts, and white-label logo integration.
+- **SEO Optimized**: Built-in SEO metadata and social sharing optimization for all public pages.
 
-#### Client Experience Enhancements (Specs 011-015)
-- **Client Favorites**: Allow clients to mark and manage favorite photos with sync
-- **Selection Sync**: Real-time synchronization of client selections across devices
-- **Gallery Branding**: Custom gradient themes and enhanced visual presentation
-- **Magic Link Grid**: Auto-layout system for beautiful gallery displays
-- **Download Policies**: Fine-grained control over client download permissions
-
-#### AI & Smart Features (Specs 005, 008, 010)
-- **Smart Tagging Cache**: Local caching layer for faster AI operations
-- **Face Group Merge**: Advanced face clustering with merge/split capabilities
-- **AI Provider Settings**: Google Gemini BYOA (Bring Your Own API) configuration
-- **Tagging Health Monitoring**: Track AI coverage and optimization across workspace
-- **Bulk Reanalysis**: Re-process photos with improved AI models
-
-#### Platform Improvements
-- **Admin Microservice**: Platform-wide administration tools (Spec 001)
-- **User Profile Settings**: Enhanced user management and preferences (Spec 002)
-- **Shared Packages Infrastructure** (Spec 022): 4 npm packages (`@rawdrive/shared-types`, `@rawdrive/shared-constants`, `@rawdrive/shared-validation`, `@rawdrive/shared-utils`) with TypeScript-to-Python type generation via pnpm workspaces
-- **Error Handling**: Comprehensive error boundaries and retry mechanisms
+#### Platform & Infrastructure
+- **Microservices Expansion**: Dedicated services for Billing, Gallery, Onboarding, Invitations, Upload, and Notifications.
+- **Traefik v3 API Gateway**: Cloud-native routing with automatic TLS and rate limiting.
+- **KEDA Scaling**: Event-driven autoscaling for microservices based on traffic and queue lag.
+- **Shared Packages Infrastructure**: Monorepo with 4 pnpm-managed packages for type safety across TypeScript and Python.
+- **Full-Stack Monitoring**: Integrated Prometheus, Grafana, Loki, and Promtail for comprehensive observability.
 
 ---
 

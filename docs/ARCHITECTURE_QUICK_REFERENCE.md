@@ -1,6 +1,6 @@
 # RawDrive Architecture Quick Reference
 
-**Last Updated**: January 6, 2026
+**Last Updated**: January 27, 2026
 
 ## System Overview
 
@@ -11,13 +11,6 @@ flowchart TB
     subgraph Clients["👤 Client Layer"]
         Web[Web Browser]
         Mobile[Mobile App]
-        Desktop[Desktop App]
-    end
-
-    subgraph Edge["🌐 Cloudflare Edge"]
-        WAF[WAF]
-        CDN[CDN]
-        DDoS[DDoS Protection]
     end
 
     subgraph Gateway["🚪 API Gateway"]
@@ -25,29 +18,39 @@ flowchart TB
         KEDA[KEDA Autoscaler]
     end
 
-    subgraph Backend["⚙️ Backend Services"]
-        Auth[Auth Service]
-        Gallery[Gallery Service]
-        Photo[Photo Service]
-        AI[AI Service]
-        Jobs[Background Jobs]
+    subgraph Backend["⚙️ Microservices Cluster"]
+        ServiceA[Backend API]
+        ServiceB[Gallery Service]
+        ServiceC[Billing Service]
+        ServiceD[Upload Service]
+        ServiceE[Invitations Service]
+        ServiceF[Notifications Service]
+        ServiceG[Onboarding Service]
+    end
+
+    subgraph Processing["🤖 AI & Processing"]
+        OneAPI[One-API / LLM Proxy]
+        Workers[Celery/BullMQ Workers]
+        Workers --> Face[Face Recognition]
+        Workers --> Quality[Quality Scoring]
     end
 
     subgraph Data["💾 Data Layer"]
-        PG[(PostgreSQL 16)]
+        PG[(PostgreSQL 16 + pgvector)]
         Redis[(Redis 7)]
         R2[(Cloudflare R2)]
     end
 
-    subgraph Observability["📊 Observability"]
-        Prometheus[Prometheus]
+    subgraph Observability["📊 Monitoring Stack"]
+        Prom[Prometheus]
         Grafana[Grafana]
         Loki[Loki]
     end
 
-    Clients --> Edge --> Gateway --> Backend
+    Clients --> Gateway --> Backend
+    Backend --> Processing
     Backend --> Data
-    Backend --> Observability
+    Backend & Processing --> Observability
 ```
 
 ## Architecture Layers
@@ -94,17 +97,15 @@ flowchart TB
 - **Runtime**: Python 3.11 + FastAPI + SQLAlchemy
 - **Shared Types**: Generated Pydantic models from TypeScript (`app.shared.*`)
 - **Scaling**: All services KEDA-enabled for production autoscaling
-- **Services** (each independently scalable):
-  - Auth Service (JWT, OAuth, MFA) - scales on auth request rate
-  - Gallery Service (CRUD, sharing) - scales on API requests
-  - Photo Service (upload, processing) - scales on upload queue depth
-  - Album Service (design, export) - scales on export jobs
-  - Client Service (management) - scales on API requests
-  - Booking Service (calendar, scheduling) - scales on booking load
-  - Payment Service (Razorpay, Stripe) - scales on transaction rate
-  - AI Service (Gemini, embeddings) - scales on AI queue depth
-  - Email Service (SendGrid) - scales on email queue
-  - Background Jobs (Celery) - scales on job queue depth
+- **Services** (independently scalable):
+  - **Backend API**: Core multi-tenant logic and RBAC.
+  - **Gallery Service**: Public viewing, Magic Links, and Client Preview.
+  - **Billing Service**: Stripe/Razorpay integration and subscription quotas.
+  - **Upload Service**: Resumable TUS uploads with AES-256 encryption.
+  - **Onboarding Service**: User registration and workspace initialization.
+  - **Invitations Service**: Digital event invitations and RSVP management.
+  - **Notifications Service**: Multi-channel communications (Email/Alerts).
+  - **Background Jobs (Celery/BullMQ)**: Asset processing and AI analysis.
 
 ### 6. Data Layer
 
@@ -463,6 +464,6 @@ For questions about the architecture:
 
 ---
 
-**Version**: 1.2
-**Last Updated**: January 6, 2026
+**Version**: 1.3
+**Last Updated**: January 27, 2026
 **Maintained By**: Engineering Team

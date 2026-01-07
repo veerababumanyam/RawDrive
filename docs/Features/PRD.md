@@ -4,11 +4,11 @@
 
 > Terminology: See [`GLOSSARY.md`](GLOSSARY.md) (canonical terms for Workspace, Asset, Share Link, Trial, etc.).
 
-**Last updated:** 17 Dec 2025  
+**Last updated:** 27 Jan 2026  
 **Owner:** Prasad Manyam  
 **Company:** SWAZ Consultants  
 **Product:** RawDrive  
-**Status:** Draft v2 (consolidated)
+**Status:** Draft v3 (Updated for Microservices)
 
 ---
 
