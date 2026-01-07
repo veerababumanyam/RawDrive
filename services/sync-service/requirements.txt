@@ -1,0 +1,41 @@
+# Sync Service Dependencies
+# RawDrive Live Camera Sync Microservice
+
+# Core
+fastapi>=0.115.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.3
+pydantic-settings>=2.1.0
+
+# Database
+asyncpg>=0.29.0
+
+# Redis
+redis>=5.0.1
+
+# HTTP client (for internal service calls)
+httpx>=0.26.0
+
+# WebSocket
+websockets>=12.0
+
+# JWT Authentication
+PyJWT>=2.8.0
+
+# Utilities
+python-multipart>=0.0.6
+
+# Observability
+structlog>=23.3.0
+prometheus-client>=0.19.0
+
+# Testing
+pytest>=7.4.4
+pytest-asyncio>=0.23.3
+pytest-cov>=4.1.0
+
+# Development
+black>=23.12.1
+isort>=5.13.2
+mypy>=1.8.0
+ruff>=0.1.9

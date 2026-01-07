@@ -1,0 +1,45 @@
+﻿
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] ΓÇ║ tests\e2e\upload-flow.spec.ts:12:5 ΓÇ║ Upload Flow E2E ΓÇ║ should login, create gallery (if needed), encrypt and upload a file
+[1A[2K[chromium] ΓÇ║ tests\e2e\upload-flow.spec.ts:12:5 ΓÇ║ Upload Flow E2E ΓÇ║ should login, create gallery (if needed), encrypt and upload a file
+Navigating to Sign In...
+
+[1A[2KFilling credentials...
+
+[1A[2KWaiting for workspace redirect...
+
+[1A[2KLogin successful!
+
+[1A[2KNo galleries found. Creating new gallery...
+
+[1A[2KNew Gallery button not found, trying direct navigation...
+
+[1A[2KFilling Create Gallery form...
+
+
+[1A[2K  1) [chromium] ΓÇ║ tests\e2e\upload-flow.spec.ts:12:5 ΓÇ║ Upload Flow E2E ΓÇ║ should login, create gallery (if needed), encrypt and upload a file 
+
+    [31mTest timeout of 60000ms exceeded.[39m
+
+    Error: page.waitForSelector: Test timeout of 60000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('form') to be visible[22m
+
+
+      72 |                 // Fill Create Form
+      73 |                 console.log('Filling Create Gallery form...');
+    > 74 |                 await page.waitForSelector('form');
+         |                            ^
+      75 |
+      76 |                 // Title
+      77 |                 const titleInput = page.getByLabel('Gallery Title').or(page.getByPlaceholder('e.g., Johnson Wedding'));
+        at C:\Users\admin\Desktop\RawDrive\frontend\tests\e2e\upload-flow.spec.ts:74:28
+
+    Error Context: test-results\upload-flow-Upload-Flow-E2-a17b3-d-encrypt-and-upload-a-file-chromium\error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] ΓÇ║ tests\e2e\upload-flow.spec.ts:12:5 ΓÇ║ Upload Flow E2E ΓÇ║ should login, create gallery (if needed), encrypt and upload a file 
+
+[36m  Serving HTML report at http://localhost:9323. Press Ctrl+C to quit.[39m

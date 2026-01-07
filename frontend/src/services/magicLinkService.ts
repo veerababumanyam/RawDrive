@@ -107,6 +107,11 @@ export class MagicLinkService {
         response.error.status || 500
       );
     }
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/9ae53fb2-7e05-4977-88b5-8f95a6db3036',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'magicLinkService.ts:createLink',message:'Link created - checking response',data:{has_url:!!response.data?.url,has_public_url:!!response.data?.public_url,has_token:!!response.data?.token,link_id:response.data?.link_id,url_preview:response.data?.url?.substring(0,80),public_url_preview:response.data?.public_url?.substring(0,80)},"timestamp":Date.now(),sessionId:"debug-session",runId:"run1",hypothesisId:"G"})}).catch(()=>{});
+    } catch {}
+    // #endregion
     return response.data!;
   }
 
@@ -199,8 +204,21 @@ export class MagicLinkService {
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/magic-links/${linkId}/qr${query ? `?${query}` : ''}`;
 
-    const response = await fetch(endpoint, {
+    // Get authentication token
+    const { getStoredTokens } = await import('./tokenStorage');
+    const tokens = getStoredTokens();
+    const headers: Record<string, string> = {};
+    if (tokens?.accessToken) {
+      headers['Authorization'] = `Bearer ${tokens.accessToken}`;
+    }
+
+    const { getApiBaseUrl } = await import('./api');
+    const baseUrl = getApiBaseUrl();
+    const url = `${baseUrl}${endpoint}`;
+
+    const response = await fetch(url, {
       method: 'GET',
+      headers,
       credentials: 'include',
     });
 

@@ -3,7 +3,7 @@
   "description": "Add composite indexes for common asset filter combinations (workspace_id, gallery_id, status, quality_tier) to reduce gallery asset listing latency by 20-30%",
   "id": "feature-1767728571188-5hzxpqzb7",
   "steps": [],
-  "status": "verified",
+  "status": "completed",
   "skipTests": true,
   "priority": 1,
   "branchName": "main",

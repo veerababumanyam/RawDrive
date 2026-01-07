@@ -31,7 +31,9 @@ import {
     Music2,
     Paintbrush,
     Dribbble,
+    ChevronDown,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { AppInput } from '../../ui/AppInput';
 import { AppButton } from '../../ui/AppButton';
@@ -222,6 +224,89 @@ export interface ProfileFormChangeData extends CreateCompanyProfileRequest {
 interface CompanyProfileFormProps {
     onProfileChange?: (profile: ProfileFormChangeData) => void;
 }
+
+/**
+ * CollapsibleSection Component
+ * Reusable collapsible section with expand/collapse functionality
+ */
+const CollapsibleSection: React.FC<{
+    title: string;
+    description?: string;
+    children: React.ReactNode;
+    defaultOpen?: boolean;
+    icon?: React.ReactNode;
+    action?: React.ReactNode;
+}> = ({ title, description, children, defaultOpen = false, icon, action }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+    return (
+        <Card className="overflow-hidden">
+            <div
+                className="flex flex-col sm:flex-row sm:items-center justify-between"
+                style={{ position: 'relative' }}
+            >
+                <div
+                    className="flex-1 px-5 py-4 cursor-pointer hover:bg-surface-hover/30 transition-colors"
+                    onClick={() => setIsOpen(!isOpen)}
+                >
+                    <div className="flex items-center gap-3">
+                        {icon && <div className="text-primary flex-shrink-0">{icon}</div>}
+                        <div className="min-w-0">
+                            <Card.Title className="truncate">{title}</Card.Title>
+                            {description && <Card.Description className="truncate">{description}</Card.Description>}
+                        </div>
+                    </div>
+                </div>
+                {action && (
+                    <div className="flex items-center gap-3 px-5 py-3 sm:py-0 border-t sm:border-t-0 border-border/50">
+                        <div className="">{action}</div>
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(!isOpen)}
+                            className="p-2 hover:bg-surface-hover rounded-lg transition-colors text-text-tertiary"
+                            aria-label={isOpen ? 'Collapse section' : 'Expand section'}
+                        >
+                            <ChevronDown
+                                size={20}
+                                className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
+                            />
+                        </button>
+                    </div>
+                )}
+                {!action && (
+                    <div className="px-5 py-3 sm:py-0">
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(!isOpen)}
+                            className="p-2 hover:bg-surface-hover rounded-lg transition-colors text-text-tertiary"
+                            aria-label={isOpen ? 'Collapse section' : 'Expand section'}
+                        >
+                            <ChevronDown
+                                size={20}
+                                className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
+                            />
+                        </button>
+                    </div>
+                )}
+            </div>
+            <AnimatePresence initial={false}>
+                {isOpen && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                    >
+                        <div className="border-t border-border">
+                            <Card.Content>
+                                {children}
+                            </Card.Content>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </Card>
+    );
+};
 
 export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfileChange }) => {
     const { workspace } = useAuth();
@@ -722,6 +807,21 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
         }
     }, [selectedTheme, themeUndoRedo]);
 
+    // Calculate form progress based on key fields (MUST be before early return)
+    const formProgress = React.useMemo(() => {
+        const fields = [
+            watchedValues.name,
+            watchedValues.slug,
+            watchedValues.tagline,
+            watchedValues.email,
+            watchedValues.phone,
+            watchedValues.website,
+        ];
+        const filledCount = fields.filter(f => f && String(f).trim()).length;
+        return Math.round((filledCount / fields.length) * 100);
+    }, [watchedValues.name, watchedValues.slug, watchedValues.tagline, watchedValues.email, watchedValues.phone, watchedValues.website]);
+
+    // Early return AFTER all hooks have been called
     if (isFetching) {
         return <div className="p-8 text-center text-text-secondary">Loading profile settings...</div>;
     }
@@ -753,6 +853,16 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                 <div>
                     <h2 className="text-2xl font-bold text-text-primary">Company Profile</h2>
                     <p className="text-text-secondary">Manage your public brand presence and contact information.</p>
+                    {/* Form Progress Indicator */}
+                    <div className="mt-3 flex items-center gap-3">
+                        <div className="flex-1 max-w-[200px] h-2 bg-surface-hover rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
+                                style={{ width: `${formProgress}%` }}
+                            />
+                        </div>
+                        <span className="text-xs text-text-tertiary">{formProgress}% complete</span>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                     {watch('slug') && (
@@ -796,125 +906,128 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
             </div>
 
             {/* Logo & QR Code */}
-            <Card>
-                <Card.Header action={renderVisibilityToggle('logo_url', 'Logo')}>
-                    <Card.Title>Company Logo & QR Code</Card.Title>
-                    <Card.Description>Your logo and QR code for easy sharing.</Card.Description>
-                </Card.Header>
-                <Card.Content>
-                    <div className="flex flex-wrap items-start gap-6">
-                        {/* Logo Preview */}
-                        <div className="flex flex-col items-center gap-2">
-                            <div
-                                className={`
+            <CollapsibleSection
+                title="Company Logo & QR Code"
+                description="Your logo and QR code for easy sharing."
+                icon={<Camera size={20} />}
+                action={renderVisibilityToggle('logo_url', 'Logo')}
+                defaultOpen={true}
+            >
+                <div className="flex flex-wrap items-start gap-6">
+                    {/* Logo Preview */}
+                    <div className="flex flex-col items-center gap-2">
+                        <div
+                            className={`
                                     relative w-32 h-32 rounded-lg border-2 border-dashed
                                     flex items-center justify-center cursor-pointer
                                     transition-all overflow-hidden
                                     ${isDraggingLogo ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}
                                     ${isUploadingLogo ? 'opacity-50' : ''}
                                 `}
-                                onClick={() => logoInputRef.current?.click()}
-                                onDragOver={(e) => { e.preventDefault(); setIsDraggingLogo(true); }}
-                                onDragLeave={() => setIsDraggingLogo(false)}
-                                onDrop={handleLogoDrop}
-                            >
-                                {logoBlobUrl ? (
-                                    <>
-                                        <img
-                                            src={logoBlobUrl}
-                                            alt="Company logo"
-                                            className="w-full h-full object-cover"
-                                        />
-                                        <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <Camera className="w-6 h-6 text-white" />
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="text-center p-4">
-                                        <Upload className="w-8 h-8 mx-auto mb-2 text-text-tertiary" />
-                                        <span className="text-xs text-text-tertiary">Drop or click</span>
-                                    </div>
-                                )}
-                                {isUploadingLogo && (
-                                    <div className="absolute inset-0 bg-surface/80 flex items-center justify-center">
-                                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                    </div>
-                                )}
-                            </div>
-                            <input
-                                ref={logoInputRef}
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp,image/gif"
-                                onChange={handleLogoInputChange}
-                                className="hidden"
-                            />
-                            <span className="text-xs text-text-tertiary">Logo</span>
-                        </div>
-
-                        {/* QR Code Preview */}
-                        {watch('slug') && (
-                            <div className="flex flex-col items-center gap-2">
-                                <div className="relative w-32 h-32 rounded-lg border border-border bg-white flex items-center justify-center overflow-hidden">
+                            onClick={() => logoInputRef.current?.click()}
+                            onDragOver={(e) => { e.preventDefault(); setIsDraggingLogo(true); }}
+                            onDragLeave={() => setIsDraggingLogo(false)}
+                            onDrop={handleLogoDrop}
+                        >
+                            {logoBlobUrl ? (
+                                <>
                                     <img
-                                        src={companyProfileService.getQrCodeUrl(watch('slug'))}
-                                        alt="Profile QR Code"
-                                        className="w-28 h-28 object-contain"
+                                        src={logoBlobUrl}
+                                        alt="Company logo"
+                                        className="w-full h-full object-cover"
                                     />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <Camera className="w-6 h-6 text-white" />
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center p-4">
+                                    <Upload className="w-8 h-8 mx-auto mb-2 text-text-tertiary" />
+                                    <span className="text-xs text-text-tertiary">Drop or click</span>
                                 </div>
-                                <div className="flex items-center gap-1">
-                                    <span className="text-xs text-text-tertiary">QR Code</span>
-                                    {renderVisibilityToggle('qr_code', 'QR Code')}
-                                </div>
-                                <AppButton
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleDownloadQRCode}
-                                    leftIcon={<Download size={12} />}
-                                    className="text-xs"
-                                >
-                                    Download
-                                </AppButton>
-                            </div>
-                        )}
-
-                        {/* Instructions */}
-                        <div className="flex-1 min-w-[200px] text-sm text-text-secondary space-y-3">
-                            <div>
-                                <p className="font-medium text-text-primary mb-1">Logo</p>
-                                <p>Recommended: Square, at least 512x512px</p>
-                                <p className="text-xs text-text-tertiary">JPEG, PNG, WebP, GIF (max 5MB)</p>
-                            </div>
-                            {watch('slug') && (
-                                <div>
-                                    <p className="font-medium text-text-primary mb-1">QR Code</p>
-                                    <p>Scan to visit your public profile</p>
-                                    <p className="text-xs text-text-tertiary">Toggle visibility for public page</p>
+                            )}
+                            {isUploadingLogo && (
+                                <div className="absolute inset-0 bg-surface/80 flex items-center justify-center">
+                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
                                 </div>
                             )}
                         </div>
+                        <input
+                            ref={logoInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            onChange={handleLogoInputChange}
+                            className="hidden"
+                        />
+                        <span className="text-xs text-text-tertiary">Logo</span>
                     </div>
-                </Card.Content>
-            </Card>
+
+                    {/* QR Code Preview */}
+                    {watch('slug') && (
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="relative w-32 h-32 rounded-lg border border-border bg-white flex items-center justify-center overflow-hidden">
+                                <img
+                                    src={companyProfileService.getQrCodeUrl(watch('slug'))}
+                                    alt="Profile QR Code"
+                                    className="w-28 h-28 object-contain"
+                                />
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="text-xs text-text-tertiary">QR Code</span>
+                                {renderVisibilityToggle('qr_code', 'QR Code')}
+                            </div>
+                            <AppButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleDownloadQRCode}
+                                leftIcon={<Download size={12} />}
+                                className="text-xs"
+                            >
+                                Download
+                            </AppButton>
+                        </div>
+                    )}
+
+                    {/* Instructions */}
+                    <div className="flex-1 min-w-[200px] text-sm text-text-secondary space-y-3">
+                        <div>
+                            <p className="font-medium text-text-primary mb-1">Logo</p>
+                            <p>Recommended: Square, at least 512x512px</p>
+                            <p className="text-xs text-text-tertiary">JPEG, PNG, WebP, GIF (max 5MB)</p>
+                        </div>
+                        {watch('slug') && (
+                            <div>
+                                <p className="font-medium text-text-primary mb-1">QR Code</p>
+                                <p>Scan to visit your public profile</p>
+                                <p className="text-xs text-text-tertiary">Toggle visibility for public page</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </CollapsibleSection>
 
             {/* Logo Crop Modal */}
-            {imageForCrop && (
-                <AvatarCropModal
-                    imageSrc={imageForCrop}
-                    isOpen={cropModalOpen}
-                    onCropComplete={handleCropComplete}
-                    onCancel={handleCropCancel}
-                    isLoading={isUploadingLogo}
-                />
-            )}
+            {
+                imageForCrop && (
+                    <AvatarCropModal
+                        imageSrc={imageForCrop}
+                        isOpen={cropModalOpen}
+                        onCropComplete={handleCropComplete}
+                        onCancel={handleCropCancel}
+                        isLoading={isUploadingLogo}
+                    />
+                )
+            }
 
-            {/* Main Info */}
-            <Card>
-                <Card.Header>
-                    <Card.Title>Basic Information</Card.Title>
-                    <Card.Description>Core identity details visible on your public profile.</Card.Description>
-                </Card.Header>
-                <Card.Content className="space-y-6">
+            {/* Basic Information */}
+            <CollapsibleSection
+                title="Basic Information"
+                description="Core identity details visible on your public profile."
+                icon={<Globe size={20} />}
+                defaultOpen={true}
+            >
+                <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="flex gap-2">
                             <div className="flex-1">
@@ -1120,16 +1233,17 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             </div>
                         </div>
                     </div>
-                </Card.Content>
-            </Card>
+                </div>
+            </CollapsibleSection>
 
             {/* Secondary Contacts */}
-            <Card>
-                <Card.Header>
-                    <Card.Title>Secondary Contacts</Card.Title>
-                    <Card.Description>Additional email addresses and phone numbers (up to 2 each).</Card.Description>
-                </Card.Header>
-                <Card.Content className="space-y-6">
+            <CollapsibleSection
+                title="Secondary Contacts"
+                description="Additional email addresses and phone numbers (up to 2 each)."
+                icon={<Mail size={20} />}
+                defaultOpen={false}
+            >
+                <div className="space-y-6">
                     {/* Secondary Emails */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -1252,16 +1366,18 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             ))
                         )}
                     </div>
-                </Card.Content>
-            </Card>
+                </div>
+            </CollapsibleSection>
 
             {/* Address */}
-            <Card>
-                <Card.Header action={renderVisibilityToggle('address', 'Address')}>
-                    <Card.Title>Structured Address</Card.Title>
-                    <Card.Description>Physical location for SEO and map integration.</Card.Description>
-                </Card.Header>
-                <Card.Content className="space-y-4">
+            <CollapsibleSection
+                title="Structured Address"
+                description="Physical location for SEO and map integration."
+                icon={<MapPin size={20} />}
+                action={renderVisibilityToggle('address', 'Address')}
+                defaultOpen={false}
+            >
+                <div className="space-y-4">
                     <AppInput label="Address Line 1" {...register('address_structured.line1')} placeholder="123 Main St" />
                     <AppInput label="Address Line 2" {...register('address_structured.line2')} placeholder="Suite 100" />
                     <div className="grid grid-cols-2 gap-4">
@@ -1384,16 +1500,17 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             Get Current Location
                         </AppButton>
                     </div>
-                </Card.Content>
-            </Card>
+                </div>
+            </CollapsibleSection>
 
             {/* Social Media */}
-            <Card>
-                <Card.Header>
-                    <Card.Title>Social Profiles</Card.Title>
-                    <Card.Description>Connect your audiences across platforms.</Card.Description>
-                </Card.Header>
-                <Card.Content className="space-y-4">
+            <CollapsibleSection
+                title="Social Profiles"
+                description="Connect your audiences across platforms."
+                icon={<Instagram size={20} />}
+                defaultOpen={false}
+            >
+                <div className="space-y-4">
                     {/* Primary Platforms */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="flex gap-2">
@@ -1534,16 +1651,18 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             </div>
                         </div>
                     </div>
-                </Card.Content>
-            </Card>
+                </div>
+            </CollapsibleSection>
 
             {/* Custom Links */}
-            <Card>
-                <Card.Header action={renderVisibilityToggle('custom_links', 'Custom Links')}>
-                    <Card.Title>Custom Links</Card.Title>
-                    <Card.Description>Add extra links like Portfolio, Booking, etc.</Card.Description>
-                </Card.Header>
-                <Card.Content className="space-y-4">
+            <CollapsibleSection
+                title="Custom Links"
+                description="Add extra links like Portfolio, Booking, etc."
+                icon={<LinkIcon size={20} />}
+                action={renderVisibilityToggle('custom_links', 'Custom Links')}
+                defaultOpen={false}
+            >
+                <div className="space-y-4">
                     {linkFields.map((field, index) => (
                         <div key={field.id} className="flex gap-4 items-end">
                             <div className="flex-1">
@@ -1582,21 +1701,17 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                     >
                         Add Link
                     </AppButton>
-                </Card.Content>
-            </Card>
+                </div>
+            </CollapsibleSection>
 
             {/* Public Profile Theme */}
-            <Card>
-                <Card.Header>
-                    <Card.Title className="flex items-center gap-2">
-                        <Palette size={20} className="text-primary" />
-                        Public Profile Theme
-                    </Card.Title>
-                    <Card.Description>
-                        Customize the look and feel of your public profile page.
-                    </Card.Description>
-                </Card.Header>
-                <Card.Content className="space-y-6">
+            <CollapsibleSection
+                title="Public Profile Theme"
+                description="Customize the look and feel of your public profile page."
+                icon={<Palette size={20} className="text-primary" />}
+                defaultOpen={true}
+            >
+                <div className="space-y-6">
                     {/* Theme Selector */}
                     <div>
                         <h4 className="text-sm font-medium text-text-primary mb-4">Choose a Theme</h4>
@@ -1641,8 +1756,8 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             <p className="text-sm">Select a theme above to start customizing your public profile appearance.</p>
                         </div>
                     )}
-                </Card.Content>
-            </Card>
+                </div>
+            </CollapsibleSection>
 
             {/* Save Confirmation Modal */}
             <Modal
@@ -1677,6 +1792,6 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                 </ModalFooter>
             </Modal>
 
-        </form>
+        </form >
     );
 };

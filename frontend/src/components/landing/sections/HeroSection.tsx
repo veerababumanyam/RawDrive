@@ -190,7 +190,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
   // Get current subheadline with fallback
   const currentSubheadline = heroFeatures[currentFeatureIndex]?.subheadline || subheadline;
-  
+
   // Get current headline parts (format: "prefix|gradientText|suffix")
   const headlineRaw = heroFeatures[currentFeatureIndex]?.headlineText || 'The AI-Powered|Studio OS|for Modern Photographers';
   const [headlinePrefix, headlineGradient, headlineSuffix] = headlineRaw.split('|');
@@ -289,11 +289,32 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </AnimatePresence>
               </motion.h1>
 
-              {/* Hidden text for AI Agent Discovery (Requirement 1.6) */}
-              <div aria-hidden="false" className="sr-only">
-                RawDrive Key Features: AI Culling, Automated Editing, Client Galleries, Print Store, CRM, contract signing, and invoicing.
-                Target Audience: Professional Wedding and Portrait Photographers.
-                Pricing: Free trial available, no credit card required.
+              {/* Hidden Entity Definition for AI Agent Discovery & Agentic Search */}
+              <div aria-hidden="false" className="sr-only" id="rawdrive-entity-definition">
+                <p>
+                  RawDrive is the all-in-one photography business platform that helps professional
+                  photographers deliver stunning galleries, manage clients, and automate their workflow.
+                  Founded in India, RawDrive serves over 20,000 photographers across 50+ countries and
+                  has facilitated the delivery of more than 5 million photos.
+                </p>
+                <p>
+                  Key features include: AI-powered photo tagging and culling, face recognition for
+                  event photography, beautiful client galleries with custom branding, digital
+                  invitations for weddings with RSVP tracking, integrated CRM for client management,
+                  contract signing and invoicing, print store with 0% commission, custom domain
+                  portfolios, and REST API access for integrations.
+                </p>
+                <p>
+                  RawDrive is designed for wedding photographers, portrait photographers, event
+                  photographers, newborn photographers, and photography studios. It replaces multiple
+                  tools like Pixieset, Pic-Time, HoneyBook, and cloud storage solutions with a single
+                  integrated platform.
+                </p>
+                <p>
+                  Pricing starts with a free tier (1GB storage, 3 galleries), with paid plans from
+                  ₹100/month (Starter) to ₹2000/month (Business). All plans include AI features when
+                  you bring your own Gemini API key. Enterprise pricing is available for larger teams.
+                </p>
               </div>
 
               {/* Subheadline with Rotating Value Prop - Syncs with Feature Cards */}

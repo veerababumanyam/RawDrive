@@ -307,9 +307,8 @@ const SharedDashboardPage: React.FC = () => {
           <div className="flex items-center gap-1">
             <Clock size={14} className={row.status === 'expired' ? 'text-warning' : 'text-text-tertiary'} />
             <span
-              className={`text-sm ${
-                row.status === 'expired' ? 'text-warning' : 'text-text-secondary'
-              }`}
+              className={`text-sm ${row.status === 'expired' ? 'text-warning' : 'text-text-secondary'
+                }`}
             >
               {sharedService.formatExpiration(row.expires_at)}
             </span>
@@ -336,17 +335,19 @@ const SharedDashboardPage: React.FC = () => {
         width: '80px',
         cell: (_, row) => (
           <div className="flex items-center justify-end gap-1">
-            <a
-              href={`/g/${row.gallery_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!row.gallery_id) return;
+                // Navigate to authenticated preview - works even if not published
+                window.open(`/workspace/galleries/${row.gallery_id}/preview`, '_blank');
+              }}
               className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-primary transition-colors"
-              aria-label="Open gallery"
-              title="Open gallery"
+              aria-label="View as Client"
+              title="View as Client"
             >
               <ExternalLink size={16} />
-            </a>
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -411,8 +412,9 @@ const SharedDashboardPage: React.FC = () => {
             onClick={() => handleExport('csv')}
             leftIcon={<Download size={18} />}
             disabled={isExporting}
+            title="Export shared links data as CSV for compliance and reporting"
           >
-            {isExporting ? 'Exporting...' : 'Export'}
+            {isExporting ? 'Exporting...' : 'Export CSV'}
           </AppButton>
           <AppButton
             variant="destructive"
@@ -529,15 +531,15 @@ const SharedDashboardPage: React.FC = () => {
               transition-all duration-200
               min-h-[44px]
               ${hideRevoked
-                ? 'border-primary/30 bg-primary/5 text-primary'
-                : 'border-white/20 dark:border-white/10 text-text-secondary hover:text-text-primary hover:border-white/30'}
+                ? 'border-warning/30 bg-warning/5 text-warning'
+                : 'border-primary/30 bg-primary/5 text-primary'}
             `}
             aria-label={hideRevoked ? 'Show revoked links' : 'Hide revoked links'}
-            title={hideRevoked ? 'Revoked links are hidden (click to show)' : 'Click to hide revoked links'}
+            title={hideRevoked ? 'Click to show revoked links' : 'Click to hide revoked links'}
           >
             {hideRevoked ? <EyeOff size={16} /> : <Eye size={16} />}
             <span className="hidden sm:inline text-sm">
-              {hideRevoked ? 'Revoked Hidden' : 'Show All'}
+              {hideRevoked ? 'Show Revoked' : 'Hide Revoked'}
             </span>
           </button>
 
@@ -567,7 +569,7 @@ const SharedDashboardPage: React.FC = () => {
           <div className="flex items-center gap-2 text-sm text-text-secondary">
             <span>{meta.total} total links</span>
             <span className="text-text-tertiary">•</span>
-            <span className="text-success">{meta.active_count} active</span>
+            <span className="text-success">{meta.active_count} active ({meta.total > 0 ? Math.round((meta.active_count / meta.total) * 100) : 0}%)</span>
             <span className="text-text-tertiary">•</span>
             <span className="text-warning">{meta.expired_count} expired</span>
             <span className="text-text-tertiary">•</span>

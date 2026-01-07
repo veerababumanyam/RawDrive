@@ -973,7 +973,7 @@ class UploadService:
 
             # Update session state
             await conn.execute(
-                "UPDATE upload_sessions SET state = 'processing' WHERE upload_id = $1",
+                "UPDATE upload_sessions SET state = 'verifying' WHERE upload_id = $1",
                 upload_id,
             )
 
@@ -1076,14 +1076,13 @@ class UploadService:
                 await conn.execute(
                     """
                     INSERT INTO asset_encryption (
-                        asset_id, workspace_id, variant, key_version, iv, auth_tag, algorithm
+                        asset_id, workspace_id, variant, key_version, iv, auth_tag
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    VALUES ($1, $2, $3, $4, $5, $6)
                     ON CONFLICT (asset_id, variant) DO UPDATE SET
                         key_version = EXCLUDED.key_version,
                         iv = EXCLUDED.iv,
                         auth_tag = EXCLUDED.auth_tag,
-                        algorithm = EXCLUDED.algorithm,
                         encrypted_at = NOW()
                     """,
                     asset_id,
@@ -1092,7 +1091,6 @@ class UploadService:
                     key_version,
                     base64.b64encode(iv).decode("utf-8"),
                     base64.b64encode(hmac_tag).decode("utf-8"),
-                    STREAMING_ALGORITHM,
                 )
 
             logger.info(

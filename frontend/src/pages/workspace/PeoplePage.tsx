@@ -326,7 +326,7 @@ const PeoplePage: React.FC = () => {
                 size="sm"
                 onClick={() => fetchGroups(true)}
                 disabled={refreshing}
-                title="Refresh"
+                title="Refresh people detection list"
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               </AppButton>
@@ -335,22 +335,20 @@ const PeoplePage: React.FC = () => {
               <div className="flex items-center gap-1 p-1 bg-surface-hover rounded-lg">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === 'grid'
+                  className={`p-2 rounded-md transition-colors ${viewMode === 'grid'
                       ? 'bg-surface text-primary shadow-sm'
                       : 'text-text-secondary hover:text-text-primary'
-                  }`}
+                    }`}
                   title="Grid view"
                 >
                   <Grid size={18} />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === 'list'
+                  className={`p-2 rounded-md transition-colors ${viewMode === 'list'
                       ? 'bg-surface text-primary shadow-sm'
                       : 'text-text-secondary hover:text-text-primary'
-                  }`}
+                    }`}
                   title="List view"
                 >
                   <List size={18} />
@@ -448,17 +446,24 @@ const PeoplePage: React.FC = () => {
                 <h3 className="text-lg font-medium text-text-primary mb-2">
                   No people detected yet
                 </h3>
-                <p className="text-center max-w-md">
-                  Face detection runs automatically when photos are uploaded.
-                  Upload some photos with faces to see them appear here.
+                <p className="text-center max-w-md text-text-secondary">
+                  Our AI automatically identifies and groups faces from your photos in real-time.
+                  Upload photos with faces to your galleries, and they'll magically appear here for lightning-fast searching.
                 </p>
-                <AppButton
-                  variant="primary"
-                  className="mt-4"
-                  onClick={() => navigate('/workspace/galleries')}
-                >
-                  Go to Galleries
-                </AppButton>
+                <div className="mt-4 flex flex-col items-center gap-2">
+                  <AppButton
+                    variant="primary"
+                    onClick={() => navigate('/workspace/galleries')}
+                  >
+                    Go to Galleries
+                  </AppButton>
+                  <button
+                    className="text-xs text-primary hover:underline"
+                    onClick={() => window.open('https://docs.rawdrive.com/features/face-detection', '_blank')}
+                  >
+                    Learn more about face detection & privacy
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -759,28 +764,25 @@ const PersonCard: React.FC<PersonCardProps> = ({
   return (
     <motion.div
       variants={staggerItem}
-      className={`group relative flex flex-col items-center p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${
-        isSelected
+      className={`group relative flex flex-col items-center p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${isSelected
           ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
           : 'bg-surface hover:bg-surface-hover border-border/50 hover:border-primary/30 hover:shadow-lg'
-      }`}
+        }`}
       onClick={handleCardClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Selection checkbox - top left, appears on hover or when selected */}
       <div
-        className={`absolute top-2 left-2 z-10 transition-opacity duration-200 ${
-          isSelected || isHovered ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`absolute top-2 left-2 z-10 transition-opacity duration-200 ${isSelected || isHovered ? 'opacity-100' : 'opacity-0'
+          }`}
       >
         <button
           onClick={handleCheckboxClick}
-          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shadow-sm ${
-            isSelected
+          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shadow-sm ${isSelected
               ? 'bg-primary text-white'
               : 'bg-surface/90 backdrop-blur-sm border border-border hover:border-primary hover:bg-surface'
-          }`}
+            }`}
           title={isSelected ? 'Deselect' : 'Select'}
         >
           {isSelected ? <Check className="w-4 h-4" /> : <CheckSquare className="w-4 h-4 text-text-secondary" />}
@@ -788,11 +790,10 @@ const PersonCard: React.FC<PersonCardProps> = ({
       </div>
 
       {/* Thumbnail */}
-      <div className={`relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 mb-3 ring-2 transition-all ${
-        isSelected
+      <div className={`relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 mb-3 ring-2 transition-all ${isSelected
           ? 'ring-primary'
           : 'ring-border/30 group-hover:ring-primary/30'
-      }`}>
+        }`}>
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
@@ -838,11 +839,10 @@ const PersonCard: React.FC<PersonCardProps> = ({
         </div>
       ) : (
         <span
-          className={`text-sm truncate max-w-full px-2 text-center ${
-            isNamed
+          className={`text-sm truncate max-w-full px-2 text-center ${isNamed
               ? 'font-medium text-text-primary'
               : 'text-text-tertiary italic'
-          }`}
+            }`}
           onDoubleClick={(e) => {
             e.stopPropagation();
             onStartEdit(group.id, isNamed ? displayName : '');
@@ -912,28 +912,25 @@ const PersonListItem: React.FC<PersonListItemProps> = ({
   return (
     <motion.div
       variants={staggerItem}
-      className={`group flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
-        isSelected
+      className={`group flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-200 ${isSelected
           ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
           : 'bg-surface hover:bg-surface-hover border-border/50 hover:border-primary/30'
-      }`}
+        }`}
       onClick={handleRowClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Selection checkbox - always visible in list view */}
       <div
-        className={`flex-shrink-0 transition-opacity duration-200 ${
-          isSelected || isHovered ? 'opacity-100' : 'opacity-40'
-        }`}
+        className={`flex-shrink-0 transition-opacity duration-200 ${isSelected || isHovered ? 'opacity-100' : 'opacity-40'
+          }`}
       >
         <button
           onClick={handleCheckboxClick}
-          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
-            isSelected
+          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${isSelected
               ? 'bg-primary text-white'
               : 'bg-surface border border-border hover:border-primary'
-          }`}
+            }`}
           title={isSelected ? 'Deselect' : 'Select'}
         >
           {isSelected ? <Check className="w-4 h-4" /> : <CheckSquare className="w-4 h-4 text-text-secondary" />}
@@ -941,11 +938,10 @@ const PersonListItem: React.FC<PersonListItemProps> = ({
       </div>
 
       {/* Thumbnail */}
-      <div className={`flex-shrink-0 w-14 h-14 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 ring-2 transition-all ${
-        isSelected
+      <div className={`flex-shrink-0 w-14 h-14 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 ring-2 transition-all ${isSelected
           ? 'ring-primary'
           : 'ring-border/30 group-hover:ring-primary/30'
-      }`}>
+        }`}>
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
@@ -993,11 +989,10 @@ const PersonListItem: React.FC<PersonListItemProps> = ({
         ) : (
           <>
             <h3
-              className={`truncate ${
-                isNamed
+              className={`truncate ${isNamed
                   ? 'font-medium text-text-primary'
                   : 'text-text-tertiary italic'
-              }`}
+                }`}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 onStartEdit(group.id, isNamed ? displayName : '');

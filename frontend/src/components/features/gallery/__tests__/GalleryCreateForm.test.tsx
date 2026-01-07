@@ -11,6 +11,7 @@ import userEvent from '@testing-library/user-event';
 import { GalleryCreateForm } from '../GalleryCreateForm';
 import { AuthProvider } from '../../../../contexts/AuthContext';
 import { ToastProvider } from '../../../ui/Toast';
+import '@testing-library/jest-dom';
 
 // Mock the clients service used by ClientCombobox
 vi.mock('../../../../services/clientService', () => ({
@@ -59,7 +60,7 @@ describe('GalleryCreateForm', () => {
     // Type something to enable button, then clear it
     await user.type(titleInput, 'Test');
     await user.clear(titleInput);
-    
+
     // Button should still be disabled after clearing
     expect(submitButton).toBeDisabled();
     expect(mockOnSubmit).not.toHaveBeenCalled();
@@ -74,7 +75,7 @@ describe('GalleryCreateForm', () => {
 
     // Enter only whitespace - button should remain disabled
     await user.type(titleInput, '   \t\n   ');
-    
+
     // Button should be disabled because trimmed value is empty
     expect(submitButton).toBeDisabled();
     expect(mockOnSubmit).not.toHaveBeenCalled();
@@ -91,10 +92,10 @@ describe('GalleryCreateForm', () => {
     const longTitle = 'a'.repeat(256);
     await user.clear(titleInput);
     await user.type(titleInput, longTitle);
-    
+
     // Button should be enabled
     expect(submitButton).not.toBeDisabled();
-    
+
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -208,12 +209,13 @@ describe('GalleryCreateForm', () => {
 
     // Enter description longer than 1000 chars
     const longDescription = 'a'.repeat(1001);
-    await user.type(descriptionInput, longDescription);
-    
+    await user.click(descriptionInput);
+    await user.paste(longDescription);
+
     // Also need a valid title
     const titleInput = screen.getByLabelText(/gallery title/i);
     await user.type(titleInput, 'Test Gallery');
-    
+
     await user.click(submitButton);
 
     await waitFor(() => {

@@ -1,0 +1,43 @@
+# Traefik routing configuration for client-service
+# Priority: 138 (between upload-service 135 and gallery-service 140)
+
+http:
+  routers:
+    client-service-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/workspaces/{workspace_id}/clients`)"
+      entryPoints:
+        - websecure
+      service: client-service
+      middlewares:
+        - rate-limit-clients
+        - security-headers
+        - cors-headers
+      priority: 138
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    client-service:
+      loadBalancer:
+        servers:
+          - url: "http://client-service:8007"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+          scheme: http
+        sticky:
+          cookie:
+            name: rawdrive_client_service
+            secure: true
+            httpOnly: true
+            sameSite: strict
+
+  middlewares:
+    rate-limit-clients:
+      rateLimit:
+        average: 100
+        period: 1m
+        burst: 50
+        sourceCriterion:
+          requestHeaderName: X-Forwarded-For

@@ -5,7 +5,7 @@ Previously, some owner roles were created with only billing:write,
 which caused 403 errors when fetching subscription status.
 
 Revision ID: 0050
-Revises: 0049
+Revises: 0049b
 Create Date: 2025-12-28
 """
 

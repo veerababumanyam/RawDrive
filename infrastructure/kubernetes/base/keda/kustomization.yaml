@@ -6,3 +6,4 @@ resources:
   - scaledobjects.yaml
   - gallery-scaledobject.yaml
   - billing-scaledobject.yaml
+  - notifications-scaledobject.yaml

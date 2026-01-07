@@ -123,7 +123,7 @@ const getActivityGradient = (type: ActivityTypeEnum) => {
 const DashboardPage = () => {
     const navigate = useNavigate();
     const { t } = useTranslation(['dashboard', 'common']);
-    const { workspace } = useAuth();
+    const { workspace, user } = useAuth();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [recentGalleries, setRecentGalleries] = useState<GalleryListItem[]>([]);
     const [recentClients, setRecentClients] = useState<ClientListItem[]>([]);
@@ -195,8 +195,8 @@ const DashboardPage = () => {
             id: 'galleries',
             label: t('stats.totalGalleries'),
             value: stats?.galleries || 0,
-            change: '+0',
-            trend: 'neutral',
+            change: stats?.galleries_change || '+0',
+            trend: stats?.galleries_change && parseFloat(stats.galleries_change) > 0 ? 'up' : 'neutral',
             icon: LayoutGrid,
             gradient: 'from-violet-500 to-purple-600',
         },
@@ -204,8 +204,8 @@ const DashboardPage = () => {
             id: 'photos',
             label: t('stats.totalPhotos'),
             value: stats?.photos || 0,
-            change: '+0',
-            trend: 'neutral',
+            change: stats?.photos_change || '+0',
+            trend: stats?.photos_change && parseFloat(stats.photos_change) > 0 ? 'up' : 'neutral',
             icon: Image,
             gradient: 'from-blue-500 to-cyan-500',
         },
@@ -213,8 +213,8 @@ const DashboardPage = () => {
             id: 'clients',
             label: t('stats.totalClients'),
             value: stats?.clients || 0,
-            change: '+0',
-            trend: 'neutral',
+            change: stats?.clients_change || '+0',
+            trend: stats?.clients_change && parseFloat(stats.clients_change) > 0 ? 'up' : 'neutral',
             icon: Users,
             gradient: 'from-emerald-500 to-teal-500',
         },
@@ -222,8 +222,8 @@ const DashboardPage = () => {
             id: 'views',
             label: t('stats.views'),
             value: stats?.views || 0,
-            change: '+0%',
-            trend: 'neutral',
+            change: stats?.views_change || '+0%',
+            trend: stats?.views_change && parseFloat(stats.views_change) > 0 ? 'up' : 'neutral',
             icon: Eye,
             gradient: 'from-amber-500 to-orange-500',
         },
@@ -245,10 +245,10 @@ const DashboardPage = () => {
                     <div className="flex items-center justify-between h-16">
                         <div className="flex-1 min-w-0">
                             <h1 className="text-xl sm:text-2xl font-bold text-gradient">
-                                {t('title')}
+                                {user?.displayName ? `Welcome back, ${user.displayName.split(' ')[0]}!` : t('title')}
                             </h1>
                             <p className="text-sm text-text-secondary hidden sm:block mt-0.5">
-                                {t('welcomeGeneric')}
+                                {user?.displayName ? "Here's what's happening in your workspace today." : t('welcomeGeneric')}
                             </p>
                         </div>
                         <button
@@ -283,6 +283,12 @@ const DashboardPage = () => {
                                         <div className={`icon-container icon-container-lg rounded-xl bg-gradient-to-br ${stat.gradient} shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300`}>
                                             <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                                         </div>
+                                        {stat.change && stat.change !== '+0' && stat.change !== '+0%' && (
+                                            <div className={`flex items-center gap-0.5 text-xs font-bold ${stat.trend === 'up' ? 'text-success' : 'text-text-tertiary'}`}>
+                                                {stat.trend === 'up' && <TrendingUp size={12} />}
+                                                {stat.change}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div>
@@ -413,7 +419,10 @@ const DashboardPage = () => {
                                         <span className="text-xs text-text-tertiary font-medium">Growth</span>
                                     </div>
                                     <div className="text-xl sm:text-2xl font-bold text-text-primary group-hover:scale-105 transition-transform origin-left">
-                                        {clientAnalytics.summary.growth_rate_percent.toFixed(1)}%
+                                        {clientAnalytics.summary.growth_rate_percent > 0
+                                            ? `${clientAnalytics.summary.growth_rate_percent.toFixed(1)}%`
+                                            : <span className="text-sm font-normal text-text-tertiary">No data yet</span>
+                                        }
                                     </div>
                                 </div>
                             </div>
@@ -555,18 +564,17 @@ const DashboardPage = () => {
                                                 >
                                                     <Edit size={18} />
                                                 </button>
-                                                {gallery.status === 'published' && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            window.open(`/g/${gallery.gallery_id}`, '_blank');
-                                                        }}
-                                                        className="p-2 rounded-xl glass-list-item text-text-tertiary hover:text-accent transition-all hover:scale-110"
-                                                        aria-label="View"
-                                                    >
-                                                        <ExternalLink size={18} />
-                                                    </button>
-                                                )}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        // Navigate to authenticated preview - works even if not published
+                                                        window.open(`/workspace/galleries/${gallery.gallery_id}/preview`, '_blank');
+                                                    }}
+                                                    className="p-2 rounded-xl glass-list-item text-text-tertiary hover:text-accent transition-all hover:scale-110"
+                                                    aria-label="View as Client"
+                                                >
+                                                    <ExternalLink size={18} />
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -651,7 +659,7 @@ const DashboardPage = () => {
                                                         {' '}
                                                         <span className="text-text-secondary">
                                                             {activity.description?.replace(activity.actor.name, '').trim() ||
-                                                             activity.activity_type.replace(/_/g, ' ')}
+                                                                activity.activity_type.replace(/_/g, ' ')}
                                                         </span>
                                                     </p>
                                                     <p className="text-xs text-text-tertiary mt-0.5 flex items-center gap-1.5">

@@ -175,6 +175,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # Full verification happens in the route dependency
             payload = jwt.decode(
                 token,
+                "",  # Empty key for unverified decode
                 options={"verify_signature": False, "verify_exp": False},
             )
 

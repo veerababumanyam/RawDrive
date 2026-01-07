@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  client-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rawdrive-client-service
+    ports:
+      - "8007:8007"
+    environment:
+      # Service
+      - SERVICE_NAME=client-service
+      - SERVICE_VERSION=1.0.0
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+
+      # Database
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_READ_REPLICA_URL=${DATABASE_READ_REPLICA_URL:-}
+      - DB_POOL_MIN_SIZE=10
+      - DB_POOL_MAX_SIZE=50
+
+      # Redis
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - REDIS_MAX_CONNECTIONS=30
+
+      # JWT (MUST match other services)
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=HS256
+
+      # CORS
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,https://rawdrive.io}
+
+      # Rate Limiting
+      - RATE_LIMIT_ENABLED=true
+
+      # Cache TTLs
+      - CACHE_TTL_CLIENT_METADATA=300
+      - CACHE_TTL_CLIENT_DETAILS=120
+      - CACHE_TTL_ACTIVITY_TIMELINE=30
+
+    depends_on:
+      - postgres
+      - redis
+
+    networks:
+      - rawdrive-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+    restart: unless-stopped
+
+    labels:
+      # Traefik labels for dynamic configuration
+      - "traefik.enable=true"
+      - "traefik.http.routers.client-service.rule=Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/workspaces/{workspace_id}/clients`)"
+      - "traefik.http.routers.client-service.entrypoints=websecure"
+      - "traefik.http.routers.client-service.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.client-service.priority=138"
+      - "traefik.http.services.client-service.loadbalancer.server.port=8007"
+      - "traefik.http.services.client-service.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.client-service.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.middlewares.client-rate-limit.ratelimit.average=100"
+      - "traefik.http.middlewares.client-rate-limit.ratelimit.period=1m"
+      - "traefik.http.routers.client-service.middlewares=client-rate-limit@docker,security-headers@docker,cors-headers@docker"
+
+networks:
+  rawdrive-network:
+    external: true

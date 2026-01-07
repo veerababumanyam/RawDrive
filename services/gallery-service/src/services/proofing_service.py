@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from src.database import fetch, fetchrow, fetchval, execute, get_connection
 from src.cache.redis_client import redis_client, invalidate_proofing_cache
 from src.config import settings
-from src.logging import get_logger
+from src.log_config import get_logger
 from src.observability.metrics import get_metrics
 
 logger = get_logger(__name__)
@@ -244,6 +244,7 @@ class ProofingService:
 
     async def face_search(
         self,
+        workspace_id: str,
         gallery_id: str,
         face_embedding: List[float],
         threshold: float = 0.6,
@@ -257,15 +258,19 @@ class ProofingService:
                     """
                     SELECT
                         a.asset_id,
-                        1 - (af.embedding <=> $1::vector) as similarity
-                    FROM asset_faces af
-                    JOIN assets a ON af.asset_id = a.asset_id
+                        a.original_object_key,
+                        1 - (f.embedding <=> $1::vector) as similarity,
+                        f.bounding_box,
+                        f.confidence
+                    FROM faces f
+                    JOIN assets a ON f.photo_id = a.asset_id
                     JOIN gallery_assets ga ON a.asset_id = ga.asset_id
                     WHERE ga.gallery_id = $2
                     AND ga.visible = TRUE
                     AND a.deleted = FALSE
-                    AND 1 - (af.embedding <=> $1::vector) >= $3
-                    ORDER BY af.embedding <=> $1::vector
+                    AND f.embedding IS NOT NULL
+                    AND 1 - (f.embedding <=> $1::vector) >= $3
+                    ORDER BY f.embedding <=> $1::vector
                     LIMIT $4
                     """,
                     face_embedding,
@@ -274,12 +279,35 @@ class ProofingService:
                     limit,
                 )
 
+        # Generate signed URLs for face search results
+        from src.services.r2_service import get_r2_service
+        r2_service = get_r2_service()
+
+        # Build asset list
+        asset_list = [
+            {
+                "asset_id": str(r["asset_id"]),
+                "filename": r["original_object_key"].split("/")[-1] if r["original_object_key"] else "",
+                "is_private": False,  # Face search only returns visible assets
+            }
+            for r in results
+        ]
+
+        # Generate thumbnail URLs in parallel
+        signed_urls = await r2_service.generate_signed_urls_batch(
+            workspace_id=workspace_id,
+            assets=asset_list,
+            expires_in=3600,
+        )
+
         return {
             "results": [
                 {
                     "asset_id": str(r["asset_id"]),
                     "similarity": float(r["similarity"]),
-                    "thumbnail_url": None,  # Would be populated with signed URL
+                    "bounding_box": r["bounding_box"],
+                    "confidence": float(r["confidence"]),
+                    "thumbnail_url": signed_urls.get(str(r["asset_id"]), {}).get("thumbnail"),
                 }
                 for r in results
             ],

@@ -240,7 +240,7 @@ const ThemeCard = React.memo<ThemeCardProps>(({
             {theme.category}
           </span>
         </div>
-        <p className="text-[11px] text-text-tertiary mt-0.5 line-clamp-1">
+        <p className="text-[11px] text-text-tertiary mt-0.5 line-clamp-2" title={theme.description}>
           {theme.description}
         </p>
       </div>

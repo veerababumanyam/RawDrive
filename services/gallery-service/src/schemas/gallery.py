@@ -197,6 +197,11 @@ class AssetMetadata(BaseModel):
     date_taken: Optional[str] = None
     exif: Optional[dict] = None
 
+    # Signed URLs for different variants (populated by R2 service)
+    thumbnail_url: Optional[str] = None
+    preview_url: Optional[str] = None
+    original_url: Optional[str] = None
+
 
 class GalleryAssetResponse(BaseModel):
     """Gallery asset response."""

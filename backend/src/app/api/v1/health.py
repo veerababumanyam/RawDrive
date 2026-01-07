@@ -445,3 +445,141 @@ async def app_info(settings: SettingsDep) -> dict:
         "environment": settings.app_env.value,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.get(
+    "/health/database-integrity",
+    summary="Database integrity check",
+    description="Validates database integrity including subscription requirements. Use for monitoring and pre-deployment validation.",
+)
+async def database_integrity_check(response: Response) -> dict:
+    """Database integrity validation check.
+
+    Validates critical database invariants:
+    - All active workspaces have subscriptions
+    - All sessions have valid users
+    - Required plans exist
+    - No duplicate workspace slugs
+
+    Returns 200 OK if all checks pass, 503 Service Unavailable if critical issues found.
+    """
+    from app.db.postgres import get_postgres_pool
+
+    start = time.perf_counter()
+    pool = await get_postgres_pool()
+
+    issues = []
+    critical_count = 0
+    warning_count = 0
+
+    # Check 1: Workspaces without subscriptions
+    try:
+        missing_subs = await pool.fetch("""
+            SELECT w.workspace_id, w.name, w.slug
+            FROM workspaces w
+            LEFT JOIN workspace_subscriptions ws ON ws.workspace_id = w.workspace_id
+            WHERE w.status = 'active' AND ws.subscription_id IS NULL
+        """)
+
+        if missing_subs:
+            critical_count += len(missing_subs)
+            issues.append({
+                "severity": "CRITICAL",
+                "check": "workspace_subscriptions",
+                "message": f"Found {len(missing_subs)} active workspaces without subscriptions",
+                "count": len(missing_subs),
+                "details": [{"workspace_id": str(row['workspace_id']), "name": row['name']} for row in missing_subs[:5]]
+            })
+    except Exception as e:
+        logger.error(f"Failed to check workspace subscriptions: {e}")
+        issues.append({
+            "severity": "ERROR",
+            "check": "workspace_subscriptions",
+            "message": f"Check failed: {str(e)}"
+        })
+
+    # Check 2: Orphaned sessions
+    try:
+        orphaned_sessions = await pool.fetchval("""
+            SELECT COUNT(*) FROM sessions s
+            LEFT JOIN users u ON u.user_id = s.user_id
+            WHERE u.user_id IS NULL
+        """)
+
+        if orphaned_sessions and orphaned_sessions > 0:
+            warning_count += orphaned_sessions
+            issues.append({
+                "severity": "WARNING",
+                "check": "orphaned_sessions",
+                "message": f"Found {orphaned_sessions} sessions for deleted users",
+                "count": orphaned_sessions
+            })
+    except Exception as e:
+        logger.warning(f"Failed to check orphaned sessions: {e}")
+
+    # Check 3: Required plans exist
+    try:
+        required_plans = ['starter', 'professional', 'enterprise', 'studio']
+        existing_plans = await pool.fetch("SELECT code FROM plans")
+        existing_codes = {row['code'] for row in existing_plans}
+
+        missing_plans = [p for p in required_plans if p not in existing_codes]
+        if missing_plans:
+            critical_count += len(missing_plans)
+            issues.append({
+                "severity": "CRITICAL",
+                "check": "required_plans",
+                "message": f"Required plans missing: {', '.join(missing_plans)}",
+                "missing": missing_plans
+            })
+    except Exception as e:
+        logger.error(f"Failed to check required plans: {e}")
+        issues.append({
+            "severity": "ERROR",
+            "check": "required_plans",
+            "message": f"Check failed: {str(e)}"
+        })
+
+    # Check 4: Duplicate workspace slugs
+    try:
+        duplicates = await pool.fetch("""
+            SELECT slug, COUNT(*) as count
+            FROM workspaces
+            GROUP BY slug
+            HAVING COUNT(*) > 1
+        """)
+
+        if duplicates:
+            critical_count += len(duplicates)
+            issues.append({
+                "severity": "CRITICAL",
+                "check": "duplicate_slugs",
+                "message": f"Found {len(duplicates)} duplicate workspace slugs",
+                "duplicates": [{"slug": row['slug'], "count": row['count']} for row in duplicates]
+            })
+    except Exception as e:
+        logger.error(f"Failed to check duplicate slugs: {e}")
+
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    # Set response status based on findings
+    healthy = critical_count == 0
+
+    if not healthy:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return {
+        "status": "ok" if healthy else "unhealthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "critical_issues": critical_count,
+            "warnings": warning_count,
+            "total_issues": len(issues),
+        },
+        "issues": issues,
+        "latency_ms": round(elapsed_ms, 2),
+        "recommendations": [
+            "Run: python backend/scripts/validate-database.py --fix",
+            "Or apply migration: alembic upgrade head (includes 0117_backfill_workspace_subscriptions)",
+        ] if not healthy else []
+    }

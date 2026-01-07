@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Home,
   Users,
+  UsersRound,
   Eye,
   Share2,
   Settings,
@@ -16,12 +17,14 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeft,
-  Building2,
   UserCircle,
   User,
   Mail,
-  Shield,
   Cpu,
+  Sparkles,
+  TrendingUp,
+  BarChart2,
+  Building2,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -34,7 +37,6 @@ import {
 import { useAppShell } from '../layout/AppShell';
 import { useAuth } from '../../contexts/AuthContext';
 import { AppButton } from '../ui/AppButton';
-import { useAdminAccess } from '../../hooks/useAdminAccess';
 
 /* =============================================================================
    WorkspaceSidebar Component
@@ -67,7 +69,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const { t } = useTranslation('common');
   const { sidebarCollapsed, toggleCollapse } = useAppShell();
   const { logout } = useAuth();
-  const { isAdmin } = useAdminAccess();
 
   const currentPath = location.pathname;
 
@@ -85,7 +86,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     { id: 'dashboard', label: t('nav.dashboard'), icon: <Home size={20} />, path: '/workspace' },
     { id: 'galleries', label: t('nav.galleries'), icon: <LayoutGrid size={20} />, path: '/workspace/galleries' },
     { id: 'invitations', label: t('nav.invitations', 'Invitations'), icon: <Mail size={20} />, path: '/workspace/invitations' },
-    { id: 'people', label: t('nav.people', 'People'), icon: <UserCircle size={20} />, path: '/workspace/people' },
+    // Terminology Note: "People" feature is now referred to as "FaceIDs" in the UI to avoid user confusion
+    { id: 'people', label: t('nav.people', 'FaceIDs'), icon: <UserCircle size={20} />, path: '/workspace/people' },
     { id: 'clients', label: t('nav.clients'), icon: <Users size={20} />, path: '/workspace/clients' },
     { id: 'visitors', label: t('nav.visitors'), icon: <Eye size={20} />, path: '/workspace/visitors' },
     { id: 'shared', label: t('nav.shared'), icon: <Share2 size={20} />, path: '/workspace/shared' },
@@ -98,17 +100,19 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   ], [t]);
 
   const bottomNavItems = React.useMemo(() => [
-    { id: 'settings', label: t('nav.settings'), icon: <Settings size={20} />, path: '/workspace/settings' },
-    { id: 'profile', label: t('nav.companyProfile'), icon: <Building2 size={20} />, path: '/workspace/settings/profile' },
+    { id: 'companyProfile', label: t('nav.companyProfile', 'Company Profile'), icon: <Building2 size={20} />, path: '/workspace/settings/profile' },
     { id: 'myProfile', label: t('nav.myProfile', 'My Profile'), icon: <User size={20} />, path: '/settings' },
-    { id: 'help', label: t('nav.help'), icon: <HelpCircle size={20} />, path: '/workspace/help' },
+    { id: 'team', label: t('nav.team', 'Team'), icon: <UsersRound size={20} />, path: '/workspace/team' },
+    { id: 'settings', label: t('nav.settings'), icon: <Settings size={20} />, path: '/workspace/settings' },
+    { id: 'help', label: t('nav.helpSupport', 'Help & Support'), icon: <HelpCircle size={20} />, path: '/workspace/help' },
   ], [t]);
 
-  // Admin navigation items (only shown to platform admins)
-  const adminNavItems = React.useMemo(() => [
-    { id: 'admin-dashboard', label: 'Admin Dashboard', icon: <Shield size={20} />, path: '/admin' },
-    { id: 'admin-models', label: 'AI Models', icon: <Cpu size={20} />, path: '/admin/gemini-models' },
-  ], []);
+  // AI & Analytics navigation items
+  const aiNavItems = React.useMemo(() => [
+    { id: 'analytics', label: t('nav.analytics', 'Analytics'), icon: <BarChart2 size={20} />, path: '/workspace/analytics' },
+    { id: 'ai-insights', label: t('nav.aiInsights', 'AI Insights'), icon: <TrendingUp size={20} />, path: '/workspace/ai/insights' },
+    { id: 'ai-tools', label: t('nav.aiTools', 'AI Tools'), icon: <Cpu size={20} />, path: '/workspace/ai/tools' },
+  ], [t]);
 
   // Helper to check if a path is active using segment-based matching
   // This prevents false positives like /workspace/galleries-archive matching /workspace/galleries
@@ -118,8 +122,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     }
     // Check if current path starts with itemPath followed by end, /, or ?
     return current === itemPath ||
-           current.startsWith(itemPath + '/') ||
-           current.startsWith(itemPath + '?');
+      current.startsWith(itemPath + '/') ||
+      current.startsWith(itemPath + '?');
   }, []);
 
   const handleNavigation = (path: string) => {
@@ -204,6 +208,22 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 
         <SidebarDivider />
 
+        {/* AI & Analytics Section */}
+        <SidebarSection title={sidebarCollapsed ? undefined : 'AI & Analytics'}>
+          {aiNavItems.map((item) => (
+            <SidebarItem
+              key={item.id}
+              id={item.path}
+              label={item.label}
+              icon={item.icon}
+              active={isPathActive(item.path, currentPath)}
+              onClick={() => handleNavigation(item.path)}
+            />
+          ))}
+        </SidebarSection>
+
+        <SidebarDivider />
+
         {/* System Section */}
         <SidebarSection title={sidebarCollapsed ? undefined : 'System'}>
           {bottomNavItems.map((item) => (
@@ -217,25 +237,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             />
           ))}
         </SidebarSection>
-
-        {/* Admin Section - Only shown to platform admins */}
-        {isAdmin && (
-          <>
-            <SidebarDivider />
-            <SidebarSection title={sidebarCollapsed ? undefined : 'Platform Admin'}>
-              {adminNavItems.map((item) => (
-                <SidebarItem
-                  key={item.id}
-                  id={item.path}
-                  label={item.label}
-                  icon={item.icon}
-                  active={isPathActive(item.path, currentPath)}
-                  onClick={() => handleNavigation(item.path)}
-                />
-              ))}
-            </SidebarSection>
-          </>
-        )}
       </SidebarContent>
 
       {/* Footer */}
@@ -251,9 +252,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             </div>
             <div className="sidebar-storage-bar">
               <div
-                className={`sidebar-storage-fill ${
-                  storagePercent > 90 ? 'danger' : storagePercent > 70 ? 'warning' : ''
-                }`}
+                className={`sidebar-storage-fill ${storagePercent > 90 ? 'danger' : storagePercent > 70 ? 'warning' : ''
+                  }`}
                 style={{ width: `${storagePercent}%` }}
               />
             </div>

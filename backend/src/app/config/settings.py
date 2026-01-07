@@ -222,6 +222,53 @@ class AppSettings(BaseSettings):
         description="Default from name for SendGrid emails",
     )
 
+    # SMTP Email (Alternative to SendGrid)
+    smtp_host: Optional[str] = Field(
+        default=None,
+        alias="SMTP_HOST",
+        description="SMTP server hostname (e.g., smtp.gmail.com)",
+    )
+    smtp_port: int = Field(
+        default=587,
+        alias="SMTP_PORT",
+        description="SMTP server port (587 for TLS, 465 for SSL)",
+    )
+    smtp_username: Optional[str] = Field(
+        default=None,
+        alias="SMTP_USERNAME",
+        description="SMTP authentication username",
+    )
+    smtp_password: Optional[SecretStr] = Field(
+        default=None,
+        alias="SMTP_PASSWORD",
+        description="SMTP authentication password",
+    )
+    smtp_use_tls: bool = Field(
+        default=True,
+        alias="SMTP_USE_TLS",
+        description="Use STARTTLS for SMTP connection (port 587)",
+    )
+    smtp_use_ssl: bool = Field(
+        default=False,
+        alias="SMTP_USE_SSL",
+        description="Use SSL/TLS for SMTP connection (port 465)",
+    )
+    smtp_from_email: Optional[str] = Field(
+        default=None,
+        alias="SMTP_FROM_EMAIL",
+        description="Default from email address for SMTP (falls back to sendgrid_from_email)",
+    )
+    smtp_from_name: Optional[str] = Field(
+        default=None,
+        alias="SMTP_FROM_NAME",
+        description="Default from name for SMTP emails (falls back to sendgrid_from_name)",
+    )
+    smtp_timeout: int = Field(
+        default=30,
+        alias="SMTP_TIMEOUT",
+        description="SMTP connection timeout in seconds",
+    )
+
     # AI Providers
     gemini_api_key: Optional[SecretStr] = Field(
         default=None,
@@ -340,6 +387,7 @@ class AppSettings(BaseSettings):
             "RAZORPAY_KEY_SECRET",
             "RAZORPAY_WEBHOOK_SECRET",
             "sendgrid_api_key",
+            "smtp_password",
             "gemini_api_key",
             "openai_api_key",
             "anthropic_api_key",

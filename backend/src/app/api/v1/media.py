@@ -147,47 +147,64 @@ async def stream_media(
                 filename=filename,
             )
         except StorageError as e:
-            # Check for legacy unencrypted thumbnail (pre-0.2.0)
-            # These files exist but don't have .enc extension
-            if e.code == "FILE_NOT_FOUND" and variant == "thumbnail":
+            # If thumbnail/preview doesn't exist, fallback to original image
+            if e.code == "FILE_NOT_FOUND" and variant in ("thumbnail", "preview") and fetch_variant != "original":
+                logger.info(
+                    f"Thumbnail/preview not found for asset {asset_id}, falling back to original",
+                    extra={"asset_id": str(asset_id), "variant": variant}
+                )
                 try:
-                    # Try to fetch unencrypted thumbnail
-                    # Note: Legacy path structure matches current but without .enc
-                    legacy_key = f"workspaces/{workspace_id}/galleries/{gallery_id}/{variant}/{asset_id}/thumb.webp"
-                    
-                    logger.info(f"Attempting to fetch legacy unencrypted thumbnail: {legacy_key}")
-                    
-                    loop = asyncio.get_event_loop()
-                    response = await loop.run_in_executor(
-                        storage_service.executor,
-                        lambda: storage_service.s3_client.get_object(
-                            Bucket=storage_service.bucket_name, 
-                            Key=legacy_key
-                        )
+                    # Try to fetch original as fallback
+                    encrypted_data = await storage_service.download_encrypted_file(
+                        workspace_id=workspace_id,
+                        gallery_id=gallery_id,
+                        asset_id=asset_id,
+                        variant="original",
+                        filename=original_filename if original_filename else f"{asset_id}.enc",
                     )
-                    
-                    legacy_data = await loop.run_in_executor(
-                        storage_service.executor,
-                        lambda: response["Body"].read()
-                    )
-                    
-                    # Stream unencrypted content directly
-                    return StreamingResponse(
-                        iter([legacy_data]),
-                        media_type="image/webp",
-                        headers={
-                            "Cache-Control": "private, max-age=3600",
-                            "X-Legacy-Asset": "true",
-                        },
-                    )
-                except Exception as legacy_error:
-                    logger.debug(f"Legacy thumbnail not found: {legacy_error}")
-                    # Fall through to original error handling
-                    pass
-
-            if e.code == "FILE_NOT_FOUND":
+                    # Update variant for decryption
+                    fetch_variant = "original"
+                except StorageError as fallback_error:
+                    # Original also not found, check for legacy
+                    if fallback_error.code == "FILE_NOT_FOUND" and variant == "thumbnail":
+                        # Check for legacy unencrypted thumbnail (pre-0.2.0)
+                        try:
+                            legacy_key = f"workspaces/{workspace_id}/galleries/{gallery_id}/thumbnail/{asset_id}/thumb.webp"
+                            
+                            logger.info(f"Attempting to fetch legacy unencrypted thumbnail: {legacy_key}")
+                            
+                            loop = asyncio.get_event_loop()
+                            response = await loop.run_in_executor(
+                                storage_service.executor,
+                                lambda: storage_service.s3_client.get_object(
+                                    Bucket=storage_service.bucket_name, 
+                                    Key=legacy_key
+                                )
+                            )
+                            
+                            legacy_data = await loop.run_in_executor(
+                                storage_service.executor,
+                                lambda: response["Body"].read()
+                            )
+                            
+                            # Stream unencrypted content directly
+                            return StreamingResponse(
+                                iter([legacy_data]),
+                                media_type="image/webp",
+                                headers={
+                                    "Cache-Control": "private, max-age=3600",
+                                    "X-Legacy-Asset": "true",
+                                },
+                            )
+                        except Exception as legacy_error:
+                            logger.debug(f"Legacy thumbnail not found: {legacy_error}")
+                            # Fall through to original error handling
+                            pass
+                    raise NotFoundError("Media file", asset_id) from fallback_error
+            elif e.code == "FILE_NOT_FOUND":
                 raise NotFoundError("Media file", asset_id) from e
-            raise
+            else:
+                raise
 
         # Decrypt file
         try:

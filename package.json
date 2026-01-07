@@ -2,9 +2,9 @@
   "name": "rawdrive",
   "private": true,
   "scripts": {
-    "build:packages": "pnpm -r --filter './packages/*' run build",
+    "build:packages": "pnpm -r --filter packages/* run build",
     "generate:python": "tsx scripts/generate-python-types.ts",
-    "test:packages": "pnpm -r --filter './packages/*' run test",
+    "test:packages": "pnpm -r --filter packages/* run test",
     "test:parity": "pnpm --filter @rawdrive/shared-types run test"
   },
   "dependencies": {

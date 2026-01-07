@@ -1,7 +1,7 @@
 """Add indexes for recycle bin query optimization
 
 Revision ID: 0015_recycle_bin_indexes
-Revises: 0014_company_profiles_table
+Revises: 0014
 Create Date: 2025-12-20
 
 This migration adds composite indexes to optimize recycle bin queries:

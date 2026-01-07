@@ -1,0 +1,167 @@
+# Prometheus alerting rules for client-service
+# Load with: -v ./client-service-alerts.yaml:/etc/prometheus/client-service-alerts.yaml
+
+groups:
+  - name: client-service
+    interval: 30s
+    rules:
+      # High error rate alert
+      - alert: ClientServiceHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{service="client-service",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{service="client-service"}[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: client-service
+        annotations:
+          summary: "Client Service experiencing high error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      # High latency alert
+      - alert: ClientServiceHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{service="client-service"}[5m])) by (le)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: client-service
+        annotations:
+          summary: "Client Service P95 latency is high"
+          description: "P95 latency is {{ $value }}s (threshold: 500ms)"
+
+      # Critical latency alert
+      - alert: ClientServiceCriticalLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{service="client-service"}[5m])) by (le)
+          ) > 1.0
+        for: 3m
+        labels:
+          severity: critical
+          service: client-service
+        annotations:
+          summary: "Client Service P95 latency is critically high"
+          description: "P95 latency is {{ $value }}s (threshold: 1s)"
+
+      # Service down alert
+      - alert: ClientServiceDown
+        expr: up{job="client-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: client-service
+        annotations:
+          summary: "Client Service is down"
+          description: "Client Service has been down for more than 2 minutes"
+
+      # High cache miss rate
+      - alert: ClientServiceHighCacheMissRate
+        expr: |
+          (
+            sum(rate(cache_misses_total{service="client-service"}[5m]))
+            /
+            sum(rate(cache_requests_total{service="client-service"}[5m]))
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: client-service
+        annotations:
+          summary: "Client Service cache miss rate is high"
+          description: "Cache miss rate is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+      # Database connection pool exhaustion
+      - alert: ClientServiceDatabasePoolExhausted
+        expr: |
+          (
+            sum(asyncpg_pool_current_size{service="client-service"})
+            /
+            sum(asyncpg_pool_max_size{service="client-service"})
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: client-service
+        annotations:
+          summary: "Client Service database pool near exhaustion"
+          description: "Pool utilization is {{ $value | humanizePercentage }} (threshold: 90%)"
+
+      # Redis connection failures
+      - alert: ClientServiceRedisConnectionFailures
+        expr: |
+          sum(rate(redis_connection_errors_total{service="client-service"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: client-service
+        annotations:
+          summary: "Client Service experiencing Redis connection failures"
+          description: "Redis error rate is {{ $value }} errors/sec"
+
+      # High request rate (potential attack)
+      - alert: ClientServiceAbnormalRequestRate
+        expr: |
+          sum(rate(http_requests_total{service="client-service"}[1m])) > 1000
+        for: 2m
+        labels:
+          severity: warning
+          service: client-service
+        annotations:
+          summary: "Client Service request rate is abnormally high"
+          description: "Request rate is {{ $value }} req/sec (threshold: 1000)"
+
+      # KEDA autoscaling not working
+      - alert: ClientServiceAutoscalingStuck
+        expr: |
+          (
+            sum(rate(http_requests_total{service="client-service"}[5m])) > 200
+          ) and (
+            count(up{job="client-service"} == 1) <= 2
+          )
+        for: 5m
+        labels:
+          severity: warning
+          service: client-service
+        annotations:
+          summary: "Client Service autoscaling may be stuck"
+          description: "High load ({{ $value }} RPS) but only {{ $labels.replicas }} replicas running"
+
+      # Duplicate detection performance degradation
+      - alert: ClientServiceDuplicateDetectionSlow
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{
+              service="client-service",
+              endpoint="/api/v1/workspaces/*/clients/duplicates/detect"
+            }[5m])) by (le)
+          ) > 5.0
+        for: 5m
+        labels:
+          severity: warning
+          service: client-service
+        annotations:
+          summary: "Duplicate detection is slow"
+          description: "P95 latency is {{ $value }}s (threshold: 5s)"
+
+      # CSV import/export performance
+      - alert: ClientServiceImportExportSlow
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{
+              service="client-service",
+              endpoint=~"/api/v1/workspaces/.*/clients/(import|export)"
+            }[5m])) by (le)
+          ) > 30.0
+        for: 5m
+        labels:
+          severity: warning
+          service: client-service
+        annotations:
+          summary: "Import/export operations are slow"
+          description: "P95 latency is {{ $value }}s (threshold: 30s)"

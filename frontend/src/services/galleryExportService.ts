@@ -79,6 +79,7 @@ export async function createExport(params: CreateGalleryExportParams): Promise<G
     }
   );
 
+  if (!response.data) throw new Error(response.error?.message || 'Failed to create export');
   return response.data.export;
 }
 
@@ -92,6 +93,7 @@ export async function getExport(
   const response = await apiClient.get<{ export: GalleryExport }>(
     `/api/v1/workspaces/${workspaceId}/gallery-exports/${exportId}`
   );
+  if (!response.data) throw new Error(response.error?.message || 'Failed to get export');
   return response.data.export;
 }
 
@@ -112,6 +114,7 @@ export async function listExports(params: ListGalleryExportsParams): Promise<Lis
     : `/api/v1/workspaces/${workspaceId}/gallery-exports`;
 
   const response = await apiClient.get<ListExportsResponse>(`${path}?${queryParams.toString()}`);
+  if (!response.data) throw new Error(response.error?.message || 'Failed to list exports');
   return response.data;
 }
 
@@ -127,6 +130,7 @@ export async function cancelExport(
     `/api/v1/workspaces/${workspaceId}/gallery-exports/${exportId}/cancel`,
     { reason }
   );
+  if (!response.data) throw new Error(response.error?.message || 'Failed to cancel export');
   return response.data.export;
 }
 
@@ -142,6 +146,7 @@ export async function retryExport(
     `/api/v1/workspaces/${workspaceId}/gallery-exports/${exportId}/retry`,
     { modifiedConfig }
   );
+  if (!response.data) throw new Error(response.error?.message || 'Failed to retry export');
   return response.data.export;
 }
 
@@ -164,6 +169,7 @@ export async function createBatchExport(params: BatchExportParams): Promise<{
     scheduledAt: scheduledAt?.toISOString(),
   });
 
+  if (!response.data) throw new Error(response.error?.message || 'Failed to create batch export');
   return response.data;
 }
 
@@ -174,6 +180,7 @@ export async function getExportStats(workspaceId: string): Promise<ExportStats> 
   const response = await apiClient.get<ExportStats>(
     `/api/v1/workspaces/${workspaceId}/gallery-exports/stats`
   );
+  if (!response.data) throw new Error(response.error?.message || 'Failed to get export stats');
   return response.data;
 }
 
@@ -190,6 +197,7 @@ export async function listCloudConnections(
   const response = await apiClient.get<{ connections: CloudProviderConnection[] }>(
     `/api/v1/workspaces/${workspaceId}/gallery-exports/cloud/connections`
   );
+  if (!response.data) throw new Error(response.error?.message || 'Failed to list cloud connections');
   return response.data.connections;
 }
 
@@ -205,6 +213,7 @@ export async function connectCloudProvider(
     `/api/v1/workspaces/${workspaceId}/gallery-exports/cloud/connect`,
     { provider, redirectUri }
   );
+  if (!response.data) throw new Error(response.error?.message || 'Failed to connect cloud provider');
   return response.data;
 }
 
@@ -221,6 +230,7 @@ export async function cloudProviderCallback(
     `/api/v1/workspaces/${workspaceId}/gallery-exports/cloud/callback`,
     { provider, code, state }
   );
+  if (!response.data) throw new Error(response.error?.message || 'Failed to handle cloud provider callback');
   return response.data.connection;
 }
 

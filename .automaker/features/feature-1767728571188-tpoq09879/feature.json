@@ -3,7 +3,7 @@
   "description": "Implement virtual scrolling for asset grids using react-window to reduce DOM nodes from 100+ to ~30 visible, cutting render time 90%",
   "id": "feature-1767728571188-tpoq09879",
   "steps": [],
-  "status": "verified",
+  "status": "completed",
   "skipTests": true,
   "priority": 1,
   "branchName": "main",

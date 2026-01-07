@@ -66,6 +66,10 @@ from .onboarding import (
     RegistrationMethod,
     PaymentStatus,
     # Note: BillingInterval is imported from subscription module above
+    # Business Identity Enums
+    BusinessType,
+    DateFormat,
+    Language,
     # Payment Transaction
     PaymentTransaction,
     TransactionType,
@@ -145,6 +149,41 @@ from .analytics import (
     ReportExportDownloadInfo,
     ReportGenerationRequest,
     ReportGenerationStatus,
+)
+from .language_preference import (
+    # Language Preference Enums
+    SupportedLanguage,
+    LanguageContext,
+    LanguagePreferenceSource,
+    # Language Preference Models
+    LanguagePreference,
+    LanguagePreferenceCreate,
+    LanguagePreferenceUpdate,
+    LanguagePreferenceSummary,
+    ResolvedLanguagePreference,
+    LanguageInfo,
+    # RTL Utilities
+    RTL_LANGUAGES,
+    is_rtl_language,
+    get_text_direction,
+)
+from .user import (
+    # User Models
+    User,
+    UserCreate,
+    UserUpdate,
+    UserSummary,
+    UserLanguageSettings,
+    UserWithLanguagePreferences,
+)
+from .workspace import (
+    # Workspace Models
+    Workspace,
+    WorkspaceCreate,
+    WorkspaceUpdate,
+    WorkspaceSummary,
+    WorkspaceLanguageSettings,
+    WorkspaceWithLanguagePreferences,
 )
 from .compliance import (
     # Data Subject Request Enums

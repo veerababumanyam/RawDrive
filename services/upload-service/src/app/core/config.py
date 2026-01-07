@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # Server configuration
     HOST: str = Field(default="0.0.0.0", alias="HOST")
     PORT: int = Field(default=8001, alias="PORT")
+    EXTERNAL_BASE_URL: Optional[str] = Field(
+        default=None,
+        alias="EXTERNAL_BASE_URL",
+        description="External URL for client access (e.g., http://localhost:8008). If not set, defaults to http://localhost:{PORT}",
+    )
 
     # ====================
     # Database Configuration
@@ -345,6 +350,11 @@ class Settings(BaseSettings):
         default=50,
         alias="RATE_LIMIT_PER_WORKSPACE",
         description="Per-workspace upload rate limit per second",
+    )
+    RATE_LIMIT_WINDOW: int = Field(
+        default=60,
+        alias="RATE_LIMIT_WINDOW",
+        description="Rate limit window in seconds",
     )
 
     # ====================

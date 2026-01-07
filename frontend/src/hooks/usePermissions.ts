@@ -7,7 +7,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/services/api';
+import { apiClient as api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 // ---------------------------------------------------------------------------
@@ -134,7 +134,8 @@ export function useEffectivePermissions(workspaceId?: string) {
   return useQuery<EffectivePermissions>({
     queryKey: ['permissions', 'effective', wsId],
     queryFn: async () => {
-      const response = await api.get(`/api/v1/workspaces/${wsId}/permissions/effective`);
+      const response = await api.get<EffectivePermissions>(`/api/v1/workspaces/${wsId}/permissions/effective`);
+      if (!response.data) throw new Error(response.error?.message || 'Failed to get effective permissions');
       return response.data;
     },
     enabled: !!wsId,
@@ -194,11 +195,12 @@ export function useCheckGranularPermission(
   return useQuery<GranularPermissionCheckResult>({
     queryKey: ['permissions', 'check', wsId, permission, resourceId, resourceType],
     queryFn: async () => {
-      const response = await api.post(`/api/v1/workspaces/${wsId}/permissions/check`, {
+      const response = await api.post<GranularPermissionCheckResult>(`/api/v1/workspaces/${wsId}/permissions/check`, {
         permission,
         resource_id: resourceId,
         resource_type: resourceType,
       });
+      if (!response.data) throw new Error(response.error?.message || 'Failed to check granular permission');
       return response.data;
     },
     enabled: !!wsId && !!permission,
@@ -250,9 +252,10 @@ export function usePermissionConditions(workspaceId?: string, conditionType?: st
       if (conditionType) {
         params.set('condition_type', conditionType);
       }
-      const response = await api.get(
+      const response = await api.get<{ items: PermissionCondition[]; total: number }>(
         `/api/v1/workspaces/${wsId}/permissions/conditions?${params}`
       );
+      if (!response.data) throw new Error(response.error?.message || 'Failed to list permission conditions');
       return response.data;
     },
     enabled: !!wsId,
@@ -274,7 +277,8 @@ export function useCreateCondition(workspaceId?: string) {
       condition_type: string;
       condition_config: Record<string, unknown>;
     }) => {
-      const response = await api.post(`/api/v1/workspaces/${wsId}/permissions/conditions`, data);
+      const response = await api.post<PermissionCondition>(`/api/v1/workspaces/${wsId}/permissions/conditions`, data);
+      if (!response.data) throw new Error(response.error?.message || 'Failed to create permission condition');
       return response.data;
     },
     onSuccess: () => {
@@ -315,9 +319,10 @@ export function useTimeBasedAssignments(
       if (options?.includeRevoked) {
         params.set('include_revoked', 'true');
       }
-      const response = await api.get(
+      const response = await api.get<{ items: TimeBasedAssignment[]; total: number; active_count: number; expired_count: number }>(
         `/api/v1/workspaces/${wsId}/permissions/time-based?${params}`
       );
+      if (!response.data) throw new Error(response.error?.message || 'Failed to list time-based assignments');
       return response.data;
     },
     enabled: !!wsId,
@@ -340,7 +345,8 @@ export function useGrantTimeBasedAccess(workspaceId?: string) {
       expires_at: string;
       reason?: string;
     }) => {
-      const response = await api.post(`/api/v1/workspaces/${wsId}/permissions/time-based`, data);
+      const response = await api.post<TimeBasedAssignment>(`/api/v1/workspaces/${wsId}/permissions/time-based`, data);
+      if (!response.data) throw new Error(response.error?.message || 'Failed to grant time-based access');
       return response.data;
     },
     onSuccess: () => {
@@ -366,10 +372,11 @@ export function useRevokeTimeBasedAccess(workspaceId?: string) {
       assignmentId: string;
       reason?: string;
     }) => {
-      const response = await api.post(
+      const response = await api.post<{ success: boolean }>(
         `/api/v1/workspaces/${wsId}/permissions/time-based/${assignmentId}/revoke`,
         { reason }
       );
+      if (!response.data) throw new Error(response.error?.message || 'Failed to revoke time-based access');
       return response.data;
     },
     onSuccess: () => {
@@ -418,9 +425,10 @@ export function useRoleAuditLogs(
       if (options?.limit) params.set('limit', options.limit.toString());
       if (options?.offset) params.set('offset', options.offset.toString());
 
-      const response = await api.get(
+      const response = await api.get<{ items: RoleAuditLogEntry[]; total: number; limit: number; offset: number }>(
         `/api/v1/workspaces/${wsId}/permissions/audit-log?${params}`
       );
+      if (!response.data) throw new Error(response.error?.message || 'Failed to list role audit logs');
       return response.data;
     },
     enabled: !!wsId,
@@ -437,7 +445,8 @@ export function useDelegationRules(workspaceId?: string) {
   return useQuery<{ items: DelegationRule[]; total: number }>({
     queryKey: ['permissions', 'delegation-rules', wsId],
     queryFn: async () => {
-      const response = await api.get(`/api/v1/workspaces/${wsId}/permissions/delegation-rules`);
+      const response = await api.get<{ items: DelegationRule[]; total: number }>(`/api/v1/workspaces/${wsId}/permissions/delegation-rules`);
+      if (!response.data) throw new Error(response.error?.message || 'Failed to list delegation rules');
       return response.data;
     },
     enabled: !!wsId,
@@ -460,10 +469,11 @@ export function useCreateDelegationRule(workspaceId?: string) {
       can_set_expiration?: boolean;
       max_expiration_days?: number;
     }) => {
-      const response = await api.post(
+      const response = await api.post<DelegationRule>(
         `/api/v1/workspaces/${wsId}/permissions/delegation-rules`,
         data
       );
+      if (!response.data) throw new Error(response.error?.message || 'Failed to create delegation rule');
       return response.data;
     },
     onSuccess: () => {
@@ -494,9 +504,10 @@ export function useGranularPermissions(
       if (options?.permission) params.set('permission', options.permission);
       if (options?.includeInactive) params.set('include_inactive', 'true');
 
-      const response = await api.get(
+      const response = await api.get<{ items: GranularPermission[]; total: number }>(
         `/api/v1/workspaces/${wsId}/permissions/granular?${params}`
       );
+      if (!response.data) throw new Error(response.error?.message || 'Failed to list granular permissions');
       return response.data;
     },
     enabled: !!wsId,
@@ -519,7 +530,8 @@ export function useGrantGranularPermission(workspaceId?: string) {
       expires_at?: string;
       notes?: string;
     }) => {
-      const response = await api.post(`/api/v1/workspaces/${wsId}/permissions/granular`, data);
+      const response = await api.post<GranularPermission>(`/api/v1/workspaces/${wsId}/permissions/granular`, data);
+      if (!response.data) throw new Error(response.error?.message || 'Failed to grant granular permission');
       return response.data;
     },
     onSuccess: () => {

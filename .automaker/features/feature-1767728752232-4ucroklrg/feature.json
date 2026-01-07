@@ -14,6 +14,140 @@
   "requirePlanApproval": false,
   "dependencies": [],
   "titleGenerating": false,
-  "status": "backlog",
-  "id": "feature-1767728752232-4ucroklrg"
+  "status": "verified",
+  "id": "feature-1767728752232-4ucroklrg",
+  "startedAt": "2026-01-07T12:20:11.479Z",
+  "updatedAt": "2026-01-07T13:24:10.893Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Task\nInput: {\n  \"description\": \"Explore team management codebase\",\n  \"prompt\": \"Explore the codebase to understand the existing structure for team management and multi-user workspaces. I need to find:\\n\\n1. Existing user/workspace relationship models and schemas\\n2. Any existing invitation system\\n3. RBAC/permission patterns already in use\\n4. Audit logging patterns\\n5. Email service for sending invitations\\n6. Frontend team/member management pages or components\\n\\nFocus on:\\n- backend/src/app/models/ - for User, Workspace, UserWorkspace models\\n- backend/src/app/services/ - for any team/invitation services\\n- backend/src/app/api/v1/ - for existing endpoints\\n- frontend/src/pages/workspace/ - for team-related pages\\n- frontend/src/components/features/ - for team components\\n- frontend/src/hooks/ - for permission hooks\\n\\nBe very thorough - search for patterns like \\\"invitation\\\", \\\"team\\\", \\\"member\\\", \\\"role\\\", \\\"permission\\\", \\\"rbac\\\", \\\"workspace_id\\\".\",\n  \"subagent_type\": \"Explore\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/models/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/services/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/api/v1/*.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/pages/workspace/*.tsx\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/components/features/**/*.tsx\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/hooks/*.ts\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"invitation|team|member|role|permission|rbac\",\n  \"type\": \"py\",\n  \"output_mode\": \"files_with_matches\",\n  \"path\": \"backend/src/app/models\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\models\\\\user.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\models\\\\workspace.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\models\\\\__init__.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\rbac_service.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\permissions.py\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"class.*team|class.*member|class.*invitation.*workspace\",\n  \"type\": \"py\",\n  \"output_mode\": \"content\",\n  \"path\": \"backend/src/app\",\n  \"head_limit\": 30\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\collaboration.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\roles.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"workspace_membership|team_member|invitation\",\n  \"type\": \"py\",\n  \"output_mode\": \"files_with_matches\",\n  \"path\": \"backend/src/app/api/v1\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\workspaces.py\",\n  \"limit\": 150\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\audit_logs.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\audit_service.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\pages\\\\workspace\\\\PeoplePage.tsx\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\hooks\\\\usePermissions.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/components/features/team* frontend/src/components/features/members* frontend/src/components/features/invitations*\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"sendgrid_service|email_service|send_invitation|invite_member\",\n  \"type\": \"py\",\n  \"output_mode\": \"files_with_matches\",\n  \"path\": \"backend/src/app/services\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\sendgrid_service.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/backend/src/app/api/v1 -name \\\"*.py\\\" -exec grep -l \\\"invite\\\\|member\\\\|team\\\" {} \\\\;\",\n  \"description\": \"Search for member/invite related API endpoints\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"limit\": 200\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"InviteMemberRequest\\\\|WorkspaceMemberResponse\\\\|class Member\\\" /c/Users/admin/Desktop/RawDrive/backend/src/app --include=\\\"*.py\\\" | head -20\",\n  \"description\": \"Find member and invitation request/response models\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"offset\": 200,\n  \"limit\": 150\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\workspaces.py\",\n  \"offset\": 150,\n  \"limit\": 200\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -A 30 \\\"def list_members\\\\|def invite_member\\\\|def remove_member\\\" /c/Users/admin/Desktop/RawDrive/backend/src/app/api/v1/workspaces.py | head -100\",\n  \"description\": \"Get member management endpoints\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\invitation_service.py\",\n  \"limit\": 120\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"workspace_memberships\\\\|WorkspaceMembership\\\" /c/Users/admin/Desktop/RawDrive/backend/src/app --include=\\\"*.py\\\" | head -10\",\n  \"description\": \"Find workspace membership models\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\contexts\\\\CollaborationContext.tsx\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find /c/Users/admin/Desktop/RawDrive/frontend/src -name \\\"*.ts\\\" -o -name \\\"*.tsx\\\" | xargs grep -l \\\"useWorkspace\\\\|useAuth\\\\|workspace_id\\\\|member\\\\|team\\\" | head -15\",\n  \"description\": \"Find workspace and team related frontend files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\pages\\\\workspace\\\\InvitationsPage.tsx\",\n  \"limit\": 80\n}\n\nNow I have a comprehensive understanding of the existing codebase. Let me read a few more key files to understand the exact implementation details before generating the specification.\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\invitation_service.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\rbac_service.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\workspaces.py\"\n}\n\nLet me also check for frontend components related to team management and the existing schemas:\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/pages/workspace/**/*Team*\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/components/features/team/**/*\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"offset\": 1,\n  \"limit\": 300\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\api\\\\schemas.py\",\n  \"offset\": 300,\n  \"limit\": 200\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"member|invitation\",\n  \"path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\services\",\n  \"-i\": true,\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\hooks\\\\usePermissions.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\workspace_service.py\",\n  \"limit\": 200\n}\n\nNow I have a comprehensive understanding of the codebase. Let me generate the specification:\n\n---\n\n# Team Management & Multi-User Workspaces Specification\n\n## 1. Problem Statement\n\nStudio owners and managers need the ability to invite team members, assign granular roles, and control access to their RawDrive workspace. Currently, the backend services for invitations, RBAC, and audit logging are fully implemented, but the frontend lacks a dedicated Team Management interface. Users cannot view team members, send invitations, manage roles, or monitor team activity through the UI.\n\n## 2. User Story\n\nAs a **Studio Owner/Admin**, I want to **invite team members, assign roles, and manage their access** so that **my team can collaborate on galleries while I maintain control over sensitive areas like billing and workspace settings**.\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** a user with `members:invite` permission, **WHEN** they navigate to Team Settings and enter an email + select a role, **THEN** an invitation email is sent and the pending invitation appears in the list.\n- **GIVEN** a user with `members:read` permission, **WHEN** they access the Team page, **THEN** they see all active members with their roles and pending invitations.\n- **GIVEN** a user with `members:write` permission, **WHEN** they change a member's role, **THEN** the role is updated immediately and cached permissions are invalidated.\n- **GIVEN** an invited user, **WHEN** they click the invitation link and sign up/login, **THEN** they are added to the workspace with the assigned roles.\n\n### Edge Cases\n- **GIVEN** a user invites an email that's already a member, **WHEN** the invitation is submitted, **THEN** error \"User is already a member\" is displayed.\n- **GIVEN** a pending invitation exists for an email, **WHEN** a new invitation is sent, **THEN** the old invitation is revoked and a new one is created.\n- **GIVEN** an invitation is 7+ days old, **WHEN** the invitee clicks the link, **THEN** \"Invitation has expired\" is displayed.\n\n### Error Handling\n- **GIVEN** a user without `members:invite` permission, **WHEN** they attempt to invite, **THEN** a 403 Forbidden error is shown.\n- **GIVEN** a role_id that doesn't exist in the workspace, **WHEN** invitation is created, **THEN** \"Invalid role\" error is returned.\n- **GIVEN** network failure during role update, **WHEN** the request fails, **THEN** the UI shows an error toast and retains the previous state.\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| **Affected Files** | `frontend/src/pages/workspace/TeamPage.tsx` (new), `frontend/src/components/features/team/*` (new), `frontend/src/services/teamService.ts` (new), `frontend/src/hooks/useTeam.ts` (new) |\n| **Dependencies** | React Query, React Router, existing RBAC hooks, existing API client |\n| **Constraints** | Must use existing backend APIs (fully implemented), maintain multi-tenant isolation via `workspace_id` |\n| **Patterns to Follow** | Use `AppButton`, `AppInput` from design system; follow existing page layout patterns (see `GalleriesPage.tsx`); use React Query for data fetching |\n\n**Existing Backend APIs (Already Implemented):**\n- `POST /api/v1/workspaces/{id}/members/invite` - Send invitation\n- `GET /api/v1/workspaces/{id}/members` - List members\n- `DELETE /api/v1/workspaces/{id}/members/{user_id}` - Remove member\n- `GET /api/v1/workspaces/{id}/invitations` - List invitations\n- `DELETE /api/v1/workspaces/{id}/invitations/{id}` - Revoke invitation\n- `GET /api/v1/workspaces/{id}/roles` - List roles\n- `POST /api/v1/workspaces/{id}/roles` - Create custom role\n- `PATCH /api/v1/workspaces/{id}/roles/{id}` - Update role\n- `DELETE /api/v1/workspaces/{id}/roles/{id}` - Delete role\n- `POST /api/v1/invitations/accept` - Accept invitation (public endpoint)\n- `GET /api/v1/invitations/{token}` - Get invitation preview (public endpoint)\n\n## 5. Non-Goals\n\n- **Custom role creation UI** - System roles (Owner, Admin, Editor, Viewer) suffice for MVP; custom roles can be added later.\n- **MFA enforcement** - Enterprise feature for future release.\n- **Project-level access** - Freelancer access to specific galleries is roadmap item.\n- **Team groups** - Organizing teams into sub-groups is future enhancement.\n- **\"Meet the Team\" public profile integration** - Separate feature for Company Profile page.\n- **Bulk import/CSV upload** - Single invitation flow only for now.\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation (Services & Hooks)\n\n- [ ] T001: Create teamService.ts with API methods for members, invitations, and roles | File: frontend/src/services/teamService.ts\n- [ ] T002: Create useTeam.ts hook with React Query hooks for team operations | File: frontend/src/hooks/useTeam.ts\n- [ ] T003: Add team routes to router configuration | File: frontend/src/router/routes.tsx\n- [ ] T004: Add missing invitation accept/preview API endpoints to backend | File: backend/src/app/api/v1/invitations.py\n\n## Phase 2: Core UI Components\n\n- [ ] T005: Create TeamMemberCard component for displaying member info | File: frontend/src/components/features/team/TeamMemberCard.tsx\n- [ ] T006: Create InvitationCard component for pending invitations | File: frontend/src/components/features/team/InvitationCard.tsx\n- [ ] T007: Create InviteMemberDialog modal for sending invitations | File: frontend/src/components/features/team/InviteMemberDialog.tsx\n- [ ] T008: Create RoleSelector component for choosing roles | File: frontend/src/components/features/team/RoleSelector.tsx\n- [ ] T009: Create ChangeRoleDialog modal for updating member roles | File: frontend/src/components/features/team/ChangeRoleDialog.tsx\n- [ ] T010: Create RemoveMemberDialog confirmation modal | File: frontend/src/components/features/team/RemoveMemberDialog.tsx\n\n## Phase 3: Pages & Integration\n\n- [ ] T011: Create TeamPage as main team management page | File: frontend/src/pages/workspace/TeamPage.tsx\n- [ ] T012: Create InvitationAcceptPage for accepting invitations | File: frontend/src/pages/public/InvitationAcceptPage.tsx\n- [ ] T013: Add Team navigation link to workspace sidebar | File: frontend/src/components/layout/WorkspaceSidebar.tsx\n- [ ] T014: Create index file for team components | File: frontend/src/components/features/team/index.ts\n\n## Phase 4: Testing & Verification\n\n- [ ] T015: Create Playwright verification test for team management flow | File: frontend/tests/e2e/team-management-verify.spec.ts\n- [ ] T016: Run verification test and fix any issues | File: N/A\n- [ ] T017: Delete verification test after successful run | File: N/A\n```\n\n## 7. Success Metrics\n\n| Metric | Target |\n|--------|--------|\n| Members list loads | < 500ms response time |\n| Invitation sent successfully | Email + pending status visible |\n| Role change reflects immediately | Permission cache invalidated |\n| All permission checks enforced | Unauthorized actions blocked with 403 |\n| Page renders without console errors | Zero React/TypeScript errors |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Backend invitation email not actually sending | Check `TODO: Send invitation email` in workspaces.py; may need to integrate SendGrid service |\n| Invitation accept endpoint might be missing | Verify and add `/api/v1/invitations/accept` public endpoint if needed |\n| Permission check inconsistency (members:read vs member:read) | Audit backend for correct permission names; fix inconsistencies |\n| Role changes not invalidating React Query cache | Call `queryClient.invalidateQueries` on mutations |\n\n---",
+    "generatedAt": "2026-01-07T12:23:38.608Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create teamService.ts with API methods for members, invitations, and roles",
+        "filePath": "frontend/src/services/teamService.ts",
+        "phase": "Phase 1: Foundation (Services & Hooks)",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Create useTeam.ts hook with React Query hooks for team operations",
+        "filePath": "frontend/src/hooks/useTeam.ts",
+        "phase": "Phase 1: Foundation (Services & Hooks)",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Add team routes to router configuration",
+        "filePath": "frontend/src/router/routes.tsx",
+        "phase": "Phase 1: Foundation (Services & Hooks)",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Add missing invitation accept/preview API endpoints to backend",
+        "filePath": "backend/src/app/api/v1/invitations.py",
+        "phase": "Phase 1: Foundation (Services & Hooks)",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create TeamMemberCard component for displaying member info",
+        "filePath": "frontend/src/components/features/team/TeamMemberCard.tsx",
+        "phase": "Phase 2: Core UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create InvitationCard component for pending invitations",
+        "filePath": "frontend/src/components/features/team/InvitationCard.tsx",
+        "phase": "Phase 2: Core UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create InviteMemberDialog modal for sending invitations",
+        "filePath": "frontend/src/components/features/team/InviteMemberDialog.tsx",
+        "phase": "Phase 2: Core UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Create RoleSelector component for choosing roles",
+        "filePath": "frontend/src/components/features/team/RoleSelector.tsx",
+        "phase": "Phase 2: Core UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create ChangeRoleDialog modal for updating member roles",
+        "filePath": "frontend/src/components/features/team/ChangeRoleDialog.tsx",
+        "phase": "Phase 2: Core UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Create RemoveMemberDialog confirmation modal",
+        "filePath": "frontend/src/components/features/team/RemoveMemberDialog.tsx",
+        "phase": "Phase 2: Core UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Create TeamPage as main team management page",
+        "filePath": "frontend/src/pages/workspace/TeamPage.tsx",
+        "phase": "Phase 3: Pages & Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create InvitationAcceptPage for accepting invitations",
+        "filePath": "frontend/src/pages/public/InvitationAcceptPage.tsx",
+        "phase": "Phase 3: Pages & Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Add Team navigation link to workspace sidebar",
+        "filePath": "frontend/src/components/layout/WorkspaceSidebar.tsx",
+        "phase": "Phase 3: Pages & Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create index file for team components",
+        "filePath": "frontend/src/components/features/team/index.ts",
+        "phase": "Phase 3: Pages & Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Create Playwright verification test for team management flow",
+        "filePath": "frontend/tests/e2e/team-management-verify.spec.ts",
+        "phase": "Phase 4: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Run verification test and fix any issues",
+        "filePath": "N/A",
+        "phase": "Phase 4: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Delete verification test after successful run",
+        "filePath": "N/A",
+        "phase": "Phase 4: Testing & Verification",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 17,
+    "tasksCompleted": 17,
+    "approvedAt": "2026-01-07T12:23:38.609Z",
+    "currentTaskId": "T017"
+  }
 }

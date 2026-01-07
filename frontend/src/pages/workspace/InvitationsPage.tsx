@@ -402,7 +402,7 @@ const InvitationsPage: React.FC = () => {
   const [eventTypeFilter, setEventTypeFilter] = useState<EventType | 'all'>('all');
 
   // Fetch invitations
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['invitations', workspaceId, statusFilter, eventTypeFilter, searchQuery],
     queryFn: () =>
       invitationService.listInvitations(workspaceId!, {
@@ -518,8 +518,8 @@ const InvitationsPage: React.FC = () => {
         <InvitationErrorFallback
           type={getErrorTypeFromError(error)}
           title="Failed to load invitations"
-          message="We couldn't load your invitations. Please try again."
           onRetry={() => refetch()}
+          isRetrying={isFetching}
           showBack={false}
           showHome={false}
         />

@@ -154,29 +154,44 @@ class SessionService:
         await self._enforce_max_sessions(user_id)
 
         # Store in PostgreSQL for persistence/audit
-        await pool.execute(
-            """
-            INSERT INTO sessions (
-                session_id, user_id, workspace_id, refresh_token_hash,
-                device_info, device_fingerprint,
-                ip_address, last_ip_address, ip_changed_at,
-                user_agent, created_at, last_used_at, expires_at
+        try:
+            await pool.execute(
+                """
+                INSERT INTO sessions (
+                    session_id, user_id, workspace_id, refresh_token_hash,
+                    device_info, device_fingerprint,
+                    ip_address, last_ip_address, ip_changed_at,
+                    user_agent, created_at, last_used_at, expires_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                """,
+                session_id,
+                user_id,
+                workspace_id,
+                token_hash,
+                json.dumps(device_info or {}),
+                device_fingerprint,
+                ip_address,
+                ip_address,  # last_ip_address initialized same as ip_address
+                None,  # ip_changed_at
+                user_agent,
+                now,  # $11 - created_at
+                now,  # $12 - last_used_at
+                expires_at,  # $13
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)
-            """,
-            session_id,
-            user_id,
-            workspace_id,
-            token_hash,
-            json.dumps(device_info or {}),
-            device_fingerprint,
-            ip_address,
-            ip_address,  # last_ip_address initialized same as ip_address
-            None,  # ip_changed_at
-            user_agent,
-            now,
-            expires_at,
-        )
+        except Exception as e:
+            logger.error(
+                "Failed to create session in PostgreSQL",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "user_id": str(user_id),
+                    "workspace_id": str(workspace_id) if workspace_id else None,
+                    "session_id": str(session_id),
+                },
+                exc_info=True,
+            )
+            raise
 
         logger.info("Session created", extra={"session_id": str(session_id), "user_id": str(user_id)})
         return session

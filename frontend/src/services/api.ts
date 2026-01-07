@@ -56,6 +56,16 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second
 const TIMEOUT_MS = 60000; // 60 seconds
 
+// Unauthenticated endpoints that should not trigger session expiration on 401
+const UNAUTHENTICATED_ENDPOINTS = [
+  '/api/v1/auth/login',
+  '/api/v1/auth/signup',
+  '/api/v1/auth/forgot-password',
+  '/api/v1/auth/reset-password',
+  '/api/v1/auth/verify-email',
+  '/api/v1/onboarding',
+];
+
 // Event for auth state changes - allows React to handle navigation instead of hard redirects
 export const AUTH_EVENTS = {
   SESSION_EXPIRED: 'rawdrive:session_expired',
@@ -101,9 +111,11 @@ function isRetryableError(error: any): boolean {
   // AbortError from user action has message "signal is aborted without reason" or similar
   // Only retry explicit timeout aborts that have 'timeout' in the message
   if (error.name === 'AbortError') {
-    return error.message?.toLowerCase().includes('timeout') || false;
+    const message = (error.message || '').toLowerCase();
+    return message.includes('timeout');
   }
-  if (error.message?.toLowerCase().includes('timeout')) {
+  const message = (error.message || '').toLowerCase();
+  if (message.includes('timeout')) {
     return true;
   }
 
@@ -251,6 +263,11 @@ class ApiClient {
 
       // Handle 401 - try token refresh
       if (response.status === 401) {
+        // Check if this is an unauthenticated endpoint (login, signup, etc.)
+        const isUnauthenticatedEndpoint = UNAUTHENTICATED_ENDPOINTS.some(
+          (ep) => endpoint.startsWith(ep)
+        );
+
         const newToken = await this.handleTokenRefresh();
 
         if (newToken) {
@@ -272,10 +289,22 @@ class ApiClient {
             clearTimeout(retryTimeoutId);
           }
         } else {
-          // Emit session expired event - let React handle the redirect gracefully
-          // This prevents jarring hard redirects that can happen during normal user interactions
-          emitSessionExpired();
-          return { error: { code: 'UNAUTHORIZED', message: 'Session expired' } };
+          // Only emit session expired for authenticated endpoints
+          // For unauthenticated endpoints (like login), return a generic auth error
+          if (!isUnauthenticatedEndpoint) {
+            // Emit session expired event - let React handle the redirect gracefully
+            // This prevents jarring hard redirects that can happen during normal user interactions
+            emitSessionExpired();
+          }
+
+          return {
+            error: {
+              code: 'UNAUTHORIZED',
+              message: isUnauthenticatedEndpoint
+                ? 'Authentication failed'
+                : 'Session expired'
+            }
+          };
         }
       }
 

@@ -14,7 +14,7 @@ import asyncpg
 from contextlib import asynccontextmanager
 
 from src.config import settings
-from src.logging import get_logger
+from src.log_config import get_logger
 
 logger = get_logger(__name__)
 

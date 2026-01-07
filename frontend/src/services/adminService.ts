@@ -59,7 +59,9 @@ export async function listPlatformAdmins(
   if (params?.search) searchParams.set('search', params.search);
 
   const url = `/api/v1/admin/admins${searchParams.toString() ? `?${searchParams}` : ''}`;
-  return apiClient.get<PaginatedResponse<PlatformAdmin>>(url);
+  const response = await apiClient.get<PaginatedResponse<PlatformAdmin>>(url);
+  if (!response.data) throw new Error(response.error?.message || 'Failed to list platform admins');
+  return response.data;
 }
 
 /**
@@ -69,9 +71,11 @@ export async function grantPlatformRole(
   userId: string,
   roleName: string
 ): Promise<MessageResponse> {
-  return apiClient.post<MessageResponse>(`/api/v1/admin/admins/${userId}/roles`, {
+  const response = await apiClient.post<MessageResponse>(`/api/v1/admin/admins/${userId}/roles`, {
     role: roleName,
   });
+  if (!response.data) throw new Error(response.error?.message || 'Failed to grant platform role');
+  return response.data;
 }
 
 /**
@@ -81,7 +85,9 @@ export async function revokePlatformRole(
   userId: string,
   roleName: string
 ): Promise<MessageResponse> {
-  return apiClient.delete<MessageResponse>(`/api/v1/admin/admins/${userId}/roles/${roleName}`);
+  const response = await apiClient.delete<MessageResponse>(`/api/v1/admin/admins/${userId}/roles/${roleName}`);
+  if (!response.data) throw new Error(response.error?.message || 'Failed to revoke platform role');
+  return response.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,7 +110,9 @@ export async function listWorkspaces(params?: {
   if (params?.search) searchParams.set('search', params.search);
 
   const url = `/api/v1/admin/workspaces${searchParams.toString() ? `?${searchParams}` : ''}`;
-  return apiClient.get<PaginatedResponse<AdminWorkspaceSearchResult>>(url);
+  const response = await apiClient.get<PaginatedResponse<AdminWorkspaceSearchResult>>(url);
+  if (!response.data) throw new Error(response.error?.message || 'Failed to list workspaces');
+  return response.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,16 +126,20 @@ export async function startSupportSession(
   workspaceId: string,
   justification: string
 ): Promise<SupportAccessSession> {
-  return apiClient.post<SupportAccessSession>(`/api/v1/admin/workspaces/${workspaceId}/support-access`, {
+  const response = await apiClient.post<SupportAccessSession>(`/api/v1/admin/workspaces/${workspaceId}/support-access`, {
     justification,
   });
+  if (!response.data) throw new Error(response.error?.message || 'Failed to start support session');
+  return response.data;
 }
 
 /**
  * End an active support session
  */
 export async function endSupportSession(sessionId: string): Promise<MessageResponse> {
-  return apiClient.delete<MessageResponse>(`/api/v1/admin/support-access/${sessionId}`);
+  const response = await apiClient.delete<MessageResponse>(`/api/v1/admin/support-access/${sessionId}`);
+  if (!response.data) throw new Error(response.error?.message || 'Failed to end support session');
+  return response.data;
 }
 
 /**
@@ -140,7 +152,9 @@ export async function listSupportSessions(params?: {
   if (params?.include_expired) searchParams.set('include_expired', 'true');
 
   const url = `/api/v1/admin/support-access${searchParams.toString() ? `?${searchParams}` : ''}`;
-  return apiClient.get<SupportAccessSession[]>(url);
+  const response = await apiClient.get<SupportAccessSession[]>(url);
+  if (!response.data) throw new Error(response.error?.message || 'Failed to list support sessions');
+  return response.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +165,9 @@ export async function listSupportSessions(params?: {
  * Get admin dashboard statistics
  */
 export async function getDashboardStats(): Promise<AdminDashboardStats> {
-  return apiClient.get<AdminDashboardStats>('/api/v1/admin/dashboard/stats');
+  const response = await apiClient.get<AdminDashboardStats>('/api/v1/admin/dashboard/stats');
+  if (!response.data) throw new Error(response.error?.message || 'Failed to get dashboard stats');
+  return response.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +190,9 @@ export async function listAuditLogs(
   if (params?.before) searchParams.set('before', params.before);
 
   const url = `/api/v1/admin/audit-logs${searchParams.toString() ? `?${searchParams}` : ''}`;
-  return apiClient.get<PaginatedResponse<AdminAuditLog>>(url);
+  const response = await apiClient.get<PaginatedResponse<AdminAuditLog>>(url);
+  if (!response.data) throw new Error(response.error?.message || 'Failed to list audit logs');
+  return response.data;
 }
 
 // ---------------------------------------------------------------------------

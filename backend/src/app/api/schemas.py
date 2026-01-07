@@ -94,6 +94,9 @@ class UpdateUserRequest(BaseModel):
 
     display_name: Optional[str] = Field(None, min_length=1, max_length=255)
     preferred_language: Optional[str] = Field(None, max_length=10)
+    secondary_language: Optional[str] = Field(None, max_length=10, description="Fallback language")
+    date_locale: Optional[str] = Field(None, max_length=10, description="Locale for date formatting (e.g., en-IN)")
+    number_locale: Optional[str] = Field(None, max_length=10, description="Locale for number/currency formatting")
 
 
 class CreateWorkspaceRequest(BaseModel):
@@ -102,6 +105,10 @@ class CreateWorkspaceRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Workspace name")
     slug: Optional[str] = Field(None, min_length=3, max_length=100, description="URL slug")
     default_language: str = Field("en-IN", max_length=10, description="Default language")
+    supported_languages: list[str] = Field(default=["en"], description="Languages enabled for this workspace")
+    guest_default_language: str = Field("en", max_length=10, description="Default language for guest/client content")
+    date_locale: str = Field("en-IN", max_length=10, description="Locale for date formatting")
+    number_locale: str = Field("en-IN", max_length=10, description="Locale for number/currency formatting")
 
 
 class UpdateWorkspaceRequest(BaseModel):
@@ -110,6 +117,10 @@ class UpdateWorkspaceRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     slug: Optional[str] = Field(None, min_length=3, max_length=100)
     default_language: Optional[str] = Field(None, max_length=10)
+    supported_languages: Optional[list[str]] = Field(None, description="Languages enabled for this workspace")
+    guest_default_language: Optional[str] = Field(None, max_length=10, description="Default language for guest/client content")
+    date_locale: Optional[str] = Field(None, max_length=10, description="Locale for date formatting")
+    number_locale: Optional[str] = Field(None, max_length=10, description="Locale for number/currency formatting")
 
 
 class InviteMemberRequest(BaseModel):
@@ -160,6 +171,10 @@ class UserProfileResponse(BaseModel):
     display_name: str
     email_verified: bool
     preferred_language: str
+    secondary_language: Optional[str] = None
+    date_locale: str = "en-IN"
+    number_locale: str = "en-IN"
+    language_detected_from: Optional[str] = None
     created_at: datetime
     workspace_id: Optional[UUID] = None
 
@@ -216,6 +231,10 @@ class WorkspaceResponse(BaseModel):
     slug: str
     status: str
     default_language: str
+    supported_languages: list[str] = ["en"]
+    guest_default_language: str = "en"
+    date_locale: str = "en-IN"
+    number_locale: str = "en-IN"
     created_at: datetime
     updated_at: datetime
 
@@ -767,6 +786,7 @@ class PaginationMeta(BaseModel):
 class CreateMagicLinkRequest(BaseModel):
     """Request to create a magic link."""
 
+    album_title: str = Field(..., min_length=1, max_length=200, description="Client-facing album title for public gallery")
     label: Optional[str] = Field(None, max_length=100, description="User-friendly label")
     target_type: Literal["gallery", "sub_gallery", "photo"] = Field(
         "gallery", description="What the link provides access to"
@@ -1142,6 +1162,10 @@ class ExtendedUserProfileResponse(BaseModel):
     display_name: str
     email_verified: bool
     preferred_language: str
+    secondary_language: Optional[str] = None
+    date_locale: str = "en-IN"
+    number_locale: str = "en-IN"
+    language_detected_from: Optional[str] = None
     created_at: datetime
     workspace_id: Optional[UUID] = None
 
@@ -1169,6 +1193,9 @@ class UpdateProfileRequest(BaseModel):
     timezone: Optional[str] = Field(None, max_length=50)
     bio: Optional[str] = Field(None, max_length=500)
     preferred_language: Optional[str] = Field(None, max_length=10)
+    secondary_language: Optional[str] = Field(None, max_length=10, description="Fallback language")
+    date_locale: Optional[str] = Field(None, max_length=10, description="Locale for date formatting (e.g., en-IN)")
+    number_locale: Optional[str] = Field(None, max_length=10, description="Locale for number/currency formatting")
 
 
 class AvatarUploadResponse(BaseModel):
@@ -2125,3 +2152,84 @@ class DownloadStatusResponse(BaseModel):
     created_at: datetime
     ready_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
+
+
+# ---------------------------------------------------------------------------
+# i18n / Language Preference Schemas (T006 - Localization & Regional Features)
+# ---------------------------------------------------------------------------
+
+
+class LanguageInfoResponse(BaseModel):
+    """Information about a supported language."""
+
+    code: str = Field(..., description="Language code (e.g., 'en', 'hi', 'te')")
+    name: str = Field(..., description="Language name in English")
+    native_name: str = Field(..., description="Language name in its native script")
+    direction: Literal["ltr", "rtl"] = Field("ltr", description="Text direction")
+    flag_emoji: Optional[str] = Field(None, description="Optional flag emoji")
+
+
+class LanguageListResponse(BaseModel):
+    """Response for listing supported languages."""
+
+    languages: list[LanguageInfoResponse]
+    total: int = Field(..., description="Total number of supported languages")
+
+
+class LanguagePreferenceResponse(BaseModel):
+    """Language preference response with full details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    preference_id: UUID
+    context: str = Field(..., description="Context (ui, email, notification, etc.)")
+    primary_language: str = Field(..., description="Primary language code")
+    fallback_language: str = Field(..., description="Fallback language code")
+    date_locale: str = Field("en-IN", description="Locale for date formatting")
+    number_locale: str = Field("en-IN", description="Locale for number formatting")
+    currency_code: str = Field("INR", description="Preferred currency (ISO 4217)")
+    timezone: str = Field("Asia/Kolkata", description="Timezone (IANA identifier)")
+    source: str = Field(..., description="How preference was determined")
+    is_explicit: bool = Field(False, description="Whether user explicitly set this")
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class UpdateLanguagePreferenceRequest(BaseModel):
+    """Request to update language preference for a context."""
+
+    primary_language: Optional[str] = Field(None, max_length=10, description="Primary language code")
+    fallback_language: Optional[str] = Field(None, max_length=10, description="Fallback language")
+    date_locale: Optional[str] = Field(None, max_length=20, description="Date locale (e.g., en-IN)")
+    number_locale: Optional[str] = Field(None, max_length=20, description="Number locale")
+    currency_code: Optional[str] = Field(None, max_length=3, description="Currency code (ISO 4217)")
+    timezone: Optional[str] = Field(None, max_length=100, description="Timezone (IANA identifier)")
+
+
+class SetLanguageRequest(BaseModel):
+    """Request to set primary language for a context."""
+
+    language: str = Field(..., min_length=2, max_length=10, description="Language code (e.g., 'hi', 'te')")
+
+
+class ResolvedLocaleResponse(BaseModel):
+    """Response with resolved locale information."""
+
+    language: str = Field(..., description="Resolved language code")
+    fallback: str = Field(..., description="Fallback language code")
+    source: str = Field(..., description="How locale was determined")
+    is_explicit: bool = Field(False, description="Whether explicitly set by user")
+    date_locale: str = Field("en-IN", description="Date formatting locale")
+    number_locale: str = Field("en-IN", description="Number formatting locale")
+    currency_code: str = Field("INR", description="Currency code")
+    timezone: str = Field("Asia/Kolkata", description="Timezone")
+    direction: Literal["ltr", "rtl"] = Field("ltr", description="Text direction")
+
+
+class UserLanguagePreferencesResponse(BaseModel):
+    """Response with all user language preferences."""
+
+    preferences: list[LanguagePreferenceResponse]
+    resolved_ui_locale: ResolvedLocaleResponse = Field(
+        ..., description="Currently resolved UI locale"
+    )

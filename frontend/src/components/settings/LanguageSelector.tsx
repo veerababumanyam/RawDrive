@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown, Globe } from 'lucide-react';
 import { SUPPORTED_LANGUAGES, type LanguageCode } from '../../i18n/config';
-import { userService } from '../../services/userService';
+import { i18nService } from '../../services/i18nService';
 
 interface LanguageSelectorProps {
     /** Callback when language changes successfully */
@@ -45,9 +45,9 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
             await i18n.changeLanguage(langCode);
 
             // Persist to localStorage (handled by i18next detector)
-            // Persist to backend
+            // Persist to backend via i18n service
             try {
-                await userService.updateProfile({ preferred_language: langCode });
+                await i18nService.syncLanguage(langCode);
             } catch (error) {
                 console.warn('Failed to save language preference to backend:', error);
                 // Continue anyway - localStorage will persist it

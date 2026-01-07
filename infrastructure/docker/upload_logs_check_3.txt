@@ -1,0 +1,200 @@
+﻿rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 773, in _prepare
+rawdrive-upload-service  |     prepared_stmt = await self._connection.prepare(
+rawdrive-upload-service  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/asyncpg/connection.py", line 638, in prepare
+rawdrive-upload-service  |     return await self._prepare(
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/asyncpg/connection.py", line 657, in _prepare
+rawdrive-upload-service  |     stmt = await self._get_statement(
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/asyncpg/connection.py", line 443, in _get_statement
+rawdrive-upload-service  |     statement = await self._protocol.prepare(
+rawdrive-upload-service  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "asyncpg/protocol/protocol.pyx", line 165, in prepare
+rawdrive-upload-service  | asyncpg.exceptions.UndefinedColumnError: column w.storage_used_bytes does not exist
+rawdrive-upload-service  | 
+rawdrive-upload-service  | The above exception was the direct cause of the following exception:
+rawdrive-upload-service  | 
+rawdrive-upload-service  | Traceback (most recent call last):
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+rawdrive-upload-service  |     self.dialect.do_execute(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+rawdrive-upload-service  |     cursor.execute(statement, parameters)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
+rawdrive-upload-service  |     self._adapt_connection.await_(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+rawdrive-upload-service  |     return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+rawdrive-upload-service  |     value = await result
+rawdrive-upload-service  |             ^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
+rawdrive-upload-service  |     self._handle_exception(error)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
+rawdrive-upload-service  |     self._adapt_connection._handle_exception(error)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+rawdrive-upload-service  |     raise translated_error from error
+rawdrive-upload-service  | sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedColumnError'>: column w.storage_used_bytes does not exist
+rawdrive-upload-service  | 
+rawdrive-upload-service  | The above exception was the direct cause of the following exception:
+rawdrive-upload-service  | 
+rawdrive-upload-service  | Traceback (most recent call last):
+rawdrive-upload-service  |   File "/app/src/app/api/v1/upload.py", line 383, in create_upload_session
+rawdrive-upload-service  |     result = await upload_service.create_upload_session(
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/services/upload_service.py", line 575, in create_upload_session
+rawdrive-upload-service  |     allowed, error_message = await self.check_storage_quota(
+rawdrive-upload-service  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/services/upload_service.py", line 402, in check_storage_quota
+rawdrive-upload-service  |     row = await fetch_one(query, {"workspace_id": workspace_id})
+rawdrive-upload-service  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/core/database.py", line 771, in fetch_one
+rawdrive-upload-service  |     result = await conn.execute(text(query), params or {})
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/ext/asyncio/engine.py", line 659, in execute
+rawdrive-upload-service  |     result = await greenlet_spawn(
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+rawdrive-upload-service  |     result = context.throw(*sys.exc_info())
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+rawdrive-upload-service  |     return meth(
+rawdrive-upload-service  |            ^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+rawdrive-upload-service  |     return connection._execute_clauseelement(
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+rawdrive-upload-service  |     ret = self._execute_context(
+rawdrive-upload-service  |           ^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+rawdrive-upload-service  |     return self._exec_single_context(
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+rawdrive-upload-service  |     self._handle_dbapi_exception(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+rawdrive-upload-service  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+rawdrive-upload-service  |     self.dialect.do_execute(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+rawdrive-upload-service  |     cursor.execute(statement, parameters)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
+rawdrive-upload-service  |     self._adapt_connection.await_(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+rawdrive-upload-service  |     return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+rawdrive-upload-service  |     value = await result
+rawdrive-upload-service  |             ^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
+rawdrive-upload-service  |     self._handle_exception(error)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
+rawdrive-upload-service  |     self._adapt_connection._handle_exception(error)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+rawdrive-upload-service  |     raise translated_error from error
+rawdrive-upload-service  | sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column w.storage_used_bytes does not exist
+rawdrive-upload-service  | [SQL: 
+rawdrive-upload-service  |             SELECT
+rawdrive-upload-service  |                 COALESCE(w.storage_used_bytes, 0) as storage_used,
+rawdrive-upload-service  |                 COALESCE(p.storage_bytes, 0) as storage_limit
+rawdrive-upload-service  |             FROM workspaces w
+rawdrive-upload-service  |             LEFT JOIN workspace_subscriptions ws ON ws.workspace_id = w.workspace_id
+rawdrive-upload-service  |             LEFT JOIN plans p ON p.plan_id = ws.plan_id
+rawdrive-upload-service  |             WHERE w.workspace_id = $1
+rawdrive-upload-service  |         ]
+rawdrive-upload-service  | [parameters: (UUID('11111111-1111-1111-1111-000000000003'),)]
+rawdrive-upload-service  | (Background on this error at: https://sqlalche.me/e/20/f405)
+rawdrive-upload-service  | 
+rawdrive-upload-service  | The above exception was the direct cause of the following exception:
+rawdrive-upload-service  | 
+rawdrive-upload-service  | Traceback (most recent call last):
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+rawdrive-upload-service  |     result = await app(  # type: ignore[func-returns-value]
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+rawdrive-upload-service  |     return await self.app(scope, receive, send)
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/applications.py", line 1135, in __call__
+rawdrive-upload-service  |     await super().__call__(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/applications.py", line 107, in __call__
+rawdrive-upload-service  |     await self.middleware_stack(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 186, in __call__
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 164, in __call__
+rawdrive-upload-service  |     await self.app(scope, receive, _send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 191, in __call__
+rawdrive-upload-service  |     with recv_stream, send_stream, collapse_excgroups():
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/contextlib.py", line 158, in __exit__
+rawdrive-upload-service  |     self.gen.throw(typ, value, traceback)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_utils.py", line 85, in collapse_excgroups
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+rawdrive-upload-service  |     response = await self.dispatch_func(request, call_next)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/middleware/rate_limit.py", line 110, in dispatch
+rawdrive-upload-service  |     response = await call_next(request)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
+rawdrive-upload-service  |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+rawdrive-upload-service  |     await self.app(scope, receive_or_disconnect, send_no_error)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 191, in __call__
+rawdrive-upload-service  |     with recv_stream, send_stream, collapse_excgroups():
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/contextlib.py", line 158, in __exit__
+rawdrive-upload-service  |     self.gen.throw(typ, value, traceback)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_utils.py", line 85, in collapse_excgroups
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+rawdrive-upload-service  |     response = await self.dispatch_func(request, call_next)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/middleware/auth.py", line 126, in dispatch
+rawdrive-upload-service  |     response = await call_next(request)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
+rawdrive-upload-service  |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+rawdrive-upload-service  |     await self.app(scope, receive_or_disconnect, send_no_error)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 93, in __call__
+rawdrive-upload-service  |     await self.simple_response(scope, receive, send, request_headers=headers)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 144, in simple_response
+rawdrive-upload-service  |     await self.app(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+rawdrive-upload-service  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+rawdrive-upload-service  |     await app(scope, receive, sender)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+rawdrive-upload-service  |     await self.app(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 716, in __call__
+rawdrive-upload-service  |     await self.middleware_stack(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 736, in app
+rawdrive-upload-service  |     await route.handle(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 290, in handle
+rawdrive-upload-service  |     await self.app(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 115, in app
+rawdrive-upload-service  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+rawdrive-upload-service  |     await app(scope, receive, sender)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 101, in app
+rawdrive-upload-service  |     response = await f(request)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 355, in app
+rawdrive-upload-service  |     raw_response = await run_endpoint_function(
+rawdrive-upload-service  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 243, in run_endpoint_function
+rawdrive-upload-service  |     return await dependant.call(**values)
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/api/v1/upload.py", line 471, in create_upload_session
+rawdrive-upload-service  |     logger.exception(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1524, in exception
+rawdrive-upload-service  |     self.error(msg, *args, exc_info=exc_info, **kwargs)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1518, in error
+rawdrive-upload-service  |     self._log(ERROR, msg, args, **kwargs)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1632, in _log
+rawdrive-upload-service  |     record = self.makeRecord(self.name, level, fn, lno, msg, args,
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1606, in makeRecord
+rawdrive-upload-service  |     raise KeyError("Attempt to overwrite %r in LogRecord" % key)
+rawdrive-upload-service  | KeyError: "Attempt to overwrite 'filename' in LogRecord"

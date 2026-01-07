@@ -23,7 +23,7 @@ from src.middleware.rate_limiter import RateLimiterMiddleware
 from src.middleware.correlation import CorrelationMiddleware
 from src.cache.redis_client import redis_client
 from src.database import get_pool, close_pool
-from src.logging import configure_logging, get_logger
+from src.log_config import configure_logging, get_logger
 from src.observability.health import health_checker
 from src.observability.metrics import generate_latest_metrics
 

@@ -14,4 +14,8 @@ export * from './syncService';
 export * from './searchService';
 export * from './cleanupService';
 export * from './galleryExportService';
-export * from './analyticsService';
+export { AnalyticsService, analyticsService } from './analyticsService';
+export type * as AnalyticsModels from './analyticsService';
+
+export { i18nService } from './i18nService';
+export type * from './i18nService';

@@ -1,0 +1,67 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: photo-sync-scaler
+  labels:
+    app: photo-sync-service
+spec:
+  scaleTargetRef:
+    name: photo-sync-service
+    kind: Deployment
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  pollingInterval: 15
+  cooldownPeriod: 300
+  advanced:
+    restoreToOriginalReplicaCount: true
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 10
+              periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+            - type: Pods
+              value: 4
+              periodSeconds: 15
+          selectPolicy: Max
+  triggers:
+    # Scale based on RabbitMQ queue length
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: photo-sync.jobs
+        mode: QueueLength
+        value: "10"  # Scale up when >10 pending jobs per pod
+      authenticationRef:
+        name: photo-sync-rabbitmq-auth
+
+    # Scale based on CPU utilization
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"
+
+    # Scale based on memory utilization
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: "80"
+
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: photo-sync-rabbitmq-auth
+spec:
+  secretTargetRef:
+    - parameter: host
+      name: photo-sync-secrets
+      key: RABBITMQ_URL

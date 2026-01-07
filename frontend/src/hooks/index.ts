@@ -196,3 +196,67 @@ export type {
   AuditExportFormat,
   AuditExportStatus,
 } from './useAuditLogs';
+
+// AI Highlights hooks
+export { useAIHighlights } from './useAIHighlights';
+export type {
+  UseAIHighlightsOptions,
+  UseAIHighlightsResult,
+} from './useAIHighlights';
+
+// Team Management hooks
+export {
+  // Query hooks
+  useTeamMembers,
+  useInvitations,
+  useRoles,
+  useInvitationPreview,
+  useTeam,
+  // Mutation hooks - Members
+  useRemoveMember,
+  useUpdateMemberRoles,
+  // Mutation hooks - Invitations
+  useInviteMember,
+  useRevokeInvitation,
+  useResendInvitation,
+  useAcceptInvitation,
+  // Mutation hooks - Roles
+  useCreateRole,
+  useUpdateRole,
+  useDeleteRole,
+  // Query keys and utilities
+  teamQueryKeys,
+  invalidateTeamCache,
+  clearAllTeamCaches,
+  // Re-exported utilities from service
+  isInvitationExpired,
+  isSystemRole,
+  formatPermissions,
+  SYSTEM_ROLES,
+} from './useTeam';
+export type {
+  // Hook options and return types
+  UseTeamMembersOptions,
+  UseTeamMembersReturn,
+  UseInvitationsOptions,
+  UseInvitationsReturn,
+  UseRolesOptions,
+  UseRolesReturn,
+  UseInvitationPreviewOptions,
+  UseInvitationPreviewReturn,
+  UseTeamOptions,
+  UseTeamReturn,
+  // Service types
+  WorkspaceMember,
+  MemberListResponse,
+  WorkspaceInvitation,
+  InvitationPreview,
+  Role,
+  InviteMemberRequest,
+  CreateRoleRequest,
+  UpdateRoleRequest,
+  AcceptInvitationResponse,
+  MessageResponse,
+  InvitationStatus,
+  MemberStatus,
+} from './useTeam';

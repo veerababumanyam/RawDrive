@@ -170,6 +170,34 @@ http:
       priority: 145
 
     # -------------------------------------------------------------------------
+    # Notifications Microservice - Webhooks (SendGrid callbacks)
+    # Higher priority to match before generic notifications routes
+    # -------------------------------------------------------------------------
+    notifications-webhooks-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/notifications/webhooks`)"
+      entryPoints:
+        - web
+      service: notifications-service
+      middlewares:
+        - rate-limit-webhooks
+        - security-headers-dev
+      priority: 150
+
+    # -------------------------------------------------------------------------
+    # Notifications Microservice - API Endpoints
+    # -------------------------------------------------------------------------
+    notifications-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/notifications`)"
+      entryPoints:
+        - web
+      service: notifications-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 145
+
+    # -------------------------------------------------------------------------
     # AI Service - Stricter rate limiting
     # -------------------------------------------------------------------------
     ai-router-local:
@@ -266,6 +294,15 @@ http:
           interval: 10s
           timeout: 3s
 
+    notifications-service:
+      loadBalancer:
+        servers:
+          - url: "http://notifications-service:8007"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
     grafana-service:
       loadBalancer:
         servers:
@@ -357,6 +394,7 @@ http:
           - "http://localhost:3000"
           - "http://localhost:80"
           - "http://localhost"
+          - "http://localhost:5173"
         accessControlAllowCredentials: true
         accessControlMaxAge: 86400
         addVaryHeader: true

@@ -130,8 +130,8 @@ class TestGalleryService:
 
             with pytest.raises(GalleryNotFoundError):
                 await gallery_service.get_gallery(
-                    workspace_id="test-workspace",
-                    gallery_id="non-existent",
+                    workspace_id="550e8400-e29b-41d4-a716-446655440000",
+                    gallery_id="660e8400-e29b-41d4-a716-446655440000",
                 )
 
     @pytest.mark.asyncio
@@ -164,7 +164,7 @@ class TestGalleryService:
             mock_conn.return_value = mock_ctx
 
             result = await gallery_service.list_galleries(
-                workspace_id="test-workspace",
+                workspace_id="550e8400-e29b-41d4-a716-446655440000",
                 page=1,
                 limit=20,
             )

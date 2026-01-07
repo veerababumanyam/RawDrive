@@ -6,8 +6,8 @@ specific AI features per user.
 Feature: 010-ai-powered-features
 Task: T080 - Add AI feature toggles in user settings
 
-Revision ID: 0049
-Revises: 0048
+Revision ID: 0049b
+Revises: 0049
 Create Date: 2025-12-28
 """
 

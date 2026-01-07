@@ -1,7 +1,7 @@
 """Add shoot_date and client_id to galleries.
 
 Revision ID: 0016
-Revises: 0015
+Revises: 0015_recycle_bin_indexes
 Create Date: 2025-12-21
 """
 

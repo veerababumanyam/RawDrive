@@ -1,0 +1,9 @@
+{
+  "category": "Frontend React Query Configuration",
+  "description": "Configure React Query staleTime to 5 minutes (300,000ms) for read-heavy endpoints (galleries, assets, quality analysis). Currently, staleTime defaults to 0ms, forcing API calls on every mount even if data was fetched seconds prior. Implement proper cache invalidation on mutations (favorite, rename, publish). Add onSuccess callbacks to update cache instead of refetching entire galleries.",
+  "id": "feature-1767788779286-lv19se0bj",
+  "steps": [],
+  "status": "backlog",
+  "skipTests": true,
+  "priority": 1
+}

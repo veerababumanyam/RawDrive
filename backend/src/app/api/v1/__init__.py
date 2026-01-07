@@ -47,9 +47,11 @@ from app.api.v1.gemini_settings import models_router as gemini_models_router
 from app.api.v1.admin_gemini_models import router as admin_gemini_models_router
 from app.api.v1.client_favorites import router as client_favorites_router
 from app.api.v1.favorites_analytics import router as favorites_analytics_router
+from app.api.v1.i18n import router as i18n_router
+from app.api.v1.invitations import router as invitations_router
 # Temporarily commented out until all invitation types are generated
-# from app.api.v1.digital_invitations import router as digital_invitations_router
-# from app.api.v1.public_invitations import router as public_invitations_router
+from app.api.v1.digital_invitations import router as digital_invitations_router
+from app.api.v1.public_invitations import router as public_invitations_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -229,16 +231,23 @@ router.include_router(
     tags=["favorites-analytics"],
 )
 
+# Internationalization routes (Localization & Regional Features)
+# Language preference management, locale resolution, and supported languages API
+router.include_router(i18n_router)
 
+# Team Member Invitations routes (Team Management & Multi-User Workspaces)
+# Public endpoints for accepting and previewing workspace member invitations
+# Includes: GET /invitations/{token} (preview), POST /invitations/accept (accept)
+router.include_router(invitations_router)
 
 # Public Invitations routes (016-save-the-date)
 # Public endpoints for guest access to invitations and RSVP submission
 # Temporarily commented out until all invitation types are generated
-# router.include_router(
-#     public_invitations_router,
-#     prefix="/api/v1/public/invitations",
-#     tags=["public-invitations"],
-# )
+router.include_router(
+    public_invitations_router,
+    prefix="/api/v1/public/invitations",
+    tags=["public-invitations"],
+)
 
 # from app.api.v1.invitation_media import router as invitation_media_router  # Temporarily disabled
 # router.include_router(  # Temporarily disabled
@@ -334,11 +343,11 @@ from app.api.v1.invitations_microservice_proxy import router as invitations_micr
 # NOTE: Using /digital-invitations to avoid conflict with workspace member invitations
 # in workspaces.py which uses /{workspace_id}/invitations
 # Temporarily commented out until all invitation types are generated
-# router.include_router(
-#     digital_invitations_router,
-#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
-#     tags=["digital-invitations"],
-# )
+router.include_router(
+    digital_invitations_router,
+    prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
+    tags=["digital-invitations"],
+)
 
 # Engagement Scoring routes (Automated Engagement Scoring System)
 # Tracks client interaction patterns and provides predictive scoring

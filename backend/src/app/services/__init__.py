@@ -60,6 +60,22 @@ from app.services.email_verification_service import (
     ResendCooldownError,
     cleanup_verification_tokens_job,
 )
+from app.services.email_service import (
+    EmailService,
+    get_email_service,
+    EmailServiceError,
+    EmailNotConfiguredError,
+    EmailSendError,
+    EmailRateLimitError,
+    EmailInvalidRecipientError,
+    EmailType,
+    EmailProvider,
+    EmailStatus,
+    EmailResult,
+    send_verification_email,
+    send_welcome_email,
+    send_password_reset_email,
+)
 from app.services.task_queue import (
     TaskQueueService,
     Task,
@@ -149,6 +165,12 @@ from app.services.incident_service import (
     AffectedResourceListResult,
     NotificationDeadlineResult,
 )
+from app.services.i18n_service import (
+    I18nService,
+    get_i18n_service,
+    I18nServiceError,
+    UnsupportedLanguageError,
+)
 
 
 __all__ = [
@@ -216,6 +238,21 @@ __all__ = [
     "EmailAlreadyVerifiedError",
     "ResendCooldownError",
     "cleanup_verification_tokens_job",
+    # Email Service (SMTP/SendGrid)
+    "EmailService",
+    "get_email_service",
+    "EmailServiceError",
+    "EmailNotConfiguredError",
+    "EmailSendError",
+    "EmailRateLimitError",
+    "EmailInvalidRecipientError",
+    "EmailType",
+    "EmailProvider",
+    "EmailStatus",
+    "EmailResult",
+    "send_verification_email",
+    "send_welcome_email",
+    "send_password_reset_email",
     # Task Queue
     "TaskQueueService",
     "Task",
@@ -318,4 +355,9 @@ __all__ = [
     "IncidentUpdateListResult",
     "AffectedResourceListResult",
     "NotificationDeadlineResult",
+    # I18n (Localization & Regional Features)
+    "I18nService",
+    "get_i18n_service",
+    "I18nServiceError",
+    "UnsupportedLanguageError",
 ]

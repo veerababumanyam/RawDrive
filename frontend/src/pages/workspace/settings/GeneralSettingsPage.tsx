@@ -5,13 +5,14 @@
  * Uses centralized design system classes for consistent styling.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe, Palette, Bell, Shield, Settings } from 'lucide-react';
+import { Globe, Palette, Bell, Shield, Settings, Keyboard, X } from 'lucide-react';
 import { LanguageSelector } from '../../../components/settings/LanguageSelector';
 
 const GeneralSettingsPage: React.FC = () => {
     const { t } = useTranslation('settings');
+    const [showKeyboardModal, setShowKeyboardModal] = useState(false);
 
     return (
         <div className="h-full overflow-auto bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
@@ -157,8 +158,63 @@ const GeneralSettingsPage: React.FC = () => {
                             />
                         </div>
                     </section>
+
+                    {/* Keyboard Shortcuts */}
+                    <section className="glass-card glass-card-hover rounded-2xl p-4 sm:p-6">
+                        <div className="flex items-start gap-4 mb-6">
+                            <div className="icon-container icon-container-lg icon-container-success rounded-xl shadow-lg">
+                                <Keyboard size={22} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-semibold text-text-primary">
+                                    Keyboard Shortcuts
+                                </h2>
+                                <p className="text-sm text-text-secondary mt-0.5">
+                                    Speed up your workflow with keyboard shortcuts
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between py-3 px-3 -mx-3 rounded-xl bg-surface-hover/50">
+                            <div>
+                                <div className="font-medium text-text-primary">View all shortcuts</div>
+                                <div className="text-sm text-text-tertiary">Press <kbd className="px-1.5 py-0.5 text-xs font-mono bg-surface-hover border border-border rounded">?</kbd> anywhere to open</div>
+                            </div>
+                            <button
+                                onClick={() => setShowKeyboardModal(true)}
+                                className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors shadow-sm"
+                            >
+                                Open Shortcuts
+                            </button>
+                        </div>
+                    </section>
                 </div>
             </main>
+
+            {/* Keyboard Shortcuts Modal */}
+            {showKeyboardModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowKeyboardModal(false)}>
+                    <div className="glass-card rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-bold text-gradient">Keyboard Shortcuts</h2>
+                            <button onClick={() => setShowKeyboardModal(false)} className="p-2 rounded-lg hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            <ShortcutRow keys={['?']} description="Show this help" />
+                            <ShortcutRow keys={['G', 'D']} description="Go to Dashboard" />
+                            <ShortcutRow keys={['G', 'G']} description="Go to Galleries" />
+                            <ShortcutRow keys={['G', 'C']} description="Go to Clients" />
+                            <ShortcutRow keys={['G', 'P']} description="Go to People" />
+                            <ShortcutRow keys={['N']} description="Create New Gallery" />
+                            <ShortcutRow keys={['/', 'Ctrl', 'K']} description="Search" />
+                            <ShortcutRow keys={['Esc']} description="Close modal / Cancel" />
+                        </div>
+                        <p className="text-xs text-text-tertiary mt-6 text-center">Press <kbd className="px-1 py-0.5 text-xs font-mono bg-surface-hover border border-border rounded">Esc</kbd> to close</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -200,5 +256,24 @@ const ToggleRow: React.FC<ToggleRowProps> = React.memo(({ label, description, de
         </div>
     );
 });
+
+interface ShortcutRowProps {
+    keys: string[];
+    description: string;
+}
+
+const ShortcutRow: React.FC<ShortcutRowProps> = ({ keys, description }) => (
+    <div className="flex items-center justify-between py-2">
+        <span className="text-text-secondary">{description}</span>
+        <div className="flex items-center gap-1">
+            {keys.map((key, i) => (
+                <React.Fragment key={key}>
+                    <kbd className="px-2 py-1 text-xs font-mono font-semibold bg-surface-hover border border-border rounded shadow-sm text-text-primary">{key}</kbd>
+                    {i < keys.length - 1 && <span className="text-text-tertiary">+</span>}
+                </React.Fragment>
+            ))}
+        </div>
+    </div>
+);
 
 export default GeneralSettingsPage;

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Callable, Dict, List, Optional, Awaitable
 
-from src.logging import get_logger
+from src.log_config import get_logger
 
 logger = get_logger(__name__)
 

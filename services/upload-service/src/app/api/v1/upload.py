@@ -121,6 +121,7 @@ async def get_current_user(
     try:
         # Import jose for token decoding (python-jose library)
         from jose import jwt, JWTError, ExpiredSignatureError
+        from jose.exceptions import JWKError
 
         settings = get_settings()
 
@@ -146,16 +147,18 @@ async def get_current_user(
                     algorithms=["HS256"],
                     issuer=settings.JWT_ISSUER,
                 )
-        except JWTError as e:
+        except (JWTError, JWKError) as e:
             # In development, allow unverified decode for testing
             if settings.is_development:
-                payload = jwt.decode(
-                    token,
-                    options={"verify_signature": False, "verify_exp": False},
-                )
-                logger.warning(
-                    "JWT signature verification skipped in development mode"
-                )
+                try:
+                    payload = jwt.get_unverified_claims(token)
+                    logger.warning(
+                        "JWT signature verification failed, using unverified claims in dev mode",
+                        extra={"original_error": str(e)}
+                    )
+                except Exception as ex:
+                    logger.error("Failed to decode token unverified", extra={"error": str(ex)})
+                    raise AuthError("Invalid token")
             else:
                 raise
 
@@ -366,7 +369,7 @@ async def create_upload_session(
         logger.info(
             "RAW file upload session requested",
             extra={
-                "filename": request.file_name,
+                "file_name": request.file_name,
                 "extension": ext,
                 "mime_type": request.mime_type,
                 "size_bytes": request.size_bytes,
@@ -395,7 +398,7 @@ async def create_upload_session(
                 "upload_id": result["upload_id"],
                 "workspace_id": str(workspace_id),
                 "user_id": str(current_user.user_id),
-                "filename": request.file_name,
+                "file_name": request.file_name,
                 "size_bytes": request.size_bytes,
             },
         )
@@ -417,7 +420,7 @@ async def create_upload_session(
             extra={
                 "error": str(e),
                 "code": e.code,
-                "filename": request.file_name,
+                "file_name": request.file_name,
                 "mime_type": request.mime_type,
                 "size_bytes": request.size_bytes,
             },
@@ -470,7 +473,7 @@ async def create_upload_session(
             extra={
                 "error": str(e),
                 "workspace_id": str(workspace_id),
-                "filename": request.file_name,
+                "file_name": request.file_name,
             },
         )
         raise HTTPException(
@@ -1494,11 +1497,13 @@ async def complete_upload(
         # Create streaming encryptor
         encryptor = encryption_service.create_streaming_encryptor(workspace_id)
         encryption_iv = encryptor.iv
+        hmac_tag = None
+        key_version = 1  # Default version for deterministic key derivation
 
         # For large files (>10MB), use multipart upload
         if expected_size > r2_service.MULTIPART_THRESHOLD:
             # Streaming multipart upload with encryption
-            etag = await _encrypt_and_upload_multipart(
+            etag, hmac_tag = await _encrypt_and_upload_multipart(
                 chunked_service=chunked_service,
                 r2_service=r2_service,
                 encryptor=encryptor,
@@ -1510,7 +1515,7 @@ async def complete_upload(
         else:
             # For smaller files, assemble, encrypt, and upload in one shot
             # (Still streaming from Redis, just not multipart to R2)
-            encrypted_data = await _encrypt_assembled_file(
+            encrypted_data, hmac_tag = await _encrypt_assembled_file(
                 chunked_service=chunked_service,
                 encryptor=encryptor,
                 workspace_id=workspace_id,
@@ -1542,21 +1547,19 @@ async def complete_upload(
 
         # 10. Create asset record in database
         async with get_connection() as conn:
-            # Insert asset record
+            # Insert asset record (without encryption columns - they're in asset_encryption table)
             await conn.execute(
                 text("""
                     INSERT INTO assets (
                         asset_id, workspace_id, created_by_user_id,
-                        file_type, mime_type, sha256,
+                        type, mime_type, sha256,
                         original_object_key, original_bytes,
-                        encryption_iv, encryption_algo,
                         status, created_at, updated_at
                     )
                     VALUES (
                         :asset_id, :workspace_id, :user_id,
-                        :file_type, :mime_type, :sha256,
+                        :type, :mime_type, :sha256,
                         :object_key, :size_bytes,
-                        :encryption_iv, :encryption_algo,
                         :status, NOW(), NOW()
                     )
                 """),
@@ -1564,14 +1567,41 @@ async def complete_upload(
                     "asset_id": asset_id,
                     "workspace_id": workspace_id,
                     "user_id": current_user.user_id,
-                    "file_type": file_type,
+                    "type": file_type,
                     "mime_type": mime_type,
                     "sha256": computed_sha256,
                     "object_key": object_key,
                     "size_bytes": expected_size,
-                    "encryption_iv": encryption_iv.hex(),
-                    "encryption_algo": "AES-256-CTR-HMAC",
-                    "status": "processing",
+                    "status": "available",  # Set to 'available' immediately so it appears in gallery
+                    # Background processing (thumbnails, variants) will still run via Kafka event
+                },
+            )
+
+            # Insert encryption metadata into asset_encryption table
+            import base64
+            if hmac_tag is None:
+                raise ValueError("HMAC tag is None - encryption finalization failed")
+            await conn.execute(
+                text("""
+                    INSERT INTO asset_encryption (
+                        asset_id, workspace_id, variant, key_version, iv, auth_tag
+                    )
+                    VALUES (
+                        :asset_id, :workspace_id, :variant, :key_version, :iv, :auth_tag
+                    )
+                    ON CONFLICT (asset_id, variant) DO UPDATE SET
+                        key_version = EXCLUDED.key_version,
+                        iv = EXCLUDED.iv,
+                        auth_tag = EXCLUDED.auth_tag,
+                        encrypted_at = NOW()
+                """),
+                {
+                    "asset_id": asset_id,
+                    "workspace_id": workspace_id,
+                    "variant": "original",
+                    "key_version": key_version,
+                    "iv": base64.b64encode(encryption_iv).decode("utf-8"),
+                    "auth_tag": base64.b64encode(hmac_tag).decode("utf-8"),
                 },
             )
 
@@ -1581,11 +1611,11 @@ async def complete_upload(
                     text("""
                         INSERT INTO gallery_assets (
                             gallery_id, sub_gallery_id, asset_id,
-                            workspace_id, created_at
+                            workspace_id, visible, created_at
                         )
                         VALUES (
                             :gallery_id, :sub_gallery_id, :asset_id,
-                            :workspace_id, NOW()
+                            :workspace_id, TRUE, NOW()
                         )
                     """),
                     {
@@ -1596,19 +1626,9 @@ async def complete_upload(
                     },
                 )
 
-            # Update workspace storage usage
-            await conn.execute(
-                text("""
-                    UPDATE workspaces
-                    SET storage_used_bytes = COALESCE(storage_used_bytes, 0) + :size_bytes,
-                        updated_at = NOW()
-                    WHERE workspace_id = :workspace_id
-                """),
-                {
-                    "workspace_id": workspace_id,
-                    "size_bytes": expected_size,
-                },
-            )
+            # Storage usage is tracked via workspace_storage_cache table
+            # The trigger on assets table will automatically mark the cache as stale
+            # when this asset is inserted, so no manual update needed here
 
             await conn.commit()
 
@@ -1836,7 +1856,7 @@ async def _encrypt_assembled_file(
     workspace_id: UUID,
     upload_id: UUID,
     total_size: int,
-) -> bytes:
+) -> tuple[bytes, bytes]:
     """Assemble chunks and encrypt them into a single encrypted blob.
 
     Used for smaller files (<10MB) where we can hold the encrypted
@@ -1864,7 +1884,7 @@ async def _encrypt_assembled_file(
     hmac_tag = encryptor.finalize()
     encrypted_chunks.append(hmac_tag)
 
-    return b"".join(encrypted_chunks)
+    return b"".join(encrypted_chunks), hmac_tag
 
 
 async def _encrypt_and_upload_multipart(
@@ -1875,7 +1895,7 @@ async def _encrypt_and_upload_multipart(
     upload_id: UUID,
     object_key: str,
     total_size: int,
-) -> str:
+) -> tuple[str, bytes]:
     """Encrypt and upload a large file using multipart upload.
 
     Streams chunks from Redis → encryption → R2 multipart upload.
@@ -1968,7 +1988,7 @@ async def _encrypt_and_upload_multipart(
             parts=parts,
         )
 
-        return etag
+        return etag, hmac_tag
 
     except Exception:
         # Abort multipart upload on failure

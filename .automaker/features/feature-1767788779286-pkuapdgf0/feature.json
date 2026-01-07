@@ -1,0 +1,9 @@
+{
+  "category": "Global Request Timeouts & Circuit Breaking",
+  "description": "Add middleware to enforce maximum request timeout (30s for reads, 60s for writes). Currently, expensive operations (face search, AI tagging, Smart Curate vector search) can hang indefinitely if vector database is overloaded. Implement exponential backoff circuit breaker for microservice calls (invitations-service, gallery-service). Fail-fast after 3 consecutive timeouts instead of waiting 30 seconds per request.",
+  "id": "feature-1767788779286-pkuapdgf0",
+  "steps": [],
+  "status": "backlog",
+  "skipTests": true,
+  "priority": 2
+}

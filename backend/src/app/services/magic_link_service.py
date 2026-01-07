@@ -244,38 +244,136 @@ class MagicLinkService:
         Returns:
             Created link with token (token is only returned here!)
         """
-        # Generate secure token
-        token, token_hash = self._generate_token()
-
-        # Build the public URL first (needed for repository storage)
-        url = self._build_url(token, target_type, target_id, base_url)
-
-        # Create the link record with the public URL stored in database
-        link = await self.repo.create(
-            workspace_id=workspace_id,
-            gallery_id=gallery_id,
-            token_hash=token_hash,
-            target_type=target_type,
-            target_id=target_id,
-            album_title=album_title,
-            label=label,
-            expires_at=expires_at,
-            max_accesses=max_accesses,
-            qr_config=qr_config,
-            created_by_user_id=created_by_user_id,
-            public_url=url,
-            invitation_id=invitation_id,
+        logger.info(
+            "[MagicLink Service] create_link - START",
+            extra={
+                "workspace_id": str(workspace_id),
+                "gallery_id": str(gallery_id) if gallery_id else None,
+                "target_type": target_type,
+                "target_id": str(target_id) if target_id else None,
+                "album_title": album_title,
+                "label": label,
+                "expires_at": expires_at.isoformat() if expires_at else None,
+                "max_accesses": max_accesses,
+                "created_by_user_id": str(created_by_user_id) if created_by_user_id else None,
+                "base_url": base_url,
+                "invitation_id": str(invitation_id) if invitation_id else None,
+                "has_qr_config": qr_config is not None,
+            },
         )
 
-        # Cache URL for QR code generation (token can't be recovered later)
-        await self.cache_link_url(UUID(link["link_id"]), url)
+        try:
+            # Generate secure token
+            logger.debug("[MagicLink Service] Generating secure token")
+            token, token_hash = self._generate_token()
+            logger.debug(
+                "[MagicLink Service] Token generated",
+                extra={
+                    "token_length": len(token),
+                    "token_hash_length": len(token_hash),
+                    "token_hash_prefix": token_hash[:8],
+                },
+            )
 
-        # Return with token (only time it's available!)
-        return {
-            **link,
-            "token": token,  # IMPORTANT: Only returned on creation!
-            "url": url,
-        }
+            # Build the public URL first (needed for repository storage)
+            logger.debug("[MagicLink Service] Building public URL", extra={"base_url": base_url, "target_type": target_type})
+            url = self._build_url(token, target_type, target_id, base_url)
+            logger.debug("[MagicLink Service] Public URL built", extra={"url": url})
+
+            # Create the link record with the public URL stored in database
+            logger.info(
+                "[MagicLink Service] Calling repository.create",
+                extra={
+                    "workspace_id": str(workspace_id),
+                    "gallery_id": str(gallery_id) if gallery_id else None,
+                    "target_type": target_type,
+                },
+            )
+            # #region agent log
+            import json
+            try:
+                with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"magic_link_service.py:before_repo_create","message":"Before repository.create","data":{"workspace_id":str(workspace_id),"gallery_id":str(gallery_id) if gallery_id else None,"album_title":album_title,"public_url":url},"timestamp":int(__import__("time").time()*1000)})+"\n")
+            except: pass
+            # #endregion
+
+            link = await self.repo.create(
+                workspace_id=workspace_id,
+                gallery_id=gallery_id,
+                token_hash=token_hash,
+                target_type=target_type,
+                target_id=target_id,
+                album_title=album_title,
+                label=label,
+                expires_at=expires_at,
+                max_accesses=max_accesses,
+                qr_config=qr_config,
+                created_by_user_id=created_by_user_id,
+                public_url=url,
+                invitation_id=invitation_id,
+            )
+            # #region agent log
+            try:
+                with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"magic_link_service.py:after_repo_create","message":"After repository.create","data":{"has_link":link is not None,"link_id":link.get("link_id") if link else None},"timestamp":int(__import__("time").time()*1000)})+"\n")
+            except: pass
+            # #endregion
+
+            logger.info(
+                "[MagicLink Service] Repository.create returned",
+                extra={
+                    "link_id": link.get("link_id"),
+                    "has_link_data": bool(link),
+                },
+            )
+
+            # Cache URL for QR code generation (token can't be recovered later)
+            logger.debug("[MagicLink Service] Caching link URL for QR generation")
+            await self.cache_link_url(UUID(link["link_id"]), url)
+            logger.debug("[MagicLink Service] Link URL cached")
+
+            # Return with token (only time it's available!)
+            result = {
+                **link,
+                "token": token,  # IMPORTANT: Only returned on creation!
+                "url": url,
+            }
+            # #region agent log
+            try:
+                with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"G","location":"magic_link_service.py:result_preparation","message":"Preparing result with token and URL","data":{"has_token":True,"has_url":True,"url_preview":url[:80],"token_length":len(token),"token_preview":token[:20]},"timestamp":int(__import__("time").time()*1000)})+"\n")
+            except: pass
+            # #endregion
+
+            logger.info(
+                "[MagicLink Service] create_link - SUCCESS",
+                extra={
+                    "link_id": link.get("link_id"),
+                    "has_token": "token" in result,
+                    "has_url": "url" in result,
+                    "url": url,
+                },
+            )
+
+            return result
+
+        except Exception as e:
+            # #region agent log
+            try:
+                with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"F","location":"magic_link_service.py:exception_handler","message":"Exception in service.create_link","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":int(__import__("time").time()*1000)})+"\n")
+            except: pass
+            # #endregion
+            logger.exception(
+                "[MagicLink Service] Exception in create_link",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "workspace_id": str(workspace_id),
+                    "gallery_id": str(gallery_id) if gallery_id else None,
+                },
+            )
+            raise
 
     def _build_url(
         self,

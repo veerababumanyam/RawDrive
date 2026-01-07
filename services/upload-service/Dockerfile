@@ -97,17 +97,17 @@ RUN useradd --create-home --shell /bin/bash --uid 1000 appuser \
 
 USER appuser
 
-EXPOSE 8000
+EXPOSE ${PORT}
 
 # Development health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Use tini as init system for proper signal handling
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Development with hot reload
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "src"]
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --reload --reload-dir src
 
 # =============================================================================
 # Stage 4: Testing - Run tests in isolated environment
@@ -210,7 +210,7 @@ RUN useradd --create-home --shell /bin/bash --uid 1000 appuser \
 
 USER appuser
 
-EXPOSE 8000
+EXPOSE ${PORT}
 
 # Production health check with faster intervals
 # Production health check with faster intervals

@@ -1,0 +1,468 @@
+﻿
+Running 1 test using 1 worker
+
+Navigating to Sign In...
+Filling credentials...
+Waiting for workspace redirect...
+Login successful!
+No galleries found. Creating new gallery...
+New Gallery button not found, trying direct navigation...
+Filling Create Gallery form...
+node.exe : [2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m Pre-transform error: Failed to 
+resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.
+At C:\Users\admin\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.cjs" 
+$args
++     
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([2m[WebServer]. 
+   ..s package.json.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m Pre-transform error: Failed to 
+resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m Pre-transform error: Failed to 
+resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m Pre-transform error: Failed to 
+resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m Pre-transform error: Failed to 
+resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m Pre-transform error: Failed to 
+resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m [31mInternal server error: Failed 
+to resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.[39m
+[2m[WebServer] [22m  Plugin: [35mvite:import-analysis[39m
+[2m[WebServer] [22m  File: [36mC:/Users/admin/Desktop/RawDr
+ive/packages/shared-constants/dist/sync.js[39m
+[2m[WebServer] [22m      at packageEntryFailure (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46638:15)
+[2m[WebServer] [22m      at resolvePackageEntry (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46635:3)
+[2m[WebServer] [22m      at tryNodeResolve (file:///C:/Users
+/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+
+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.
+js:46451:16)
+[2m[WebServer] [22m      at ResolveIdContext.resolveId (file
+:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.
+4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunks/d
+ep-BK3b2jBa.js:46201:19)
+[2m[WebServer] [22m      at async PluginContainer.resolveId 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49017:22)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.resolve (file:///C:/Users/admin/Desktop
+/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.27/
+node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49178:15)
+[2m[WebServer] [22m      at async normalizeUrl (file:///C:/U
+sers/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@ty
+pes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2
+jBa.js:64300:26)
+[2m[WebServer] [22m      at async file:///C:/Users/admin/Des
+ktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19
+.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:3
+9
+[2m[WebServer] [22m      at async Promise.all (index 1)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.transform (file:///C:/Users/admin/Deskt
+op/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.2
+7/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+[2m[WebServer] [22m      at async PluginContainer.transform 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49099:18)
+[2m[WebServer] [22m      at async loadAndTransform (file:///
+C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21
+_@types+node@20.19.27/node_modules/vite/dist/node/chunks/dep-B
+K3b2jBa.js:51978:27)
+[2m[WebServer] [22m      at async viteTransformMiddleware (f
+ile:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite
+@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunk
+s/dep-BK3b2jBa.js:62106:24)
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m [31mInternal server error: Failed 
+to resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.[39m
+[2m[WebServer] [22m  Plugin: [35mvite:import-analysis[39m
+[2m[WebServer] [22m  File: [36mC:/Users/admin/Desktop/RawDr
+ive/packages/shared-constants/dist/admin.js[39m
+[2m[WebServer] [22m      at packageEntryFailure (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46638:15)
+[2m[WebServer] [22m      at resolvePackageEntry (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46635:3)
+[2m[WebServer] [22m      at tryNodeResolve (file:///C:/Users
+/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+
+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.
+js:46451:16)
+[2m[WebServer] [22m      at ResolveIdContext.resolveId (file
+:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.
+4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunks/d
+ep-BK3b2jBa.js:46201:19)
+[2m[WebServer] [22m      at async PluginContainer.resolveId 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49017:22)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.resolve (file:///C:/Users/admin/Desktop
+/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.27/
+node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49178:15)
+[2m[WebServer] [22m      at async normalizeUrl (file:///C:/U
+sers/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@ty
+pes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2
+jBa.js:64300:26)
+[2m[WebServer] [22m      at async file:///C:/Users/admin/Des
+ktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19
+.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:3
+9
+[2m[WebServer] [22m      at async Promise.all (index 1)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.transform (file:///C:/Users/admin/Deskt
+op/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.2
+7/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+[2m[WebServer] [22m      at async PluginContainer.transform 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49099:18)
+[2m[WebServer] [22m      at async loadAndTransform (file:///
+C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21
+_@types+node@20.19.27/node_modules/vite/dist/node/chunks/dep-B
+K3b2jBa.js:51978:27)
+[2m[WebServer] [22m      at async viteTransformMiddleware (f
+ile:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite
+@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunk
+s/dep-BK3b2jBa.js:62106:24)
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m [31mInternal server error: Failed 
+to resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.[39m
+[2m[WebServer] [22m  Plugin: [35mvite:import-analysis[39m
+[2m[WebServer] [22m  File: [36mC:/Users/admin/Desktop/RawDr
+ive/packages/shared-constants/dist/calendar.js[39m
+[2m[WebServer] [22m      at packageEntryFailure (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46638:15)
+[2m[WebServer] [22m      at resolvePackageEntry (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46635:3)
+[2m[WebServer] [22m      at tryNodeResolve (file:///C:/Users
+/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+
+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.
+js:46451:16)
+[2m[WebServer] [22m      at ResolveIdContext.resolveId (file
+:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.
+4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunks/d
+ep-BK3b2jBa.js:46201:19)
+[2m[WebServer] [22m      at async PluginContainer.resolveId 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49017:22)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.resolve (file:///C:/Users/admin/Desktop
+/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.27/
+node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49178:15)
+[2m[WebServer] [22m      at async normalizeUrl (file:///C:/U
+sers/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@ty
+pes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2
+jBa.js:64300:26)
+[2m[WebServer] [22m      at async file:///C:/Users/admin/Des
+ktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19
+.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:3
+9
+[2m[WebServer] [22m      at async Promise.all (index 1)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.transform (file:///C:/Users/admin/Deskt
+op/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.2
+7/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+[2m[WebServer] [22m      at async PluginContainer.transform 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49099:18)
+[2m[WebServer] [22m      at async loadAndTransform (file:///
+C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21
+_@types+node@20.19.27/node_modules/vite/dist/node/chunks/dep-B
+K3b2jBa.js:51978:27)
+[2m[WebServer] [22m      at async viteTransformMiddleware (f
+ile:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite
+@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunk
+s/dep-BK3b2jBa.js:62106:24)
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m [31mInternal server error: Failed 
+to resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.[39m
+[2m[WebServer] [22m  Plugin: [35mvite:import-analysis[39m
+[2m[WebServer] [22m  File: [36mC:/Users/admin/Desktop/RawDr
+ive/packages/shared-constants/dist/export.js[39m
+[2m[WebServer] [22m      at packageEntryFailure (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46638:15)
+[2m[WebServer] [22m      at resolvePackageEntry (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46635:3)
+[2m[WebServer] [22m      at tryNodeResolve (file:///C:/Users
+/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+
+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.
+js:46451:16)
+[2m[WebServer] [22m      at ResolveIdContext.resolveId (file
+:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.
+4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunks/d
+ep-BK3b2jBa.js:46201:19)
+[2m[WebServer] [22m      at async PluginContainer.resolveId 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49017:22)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.resolve (file:///C:/Users/admin/Desktop
+/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.27/
+node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49178:15)
+[2m[WebServer] [22m      at async normalizeUrl (file:///C:/U
+sers/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@ty
+pes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2
+jBa.js:64300:26)
+[2m[WebServer] [22m      at async file:///C:/Users/admin/Des
+ktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19
+.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:3
+9
+[2m[WebServer] [22m      at async Promise.all (index 0)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.transform (file:///C:/Users/admin/Deskt
+op/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.2
+7/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+[2m[WebServer] [22m      at async PluginContainer.transform 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49099:18)
+[2m[WebServer] [22m      at async loadAndTransform (file:///
+C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21
+_@types+node@20.19.27/node_modules/vite/dist/node/chunks/dep-B
+K3b2jBa.js:51978:27)
+[2m[WebServer] [22m      at async viteTransformMiddleware (f
+ile:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite
+@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunk
+s/dep-BK3b2jBa.js:62106:24)
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m [31mInternal server error: Failed 
+to resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.[39m
+[2m[WebServer] [22m  Plugin: [35mvite:import-analysis[39m
+[2m[WebServer] [22m  File: [36mC:/Users/admin/Desktop/RawDr
+ive/packages/shared-constants/dist/analytics.js[39m
+[2m[WebServer] [22m      at packageEntryFailure (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46638:15)
+[2m[WebServer] [22m      at resolvePackageEntry (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46635:3)
+[2m[WebServer] [22m      at tryNodeResolve (file:///C:/Users
+/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+
+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.
+js:46451:16)
+[2m[WebServer] [22m      at ResolveIdContext.resolveId (file
+:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.
+4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunks/d
+ep-BK3b2jBa.js:46201:19)
+[2m[WebServer] [22m      at async PluginContainer.resolveId 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49017:22)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.resolve (file:///C:/Users/admin/Desktop
+/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.27/
+node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49178:15)
+[2m[WebServer] [22m      at async normalizeUrl (file:///C:/U
+sers/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@ty
+pes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2
+jBa.js:64300:26)
+[2m[WebServer] [22m      at async file:///C:/Users/admin/Des
+ktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19
+.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:3
+9
+[2m[WebServer] [22m      at async Promise.all (index 0)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.transform (file:///C:/Users/admin/Deskt
+op/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.2
+7/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+[2m[WebServer] [22m      at async PluginContainer.transform 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49099:18)
+[2m[WebServer] [22m      at async loadAndTransform (file:///
+C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21
+_@types+node@20.19.27/node_modules/vite/dist/node/chunks/dep-B
+K3b2jBa.js:51978:27)
+[2m[WebServer] [22m      at async viteTransformMiddleware (f
+ile:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite
+@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunk
+s/dep-BK3b2jBa.js:62106:24)
+[2m[WebServer] [22m[2m9:52:37 am[22m 
+[31m[1m[vite][22m[39m [31mInternal server error: Failed 
+to resolve entry for package "@rawdrive/shared-types". The 
+package may have incorrect main/module/exports specified in 
+its package.json.[39m
+[2m[WebServer] [22m  Plugin: [35mvite:import-analysis[39m
+[2m[WebServer] [22m  File: [36mC:/Users/admin/Desktop/RawDr
+ive/packages/shared-constants/dist/compliance.js[39m
+[2m[WebServer] [22m      at packageEntryFailure (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46638:15)
+[2m[WebServer] [22m      at resolvePackageEntry (file:///C:/
+Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@t
+ypes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b
+2jBa.js:46635:3)
+[2m[WebServer] [22m      at tryNodeResolve (file:///C:/Users
+/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+
+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.
+js:46451:16)
+[2m[WebServer] [22m      at ResolveIdContext.resolveId (file
+:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.
+4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunks/d
+ep-BK3b2jBa.js:46201:19)
+[2m[WebServer] [22m      at async PluginContainer.resolveId 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49017:22)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.resolve (file:///C:/Users/admin/Desktop
+/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.27/
+node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49178:15)
+[2m[WebServer] [22m      at async normalizeUrl (file:///C:/U
+sers/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@ty
+pes+node@20.19.27/node_modules/vite/dist/node/chunks/dep-BK3b2
+jBa.js:64300:26)
+[2m[WebServer] [22m      at async file:///C:/Users/admin/Des
+ktop/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19
+.27/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:3
+9
+[2m[WebServer] [22m      at async Promise.all (index 1)
+[2m[WebServer] [22m      at async 
+TransformPluginContext.transform (file:///C:/Users/admin/Deskt
+op/RawDrive/node_modules/.pnpm/vite@5.4.21_@types+node@20.19.2
+7/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+[2m[WebServer] [22m      at async PluginContainer.transform 
+(file:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vi
+te@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chu
+nks/dep-BK3b2jBa.js:49099:18)
+[2m[WebServer] [22m      at async loadAndTransform (file:///
+C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite@5.4.21
+_@types+node@20.19.27/node_modules/vite/dist/node/chunks/dep-B
+K3b2jBa.js:51978:27)
+[2m[WebServer] [22m      at async viteTransformMiddleware (f
+ile:///C:/Users/admin/Desktop/RawDrive/node_modules/.pnpm/vite
+@5.4.21_@types+node@20.19.27/node_modules/vite/dist/node/chunk
+s/dep-BK3b2jBa.js:62106:24)
+Test failed with error: page.waitForSelector: Test timeout of 
+60000ms exceeded.
+Call log:
+[2m  - waiting for locator('form') to be visible[22m
+
+    at [90mC:\Users\admin\Desktop\RawDrive\frontend\[39mtest
+s\e2e\upload-flow.spec.ts:74:28 {
+  [[32mSymbol(step)[39m]: {
+    location: {
+      file: [32m'C:\\Users\\admin\\Desktop\\RawDrive\\fronten
+d\\tests\\e2e\\upload-flow.spec.ts'[39m,
+      line: [33m74[39m,
+      column: [33m28[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m"Wait for selector locator('form')"[39m,
+    apiName: [32m'page.waitForSelector'[39m,
+    params: { selector: [32m'form'[39m, timeout: 
+[33m0[39m },
+    group: [90mundefined[39m,
+    stepId: [32m'pw:api@44'[39m,
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@44'[39m,
+      _title: [32m"Wait for selector locator('form')"[39m,
+      _parentStep: [90mundefined[39m,
+      skip: [36m[Function (anonymous)][39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1767776014299[39m,
+    error: {
+      message: [32m'Error: page.waitForSelector: Test 
+timeout of 60000ms exceeded.\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m"\x1B[2m  - waiting for locator('form') to be 
+visible\x1B[22m\n"[39m,
+      stack: [32m'Error: page.waitForSelector: Test timeout 
+of 60000ms exceeded.\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m"\x1B[2m  - waiting for locator('form') to be 
+visible\x1B[22m\n"[39m +
+        [32m'\n'[39m +
+        [32m'    at C:\\Users\\admin\\Desktop\\RawDrive\\fron
+tend\\tests\\e2e\\upload-flow.spec.ts:74:28'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+  Γ£ÿ  1 [chromium] ΓÇ║ tests\e2e\upload-flow.spec.ts:12:5 ΓÇ║ Upload Flow E2E ΓÇ║ should login, create gallery (if needed), encrypt and upload a file (1.0m)
+
+
+  1) [chromium] ΓÇ║ tests\e2e\upload-flow.spec.ts:12:5 ΓÇ║ Upload Flow E2E ΓÇ║ should login, create gallery (if needed), encrypt and upload a file 
+
+    [31mTest timeout of 60000ms exceeded.[39m
+
+    Error: page.waitForSelector: Test timeout of 60000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('form') to be visible[22m
+
+
+      72 |                 // Fill Create Form
+      73 |                 console.log('Filling Create Gallery form...');
+    > 74 |                 await page.waitForSelector('form');
+         |                            ^
+      75 |
+      76 |                 // Title
+      77 |                 const titleInput = page.getByLabel('Gallery Title').or(page.getByPlaceholder('e.g., Johnson Wedding'));
+        at C:\Users\admin\Desktop\RawDrive\frontend\tests\e2e\upload-flow.spec.ts:74:28
+
+    Error Context: test-results\upload-flow-Upload-Flow-E2-a17b3-d-encrypt-and-upload-a-file-chromium\error-context.md
+
+  1 failed
+    [chromium] ΓÇ║ tests\e2e\upload-flow.spec.ts:12:5 ΓÇ║ Upload Flow E2E ΓÇ║ should login, create gallery (if needed), encrypt and upload a file 

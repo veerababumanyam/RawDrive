@@ -18,7 +18,7 @@ The table supports:
 
 Feature: Audit & Compliance System
 Revision ID: 0110
-Revises: 0109
+Revises: 0109b
 Create Date: 2026-01-06
 """
 

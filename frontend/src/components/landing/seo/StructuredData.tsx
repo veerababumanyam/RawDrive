@@ -41,6 +41,7 @@ export interface ProductData {
     priceCurrency: string;
     availability: string;
     url?: string;
+    priceValidUntil?: string;
   }[];
 }
 
@@ -128,23 +129,27 @@ const defaultWebsite: WebsiteData = {
 const defaultProduct: ProductData = {
   name: 'RawDrive',
   description:
-    'Professional photography management platform with gallery delivery, client proofing, album design, and AI-powered features.',
+    'Professional photography management platform with gallery delivery, client proofing, album design, and AI-powered features. The all-in-one solution for wedding photographers, portrait photographers, and photography studios.',
   brand: 'RawDrive',
   featureList: [
     'AI Face Recognition',
+    'AI Photo Culling',
+    'Client Galleries',
+    'Digital Invitations',
     'SOC 2 Compliance',
-    'CRM',
+    'CRM & Contracts',
     'Custom Domain Portfolios',
+    'Print Store (0% Commission)',
     'Zapier Integration',
     'REST API Access',
-    'Green Hosting',
+    'India-Optimized CDN',
   ],
   audience: {
-    audienceType: 'Professional Photographers, Studios, Agencies',
+    audienceType: 'Professional Photographers, Wedding Photographers, Portrait Studios, Photography Agencies',
   },
   aggregateRating: {
     ratingValue: 4.9,
-    ratingCount: 1250,
+    ratingCount: 20000,
     bestRating: 5,
     worstRating: 1,
   },
@@ -154,18 +159,21 @@ const defaultProduct: ProductData = {
       priceCurrency: 'INR',
       availability: 'https://schema.org/InStock',
       url: 'https://rawdrive.ai/pricing',
+      priceValidUntil: '2026-12-31',
     },
     {
       price: 500,
       priceCurrency: 'INR',
       availability: 'https://schema.org/InStock',
       url: 'https://rawdrive.ai/pricing',
+      priceValidUntil: '2026-12-31',
     },
     {
       price: 2000,
       priceCurrency: 'INR',
       availability: 'https://schema.org/InStock',
       url: 'https://rawdrive.ai/pricing',
+      priceValidUntil: '2026-12-31',
     },
   ],
 };
@@ -259,6 +267,7 @@ export const StructuredData: React.FC<StructuredDataProps> = ({
         priceCurrency: offer.priceCurrency,
         availability: offer.availability,
         url: offer.url,
+        priceValidUntil: offer.priceValidUntil,
       })),
     });
   }

@@ -13,7 +13,7 @@ httpx==0.27.2
 email-validator==2.2.0
 alembic==1.13.2
 SQLAlchemy==2.0.36
-# psycopg2-binary==2.9.10
+psycopg2-binary==2.9.11  # Required for Alembic migrations (sync driver)
 
 # Storage (Cloudflare R2 - S3-compatible)
 boto3==1.35.0

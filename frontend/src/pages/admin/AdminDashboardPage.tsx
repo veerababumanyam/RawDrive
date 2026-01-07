@@ -146,9 +146,17 @@ const AdminList: React.FC<AdminListProps> = ({ admins, isLoading, onRefresh }) =
       </div>
 
       {isLoading && admins.length === 0 ? (
-        <div className="p-8 text-center">
-          <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-text-secondary mt-2">Loading admins...</p>
+        <div className="p-4 space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="animate-pulse flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-border" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-border rounded w-1/3" />
+                <div className="h-3 bg-border rounded w-1/2" />
+              </div>
+              <div className="h-4 bg-border rounded w-16" />
+            </div>
+          ))}
         </div>
       ) : admins.length === 0 ? (
         <div className="p-8 text-center">
@@ -268,9 +276,19 @@ const WorkspaceList: React.FC<WorkspaceListProps> = ({
       </div>
 
       {isLoading && workspaces.length === 0 ? (
-        <div className="p-8 text-center">
-          <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-text-secondary mt-2">Loading workspaces...</p>
+        <div className="p-4 space-y-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="animate-pulse flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="h-4 bg-border rounded w-1/3" />
+                <div className="h-4 bg-border rounded w-16" />
+              </div>
+              <div className="flex gap-4">
+                <div className="h-3 bg-border rounded w-1/2" />
+                <div className="h-3 bg-border rounded w-12" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : workspaces.length === 0 ? (
         <div className="p-8 text-center">
@@ -355,9 +373,17 @@ const SupportSessions: React.FC<SupportSessionsProps> = ({
       </div>
 
       {isLoading && sessions.length === 0 ? (
-        <div className="p-8 text-center">
-          <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-text-secondary mt-2">Loading sessions...</p>
+        <div className="p-4 space-y-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="animate-pulse space-y-2">
+              <div className="flex justify-between">
+                <div className="h-4 bg-border rounded w-1/4" />
+                <div className="h-8 bg-border rounded w-16" />
+              </div>
+              <div className="h-3 bg-border rounded w-3/4" />
+              <div className="h-3 bg-border rounded w-1/2" />
+            </div>
+          ))}
         </div>
       ) : sessions.length === 0 ? (
         <div className="p-8 text-center">
@@ -412,12 +438,13 @@ const AdminDashboardPage: React.FC = () => {
 
   const loadAdmins = useCallback(async () => {
     setIsLoadingAdmins(true);
+    setError(null);
     try {
       const response = await adminService.listPlatformAdmins({ page: 1, limit: 20 });
       setAdmins(response.items as any);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load admins:', err);
-      setError('Failed to load platform admins');
+      setError('Failed to load platform admins. Please try again.');
     } finally {
       setIsLoadingAdmins(false);
     }
@@ -425,6 +452,7 @@ const AdminDashboardPage: React.FC = () => {
 
   const loadWorkspaces = useCallback(async () => {
     setIsLoadingWorkspaces(true);
+    setError(null);
     try {
       const response = await adminService.listWorkspaces({
         page: 1,
@@ -432,9 +460,9 @@ const AdminDashboardPage: React.FC = () => {
         search: workspaceSearch || undefined,
       });
       setWorkspaces(response.items as any);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load workspaces:', err);
-      setError('Failed to load workspaces');
+      setError(`Failed to load workspaces. Please check your network connection or ensure you have administrative permissions.`);
     } finally {
       setIsLoadingWorkspaces(false);
     }
@@ -442,12 +470,13 @@ const AdminDashboardPage: React.FC = () => {
 
   const loadSessions = useCallback(async () => {
     setIsLoadingSessions(true);
+    setError(null);
     try {
       const response = await adminService.listSupportSessions();
       setSessions(response as any);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load sessions:', err);
-      // Don't show error for sessions - may not have permission
+      // Don't set global error for sessions as it might be a permission issue
     } finally {
       setIsLoadingSessions(false);
     }
@@ -500,15 +529,36 @@ const AdminDashboardPage: React.FC = () => {
       <main className="max-w-7xl mx-auto py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
         {/* Error Alert */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 p-4 bg-error/10 border border-error/20 rounded-xl text-error">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <span>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="ml-auto p-1 hover:bg-error/10 rounded"
-            >
-              <XCircle className="w-4 h-4" />
-            </button>
+          <div className="mb-6 flex items-center gap-4 p-4 bg-error/10 border border-error/20 rounded-xl text-error">
+            <AlertCircle className="w-6 h-6 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">{error}</p>
+              <p className="text-xs mt-1 opacity-80">
+                Try refreshing the page or checking your internet connection. If the problem persists, contact support.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <AppButton
+                size="sm"
+                variant="outline"
+                className="border-error/20 text-error hover:bg-error/10"
+                onClick={() => {
+                  loadAdmins();
+                  loadWorkspaces();
+                  loadSessions();
+                }}
+              >
+                <RefreshCcw className="w-4 h-4 mr-1" />
+                Retry
+              </AppButton>
+              <button
+                onClick={() => setError(null)}
+                className="p-2 hover:bg-error/10 rounded-lg transition-colors"
+                aria-label="Dismiss error"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         )}
 
@@ -586,14 +636,14 @@ const AdminDashboardPage: React.FC = () => {
             </a>
             <button
               className="flex items-center justify-between p-3 bg-surface-hover rounded-lg hover:bg-primary/10 transition-colors group"
-              onClick={() => {/* TODO: Open audit logs */}}
+              onClick={() => {/* TODO: Open audit logs */ }}
             >
               <span className="text-sm font-medium text-text-primary">View Audit Logs</span>
               <ChevronRight className="w-4 h-4 text-text-tertiary group-hover:text-primary transition-colors" />
             </button>
             <button
               className="flex items-center justify-between p-3 bg-surface-hover rounded-lg hover:bg-primary/10 transition-colors group"
-              onClick={() => {/* TODO: Feature flags */}}
+              onClick={() => {/* TODO: Feature flags */ }}
             >
               <span className="text-sm font-medium text-text-primary">Feature Flags</span>
               <ChevronRight className="w-4 h-4 text-text-tertiary group-hover:text-primary transition-colors" />

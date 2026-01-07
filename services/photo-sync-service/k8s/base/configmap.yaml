@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: photo-sync-config
+  labels:
+    app: photo-sync-service
+data:
+  PHOTO_SYNC_SERVICE_PORT: "3000"
+  PHOTO_SYNC_SERVICE_HOST: "0.0.0.0"
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+
+  # Database (connection string in secrets)
+  DB_POOL_MIN: "2"
+  DB_POOL_MAX: "10"
+
+  # Redis
+  REDIS_CONNECT_TIMEOUT: "10000"
+
+  # RabbitMQ
+  RABBITMQ_PREFETCH_COUNT: "10"
+
+  # Provider OAuth (credentials in secrets)
+  GOOGLE_REDIRECT_URI: "https://app.rawdrive.io/api/v1/sync/providers/google_photos/callback"
+  DROPBOX_REDIRECT_URI: "https://app.rawdrive.io/api/v1/sync/providers/dropbox/callback"
+  ONEDRIVE_REDIRECT_URI: "https://app.rawdrive.io/api/v1/sync/providers/onedrive/callback"
+  AMAZON_REDIRECT_URI: "https://app.rawdrive.io/api/v1/sync/providers/amazon_photos/callback"
+
+  # Storage
+  STORAGE_BACKEND: "s3"
+  S3_REGION: "auto"
+
+  # Frontend URL for OAuth redirects
+  FRONTEND_URL: "https://app.rawdrive.io"
+  DEFAULT_OAUTH_REDIRECT: "https://app.rawdrive.io/settings/integrations"
+
+  # OpenTelemetry
+  OTEL_SERVICE_NAME: "photo-sync-service"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"

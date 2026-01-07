@@ -95,6 +95,7 @@ const ForgotPasswordPage = lazyWithRetry(() => import('../pages/public/ForgotPas
 // Workspace pages
 const DashboardPage = lazy(() => import('../pages/workspace/DashboardPage'));
 const GalleriesPage = lazy(() => import('../pages/workspace/GalleriesPage'));
+const GalleryPreviewPage = lazy(() => import('../pages/workspace/GalleryPreviewPage'));
 const PeoplePage = lazy(() => import('../pages/workspace/PeoplePage'));
 const FavoritesPage = lazy(() => import('../pages/workspace/FavoritesPage'));
 const RecentPage = lazy(() => import('../pages/workspace/RecentPage'));
@@ -124,6 +125,15 @@ const SyncPage = lazy(() => import('../pages/workspace/SyncPage'));
 // Calendar & Booking Management page
 const BookingsPage = lazy(() => import('../pages/workspace/BookingsPage'));
 
+// Analytics & Reporting pages
+const AnalyticsDashboardPage = lazy(() => import('../pages/workspace/AnalyticsDashboardPage'));
+const GalleryAnalyticsPage = lazy(() => import('../pages/workspace/GalleryAnalyticsPage'));
+const ReportsPage = lazy(() => import('../pages/workspace/ReportsPage'));
+
+// Team Management pages
+const TeamPage = lazy(() => import('../pages/workspace/TeamPage'));
+const InvitationAcceptPage = lazy(() => import('../pages/public/InvitationAcceptPage'));
+
 // User Settings pages
 // Note: Individual settings pages are deprecated - use UserSettingsPage with tabs
 const UserSettingsPage = lazy(() => import('../pages/settings/UserSettingsPage'));
@@ -131,6 +141,11 @@ const UserSettingsPage = lazy(() => import('../pages/settings/UserSettingsPage')
 // Admin pages
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
 const GeminiModelsPage = lazy(() => import('../pages/admin/GeminiModelsPage'));
+
+// AI Dashboard pages - TODO: Implement these pages
+// const SmartCurateDashboardPage = lazy(() => import('../pages/workspace/ai/SmartCurateDashboardPage'));
+// const AIInsightsHistoryPage = lazy(() => import('../pages/workspace/ai/AIInsightsHistoryPage'));
+// const AIToolsHubPage = lazy(() => import('../pages/workspace/ai/AIToolsHubPage'));
 
 // Compliance pages (audit & compliance system)
 const AuditLogsPage = lazy(() => import('../pages/admin/AuditLogsPage'));
@@ -203,10 +218,24 @@ export const publicRoutes: RouteObject[] = [
     path: '/g/:galleryId',
     element: <LazyPage component={PublicGalleryPage} />,
   },
+  // Preview route - authenticated but renders like public gallery (no sidebar)
+  {
+    path: '/workspace/galleries/:id/preview',
+    element: (
+      <ProtectedRoute>
+        <CriticalLazyPage component={GalleryPreviewPage} />
+      </ProtectedRoute>
+    ),
+  },
   // Public invitation view (016-save-the-date)
   {
     path: '/i/:slug',
     element: <LazyPage component={PublicInvitationPage} />,
+  },
+  // Team invitation accept page (requires token in URL)
+  {
+    path: '/invite/:token',
+    element: <CriticalLazyPage component={InvitationAcceptPage} />,
   },
   // Legal/Policy pages
   {
@@ -322,6 +351,11 @@ export const workspaceRoutes: RouteObject[] = [
         path: 'people',
         element: <LazyPage component={PeoplePage} />,
       },
+      // Team Management routes
+      {
+        path: 'team',
+        element: <CriticalLazyPage component={TeamPage} />,
+      },
       {
         path: 'clients',
         element: <CriticalLazyPage component={ClientsPage} />,
@@ -399,6 +433,32 @@ export const workspaceRoutes: RouteObject[] = [
         path: 'bookings',
         element: <CriticalLazyPage component={BookingsPage} />,
       },
+      // Analytics & Reporting routes
+      {
+        path: 'analytics',
+        element: <CriticalLazyPage component={AnalyticsDashboardPage} />,
+      },
+      {
+        path: 'analytics/galleries/:galleryId',
+        element: <CriticalLazyPage component={GalleryAnalyticsPage} />,
+      },
+      {
+        path: 'reports',
+        element: <CriticalLazyPage component={ReportsPage} />,
+      },
+      // AI Dashboard routes - TODO: Uncomment when pages are implemented
+      // {
+      //   path: 'ai/smart-curate',
+      //   element: <CriticalLazyPage component={SmartCurateDashboardPage} />,
+      // },
+      // {
+      //   path: 'ai/insights',
+      //   element: <CriticalLazyPage component={AIInsightsHistoryPage} />,
+      // },
+      // {
+      //   path: 'ai/tools',
+      //   element: <CriticalLazyPage component={AIToolsHubPage} />,
+      // },
     ],
   },
 ];

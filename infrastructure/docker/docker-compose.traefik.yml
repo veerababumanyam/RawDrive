@@ -1,3 +1,26 @@
+# ============================================================================
+# DEPRECATED - DO NOT USE
+# ============================================================================
+# This file is DEPRECATED and should NOT be used.
+#
+# The main docker-compose.yml now includes Traefik with File Provider routing.
+# All routing is defined in infrastructure/docker/traefik/dynamic.dev.yaml
+#
+# Using this file will create conflicting Docker Provider labels that
+# duplicate and conflict with the File Provider configuration.
+#
+# REASON FOR DEPRECATION:
+# - File Provider (dynamic.dev.yaml) is the single source of truth
+# - Docker labels create maintenance overhead (changes in 2 places)
+# - Labels-based routing conflicts with File Provider routing
+#
+# MIGRATION:
+# Old: docker compose -f docker-compose.yml -f docker-compose.traefik.yml up
+# New: docker compose -f docker-compose.yml up
+#
+# Kept for reference only. Will be removed in future version.
+# ============================================================================
+#
 # Docker Compose - Traefik API Gateway for RawDrive
 # Integrates with KEDA via Prometheus metrics
 #

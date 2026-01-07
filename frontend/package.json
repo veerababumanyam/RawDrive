@@ -16,6 +16,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fingerprintjs/fingerprintjs": "^5.0.1",
+    "@heroicons/react": "^2.2.0",
     "@rawdrive/shared-constants": "workspace:*",
     "@rawdrive/shared-types": "workspace:*",
     "@rawdrive/shared-utils": "workspace:*",
@@ -30,6 +31,7 @@
     "i18next": "^25.7.3",
     "i18next-browser-languagedetector": "^8.2.0",
     "i18next-http-backend": "^3.0.2",
+    "js-sha256": "^0.11.1",
     "lucide-react": "^0.294.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
@@ -44,6 +46,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",

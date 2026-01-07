@@ -114,6 +114,11 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     setError(null);
     try {
       const newLink = await magicLinkService.createLink(workspaceId, galleryId, formData);
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7242/ingest/9ae53fb2-7e05-4977-88b5-8f95a6db3036',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShareDialog.tsx:handleCreateLink',message:'Link created - checking response',data:{has_url:!!newLink.url,has_public_url:!!newLink.public_url,has_token:!!newLink.token,link_id:newLink.link_id,url_preview:newLink.url?.substring(0,80)||newLink.public_url?.substring(0,80)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+      } catch {}
+      // #endregion
       setLinks((prev) => [newLink, ...prev]);
       setSelectedLink(newLink);
       setViewMode('qr');
@@ -132,8 +137,22 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   };
 
   const handleCopyLink = async (link: MagicLink) => {
-    // Use url (from creation), public_url (from database), or fallback
-    const url = link.url || link.public_url || `${window.location.origin}/g/${link.link_id}`;
+    // Use url (from creation), public_url (from database), or build from token
+    // IMPORTANT: link_id is NOT the token - token is only available on creation
+    let url = link.url || link.public_url;
+    if (!url && link.token) {
+      // Build URL from token if available (only on creation)
+      url = `${window.location.origin}/g/${link.token}`;
+    }
+    if (!url) {
+      console.error('Magic link URL not available - token may have been lost', link);
+      throw new Error('Magic link URL not available. Please create a new link.');
+    }
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/9ae53fb2-7e05-4977-88b5-8f95a6db3036',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShareDialog.tsx:handleCopyLink',message:'URL being copied',data:{has_url:!!link.url,has_public_url:!!link.public_url,has_token:!!link.token,url:url?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+    } catch {}
+    // #endregion
     const success = await magicLinkService.copyToClipboard(url);
     if (success) {
       setCopiedLinkId(link.link_id);
@@ -142,8 +161,15 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   };
 
   const handleShare = async (link: MagicLink) => {
-    // Use url (from creation), public_url (from database), or fallback
-    const url = link.url || link.public_url || `${window.location.origin}/g/${link.link_id}`;
+    // Use url (from creation), public_url (from database), or build from token
+    let url = link.url || link.public_url;
+    if (!url && link.token) {
+      url = `${window.location.origin}/g/${link.token}`;
+    }
+    if (!url) {
+      console.error('Magic link URL not available - token may have been lost', link);
+      throw new Error('Magic link URL not available. Please create a new link.');
+    }
     const result = await magicLinkService.share(
       url,
       galleryTitle,
@@ -556,8 +582,29 @@ const QRCodeView: React.FC<QRCodeViewProps> = ({
     };
   }, [workspaceId, galleryId, link.link_id]);
 
-  // Use url (from creation), public_url (from database), or fallback
-  const linkUrl = link.url || link.public_url || `${window.location.origin}/g/${link.link_id}`;
+  // Use url (from creation), public_url (from database), or build from token
+  let linkUrl = link.url || link.public_url;
+  if (!linkUrl && link.token) {
+    linkUrl = `${window.location.origin}/g/${link.token}`;
+  }
+  if (!linkUrl) {
+    // This should never happen - URL should always be stored in public_url
+    // If it's missing, the link was created incorrectly or the database is corrupted
+    console.error('Magic link URL not available - this is a critical error', {
+      link_id: link.link_id,
+      has_url: !!link.url,
+      has_public_url: !!link.public_url,
+      has_token: !!link.token,
+    });
+    // DO NOT use link_id as fallback - it's a security risk
+    // Instead, show an error to the user
+    linkUrl = '#error-missing-url';
+  }
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/9ae53fb2-7e05-4977-88b5-8f95a6db3036',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShareDialog.tsx:QRView',message:'Link URL for display',data:{has_url:!!link.url,has_public_url:!!link.public_url,has_token:!!link.token,link_id:link.link_id,url_preview:linkUrl?.substring(0,80)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+  } catch {}
+  // #endregion
 
   return (
     <div className="space-y-4">

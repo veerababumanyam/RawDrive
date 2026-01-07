@@ -293,29 +293,32 @@ const ClientsPage: React.FC = () => {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <AppButton
-            onClick={handleExport}
-            variant="outline"
-            leftIcon={<Download size={18} />}
-            className="hidden sm:flex"
-          >
-            Export
-          </AppButton>
-          <AppButton
-            onClick={handleImport}
-            variant="outline"
-            leftIcon={<Upload size={18} />}
-            className="hidden sm:flex"
-          >
-            Import
-          </AppButton>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center glass-light border border-white/20 dark:border-white/10 rounded-xl overflow-hidden p-1 shadow-inner">
+            <button
+              onClick={handleExport}
+              className="px-3 py-2 text-sm font-medium text-text-secondary hover:text-primary hover:bg-white/50 dark:hover:bg-white/10 rounded-lg transition-all flex items-center gap-2"
+              title="Export clients to CSV/vCard"
+            >
+              <Download size={16} />
+              <span>Export</span>
+            </button>
+            <div className="w-px h-6 bg-white/20 dark:bg-white/10 mx-1" />
+            <button
+              onClick={handleImport}
+              className="px-3 py-2 text-sm font-medium text-text-secondary hover:text-primary hover:bg-white/50 dark:hover:bg-white/10 rounded-lg transition-all flex items-center gap-2"
+              title="Import clients from CSV/vCard"
+            >
+              <Upload size={16} />
+              <span>Import</span>
+            </button>
+          </div>
           <AppButton
             onClick={handleCreateClient}
             variant="primary"
             leftIcon={<Plus size={20} />}
             shine
-            className="hover:-translate-y-0.5 active:scale-95 transition-all"
+            className="hover:-translate-y-0.5 active:scale-95 transition-all px-6 py-2.5 rounded-xl shadow-lg shadow-primary/20"
           >
             {t('actions.create')} {t('labels.client_one', { defaultValue: 'Client' })}
           </AppButton>
@@ -369,7 +372,7 @@ const ClientsPage: React.FC = () => {
               <Filter size={18} />
               <span className="hidden sm:inline">Status</span>
               {filterStatus !== 'all' && (
-                <span className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent animate-pulse" />
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-white text-[10px] flex items-center justify-center border-2 border-background font-bold">1</span>
               )}
             </button>
             {showFilters && (
@@ -419,9 +422,9 @@ const ClientsPage: React.FC = () => {
               <Tag size={18} />
               <span className="hidden sm:inline">Tags</span>
               {selectedTagIds.length > 0 && (
-                <AppBadge variant="primary" size="sm">
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-white text-[10px] flex items-center justify-center border-2 border-background font-bold">
                   {selectedTagIds.length}
-                </AppBadge>
+                </span>
               )}
             </button>
             {showTagFilter && (
@@ -996,8 +999,8 @@ const ClientEmptyState: React.FC<ClientEmptyStateProps> = ({ hasFilters, onCreat
           : 'Start building your client relationships by adding your first client.'}
       </p>
       {!hasFilters && (
-        <AppButton onClick={onCreateClient} variant="primary" leftIcon={<Plus size={20} />} shine>
-          Add Your First Client
+        <AppButton onClick={onCreateClient} variant="primary" leftIcon={<Plus size={20} />} shine className="px-8">
+          Get Started
         </AppButton>
       )}
     </div>

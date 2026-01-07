@@ -24,7 +24,7 @@ from enum import Enum
 import redis.asyncio as redis
 
 from src.config import settings
-from src.logging import get_logger
+from src.log_config import get_logger
 
 logger = get_logger(__name__)
 

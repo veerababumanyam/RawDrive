@@ -1,220 +1,59 @@
 # Dependencies
 node_modules/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.pytest_cache/
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git
-.mypy_cache
-.pytest_cache
-.hypothesis
-docparser-468004-7a847fc2e761.json
-docparser-468004-7a847fc2e761.json
-
-
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+.pnpm-store/
 
 # Build outputs
 dist/
 build/
-*.tsbuildinfo
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+
+# Test artifacts
+playwright-report/
+test-results/
+.pytest_cache/
+coverage/
+.nyc_output/
 
 # Logs
 logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+backend_logs.txt
 
-# Runtime data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-lib-cov/
-
-# Grunt intermediate storage
-.grunt/
-
-# Dependency directories
-jspm_packages/
-
-# Optional npm cache directory
-.npm
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file
-.env
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Temporary folders
-tmp/
-temp/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Docker
-.dockerignore
-
-# Backup files
+# Temporary files
+*.tmp
+*.temp
 *.bak
-*.backup
-*.old
+nul
 
-# Cache directories
-.cache/
-.parcel-cache/
+# Debug/curl outputs
+curl_*.txt
+response.txt
+login.json
 
-# TypeScript
-*.tsbuildinfo
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# Next.js
-.next/
-out/
+# IDE
+.idea/
+*.swp
+*.swo
 
-# Nuxt.js
-.nuxt/
-
-# Vuepress
-.vuepress/dist
-
-# Serverless directories
-.serverless/
-
-# FuseBox cache
-.fusebox/
-
-# DynamoDB Local files
-.dynamodb/
-
-# TernJS port file
-.tern-port
-
-# Stores VSCode versions used for testing VSCode extensions
-.vscode-test
-
-# Yarn
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
-.yarn/install-state.gz
-
-# Redis dump
-dump.rdb
-
-# Bull queues
-.bull
-
-# Upload sessions
-uploads/
-
-# AI models and embeddings
-models/
-embeddings/
-
-# Secrets and keys
-secrets/
-*.key
-*.pem
-*.crt
-*.p12
-
-# Google Cloud service account credentials
-*-*-*.json
-docs/docparser-*.json
-
-# Testing
-test-results/
-playwright-report/
-playwright/.cache/
-
-# Documentation build
-docs/build/
-docs/.vuepress/dist/
-
-# Local development
-.env.local
-.env.development
-.env.test
-.env.production
-
-# Cursor AI
-.cursor/
-
-# MCP
-.mcp/
-
-# Project specific
-rawdrive_deploy_key
-
-# Environment variables
+# Environment (keep .env.example but ignore actual .env)
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 
+# Personal test data
+Manyam sisters/
 
-
-backend/venv/
-
-backend/buffalo_l.zip
-backend/credentials/
-
-# Allow backend source models
-!backend/src/app/models/
-
-# Allow frontend public models
-!frontend/public/models/
+# Temporary documentation (fix summaries, etc.)
+*_SUMMARY.md
+*_COMPLETE.md
+*_READY.md
+START_HERE.txt
+QUICK_START*.md

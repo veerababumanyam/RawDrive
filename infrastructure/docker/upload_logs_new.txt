@@ -1,0 +1,30 @@
+﻿rawdrive-upload-service  | INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)
+rawdrive-upload-service  | INFO:     Started parent process [8]
+rawdrive-upload-service  | INFO:     Started server process [10]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | INFO:     Started server process [13]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | INFO:     Started server process [11]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | INFO:     Started server process [12]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:29:50 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.

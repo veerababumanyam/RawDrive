@@ -1,0 +1,454 @@
+{
+  "category": "Uncategorized",
+  "description": "# Photo Import/Sync Microservice\n\nBuild a dedicated microservice for importing and synchronizing photos from multiple cloud storage providers, designed with a scalable architecture for both development and production environments.\n\n## Technical Implementation\n\n### Service Architecture\n- **Runtime**: Node.js 20 LTS with TypeScript for type safety and async/await patterns\n- **Framework**: Fastify for high-performance HTTP handling with built-in validation\n- **Message Queue**: RabbitMQ with `amqplib` for job queue processing\n- **Database**: PostgreSQL for sync state/metadata, Redis for caching and distributed locks\n- **Container Runtime**: Multi-stage Docker build with Alpine base (~150MB final image)\n\n### API Endpoints\n```\nPOST   /api/v1/sync/providers/{provider}/connect    # Initiate OAuth2 flow\nPOST   /api/v1/sync/providers/{provider}/callback   # OAuth2 callback handler\nPOST   /api/v1/sync/jobs                            # Create new sync job\nGET    /api/v1/sync/jobs/{jobId}                    # Get job status/progress\nDELETE /api/v1/sync/jobs/{jobId}                    # Cancel running job\nGET    /api/v1/sync/providers/{provider}/status     # Provider connection status\nGET    /health/live                                 # Liveness probe\nGET    /health/ready                                # Readiness probe (DB + Queue)\n```\n\n### Data Models\n\n```typescript\n// Core entities\ninterface SyncJob {\n  id: string;\n  userId: string;\n  provider: ProviderType;\n  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';\n  syncType: 'full' | 'incremental';\n  progress: { processed: number; total: number; errors: number };\n  lastSyncToken?: string;  // Provider-specific cursor for delta sync\n  startedAt?: Date;\n  completedAt?: Date;\n  error?: string;\n}\n\ninterface PhotoMetadata {\n  id: string;\n  userId: string;\n  providerId: string;\n  provider: ProviderType;\n  filename: string;\n  mimeType: string;\n  size: number;\n  hash: string;  // For duplicate detection\n  exifData?: Record<string, unknown>;\n  capturedAt?: Date;\n  albums: string[];\n  syncedAt: Date;\n}\n\ninterface ProviderCredential {\n  userId: string;\n  provider: ProviderType;\n  accessToken: string;  // Encrypted at rest\n  refreshToken: string; // Encrypted at rest\n  expiresAt: Date;\n  scopes: string[];\n}\n\ntype ProviderType = 'google' | 'icloud' | 'dropbox' | 'amazon' | 'onedrive';\n```\n\n### Provider Adapter Pattern\n\n```typescript\n// Base interface all providers implement\ninterface IPhotoProvider {\n  readonly name: ProviderType;\n  readonly rateLimits: { requestsPerSecond: number; dailyQuota?: number };\n  \n  authenticate(authCode: string): Promise<ProviderCredential>;\n  refreshToken(credential: ProviderCredential): Promise<ProviderCredential>;\n  listPhotos(cursor?: string): AsyncGenerator<PhotoBatch>;\n  downloadPhoto(photoId: string): Promise<ReadableStream>;\n  getChanges(syncToken: string): Promise<DeltaChanges>;\n}\n\n// Abstract base with shared functionality\nabstract class BasePhotoProvider implements IPhotoProvider {\n  protected rateLimiter: RateLimiter;\n  protected retryPolicy: RetryPolicy;\n  \n  protected async withRetry<T>(fn: () => Promise<T>): Promise<T>;\n  protected async withRateLimit<T>(fn: () => Promise<T>): Promise<T>;\n}\n```\n\n### Provider-Specific Implementation Details\n\n| Provider | API | Auth | Delta Sync | Rate Limits |\n|----------|-----|------|------------|-------------|\n| Google Photos | REST API v1 | OAuth2 (photos.readonly) | pageToken pagination | 10,000 req/day |\n| iCloud | CloudKit Web Services | Apple ID + App-specific password | syncToken | Custom headers required |\n| Dropbox | Dropbox API v2 | OAuth2 (files.content.read) | cursor-based | 1000 req/min |\n| Amazon Photos | Amazon Drive API | Login with Amazon OAuth2 | checkpoint | 600 req/min |\n| OneDrive | Microsoft Graph API | OAuth2 (Files.Read) | deltaLink | 10,000 req/10min |\n\n### Message Queue Design\n\n```typescript\n// Queue names\nconst QUEUES = {\n  SYNC_JOBS: 'photo-sync.jobs',           // New sync job requests\n  PHOTO_DOWNLOADS: 'photo-sync.downloads', // Individual photo download tasks\n  SYNC_COMPLETE: 'photo-sync.complete',    // Completion notifications\n  DEAD_LETTER: 'photo-sync.dlq'            // Failed messages\n};\n\n// Job message schema\ninterface SyncJobMessage {\n  jobId: string;\n  userId: string;\n  provider: ProviderType;\n  syncType: 'full' | 'incremental';\n  priority: number;\n  retryCount: number;\n  maxRetries: number;\n}\n```\n\n### Environment Configuration\n\n```bash\n# .env.example\n# Service Configuration\nPHOTO_SYNC_SERVICE_PORT=3000\nPHOTO_SYNC_SERVICE_HOST=0.0.0.0\nNODE_ENV=development\n\n# Database\nDATABASE_URL=postgresql://user:pass@localhost:5432/photo_sync\nREDIS_URL=redis://localhost:6379\n\n# Message Queue\nRABBITMQ_URL=amqp://user:pass@localhost:5672\nRABBITMQ_PREFETCH_COUNT=10\n\n# Provider OAuth Credentials\nGOOGLE_CLIENT_ID=\nGOOGLE_CLIENT_SECRET=\nGOOGLE_REDIRECT_URI=\n\nDROPBOX_APP_KEY=\nDROPBOX_APP_SECRET=\nDROPBOX_REDIRECT_URI=\n\nONEDRIVE_CLIENT_ID=\nONEDRIVE_CLIENT_SECRET=\nONEDRIVE_REDIRECT_URI=\n\nAMAZON_CLIENT_ID=\nAMAZON_CLIENT_SECRET=\nAMAZON_REDIRECT_URI=\n\nICLOUD_APP_ID=\nICLOUD_TEAM_ID=\n\n# Storage (for downloaded photos)\nSTORAGE_BACKEND=s3  # s3, local, azure\nS3_BUCKET=\nS3_REGION=\nAWS_ACCESS_KEY_ID=\nAWS_SECRET_ACCESS_KEY=\n\n# Security\nENCRYPTION_KEY=  # 32-byte key for credential encryption\nJWT_SECRET=\n\n# Observability\nLOG_LEVEL=info\nOTEL_EXPORTER_OTLP_ENDPOINT=\n```\n\n### Project Structure\n\n```\nphoto-sync-service/\n├── src/\n│   ├── providers/\n│   │   ├── base.provider.ts        # Abstract base class\n│   │   ├── provider.interface.ts   # IPhotoProvider interface\n│   │   ├── google.provider.ts\n│   │   ├── dropbox.provider.ts\n│   │   ├── onedrive.provider.ts\n│   │   ├── amazon.provider.ts\n│   │   ├── icloud.provider.ts\n│   │   └── index.ts                # Provider factory\n│   ├── services/\n│   │   ├── sync.service.ts         # Orchestrates sync operations\n│   │   ├── job.service.ts          # Job lifecycle management\n│   │   ├── credential.service.ts   # Token storage/refresh\n│   │   └── storage.service.ts      # Photo storage abstraction\n│   ├── workers/\n│   │   ├── sync.worker.ts          # Consumes sync job queue\n│   │   └── download.worker.ts      # Consumes download queue\n│   ├── utils/\n│   │   ├── rate-limiter.ts         # Token bucket implementation\n│   │   ├── retry.ts                # Exponential backoff\n│   │   ├── duplicate-detector.ts   # Hash-based deduplication\n│   │   ├── encryption.ts           # Credential encryption\n│   │   └── exif-parser.ts          # Metadata extraction\n│   ├── routes/\n│   │   ├── sync.routes.ts\n│   │   └── health.routes.ts\n│   ├── db/\n│   │   ├── migrations/\n│   │   └── repositories/\n│   ├── config/\n│   │   └── index.ts                # Centralized config from env\n│   └── app.ts\n├── k8s/\n│   ├── base/\n│   │   ├── deployment.yaml\n│   │   ├── service.yaml\n│   │   ├── configmap.yaml\n│   │   └── hpa.yaml\n│   ├── overlays/\n│   │   ├── development/\n│   │   └── production/\n│   └── keda/\n│       └── scaledobject.yaml\n├── docker-compose.yml\n├── docker-compose.override.yml     # Dev-specific (hot reload)\n├── Dockerfile\n├── .env.example\n└── package.json\n```\n\n### Docker Configuration\n\n```dockerfile\n# Dockerfile - Multi-stage build\nFROM node:20-alpine AS builder\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\n\nFROM node:20-alpine AS production\nWORKDIR /app\nRUN apk add --no-cache tini\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/node_modules ./node_modules\nCOPY --from=builder /app/package.json ./\nUSER node\nEXPOSE 3000\nENTRYPOINT [\"/sbin/tini\", \"--\"]\nCMD [\"node\", \"dist/app.js\"]\n```\n\n```yaml\n# docker-compose.yml\nversion: '3.8'\nservices:\n  photo-sync:\n    build: .\n    ports:\n      - \"${PHOTO_SYNC_SERVICE_PORT:-3000}:3000\"\n    env_file: .env\n    depends_on:\n      postgres:\n        condition: service_healthy\n      rabbitmq:\n        condition: service_healthy\n      redis:\n        condition: service_started\n    volumes:\n      - ./src:/app/src:ro  # Hot reload in dev\n    command: npm run dev\n\n  postgres:\n    image: postgres:15-alpine\n    environment:\n      POSTGRES_DB: photo_sync\n      POSTGRES_USER: ${DB_USER:-postgres}\n      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}\n    volumes:\n      - postgres_data:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U postgres\"]\n      interval: 5s\n      timeout: 5s\n      retries: 5\n\n  rabbitmq:\n    image: rabbitmq:3-management-alpine\n    ports:\n      - \"15672:15672\"\n    healthcheck:\n      test: rabbitmq-diagnostics -q ping\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\n  redis:\n    image: redis:7-alpine\n    command: redis-server --appendonly yes\n\nvolumes:\n  postgres_data:\n```\n\n### Kubernetes + KEDA Configuration\n\n```yaml\n# k8s/base/deployment.yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: photo-sync-service\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: photo-sync-service\n  template:\n    spec:\n      containers:\n        - name: photo-sync\n          image: photo-sync-service:latest\n          ports:\n            - containerPort: 3000\n          envFrom:\n            - configMapRef:\n                name: photo-sync-config\n            - secretRef:\n                name: photo-sync-secrets\n          resources:\n            requests:\n              memory: \"256Mi\"\n              cpu: \"100m\"\n            limits:\n              memory: \"512Mi\"\n              cpu: \"500m\"\n          livenessProbe:\n            httpGet:\n              path: /health/live\n              port: 3000\n            initialDelaySeconds: 10\n            periodSeconds: 15\n          readinessProbe:\n            httpGet:\n              path: /health/ready\n              port: 3000\n            initialDelaySeconds: 5\n            periodSeconds: 10\n```\n\n```yaml\n# k8s/keda/scaledobject.yaml\napiVersion: keda.sh/v1alpha1\nkind: ScaledObject\nmetadata:\n  name: photo-sync-scaler\nspec:\n  scaleTargetRef:\n    name: photo-sync-service\n  minReplicaCount: 1\n  maxReplicaCount: 20\n  pollingInterval: 15\n  cooldownPeriod: 300\n  triggers:\n    - type: rabbitmq\n      metadata:\n        queueName: photo-sync.jobs\n        mode: QueueLength\n        value: \"10\"  # Scale up when >10 pending jobs per pod\n        hostFromEnv: RABBITMQ_URL\n    - type: cpu\n      metadata:\n        type: Utilization\n        value: \"70\"\n    - type: memory\n      metadata:\n        type: Utilization\n        value: \"80\"\n```\n\n### Error Handling & Resilience\n\n```typescript\n// Retry policy with exponential backoff\nconst retryPolicy = {\n  maxRetries: 5,\n  baseDelayMs: 1000,\n  maxDelayMs: 60000,\n  retryableErrors: [\n    'RATE_LIMIT_EXCEEDED',\n    'TEMPORARY_ERROR',\n    'NETWORK_ERROR',\n    'SERVICE_UNAVAILABLE'\n  ]\n};\n\n// Circuit breaker per provider\nconst circuitBreakerConfig = {\n  failureThreshold: 5,\n  successThreshold: 2,\n  timeout: 30000\n};\n```\n\n### Security Considerations\n- OAuth tokens encrypted at rest using AES-256-GCM\n- Secrets injected via Kubernetes Secrets (not ConfigMaps)\n- Network policies restricting pod-to-pod communication\n- Rate limiting on API endpoints to prevent abuse\n- Request validation using JSON Schema\n- Audit logging for all sync operations\n\n### Duplicate Detection Strategy\n- Generate perceptual hash (pHash) for image content comparison\n- Store file hash (SHA-256) + file size + capture timestamp\n- Cross-provider deduplication using hash lookup in Redis bloom filter\n- Configurable similarity threshold for near-duplicate detection\n\n### Observability\n- Structured JSON logging with correlation IDs\n- OpenTelemetry tracing for distributed request tracking\n- Prometheus metrics endpoint at `/metrics`\n- Key metrics: sync_jobs_total, sync_duration_seconds, photos_processed_total, provider_errors_total",
+  "title": "Photo Import_Sync Microservice",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1767744115423-11ncmatms",
+  "startedAt": "2026-01-07T00:21:10.867Z",
+  "updatedAt": "2026-01-07T07:09:54.154Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "# Photo Import/Sync Microservice Specification\n\n## 1. Problem Statement\n\nPhotographers need to import and synchronize their existing photo libraries from multiple cloud storage providers (Google Photos, iCloud, Dropbox, Amazon Photos, OneDrive) into RawDrive. Currently, users must manually download and re-upload photos, which is time-consuming and error-prone. A dedicated microservice will automate this process with provider-specific adapters, job queuing, and incremental sync capabilities.\n\n## 2. User Story\n\nAs a **professional photographer**, I want to **connect my existing cloud storage accounts and automatically import my photos into RawDrive**, so that **I can consolidate my photo library without manual downloads and uploads**.\n\n## 3. Acceptance Criteria\n\n### Happy Path - OAuth Connection\n- **GIVEN** a user is on the import settings page\n- **WHEN** they click \"Connect Google Photos\"\n- **THEN** they are redirected to Google's OAuth consent screen\n- **AND** upon approval, their credentials are securely stored\n- **AND** they see a success confirmation with provider status\n\n### Happy Path - Full Sync\n- **GIVEN** a user has connected a provider\n- **WHEN** they initiate a full sync job\n- **THEN** all photos are enumerated and downloaded\n- **AND** progress is reported in real-time (processed/total/errors)\n- **AND** photos are stored with extracted EXIF metadata\n- **AND** duplicates are detected and skipped\n\n### Happy Path - Incremental Sync\n- **GIVEN** a user has previously completed a full sync\n- **WHEN** they trigger an incremental sync\n- **THEN** only new/modified photos since last sync are processed\n- **AND** the sync completes significantly faster than full sync\n\n### Edge Case - Rate Limiting\n- **GIVEN** a provider returns a rate limit error (429)\n- **WHEN** the sync worker encounters this error\n- **THEN** it applies exponential backoff with jitter\n- **AND** retries up to 5 times before failing the photo\n- **AND** continues with remaining photos\n\n### Edge Case - Token Expiration\n- **GIVEN** a provider's access token has expired\n- **WHEN** an API call fails with 401\n- **THEN** the service automatically refreshes the token\n- **AND** retries the original request\n- **AND** updates stored credentials\n\n### Edge Case - Large Library (100K+ photos)\n- **GIVEN** a user has 100,000+ photos in their library\n- **WHEN** they start a full sync\n- **THEN** the job processes photos in batches\n- **AND** can be paused/resumed without data loss\n- **AND** completes within reasonable time via horizontal scaling\n\n### Error Handling - Provider Unavailable\n- **GIVEN** a provider's API is down\n- **WHEN** sync attempts fail after max retries\n- **THEN** the job is marked as failed with clear error message\n- **AND** partial progress is preserved\n- **AND** user is notified via webhook/email\n\n### Error Handling - Invalid Credentials\n- **GIVEN** a user's OAuth tokens are revoked\n- **WHEN** refresh token fails\n- **THEN** the provider status is marked as disconnected\n- **AND** user is prompted to re-authenticate\n- **AND** pending jobs for that provider are cancelled\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Service Location | `services/photo-sync-service/` |\n| Runtime | Node.js 20 LTS + TypeScript 5.2+ |\n| Framework | Fastify 4.x |\n| Message Queue | RabbitMQ with amqplib |\n| Database | PostgreSQL 16 (shared) + Redis 7 |\n| API Gateway | Traefik v3 (priority 130 for `/api/v1/sync/*`) |\n| Autoscaling | KEDA with RabbitMQ trigger |\n| Docker Image | Multi-stage Alpine (~150MB) |\n| Port | 8007 (dev), 8007 (prod) |\n| Patterns to Follow | Existing microservices (gallery-service, upload-service) |\n\n## 5. Non-Goals\n\n- **Photo editing/processing** - This service only imports; processing is handled by existing services\n- **Two-way sync** - Photos flow into RawDrive only, not back to providers\n- **Social media imports** - Instagram, Facebook, etc. are out of scope for v1\n- **Real-time sync** - Uses polling/manual trigger, not webhooks for v1\n- **Local folder sync** - Only cloud providers, not local filesystem\n- **Album/folder structure preservation** - v1 imports photos flat; album mapping is future enhancement\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation & Service Scaffolding\n\n- [ ] T001: Create service directory structure with TypeScript/Fastify boilerplate | File: services/photo-sync-service/src/app.ts\n- [ ] T002: Configure package.json with dependencies (fastify, amqplib, pg, ioredis, etc.) | File: services/photo-sync-service/package.json\n- [ ] T003: Create TypeScript configuration with strict mode | File: services/photo-sync-service/tsconfig.json\n- [ ] T004: Create Dockerfile with multi-stage Alpine build | File: services/photo-sync-service/Dockerfile\n- [ ] T005: Create docker-compose.yml with service dependencies | File: services/photo-sync-service/docker-compose.yml\n- [ ] T006: Create environment configuration module | File: services/photo-sync-service/src/config/index.ts\n- [ ] T007: Create .env.example with all required variables | File: services/photo-sync-service/.env.example\n\n## Phase 2: Database & Infrastructure\n\n- [ ] T008: Create PostgreSQL migration for sync_jobs table | File: services/photo-sync-service/src/db/migrations/001_create_sync_jobs.ts\n- [ ] T009: Create PostgreSQL migration for photo_metadata table | File: services/photo-sync-service/src/db/migrations/002_create_photo_metadata.ts\n- [ ] T010: Create PostgreSQL migration for provider_credentials table | File: services/photo-sync-service/src/db/migrations/003_create_provider_credentials.ts\n- [ ] T011: Create database connection module with connection pooling | File: services/photo-sync-service/src/db/connection.ts\n- [ ] T012: Create SyncJobRepository with CRUD operations | File: services/photo-sync-service/src/db/repositories/sync-job.repository.ts\n- [ ] T013: Create PhotoMetadataRepository with dedup queries | File: services/photo-sync-service/src/db/repositories/photo-metadata.repository.ts\n- [ ] T014: Create ProviderCredentialRepository with encryption | File: services/photo-sync-service/src/db/repositories/provider-credential.repository.ts\n- [ ] T015: Create Redis client module for caching/locks | File: services/photo-sync-service/src/cache/redis-client.ts\n\n## Phase 3: Core Utilities\n\n- [ ] T016: Create AES-256-GCM encryption utility for credentials | File: services/photo-sync-service/src/utils/encryption.ts\n- [ ] T017: Create token bucket rate limiter utility | File: services/photo-sync-service/src/utils/rate-limiter.ts\n- [ ] T018: Create exponential backoff retry utility | File: services/photo-sync-service/src/utils/retry.ts\n- [ ] T019: Create EXIF metadata parser utility | File: services/photo-sync-service/src/utils/exif-parser.ts\n- [ ] T020: Create SHA-256 hash and pHash duplicate detector | File: services/photo-sync-service/src/utils/duplicate-detector.ts\n- [ ] T021: Create circuit breaker utility for provider resilience | File: services/photo-sync-service/src/utils/circuit-breaker.ts\n\n## Phase 4: Provider Adapter Pattern\n\n- [ ] T022: Create IPhotoProvider interface and types | File: services/photo-sync-service/src/providers/provider.interface.ts\n- [ ] T023: Create BasePhotoProvider abstract class | File: services/photo-sync-service/src/providers/base.provider.ts\n- [ ] T024: Implement GooglePhotosProvider with OAuth2 | File: services/photo-sync-service/src/providers/google.provider.ts\n- [ ] T025: Implement DropboxProvider with OAuth2 | File: services/photo-sync-service/src/providers/dropbox.provider.ts\n- [ ] T026: Implement OneDriveProvider with Microsoft Graph | File: services/photo-sync-service/src/providers/onedrive.provider.ts\n- [ ] T027: Implement AmazonPhotosProvider with OAuth2 | File: services/photo-sync-service/src/providers/amazon.provider.ts\n- [ ] T028: Implement iCloudProvider with CloudKit | File: services/photo-sync-service/src/providers/icloud.provider.ts\n- [ ] T029: Create ProviderFactory for adapter instantiation | File: services/photo-sync-service/src/providers/index.ts\n\n## Phase 5: Services Layer\n\n- [ ] T030: Create CredentialService for OAuth token management | File: services/photo-sync-service/src/services/credential.service.ts\n- [ ] T031: Create JobService for sync job lifecycle | File: services/photo-sync-service/src/services/job.service.ts\n- [ ] T032: Create StorageService for photo upload to R2/S3 | File: services/photo-sync-service/src/services/storage.service.ts\n- [ ] T033: Create SyncService for orchestrating sync operations | File: services/photo-sync-service/src/services/sync.service.ts\n\n## Phase 6: Message Queue & Workers\n\n- [ ] T034: Create RabbitMQ connection and channel manager | File: services/photo-sync-service/src/queue/rabbitmq-client.ts\n- [ ] T035: Create queue constants and message schemas | File: services/photo-sync-service/src/queue/queues.ts\n- [ ] T036: Create SyncWorker for processing sync jobs | File: services/photo-sync-service/src/workers/sync.worker.ts\n- [ ] T037: Create DownloadWorker for individual photo downloads | File: services/photo-sync-service/src/workers/download.worker.ts\n\n## Phase 7: API Routes\n\n- [ ] T038: Create health routes (/health/live, /health/ready) | File: services/photo-sync-service/src/routes/health.routes.ts\n- [ ] T039: Create OAuth connect/callback routes | File: services/photo-sync-service/src/routes/oauth.routes.ts\n- [ ] T040: Create sync job CRUD routes | File: services/photo-sync-service/src/routes/sync.routes.ts\n- [ ] T041: Create provider status routes | File: services/photo-sync-service/src/routes/provider.routes.ts\n- [ ] T042: Create Prometheus metrics endpoint | File: services/photo-sync-service/src/routes/metrics.routes.ts\n\n## Phase 8: Observability & Monitoring\n\n- [ ] T043: Create structured JSON logger with correlation IDs | File: services/photo-sync-service/src/observability/logger.ts\n- [ ] T044: Create OpenTelemetry tracing configuration | File: services/photo-sync-service/src/observability/tracing.ts\n- [ ] T045: Create Prometheus metrics collector | File: services/photo-sync-service/src/observability/metrics.ts\n\n## Phase 9: Kubernetes & KEDA\n\n- [ ] T046: Create Kubernetes Deployment manifest | File: services/photo-sync-service/k8s/base/deployment.yaml\n- [ ] T047: Create Kubernetes Service manifest | File: services/photo-sync-service/k8s/base/service.yaml\n- [ ] T048: Create Kubernetes ConfigMap manifest | File: services/photo-sync-service/k8s/base/configmap.yaml\n- [ ] T049: Create KEDA ScaledObject for RabbitMQ-based autoscaling | File: services/photo-sync-service/k8s/keda/scaledobject.yaml\n- [ ] T050: Create Kubernetes overlays for dev/prod | File: services/photo-sync-service/k8s/overlays/development/kustomization.yaml\n\n## Phase 10: Integration & Gateway\n\n- [ ] T051: Add photo-sync-service to Traefik dynamic config | File: infrastructure/docker/traefik/dynamic.yaml\n- [ ] T052: Add photo-sync-service to main docker-compose.yml | File: infrastructure/docker/docker-compose.yml\n- [ ] T053: Create development startup script | File: scripts/dev-photo-sync-service.sh\n- [ ] T054: Create service README with setup instructions | File: services/photo-sync-service/README.md\n\n## Phase 11: Testing\n\n- [ ] T055: Create unit tests for encryption utility | File: services/photo-sync-service/tests/unit/encryption.test.ts\n- [ ] T056: Create unit tests for rate limiter | File: services/photo-sync-service/tests/unit/rate-limiter.test.ts\n- [ ] T057: Create unit tests for duplicate detector | File: services/photo-sync-service/tests/unit/duplicate-detector.test.ts\n- [ ] T058: Create integration tests for OAuth flow | File: services/photo-sync-service/tests/integration/oauth.test.ts\n- [ ] T059: Create integration tests for sync job lifecycle | File: services/photo-sync-service/tests/integration/sync-job.test.ts\n- [ ] T060: Create load tests for concurrent sync jobs | File: services/photo-sync-service/tests/load/sync-load.test.ts\n```\n\n## 7. Success Metrics\n\n| Metric | Target |\n|--------|--------|\n| OAuth connection success rate | ≥ 99% for supported providers |\n| Full sync throughput | ≥ 100 photos/minute per worker |\n| Incremental sync detection | < 30 seconds for delta calculation |\n| Duplicate detection accuracy | ≥ 99.5% (hash-based) |\n| Service availability | 99.9% uptime |\n| API response time (P95) | < 200ms for job status queries |\n| Memory usage per pod | < 512MB under load |\n| KEDA scaling response | < 60 seconds to scale up |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Provider API changes break adapters | Version-specific adapter implementations, comprehensive error logging, health checks per provider |\n| OAuth token storage security breach | AES-256-GCM encryption at rest, Kubernetes Secrets for keys, audit logging |\n| Rate limiting causes sync failures | Per-provider rate limiters, exponential backoff, queue-based throttling |\n| Large libraries overwhelm workers | Batch processing, KEDA autoscaling, distributed locks for job coordination |\n| iCloud lacks official API | Use CloudKit Web Services with app-specific passwords, document limitations |\n| Network failures during downloads | Resumable downloads where supported, checkpointing progress, retry with backoff |\n| Duplicate photos across providers | Hash-based deduplication with Bloom filter for O(1) lookup |\n| RabbitMQ unavailability | Dead letter queues, health checks, fallback to Redis-based queuing |\n\n---",
+    "generatedAt": "2026-01-07T00:22:21.349Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create service directory structure with TypeScript/Fastify boilerplate",
+        "filePath": "services/photo-sync-service/src/app.ts",
+        "phase": "Phase 1: Foundation & Service Scaffolding",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Configure package.json with dependencies (fastify, amqplib, pg, ioredis, etc.)",
+        "filePath": "services/photo-sync-service/package.json",
+        "phase": "Phase 1: Foundation & Service Scaffolding",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create TypeScript configuration with strict mode",
+        "filePath": "services/photo-sync-service/tsconfig.json",
+        "phase": "Phase 1: Foundation & Service Scaffolding",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Create Dockerfile with multi-stage Alpine build",
+        "filePath": "services/photo-sync-service/Dockerfile",
+        "phase": "Phase 1: Foundation & Service Scaffolding",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create docker-compose.yml with service dependencies",
+        "filePath": "services/photo-sync-service/docker-compose.yml",
+        "phase": "Phase 1: Foundation & Service Scaffolding",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create environment configuration module",
+        "filePath": "services/photo-sync-service/src/config/index.ts",
+        "phase": "Phase 1: Foundation & Service Scaffolding",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create .env.example with all required variables",
+        "filePath": "services/photo-sync-service/.env.example",
+        "phase": "Phase 1: Foundation & Service Scaffolding",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Create PostgreSQL migration for sync_jobs table",
+        "filePath": "services/photo-sync-service/src/db/migrations/001_create_sync_jobs.ts",
+        "phase": "Phase 2: Database & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create PostgreSQL migration for photo_metadata table",
+        "filePath": "services/photo-sync-service/src/db/migrations/002_create_photo_metadata.ts",
+        "phase": "Phase 2: Database & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Create PostgreSQL migration for provider_credentials table",
+        "filePath": "services/photo-sync-service/src/db/migrations/003_create_provider_credentials.ts",
+        "phase": "Phase 2: Database & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Create database connection module with connection pooling",
+        "filePath": "services/photo-sync-service/src/db/connection.ts",
+        "phase": "Phase 2: Database & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create SyncJobRepository with CRUD operations",
+        "filePath": "services/photo-sync-service/src/db/repositories/sync-job.repository.ts",
+        "phase": "Phase 2: Database & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create PhotoMetadataRepository with dedup queries",
+        "filePath": "services/photo-sync-service/src/db/repositories/photo-metadata.repository.ts",
+        "phase": "Phase 2: Database & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create ProviderCredentialRepository with encryption",
+        "filePath": "services/photo-sync-service/src/db/repositories/provider-credential.repository.ts",
+        "phase": "Phase 2: Database & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Create Redis client module for caching/locks",
+        "filePath": "services/photo-sync-service/src/cache/redis-client.ts",
+        "phase": "Phase 2: Database & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create AES-256-GCM encryption utility for credentials",
+        "filePath": "services/photo-sync-service/src/utils/encryption.ts",
+        "phase": "Phase 3: Core Utilities",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Create token bucket rate limiter utility",
+        "filePath": "services/photo-sync-service/src/utils/rate-limiter.ts",
+        "phase": "Phase 3: Core Utilities",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create exponential backoff retry utility",
+        "filePath": "services/photo-sync-service/src/utils/retry.ts",
+        "phase": "Phase 3: Core Utilities",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Create EXIF metadata parser utility",
+        "filePath": "services/photo-sync-service/src/utils/exif-parser.ts",
+        "phase": "Phase 3: Core Utilities",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Create SHA-256 hash and pHash duplicate detector",
+        "filePath": "services/photo-sync-service/src/utils/duplicate-detector.ts",
+        "phase": "Phase 3: Core Utilities",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Create circuit breaker utility for provider resilience",
+        "filePath": "services/photo-sync-service/src/utils/circuit-breaker.ts",
+        "phase": "Phase 3: Core Utilities",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Create IPhotoProvider interface and types",
+        "filePath": "services/photo-sync-service/src/providers/provider.interface.ts",
+        "phase": "Phase 4: Provider Adapter Pattern",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Create BasePhotoProvider abstract class",
+        "filePath": "services/photo-sync-service/src/providers/base.provider.ts",
+        "phase": "Phase 4: Provider Adapter Pattern",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Implement GooglePhotosProvider with OAuth2",
+        "filePath": "services/photo-sync-service/src/providers/google.provider.ts",
+        "phase": "Phase 4: Provider Adapter Pattern",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Implement DropboxProvider with OAuth2",
+        "filePath": "services/photo-sync-service/src/providers/dropbox.provider.ts",
+        "phase": "Phase 4: Provider Adapter Pattern",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Implement OneDriveProvider with Microsoft Graph",
+        "filePath": "services/photo-sync-service/src/providers/onedrive.provider.ts",
+        "phase": "Phase 4: Provider Adapter Pattern",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Implement AmazonPhotosProvider with OAuth2",
+        "filePath": "services/photo-sync-service/src/providers/amazon.provider.ts",
+        "phase": "Phase 4: Provider Adapter Pattern",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Implement iCloudProvider with CloudKit",
+        "filePath": "services/photo-sync-service/src/providers/icloud.provider.ts",
+        "phase": "Phase 4: Provider Adapter Pattern",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Create ProviderFactory for adapter instantiation",
+        "filePath": "services/photo-sync-service/src/providers/index.ts",
+        "phase": "Phase 4: Provider Adapter Pattern",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Create CredentialService for OAuth token management",
+        "filePath": "services/photo-sync-service/src/services/credential.service.ts",
+        "phase": "Phase 5: Services Layer",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create JobService for sync job lifecycle",
+        "filePath": "services/photo-sync-service/src/services/job.service.ts",
+        "phase": "Phase 5: Services Layer",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Create StorageService for photo upload to R2/S3",
+        "filePath": "services/photo-sync-service/src/services/storage.service.ts",
+        "phase": "Phase 5: Services Layer",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Create SyncService for orchestrating sync operations",
+        "filePath": "services/photo-sync-service/src/services/sync.service.ts",
+        "phase": "Phase 5: Services Layer",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Create RabbitMQ connection and channel manager",
+        "filePath": "services/photo-sync-service/src/queue/rabbitmq-client.ts",
+        "phase": "Phase 6: Message Queue & Workers",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Create queue constants and message schemas",
+        "filePath": "services/photo-sync-service/src/queue/queues.ts",
+        "phase": "Phase 6: Message Queue & Workers",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Create SyncWorker for processing sync jobs",
+        "filePath": "services/photo-sync-service/src/workers/sync.worker.ts",
+        "phase": "Phase 6: Message Queue & Workers",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Create DownloadWorker for individual photo downloads",
+        "filePath": "services/photo-sync-service/src/workers/download.worker.ts",
+        "phase": "Phase 6: Message Queue & Workers",
+        "status": "pending"
+      },
+      {
+        "id": "T038",
+        "description": "Create health routes (/health/live, /health/ready)",
+        "filePath": "services/photo-sync-service/src/routes/health.routes.ts",
+        "phase": "Phase 7: API Routes",
+        "status": "pending"
+      },
+      {
+        "id": "T039",
+        "description": "Create OAuth connect/callback routes",
+        "filePath": "services/photo-sync-service/src/routes/oauth.routes.ts",
+        "phase": "Phase 7: API Routes",
+        "status": "pending"
+      },
+      {
+        "id": "T040",
+        "description": "Create sync job CRUD routes",
+        "filePath": "services/photo-sync-service/src/routes/sync.routes.ts",
+        "phase": "Phase 7: API Routes",
+        "status": "pending"
+      },
+      {
+        "id": "T041",
+        "description": "Create provider status routes",
+        "filePath": "services/photo-sync-service/src/routes/provider.routes.ts",
+        "phase": "Phase 7: API Routes",
+        "status": "pending"
+      },
+      {
+        "id": "T042",
+        "description": "Create Prometheus metrics endpoint",
+        "filePath": "services/photo-sync-service/src/routes/metrics.routes.ts",
+        "phase": "Phase 7: API Routes",
+        "status": "pending"
+      },
+      {
+        "id": "T043",
+        "description": "Create structured JSON logger with correlation IDs",
+        "filePath": "services/photo-sync-service/src/observability/logger.ts",
+        "phase": "Phase 8: Observability & Monitoring",
+        "status": "pending"
+      },
+      {
+        "id": "T044",
+        "description": "Create OpenTelemetry tracing configuration",
+        "filePath": "services/photo-sync-service/src/observability/tracing.ts",
+        "phase": "Phase 8: Observability & Monitoring",
+        "status": "pending"
+      },
+      {
+        "id": "T045",
+        "description": "Create Prometheus metrics collector",
+        "filePath": "services/photo-sync-service/src/observability/metrics.ts",
+        "phase": "Phase 8: Observability & Monitoring",
+        "status": "pending"
+      },
+      {
+        "id": "T046",
+        "description": "Create Kubernetes Deployment manifest",
+        "filePath": "services/photo-sync-service/k8s/base/deployment.yaml",
+        "phase": "Phase 9: Kubernetes & KEDA",
+        "status": "pending"
+      },
+      {
+        "id": "T047",
+        "description": "Create Kubernetes Service manifest",
+        "filePath": "services/photo-sync-service/k8s/base/service.yaml",
+        "phase": "Phase 9: Kubernetes & KEDA",
+        "status": "pending"
+      },
+      {
+        "id": "T048",
+        "description": "Create Kubernetes ConfigMap manifest",
+        "filePath": "services/photo-sync-service/k8s/base/configmap.yaml",
+        "phase": "Phase 9: Kubernetes & KEDA",
+        "status": "pending"
+      },
+      {
+        "id": "T049",
+        "description": "Create KEDA ScaledObject for RabbitMQ-based autoscaling",
+        "filePath": "services/photo-sync-service/k8s/keda/scaledobject.yaml",
+        "phase": "Phase 9: Kubernetes & KEDA",
+        "status": "pending"
+      },
+      {
+        "id": "T050",
+        "description": "Create Kubernetes overlays for dev/prod",
+        "filePath": "services/photo-sync-service/k8s/overlays/development/kustomization.yaml",
+        "phase": "Phase 9: Kubernetes & KEDA",
+        "status": "pending"
+      },
+      {
+        "id": "T051",
+        "description": "Add photo-sync-service to Traefik dynamic config",
+        "filePath": "infrastructure/docker/traefik/dynamic.yaml",
+        "phase": "Phase 10: Integration & Gateway",
+        "status": "pending"
+      },
+      {
+        "id": "T052",
+        "description": "Add photo-sync-service to main docker-compose.yml",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 10: Integration & Gateway",
+        "status": "pending"
+      },
+      {
+        "id": "T053",
+        "description": "Create development startup script",
+        "filePath": "scripts/dev-photo-sync-service.sh",
+        "phase": "Phase 10: Integration & Gateway",
+        "status": "pending"
+      },
+      {
+        "id": "T054",
+        "description": "Create service README with setup instructions",
+        "filePath": "services/photo-sync-service/README.md",
+        "phase": "Phase 10: Integration & Gateway",
+        "status": "pending"
+      },
+      {
+        "id": "T055",
+        "description": "Create unit tests for encryption utility",
+        "filePath": "services/photo-sync-service/tests/unit/encryption.test.ts",
+        "phase": "Phase 11: Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T056",
+        "description": "Create unit tests for rate limiter",
+        "filePath": "services/photo-sync-service/tests/unit/rate-limiter.test.ts",
+        "phase": "Phase 11: Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T057",
+        "description": "Create unit tests for duplicate detector",
+        "filePath": "services/photo-sync-service/tests/unit/duplicate-detector.test.ts",
+        "phase": "Phase 11: Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T058",
+        "description": "Create integration tests for OAuth flow",
+        "filePath": "services/photo-sync-service/tests/integration/oauth.test.ts",
+        "phase": "Phase 11: Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T059",
+        "description": "Create integration tests for sync job lifecycle",
+        "filePath": "services/photo-sync-service/tests/integration/sync-job.test.ts",
+        "phase": "Phase 11: Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T060",
+        "description": "Create load tests for concurrent sync jobs",
+        "filePath": "services/photo-sync-service/tests/load/sync-load.test.ts",
+        "phase": "Phase 11: Testing",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 60,
+    "tasksCompleted": 22,
+    "approvedAt": "2026-01-07T00:22:21.350Z",
+    "currentTaskId": "T023"
+  }
+}

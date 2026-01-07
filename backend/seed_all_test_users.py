@@ -11,7 +11,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from app.utils.security import hash_password
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://rawdrive:rawdrive@localhost:5432/rawdrive")
+# Get DB URL and fix scheme for asyncpg
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    # Default for local testing (outside docker)
+    DATABASE_URL = "postgresql://rawdrive:rawdrive@localhost:5432/rawdrive"
+else:
+    # Fix scheme for asyncpg (remove +asyncpg if present)
+    if "postgresql+asyncpg://" in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 
 # Test user definitions with deterministic UUIDs
 SUBSCRIPTION_TIER_USERS = [
@@ -412,11 +420,11 @@ async def seed_all_users():
                     conn,
                     user_data["workspace_id"],
                     user_data["workspace_name"],
-                    user_data["user_id"],
+                    str(user_id),
                 )
                 await assign_workspace_role(
                     conn,
-                    UUID(user_data["user_id"]),
+                    user_id,
                     UUID(user_data["workspace_id"]),
                     "owner",
                 )
@@ -441,11 +449,11 @@ async def seed_all_users():
                 conn,
                 user_data["workspace_id"],
                 user_data["workspace_name"],
-                user_data["user_id"],
+                str(user_id),
             )
             await assign_workspace_role(
                 conn,
-                UUID(user_data["user_id"]),
+                user_id,
                 UUID(user_data["workspace_id"]),
                 "owner",
             )
@@ -453,7 +461,7 @@ async def seed_all_users():
             # Assign platform role
             await assign_platform_role(
                 conn,
-                UUID(user_data["user_id"]),
+                user_id,
                 user_data["platform_role"],
             )
         
@@ -462,14 +470,21 @@ async def seed_all_users():
         print("-" * 70)
         
         shared_workspace_id = "44444444-4444-4444-4444-444444444000"
-        first_owner = WORKSPACE_ROLE_USERS[0]
+        # We need to find the user_id for the first owner dynamically if possible, 
+        # but WORKSPACE_ROLE_USERS[0] hasn't been created/fetched yet.
+        # Let's clean this up by doing it inside the next loop or fetching first.
+        
+        # Fetch/Create first owner to get valid ID
+        first_owner_data = WORKSPACE_ROLE_USERS[0]
+        print(f"\nPreparing owner for shared workspace: {first_owner_data['email']}")
+        first_owner_id = await create_user(conn, first_owner_data)
         
         print(f"\ntest-roles-workspace:")
         await create_workspace(
             conn,
             shared_workspace_id,
             "test-roles-workspace",
-            first_owner["user_id"],
+            str(first_owner_id),
         )
         
         # 4. Seed Workspace Role Users
@@ -482,7 +497,7 @@ async def seed_all_users():
             
             await assign_workspace_role(
                 conn,
-                UUID(user_data["user_id"]),
+                user_id,
                 UUID(user_data["workspace_id"]),
                 user_data["workspace_role"],
             )

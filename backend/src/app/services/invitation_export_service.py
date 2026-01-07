@@ -63,25 +63,6 @@ class InvitationExportService:
         
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Check if invitation_exports table exists, create if not
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS invitation_exports (
-                    export_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    workspace_id UUID NOT NULL,
-                    invitation_id UUID NOT NULL,
-                    user_id UUID NOT NULL,
-                    format VARCHAR(20) NOT NULL,
-                    status VARCHAR(20) DEFAULT 'pending',
-                    file_url TEXT,
-                    file_size_bytes INTEGER,
-                    options JSONB DEFAULT '{}',
-                    error_message TEXT,
-                    expires_at TIMESTAMPTZ,
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    completed_at TIMESTAMPTZ
-                )
-            """)
-            
             # Calculate expiration (7 days from now)
             expires_at = datetime.utcnow() + timedelta(days=7)
             

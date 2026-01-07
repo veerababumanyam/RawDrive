@@ -26,8 +26,8 @@ RawDrive uses a modern cloud-native infrastructure stack:
 |---------|----------|
 | **Traefik (Docker)** | |
 | Static config | `infrastructure/docker/traefik/traefik.yaml` |
-| Dynamic config | `infrastructure/docker/traefik/dynamic.yaml` |
-| Compose extension | `infrastructure/docker/docker-compose.traefik.yml` |
+| Dynamic config (single source of truth) | `infrastructure/docker/traefik/dynamic.yaml` |
+| ~~Compose extension~~ | ~~`docker-compose.traefik.yml`~~ (DEPRECATED) |
 | **Traefik (K8s)** | |
 | Deployment | `infrastructure/kubernetes/base/traefik/deployment.yaml` |
 | IngressRoutes | `infrastructure/kubernetes/base/traefik/ingressroutes.yaml` |
@@ -200,14 +200,18 @@ WITH (num_neighbors = 50);
 ## Docker Commands
 
 ```bash
-# Start with Traefik
-docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
+# Start with Traefik (uses File Provider routing from dynamic.yaml)
+docker compose -f docker-compose.yml up -d
 
 # Access Traefik dashboard (dev only)
-open http://localhost:8080
+open http://localhost:8080           # Direct access
+open http://traefik.localhost        # Via router
 
 # View Traefik metrics
 curl http://localhost:8082/metrics
+
+# Note: docker-compose.traefik.yml is DEPRECATED and should NOT be used
+# All routing is defined in infrastructure/docker/traefik/dynamic.yaml
 ```
 
 ## Kubernetes Commands

@@ -38,6 +38,14 @@ interface SEOHeadProps {
   aiTargetAudience?: string;
   /** AI Agent Discovery - pricing model */
   aiPricingModel?: string;
+  /** AI Agent Discovery - product category */
+  aiProductCategory?: string;
+  /** AI Agent Discovery - key features */
+  aiKeyFeatures?: string;
+  /** AI Agent Discovery - competitors */
+  aiCompetitors?: string;
+  /** AI Agent Discovery - use cases */
+  aiUseCases?: string;
 }
 
 const DEFAULT_TITLE = 'RawDrive - Professional Photography Management';
@@ -63,14 +71,18 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
   aiContentSummary,
   aiTargetAudience,
   aiPricingModel,
+  aiProductCategory,
+  aiKeyFeatures,
+  aiCompetitors,
+  aiUseCases,
 }) => {
   const fullTitle = title ? `${title} | ${siteName}` : DEFAULT_TITLE;
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rawdrive.ai';
   const fullCanonicalUrl = canonicalUrl
     ? `${baseUrl}${canonicalUrl}`
     : typeof window !== 'undefined'
-    ? window.location.href
-    : baseUrl;
+      ? window.location.href
+      : baseUrl;
   const fullOgImage = ogImage.startsWith('http') ? ogImage : `${baseUrl}${ogImage}`;
 
   return (
@@ -110,6 +122,10 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
       {aiContentSummary && <meta name="ai-content-summary" content={aiContentSummary} />}
       {aiTargetAudience && <meta name="ai-target-audience" content={aiTargetAudience} />}
       {aiPricingModel && <meta name="ai-pricing-model" content={aiPricingModel} />}
+      {aiProductCategory && <meta name="ai-product-category" content={aiProductCategory} />}
+      {aiKeyFeatures && <meta name="ai-key-features" content={aiKeyFeatures} />}
+      {aiCompetitors && <meta name="ai-competitors" content={aiCompetitors} />}
+      {aiUseCases && <meta name="ai-use-cases" content={aiUseCases} />}
 
       {/* Structured Data */}
       {structuredData && (

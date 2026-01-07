@@ -12,12 +12,13 @@ from src.services.gallery_service import (
     GalleryNotFoundError,
     GalleryError,
 )
+from src.services.cache_warming_service import get_cache_warming_service
 from src.schemas.gallery import (
     GalleryResponse,
     GalleryListResponse,
     GalleryAssetsListResponse,
 )
-from src.logging import get_logger
+from src.log_config import get_logger
 from src.observability.metrics import get_metrics
 
 logger = get_logger(__name__)
@@ -76,8 +77,16 @@ async def list_galleries(
     List galleries for the authenticated workspace.
 
     Supports pagination, sorting, and filtering.
+
+    Triggers background cache warming on first page load to preload
+    the 5 most recent galleries for faster subsequent access.
     """
     gallery_service = get_gallery_service()
+
+    # Trigger background cache warming on first page load (non-blocking)
+    if page == 1 and not search and not status:
+        cache_warming_service = get_cache_warming_service()
+        await cache_warming_service.warm_workspace_cache_background(workspace_id)
 
     try:
         result = await gallery_service.list_galleries(
@@ -149,3 +158,37 @@ async def list_gallery_assets(
         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
     except GalleryError as e:
         raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+
+
+# =============================================================================
+# Cache Warming Endpoint
+# =============================================================================
+
+
+@router.post("/cache/warm")
+async def warm_cache(
+    workspace_id: str = Depends(get_workspace_id),
+    force: bool = Query(False, description="Force re-warming even if already warm"),
+):
+    """
+    Manually trigger cache warming for a workspace.
+
+    Preloads the 5 most recent galleries into cache for faster access.
+    This operation is normally triggered automatically on workspace load.
+
+    Use the force parameter to re-warm even if the cache was recently warmed.
+    """
+    cache_warming_service = get_cache_warming_service()
+
+    try:
+        result = await cache_warming_service.warm_workspace_cache(
+            workspace_id=workspace_id,
+            force=force,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Cache warming failed: {e}", extra={"workspace_id": workspace_id})
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "CACHE_WARM_FAILED", "message": str(e)}
+        )

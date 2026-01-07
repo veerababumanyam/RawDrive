@@ -1,0 +1,174 @@
+﻿
+> rawdrive-frontend@0.2.4 test C:\Users\admin\Desktop\RawDrive\frontend
+> vitest "run"
+
+
+[7m[1m[36m RUN [39m[22m[27m [36mv1.6.1[39m [90mC:/Users/admin/Desktop/RawDrive/frontend[39m
+
+ [32mΓ£ô[39m src/_orphaned/profile-editor/ProfileEditorIntegration.test.tsx [2m ([22m[2m25 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+ [32mΓ£ô[39m tests/features/invitations/rsvp_export_pdf.test.ts [2m ([22m[2m21 tests[22m[2m)[22m[90m 23[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/useThemeUndoRedo.test.ts [2m ([22m[2m21 tests[22m[2m)[22m[90m 66[2mms[22m[39m
+ [32mΓ£ô[39m src/test/ab-testing.test.tsx [2m ([22m[2m40 tests[22m[2m)[22m[90m 214[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/profile/__tests__/themeWorkflow.integration.test.tsx [2m ([22m[2m15 tests[22m[2m)[22m[90m 132[2mms[22m[39m
+ [32mΓ£ô[39m src/test/performance.test.tsx [2m ([22m[2m35 tests[22m[2m)[22m[90m 262[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/profile/__tests__/coordinateWorkflow.integration.test.tsx [2m ([22m[2m20 tests[22m[2m)[22m[33m 364[2mms[22m[39m
+ [32mΓ£ô[39m src/services/__tests__/magicLinkService.test.ts [2m ([22m[2m22 tests[22m[2m)[22m[90m 27[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/usePublicProfileTheme.test.ts [2m ([22m[2m19 tests[22m[2m)[22m[90m 93[2mms[22m[39m
+ [32mΓ£ô[39m src/components/settings/__tests__/AIFeatureToggles.test.tsx [2m ([22m[2m20 tests[22m[2m)[22m[33m 605[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/favorites/__tests__/FavoritesPanel.test.tsx [2m ([22m[2m15 tests[22m[2m)[22m[33m 568[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/useFavorites.test.ts [2m ([22m[2m12 tests[22m[2m)[22m[33m 884[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/settings/__tests__/UndoRedoControls.test.tsx [2m ([22m[2m29 tests[22m[2m)[22m[33m 577[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/useAIFeatureToggles.test.ts [2m ([22m[2m16 tests[22m[2m)[22m[33m 957[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/FavoritesSettingsPanel.test.tsx [2m ([22m[2m15 tests[22m[2m)[22m[33m 594[2mms[22m[39m
+ [32mΓ£ô[39m src/test/exit-intent.test.tsx [2m ([22m[2m25 tests[22m[2m)[22m[33m 715[2mms[22m[39m
+ [32mΓ£ô[39m tests/components/InvitationErrorBoundary.test.tsx [2m ([22m[2m18 tests[22m[2m)[22m[33m 698[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/useFavoriteLists.test.ts [2m ([22m[2m16 tests[22m[2m)[22m[33m 1330[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/VirtualPhotoGrid.test.tsx [2m ([22m[2m18 tests[22m[2m)[22m[33m 716[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/settings/__tests__/ThemeHelpTooltip.test.tsx [2m ([22m[2m39 tests[22m[2m)[22m[33m 1345[2mms[22m[39m
+ [32mΓ£ô[39m src/_orphaned/profile-editor/ProfileEditorProperty.test.tsx [2m ([22m[2m63 tests[22m[2m)[22m[33m 640[2mms[22m[39m
+ [32mΓ£ô[39m src/_orphaned/profile-editor/ProfileEditorPerformance.test.tsx [2m ([22m[2m26 tests[22m[2m)[22m[33m 1523[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/profile/__tests__/visibilityWorkflow.integration.test.tsx [2m ([22m[2m23 tests[22m[2m)[22m[33m 2088[2mms[22m[39m
+ [32mΓ£ô[39m tests/accessibility/wcag-contrast-rsvp.test.ts [2m ([22m[2m24 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/settings/__tests__/accessibility.test.tsx [2m ([22m[2m18 tests[22m[2m)[22m[33m 1569[2mms[22m[39m
+ [32mΓ£ô[39m tests/unit/components/ai/AICreatePanel.test.tsx [2m ([22m[2m22 tests[22m[2m)[22m[33m 1850[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/useDownloadFavorites.test.ts [2m ([22m[2m12 tests[22m[2m)[22m[90m 60[2mms[22m[39m
+ [32mΓ£ô[39m src/test/seo.test.tsx [2m ([22m[2m40 tests[22m[2m)[22m[33m 2010[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/profile/public/__tests__/GlassContainer.test.tsx [2m ([22m[2m22 tests[22m[2m)[22m[90m 196[2mms[22m[39m
+ [32mΓ£ô[39m src/test/faq-section.test.tsx [2m ([22m[2m26 tests[22m[2m)[22m[33m 2544[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/DownloadFavoritesButton.test.tsx [2m ([22m[2m18 tests[22m[2m)[22m[33m 381[2mms[22m[39m
+ [32mΓ£ô[39m tests/unit/components/ai/AnalysisSummary.test.tsx [2m ([22m[2m17 tests[22m[2m)[22m[33m 689[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/settings/__tests__/ThemeCustomization.test.tsx [2m ([22m[2m12 tests[22m[2m)[22m[33m 919[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/settings/__tests__/performance.test.tsx [2m ([22m[2m13 tests[22m[2m)[22m[33m 1503[2mms[22m[39m
+ [32mΓ£ô[39m tests/unit/components/ai/SimilarityStackSection.test.tsx [2m ([22m[2m18 tests[22m[2m)[22m[33m 767[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/FavoritesAnalyticsDashboard.test.tsx [2m ([22m[2m9 tests[22m[2m)[22m[33m 725[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/PhotoGrid.test.tsx [2m ([22m[2m2 tests[22m[2m)[22m[33m 320[2mms[22m[39m
+ [32mΓ£ô[39m src/test/social-proof.test.tsx [2m ([22m[2m9 tests[22m[2m)[22m[33m 330[2mms[22m[39m
+ [32mΓ£ô[39m tests/unit/components/ai/ContentFilterSection.test.tsx [2m ([22m[2m13 tests[22m[2m)[22m[33m 1064[2mms[22m[39m
+ [32mΓ£ô[39m tests/unit/components/ai/TechnicalScoreFilterSection.test.tsx [2m ([22m[2m12 tests[22m[2m)[22m[33m 556[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/ShareDialog.test.tsx [2m ([22m[2m28 tests[22m[2m)[22m[33m 3630[2mms[22m[39m
+ [32mΓ£ô[39m tests/unit/components/ai/SmartCollectionSelector.test.tsx [2m ([22m[2m16 tests[22m[2m)[22m[33m 1273[2mms[22m[39m
+ [32mΓ£ô[39m src/test/pricing-section.test.tsx [2m ([22m[2m20 tests[22m[2m)[22m[33m 1217[2mms[22m[39m
+ [32mΓ£ô[39m src/test/accessibility.test.tsx [2m ([22m[2m25 tests[22m[2m)[22m[33m 4494[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/useSelection.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[33m 307[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/favorites/__tests__/FavoritesButton.test.tsx [2m ([22m[2m16 tests[22m[2m)[22m[33m 355[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/FaceDiscovery.test.tsx [2m ([22m[2m11 tests[22m[2m)[22m[33m 782[2mms[22m[39m
+ [32mΓ£ô[39m src/test/integration.test.tsx [2m ([22m[2m28 tests[22m[2m)[22m[33m 3646[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/public/legal/__tests__/privacy.test.tsx [2m ([22m[2m17 tests[22m[2m)[22m[33m 869[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/GalleryDragDrop.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[33m 1805[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/settings/__tests__/ThemeSelector.test.tsx [2m ([22m[2m16 tests[22m [2m|[22m [33m2 skipped[39m[2m)[22m[33m 3361[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/CommentSection.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[33m 640[2mms[22m[39m
+ [32mΓ£ô[39m src/test/comparison-roi.test.tsx [2m ([22m[2m12 tests[22m[2m)[22m[33m 417[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/useIntersectionObserver.test.tsx [2m ([22m[2m2 tests[22m[2m)[22m[90m 29[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/InlineEditForm.test.tsx [2m ([22m[2m2 tests[22m[2m)[22m[90m 106[2mms[22m[39m
+ [32mΓ£ô[39m src/contexts/__tests__/SignedUrlContext.test.tsx [2m ([22m[2m1 test[22m[2m)[22m[90m 29[2mms[22m[39m
+[90mstdout[2m | src/services/__tests__/tusUploadService.test.ts[2m > [22m[2mtusUploadService Auto-Resume[2m > [22m[2mshould auto-resume paused clients[22m[39m
+Checking 1 active uploads for auto-resume...
+Auto-resuming upload test-resume-1...
+
+[90mstdout[2m | src/services/__tests__/tusUploadService.test.ts[2m > [22m[2mtusUploadService Auto-Resume[2m > [22m[2mshould not resume active (non-paused) clients[22m[39m
+Checking 1 active uploads for auto-resume...
+
+[90mstdout[2m | src/services/__tests__/tusUploadService.test.ts[2m > [22m[2mtusUploadService Auto-Resume[2m > [22m[2mshould not resume completed clients[22m[39m
+Checking 1 active uploads for auto-resume...
+
+[90mstdout[2m | src/services/__tests__/tusUploadService.test.ts[2m > [22m[2mtusUploadService Auto-Resume[2m > [22m[2mshould not resume clients with errors[22m[39m
+Checking 1 active uploads for auto-resume...
+
+[90mstdout[2m | src/services/__tests__/tusUploadService.test.ts[2m > [22m[2mtusUploadService Auto-Resume[2m > [22m[2mshould stop tracking clients after unregister[22m[39m
+Checking 0 active uploads for auto-resume...
+
+ [32mΓ£ô[39m src/services/__tests__/tusUploadService.test.ts [2m ([22m[2m5 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32mΓ£ô[39m tests/unit/hooks/useAIFilters.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[90m 51[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/GalleryCanvas.test.tsx [2m ([22m[2m1 test[22m[2m)[22m[33m 831[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/useGalleryAssets.test.ts [2m ([22m[2m1 test[22m[2m)[22m[90m 114[2mms[22m[39m
+ [32mΓ£ô[39m tests/unit/components/ai/BlurFilterSection.test.tsx [2m ([22m[2m8 tests[22m[2m)[22m[33m 486[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/PhotoCard.test.tsx [2m ([22m[2m1 test[22m[2m)[22m[90m 265[2mms[22m[39m
+[90mstdout[2m | src/components/features/gallery/__tests__/GalleryCard.test.tsx[2m > [22m[2mGalleryCard[2m > [22m[2mrenders gallery title and info[22m[39m
+[GalleryCard] Cover image effect: {
+  galleryId: [32m'gal-1'[39m,
+  cover_asset_id: [32m'asset-123'[39m,
+  workspace_id: [32m'ws-123'[39m,
+  coverImageUrl: [1mnull[22m,
+  imageError: [33mfalse[39m
+}
+[GalleryCard] Fetching signed URL for cover: asset-123
+[GalleryCard] Got signed URL: https://example.com/default.jpg...
+
+[90mstdout[2m | src/components/features/gallery/__tests__/GalleryCard.test.tsx[2m > [22m[2mGalleryCard[2m > [22m[2mfetches and displays cover image from signed URL[22m[39m
+[GalleryCard] Cover image effect: {
+  galleryId: [32m'gal-1'[39m,
+  cover_asset_id: [32m'asset-123'[39m,
+  workspace_id: [32m'ws-123'[39m,
+  coverImageUrl: [1mnull[22m,
+  imageError: [33mfalse[39m
+}
+[GalleryCard] Fetching signed URL for cover: asset-123
+[GalleryCard] Got signed URL: https://example.com/signed-url.jpg...
+
+[90mstdout[2m | src/components/features/gallery/__tests__/GalleryCard.test.tsx[2m > [22m[2mGalleryCard[2m > [22m[2mfetches and displays cover image from signed URL[22m[39m
+[GalleryCard] Cover image effect: {
+  galleryId: [32m'gal-1'[39m,
+  cover_asset_id: [32m'asset-123'[39m,
+  workspace_id: [32m'ws-123'[39m,
+  coverImageUrl: [32m'https://example.com/signed-url.jpg'[39m,
+  imageError: [33mfalse[39m
+}
+
+[90mstdout[2m | src/components/features/gallery/__tests__/GalleryCard.test.tsx[2m > [22m[2mGalleryCard[2m > [22m[2muses legacy cover_image_url if cover_asset_id is missing[22m[39m
+[GalleryCard] Cover image effect: {
+  galleryId: [32m'gal-1'[39m,
+  cover_asset_id: [90mundefined[39m,
+  workspace_id: [32m'ws-123'[39m,
+  coverImageUrl: [32m'https://example.com/legacy.jpg'[39m,
+  imageError: [33mfalse[39m
+}
+
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/GalleryCard.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[90m 83[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/MasonryLayout.test.tsx [2m ([22m[2m1 test[22m[2m)[22m[33m 775[2mms[22m[39m
+ [32mΓ£ô[39m src/test/core-ui.test.tsx [2m ([22m[2m8 tests[22m[2m)[22m[90m 240[2mms[22m[39m
+ [32mΓ£ô[39m src/hooks/__tests__/deleteRestoration.test.ts [2m ([22m[2m1 test[22m[2m)[22m[90m 19[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/HoverOverlay.test.tsx [2m ([22m[2m2 tests[22m[2m)[22m[33m 592[2mms[22m[39m
+ [33mΓ¥»[39m src/utils/__tests__/downloadPolicy.test.ts [2m ([22m[2m0 test[22m[2m)[22m
+ [32mΓ£ô[39m src/test/workflow-tabs.test.tsx [2m ([22m[2m4 tests[22m[2m)[22m[33m 664[2mms[22m[39m
+ [32mΓ£ô[39m src/test/hero-section.test.tsx [2m ([22m[2m4 tests[22m[2m)[22m[33m 499[2mms[22m[39m
+ [32mΓ£ô[39m src/test/feature-sections.test.tsx [2m ([22m[2m11 tests[22m[2m)[22m[33m 731[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/public/legal/__tests__/terms.test.tsx [2m ([22m[2m12 tests[22m[2m)[22m[33m 567[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/PersonSelector.test.tsx [2m ([22m[2m5 tests[22m[2m)[22m[33m 1074[2mms[22m[39m
+ [32mΓ£ô[39m src/test/structured-data.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[33m 1831[2mms[22m[39m
+ [32mΓ£ô[39m tests/unit/components/ai/QualityFilterSection.test.tsx [2m ([22m[2m2 tests[22m[2m)[22m[90m 57[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/BulkActions.test.tsx [2m ([22m[2m3 tests[22m[2m)[22m[33m 1851[2mms[22m[39m
+ [32mΓ£ô[39m src/test/hero-responsive.test.tsx [2m ([22m[2m1 test[22m[2m)[22m[33m 412[2mms[22m[39m
+[90mstdout[2m | src/test/landing-page-routing.test.tsx[2m > [22m[2mLanding Page Routing[2m > [22m[2mrenders landing page at root route /[22m[39m
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen flex items-center justify-center bg-background"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex flex-col items-center gap-4"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin"[39m
+        [36m/>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-text-secondary"[39m
+        [36m>[39m
+          [0mLoading...[0m
+        [36m</p>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+ [32mΓ£ô[39m src/test/landing-page-routing.test.tsx [2m ([22m[2m2 tests[22m[2m)[22m[90m 54[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/settings/CompanyProfileForm.test.tsx [2m ([22m[2m20 tests[22m [2m|[22m [33m4 skipped[39m[2m)[22m[33m 10363[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/public/legal/__tests__/terms.property.test.tsx [2m ([22m[2m5 tests[22m[2m)[22m[33m 4759[2mms[22m[39m
+ [32mΓ£ô[39m src/components/features/gallery/__tests__/GalleryCreateForm.test.tsx [2m ([22m[2m11 tests[22m[2m)[22m[33m 7046[2mms[22m[39m
+ [32mΓ£ô[39m src/pages/public/legal/__tests__/privacy.property.test.tsx [2m ([22m[2m10 tests[22m[2m)[22m[33m 10667[2mms[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m81 passed[39m[22m[90m (82)[39m
+[2m      Tests [22m [1m[32m1164 passed[39m[22m[2m | [22m[33m6 skipped[39m[90m (1170)[39m
+[2m   Start at [22m 09:42:09
+[2m   Duration [22m 17.65s[2m (transform 13.47s, setup 33.55s, collect 39.93s, tests 96.93s, environment 106.51s, prepare 20.82s)[22m
+
+ΓÇëELIFECYCLEΓÇë Test failed. See above for more details.

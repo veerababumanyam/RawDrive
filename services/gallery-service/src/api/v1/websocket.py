@@ -19,7 +19,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
 from src.cache.redis_client import redis_client
 from src.config import settings
-from src.logging import get_logger
+from src.log_config import get_logger
 from src.observability.metrics import get_metrics
 
 logger = get_logger(__name__)

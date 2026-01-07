@@ -73,8 +73,32 @@ class MagicLinkRepository:
         Returns:
             Created magic link record as dict
         """
+        logger.info(
+            "[MagicLink Repository] create - START",
+            extra={
+                "workspace_id": str(workspace_id),
+                "gallery_id": str(gallery_id) if gallery_id else None,
+                "target_type": target_type,
+                "target_id": str(target_id) if target_id else None,
+                "album_title": album_title,
+                "label": label,
+                "token_hash_length": len(token_hash),
+                "token_hash_prefix": token_hash[:8],
+                "has_expires_at": expires_at is not None,
+                "max_accesses": max_accesses,
+                "has_qr_config": qr_config is not None,
+                "created_by_user_id": str(created_by_user_id) if created_by_user_id else None,
+                "public_url": public_url,
+                "invitation_id": str(invitation_id) if invitation_id else None,
+            },
+        )
+
         pool = await get_postgres_pool()
+        logger.debug("[MagicLink Repository] Postgres pool acquired")
+
         async with pool.acquire() as conn:
+            logger.debug("[MagicLink Repository] Database connection acquired")
+
             # Build QR config with defaults
             final_qr_config = {
                 "size": 1024,
@@ -85,41 +109,169 @@ class MagicLinkRepository:
             if qr_config:
                 final_qr_config.update(qr_config)
 
-            row = await conn.fetchrow(
-                """
-                INSERT INTO magic_links (
-                    workspace_id, gallery_id, token_hash, target_type, target_id,
-                    album_title, label, expires_at, max_accesses, qr_config,
-                    created_by_user_id, public_url, invitation_id
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                RETURNING *
-                """,
-                workspace_id,
-                gallery_id,
-                token_hash,
-                target_type,
-                target_id,
-                album_title,
-                label,
-                expires_at,
-                max_accesses,
-                final_qr_config,
-                created_by_user_id,
-                public_url,
-                invitation_id,
+            logger.debug(
+                "[MagicLink Repository] QR config prepared",
+                extra={"qr_config": final_qr_config},
             )
 
+            # Log the exact SQL and parameters (without sensitive data)
+            logger.debug(
+                "[MagicLink Repository] Executing INSERT statement",
+                extra={
+                    "sql": "INSERT INTO magic_links (...) VALUES ($1, $2, ..., $13) RETURNING *",
+                    "param_count": 13,
+                    "workspace_id": str(workspace_id),
+                    "gallery_id": str(gallery_id) if gallery_id else None,
+                    "target_type": target_type,
+                    "target_id": str(target_id) if target_id else None,
+                    "album_title": album_title,
+                    "label": label,
+                    "expires_at": expires_at.isoformat() if expires_at else None,
+                    "max_accesses": max_accesses,
+                    "has_qr_config": bool(final_qr_config),
+                    "created_by_user_id": str(created_by_user_id) if created_by_user_id else None,
+                    "public_url": public_url,
+                    "invitation_id": str(invitation_id) if invitation_id else None,
+                },
+            )
+
+            try:
+                # Log the exact SQL query for debugging
+                sql_query = """
+                    INSERT INTO magic_links (
+                        workspace_id, gallery_id, token_hash, target_type, target_id,
+                        album_title, label, expires_at, max_accesses, qr_config,
+                        created_by_user_id, public_url, invitation_id
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                    RETURNING *
+                """
+                
+                logger.debug(
+                    "[MagicLink Repository] Executing SQL query",
+                    extra={
+                        "sql": sql_query.strip(),
+                        "parameters": {
+                            "$1": str(workspace_id),
+                            "$2": str(gallery_id) if gallery_id else None,
+                            "$3": f"{token_hash[:8]}...",
+                            "$4": target_type,
+                            "$5": str(target_id) if target_id else None,
+                            "$6": album_title,
+                            "$7": label,
+                            "$8": expires_at.isoformat() if expires_at else None,
+                            "$9": max_accesses,
+                            "$10": "qr_config object",
+                            "$11": str(created_by_user_id) if created_by_user_id else None,
+                            "$12": public_url,
+                            "$13": str(invitation_id) if invitation_id else None,
+                        },
+                    },
+                )
+
+                # #region agent log
+                import json
+                try:
+                    with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"magic_link_repository.py:before_fetchrow","message":"Before database INSERT","data":{"workspace_id":str(workspace_id),"gallery_id":str(gallery_id) if gallery_id else None,"has_album_title":album_title is not None,"has_public_url":public_url is not None,"has_invitation_id":invitation_id is not None,"target_type":target_type},"timestamp":int(__import__("time").time()*1000)})+"\n")
+                except: pass
+                # #endregion
+                row = await conn.fetchrow(
+                    sql_query,
+                    workspace_id,
+                    gallery_id,
+                    token_hash,
+                    target_type,
+                    target_id,
+                    album_title,
+                    label,
+                    expires_at,
+                    max_accesses,
+                    final_qr_config,
+                    created_by_user_id,
+                    public_url,
+                    invitation_id,
+                )
+                # #region agent log
+                try:
+                    with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"magic_link_repository.py:after_fetchrow","message":"After database INSERT","data":{"row_returned":row is not None,"link_id":str(row["link_id"]) if row else None},"timestamp":int(__import__("time").time()*1000)})+"\n")
+                except: pass
+                # #endregion
+
+                logger.info(
+                    "[MagicLink Repository] INSERT successful",
+                    extra={
+                        "row_returned": row is not None,
+                        "link_id": str(row["link_id"]) if row else None,
+                    },
+                )
+
+            except Exception as db_error:
+                # Log the actual database error for debugging
+                error_msg = str(db_error)
+                error_type = type(db_error).__name__
+                # #region agent log
+                try:
+                    with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"magic_link_repository.py:db_error","message":"Database error caught","data":{"error":error_msg,"error_type":error_type,"has_column_error":"column" in error_msg.lower() or "does not exist" in error_msg.lower()},"timestamp":int(__import__("time").time()*1000)})+"\n")
+                except: pass
+                # #endregion
+                logger.exception(
+                    "[MagicLink Repository] Database error creating magic link",
+                    extra={
+                        "error": error_msg,
+                        "error_type": error_type,
+                        "error_module": getattr(db_error, "__module__", None),
+                        "workspace_id": str(workspace_id),
+                        "gallery_id": str(gallery_id) if gallery_id else None,
+                        "target_type": target_type,
+                        "sql_statement": "INSERT INTO magic_links",
+                        "columns_attempted": [
+                            "workspace_id", "gallery_id", "token_hash", "target_type", "target_id",
+                            "album_title", "label", "expires_at", "max_accesses", "qr_config",
+                            "created_by_user_id", "public_url", "invitation_id",
+                        ],
+                    },
+                )
+
+                # Check if it's a column error
+                if "does not exist" in error_msg.lower() or "column" in error_msg.lower():
+                    logger.error(
+                        "[MagicLink Repository] Possible missing database column",
+                        extra={
+                            "error": error_msg,
+                            "suggestion": "Run: alembic upgrade head",
+                        },
+                    )
+
+                # Re-raise with more context
+                raise RuntimeError(
+                    f"Failed to create magic link in database: {error_msg}. "
+                    "This may indicate missing database migrations. "
+                    "Run: alembic upgrade head"
+                ) from db_error
+
+            logger.debug("[MagicLink Repository] Converting row to dict")
             result = self._row_to_dict(row)
+            # #region agent log
+            try:
+                with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"G","location":"magic_link_repository.py:after_row_to_dict","message":"After converting row to dict","data":{"has_public_url":"public_url" in result,"public_url_preview":result.get("public_url","")[:80] if result.get("public_url") else None,"link_id":str(result.get("link_id",""))},"timestamp":int(__import__("time").time()*1000)})+"\n")
+            except: pass
+            # #endregion
 
             logger.info(
-                "Magic link created",
+                "[MagicLink Repository] create - SUCCESS",
                 extra={
                     "link_id": str(result["link_id"]),
                     "workspace_id": str(workspace_id),
                     "gallery_id": str(gallery_id) if gallery_id else None,
                     "invitation_id": str(invitation_id) if invitation_id else None,
                     "target_type": target_type,
+                    "has_album_title": "album_title" in result,
+                    "has_public_url": "public_url" in result,
+                    "public_url": result.get("public_url"),
                 },
             )
 

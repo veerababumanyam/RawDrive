@@ -345,7 +345,7 @@ export interface RecalculateResponse {
 // Service Class
 // ---------------------------------------------------------------------------
 
-function buildQueryString<T extends Record<string, unknown>>(params: T): string {
+function buildQueryString(params: any): string {
   const searchParams = new URLSearchParams();
 
   for (const [key, value] of Object.entries(params)) {
@@ -382,6 +382,7 @@ export class EngagementService {
       `${this.getBaseUrl(workspaceId)}/events`,
       request
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to record event');
     return response.data;
   }
 
@@ -397,6 +398,7 @@ export class EngagementService {
     const response = await apiClient.get<EventListResponse>(
       `${this.getBaseUrl(workspaceId)}/clients/${clientId}/events${queryString}`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get client events');
     return response.data;
   }
 
@@ -415,6 +417,7 @@ export class EngagementService {
     const response = await apiClient.get<ScoreListResponse>(
       `${this.getBaseUrl(workspaceId)}/scores${queryString}`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get scores');
     return response.data;
   }
 
@@ -428,6 +431,7 @@ export class EngagementService {
     const response = await apiClient.get<EngagementScore>(
       `${this.getBaseUrl(workspaceId)}/clients/${clientId}/score`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get client score');
     return response.data;
   }
 
@@ -441,6 +445,7 @@ export class EngagementService {
     const response = await apiClient.post<EngagementScore>(
       `${this.getBaseUrl(workspaceId)}/clients/${clientId}/score/recalculate`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to recalculate client score');
     return response.data;
   }
 
@@ -456,6 +461,7 @@ export class EngagementService {
     const response = await apiClient.get<ScoreHistoryItem[]>(
       `${this.getBaseUrl(workspaceId)}/clients/${clientId}/score/history?snapshot_type=${snapshotType}&limit=${limit}`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get client score history');
     return response.data;
   }
 
@@ -466,6 +472,7 @@ export class EngagementService {
     const response = await apiClient.get<TierDistribution>(
       `${this.getBaseUrl(workspaceId)}/tier-distribution`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get tier distribution');
     return response.data;
   }
 
@@ -476,6 +483,7 @@ export class EngagementService {
     const response = await apiClient.post<RecalculateResponse>(
       `${this.getBaseUrl(workspaceId)}/scores/recalculate-all`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to recalculate all scores');
     return response.data;
   }
 
@@ -493,6 +501,7 @@ export class EngagementService {
     const response = await apiClient.get<PredictiveScore>(
       `${this.getBaseUrl(workspaceId)}/clients/${clientId}/predictions`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get client predictions');
     return response.data;
   }
 
@@ -507,6 +516,7 @@ export class EngagementService {
     const response = await apiClient.get<HighIntentClient[]>(
       `${this.getBaseUrl(workspaceId)}/high-intent?min_score=${minScore}&limit=${limit}`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get high intent clients');
     return response.data;
   }
 
@@ -521,6 +531,7 @@ export class EngagementService {
     const response = await apiClient.get<ChurnRiskClient[]>(
       `${this.getBaseUrl(workspaceId)}/churn-risk?min_score=${minScore}&limit=${limit}`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get churn risk clients');
     return response.data;
   }
 
@@ -543,6 +554,7 @@ export class EngagementService {
     const response = await apiClient.get<Recommendation[]>(
       `${this.getBaseUrl(workspaceId)}/clients/${clientId}/recommendations${queryString}`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get client recommendations');
     return response.data;
   }
 
@@ -556,6 +568,7 @@ export class EngagementService {
     const response = await apiClient.post<Recommendation[]>(
       `${this.getBaseUrl(workspaceId)}/clients/${clientId}/recommendations/generate`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to generate recommendations');
     return response.data;
   }
 
@@ -577,6 +590,7 @@ export class EngagementService {
     const response = await apiClient.get<PendingRecommendation[]>(
       `${this.getBaseUrl(workspaceId)}/recommendations${queryString}`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get pending recommendations');
     return response.data;
   }
 
@@ -592,6 +606,7 @@ export class EngagementService {
       `${this.getBaseUrl(workspaceId)}/recommendations/${recommendationId}`,
       request
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to update recommendation status');
     return response.data;
   }
 
@@ -606,6 +621,7 @@ export class EngagementService {
     const response = await apiClient.get<EngagementDashboard>(
       `${this.getBaseUrl(workspaceId)}/dashboard`
     );
+    if (!response.data) throw new Error(response.error?.message || 'Failed to get dashboard');
     return response.data;
   }
 }

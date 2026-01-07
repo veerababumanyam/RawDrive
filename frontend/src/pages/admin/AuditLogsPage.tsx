@@ -446,22 +446,20 @@ const ExportModal: React.FC<ExportModalProps> = ({
           <div className="flex gap-3">
             <button
               onClick={() => setFormat('csv')}
-              className={`flex-1 p-3 rounded-lg border transition-colors ${
-                format === 'csv'
+              className={`flex-1 p-3 rounded-lg border transition-colors ${format === 'csv'
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border hover:bg-surface-hover text-text-secondary'
-              }`}
+                }`}
             >
               <span className="font-medium">CSV</span>
               <p className="text-xs mt-1 opacity-75">Spreadsheet compatible</p>
             </button>
             <button
               onClick={() => setFormat('json')}
-              className={`flex-1 p-3 rounded-lg border transition-colors ${
-                format === 'json'
+              className={`flex-1 p-3 rounded-lg border transition-colors ${format === 'json'
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border hover:bg-surface-hover text-text-secondary'
-              }`}
+                }`}
             >
               <span className="font-medium">JSON</span>
               <p className="text-xs mt-1 opacity-75">Machine readable</p>
@@ -627,7 +625,7 @@ const AuditLogsPage: React.FC = () => {
           </div>
           <div className="text-sm">
             <div className="text-text-primary truncate max-w-[150px]">
-              {value || row.actor_type}
+              {String(value || row.actor_type)}
             </div>
             <div className="text-xs text-text-tertiary">{row.actor_type}</div>
           </div>

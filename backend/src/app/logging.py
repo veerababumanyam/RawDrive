@@ -312,6 +312,13 @@ def configure_logging() -> None:
     logging.getLogger("botocore").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
+    # Enable DEBUG logging for magic link modules when LOG_LEVEL is DEBUG
+    if log_level == "DEBUG" or os.getenv("DEBUG_MAGIC_LINKS", "false").lower() == "true":
+        logging.getLogger("app.api.v1.magic_links").setLevel(logging.DEBUG)
+        logging.getLogger("app.services.magic_link_service").setLevel(logging.DEBUG)
+        logging.getLogger("app.repositories.magic_link_repository").setLevel(logging.DEBUG)
+        logging.getLogger("app.db.postgres").setLevel(logging.DEBUG)
+
 
 def get_logger(name: Optional[str] = None) -> structlog.BoundLogger:
     """

@@ -1,0 +1,86 @@
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › tests\e2e\upload-flow.spec.ts:12:5 › Upload Flow E2E › should login, create gallery (if needed), encrypt and upload a file
+[1A[2K[chromium] › tests\e2e\upload-flow.spec.ts:12:5 › Upload Flow E2E › should login, create gallery (if needed), encrypt and upload a file
+Navigating to Sign In...
+
+[1A[2KFilling credentials...
+
+[1A[2KWaiting for workspace redirect...
+
+[1A[2KLogin successful!
+
+[1A[2KNo galleries found. Creating new gallery...
+
+[1A[2KNew Gallery button not found, trying direct navigation...
+
+[1A[2KFilling Create Gallery form...
+
+[1A[2KTest failed with error: page.waitForSelector: Test timeout of 60000ms exceeded.
+Call log:
+[2m  - waiting for locator('form') to be visible[22m
+
+    at [90mC:\Users\admin\Desktop\RawDrive\frontend\[39mtests\e2e\upload-flow.spec.ts:88:28 {
+  [[32mSymbol(step)[39m]: {
+    location: {
+      file: [32m'C:\\Users\\admin\\Desktop\\RawDrive\\frontend\\tests\\e2e\\upload-flow.spec.ts'[39m,
+      line: [33m88[39m,
+      column: [33m28[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m"Wait for selector locator('form')"[39m,
+    apiName: [32m'page.waitForSelector'[39m,
+    params: { selector: [32m'form'[39m, state: [32m'visible'[39m, timeout: [33m0[39m },
+    group: [90mundefined[39m,
+    stepId: [32m'pw:api@47'[39m,
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@47'[39m,
+      _title: [32m"Wait for selector locator('form')"[39m,
+      _parentStep: [90mundefined[39m,
+      skip: [36m[Function (anonymous)][39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1767808550705[39m,
+    error: {
+      message: [32m'Error: page.waitForSelector: Test timeout of 60000ms exceeded.\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m"\x1B[2m  - waiting for locator('form') to be visible\x1B[22m\n"[39m,
+      stack: [32m'Error: page.waitForSelector: Test timeout of 60000ms exceeded.\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m"\x1B[2m  - waiting for locator('form') to be visible\x1B[22m\n"[39m +
+        [32m'\n'[39m +
+        [32m'    at C:\\Users\\admin\\Desktop\\RawDrive\\frontend\\tests\\e2e\\upload-flow.spec.ts:88:28'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K  1) [chromium] › tests\e2e\upload-flow.spec.ts:12:5 › Upload Flow E2E › should login, create gallery (if needed), encrypt and upload a file 
+
+    [31mTest timeout of 60000ms exceeded.[39m
+
+    Error: page.screenshot: Target page, context or browser has been closed
+
+      159 |         } catch (e) {
+      160 |             console.error("Test failed with error:", e);
+    > 161 |             await page.screenshot({ path: 'failure-state.png', fullPage: true });
+          |                        ^
+      162 |             const content = await page.content();
+      163 |             fs.writeFileSync('failure-state.html', content);
+      164 |             throw e;
+        at C:\Users\admin\Desktop\RawDrive\frontend\tests\e2e\upload-flow.spec.ts:161:24
+
+    Error Context: test-results\upload-flow-Upload-Flow-E2-a17b3-d-encrypt-and-upload-a-file-chromium\error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › tests\e2e\upload-flow.spec.ts:12:5 › Upload Flow E2E › should login, create gallery (if needed), encrypt and upload a file 
+
+[36m  Serving HTML report at http://localhost:52744. Press Ctrl+C to quit.[39m
+Terminate batch job (Y/N)? 

@@ -142,9 +142,9 @@ function isValidFileType(file: File, accept?: string): boolean {
     // Default: check against all supported types
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     return (
-      SUPPORTED_IMAGE_TYPES.includes(file.type) ||
-      SUPPORTED_VIDEO_TYPES.includes(file.type) ||
-      SUPPORTED_RAW_TYPES.includes(ext)
+      (SUPPORTED_IMAGE_TYPES as unknown as string[]).includes(file.type) ||
+      (SUPPORTED_VIDEO_TYPES as unknown as string[]).includes(file.type) ||
+      (SUPPORTED_RAW_TYPES as unknown as string[]).includes(ext!)
     );
   }
 

@@ -47,6 +47,22 @@ interface PricingSectionProps {
   subtitle?: string;
 }
 
+// Currency configuration for international pricing
+type Currency = 'INR' | 'USD' | 'EUR';
+
+interface CurrencyConfig {
+  symbol: string;
+  code: Currency;
+  rate: number; // Conversion rate from INR
+  locale: string;
+}
+
+const CURRENCY_CONFIG: Record<Currency, CurrencyConfig> = {
+  INR: { symbol: '₹', code: 'INR', rate: 1, locale: 'en-IN' },
+  USD: { symbol: '$', code: 'USD', rate: 0.012, locale: 'en-US' },
+  EUR: { symbol: '€', code: 'EUR', rate: 0.011, locale: 'de-DE' },
+};
+
 // All 5 pricing tiers matching the design
 const pricingTiers: PricingTier[] = [
   {
@@ -168,14 +184,35 @@ const pricingTiers: PricingTier[] = [
 const PricingCard: React.FC<{
   tier: PricingTier;
   isAnnual: boolean;
-}> = ({ tier, isAnnual }) => {
+  currency: Currency;
+}> = ({ tier, isAnnual, currency }) => {
+  const currencyConfig = CURRENCY_CONFIG[currency];
   const isCustomPricing = typeof tier.price.monthly === 'string';
-  const currentPrice = isAnnual ? tier.price.annual : tier.price.monthly;
-  const isFree = currentPrice === 0;
+  const rawPrice = isAnnual ? tier.price.annual : tier.price.monthly;
+  const isFree = rawPrice === 0;
+
+  // Convert price to selected currency
+  const convertPrice = (value: number | string): number | string => {
+    if (typeof value === 'string') return value;
+    if (value === 0) return 0;
+    return Math.round(value * currencyConfig.rate);
+  };
+
+  const currentPrice = convertPrice(rawPrice);
 
   const formatPrice = (value: number | string) => {
     if (typeof value === 'string') return value;
-    return new Intl.NumberFormat('en-IN').format(value);
+    return new Intl.NumberFormat(currencyConfig.locale).format(value);
+  };
+
+  // Calculate annual savings
+  const getAnnualSavings = () => {
+    if (isCustomPricing || isFree) return null;
+    const monthlyTotal = (tier.price.monthly as number) * 12;
+    const annualPrice = tier.price.annual as number;
+    const savings = monthlyTotal - annualPrice;
+    if (savings <= 0) return null;
+    return Math.round(savings * currencyConfig.rate);
   };
 
   return (
@@ -225,7 +262,7 @@ const PricingCard: React.FC<{
         <div className="mb-6">
           <div className="flex items-baseline gap-1">
             {!isCustomPricing && !isFree && (
-              <span className="text-slate-600 text-lg">₹</span>
+              <span className="text-slate-600 text-lg">{currencyConfig.symbol}</span>
             )}
             <span className={`
               font-bold
@@ -242,6 +279,11 @@ const PricingCard: React.FC<{
           )}
           {isCustomPricing && (
             <p className="text-sm text-slate-600 mt-1">Contact us for pricing</p>
+          )}
+          {isAnnual && getAnnualSavings() && (
+            <p className="text-sm text-emerald-600 font-medium mt-1">
+              Save {currencyConfig.symbol}{formatPrice(getAnnualSavings()!)}/year
+            </p>
           )}
         </div>
 
@@ -281,7 +323,7 @@ const PricingCard: React.FC<{
           <span className="text-sm font-semibold text-slate-900">{tier.storage}</span>
         </div>
       </div>
-    </motion.div>
+    </motion.div >
   );
 };
 
@@ -292,6 +334,7 @@ export const PricingSection: React.FC<PricingSectionProps> = ({
   subtitle = 'Start free, upgrade when you need more. No hidden fees, no surprises.',
 }) => {
   const [isAnnual, setIsAnnual] = useState(false);
+  const [currency, setCurrency] = useState<Currency>('INR');
 
   return (
     <section
@@ -314,7 +357,7 @@ export const PricingSection: React.FC<PricingSectionProps> = ({
           </p>
 
           {/* Billing Toggle */}
-          <div 
+          <div
             className="inline-flex items-center gap-1 p-1.5 bg-slate-100 rounded-full"
             role="radiogroup"
             aria-label="Billing period"
@@ -358,6 +401,27 @@ export const PricingSection: React.FC<PricingSectionProps> = ({
               </span>
             </button>
           </div>
+
+          {/* Currency Selector */}
+          <div className="flex items-center gap-2 bg-slate-100 rounded-full p-1">
+            {(Object.keys(CURRENCY_CONFIG) as Currency[]).map((curr) => (
+              <button
+                key={curr}
+                onClick={() => setCurrency(curr)}
+                className={`
+                  px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200
+                  ${currency === curr
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                  }
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500
+                `}
+                aria-pressed={currency === curr}
+              >
+                {CURRENCY_CONFIG[curr].symbol} {curr}
+              </button>
+            ))}
+          </div>
         </FadeIn>
 
         {/* Pricing Cards - All 5 tiers */}
@@ -374,7 +438,7 @@ export const PricingSection: React.FC<PricingSectionProps> = ({
               variants={staggerItem}
               className={tier.highlighted ? 'lg:-mt-4 lg:mb-4' : ''}
             >
-              <PricingCard tier={tier} isAnnual={isAnnual} />
+              <PricingCard tier={tier} isAnnual={isAnnual} currency={currency} />
             </motion.div>
           ))}
         </motion.div>

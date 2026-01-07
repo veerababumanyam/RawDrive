@@ -337,26 +337,40 @@ class AuthService:
                     now,
                 )
 
-                # Create trial subscription
+                # Create trial subscription - ALWAYS required for workspace to be accessible
                 trial_end = now + timedelta(days=30)
-                free_plan = await conn.fetchrow(
+
+                # Try to get free plan first, fall back to starter
+                default_plan = await conn.fetchrow(
                     "SELECT plan_id FROM plans WHERE code = 'free' LIMIT 1"
                 )
-                if free_plan:
-                    await conn.execute(
-                        """
-                        INSERT INTO workspace_subscriptions (
-                            subscription_id, workspace_id, plan_id, status,
-                            trial_started_at, trial_expires_at, created_at, updated_at
-                        )
-                        VALUES ($1, $2, $3, 'trialing', $4, $5, $4, $4)
-                        """,
-                        uuid.uuid4(),
-                        workspace_id,
-                        free_plan["plan_id"],
-                        now,
-                        trial_end,
+                if not default_plan:
+                    logger.warning("Free plan not found during signup, falling back to starter")
+                    default_plan = await conn.fetchrow(
+                        "SELECT plan_id FROM plans WHERE code = 'starter' LIMIT 1"
                     )
+
+                if not default_plan:
+                    raise RuntimeError(
+                        "No default plan available for signup. "
+                        "Run migrations 0094 (subscription plans) and 0118 (free plan) first."
+                    )
+
+                # Create subscription (REQUIRED - without this, workspace is inaccessible)
+                await conn.execute(
+                    """
+                    INSERT INTO workspace_subscriptions (
+                        subscription_id, workspace_id, plan_id, status,
+                        trial_started_at, trial_expires_at, created_at, updated_at
+                    )
+                    VALUES ($1, $2, $3, 'trialing', $4, $5, $4, $4)
+                    """,
+                    uuid.uuid4(),
+                    workspace_id,
+                    default_plan["plan_id"],
+                    now,
+                    trial_end,
+                )
 
         # Build tokens
         permissions = await _get_user_permissions(pool, user_id, workspace_id)

@@ -292,7 +292,7 @@ class UploadService:
             logger.info(
                 "Detected RAW file by extension",
                 extra={
-                    "filename": filename,
+                    "file_name": filename,
                     "extension": ext,
                     "original_mime": mime_type,
                 },
@@ -321,7 +321,7 @@ class UploadService:
             logger.info(
                 "Detected RAW file by extension with non-standard MIME",
                 extra={
-                    "filename": filename,
+                    "file_name": filename,
                     "extension": ext,
                     "original_mime": mime_type,
                 },
@@ -359,7 +359,7 @@ class UploadService:
             logger.info(
                 "RAW file accepted",
                 extra={
-                    "filename": filename,
+                    "file_name": filename,
                     "extension": ext.upper(),
                     "size_bytes": size_bytes,
                 },
@@ -391,11 +391,12 @@ class UploadService:
         # Query current storage usage and limit
         query = """
             SELECT
-                COALESCE(w.storage_used_bytes, 0) as storage_used,
+                COALESCE(wc.storage_used_bytes, 0) as storage_used,
                 COALESCE(p.storage_bytes, 0) as storage_limit
             FROM workspaces w
             LEFT JOIN workspace_subscriptions ws ON ws.workspace_id = w.workspace_id
             LEFT JOIN plans p ON p.plan_id = ws.plan_id
+            LEFT JOIN workspace_storage_cache wc ON wc.workspace_id = w.workspace_id
             WHERE w.workspace_id = :workspace_id
         """
 
@@ -635,7 +636,7 @@ class UploadService:
                 "upload_id": str(upload_id),
                 "workspace_id": str(workspace_id),
                 "gallery_id": str(gallery_id) if gallery_id else None,
-                "filename": filename,
+                "file_name": filename,
                 "size_bytes": size_bytes,
                 "file_type": file_type,
             },
@@ -645,7 +646,12 @@ class UploadService:
         # In production, this would be a presigned R2 URL
         # For the microservice, we use our own endpoint
         settings = get_settings()
-        base_url = f"http://{settings.HOST}:{settings.PORT}"
+        # Use EXTERNAL_BASE_URL if configured, otherwise default to localhost
+        # Note: HOST is typically 0.0.0.0 for binding, which is not valid for clients
+        if settings.EXTERNAL_BASE_URL:
+            base_url = settings.EXTERNAL_BASE_URL.rstrip("/")
+        else:
+            base_url = f"http://localhost:{settings.PORT}"
 
         return {
             "upload_id": str(upload_id),

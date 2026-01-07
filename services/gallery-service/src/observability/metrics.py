@@ -22,7 +22,7 @@ from prometheus_client import (
     CONTENT_TYPE_LATEST,
 )
 
-from src.logging import get_logger
+from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -147,6 +147,23 @@ CIRCUIT_BREAKER_STATE = Gauge(
     "gallery_circuit_breaker_state",
     "Circuit breaker state (0=closed, 1=half_open, 2=open)",
     ["service"],  # redis, database
+)
+
+# Cache warming metrics
+CACHE_WARM_COMPLETE = Counter(
+    "gallery_cache_warm_complete_total",
+    "Total successful cache warming operations",
+)
+
+CACHE_WARM_GALLERIES = Counter(
+    "gallery_cache_warm_galleries_total",
+    "Total galleries warmed in cache",
+)
+
+CACHE_WARM_ERRORS = Counter(
+    "gallery_cache_warm_errors_total",
+    "Total cache warming errors",
+    ["error_type"],  # gallery_fetch, cache_set, background
 )
 
 
@@ -293,6 +310,15 @@ class MetricsCollector:
     def set_requests_per_second(self, rps: float) -> None:
         """Set current requests per second rate for KEDA scaling."""
         REQUESTS_PER_SECOND.set(rps)
+
+    def cache_warm_complete(self, galleries_warmed: int) -> None:
+        """Record a successful cache warming operation."""
+        CACHE_WARM_COMPLETE.inc()
+        CACHE_WARM_GALLERIES.inc(galleries_warmed)
+
+    def cache_warm_error(self, error_type: str) -> None:
+        """Record a cache warming error."""
+        CACHE_WARM_ERRORS.labels(error_type=error_type).inc()
 
 
 # =============================================================================

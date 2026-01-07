@@ -65,7 +65,7 @@ class Settings(BaseSettings):
 
     # Server Configuration
     HOST: str = Field(default="0.0.0.0", alias="HOST")
-    PORT: int = Field(default=8003, alias="PORT")
+    PORT: int = Field(default=8007, alias="PORT")
 
     # ==========================================================================
     # Database Configuration

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Users,
@@ -19,6 +19,7 @@ import { AppButton } from '../ui/AppButton';
    WorkflowTabs Component
 
    Interactive section showing different use cases (Attract, Manage, Deliver).
+   Features auto-rotation with pause on hover for better engagement.
    ============================================================================= */
 
 type TabId = 'attract' | 'invite' | 'manage' | 'deliver';
@@ -140,11 +141,44 @@ const TABS: WorkflowTab[] = [
     }
 ];
 
+const ROTATION_INTERVAL = 8000; // 8 seconds per tab
+
 export const WorkflowTabs: React.FC = () => {
     const [activeTab, setActiveTab] = useState<TabId>('attract');
     const [startTime, setStartTime] = useState<number>(Date.now());
+    const [isAutoRotating, setIsAutoRotating] = useState(true);
+    const [progress, setProgress] = useState(0);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const currentTab = TABS.find(t => t.id === activeTab) || TABS[0];
+
+    // Auto-rotation effect
+    useEffect(() => {
+        if (!isAutoRotating) {
+            setProgress(0);
+            return;
+        }
+
+        const progressInterval = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 100) return 0;
+                return prev + (100 / (ROTATION_INTERVAL / 100));
+            });
+        }, 100);
+
+        const rotationInterval = setInterval(() => {
+            const currentIndex = TABS.findIndex(t => t.id === activeTab);
+            const nextIndex = (currentIndex + 1) % TABS.length;
+            setActiveTab(TABS[nextIndex].id);
+            setStartTime(Date.now());
+            setProgress(0);
+        }, ROTATION_INTERVAL);
+
+        return () => {
+            clearInterval(progressInterval);
+            clearInterval(rotationInterval);
+        };
+    }, [isAutoRotating, activeTab]);
 
     // Analytics stub
     const trackTabUnmount = (_tabId: TabId, _duration: number) => {
@@ -159,10 +193,24 @@ export const WorkflowTabs: React.FC = () => {
 
         setStartTime(Date.now());
         setActiveTab(newTabId);
+        setProgress(0);
+        // Pause auto-rotation temporarily when user manually selects
+        setIsAutoRotating(false);
+        // Resume after a delay
+        setTimeout(() => setIsAutoRotating(true), ROTATION_INTERVAL);
     };
 
+    const handleMouseEnter = () => setIsAutoRotating(false);
+    const handleMouseLeave = () => setIsAutoRotating(true);
+
     return (
-        <section className="py-20 lg:py-32 relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800" id="workflow">
+        <section
+            className="py-20 lg:py-32 relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800"
+            id="workflow"
+            ref={containerRef}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+        >
             {/* Background Decor */}
             <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-primary-500/20 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-96 h-96 bg-accent-500/20 rounded-full blur-3xl" />
@@ -178,27 +226,38 @@ export const WorkflowTabs: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Tab Navigation */}
-                <div className="flex flex-wrap justify-center gap-4 mb-12">
-                    {TABS.map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => handleTabChange(tab.id)}
-                            className={`
+                {/* Tab Navigation with Progress Bar */}
+                <div className="flex flex-col items-center gap-4 mb-12">
+                    <div className="flex flex-wrap justify-center gap-4">
+                        {TABS.map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => handleTabChange(tab.id)}
+                                className={`
                 flex items-center gap-2 px-6 py-3 rounded-full text-sm font-medium transition-all duration-300
                 ${activeTab === tab.id
-                                    ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-500/25 ring-2 ring-primary-500/50'
-                                    : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white border border-white/10'}
+                                        ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-500/25 ring-2 ring-primary-500/50'
+                                        : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white border border-white/10'}
               `}
-                            aria-selected={activeTab === tab.id}
-                            role="tab"
-                        >
-                            <span className={activeTab === tab.id ? 'text-white' : 'text-slate-400'}>
-                                {tab.icon}
-                            </span>
-                            {tab.label}
-                        </button>
-                    ))}
+                                aria-selected={activeTab === tab.id}
+                                role="tab"
+                            >
+                                <span className={activeTab === tab.id ? 'text-white' : 'text-slate-400'}>
+                                    {tab.icon}
+                                </span>
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Progress Bar for Auto-rotation */}
+                    <div className="w-full max-w-md h-1 bg-white/10 rounded-full overflow-hidden">
+                        <motion.div
+                            className="h-full bg-gradient-to-r from-primary-500 to-accent-500"
+                            style={{ width: `${progress}%` }}
+                            transition={{ duration: 0.1, ease: 'linear' }}
+                        />
+                    </div>
                 </div>
 
                 {/* Tab Content */}
@@ -265,17 +324,16 @@ export const WorkflowTabs: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 {/* Mockup Content */}
                                 <div className="p-6 relative min-h-[280px]">
                                     {/* Animated gradient background */}
-                                    <div className={`absolute inset-0 opacity-30 ${
-                                        activeTab === 'attract' ? 'bg-gradient-to-br from-blue-500/30 via-purple-500/20 to-pink-500/30' :
+                                    <div className={`absolute inset-0 opacity-30 ${activeTab === 'attract' ? 'bg-gradient-to-br from-blue-500/30 via-purple-500/20 to-pink-500/30' :
                                         activeTab === 'invite' ? 'bg-gradient-to-br from-pink-500/30 via-rose-500/20 to-red-500/30' :
-                                        activeTab === 'manage' ? 'bg-gradient-to-br from-green-500/30 via-teal-500/20 to-cyan-500/30' :
-                                        'bg-gradient-to-br from-orange-500/30 via-amber-500/20 to-yellow-500/30'
-                                    }`} />
-                                    
+                                            activeTab === 'manage' ? 'bg-gradient-to-br from-green-500/30 via-teal-500/20 to-cyan-500/30' :
+                                                'bg-gradient-to-br from-orange-500/30 via-amber-500/20 to-yellow-500/30'
+                                        }`} />
+
                                     {/* Floating Cards Animation */}
                                     <motion.div
                                         initial={{ opacity: 0, y: 20 }}
@@ -289,12 +347,11 @@ export const WorkflowTabs: React.FC = () => {
                                             transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
                                             className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10"
                                         >
-                                            <div className={`w-10 h-10 rounded-lg ${
-                                                activeTab === 'attract' ? 'bg-blue-500/30' :
+                                            <div className={`w-10 h-10 rounded-lg ${activeTab === 'attract' ? 'bg-blue-500/30' :
                                                 activeTab === 'invite' ? 'bg-pink-500/30' :
-                                                activeTab === 'manage' ? 'bg-green-500/30' :
-                                                'bg-orange-500/30'
-                                            } flex items-center justify-center mb-3`}>
+                                                    activeTab === 'manage' ? 'bg-green-500/30' :
+                                                        'bg-orange-500/30'
+                                                } flex items-center justify-center mb-3`}>
                                                 {currentTab.features[0]?.icon}
                                             </div>
                                             <h5 className="text-white/90 text-sm font-medium mb-1">
@@ -311,12 +368,11 @@ export const WorkflowTabs: React.FC = () => {
                                             transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut", delay: 0.5 }}
                                             className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10"
                                         >
-                                            <div className={`w-10 h-10 rounded-lg ${
-                                                activeTab === 'attract' ? 'bg-purple-500/30' :
+                                            <div className={`w-10 h-10 rounded-lg ${activeTab === 'attract' ? 'bg-purple-500/30' :
                                                 activeTab === 'invite' ? 'bg-rose-500/30' :
-                                                activeTab === 'manage' ? 'bg-teal-500/30' :
-                                                'bg-amber-500/30'
-                                            } flex items-center justify-center mb-3`}>
+                                                    activeTab === 'manage' ? 'bg-teal-500/30' :
+                                                        'bg-amber-500/30'
+                                                } flex items-center justify-center mb-3`}>
                                                 {currentTab.features[1]?.icon}
                                             </div>
                                             <h5 className="text-white/90 text-sm font-medium mb-1">
@@ -334,12 +390,11 @@ export const WorkflowTabs: React.FC = () => {
                                             className="col-span-2 bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10"
                                         >
                                             <div className="flex items-center gap-3 mb-3">
-                                                <div className={`w-10 h-10 rounded-lg ${
-                                                    activeTab === 'attract' ? 'bg-pink-500/30' :
+                                                <div className={`w-10 h-10 rounded-lg ${activeTab === 'attract' ? 'bg-pink-500/30' :
                                                     activeTab === 'invite' ? 'bg-red-500/30' :
-                                                    activeTab === 'manage' ? 'bg-cyan-500/30' :
-                                                    'bg-yellow-500/30'
-                                                } flex items-center justify-center flex-shrink-0`}>
+                                                        activeTab === 'manage' ? 'bg-cyan-500/30' :
+                                                            'bg-yellow-500/30'
+                                                    } flex items-center justify-center flex-shrink-0`}>
                                                     {currentTab.features[2]?.icon}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
@@ -353,12 +408,11 @@ export const WorkflowTabs: React.FC = () => {
                                             </div>
                                             {/* Progress/Stats Bar */}
                                             <div className="flex gap-2 items-center">
-                                                <div className={`h-2 rounded-full ${
-                                                    activeTab === 'attract' ? 'bg-gradient-to-r from-blue-500 to-purple-500' :
+                                                <div className={`h-2 rounded-full ${activeTab === 'attract' ? 'bg-gradient-to-r from-blue-500 to-purple-500' :
                                                     activeTab === 'invite' ? 'bg-gradient-to-r from-pink-500 to-rose-500' :
-                                                    activeTab === 'manage' ? 'bg-gradient-to-r from-green-500 to-teal-500' :
-                                                    'bg-gradient-to-r from-orange-500 to-amber-500'
-                                                }`} style={{ width: '60%' }} />
+                                                        activeTab === 'manage' ? 'bg-gradient-to-r from-green-500 to-teal-500' :
+                                                            'bg-gradient-to-r from-orange-500 to-amber-500'
+                                                    }`} style={{ width: '60%' }} />
                                                 <div className="h-2 bg-white/10 rounded-full flex-1" />
                                                 <span className="text-white/40 text-xs font-medium ml-2">
                                                     {activeTab === 'attract' ? '12 leads' : activeTab === 'invite' ? '85 RSVPs' : activeTab === 'manage' ? '8 active' : '156 photos'}
@@ -366,18 +420,17 @@ export const WorkflowTabs: React.FC = () => {
                                             </div>
                                         </motion.div>
                                     </motion.div>
-                                    
+
                                     {/* Floating particles */}
                                     <div className="absolute top-4 right-4">
                                         <motion.div
                                             animate={{ rotate: 360 }}
                                             transition={{ repeat: Infinity, duration: 20, ease: "linear" }}
-                                            className={`w-16 h-16 rounded-full border-2 border-dashed ${
-                                                activeTab === 'attract' ? 'border-blue-500/20' :
+                                            className={`w-16 h-16 rounded-full border-2 border-dashed ${activeTab === 'attract' ? 'border-blue-500/20' :
                                                 activeTab === 'invite' ? 'border-pink-500/20' :
-                                                activeTab === 'manage' ? 'border-green-500/20' :
-                                                'border-orange-500/20'
-                                            }`}
+                                                    activeTab === 'manage' ? 'border-green-500/20' :
+                                                        'border-orange-500/20'
+                                                }`}
                                         />
                                     </div>
                                 </div>

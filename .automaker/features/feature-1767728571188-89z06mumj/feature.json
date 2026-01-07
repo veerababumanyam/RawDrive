@@ -5,5 +5,13 @@
   "steps": [],
   "status": "backlog",
   "skipTests": true,
-  "priority": 2
+  "priority": 2,
+  "title": "",
+  "model": "opus",
+  "thinkingLevel": "none",
+  "imagePaths": [],
+  "textFilePaths": [],
+  "branchName": "main",
+  "planningMode": "skip",
+  "requirePlanApproval": false
 }

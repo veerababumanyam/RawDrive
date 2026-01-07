@@ -46,6 +46,8 @@ interface InvitationErrorFallbackProps {
   message?: string;
   /** Show retry button */
   showRetry?: boolean;
+  /** Whether a retry is currently in progress */
+  isRetrying?: boolean;
   /** Retry callback */
   onRetry?: () => void;
   /** Show back button */
@@ -125,6 +127,7 @@ export const InvitationErrorFallback: React.FC<InvitationErrorFallbackProps> = (
   title,
   message,
   showRetry = true,
+  isRetrying = false,
   onRetry,
   showBack = true,
   showHome = true,
@@ -162,7 +165,12 @@ export const InvitationErrorFallback: React.FC<InvitationErrorFallbackProps> = (
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           {showRetry && onRetry && (
-            <AppButton variant="primary" onClick={onRetry}>
+            <AppButton
+              variant="primary"
+              onClick={onRetry}
+              isLoading={isRetrying}
+              loadingText="Retrying..."
+            >
               <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />
               Try Again
             </AppButton>

@@ -199,28 +199,28 @@ const GalleriesPage: React.FC = () => {
   }, []);
 
   const handleTogglePin = async (gallery: GalleryListItem) => {
-      if (!workspace?.workspace_id) return;
-      try {
-          if (gallery.is_pinned) {
-              await galleryService.unpinGallery(workspace.workspace_id, gallery.gallery_id);
-                addToast({
-                  variant: 'success',
-                  message: `Unpinned "${gallery.title}"`,
-              });
-          } else {
-              await galleryService.pinGallery(workspace.workspace_id, gallery.gallery_id);
-              addToast({
-                  variant: 'success',
-                  message: `Pinned "${gallery.title}" to favorites`,
-              });
-          }
-          refetch();
-      } catch (err) {
-          addToast({
-              variant: 'error',
-              message: 'Failed to update pin status',
-          });
+    if (!workspace?.workspace_id) return;
+    try {
+      if (gallery.is_pinned) {
+        await galleryService.unpinGallery(workspace.workspace_id, gallery.gallery_id);
+        addToast({
+          variant: 'success',
+          message: `Unpinned "${gallery.title}"`,
+        });
+      } else {
+        await galleryService.pinGallery(workspace.workspace_id, gallery.gallery_id);
+        addToast({
+          variant: 'success',
+          message: `Pinned "${gallery.title}" to favorites`,
+        });
       }
+      refetch();
+    } catch (err) {
+      addToast({
+        variant: 'error',
+        message: 'Failed to update pin status',
+      });
+    }
   };
 
 
@@ -237,18 +237,27 @@ const GalleriesPage: React.FC = () => {
       <motion.div variants={staggerItem} className="card-glass rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gradient">{t('common:nav.galleries')}</h1>
-          <p className="text-text-secondary mt-1">
+          <div className="text-text-secondary mt-1">
             {loading ? (
               t('common:status.loading')
             ) : error ? (
               t('list.errorLoading')
+            ) : galleries.length === 0 && !debouncedSearch && filterStatus === 'all' && !startDate && !endDate ? (
+              t('list.emptyState', { defaultValue: "No galleries yet. Let's create your first one!" })
             ) : (
-              <>
-                {galleries.length} {galleries.length === 1 ? t('list.galleryCount_one') : t('list.galleryCount_other')}
-                {meta && ` ${t('list.of')} ${meta.total}`}
-              </>
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-text-primary">
+                  {meta?.total || galleries.length}
+                </span>
+                <span>
+                  {(meta?.total || galleries.length) === 1 ? t('list.galleryCount_one') : t('list.galleryCount_other')}
+                </span>
+                {(searchQuery || filterStatus !== 'all' || startDate || endDate) && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Filtered</span>
+                )}
+              </div>
             )}
-          </p>
+          </div>
         </div>
         <AppButton
           onClick={handleCreateGallery}
@@ -273,7 +282,7 @@ const GalleriesPage: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('list.searchPlaceholder')}
+            placeholder={t('list.searchPlaceholder', { defaultValue: 'Search by title, client, or event...' })}
             className="
                 w-full pl-10 pr-4 py-2.5
                 glass-light border border-white/20 dark:border-white/10
@@ -340,37 +349,43 @@ const GalleriesPage: React.FC = () => {
 
           {/* Date Range Filter */}
           <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="
-                px-3 py-2.5
-                glass-light border border-white/20 dark:border-white/10
-                rounded-xl text-text-secondary text-sm
-                focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
-                hover:border-white/30
-                transition-all duration-200
-                min-h-[44px]
-              "
-              placeholder="Start Date"
-            />
-            <span className="text-text-tertiary">-</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="
-                px-3 py-2.5
-                glass-light border border-white/20 dark:border-white/10
-                rounded-xl text-text-secondary text-sm
-                focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
-                hover:border-white/30
-                transition-all duration-200
-                min-h-[44px]
-              "
-              placeholder="End Date"
-            />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="relative">
+                <span className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] text-text-tertiary font-medium">From</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="
+                    px-3 py-2.5
+                    glass-light border border-white/20 dark:border-white/10
+                    rounded-xl text-text-secondary text-sm
+                    focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
+                    hover:border-white/30
+                    transition-all duration-200
+                    min-h-[44px]
+                  "
+                />
+              </div>
+              <span className="hidden sm:inline text-text-tertiary">-</span>
+              <div className="relative">
+                <span className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] text-text-tertiary font-medium">To</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="
+                    px-3 py-2.5
+                    glass-light border border-white/20 dark:border-white/10
+                    rounded-xl text-text-secondary text-sm
+                    focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
+                    hover:border-white/30
+                    transition-all duration-200
+                    min-h-[44px]
+                  "
+                />
+              </div>
+            </div>
             {(startDate || endDate) && (
               <button
                 onClick={() => {
@@ -583,18 +598,17 @@ const GalleriesPage: React.FC = () => {
                           </button>
                           {activeMenu === gallery.gallery_id && (
                             <div className="absolute right-0 top-full mt-1 w-40 card-glass rounded-xl shadow-xl z-10 overflow-hidden">
-                              {gallery.status === 'published' && (
-                                <a
-                                  href={`/g/${gallery.gallery_id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary transition-colors"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <ExternalLink size={14} />
-                                  View Public
-                                </a>
-                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Navigate to authenticated preview - works even if not published
+                                  window.open(`/workspace/galleries/${gallery.gallery_id}/preview`, '_blank');
+                                }}
+                                className="flex items-center gap-2 px-3 py-2.5 text-sm text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary transition-colors w-full text-left"
+                              >
+                                <ExternalLink size={14} />
+                                View as Client
+                              </button>
                               <button
                                 className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-error hover:bg-error/10 transition-colors"
                                 onClick={(e) => {

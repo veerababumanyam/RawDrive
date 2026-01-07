@@ -5,7 +5,7 @@
 
   ## Enterprise SaaS Professional Photography Management Platform
 
-  [![Version](https://img.shields.io/badge/version-0.2.6-blue.svg)](https://github.com/rawdrive/RawDrive)
+  [![Version](https://img.shields.io/badge/version-0.2.9-blue.svg)](https://github.com/rawdrive/RawDrive)
   [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
   [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -165,91 +165,175 @@ RawDrive includes a comprehensive design system with:
 ### Prerequisites
 
 - **Node.js** 18+ and npm
-- **Python** 3.11+
-- **Docker** and Docker Compose
-- **PostgreSQL** 16+ and **Redis** 7+
+- **Docker Desktop** for Windows/Mac or Docker + Docker Compose for Linux
+- **Python** 3.11+ (optional, for local development)
+- **PostgreSQL** 16+ and **Redis** 7+ (provided by Docker)
+
+### ⚡ One-Command Startup (Recommended)
+
+**Start all 20 services with auto-restart enabled:**
+
+```bash
+# Windows (Command Prompt) - Just double-click!
+start-all-services.bat
+
+# Windows (PowerShell)
+.\start-all-services.ps1
+
+# Or use the management tool
+manage-services.bat start
+```
+
+**✅ Auto-Restart Enabled:** All services automatically start when Docker Desktop starts - no manual intervention needed after reboots!
+
+**Service Management:**
+```bash
+manage-services.bat start     # Start all services
+manage-services.bat stop      # Stop all services
+manage-services.bat restart   # Restart all services
+manage-services.bat status    # Show service status
+manage-services.bat logs      # View all logs
+```
+
+📖 **See [DOCKER_QUICK_START.md](DOCKER_QUICK_START.md) for detailed Docker commands and troubleshooting**
 
 ### Development Setup
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/rawdrive/RawDrive.git
-   cd RawDrive
-   ```
+#### 🚀 Quick Start (Recommended)
 
-2. **Start development infrastructure**
-   ```bash
-   # Option A: Database only (recommended for local backend development)
-   # Uses timescale/timescaledb-ha:pg16 with pgvector + pgvectorscale
-   docker compose -f infrastructure/docker/docker-compose.db.yml up -d
-   
-   # Option B: Full stack (all services including backend in Docker)
-   docker compose -f infrastructure/docker/docker-compose.yml up -d
-   
-   # Option C: Backend-only development (faster for backend work)
-   docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
-   ```
+**One-Command Setup** - Automatically sets up everything:
 
-3. **Install dependencies**
-   ```bash
-   # Frontend
-   cd frontend && npm install
+```powershell
+# Windows (PowerShell) - Run this from project root
+.\setup-dev-environment.ps1
+```
 
-   # Backend and AI Service (using Docker)
-   # Dependencies are installed in Docker containers
-   ```
+```bash
+# Linux/Mac
+bash scripts/setup-all.sh
+```
 
-4. **Set up environment**
-   ```bash
-   cp .env.example .env
-   # Configure your environment variables
-   ```
+This automated setup will:
+- ✅ Start all Docker services
+- ✅ Run database migrations
+- ✅ Install required dependencies (including psycopg2-binary for Alembic)
+- ✅ Seed test users
+- ✅ Build shared packages (@rawdrive/shared-types, etc.)
+- ✅ Verify all services are healthy
 
-5. **Initialize database**
-   ```bash
-   # Using Docker
-   docker compose -f infrastructure/docker/docker-compose.yml exec backend python setup_db.py
-   docker compose -f infrastructure/docker/docker-compose.yml exec backend alembic upgrade head
-   docker compose -f infrastructure/docker/docker-compose.yml exec backend python seed_user.py
-   ```
+**After setup completes:**
+```bash
+cd frontend && pnpm dev  # Start frontend on http://localhost:5173
+```
 
-6. **Start development servers**
-   ```bash
-   # Frontend
+**Test Login:**
+- Email: `free@test.rawdrive.in`
+- Password: `Test@123`
+
+---
+
+#### 🔧 Manual Setup (Advanced)
+
+If you prefer manual setup or need to troubleshoot:
+
+**1. Clone the repository**
+```bash
+git clone https://github.com/rawdrive/RawDrive.git
+cd RawDrive
+```
+
+**2. Prerequisites**
+- Docker Desktop (with Docker Compose V2)
+- Node.js 18+ and pnpm
+- Git
+
+**3. Start Docker services**
+```bash
+# Windows
+start-all-services.bat
+
+# Linux/Mac
+docker compose -f infrastructure/docker/docker-compose.yml up -d
+```
+
+**4. Install backend dependencies (CRITICAL)**
+```bash
+# This step prevents migration errors
+docker exec rawdrive-backend pip install psycopg2-binary
+```
+
+**5. Run database migrations**
+```bash
+docker exec rawdrive-backend bash -c "cd /app && alembic upgrade head"
+```
+
+**6. Seed test users**
+```bash
+docker exec -e DATABASE_URL="postgresql://rawdrive:rawdrive@postgres:5432/rawdrive" \
+  rawdrive-backend python seed_all_test_users.py
+```
+
+**7. Build shared packages**
+```bash
+cd packages/shared-types && pnpm build
+cd ../shared-constants && pnpm build
+cd ../shared-validation && pnpm build
+cd ../shared-utils && pnpm build
+cd ../../
+```
+
+**8. Install frontend dependencies**
+```bash
+cd frontend
+pnpm install
+pnpm dev  # Start frontend
+```
+
+**9. Verify services**
+```bash
+# Check service health
+docker compose -f infrastructure/docker/docker-compose.yml ps
+
+# View logs if needed
+docker compose -f infrastructure/docker/docker-compose.yml logs backend
+   manage-services.bat logs gallery-service
+
+   # Frontend (run separately for development)
    cd frontend && npm run dev  # localhost:3000
-
-   # Backend and microservices (using Docker)
-   # Services are already running in Docker containers
-   # Access backend at: http://localhost:8000
+   ```
+   
+   TEST USERS AVAILABLE
+All users password: Test@123 Subscription Tier Users:
+✅ free@test.rawdrive.in - Free Plan (1GB, 3 galleries)
+✅ starter@test.rawdrive.in - Starter Plan (10GB, 10 galleries)
+✅ professional@test.rawdrive.in - Professional Plan (100GB, 50 galleries)
+✅ business@test.rawdrive.in - Business Plan (1TB, 200 galleries)
+✅ enterprise@test.rawdrive.in - Enterprise Plan (Unlimited)
+7. **Service URLs (all running in Docker)**
+   ```
+   Backend API:        http://localhost:8000
+   Gallery Service:    http://localhost:8004
+   Billing Service:    http://localhost:8005
+   Onboarding:         http://localhost:8006
+   Invitations:        http://localhost:8007
+   Upload Service:     http://localhost:8008
+   Traefik Dashboard:  http://localhost:8080
+   Grafana:            http://localhost:3000 (admin/admin)
+   Prometheus:         http://localhost:9090
    ```
 
-7. **Gallery Microservice (Optional)**
+8. **Running individual services (alternative to Docker)**
    ```bash
-   # Start gallery service for development
+   # Gallery microservice (dev mode)
    ./scripts/dev-gallery-service.sh        # Unix/macOS/WSL
    .\scripts\dev-gallery-service.ps1      # Windows
 
-   # Test gallery integration
-   ./scripts/test-gallery-integration.sh
-
-   # Access gallery service:
-   # - Direct: http://localhost:8004/health
-   # - Via Traefik: http://localhost/api/v1/galleries
-   ```
-
-8. **Billing Microservice (Optional)**
-   ```bash
-   # Start billing service for development
+   # Billing microservice (dev mode)
    ./scripts/dev-billing-service.sh        # Unix/macOS/WSL
    .\scripts\start-billing-dev.ps1        # Windows
 
-   # Test billing integration
-   .\scripts\test-billing-setup.ps1
-
-   # Access billing service:
-   # - Direct: http://localhost:8006/health (dev) or http://localhost:8005/health (prod)
-   # - Via Traefik: http://localhost/api/v1/subscription
-   # - Webhooks: http://localhost/webhooks/razorpay, /webhooks/stripe
+   # Note: These scripts start services outside Docker
+   # Useful for development but may conflict with Docker ports
    ```
 
 ### 🧪 Testing
@@ -269,15 +353,28 @@ npm run verify  # Frontend
 docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest  # Backend
 ```
 
-### 📦 Production Build
+### 📦 Production Deployment
 
 ```bash
 # Build all services
 npm run build:prod
 
-# Start production containers
-docker-compose -f infrastructure/docker/docker-compose.yml up -d
+# Start all production containers with auto-restart
+docker compose -f infrastructure/docker/docker-compose.yml --env-file .env up -d
+
+# Or use the startup script
+start-all-services.bat  # Windows
+
+# Check health status
+manage-services.bat status
 ```
+
+**Production Services (20 total):**
+- 6 Microservices: backend, gallery, billing, onboarding, invitations, upload
+- 4 Workers: face, content, quality, invitations-worker
+- 10 Infrastructure: postgres, redis, traefik, prometheus, grafana, loki, etc.
+
+All services configured with `restart: unless-stopped` for automatic recovery.
 
 ---
 
@@ -547,15 +644,32 @@ RawDrive exclusively uses **Google Gemini** for all AI features:
 
 ## 🚀 Deployment
 
-### Docker Compose (Development)
+### Docker Compose (Development & Production)
 
 ```bash
-# Start all services
-docker-compose -f infrastructure/docker/docker-compose.yml up -d
+# Start all 20 services with one command
+start-all-services.bat  # Windows (recommended)
 
-# View logs
-docker-compose logs -f
+# Or use Docker Compose directly
+docker compose -f infrastructure/docker/docker-compose.yml --env-file .env up -d
+
+# View all logs
+manage-services.bat logs
+
+# View specific service logs
+manage-services.bat logs gallery-service
+
+# Check service health
+manage-services.bat status
 ```
+
+**Auto-Restart:** All services restart automatically with Docker Desktop - perfect for development and production!
+
+**All 20 Services:**
+- ✅ Backend API + 5 microservices (gallery, billing, upload, onboarding, invitations)
+- ✅ 4 background workers (face, content, quality, email)
+- ✅ Full monitoring stack (Traefik, Prometheus, Grafana, Loki)
+- ✅ Database & cache (PostgreSQL 16 + pgvector, Redis 7, PgBouncer)
 
 ### Kubernetes (Production)
 

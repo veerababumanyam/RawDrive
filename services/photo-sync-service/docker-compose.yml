@@ -1,0 +1,286 @@
+# =============================================================================
+# RawDrive Photo Sync Service - Local Development Docker Compose
+# =============================================================================
+#
+# This docker-compose is for local development only.
+# In production, use the main infrastructure/docker/docker-compose.yml
+# which includes this service as part of the full stack.
+#
+# Usage:
+#   cd services/photo-sync-service
+#   docker-compose up -d
+#
+# Prerequisites:
+#   Ensure the main RawDrive services are running first:
+#     cd infrastructure/docker && docker-compose up -d postgres redis rabbitmq
+#
+# The service will be available at:
+#   http://localhost:8010/health
+#   http://localhost:8010/metrics
+#
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Photo Sync API Service
+  # ===========================================================================
+  photo-sync-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: photo-sync-api
+    ports:
+      - "${PORT_PHOTO_SYNC:-8010}:${PORT_PHOTO_SYNC:-8010}"
+    environment:
+      # Service Configuration
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${PORT_PHOTO_SYNC:-8010}
+      - HOST=0.0.0.0
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - SERVICE_NAME=photo-sync-service
+      - SERVICE_VERSION=1.0.0
+
+      # Database - Use the main RawDrive PostgreSQL
+      - DATABASE_URL=${DATABASE_URL:-postgresql://rawdrive:rawdrive@host.docker.internal:5432/rawdrive}
+      - DB_POOL_MIN_SIZE=${DB_POOL_MIN_SIZE:-2}
+      - DB_POOL_MAX_SIZE=${DB_POOL_MAX_SIZE:-10}
+
+      # Redis - Use the main RawDrive Redis
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
+      - REDIS_MAX_CONNECTIONS=${REDIS_MAX_CONNECTIONS:-10}
+
+      # RabbitMQ - Message Queue for job processing
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://rawdrive:rawdrive@host.docker.internal:5672}
+      - RABBITMQ_EXCHANGE=photo-sync
+      - RABBITMQ_PREFETCH_COUNT=10
+
+      # OAuth2 Provider Credentials (Google Photos)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:8010/api/v1/sync/oauth/google/callback}
+
+      # OAuth2 Provider Credentials (Dropbox)
+      - DROPBOX_APP_KEY=${DROPBOX_APP_KEY:-}
+      - DROPBOX_APP_SECRET=${DROPBOX_APP_SECRET:-}
+      - DROPBOX_REDIRECT_URI=${DROPBOX_REDIRECT_URI:-http://localhost:8010/api/v1/sync/oauth/dropbox/callback}
+
+      # OAuth2 Provider Credentials (OneDrive / Microsoft)
+      - ONEDRIVE_CLIENT_ID=${ONEDRIVE_CLIENT_ID:-}
+      - ONEDRIVE_CLIENT_SECRET=${ONEDRIVE_CLIENT_SECRET:-}
+      - ONEDRIVE_REDIRECT_URI=${ONEDRIVE_REDIRECT_URI:-http://localhost:8010/api/v1/sync/oauth/onedrive/callback}
+
+      # OAuth2 Provider Credentials (Amazon Photos)
+      - AMAZON_CLIENT_ID=${AMAZON_CLIENT_ID:-}
+      - AMAZON_CLIENT_SECRET=${AMAZON_CLIENT_SECRET:-}
+      - AMAZON_REDIRECT_URI=${AMAZON_REDIRECT_URI:-http://localhost:8010/api/v1/sync/oauth/amazon/callback}
+
+      # iCloud Provider (CloudKit Web Services)
+      - ICLOUD_CONTAINER_ID=${ICLOUD_CONTAINER_ID:-}
+      - ICLOUD_API_TOKEN=${ICLOUD_API_TOKEN:-}
+
+      # Storage (Cloudflare R2 / S3-compatible)
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-rawdrive}
+      - R2_REGION=${R2_REGION:-auto}
+
+      # Security - Encryption for stored credentials
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY:-}
+
+      # JWT - Must match main backend for token validation
+      - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+
+      # Rate Limiting
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
+
+      # Sync Configuration
+      - SYNC_BATCH_SIZE=${SYNC_BATCH_SIZE:-100}
+      - SYNC_MAX_RETRIES=${SYNC_MAX_RETRIES:-5}
+      - SYNC_RETRY_DELAY_MS=${SYNC_RETRY_DELAY_MS:-5000}
+      - SYNC_CONCURRENT_DOWNLOADS=${SYNC_CONCURRENT_DOWNLOADS:-5}
+
+      # Circuit Breaker Configuration
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      - CIRCUIT_BREAKER_RECOVERY_TIMEOUT=${CIRCUIT_BREAKER_RECOVERY_TIMEOUT:-30000}
+
+      # Metrics & Observability
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_SERVICE_NAME=photo-sync-service
+    volumes:
+      # Mount source for hot reload in development
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT_PHOTO_SYNC:-8010}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  # ===========================================================================
+  # Photo Sync Worker - Processes sync jobs from RabbitMQ queue
+  # ===========================================================================
+  photo-sync-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: photo-sync-worker
+    command: ["npm", "run", "worker"]
+    environment:
+      # Service Configuration
+      - NODE_ENV=${NODE_ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - SERVICE_NAME=photo-sync-worker
+      - SERVICE_VERSION=1.0.0
+      - WORKER_MODE=true
+
+      # Database - Use the main RawDrive PostgreSQL
+      - DATABASE_URL=${DATABASE_URL:-postgresql://rawdrive:rawdrive@host.docker.internal:5432/rawdrive}
+      - DB_POOL_MIN_SIZE=${DB_POOL_MIN_SIZE:-2}
+      - DB_POOL_MAX_SIZE=${DB_POOL_MAX_SIZE:-10}
+
+      # Redis - Use the main RawDrive Redis
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
+
+      # RabbitMQ - Message Queue for job processing
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://rawdrive:rawdrive@host.docker.internal:5672}
+      - RABBITMQ_EXCHANGE=photo-sync
+      - RABBITMQ_PREFETCH_COUNT=5
+
+      # OAuth2 Provider Credentials (same as API for token refresh)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - DROPBOX_APP_KEY=${DROPBOX_APP_KEY:-}
+      - DROPBOX_APP_SECRET=${DROPBOX_APP_SECRET:-}
+      - ONEDRIVE_CLIENT_ID=${ONEDRIVE_CLIENT_ID:-}
+      - ONEDRIVE_CLIENT_SECRET=${ONEDRIVE_CLIENT_SECRET:-}
+      - AMAZON_CLIENT_ID=${AMAZON_CLIENT_ID:-}
+      - AMAZON_CLIENT_SECRET=${AMAZON_CLIENT_SECRET:-}
+      - ICLOUD_CONTAINER_ID=${ICLOUD_CONTAINER_ID:-}
+      - ICLOUD_API_TOKEN=${ICLOUD_API_TOKEN:-}
+
+      # Storage (Cloudflare R2 / S3-compatible)
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-rawdrive}
+      - R2_REGION=${R2_REGION:-auto}
+
+      # Security - Encryption for stored credentials
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY:-}
+
+      # Sync Configuration
+      - SYNC_BATCH_SIZE=${SYNC_BATCH_SIZE:-100}
+      - SYNC_MAX_RETRIES=${SYNC_MAX_RETRIES:-5}
+      - SYNC_RETRY_DELAY_MS=${SYNC_RETRY_DELAY_MS:-5000}
+      - SYNC_CONCURRENT_DOWNLOADS=${SYNC_CONCURRENT_DOWNLOADS:-5}
+
+      # Circuit Breaker Configuration
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      - CIRCUIT_BREAKER_RECOVERY_TIMEOUT=${CIRCUIT_BREAKER_RECOVERY_TIMEOUT:-30000}
+    volumes:
+      # Mount source for hot reload in development
+      - ./src:/app/src:ro
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+    depends_on:
+      photo-sync-api:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ===========================================================================
+  # RabbitMQ - Message Queue (Local Development Only)
+  # In production, use the shared RabbitMQ instance from infrastructure
+  # ===========================================================================
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: photo-sync-rabbitmq
+    ports:
+      - "${PORT_RABBITMQ:-5672}:5672"
+      - "${PORT_RABBITMQ_MANAGEMENT:-15672}:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-rawdrive}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-rawdrive}
+      - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_VHOST:-/}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - default
+
+volumes:
+  rabbitmq_data:
+    name: photo-sync-rabbitmq-data
+
+networks:
+  default:
+    name: rawdrive-network
+    external: true
+
+# =============================================================================
+# Usage Notes
+# =============================================================================
+#
+# This service uses the main RawDrive PostgreSQL and Redis.
+# Make sure the main services are running first:
+#
+#   cd infrastructure/docker
+#   docker-compose up -d postgres redis
+#
+# Then start this service:
+#
+#   cd services/photo-sync-service
+#   docker-compose up -d
+#
+# Or start with full stack (including local RabbitMQ):
+#
+#   docker-compose --profile full up -d
+#
+# Endpoints:
+#   - API: http://localhost:8010
+#   - Health: http://localhost:8010/health
+#   - Metrics: http://localhost:8010/metrics
+#   - RabbitMQ Management: http://localhost:15672 (rawdrive/rawdrive)
+#
+# To run database migrations:
+#
+#   docker-compose exec photo-sync-api npm run db:migrate
+#
+# To view logs:
+#
+#   docker-compose logs -f photo-sync-api photo-sync-worker
+#
+# =============================================================================

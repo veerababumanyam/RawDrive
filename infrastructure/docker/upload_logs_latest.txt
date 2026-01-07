@@ -1,0 +1,200 @@
+﻿rawdrive-upload-service  |   | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+rawdrive-upload-service  |   +-+---------------- 1 ----------------
+rawdrive-upload-service  |     | Traceback (most recent call last):
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+rawdrive-upload-service  |     |     result = await app(  # type: ignore[func-returns-value]
+rawdrive-upload-service  |     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+rawdrive-upload-service  |     |     return await self.app(scope, receive, send)
+rawdrive-upload-service  |     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/fastapi/applications.py", line 1135, in __call__
+rawdrive-upload-service  |     |     await super().__call__(scope, receive, send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/applications.py", line 107, in __call__
+rawdrive-upload-service  |     |     await self.middleware_stack(scope, receive, send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 186, in __call__
+rawdrive-upload-service  |     |     raise exc
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 164, in __call__
+rawdrive-upload-service  |     |     await self.app(scope, receive, _send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 191, in __call__
+rawdrive-upload-service  |     |     with recv_stream, send_stream, collapse_excgroups():
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/contextlib.py", line 158, in __exit__
+rawdrive-upload-service  |     |     self.gen.throw(typ, value, traceback)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/_utils.py", line 85, in collapse_excgroups
+rawdrive-upload-service  |     |     raise exc
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+rawdrive-upload-service  |     |     response = await self.dispatch_func(request, call_next)
+rawdrive-upload-service  |     |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/app/src/app/middleware/rate_limit.py", line 110, in dispatch
+rawdrive-upload-service  |     |     response = await call_next(request)
+rawdrive-upload-service  |     |                ^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
+rawdrive-upload-service  |     |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+rawdrive-upload-service  |     |     await self.app(scope, receive_or_disconnect, send_no_error)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 191, in __call__
+rawdrive-upload-service  |     |     with recv_stream, send_stream, collapse_excgroups():
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/contextlib.py", line 158, in __exit__
+rawdrive-upload-service  |     |     self.gen.throw(typ, value, traceback)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/_utils.py", line 85, in collapse_excgroups
+rawdrive-upload-service  |     |     raise exc
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+rawdrive-upload-service  |     |     response = await self.dispatch_func(request, call_next)
+rawdrive-upload-service  |     |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/app/src/app/middleware/auth.py", line 126, in dispatch
+rawdrive-upload-service  |     |     response = await call_next(request)
+rawdrive-upload-service  |     |                ^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
+rawdrive-upload-service  |     |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+rawdrive-upload-service  |     |     await self.app(scope, receive_or_disconnect, send_no_error)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 93, in __call__
+rawdrive-upload-service  |     |     await self.simple_response(scope, receive, send, request_headers=headers)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 144, in simple_response
+rawdrive-upload-service  |     |     await self.app(scope, receive, send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+rawdrive-upload-service  |     |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+rawdrive-upload-service  |     |     raise exc
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+rawdrive-upload-service  |     |     await app(scope, receive, sender)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+rawdrive-upload-service  |     |     await self.app(scope, receive, send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 716, in __call__
+rawdrive-upload-service  |     |     await self.middleware_stack(scope, receive, send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 736, in app
+rawdrive-upload-service  |     |     await route.handle(scope, receive, send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 290, in handle
+rawdrive-upload-service  |     |     await self.app(scope, receive, send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 115, in app
+rawdrive-upload-service  |     |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+rawdrive-upload-service  |     |     raise exc
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+rawdrive-upload-service  |     |     await app(scope, receive, sender)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 101, in app
+rawdrive-upload-service  |     |     response = await f(request)
+rawdrive-upload-service  |     |                ^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 345, in app
+rawdrive-upload-service  |     |     solved_result = await solve_dependencies(
+rawdrive-upload-service  |     |                     ^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/fastapi/dependencies/utils.py", line 643, in solve_dependencies
+rawdrive-upload-service  |     |     solved = await call(**solved_result.values)
+rawdrive-upload-service  |     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/app/src/app/api/v1/upload.py", line 135, in get_current_user
+rawdrive-upload-service  |     |     payload = jwt.decode(
+rawdrive-upload-service  |     |               ^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/jose/jwt.py", line 159, in decode
+rawdrive-upload-service  |     |     payload = jws.verify(token, key, algorithms, verify=verify_signature)
+rawdrive-upload-service  |     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/jose/jws.py", line 77, in verify
+rawdrive-upload-service  |     |     _verify_signature(signing_input, header, signature, key, algorithms)
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/jose/jws.py", line 263, in _verify_signature
+rawdrive-upload-service  |     |     if not _sig_matches_keys(keys, signing_input, signature, alg):
+rawdrive-upload-service  |     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/jose/jws.py", line 212, in _sig_matches_keys
+rawdrive-upload-service  |     |     key = jwk.construct(key, alg)
+rawdrive-upload-service  |     |           ^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |     |   File "/usr/local/lib/python3.11/site-packages/jose/jwk.py", line 78, in construct
+rawdrive-upload-service  |     |     raise JWKError("Unable to find an algorithm for key")
+rawdrive-upload-service  |     | jose.exceptions.JWKError: Unable to find an algorithm for key
+rawdrive-upload-service  |     +------------------------------------
+rawdrive-upload-service  | 
+rawdrive-upload-service  | The above exception was the direct cause of the following exception:
+rawdrive-upload-service  | 
+rawdrive-upload-service  | Traceback (most recent call last):
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 416, in run_asgi
+rawdrive-upload-service  |     result = await app(  # type: ignore[func-returns-value]
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+rawdrive-upload-service  |     return await self.app(scope, receive, send)
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/applications.py", line 1135, in __call__
+rawdrive-upload-service  |     await super().__call__(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/applications.py", line 107, in __call__
+rawdrive-upload-service  |     await self.middleware_stack(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 186, in __call__
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 164, in __call__
+rawdrive-upload-service  |     await self.app(scope, receive, _send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 191, in __call__
+rawdrive-upload-service  |     with recv_stream, send_stream, collapse_excgroups():
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/contextlib.py", line 158, in __exit__
+rawdrive-upload-service  |     self.gen.throw(typ, value, traceback)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_utils.py", line 85, in collapse_excgroups
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+rawdrive-upload-service  |     response = await self.dispatch_func(request, call_next)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/middleware/rate_limit.py", line 110, in dispatch
+rawdrive-upload-service  |     response = await call_next(request)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
+rawdrive-upload-service  |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+rawdrive-upload-service  |     await self.app(scope, receive_or_disconnect, send_no_error)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 191, in __call__
+rawdrive-upload-service  |     with recv_stream, send_stream, collapse_excgroups():
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/contextlib.py", line 158, in __exit__
+rawdrive-upload-service  |     self.gen.throw(typ, value, traceback)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_utils.py", line 85, in collapse_excgroups
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+rawdrive-upload-service  |     response = await self.dispatch_func(request, call_next)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/middleware/auth.py", line 126, in dispatch
+rawdrive-upload-service  |     response = await call_next(request)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
+rawdrive-upload-service  |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+rawdrive-upload-service  |     await self.app(scope, receive_or_disconnect, send_no_error)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 93, in __call__
+rawdrive-upload-service  |     await self.simple_response(scope, receive, send, request_headers=headers)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 144, in simple_response
+rawdrive-upload-service  |     await self.app(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+rawdrive-upload-service  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+rawdrive-upload-service  |     await app(scope, receive, sender)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+rawdrive-upload-service  |     await self.app(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 716, in __call__
+rawdrive-upload-service  |     await self.middleware_stack(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 736, in app
+rawdrive-upload-service  |     await route.handle(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 290, in handle
+rawdrive-upload-service  |     await self.app(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 115, in app
+rawdrive-upload-service  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+rawdrive-upload-service  |     await app(scope, receive, sender)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 101, in app
+rawdrive-upload-service  |     response = await f(request)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 345, in app
+rawdrive-upload-service  |     solved_result = await solve_dependencies(
+rawdrive-upload-service  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/dependencies/utils.py", line 643, in solve_dependencies
+rawdrive-upload-service  |     solved = await call(**solved_result.values)
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/api/v1/upload.py", line 135, in get_current_user
+rawdrive-upload-service  |     payload = jwt.decode(
+rawdrive-upload-service  |               ^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/jose/jwt.py", line 159, in decode
+rawdrive-upload-service  |     payload = jws.verify(token, key, algorithms, verify=verify_signature)
+rawdrive-upload-service  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/jose/jws.py", line 77, in verify
+rawdrive-upload-service  |     _verify_signature(signing_input, header, signature, key, algorithms)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/jose/jws.py", line 263, in _verify_signature
+rawdrive-upload-service  |     if not _sig_matches_keys(keys, signing_input, signature, alg):
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/jose/jws.py", line 212, in _sig_matches_keys
+rawdrive-upload-service  |     key = jwk.construct(key, alg)
+rawdrive-upload-service  |           ^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/jose/jwk.py", line 78, in construct
+rawdrive-upload-service  |     raise JWKError("Unable to find an algorithm for key")
+rawdrive-upload-service  | jose.exceptions.JWKError: Unable to find an algorithm for key

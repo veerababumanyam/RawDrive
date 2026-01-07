@@ -24,6 +24,8 @@ from app.api.dependencies.auth import (
     get_current_user,
     get_workspace_id,
     WorkspaceAccessDep,
+    WorkspaceIdDep,
+    CurrentUserDep,
 )
 from app.services.gallery_export_service import (
     ExportFormat,
@@ -157,8 +159,8 @@ async def create_export(
     gallery_id: UUID,
     request: CreateExportRequest,
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
-    user = Depends(get_current_user),
+    workspace_id: WorkspaceIdDep,
+    user: CurrentUserDep,
 ):
     """Create a new gallery export job.
 
@@ -233,7 +235,7 @@ async def create_export(
 async def list_gallery_exports(
     gallery_id: UUID,
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace_id: WorkspaceIdDep,
     format: Optional[str] = Query(default=None, description="Filter by format"),
     status_filter: Optional[str] = Query(default=None, alias="status", description="Filter by status"),
     page: int = Query(default=1, ge=1),
@@ -276,7 +278,7 @@ async def list_gallery_exports(
 @router.get("")
 async def list_all_exports(
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace_id: WorkspaceIdDep,
     gallery_id: Optional[UUID] = Query(default=None),
     format: Optional[str] = Query(default=None),
     status_filter: Optional[str] = Query(default=None, alias="status"),
@@ -321,7 +323,7 @@ async def list_all_exports(
 async def get_export(
     export_id: UUID,
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace_id: WorkspaceIdDep,
 ):
     """Get export details by ID."""
     export_service = get_gallery_export_service()
@@ -345,7 +347,7 @@ async def cancel_export(
     export_id: UUID,
     request: CancelExportRequest,
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace_id: WorkspaceIdDep,
 ):
     """Cancel a pending or processing export."""
     export_service = get_gallery_export_service()
@@ -378,7 +380,7 @@ async def retry_export(
     export_id: UUID,
     request: RetryExportRequest,
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace_id: WorkspaceIdDep,
 ):
     """Retry a failed export."""
     export_service = get_gallery_export_service()
@@ -410,8 +412,8 @@ async def retry_export(
 async def create_batch_export(
     request: BatchExportRequest,
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
-    user = Depends(get_current_user),
+    workspace_id: WorkspaceIdDep,
+    user: CurrentUserDep,
 ):
     """Create batch exports for multiple galleries.
 
@@ -462,7 +464,7 @@ async def create_batch_export(
 @router.get("/stats")
 async def get_export_stats(
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
+    workspace_id: WorkspaceIdDep,
 ):
     """Get export statistics for the workspace."""
     export_service = get_gallery_export_service()
@@ -477,8 +479,8 @@ async def get_export_stats(
 @router.get("/cloud/connections")
 async def list_cloud_connections(
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
-    user = Depends(get_current_user),
+    workspace_id: WorkspaceIdDep,
+    user: CurrentUserDep,
 ):
     """List connected cloud providers."""
     export_service = get_gallery_export_service()
@@ -497,8 +499,8 @@ async def list_cloud_connections(
 async def connect_cloud_provider(
     request: ConnectCloudProviderRequest,
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
-    user = Depends(get_current_user),
+    workspace_id: WorkspaceIdDep,
+    user: CurrentUserDep,
 ):
     """Initiate OAuth flow to connect a cloud provider.
 
@@ -525,8 +527,8 @@ async def connect_cloud_provider(
 async def cloud_provider_callback(
     request: CloudProviderCallbackRequest,
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
-    user = Depends(get_current_user),
+    workspace_id: WorkspaceIdDep,
+    user: CurrentUserDep,
 ):
     """Handle OAuth callback from cloud provider."""
     # TODO: Implement OAuth callback handling
@@ -541,8 +543,8 @@ async def cloud_provider_callback(
 async def disconnect_cloud_provider(
     provider: str,
     _access: WorkspaceAccessDep,
-    workspace_id: UUID = Depends(get_workspace_id),
-    user = Depends(get_current_user),
+    workspace_id: WorkspaceIdDep,
+    user: CurrentUserDep,
 ):
     """Disconnect a cloud provider."""
     export_service = get_gallery_export_service()

@@ -12,6 +12,7 @@ Repositories:
 - PlanRepository: Subscription plan queries and management
 - SubscriptionRepository: Workspace subscription CRUD operations
 - ComplianceRepository: Compliance data CRUD operations (DSR, Legal Holds, etc.)
+- I18nRepository: Language preference CRUD operations for localization
 """
 
 from app.repositories.analytics_repository import (
@@ -46,6 +47,10 @@ from app.repositories.compliance_repository import (
     ComplianceRepository,
     get_compliance_repository,
 )
+from app.repositories.i18n_repository import (
+    I18nRepository,
+    get_i18n_repository,
+)
 
 __all__ = [
     # Analytics
@@ -72,4 +77,7 @@ __all__ = [
     # Compliance (DSR, Legal Holds, Retention, Incidents)
     "ComplianceRepository",
     "get_compliance_repository",
+    # Localization (Language Preferences)
+    "I18nRepository",
+    "get_i18n_repository",
 ]

@@ -82,11 +82,13 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [useOriginalFallback, setUseOriginalFallback] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
   // Reset image error state when asset changes
   useEffect(() => {
     setImageError(false);
+    setUseOriginalFallback(false);
   }, [asset.asset_id]);
 
   // Fetch signed URL for thumbnail - simplified without variant switching
@@ -101,7 +103,17 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   } = useSignedUrl({
     assetId: asset.asset_id,
     variant: 'thumbnail',
-    enabled: enabledCondition,
+    enabled: enabledCondition && !useOriginalFallback,
+  });
+
+  // Fetch original URL as fallback when thumbnail fails
+  const {
+    url: originalUrl,
+    loading: originalUrlLoading,
+  } = useSignedUrl({
+    assetId: asset.asset_id,
+    variant: 'original',
+    enabled: enabledCondition && useOriginalFallback,
   });
 
   // Calculate aspect ratio from asset dimensions
@@ -178,8 +190,10 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     setIsEditing(false);
   };
 
-  // Use signed URL if available, fallback to cached thumbnail_url
-  const displayUrl = thumbnailUrl || asset.asset.thumbnail_url || undefined;
+  // Use signed URL if available, fallback to cached thumbnail_url, then original as last resort
+  const displayUrl = useOriginalFallback 
+    ? (originalUrl || asset.asset.original_url || undefined)
+    : (thumbnailUrl || asset.asset.thumbnail_url || undefined);
 
   // Build dynamic class names for selection/favorite states
   const selectionClasses = [
@@ -243,10 +257,15 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           decoding="async"
           draggable={false}
           onError={() => {
-            setImageError(true);
-            // Try refreshing URL on error
-            if (!urlLoading) {
-              refreshUrl();
+            // If thumbnail fails and we haven't tried original yet, fallback to original
+            if (!useOriginalFallback && !originalUrlLoading) {
+              setUseOriginalFallback(true);
+            } else {
+              setImageError(true);
+              // Try refreshing URL on error
+              if (!urlLoading && !useOriginalFallback) {
+                refreshUrl();
+              }
             }
           }}
         />

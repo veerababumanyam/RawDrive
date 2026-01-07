@@ -14,6 +14,350 @@
   "requirePlanApproval": false,
   "dependencies": [],
   "titleGenerating": false,
-  "status": "backlog",
-  "id": "feature-1767728776207-8nx2tjj7h"
+  "status": "completed",
+  "id": "feature-1767728776207-8nx2tjj7h",
+  "startedAt": "2026-01-07T08:46:33.504Z",
+  "updatedAt": "2026-01-07T08:59:18.122Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "I'll analyze this comprehensive localization feature request and generate a detailed specification. Let me first explore the codebase to understand the existing structure and patterns.\n\n🔧 Tool: Task\nInput: {\n  \"description\": \"Explore codebase for localization\",\n  \"prompt\": \"Explore the RawDrive codebase to understand:\\n1. Current i18n/localization setup if any exists\\n2. Frontend structure for adding localization (look for i18next, react-i18next, or any i18n setup)\\n3. Backend API error message patterns\\n4. Payment integrations (Stripe, Razorpay) \\n5. Notification/email services\\n6. WhatsApp or messaging integrations\\n7. Font configurations in frontend\\n8. Any existing language or locale handling\\n\\nSearch thoroughly in:\\n- frontend/src/ for i18n setup, contexts, hooks\\n- backend/src/app/ for locale handling\\n- services/ for payment and notification services\\n- packages/ for shared constants related to locales\\n\\nReturn a comprehensive summary of what exists and what needs to be created.\",\n  \"subagent_type\": \"Explore\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*i18n*\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*locale*\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*translation*\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/contexts/**\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/hooks/**\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"packages/shared-constants/**\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\docs\\\\TechnicalSpecs\\\\i18n_localization.json\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"i18next|i18n|locale|translation|language\",\n  \"path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/config/**\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/i18n/**\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"useTranslation|i18next|locale\",\n  \"path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\",\n  \"type\": \"tsx\",\n  \"output_mode\": \"files_with_matches\",\n  \"head_limit\": 20\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\i18n\\\\config.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\utils\\\\rtl.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\config\\\\indianFonts.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\components\\\\settings\\\\LanguageSelector.tsx\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/src/locales/**\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"frontend/public/locales/**\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"stripe|razorpay|payment\",\n  \"path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\",\n  \"output_mode\": \"files_with_matches\",\n  \"head_limit\": 20\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"whatsapp|sms|notification|email|message\",\n  \"path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\",\n  \"output_mode\": \"files_with_matches\",\n  \"head_limit\": 20\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"services/billing-service/**\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/services/**\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\email_service.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\notification_service.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\razorpay_service.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\\billing-service\\\\src\\\\services\\\\razorpay_service.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\\services\\\\notification_templates.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\" -type f -name \\\"package.json\\\" | head -10 | xargs grep -l \\\"i18next\\\\|payment\\\\|stripe\\\\|razorpay\\\\|whatsapp\\\" 2>/dev/null\",\n  \"description\": \"Search package.json files for dependencies\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\package.json\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"services/**/*.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\requirements.txt\",\n  \"limit\": 100\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"packages/shared-types/**/*.ts\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"language|locale|i18n\",\n  \"path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-types\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\packages\\\\shared-types\\\\src\\\\invitations.ts\",\n  \"limit\": 150\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"whatsapp\\\\|sms\\\\|twilio\\\\|communication\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\backend\\\\src\\\\app\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\services\\\" 2>/dev/null | head -20\",\n  \"description\": \"Search for WhatsApp, SMS, or communication services\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\src\\\\main.tsx\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\public\\\\locales\\\\en\\\\common.json\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\public\\\\locales\\\\hi\\\\common.json\",\n  \"limit\": 50\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive\\\\frontend\\\\public\\\\locales\\\" 2>/dev/null | head -20\",\n  \"description\": \"List locale directories\"\n}\n\nNow I have a comprehensive understanding of the codebase. Let me generate the detailed specification.\n\n---\n\n# Comprehensive Specification: Localization & Regional Features\n\n## 1. Problem Statement\n\nRawDrive needs to serve the diverse Indian market with first-class support for regional languages, local payment methods (UPI), and cultural nuances. While the frontend i18n infrastructure exists (i18next with 13 languages), critical gaps remain: backend language preference persistence, localized API error messages, email/notification localization, UPI payment integration, WhatsApp Business API, and GST-compliant invoicing.\n\n## 2. User Story\n\n**As a** professional photographer operating in India,  \n**I want** RawDrive to support my clients' regional languages, local payment methods (UPI), and culturally-aware features,  \n**So that** I can serve Tier 2/3 city clients who prefer communicating in their native language and paying via UPI.\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** a user selects Hindi as their preferred language, **WHEN** they view the gallery portal, **THEN** all UI elements, buttons, and messages display in Hindi with proper Devanagari script rendering.\n- **GIVEN** a workspace owner enables UPI payments, **WHEN** a client views an invoice, **THEN** they see a UPI QR code and can pay via GPay/PhonePe/Paytm intent.\n- **GIVEN** an invitation is sent to a guest with WhatsApp, **WHEN** the guest receives the message, **THEN** they can view the invitation and RSVP directly from WhatsApp with localized content.\n- **GIVEN** a user's browser language is Telugu, **WHEN** they first visit RawDrive, **THEN** the interface auto-detects and displays in Telugu.\n\n### Edge Cases\n- **GIVEN** a requested language has incomplete translations, **WHEN** rendering UI, **THEN** fall back to English for missing keys and log the missing translation.\n- **GIVEN** Urdu is selected (RTL language), **WHEN** viewing the interface, **THEN** text direction, layout, and alignment properly mirror for RTL reading.\n- **GIVEN** UPI payment fails due to network timeout, **WHEN** retry is attempted, **THEN** the payment session resumes without duplicate charges.\n\n### Error Handling\n- **GIVEN** an invalid language code is submitted, **WHEN** updating preferences, **THEN** return 400 error with localized message \"Unsupported language\" in the requester's current language.\n- **GIVEN** WhatsApp API rate limit exceeded, **WHEN** sending invitation, **THEN** queue the message for retry and notify user of delay.\n- **GIVEN** GST number validation fails, **WHEN** generating invoice, **THEN** return specific error identifying the invalid field.\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | 40+ files across frontend, backend, and services |\n| Dependencies | razorpay (UPI), twilio/whatsapp-business-api, babel (Python i18n), gst-validator |\n| Constraints | WhatsApp Business API requires Meta approval; UPI AutoPay requires RBI compliance |\n| Patterns to Follow | Existing i18next setup, email_service.py provider pattern, razorpay_service.py |\n\n## 5. Non-Goals\n\n- **Voice search in regional languages** - Deferred to future enhancement\n- **Hindu/Islamic calendar integration** - Deferred to future enhancement\n- **Relationship mapping beyond simple tags** - Deferred to future enhancement\n- **Admin dashboard localization** - English-first for MVP, planned for v2\n- **Stripe UPI integration** - Using Razorpay for India payments only\n- **RSVP via WhatsApp** - Mentioned as roadmap, not in current scope\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Backend Language Infrastructure\n- [ ] T001: Create Alembic migration for language_preferences table and user/workspace columns | File: backend/migrations/versions/0116_language_preferences.py\n- [ ] T002: Create LanguagePreference SQLAlchemy model | File: backend/src/app/models/language_preference.py\n- [ ] T003: Update User and Workspace models with preferred_language fields | File: backend/src/app/models/user.py\n- [ ] T004: Create i18n repository for language preference CRUD | File: backend/src/app/repositories/i18n_repository.py\n- [ ] T005: Create i18n service with locale resolution logic | File: backend/src/app/services/i18n_service.py\n- [ ] T006: Create i18n API endpoints (GET/PUT preferences, list languages) | File: backend/src/app/api/v1/i18n.py\n- [ ] T007: Register i18n routes in main router | File: backend/src/app/api/v1/__init__.py\n\n## Phase 2: Backend Localized Error Messages\n- [ ] T008: Create error message translations dictionary | File: backend/src/app/i18n/error_messages.py\n- [ ] T009: Create LocaleMiddleware to detect Accept-Language header | File: backend/src/app/middleware/locale_middleware.py\n- [ ] T010: Extend exception handlers to return localized errors | File: backend/src/app/api/exception_handlers.py\n\n## Phase 3: Email & Notification Localization\n- [ ] T011: Create email template directory structure for locales | File: backend/src/app/templates/emails/hi/verification.html\n- [ ] T012: Extend EmailService with locale parameter and template loading | File: backend/src/app/services/email_service.py\n- [ ] T013: Create notification message templates for all languages | File: backend/src/app/i18n/notification_messages.py\n- [ ] T014: Extend NotificationService with locale-aware message generation | File: backend/src/app/services/notification_service.py\n\n## Phase 4: UPI Payment Integration\n- [ ] T015: Extend RazorpayService with UPI payment mode support | File: backend/src/app/services/razorpay_service.py\n- [ ] T016: Create UPI QR code generation utility | File: backend/src/app/utils/upi_qr.py\n- [ ] T017: Create UPI payment API endpoint | File: backend/src/app/api/v1/payments.py\n- [ ] T018: Add UPI webhook handlers for payment status | File: backend/src/app/api/v1/webhooks/razorpay.py\n\n## Phase 5: GST Compliance\n- [ ] T019: Create GST validation utilities (GSTIN format, checksum) | File: backend/src/app/utils/gst_validator.py\n- [ ] T020: Create Invoice model with GST fields (CGST, SGST, IGST) | File: backend/src/app/models/invoice.py\n- [ ] T021: Create InvoiceService with GST-compliant invoice generation | File: backend/src/app/services/invoice_service.py\n- [ ] T022: Create invoice PDF template with GST breakdown | File: backend/src/app/templates/invoices/gst_invoice.html\n\n## Phase 6: WhatsApp Business API Integration\n- [ ] T023: Create WhatsApp service configuration | File: backend/src/app/config/whatsapp.py\n- [ ] T024: Create WhatsAppService with message template support | File: backend/src/app/services/whatsapp_service.py\n- [ ] T025: Create WhatsApp message templates in multiple languages | File: backend/src/app/templates/whatsapp/invitation.json\n- [ ] T026: Create WhatsApp webhook handler for status updates | File: backend/src/app/api/v1/webhooks/whatsapp.py\n\n## Phase 7: Frontend Language Preference Sync\n- [ ] T027: Create language preference API service | File: frontend/src/services/i18n.ts\n- [ ] T028: Create useLanguagePreferences hook with backend sync | File: frontend/src/hooks/useLanguagePreferences.ts\n- [ ] T029: Update LanguageSelector to persist to backend | File: frontend/src/components/settings/LanguageSelector.tsx\n- [ ] T030: Create locale-aware formatting hooks (date, currency, number) | File: frontend/src/hooks/useLocaleFormatters.ts\n\n## Phase 8: Frontend Missing Translations\n- [ ] T031: Create payment namespace translations (all 13 languages) | File: frontend/public/locales/en/payment.json\n- [ ] T032: Create notifications namespace translations | File: frontend/public/locales/en/notifications.json\n- [ ] T033: Create invitations namespace translations | File: frontend/public/locales/en/invitations.json\n- [ ] T034: Create complete Hindi translations for all namespaces | File: frontend/public/locales/hi/\n\n## Phase 9: UPI Payment UI Components\n- [ ] T035: Create UPI payment method component | File: frontend/src/components/features/payment/UPIPayment.tsx\n- [ ] T036: Create UPI QR code display component | File: frontend/src/components/features/payment/UPIQRCode.tsx\n- [ ] T037: Create payment method selector with UPI option | File: frontend/src/components/features/payment/PaymentMethodSelector.tsx\n\n## Phase 10: WhatsApp Sharing UI\n- [ ] T038: Create WhatsApp share button component | File: frontend/src/components/features/share/WhatsAppShareButton.tsx\n- [ ] T039: Create invitation channel selector (Email/WhatsApp/Both) | File: frontend/src/components/features/invitations/ChannelSelector.tsx\n- [ ] T040: Update invitation send flow with WhatsApp option | File: frontend/src/components/features/invitations/InvitationSendForm.tsx\n\n## Phase 11: GST Invoice UI\n- [ ] T041: Create GST details form component | File: frontend/src/components/features/billing/GSTDetailsForm.tsx\n- [ ] T042: Create invoice view with GST breakdown | File: frontend/src/components/features/billing/InvoiceView.tsx\n- [ ] T043: Update billing settings with GST configuration | File: frontend/src/pages/workspace/settings/BillingSettings.tsx\n\n## Phase 12: Testing & Verification\n- [ ] T044: Create backend i18n API tests | File: backend/tests/api/test_i18n.py\n- [ ] T045: Create UPI payment integration tests | File: backend/tests/services/test_razorpay_upi.py\n- [ ] T046: Create GST validation unit tests | File: backend/tests/utils/test_gst_validator.py\n- [ ] T047: Create frontend localization E2E tests | File: tests/e2e/localization.spec.ts\n```\n\n## 7. Success Metrics\n\n| Metric | Target |\n|--------|--------|\n| Language coverage | All 13 languages with ≥95% translation coverage for guest-facing UI |\n| UPI payment success rate | ≥98% for valid payment attempts |\n| WhatsApp delivery rate | ≥95% within 5 seconds |\n| Missing translation rate | <0.1% for production traffic |\n| GST invoice compliance | 100% pass rate on automated validation |\n| RTL layout correctness | 100% visual QA pass for Urdu interface |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| WhatsApp Business API approval delay | Start approval process immediately; fallback to SMS for MVP |\n| UPI AutoPay RBI compliance complexity | Use standard UPI collect for MVP; add AutoPay in future phase |\n| Translation quality for 12 languages | Use professional translation service; implement community review |\n| Incomplete RTL support in existing components | Audit components systematically; add directional CSS utilities |\n| Performance impact of loading all locale files | Lazy load namespaces; cache aggressively on CDN |\n| GST regulation changes | Abstract GST logic into configurable rules engine |\n\n---",
+    "generatedAt": "2026-01-07T07:46:10.630Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create Alembic migration for language_preferences table and user/workspace columns",
+        "filePath": "backend/migrations/versions/0116_language_preferences.py",
+        "phase": "Phase 1: Backend Language Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Create LanguagePreference SQLAlchemy model",
+        "filePath": "backend/src/app/models/language_preference.py",
+        "phase": "Phase 1: Backend Language Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Update User and Workspace models with preferred_language fields",
+        "filePath": "backend/src/app/models/user.py",
+        "phase": "Phase 1: Backend Language Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Create i18n repository for language preference CRUD",
+        "filePath": "backend/src/app/repositories/i18n_repository.py",
+        "phase": "Phase 1: Backend Language Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create i18n service with locale resolution logic",
+        "filePath": "backend/src/app/services/i18n_service.py",
+        "phase": "Phase 1: Backend Language Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create i18n API endpoints (GET/PUT preferences, list languages)",
+        "filePath": "backend/src/app/api/v1/i18n.py",
+        "phase": "Phase 1: Backend Language Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Register i18n routes in main router",
+        "filePath": "backend/src/app/api/v1/__init__.py",
+        "phase": "Phase 1: Backend Language Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Create error message translations dictionary",
+        "filePath": "backend/src/app/i18n/error_messages.py",
+        "phase": "Phase 2: Backend Localized Error Messages",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create LocaleMiddleware to detect Accept-Language header",
+        "filePath": "backend/src/app/middleware/locale_middleware.py",
+        "phase": "Phase 2: Backend Localized Error Messages",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Extend exception handlers to return localized errors",
+        "filePath": "backend/src/app/api/exception_handlers.py",
+        "phase": "Phase 2: Backend Localized Error Messages",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Create email template directory structure for locales",
+        "filePath": "backend/src/app/templates/emails/hi/verification.html",
+        "phase": "Phase 3: Email & Notification Localization",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Extend EmailService with locale parameter and template loading",
+        "filePath": "backend/src/app/services/email_service.py",
+        "phase": "Phase 3: Email & Notification Localization",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create notification message templates for all languages",
+        "filePath": "backend/src/app/i18n/notification_messages.py",
+        "phase": "Phase 3: Email & Notification Localization",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Extend NotificationService with locale-aware message generation",
+        "filePath": "backend/src/app/services/notification_service.py",
+        "phase": "Phase 3: Email & Notification Localization",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Extend RazorpayService with UPI payment mode support",
+        "filePath": "backend/src/app/services/razorpay_service.py",
+        "phase": "Phase 4: UPI Payment Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create UPI QR code generation utility",
+        "filePath": "backend/src/app/utils/upi_qr.py",
+        "phase": "Phase 4: UPI Payment Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Create UPI payment API endpoint",
+        "filePath": "backend/src/app/api/v1/payments.py",
+        "phase": "Phase 4: UPI Payment Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Add UPI webhook handlers for payment status",
+        "filePath": "backend/src/app/api/v1/webhooks/razorpay.py",
+        "phase": "Phase 4: UPI Payment Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Create GST validation utilities (GSTIN format, checksum)",
+        "filePath": "backend/src/app/utils/gst_validator.py",
+        "phase": "Phase 5: GST Compliance",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Create Invoice model with GST fields (CGST, SGST, IGST)",
+        "filePath": "backend/src/app/models/invoice.py",
+        "phase": "Phase 5: GST Compliance",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Create InvoiceService with GST-compliant invoice generation",
+        "filePath": "backend/src/app/services/invoice_service.py",
+        "phase": "Phase 5: GST Compliance",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Create invoice PDF template with GST breakdown",
+        "filePath": "backend/src/app/templates/invoices/gst_invoice.html",
+        "phase": "Phase 5: GST Compliance",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Create WhatsApp service configuration",
+        "filePath": "backend/src/app/config/whatsapp.py",
+        "phase": "Phase 6: WhatsApp Business API Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create WhatsAppService with message template support",
+        "filePath": "backend/src/app/services/whatsapp_service.py",
+        "phase": "Phase 6: WhatsApp Business API Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Create WhatsApp message templates in multiple languages",
+        "filePath": "backend/src/app/templates/whatsapp/invitation.json",
+        "phase": "Phase 6: WhatsApp Business API Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Create WhatsApp webhook handler for status updates",
+        "filePath": "backend/src/app/api/v1/webhooks/whatsapp.py",
+        "phase": "Phase 6: WhatsApp Business API Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Create language preference API service",
+        "filePath": "frontend/src/services/i18n.ts",
+        "phase": "Phase 7: Frontend Language Preference Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Create useLanguagePreferences hook with backend sync",
+        "filePath": "frontend/src/hooks/useLanguagePreferences.ts",
+        "phase": "Phase 7: Frontend Language Preference Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Update LanguageSelector to persist to backend",
+        "filePath": "frontend/src/components/settings/LanguageSelector.tsx",
+        "phase": "Phase 7: Frontend Language Preference Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Create locale-aware formatting hooks (date, currency, number)",
+        "filePath": "frontend/src/hooks/useLocaleFormatters.ts",
+        "phase": "Phase 7: Frontend Language Preference Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create payment namespace translations (all 13 languages)",
+        "filePath": "frontend/public/locales/en/payment.json",
+        "phase": "Phase 8: Frontend Missing Translations",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Create notifications namespace translations",
+        "filePath": "frontend/public/locales/en/notifications.json",
+        "phase": "Phase 8: Frontend Missing Translations",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Create invitations namespace translations",
+        "filePath": "frontend/public/locales/en/invitations.json",
+        "phase": "Phase 8: Frontend Missing Translations",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Create complete Hindi translations for all namespaces",
+        "filePath": "frontend/public/locales/hi/",
+        "phase": "Phase 8: Frontend Missing Translations",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Create UPI payment method component",
+        "filePath": "frontend/src/components/features/payment/UPIPayment.tsx",
+        "phase": "Phase 9: UPI Payment UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Create UPI QR code display component",
+        "filePath": "frontend/src/components/features/payment/UPIQRCode.tsx",
+        "phase": "Phase 9: UPI Payment UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Create payment method selector with UPI option",
+        "filePath": "frontend/src/components/features/payment/PaymentMethodSelector.tsx",
+        "phase": "Phase 9: UPI Payment UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T038",
+        "description": "Create WhatsApp share button component",
+        "filePath": "frontend/src/components/features/share/WhatsAppShareButton.tsx",
+        "phase": "Phase 10: WhatsApp Sharing UI",
+        "status": "pending"
+      },
+      {
+        "id": "T039",
+        "description": "Create invitation channel selector (Email/WhatsApp/Both)",
+        "filePath": "frontend/src/components/features/invitations/ChannelSelector.tsx",
+        "phase": "Phase 10: WhatsApp Sharing UI",
+        "status": "pending"
+      },
+      {
+        "id": "T040",
+        "description": "Update invitation send flow with WhatsApp option",
+        "filePath": "frontend/src/components/features/invitations/InvitationSendForm.tsx",
+        "phase": "Phase 10: WhatsApp Sharing UI",
+        "status": "pending"
+      },
+      {
+        "id": "T041",
+        "description": "Create GST details form component",
+        "filePath": "frontend/src/components/features/billing/GSTDetailsForm.tsx",
+        "phase": "Phase 11: GST Invoice UI",
+        "status": "pending"
+      },
+      {
+        "id": "T042",
+        "description": "Create invoice view with GST breakdown",
+        "filePath": "frontend/src/components/features/billing/InvoiceView.tsx",
+        "phase": "Phase 11: GST Invoice UI",
+        "status": "pending"
+      },
+      {
+        "id": "T043",
+        "description": "Update billing settings with GST configuration",
+        "filePath": "frontend/src/pages/workspace/settings/BillingSettings.tsx",
+        "phase": "Phase 11: GST Invoice UI",
+        "status": "pending"
+      },
+      {
+        "id": "T044",
+        "description": "Create backend i18n API tests",
+        "filePath": "backend/tests/api/test_i18n.py",
+        "phase": "Phase 12: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T045",
+        "description": "Create UPI payment integration tests",
+        "filePath": "backend/tests/services/test_razorpay_upi.py",
+        "phase": "Phase 12: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T046",
+        "description": "Create GST validation unit tests",
+        "filePath": "backend/tests/utils/test_gst_validator.py",
+        "phase": "Phase 12: Testing & Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T047",
+        "description": "Create frontend localization E2E tests",
+        "filePath": "tests/e2e/localization.spec.ts",
+        "phase": "Phase 12: Testing & Verification",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 47,
+    "tasksCompleted": 7,
+    "approvedAt": "2026-01-07T07:46:10.632Z",
+    "currentTaskId": "T008"
+  }
 }

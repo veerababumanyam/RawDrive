@@ -289,6 +289,12 @@ const GalleryDetailPage: React.FC = () => {
     setShowAITools(true);
   }, [workspace?.workspace_id, gallery]);
 
+  const handleViewAsClient = useCallback(() => {
+    if (!galleryId) return;
+    // Open authenticated preview route in new tab - works even without sharing enabled
+    window.open(`/workspace/galleries/${galleryId}/preview`, '_blank', 'noopener,noreferrer');
+  }, [galleryId]);
+
   const handleApplyAIFilters = useCallback(() => {
     setAppliedFilters(filters);
     addToast({ message: 'Filters applied', variant: 'success' });
@@ -944,7 +950,7 @@ const GalleryDetailPage: React.FC = () => {
           <GalleryActionBar
             isPublished={gallery.status === 'published'}
             hasPhotos={(gallery.stats?.total_items || 0) > 0}
-            onViewAsClient={() => window.open(`/g/${gallery.gallery_id}`, '_blank')}
+            onViewAsClient={handleViewAsClient}
             onFindPeople={() => setShowPeoplePanel(true)}
             onScanFaces={handleScanFaces}
             onAITools={handleOpenAITools}

@@ -14,9 +14,12 @@ import {
   HelpCircle,
   CreditCard,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useAppShell, HEADER_HEIGHT } from '../layout/AppShell';
 import { useSearch } from '../../contexts/SearchContext';
+import { AIHighlightsPanel } from '../features/ai/AIHighlightsPanel';
+import { useAIHighlights } from '../../hooks/useAIHighlights';
 
 /* =============================================================================
    WorkspaceHeader Component
@@ -67,10 +70,18 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [aiHighlightsOpen, setAiHighlightsOpen] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const aiHighlightsRef = useRef<HTMLDivElement>(null);
+
+  // Fetch AI highlights
+  const { highlights, isLoading: aiLoading, unreadCount: aiUnreadCount } = useAIHighlights({
+    autoRefresh: true,
+    refreshInterval: 120000, // 2 minutes
+  });
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -86,6 +97,12 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         !userMenuRef.current.contains(event.target as Node)
       ) {
         setUserMenuOpen(false);
+      }
+      if (
+        aiHighlightsRef.current &&
+        !aiHighlightsRef.current.contains(event.target as Node)
+      ) {
+        setAiHighlightsOpen(false);
       }
     };
 
@@ -111,6 +128,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         setSearchOpen(false);
         setNotificationsOpen(false);
         setUserMenuOpen(false);
+        setAiHighlightsOpen(false);
       }
     };
 
@@ -216,6 +234,51 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+
+        {/* AI Insights Button */}
+        <div ref={aiHighlightsRef} className="relative">
+          <button
+            onClick={() => setAiHighlightsOpen(!aiHighlightsOpen)}
+            className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center relative group"
+            aria-label={`AI Insights${aiUnreadCount > 0 ? `, ${aiUnreadCount} alerts` : ''}`}
+            aria-expanded={aiHighlightsOpen}
+          >
+            <Sparkles
+              size={20}
+              className="transition-all duration-300 group-hover:text-primary-500"
+            />
+            {aiUnreadCount > 0 && (
+              <span className="absolute top-1 right-1 w-5 h-5 bg-gradient-to-br from-primary-500 to-accent-500 text-white text-xs font-medium rounded-full flex items-center justify-center animate-pulse">
+                {aiUnreadCount > 9 ? '9+' : aiUnreadCount}
+              </span>
+            )}
+            {!aiLoading && highlights.length > 0 && aiUnreadCount === 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-success-500 rounded-full" />
+            )}
+          </button>
+
+          {/* AI Highlights Dropdown */}
+          {aiHighlightsOpen && (
+            <div className="absolute right-0 top-full mt-2 bg-surface border border-border rounded-xl shadow-xl overflow-hidden z-dropdown">
+              <AIHighlightsPanel
+                workspaceId=""
+                highlights={highlights}
+                isLoading={aiLoading}
+                onClose={() => setAiHighlightsOpen(false)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* AI Settings Button */}
+        <button
+          onClick={() => navigate('/settings?tab=ai')}
+          className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+          aria-label="AI Settings"
+          title="AI Settings"
+        >
+          <Settings size={20} />
         </button>
 
         {/* Notifications */}

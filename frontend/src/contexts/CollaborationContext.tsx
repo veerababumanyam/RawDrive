@@ -28,6 +28,8 @@ import type {
   ResourceLock,
 } from '@rawdrive/shared-types';
 
+import { EditSessionStatus } from '@rawdrive/shared-types';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -81,7 +83,7 @@ interface CollaborationActions {
   resolveConflict: (conflictId: string, optionId: string) => Promise<boolean>;
 }
 
-interface CollaborationContextValue extends CollaborationState, CollaborationActions {}
+interface CollaborationContextValue extends CollaborationState, CollaborationActions { }
 
 // ---------------------------------------------------------------------------
 // Context
@@ -206,7 +208,7 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({
                 user_id: userId,
                 display_name: (data.display_name as string) || 'Unknown',
                 color: (data.color as string) || '#888888',
-                status: 'active' as const,
+                status: EditSessionStatus.ACTIVE,
                 selected_assets: [],
                 last_activity: new Date().toISOString(),
                 joined_at: new Date().toISOString(),

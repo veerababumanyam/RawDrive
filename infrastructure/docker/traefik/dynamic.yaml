@@ -133,6 +133,67 @@ http:
         certResolver: letsencrypt
 
     # -------------------------------------------------------------------------
+    # Sync Service - Live Camera Sync (folder-to-gallery sync)
+    # -------------------------------------------------------------------------
+    sync-service-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/sync`)"
+      entryPoints:
+        - websecure
+      service: sync-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+        - cors-headers
+      priority: 130
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Notifications Microservice - Webhooks (SendGrid callbacks)
+    # Higher priority to match before generic notifications routes
+    # -------------------------------------------------------------------------
+    notifications-webhooks-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/notifications/webhooks`)"
+      entryPoints:
+        - websecure
+      service: notifications-service
+      middlewares:
+        - rate-limit-webhooks
+        - security-headers
+      priority: 145
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Notifications Microservice - API Endpoints
+    # -------------------------------------------------------------------------
+    notifications-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/notifications`)"
+      entryPoints:
+        - websecure
+      service: notifications-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+        - cors-headers
+      priority: 140
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Sync Service - Local Development
+    # -------------------------------------------------------------------------
+    sync-service-localhost-router:
+      rule: "PathPrefix(`/api/v1/sync`)"
+      entryPoints:
+        - web
+      service: sync-service
+      middlewares:
+        - rate-limit-api
+        - cors-headers
+      priority: 130
+
+    # -------------------------------------------------------------------------
     # AI Service - Stricter rate limiting
     # -------------------------------------------------------------------------
     ai-router:
@@ -203,6 +264,24 @@ http:
           interval: 10s
           timeout: 3s
 
+    sync-service:
+      loadBalancer:
+        servers:
+          - url: "http://sync-service:8007"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    notifications-service:
+      loadBalancer:
+        servers:
+          - url: "http://notifications-service:8007"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
     grafana-service:
       loadBalancer:
         servers:
@@ -253,6 +332,15 @@ http:
         average: 30
         burst: 60
         period: 1s
+
+    rate-limit-webhooks:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
 
     # -------------------------------------------------------------------------
     # Security Headers

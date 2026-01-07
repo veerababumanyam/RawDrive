@@ -118,22 +118,107 @@ async def create_magic_link(
     IMPORTANT: The access token is returned ONLY in this response.
     It is never stored in plaintext and cannot be retrieved later.
     """
+    # #region agent log
+    import json
+    try:
+        with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"magic_links.py:create_magic_link","message":"API endpoint entry","data":{"workspace_id":str(workspace_id),"gallery_id":str(gallery_id),"has_album_title":hasattr(request,"album_title"),"album_title":getattr(request,"album_title",None),"target_type":request.target_type},"timestamp":int(__import__("time").time()*1000)})+"\n")
+    except: pass
+    # #endregion
+    logger.info(
+        "[MagicLink API] Creating magic link - START",
+        extra={
+            "workspace_id": str(workspace_id),
+            "gallery_id": str(gallery_id),
+            "user_id": str(current_user.user_id),
+            "target_type": request.target_type,
+            "target_id": str(request.target_id) if request.target_id else None,
+            "album_title": request.album_title,
+            "label": request.label,
+            "has_expires_at": request.expires_at is not None,
+            "max_accesses": request.max_accesses,
+            "has_qr_config": request.qr_config is not None,
+            "request_method": req.method,
+            "request_url": str(req.url),
+            "client_host": req.client.host if req.client else None,
+        },
+    )
+
     service = get_magic_link_service()
+    logger.debug("[MagicLink API] Service instance obtained", extra={"service_type": type(service).__name__})
 
     # Get base URL from request or config
-    base_url = str(req.base_url).rstrip("/")
-    # In production, this should come from PUBLIC_URL env var
+    # Priority: Origin header (frontend) > Referer header > request.base_url > PUBLIC_URL
     import os
-    base_url = os.getenv("PUBLIC_URL", base_url)
+    from app.config.settings import get_settings
+    settings = get_settings()
+    
+    # Try to get frontend origin from headers (browser sends this)
+    origin = req.headers.get("Origin") or req.headers.get("Referer")
+    if origin:
+        # Extract base URL from Origin/Referer (remove path)
+        from urllib.parse import urlparse
+        parsed = urlparse(origin)
+        frontend_base_url = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    else:
+        frontend_base_url = None
+    
+    request_base_url = str(req.base_url).rstrip("/")
+    public_url_env = os.getenv("PUBLIC_URL", "").rstrip("/")
+    
+    # Determine base URL based on environment and available sources
+    if settings.app_env == "development":
+        # In development, prefer frontend origin (from browser) over backend URL
+        if frontend_base_url and ("localhost" in frontend_base_url or "127.0.0.1" in frontend_base_url):
+            base_url = frontend_base_url
+        elif "localhost" in request_base_url or "127.0.0.1" in request_base_url:
+            base_url = request_base_url
+        elif public_url_env:
+            base_url = public_url_env
+        else:
+            base_url = request_base_url
+    else:
+        # In production, always use PUBLIC_URL
+        base_url = public_url_env if public_url_env else (frontend_base_url or request_base_url)
+    
+    logger.debug("[MagicLink API] Base URL determined", extra={
+        "base_url": base_url,
+        "app_env": settings.app_env,
+        "frontend_base_url": frontend_base_url,
+        "request_base_url": request_base_url,
+        "public_url_env": public_url_env,
+        "origin_header": req.headers.get("Origin"),
+        "referer_header": req.headers.get("Referer"),
+    })
 
     try:
         # Validate target_id is provided for non-gallery targets
+        logger.debug("[MagicLink API] Validating request parameters")
         if request.target_type != "gallery" and not request.target_id:
+            logger.warning(
+                "[MagicLink API] Validation failed: target_id required",
+                extra={"target_type": request.target_type},
+            )
             raise ValidationAppError(
                 message="target_id is required for sub_gallery and photo targets",
                 field="target_id",
             )
 
+        logger.info(
+            "[MagicLink API] Calling service.create_link",
+            extra={
+                "workspace_id": str(workspace_id),
+                "gallery_id": str(gallery_id),
+                "target_type": request.target_type,
+            },
+        )
+
+        # #region agent log
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"magic_links.py:before_service_call","message":"Before service.create_link","data":{"workspace_id":str(workspace_id),"gallery_id":str(gallery_id),"album_title":request.album_title,"target_type":request.target_type},"timestamp":int(__import__("time").time()*1000)})+"\n")
+        except: pass
+        # #endregion
         result = await service.create_link(
             workspace_id=workspace_id,
             gallery_id=gallery_id,
@@ -146,16 +231,86 @@ async def create_magic_link(
             qr_config=request.qr_config.model_dump() if request.qr_config else None,
             created_by_user_id=current_user.user_id,
             base_url=base_url,
+            invitation_id=None,
         )
-        return MagicLinkResponse(**result)
+        # #region agent log
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"magic_links.py:after_service_call","message":"After service.create_link","data":{"has_result":result is not None,"link_id":result.get("link_id") if result else None,"has_token":"token" in result if result else False},"timestamp":int(__import__("time").time()*1000)})+"\n")
+        except: pass
+        # #endregion
+
+        logger.info(
+            "[MagicLink API] Service returned result",
+            extra={
+                "link_id": result.get("link_id"),
+                "has_token": "token" in result,
+                "has_url": "url" in result,
+            },
+        )
+
+        logger.debug("[MagicLink API] Creating MagicLinkResponse from result")
+        # #region agent log
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"G","location":"magic_links.py:before_response","message":"Before creating MagicLinkResponse","data":{"has_token":"token" in result,"has_url":"url" in result,"has_public_url":"public_url" in result,"url_preview":result.get("url","")[:80] if result.get("url") else None,"public_url_preview":result.get("public_url","")[:80] if result.get("public_url") else None},"timestamp":int(__import__("time").time()*1000)})+"\n")
+        except: pass
+        # #endregion
+        response = MagicLinkResponse(**result)
+        # #region agent log
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"G","location":"magic_links.py:after_response","message":"After creating MagicLinkResponse","data":{"has_token":hasattr(response,"token") and response.token is not None,"has_url":hasattr(response,"url") and response.url is not None,"url_preview":response.url[:80] if response.url else None},"timestamp":int(__import__("time").time()*1000)})+"\n")
+        except: pass
+        # #endregion
+        logger.info(
+            "[MagicLink API] Magic link created successfully - END",
+            extra={"link_id": result.get("link_id")},
+        )
+        return response
+
     except MagicLinkError as e:
+        logger.error(
+            "[MagicLink API] MagicLinkError occurred",
+            extra={
+                "error_message": e.message,
+                "error_code": e.code,
+                "status_code": e.status_code,
+            },
+            exc_info=True,
+        )
         raise AppError(message=e.message, code=e.code, status_code=e.status_code)
-    except ValidationAppError:
+    except ValidationAppError as e:
+        logger.warning(
+            "[MagicLink API] ValidationAppError occurred",
+            extra={"error_message": str(e), "field": getattr(e, "field", None)},
+        )
         raise
     except Exception as e:
-        logger.exception("Failed to create magic link")
+        # #region agent log
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"F","location":"magic_links.py:exception_handler","message":"Exception caught in API","data":{"error":str(e),"error_type":type(e).__name__,"error_module":getattr(e,"__module__",None)},"timestamp":int(__import__("time").time()*1000)})+"\n")
+        except: pass
+        # #endregion
+        logger.exception(
+            "[MagicLink API] Unexpected exception creating magic link",
+            extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "error_module": getattr(e, "__module__", None),
+                "workspace_id": str(workspace_id),
+                "gallery_id": str(gallery_id),
+                "user_id": str(current_user.user_id),
+            },
+        )
+        # Include error details in development for debugging
+        import os
+        error_message = "Failed to create magic link"
+        if os.getenv("ENVIRONMENT", "production") != "production":
+            error_message = f"Failed to create magic link: {str(e)}"
         raise AppError(
-            message="Failed to create magic link",
+            message=error_message,
             code="INTERNAL_ERROR",
             status_code=500,
         )
@@ -425,6 +580,19 @@ async def validate_magic_link(
     - Whether PIN or email registration is required
     - Company profile for branding
     """
+    # Security: Reject UUIDs (gallery_ids) - tokens are base64 encoded, not UUIDs
+    from app.shared.validation import is_valid_uuid
+    if is_valid_uuid(token):
+        logger.warning(
+            "[MagicLink API] Rejected UUID as token (security: gallery_id exposure attempt)",
+            extra={"token": token, "ip_address": request.client.host if request.client else None},
+        )
+        raise AppError(
+            message="Invalid link format. Please use a valid magic link URL.",
+            code="INVALID_TOKEN_FORMAT",
+            status_code=400,
+        )
+    
     service = get_magic_link_service()
 
     # Get client info for logging and rate limiting

@@ -19,6 +19,7 @@ import { seoContent } from '../../data/landing-content';
 
 // Below-fold sections - lazy loaded for better initial load performance
 const FeaturesSection = lazy(() => import('../../components/landing/sections/FeaturesSection'));
+const HowItWorksSection = lazy(() => import('../../components/landing/sections/HowItWorksSection'));
 const WorkflowTabs = lazy(() => import('../../components/landing/sections/WorkflowTabs'));
 const AutomationSection = lazy(() => import('../../components/landing/sections/AutomationSection'));
 const SecuritySection = lazy(() => import('../../components/landing/sections/SecuritySection'));
@@ -31,6 +32,7 @@ const CTASection = lazy(() => import('../../components/landing/sections/CTASecti
 // Feature components - lazy loaded as they are modal/popup based
 const ROICalculatorModal = lazy(() => import('../../components/landing/features/ROICalculatorModal'));
 const ExitIntentPopup = lazy(() => import('../../components/landing/features/ExitIntentPopup'));
+const DemoVideoModal = lazy(() => import('../../components/landing/features/DemoVideoModal'));
 
 /* =============================================================================
    Loading Skeleton Component
@@ -56,6 +58,8 @@ const SectionSkeleton: React.FC<{ height?: string }> = ({ height = '400px' }) =>
 const LandingPage: React.FC = () => {
   // Modal state for ROI Calculator
   const [isROIModalOpen, setIsROIModalOpen] = useState(false);
+  // Modal state for Demo Video
+  const [isDemoVideoOpen, setIsDemoVideoOpen] = useState(false);
 
   // Structured data for the landing page
   const structuredDataProps = {
@@ -76,7 +80,7 @@ const LandingPage: React.FC = () => {
     product: {
       name: 'RawDrive Photography Platform',
       description:
-        'Professional photography management platform with gallery delivery, client proofing, album design, and AI-powered features.',
+        'Professional photography management platform with gallery delivery, client proofing, album design, and AI-powered features. The all-in-one solution for wedding photographers, portrait photographers, and photography studios.',
       brand: 'RawDrive',
       offers: [
         {
@@ -84,20 +88,55 @@ const LandingPage: React.FC = () => {
           priceCurrency: 'INR',
           availability: 'https://schema.org/InStock',
           url: 'https://rawdrive.ai/pricing',
+          priceValidUntil: '2026-12-31',
         },
         {
           price: 500,
           priceCurrency: 'INR',
           availability: 'https://schema.org/InStock',
           url: 'https://rawdrive.ai/pricing',
+          priceValidUntil: '2026-12-31',
         },
         {
           price: 2000,
           priceCurrency: 'INR',
           availability: 'https://schema.org/InStock',
           url: 'https://rawdrive.ai/pricing',
+          priceValidUntil: '2026-12-31',
         },
       ],
+    },
+    // Breadcrumbs for homepage
+    breadcrumbs: [
+      { name: 'Home', url: 'https://rawdrive.ai' },
+    ],
+    // HowTo schema for AI/agentic search optimization
+    howTo: {
+      name: 'How to deliver photos to clients with RawDrive',
+      description: 'Professional photo delivery to clients in 4 simple steps using RawDrive photography platform',
+      totalTime: 'PT5M',
+      steps: [
+        {
+          name: 'Upload Your Photos',
+          text: 'Drag and drop your photos or connect your cloud storage. RawDrive supports bulk uploads and maintains original quality.',
+        },
+        {
+          name: 'AI Organizes Automatically',
+          text: 'Our AI automatically tags photos, detects faces, and groups similar shots. Find any photo instantly with smart search.',
+        },
+        {
+          name: 'Create and Share Gallery',
+          text: 'Design a beautiful branded gallery in seconds. Share a secure link with your clients via email or messaging.',
+        },
+        {
+          name: 'Client Selects and Downloads',
+          text: 'Clients view their gallery, mark favorites, leave comments, and download their selected photos. You get notified of their activity.',
+        },
+      ],
+    },
+    // Speakable schema for voice search optimization
+    speakable: {
+      cssSelectors: ['#hero-heading', '.hero-description', '#features-heading'],
     },
   };
 
@@ -112,7 +151,11 @@ const LandingPage: React.FC = () => {
         ogType="website"
         aiContentSummary="Professional photography management SaaS for gallery delivery, client proofing, and business automation with AI-powered culling and tagging"
         aiTargetAudience="Professional wedding photographers, portrait photographers, event photographers, photography studios"
-        aiPricingModel="Freemium with paid tiers: Free (10GB), Starter ₹100/mo, Professional ₹500/mo, Business ₹2000/mo, Enterprise custom"
+        aiPricingModel="Freemium with paid tiers: Free (1GB), Starter ₹100/mo, Professional ₹500/mo, Business ₹2000/mo, Enterprise custom"
+        aiProductCategory="Photography Software, SaaS, Client Gallery Platform, Photography Business Management"
+        aiKeyFeatures="AI Photo Tagging, AI Face Recognition, Client Galleries, Digital Invitations, CRM, Contracts, Print Store (0% Commission), Custom Domains, API Access"
+        aiCompetitors="Pixieset, Pic-Time, ShootProof, SmugMug, CloudSpot, PhotoShelter"
+        aiUseCases="Wedding Photography, Portrait Photography, Event Photography, Commercial Photography, Newborn Photography, Family Photography"
       />
 
       {/* Structured Data */}
@@ -147,6 +190,11 @@ const LandingPage: React.FC = () => {
           <Suspense fallback={<SectionSkeleton height="700px" />}>
             {/* Features - Core Value Proposition */}
             <FeaturesSection id="features" />
+          </Suspense>
+
+          <Suspense fallback={<SectionSkeleton height="500px" />}>
+            {/* How It Works - 3-Step Onboarding Clarity */}
+            <HowItWorksSection id="how-it-works" />
           </Suspense>
 
           <Suspense fallback={<SectionSkeleton height="600px" />}>
@@ -193,6 +241,9 @@ const LandingPage: React.FC = () => {
         {/* Features & Modals - lazy loaded as they are triggered by user interaction */}
         <Suspense fallback={null}>
           <ROICalculatorModal isOpen={isROIModalOpen} onClose={() => setIsROIModalOpen(false)} />
+        </Suspense>
+        <Suspense fallback={null}>
+          <DemoVideoModal isOpen={isDemoVideoOpen} onClose={() => setIsDemoVideoOpen(false)} />
         </Suspense>
         <Suspense fallback={null}>
           <ExitIntentPopup />

@@ -149,6 +149,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     [selectedFormat]
   );
 
+
+
   const exportScope = useMemo(() => {
     if (selectedAssetIds?.length) {
       return `${selectedAssetIds.length} selected photos`;
@@ -292,29 +294,26 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                           key={option.value}
                           onClick={() => option.available && setSelectedFormat(option.value)}
                           disabled={!option.available}
-                          className={`relative flex flex-col items-center rounded-lg border-2 p-4 text-center transition-colors ${
-                            selectedFormat === option.value
-                              ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
-                              : option.available
+                          className={`relative flex flex-col items-center rounded-lg border-2 p-4 text-center transition-colors ${selectedFormat === option.value
+                            ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
+                            : option.available
                               ? 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
                               : 'cursor-not-allowed border-gray-100 opacity-50 dark:border-gray-800'
-                          }`}
+                            }`}
                         >
                           <div
-                            className={`${
-                              selectedFormat === option.value
-                                ? 'text-indigo-600 dark:text-indigo-400'
-                                : 'text-gray-400'
-                            }`}
+                            className={`${selectedFormat === option.value
+                              ? 'text-indigo-600 dark:text-indigo-400'
+                              : 'text-gray-400'
+                              }`}
                           >
                             {option.icon}
                           </div>
                           <span
-                            className={`mt-2 text-sm font-medium ${
-                              selectedFormat === option.value
-                                ? 'text-indigo-600 dark:text-indigo-400'
-                                : 'text-gray-900 dark:text-white'
-                            }`}
+                            className={`mt-2 text-sm font-medium ${selectedFormat === option.value
+                              ? 'text-indigo-600 dark:text-indigo-400'
+                              : 'text-gray-900 dark:text-white'
+                              }`}
                           >
                             {option.label}
                           </span>
@@ -346,11 +345,10 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                           <button
                             key={opt.value}
                             onClick={() => setResolution(opt.value)}
-                            className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                              resolution === opt.value
-                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400'
-                                : 'border-gray-200 text-gray-700 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300'
-                            }`}
+                            className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${resolution === opt.value
+                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400'
+                              : 'border-gray-200 text-gray-700 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300'
+                              }`}
                           >
                             <div className="font-medium">{opt.label}</div>
                             <div className="text-xs opacity-70">{opt.description}</div>

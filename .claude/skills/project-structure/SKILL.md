@@ -165,12 +165,12 @@ RawDrive/
 │
 ├── infrastructure/        # Docker, Kubernetes, Traefik, monitoring
 │   ├── docker/            # Docker Compose configurations
-│   │   ├── docker-compose.yml        # Main production stack
+│   │   ├── docker-compose.yml        # Main stack (includes Traefik)
 │   │   ├── docker-compose.dev.yml    # Development stack
-│   │   ├── docker-compose.traefik.yml # Traefik extension
+│   │   ├── docker-compose.traefik.yml # DEPRECATED - DO NOT USE
 │   │   ├── traefik/       # Traefik v3 configuration
 │   │   │   ├── traefik.yaml  # Main config
-│   │   │   └── dynamic.yaml  # Dynamic routing
+│   │   │   └── dynamic.yaml  # Dynamic routing (single source of truth)
 │   │   └── init/          # Initialization scripts
 │   │
 │   ├── kubernetes/        # Kubernetes manifests

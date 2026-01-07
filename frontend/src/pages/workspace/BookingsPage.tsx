@@ -79,7 +79,7 @@ const formatBookingDate = (dateStr: string): string => {
 
 export default function BookingsPage() {
   const navigate = useNavigate();
-  const { currentWorkspace } = useAuth();
+  const { workspace: currentWorkspace } = useAuth();
   const workspaceId = currentWorkspace?.workspace_id;
 
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -107,11 +107,12 @@ export default function BookingsPage() {
       if (statusFilter) params.append('status', statusFilter);
       if (searchQuery) params.append('search', searchQuery);
 
-      const response = await api.get(
+      const response = await api.get<{ data: Booking[]; pagination: { pages: number } }>(
         `/api/v1/workspaces/${workspaceId}/bookings?${params.toString()}`
       );
+      if (!response.data) throw new Error(response.error?.message || 'Failed to load bookings');
 
-      setBookings(response.data.data);
+      setBookings(response.data.data as Booking[]);
       setTotalPages(response.data.pagination?.pages || 1);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load bookings');
@@ -124,8 +125,8 @@ export default function BookingsPage() {
     if (!workspaceId) return;
 
     try {
-      const response = await api.get(`/api/v1/workspaces/${workspaceId}/bookings/stats`);
-      setStats(response.data.data);
+      const response = await api.get<{ data: BookingStats }>(`/api/v1/workspaces/${workspaceId}/bookings/stats`);
+      if (response.data) setStats(response.data.data);
     } catch (err) {
       console.error('Failed to fetch booking stats:', err);
     }
@@ -138,9 +139,10 @@ export default function BookingsPage() {
 
   const handleConfirm = async (bookingId: string) => {
     try {
-      await api.post(`/api/v1/workspaces/${workspaceId}/bookings/${bookingId}/confirm`, {
+      const response = await api.post(`/api/v1/workspaces/${workspaceId}/bookings/${bookingId}/confirm`, {
         payment_status: 'deposit_paid',
       });
+      if (!response.data && response.error) throw new Error(response.error.message);
       fetchBookings();
       fetchStats();
     } catch (err: any) {
@@ -152,9 +154,10 @@ export default function BookingsPage() {
     if (!window.confirm('Are you sure you want to cancel this booking?')) return;
 
     try {
-      await api.post(`/api/v1/workspaces/${workspaceId}/bookings/${bookingId}/cancel`, {
+      const response = await api.post(`/api/v1/workspaces/${workspaceId}/bookings/${bookingId}/cancel`, {
         reason: 'Cancelled by photographer',
       });
+      if (!response.data && response.error) throw new Error(response.error.message);
       fetchBookings();
       fetchStats();
     } catch (err: any) {
@@ -164,7 +167,8 @@ export default function BookingsPage() {
 
   const handleComplete = async (bookingId: string) => {
     try {
-      await api.post(`/api/v1/workspaces/${workspaceId}/bookings/${bookingId}/complete`);
+      const response = await api.post(`/api/v1/workspaces/${workspaceId}/bookings/${bookingId}/complete`);
+      if (!response.data && response.error) throw new Error(response.error.message);
       fetchBookings();
       fetchStats();
     } catch (err: any) {
@@ -174,12 +178,13 @@ export default function BookingsPage() {
 
   const handleDownloadIcs = async (bookingId: string, confirmationCode: string) => {
     try {
-      const response = await api.get(
-        `/api/v1/workspaces/${workspaceId}/bookings/${bookingId}/ics`,
-        { responseType: 'blob' }
+      const response = await api.fetchRaw(
+        `/api/v1/workspaces/${workspaceId}/bookings/${bookingId}/ics`
       );
 
-      const blob = new Blob([response.data], { type: 'text/calendar' });
+      if (!response.ok) throw new Error('Failed to download');
+
+      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -358,9 +363,8 @@ export default function BookingsPage() {
                 return (
                   <div
                     key={booking.booking_id}
-                    className={`p-4 hover:bg-gray-50 transition-colors ${
-                      isUpcoming ? 'border-l-4 border-l-blue-500' : ''
-                    }`}
+                    className={`p-4 hover:bg-gray-50 transition-colors ${isUpcoming ? 'border-l-4 border-l-blue-500' : ''
+                      }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">

@@ -88,37 +88,6 @@ EMAIL_DOMAINS = {
 class InvitationAnalyticsService:
     """Service for tracking and analyzing invitation engagement."""
 
-    async def _ensure_tables_exist(self):
-        """Create analytics tables if they don't exist."""
-        pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS invitation_views (
-                    view_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    workspace_id UUID NOT NULL,
-                    invitation_id UUID NOT NULL,
-                    visitor_id VARCHAR(100),
-                    device_type VARCHAR(20),
-                    browser VARCHAR(100),
-                    os VARCHAR(100),
-                    country_code VARCHAR(10),
-                    city VARCHAR(100),
-                    referrer TEXT,
-                    user_agent TEXT,
-                    ip_hash VARCHAR(64),
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
-            
-            # Create indexes
-            await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_invitation_views_invitation_id
-                ON invitation_views(invitation_id)
-            """)
-            await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_invitation_views_created_at
-                ON invitation_views(created_at)
-            """)
 
     async def track_view(
         self,
@@ -130,7 +99,6 @@ class InvitationAnalyticsService:
         visitor_id: Optional[str] = None,
     ) -> dict[str, Any]:
         """Track a view of an invitation."""
-        await self._ensure_tables_exist()
         
         # Parse device and browser info
         device_type = self._detect_device_type(user_agent)
@@ -236,7 +204,6 @@ class InvitationAnalyticsService:
         days: int = 30,
     ) -> dict[str, Any]:
         """Get analytics summary for an invitation."""
-        await self._ensure_tables_exist()
         
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
@@ -353,7 +320,6 @@ class InvitationAnalyticsService:
         minutes: int = 30,
     ) -> dict[str, Any]:
         """Get real-time stats for the last N minutes."""
-        await self._ensure_tables_exist()
         
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:

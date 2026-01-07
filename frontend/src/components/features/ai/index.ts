@@ -23,6 +23,10 @@ export {
   AIButtonLoader,
 } from './AILoadingStates';
 
+// AI Highlights Panel - Header integration
+export { AIHighlightsPanel } from './AIHighlightsPanel';
+export type { AIHighlight, AIHighlightsPanelProps } from './AIHighlightsPanel';
+
 // ---------------------------------------------------------------------------
 // AIToolsHub - Unified Gallery AI Panel (024-ai-tools-hub)
 // Primary entry point for gallery-level AI features

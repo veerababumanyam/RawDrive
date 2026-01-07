@@ -1,6 +1,7 @@
 """SignedUrlService: Generate and validate time-limited signed URLs for media access.
 
-Implements 1-hour TTL tokens with workspace and permission verification.
+Implements 15-minute TTL tokens with workspace and permission verification.
+Reduced from 1 hour for improved security/freshness balance.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Secret key for signing URLs (32 bytes)
 SIGNED_URL_SECRET_ENV = "SIGNED_URL_SECRET"
-DEFAULT_TTL = 3600  # 1 hour in seconds
+DEFAULT_TTL = 900  # 15 minutes in seconds (security/freshness balance)
 
 
 class SignedUrlError(Exception):
@@ -69,7 +70,7 @@ class SignedUrlService:
             workspace_id: Workspace UUID
             asset_id: Asset UUID
             variant: Media variant ('thumbnail', 'preview', 'original')
-            ttl: Time to live in seconds (default: 1 hour)
+            ttl: Time to live in seconds (default: 15 minutes)
             download: Whether this is for download (affects audit logging)
 
         Returns:
@@ -277,7 +278,7 @@ class SignedUrlService:
             workspace_id: Workspace UUID
             face_id: Face UUID
             size: Thumbnail size ('small', 'medium', 'large')
-            ttl: Time to live in seconds (default: 1 hour)
+            ttl: Time to live in seconds (default: 15 minutes)
 
         Returns:
             Base64-encoded signed token

@@ -1,0 +1,46 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: client-service
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: client-service
+    kind: Deployment
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  pollingInterval: 15
+  cooldownPeriod: 60
+  triggers:
+    # Primary trigger: HTTP request rate from Traefik
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus:9090
+        metricName: http_requests_total
+        threshold: "100"  # 100 RPS per pod
+        query: |
+          rate(traefik_service_requests_total{service="client-service@docker"}[1m])
+
+    # Secondary trigger: P95 latency threshold
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus:9090
+        metricName: http_request_duration_p95
+        threshold: "500"  # 500ms P95 latency
+        query: |
+          histogram_quantile(0.95,
+            rate(traefik_service_request_duration_seconds_bucket{service="client-service@docker"}[1m])
+          )
+
+    # Tertiary trigger: Active connections
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus:9090
+        metricName: active_connections
+        threshold: "50"  # 50 concurrent connections per pod
+        query: |
+          sum(traefik_service_open_connections{service="client-service@docker"})
+
+  fallback:
+    failureThreshold: 3
+    replicas: 4  # Fallback to 4 replicas if metrics unavailable

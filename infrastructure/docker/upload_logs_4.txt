@@ -1,0 +1,200 @@
+﻿rawdrive-upload-service  |     await self.app(scope, receive_or_disconnect, send_no_error)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 93, in __call__
+rawdrive-upload-service  |     await self.simple_response(scope, receive, send, request_headers=headers)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 144, in simple_response
+rawdrive-upload-service  |     await self.app(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+rawdrive-upload-service  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+rawdrive-upload-service  |     await app(scope, receive, sender)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+rawdrive-upload-service  |     await self.app(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 716, in __call__
+rawdrive-upload-service  |     await self.middleware_stack(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 736, in app
+rawdrive-upload-service  |     await route.handle(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 290, in handle
+rawdrive-upload-service  |     await self.app(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 115, in app
+rawdrive-upload-service  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+rawdrive-upload-service  |     raise exc
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+rawdrive-upload-service  |     await app(scope, receive, sender)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 101, in app
+rawdrive-upload-service  |     response = await f(request)
+rawdrive-upload-service  |                ^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 355, in app
+rawdrive-upload-service  |     raw_response = await run_endpoint_function(
+rawdrive-upload-service  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 243, in run_endpoint_function
+rawdrive-upload-service  |     return await dependant.call(**values)
+rawdrive-upload-service  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/api/v1/upload.py", line 471, in create_upload_session
+rawdrive-upload-service  |     logger.exception(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1524, in exception
+rawdrive-upload-service  |     self.error(msg, *args, exc_info=exc_info, **kwargs)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1518, in error
+rawdrive-upload-service  |     self._log(ERROR, msg, args, **kwargs)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1632, in _log
+rawdrive-upload-service  |     record = self.makeRecord(self.name, level, fn, lno, msg, args,
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1606, in makeRecord
+rawdrive-upload-service  |     raise KeyError("Attempt to overwrite %r in LogRecord" % key)
+rawdrive-upload-service  | KeyError: "Attempt to overwrite 'filename' in LogRecord"
+rawdrive-upload-service  | INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)
+rawdrive-upload-service  | INFO:     Started parent process [8]
+rawdrive-upload-service  | INFO:     Started server process [11]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:35:52 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | INFO:     Started server process [12]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:35:52 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | 2026-01-07 18:35:52 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:35:52 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:35:52 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | 2026-01-07 18:35:52 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:35:52 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:35:52 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | INFO:     Started server process [13]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:35:52 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | INFO:     Started server process [10]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:35:53 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | 2026-01-07 18:35:53 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:35:53 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:35:53 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | 2026-01-07 18:35:53 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:35:53 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:35:53 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | 2026-01-07 18:36:01 | WARNING  | app.middleware.rate_limit | Rate limit check failed
+rawdrive-upload-service  | INFO:     Uvicorn running on http://0.0.0.0:8008 (Press CTRL+C to quit)
+rawdrive-upload-service  | INFO:     Started parent process [8]
+rawdrive-upload-service  | INFO:     Started server process [10]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | INFO:     Started server process [13]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | INFO:     Started server process [12]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | INFO:     Started server process [11]
+rawdrive-upload-service  | INFO:     Waiting for application startup.
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.database | Using NullPool for async engine (pool_size=5, max=20)
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.database | Database engine initialized
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.core.redis | Redis client initialized with connection pool
+rawdrive-upload-service  | 2026-01-07 18:37:18 | INFO     | app.main | Upload service started
+rawdrive-upload-service  | INFO:     Application startup complete.
+rawdrive-upload-service  | 2026-01-07 18:37:29 | WARNING  | app.middleware.rate_limit | Rate limit check failed
+rawdrive-upload-service  | 2026-01-07 18:38:17 | WARNING  | app.middleware.rate_limit | Rate limit check failed
+rawdrive-upload-service  | 2026-01-07 18:38:17 | WARNING  | app.api.v1.upload | JWT signature verification failed, using unverified claims in dev mode
+rawdrive-upload-service  | 2026-01-07 18:38:17 | DEBUG    | app.core.database | New database connection established
+rawdrive-upload-service  | 2026-01-07 18:38:17 | DEBUG    | app.core.database | Connection checked out from pool
+rawdrive-upload-service  | 2026-01-07 18:38:17 | DEBUG    | app.core.database | Connection returned to pool
+rawdrive-upload-service  | 2026-01-07 18:38:17 | DEBUG    | app.core.database | New database connection established
+rawdrive-upload-service  | 2026-01-07 18:38:17 | DEBUG    | app.core.database | Connection checked out from pool
+rawdrive-upload-service  | 2026-01-07 18:38:17 | DEBUG    | app.core.database | Connection returned to pool
+rawdrive-upload-service  | 2026-01-07 18:38:17 | ERROR    | app.api.v1.upload | Unexpected error creating upload session
+rawdrive-upload-service  | Traceback (most recent call last):
+rawdrive-upload-service  |   File "/app/src/app/api/v1/upload.py", line 383, in create_upload_session
+rawdrive-upload-service  |     result = await upload_service.create_upload_session(
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/services/upload_service.py", line 633, in create_upload_session
+rawdrive-upload-service  |     logger.info(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1489, in info
+rawdrive-upload-service  |     self._log(INFO, msg, args, **kwargs)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1632, in _log
+rawdrive-upload-service  |     record = self.makeRecord(self.name, level, fn, lno, msg, args,
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1606, in makeRecord
+rawdrive-upload-service  |     raise KeyError("Attempt to overwrite %r in LogRecord" % key)
+rawdrive-upload-service  | KeyError: "Attempt to overwrite 'filename' in LogRecord"
+rawdrive-upload-service  | 2026-01-07 18:38:18 | WARNING  | app.middleware.rate_limit | Rate limit check failed
+rawdrive-upload-service  | 2026-01-07 18:38:18 | WARNING  | app.api.v1.upload | JWT signature verification failed, using unverified claims in dev mode
+rawdrive-upload-service  | 2026-01-07 18:38:18 | DEBUG    | app.core.database | New database connection established
+rawdrive-upload-service  | 2026-01-07 18:38:18 | DEBUG    | app.core.database | Connection checked out from pool
+rawdrive-upload-service  | 2026-01-07 18:38:18 | DEBUG    | app.core.database | Connection returned to pool
+rawdrive-upload-service  | 2026-01-07 18:38:18 | DEBUG    | app.core.database | New database connection established
+rawdrive-upload-service  | 2026-01-07 18:38:18 | DEBUG    | app.core.database | Connection checked out from pool
+rawdrive-upload-service  | 2026-01-07 18:38:18 | DEBUG    | app.core.database | Connection returned to pool
+rawdrive-upload-service  | 2026-01-07 18:38:18 | ERROR    | app.api.v1.upload | Unexpected error creating upload session
+rawdrive-upload-service  | Traceback (most recent call last):
+rawdrive-upload-service  |   File "/app/src/app/api/v1/upload.py", line 383, in create_upload_session
+rawdrive-upload-service  |     result = await upload_service.create_upload_session(
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/services/upload_service.py", line 633, in create_upload_session
+rawdrive-upload-service  |     logger.info(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1489, in info
+rawdrive-upload-service  |     self._log(INFO, msg, args, **kwargs)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1632, in _log
+rawdrive-upload-service  |     record = self.makeRecord(self.name, level, fn, lno, msg, args,
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1606, in makeRecord
+rawdrive-upload-service  |     raise KeyError("Attempt to overwrite %r in LogRecord" % key)
+rawdrive-upload-service  | KeyError: "Attempt to overwrite 'filename' in LogRecord"
+rawdrive-upload-service  | 2026-01-07 18:38:19 | WARNING  | app.middleware.rate_limit | Rate limit check failed
+rawdrive-upload-service  | 2026-01-07 18:38:19 | WARNING  | app.api.v1.upload | JWT signature verification failed, using unverified claims in dev mode
+rawdrive-upload-service  | 2026-01-07 18:38:19 | DEBUG    | app.core.database | New database connection established
+rawdrive-upload-service  | 2026-01-07 18:38:19 | DEBUG    | app.core.database | Connection checked out from pool
+rawdrive-upload-service  | 2026-01-07 18:38:19 | DEBUG    | app.core.database | Connection returned to pool
+rawdrive-upload-service  | 2026-01-07 18:38:19 | DEBUG    | app.core.database | New database connection established
+rawdrive-upload-service  | 2026-01-07 18:38:19 | DEBUG    | app.core.database | Connection checked out from pool
+rawdrive-upload-service  | 2026-01-07 18:38:19 | DEBUG    | app.core.database | Connection returned to pool
+rawdrive-upload-service  | 2026-01-07 18:38:19 | ERROR    | app.api.v1.upload | Unexpected error creating upload session
+rawdrive-upload-service  | Traceback (most recent call last):
+rawdrive-upload-service  |   File "/app/src/app/api/v1/upload.py", line 383, in create_upload_session
+rawdrive-upload-service  |     result = await upload_service.create_upload_session(
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/services/upload_service.py", line 633, in create_upload_session
+rawdrive-upload-service  |     logger.info(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1489, in info
+rawdrive-upload-service  |     self._log(INFO, msg, args, **kwargs)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1632, in _log
+rawdrive-upload-service  |     record = self.makeRecord(self.name, level, fn, lno, msg, args,
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1606, in makeRecord
+rawdrive-upload-service  |     raise KeyError("Attempt to overwrite %r in LogRecord" % key)
+rawdrive-upload-service  | KeyError: "Attempt to overwrite 'filename' in LogRecord"
+rawdrive-upload-service  | 2026-01-07 18:38:22 | WARNING  | app.middleware.rate_limit | Rate limit check failed
+rawdrive-upload-service  | 2026-01-07 18:38:22 | WARNING  | app.api.v1.upload | JWT signature verification failed, using unverified claims in dev mode
+rawdrive-upload-service  | 2026-01-07 18:38:22 | DEBUG    | app.core.database | New database connection established
+rawdrive-upload-service  | 2026-01-07 18:38:22 | DEBUG    | app.core.database | Connection checked out from pool
+rawdrive-upload-service  | 2026-01-07 18:38:22 | DEBUG    | app.core.database | Connection returned to pool
+rawdrive-upload-service  | 2026-01-07 18:38:22 | DEBUG    | app.core.database | New database connection established
+rawdrive-upload-service  | 2026-01-07 18:38:22 | DEBUG    | app.core.database | Connection checked out from pool
+rawdrive-upload-service  | 2026-01-07 18:38:22 | DEBUG    | app.core.database | Connection returned to pool
+rawdrive-upload-service  | 2026-01-07 18:38:22 | ERROR    | app.api.v1.upload | Unexpected error creating upload session
+rawdrive-upload-service  | Traceback (most recent call last):
+rawdrive-upload-service  |   File "/app/src/app/api/v1/upload.py", line 383, in create_upload_session
+rawdrive-upload-service  |     result = await upload_service.create_upload_session(
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/app/src/app/services/upload_service.py", line 633, in create_upload_session
+rawdrive-upload-service  |     logger.info(
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1489, in info
+rawdrive-upload-service  |     self._log(INFO, msg, args, **kwargs)
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1632, in _log
+rawdrive-upload-service  |     record = self.makeRecord(self.name, level, fn, lno, msg, args,
+rawdrive-upload-service  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rawdrive-upload-service  |   File "/usr/local/lib/python3.11/logging/__init__.py", line 1606, in makeRecord
+rawdrive-upload-service  |     raise KeyError("Attempt to overwrite %r in LogRecord" % key)
+rawdrive-upload-service  | KeyError: "Attempt to overwrite 'filename' in LogRecord"

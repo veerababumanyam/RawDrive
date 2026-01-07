@@ -411,13 +411,54 @@ class EncryptionService:
         # Get workspace key
         key, _ = await self.get_workspace_key(workspace_id, key_version)
 
-        # Decrypt
-        aesgcm = AESGCM(key)
-        encrypted_with_tag = encrypted_data + auth_tag
+        iv_len = len(iv)
+        tag_len = len(auth_tag)
 
         try:
-            plaintext = aesgcm.decrypt(iv, encrypted_with_tag, None)
-            return plaintext
+            # AES-256-GCM path (iv=12, tag=16)
+            if iv_len == 12 and tag_len == 16:
+                aesgcm = AESGCM(key)
+                encrypted_with_tag = encrypted_data + auth_tag
+                plaintext = aesgcm.decrypt(iv, encrypted_with_tag, None)
+                return plaintext
+
+            # AES-256-CTR + HMAC path (iv=16, tag=32)
+            # Files stored in R2 as: [IV (16 bytes)][ciphertext][HMAC (32 bytes)]
+            if iv_len == 16 and tag_len == 32:
+                # Extract IV, ciphertext, and HMAC from encrypted_data blob
+                # The upload service stores files with IV and HMAC prepended/appended
+                file_iv = encrypted_data[:16]
+                file_hmac = encrypted_data[-32:]
+                ciphertext_only = encrypted_data[16:-32]
+                
+                # Verify IV matches database (sanity check)
+                if file_iv != iv:
+                    raise EncryptionError(
+                        "IV mismatch between database and file",
+                        "IV_MISMATCH"
+                    )
+                
+                # Verify HMAC matches database (sanity check)
+                if file_hmac != auth_tag:
+                    # Use file HMAC for verification (it's the source of truth)
+                    auth_tag = file_hmac
+                
+                # Two-pass decryption: first verify HMAC, then decrypt
+                # Pass 1: Verify HMAC on IV + ciphertext
+                verify_decryptor = StreamingDecryptor(key, iv)
+                verify_decryptor.update_hmac(ciphertext_only)
+                verify_decryptor.verify_hmac(auth_tag)
+                
+                # Pass 2: Decrypt (create fresh decryptor)
+                decryptor = StreamingDecryptor(key, iv)
+                plaintext = decryptor.decrypt_chunk(ciphertext_only) + decryptor.finalize()
+                return plaintext
+
+            # Unknown / unsupported format
+            raise EncryptionError(
+                f"Unsupported encryption metadata sizes (iv={iv_len}, tag={tag_len})",
+                "UNSUPPORTED_ENCRYPTION_FORMAT",
+            )
         except Exception as e:
             raise EncryptionError(
                 f"Decryption failed for {variant}: {e}", "DECRYPTION_FAILED"

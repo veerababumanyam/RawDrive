@@ -14,10 +14,10 @@
   "requirePlanApproval": false,
   "dependencies": [],
   "titleGenerating": false,
-  "status": "verified",
+  "status": "completed",
   "id": "feature-1767702355011-346l0d30n",
-  "startedAt": "2026-01-06T19:38:18.205Z",
-  "updatedAt": "2026-01-06T19:40:52.953Z",
+  "startedAt": "2026-01-07T00:24:39.679Z",
+  "updatedAt": "2026-01-07T00:26:52.579Z",
   "planSpec": {
     "status": "approved",
     "version": 1,

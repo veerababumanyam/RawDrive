@@ -66,6 +66,7 @@ async function commitUploadViaService(
     sha256: string;
     etag?: string;
     client_metadata?: Record<string, any>;
+    total_size: number;
   }
 ): Promise<{ asset_id: string }> {
   const baseUrl = featureFlags.uploadMicroservice
@@ -201,6 +202,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   const filesRef = useRef<UploadFile[]>([]);
   // TUS upload clients for large files (for pause/resume/cancel)
   const tusClientsRef = useRef<Map<string, TusUploadClient>>(new Map());
+  // Ref for processQueue to prevent circular dependency in effects
+  const processQueueRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   // Calculate progress
   const progress = useMemo<UploadProgress>(() => {
@@ -284,9 +287,9 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         if (!galleryId && enableDuplicateDetection) {
           // If no gallery, check against library logic (potentially undefined/null gallery_id in backend)
           const result = await galleryService.checkDuplicate(workspaceId, sha256, undefined);
-           return result.is_duplicate ? result.duplicates : null;
-        } 
-        
+          return result.is_duplicate ? result.duplicates : null;
+        }
+
         const result = await galleryService.checkDuplicate(workspaceId, sha256, galleryId);
         return result.is_duplicate ? result.duplicates : null;
       } catch (error) {
@@ -383,32 +386,32 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       const BATCH_SIZE = 5;
       for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
         const batch = filesToProcess.slice(i, i + BATCH_SIZE);
-        
-        await Promise.all(batch.map(async ({ uploadFile, needsDuplicateCheck }) => {
-            if (uploadFile.status === 'error') return; // Skip already errored files
 
-            if (needsDuplicateCheck && enableDuplicateDetection) {
+        await Promise.all(batch.map(async ({ uploadFile, needsDuplicateCheck }) => {
+          if (uploadFile.status === 'error') return; // Skip already errored files
+
+          if (needsDuplicateCheck && enableDuplicateDetection) {
             try {
-                const duplicates = await checkForDuplicates(uploadFile.file);
-                if (duplicates && duplicates.length > 0) {
+              const duplicates = await checkForDuplicates(uploadFile.file);
+              if (duplicates && duplicates.length > 0) {
                 // Remove file from queue and show duplicate dialog
                 setFiles((prev) => prev.filter((f) => f.id !== uploadFile.id));
                 if (uploadFile.thumbnail) {
-                    URL.revokeObjectURL(uploadFile.thumbnail);
+                  URL.revokeObjectURL(uploadFile.thumbnail);
                 }
                 if (onDuplicateDetected) {
-                    onDuplicateDetected(uploadFile.file, duplicates);
+                  onDuplicateDetected(uploadFile.file, duplicates);
                 }
                 return;
-                }
+              }
             } catch (error) {
-                // If duplicate check fails, proceed with upload
-                console.warn('Failed to check for duplicates:', error);
+              // If duplicate check fails, proceed with upload
+              console.warn('Failed to check for duplicates:', error);
             }
-            }
+          }
 
-            // Update file status to 'pending' so it enters the upload queue
-            updateFile(uploadFile.id, { status: 'pending' });
+          // Update file status to 'pending' so it enters the upload queue
+          updateFile(uploadFile.id, { status: 'pending' });
         }));
       }
 
@@ -435,7 +438,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   }, []);
 
   // Helper to ensure token is valid before upload
-  const ensureValidToken = useCallback(async (): Promise<{accessToken: string; refreshToken: string} | null> => {
+  const ensureValidToken = useCallback(async (): Promise<{ accessToken: string; refreshToken: string } | null> => {
     const tokens = getStoredTokens();
     if (!tokens) return null;
 
@@ -469,8 +472,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   const uploadSingleFile = useCallback(
     async (uploadFile: UploadFile): Promise<void> => {
       const fileId = uploadFile.id;
-      // Create unique upload key combining fileId and uploadId to prevent duplicate starts
-      const uploadKey = `${fileId}-${uploadFile.uploadId || 'new'}`;
+      // Use fileId only for deduplication - uploadId changes during upload lifecycle
+      const uploadKey = fileId;
 
       // Check if paused
       if (pauseStateRef.current.get(fileId)) {
@@ -582,27 +585,35 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
             // Use upload microservice if feature flag is enabled
             const session = featureFlags.uploadMicroservice
               ? await createUploadSessionViaService(workspaceId, {
-                  gallery_id: galleryId || undefined,
-                  sub_gallery_id: subGalleryId || null,
-                  file_name: uploadFile.file.name,
-                  mime_type: mimeType,
-                  size_bytes: uploadFile.file.size,
-                  sha256,
-                  relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
-                })
+                gallery_id: galleryId || undefined,
+                sub_gallery_id: subGalleryId || null,
+                file_name: uploadFile.file.name,
+                mime_type: mimeType,
+                size_bytes: uploadFile.file.size,
+                sha256,
+                relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
+              })
               : await galleryService.createUploadSession(workspaceId, {
-                  gallery_id: galleryId || undefined,
-                  sub_gallery_id: subGalleryId || null,
-                  file_name: uploadFile.file.name,
-                  mime_type: mimeType, // Pass empty string for RAW if browser doesn't provide
-                  size_bytes: uploadFile.file.size,
-                  sha256,
-                  relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
-                });
+                gallery_id: galleryId || undefined,
+                sub_gallery_id: subGalleryId || null,
+                file_name: uploadFile.file.name,
+                mime_type: mimeType, // Pass empty string for RAW if browser doesn't provide
+                size_bytes: uploadFile.file.size,
+                sha256,
+                relative_path: (uploadFile.file as any).webkitRelativePath || undefined,
+              });
             sessionUploadId = session.upload_id;
             // CRITICAL: Always use the upload_url returned by the backend
             // This ensures correct environment (dev vs prod) URL is used
             uploadUrl = session.upload_url;
+
+            // LOG: Session creation successful
+            console.log(
+              `[Upload] Session created | File: ${uploadFile.file.name} | ` +
+              `Upload ID: ${session.upload_id} | URL: ${uploadUrl} | ` +
+              `Size: ${(uploadFile.file.size / 1024 / 1024).toFixed(2)} MB`
+            );
+
             updateFile(fileId, { uploadId: session.upload_id });
           } else {
             // Existing session for retry - get upload URL from backend
@@ -621,13 +632,25 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
             let lastLoaded = 0;
             let lastTime = startTime;
 
-            xhr.open('PUT', uploadUrl);
+            xhr.open('PATCH', uploadUrl);
+
+            // LOG: Starting upload
+            console.log(
+              `[Upload] Starting XHR upload | File: ${uploadFile.file.name} | ` +
+              `Upload ID: ${sessionUploadId} | Method: PATCH | URL: ${uploadUrl}`
+            );
 
             // Set headers with validated/refreshed token
             if (validTokens && uploadUrl.includes('/api/v1/')) {
               xhr.setRequestHeader('Authorization', `Bearer ${validTokens.accessToken}`);
             }
             xhr.setRequestHeader('X-Workspace-ID', workspaceId);
+
+            // TUS protocol headers - required for upload microservice
+            xhr.setRequestHeader('Upload-Offset', '0');
+            xhr.setRequestHeader('Upload-Length', uploadFile.file.size.toString());
+            xhr.setRequestHeader('Tus-Resumable', '1.0.0');
+            xhr.setRequestHeader('Content-Type', 'application/offset+octet-stream');
 
             // Progress handler
             xhr.upload.onprogress = (event) => {
@@ -663,16 +686,38 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
             xhr.onload = () => {
               if (xhr.status >= 200 && xhr.status < 300) {
+                // LOG: Upload successful
+                console.log(
+                  `[Upload] File uploaded successfully | File: ${uploadFile.file.name} | ` +
+                  `Upload ID: ${sessionUploadId} | Status: ${xhr.status} ${xhr.statusText} | ` +
+                  `Time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`
+                );
                 resolve();
               } else {
+                // LOG: Upload failed
+                console.error(
+                  `[Upload] Upload failed | File: ${uploadFile.file.name} | ` +
+                  `Upload ID: ${sessionUploadId} | Status: ${xhr.status} ${xhr.statusText}`
+                );
                 const error = new Error(`Upload failed: ${xhr.statusText}`);
                 (error as any).status = xhr.status;
                 reject(error);
               }
             };
 
-            xhr.onerror = () => reject(new Error('Network error'));
-            xhr.onabort = () => reject(new Error('Upload cancelled'));
+            xhr.onerror = () => {
+              console.error(
+                `[Upload] Network error | File: ${uploadFile.file.name} | Upload ID: ${sessionUploadId}`
+              );
+              reject(new Error('Network error'));
+            };
+
+            xhr.onabort = () => {
+              console.log(
+                `[Upload] Upload cancelled | File: ${uploadFile.file.name} | Upload ID: ${sessionUploadId}`
+              );
+              reject(new Error('Upload cancelled'));
+            };
 
             // Handle cancellation if needed
             if (pauseStateRef.current.get(fileId)) {
@@ -685,28 +730,41 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
           updateFile(fileId, { progress: 90, status: 'verifying' });
 
+          // LOG: Starting commit
+          console.log(
+            `[Upload] Starting commit | File: ${uploadFile.file.name} | ` +
+            `Upload ID: ${sessionUploadId} | Service: ${featureFlags.uploadMicroservice ? 'upload-microservice' : 'backend'}`
+          );
+
           // Commit upload - use upload microservice if feature flag is enabled
           const commitResult = featureFlags.uploadMicroservice
             ? await commitUploadViaService(
-                workspaceId,
-                sessionUploadId,
-                {
-                  sha256,
-                  etag: undefined,
-                  client_metadata: uploadFile.clientMetadata
-                }
-              )
+              workspaceId,
+              sessionUploadId,
+              {
+                sha256,
+                etag: undefined,
+                client_metadata: uploadFile.clientMetadata,
+                total_size: uploadFile.file.size
+              }
+            )
             : await galleryService.commitUpload(
-                workspaceId,
-                sessionUploadId,
-                {
-                  sha256,
-                  etag: undefined,
-                  client_metadata: uploadFile.clientMetadata
-                }
-              );
+              workspaceId,
+              sessionUploadId,
+              {
+                sha256,
+                etag: undefined,
+                client_metadata: uploadFile.clientMetadata
+              }
+            );
 
           assetId = commitResult.asset_id;
+
+          // LOG: Commit successful
+          console.log(
+            `[Upload] Commit successful | File: ${uploadFile.file.name} | ` +
+            `Upload ID: ${sessionUploadId} | Asset ID: ${assetId}`
+          );
         }
 
         // Update to completed
@@ -716,6 +774,11 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
           uploadedBytes: uploadFile.totalBytes,
           assetId,
         });
+
+        // LOG: Upload complete
+        console.log(
+          `[Upload] Upload COMPLETE ✓ | File: ${uploadFile.file.name} | Asset ID: ${assetId}`
+        );
 
         // Cleanup
         activeUploadsRef.current.delete(fileId);
@@ -727,7 +790,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
         onComplete?.(assetId, fileId);
         onProgress?.(fileId, 100);
-        
+
         // Trigger queue to pick up next file
         bumpQueue();
       } catch (error) {
@@ -793,11 +856,12 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     const availableSlots = maxConcurrent - activeCount;
     // Use filesRef.current instead of files to avoid stale closure and dependency churn
     const currentFiles = filesRef.current;
+    // Only process 'pending' status - 'queued' files are already being processed
     const pendingFiles = currentFiles.filter(
-      (f) => (f.status === 'pending' || f.status === 'queued') && 
-             !pauseStateRef.current.get(f.id) &&
-             !completedUploadsRef.current.has(f.id) &&
-             !startedUploadsRef.current.has(f.id)
+      (f) => f.status === 'pending' &&
+        !pauseStateRef.current.get(f.id) &&
+        !completedUploadsRef.current.has(f.id) &&
+        !startedUploadsRef.current.has(f.id)
     );
 
     const filesToUpload = pendingFiles.slice(0, availableSlots);
@@ -805,12 +869,18 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
     for (const file of filesToUpload) {
       activeUploadsRef.current.add(file.id);
       updateFile(file.id, { status: 'queued' });
-      uploadSingleFile(file).catch((error) => {
+      // Use ref to avoid dependency on uploadSingleFile function
+      uploadSingleFileRef.current(file).catch((error) => {
         console.error('Upload error:', error);
         activeUploadsRef.current.delete(file.id);
       });
     }
-  }, [isPaused, maxConcurrent, uploadSingleFile, updateFile]);
+  }, [isPaused, maxConcurrent, updateFile]);
+
+  // Update processQueue ref to latest version
+  useEffect(() => {
+    processQueueRef.current = processQueue;
+  }, [processQueue]);
 
   // Start uploads
   const startUpload = useCallback(async () => {
@@ -834,6 +904,9 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   // Pause upload
   const pauseUpload = useCallback((fileId?: string) => {
     if (fileId) {
+      // LOG: Pausing individual file
+      console.log(`[Upload] Pausing upload | File ID: ${fileId}`);
+
       pauseStateRef.current.set(fileId, true);
       // Pause TUS client if exists
       const tusClient = tusClientsRef.current.get(fileId);
@@ -842,6 +915,12 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       }
       updateFile(fileId, { status: 'paused' });
     } else {
+      // LOG: Pausing all uploads
+      const activeFiles = files.filter(f =>
+        f.status === 'uploading' || f.status === 'verifying' || f.status === 'preparing'
+      );
+      console.log(`[Upload] Pausing ALL uploads | Active files: ${activeFiles.length}`);
+
       setIsPaused(true);
       setFiles((prev) =>
         prev.map((f) => {
@@ -858,11 +937,14 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         })
       );
     }
-  }, [updateFile]);
+  }, [files, updateFile]);
 
   // Resume upload
   const resumeUpload = useCallback((fileId?: string) => {
     if (fileId) {
+      // LOG: Resuming individual file
+      console.log(`[Upload] Resuming upload | File ID: ${fileId}`);
+
       pauseStateRef.current.delete(fileId);
       const file = files.find((f) => f.id === fileId);
       if (file && file.status === 'paused') {
@@ -870,6 +952,10 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         bumpQueue();
       }
     } else {
+      // LOG: Resuming all uploads
+      const pausedFiles = files.filter(f => f.status === 'paused');
+      console.log(`[Upload] Resuming ALL uploads | Paused files: ${pausedFiles.length}`);
+
       setIsPaused(false);
       pauseStateRef.current.clear();
       setFiles((prev) =>
@@ -889,6 +975,9 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   // Cancel upload
   const cancelUpload = useCallback((fileId?: string) => {
     if (fileId) {
+      // LOG: Cancelling individual file
+      console.log(`[Upload] Cancelling upload | File ID: ${fileId}`);
+
       activeUploadsRef.current.delete(fileId);
       pauseStateRef.current.delete(fileId);
       // Abort TUS client if exists
@@ -900,6 +989,9 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       updateFile(fileId, { status: 'cancelled' });
       removeFile(fileId);
     } else {
+      // LOG: Cancelling all uploads
+      console.log(`[Upload] Cancelling ALL uploads | Total files: ${files.length}`);
+
       // Cancel all
       activeUploadsRef.current.clear();
       pauseStateRef.current.clear();
@@ -915,7 +1007,7 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         return [];
       });
     }
-  }, [updateFile, removeFile]);
+  }, [files, updateFile, removeFile]);
 
   // Retry upload
   const retryUpload = useCallback(
@@ -979,9 +1071,10 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
   // Process queue when trigger changes
   useEffect(() => {
     if (!isPaused && activeUploadsRef.current.size < maxConcurrent) {
-      processQueue();
+      // Use ref to avoid circular dependency on processQueue
+      processQueueRef.current();
     }
-  }, [queueTrigger, isPaused, maxConcurrent, processQueue]);
+  }, [queueTrigger, isPaused, maxConcurrent]);
 
   // Track batch start - when uploading begins
   useEffect(() => {

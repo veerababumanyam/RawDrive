@@ -7,9 +7,13 @@ import apiClient from './api';
 
 export interface DashboardStats {
     galleries: number;
+    galleries_change?: string;
     photos: number;
+    photos_change?: string;
     clients: number;
+    clients_change?: string;
     views: number;
+    views_change?: string;
 }
 
 export class DashboardService {

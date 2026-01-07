@@ -135,13 +135,31 @@ def _generate_slug(name: str) -> str:
 
 
 async def _get_free_plan_id(pool: asyncpg.Pool) -> uuid.UUID:
-    """Get the Free plan ID (used for trial)."""
+    """Get the Free plan ID (used for trial).
+
+    Falls back to Starter plan if Free plan doesn't exist.
+    This ensures workspace creation never fails due to missing plan.
+    """
+    # Try free plan first
     row = await pool.fetchrow(
         "SELECT plan_id FROM plans WHERE code = 'free'"
     )
-    if not row:
-        raise RuntimeError("Free plan not found in database - run seeds first")
-    return row["plan_id"]
+    if row:
+        return row["plan_id"]
+
+    # Fallback to starter plan
+    logger.warning("Free plan not found, falling back to Starter plan")
+    row = await pool.fetchrow(
+        "SELECT plan_id FROM plans WHERE code = 'starter'"
+    )
+    if row:
+        return row["plan_id"]
+
+    # If no plans exist at all, this is a critical error
+    raise RuntimeError(
+        "No default plan found in database. "
+        "Run migration 0094 (subscription plans) and 0118 (free plan) first."
+    )
 
 
 # ---------------------------------------------------------------------------

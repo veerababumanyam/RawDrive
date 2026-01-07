@@ -22,7 +22,7 @@ from src.cache.redis_client import (
     build_assets_cache_key,
 )
 from src.config import settings
-from src.logging import get_logger
+from src.log_config import get_logger
 from src.observability.metrics import get_metrics
 
 logger = get_logger(__name__)
@@ -546,6 +546,82 @@ class GalleryService:
                     *params,
                 )
 
+        # Generate signed URLs for all assets
+        from src.services.r2_service import get_r2_service
+        r2_service = get_r2_service()
+
+        # Build asset list for batch URL generation
+        asset_list = [
+            {
+                "asset_id": str(row["asset_id"]),
+                "filename": row["filename"] or "",
+                "is_private": row["is_private"],
+            }
+            for row in assets
+        ]
+
+        # Generate all signed URLs in parallel (uses configured TTL: 15 minutes)
+        # #region agent log
+        import json
+        import os
+        try:
+            debug_log_path = '/app/debug.log'
+            log_entry = {
+                "id": "log_entry",
+                "timestamp": int(__import__('time').time() * 1000),
+                "location": "gallery_service.py:list_gallery_assets",
+                "message": "Before generating signed URLs",
+                "data": {
+                    "workspace_id": workspace_id,
+                    "gallery_id": gallery_id,
+                    "asset_count": len(asset_list),
+                    "asset_ids": [a["asset_id"] for a in asset_list[:3]]
+                },
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "C"
+            }
+            with open(debug_log_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(log_entry) + '\n')
+                f.flush()
+        except Exception:
+            pass
+        # #endregion
+        signed_urls = await r2_service.generate_signed_urls_batch(
+            workspace_id=workspace_id,
+            assets=asset_list,
+            gallery_id=gallery_id,
+        )
+        # #region agent log
+        try:
+            debug_log_path = '/app/debug.log'
+            log_entry = {
+                "id": "log_entry",
+                "timestamp": int(__import__('time').time() * 1000),
+                "location": "gallery_service.py:list_gallery_assets",
+                "message": "After generating signed URLs",
+                "data": {
+                    "signed_urls_count": len(signed_urls),
+                    "sample_urls": {
+                        k: {
+                            "thumbnail": bool(v.get("thumbnail")),
+                            "preview": bool(v.get("preview")),
+                            "original": bool(v.get("original"))
+                        }
+                        for k, v in list(signed_urls.items())[:3]
+                    }
+                },
+                "sessionId": "debug-session",
+                "runId": "run1",
+                "hypothesisId": "C"
+            }
+            with open(debug_log_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(log_entry) + '\n')
+                f.flush()
+        except Exception:
+            pass
+        # #endregion
+
         return {
             "data": [
                 {
@@ -568,6 +644,10 @@ class GalleryService:
                         "duration_ms": row["duration_ms"],
                         "date_taken": row["date_taken"].isoformat() if row["date_taken"] else None,
                         "exif": row["exif"],
+                        # Add signed URLs from R2 service
+                        "thumbnail_url": signed_urls.get(str(row["asset_id"]), {}).get("thumbnail"),
+                        "preview_url": signed_urls.get(str(row["asset_id"]), {}).get("preview"),
+                        "original_url": signed_urls.get(str(row["asset_id"]), {}).get("original"),
                     },
                 }
                 for row in assets

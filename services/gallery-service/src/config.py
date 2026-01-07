@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     # Service
     SERVICE_NAME: str = "gallery-service"
     SERVICE_VERSION: str = "1.0.0"
+    SERVICE_PORT: int = int(os.getenv("SERVICE_PORT", "8004"))
+    SERVICE_HOST: str = os.getenv("SERVICE_HOST", "0.0.0.0")
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
 
@@ -66,7 +68,7 @@ class Settings(BaseSettings):
     CACHE_TTL_GALLERY_METADATA: int = 300      # 5 minutes - L1
     CACHE_TTL_GALLERY_ASSETS: int = 120        # 2 minutes - L2
     CACHE_TTL_PROOFING_STATE: int = 30         # 30 seconds - L3 (real-time)
-    CACHE_TTL_SIGNED_URL: int = 3600           # 1 hour - R2 signed URLs
+    CACHE_TTL_SIGNED_URL: int = 900            # 15 minutes - R2 signed URLs (security/freshness balance)
     CACHE_TTL_MAGIC_LINK: int = 600            # 10 minutes
 
     # Storage (R2)
@@ -74,7 +76,7 @@ class Settings(BaseSettings):
     R2_ACCESS_KEY_ID: str = os.getenv("R2_ACCESS_KEY_ID", "")
     R2_SECRET_ACCESS_KEY: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
     R2_BUCKET_NAME: str = os.getenv("R2_BUCKET_NAME", "rawdrive")
-    R2_SIGNED_URL_EXPIRY: int = 3600  # 1 hour
+    R2_SIGNED_URL_EXPIRY: int = 900  # 15 minutes (security/freshness balance)
 
     # WebSocket - Real-time proofing
     WS_MAX_CONNECTIONS_PER_GALLERY: int = 1000

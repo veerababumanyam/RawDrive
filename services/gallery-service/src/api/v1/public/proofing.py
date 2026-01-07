@@ -23,7 +23,7 @@ from src.schemas.proofing import (
     BatchProofingRequest,
     BatchProofingResponse,
 )
-from src.logging import get_logger
+from src.log_config import get_logger
 from src.observability.metrics import get_metrics
 
 logger = get_logger(__name__)
@@ -170,9 +170,21 @@ async def face_search(
     Uses pgvector for efficient similarity search.
     Rate limited to 20 requests/minute per visitor.
     """
+    from src.database import get_connection
+    from uuid import UUID
+
     proofing_service = get_proofing_service()
 
     try:
+        # Get workspace_id from gallery
+        async with get_connection(read_only=True) as conn:
+            workspace_id = await conn.fetchval(
+                "SELECT workspace_id FROM galleries WHERE gallery_id = $1 AND deleted = FALSE",
+                UUID(gallery_id),
+            )
+            if not workspace_id:
+                raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+
         # Decode base64 image and extract face embedding
         # In production, this would call the face detection service
         # For now, we'll expect the embedding directly
@@ -183,6 +195,7 @@ async def face_search(
             return {"results": [], "total": 0}
 
         result = await proofing_service.face_search(
+            workspace_id=str(workspace_id),
             gallery_id=gallery_id,
             face_embedding=face_embedding,
             threshold=data.threshold,
