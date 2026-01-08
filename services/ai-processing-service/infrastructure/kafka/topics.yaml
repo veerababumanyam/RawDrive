@@ -1,0 +1,101 @@
+# Kafka Topics Configuration for AI Processing Service
+# Apply with: kafka-topics.sh --bootstrap-server localhost:9092 --create --config-file topics.yaml
+
+topics:
+  # ==========================================================================
+  # AI Processing Events
+  # ==========================================================================
+  - name: asset-ai-processing
+    partitions: 12
+    replication_factor: 3
+    config:
+      retention.ms: 259200000  # 3 days
+      cleanup.policy: delete
+      compression.type: lz4
+      max.message.bytes: 10485760  # 10MB (for image metadata + embeddings)
+      min.insync.replicas: 2
+    description: >
+      Asset processing events from upload-service requesting AI analysis.
+      Contains asset metadata and AI processing configuration.
+
+  # ==========================================================================
+  # AI Results Events
+  # ==========================================================================
+  - name: asset-ai-results
+    partitions: 12
+    replication_factor: 3
+    config:
+      retention.ms: 604800000  # 7 days
+      cleanup.policy: delete
+      compression.type: lz4
+      max.message.bytes: 20971520  # 20MB (for large CLIP embeddings)
+      min.insync.replicas: 2
+    description: >
+      Combined AI processing results including duplicate detection,
+      content moderation, tagging, and upscaling results.
+
+  # ==========================================================================
+  # Content Moderation Events
+  # ==========================================================================
+  - name: asset-moderation
+    partitions: 6
+    replication_factor: 3
+    config:
+      retention.ms: 2592000000  # 30 days (compliance)
+      cleanup.policy: delete
+      compression.type: lz4
+      max.message.bytes: 5242880  # 5MB
+      min.insync.replicas: 2
+    description: >
+      Content moderation results for compliance and safety.
+      Retained for 30 days for audit purposes.
+
+  # ==========================================================================
+  # Duplicate Detection Events
+  # ==========================================================================
+  - name: asset-duplicates
+    partitions: 6
+    replication_factor: 3
+    config:
+      retention.ms: 604800000  # 7 days
+      cleanup.policy: delete
+      compression.type: lz4
+      max.message.bytes: 15728640  # 15MB (for CLIP embeddings)
+      min.insync.replicas: 2
+    description: >
+      Duplicate detection results with perceptual hashes and CLIP embeddings.
+
+  # ==========================================================================
+  # Upscaling Events
+  # ==========================================================================
+  - name: asset-upscaling
+    partitions: 3
+    replication_factor: 3
+    config:
+      retention.ms: 259200000  # 3 days
+      cleanup.policy: delete
+      compression.type: lz4
+      max.message.bytes: 5242880  # 5MB
+      min.insync.replicas: 2
+    description: >
+      Image upscaling results and status updates.
+      Lower partition count due to GPU-bound processing.
+
+# =============================================================================
+# Consumer Groups
+# =============================================================================
+consumer_groups:
+  - name: ai-processing-consumer
+    description: Main consumer group for AI processing workers (CPU + GPU)
+
+  - name: duplicate-detection-consumer
+    description: Dedicated consumer for duplicate detection
+
+  - name: content-moderation-consumer
+    description: Dedicated consumer for content moderation
+
+  - name: upscaling-consumer
+    description: Dedicated consumer for GPU upscaling workers
+
+  - name: gallery-service-consumer
+    description: Gallery service consuming AI results for auto-curation

@@ -1,0 +1,90 @@
+# AI Processing Service Dockerfile (GPU workers)
+# Handles image upscaling with Real-ESRGAN
+
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04 as base
+
+# Set working directory
+WORKDIR /app
+
+# Install Python 3.11
+RUN apt-get update && apt-get install -y \
+    --no-install-recommends \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    curl \
+    ca-certificates \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symlinks for python
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash aiprocessor && \
+    chown -R aiprocessor:aiprocessor /app
+
+# =============================================================================
+# Dependencies stage
+# =============================================================================
+FROM base as dependencies
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    libpq-dev \
+    git \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements-gpu.txt .
+
+# Install Python dependencies (PyTorch with CUDA)
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements-gpu.txt
+
+# Download Real-ESRGAN model weights
+RUN mkdir -p /app/weights && \
+    wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth \
+         -O /app/weights/RealESRGAN_x4plus.pth && \
+    wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/RealESRGAN_x2plus.pth \
+         -O /app/weights/RealESRGAN_x2plus.pth
+
+# =============================================================================
+# Production stage
+# =============================================================================
+FROM base as production
+
+# Copy installed packages from dependencies stage
+COPY --from=dependencies /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
+COPY --from=dependencies /usr/local/bin /usr/local/bin
+
+# Copy model weights
+COPY --from=dependencies --chown=aiprocessor:aiprocessor /app/weights /app/weights
+
+# Copy application code
+COPY --chown=aiprocessor:aiprocessor src/ /app/src/
+
+# Switch to non-root user
+USER aiprocessor
+
+# Expose ports
+EXPOSE 8009
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
+    CMD curl -f http://localhost:8009/health || exit 1
+
+# Set environment variables
+ENV PYTHONPATH=/app/src
+ENV CUDA_VISIBLE_DEVICES=0
+ENV GPU_MEMORY_FRACTION=0.9
+
+# Run GPU upscaler worker
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8009"]

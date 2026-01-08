@@ -71,11 +71,45 @@ class FileType(str, Enum):
 
 
 @dataclass
+class AIProcessingConfig:
+    """AI processing configuration for assets.
+
+    Configures which AI features should be applied to an uploaded asset.
+
+    Attributes:
+        features: List of AI features to apply (upscale, tag, moderate, deduplicate).
+        upscale_factor: Upscaling factor (2x or 4x).
+        moderation_policy: Content moderation policy (standard, strict, custom).
+        duplicate_threshold: Similarity threshold for duplicate detection (0.0-1.0).
+        ai_priority: AI processing priority (1-10, higher = faster).
+        skip_if_exists: Skip AI processing if results already exist.
+    """
+
+    features: list[str] = field(default_factory=list)
+    upscale_factor: int = 2
+    moderation_policy: str = "standard"
+    duplicate_threshold: float = 0.95
+    ai_priority: int = 5
+    skip_if_exists: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "features": self.features,
+            "upscale_factor": self.upscale_factor,
+            "moderation_policy": self.moderation_policy,
+            "duplicate_threshold": self.duplicate_threshold,
+            "ai_priority": self.ai_priority,
+            "skip_if_exists": self.skip_if_exists,
+        }
+
+
+@dataclass
 class AssetProcessingEvent:
     """Event payload for asset processing requests.
 
     Published when an upload completes and the asset needs to be processed
-    (thumbnail generation, variant creation, metadata extraction).
+    (thumbnail generation, variant creation, metadata extraction, AI processing).
 
     Attributes:
         asset_id: UUID of the asset to process.
@@ -86,6 +120,7 @@ class AssetProcessingEvent:
         original_object_key: R2 storage key for the original file.
         priority: Processing priority (higher = processed first).
         metadata: Additional metadata for processing hints.
+        ai_config: AI processing configuration (v2.0+, optional).
     """
 
     asset_id: str
@@ -97,29 +132,38 @@ class AssetProcessingEvent:
     priority: int = 5
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    # AI processing configuration (NEW in v2.0)
+    ai_config: Optional[AIProcessingConfig] = None
+
     # Event metadata (auto-populated)
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     event_type: str = EventType.ASSET_PROCESSING.value
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    version: str = "1.0"
+    version: str = "2.0"  # Updated to 2.0 for AI support
 
     def to_dict(self) -> dict[str, Any]:
         """Convert event to dictionary for serialization."""
+        payload = {
+            "asset_id": self.asset_id,
+            "workspace_id": self.workspace_id,
+            "gallery_id": self.gallery_id,
+            "file_type": self.file_type,
+            "mime_type": self.mime_type,
+            "original_object_key": self.original_object_key,
+            "priority": self.priority,
+            "metadata": self.metadata,
+        }
+
+        # Add AI config if provided
+        if self.ai_config:
+            payload["ai_config"] = self.ai_config.to_dict()
+
         return {
             "event_id": self.event_id,
             "event_type": self.event_type,
             "timestamp": self.timestamp,
             "version": self.version,
-            "payload": {
-                "asset_id": self.asset_id,
-                "workspace_id": self.workspace_id,
-                "gallery_id": self.gallery_id,
-                "file_type": self.file_type,
-                "mime_type": self.mime_type,
-                "original_object_key": self.original_object_key,
-                "priority": self.priority,
-                "metadata": self.metadata,
-            },
+            "payload": payload,
         }
 
     def to_json(self) -> bytes:

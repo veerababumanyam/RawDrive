@@ -51,9 +51,12 @@ export class GalleryService {
     if (options?.recentOnly) params.append('recent_only', 'true');
 
     const query = params.toString();
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries${query ? `?${query}` : ''}`;
+    const endpoint = `/api/v1/galleries${query ? `?${query}` : ''}`;
 
-    const response = await apiClient.get<GalleryListResponse>(endpoint, { headers: undefined, signal: options?.signal } as any);
+    const response = await apiClient.get<GalleryListResponse>(endpoint, {
+      headers: { 'X-Workspace-ID': workspaceId },
+      signal: options?.signal
+    } as any);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch galleries');
     }
@@ -64,10 +67,13 @@ export class GalleryService {
    * Get gallery details
    */
   async getGallery(workspaceId: string, galleryId: string, signal?: AbortSignal): Promise<GalleryDetailData> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}`;
+    const endpoint = `/api/v1/galleries/${galleryId}`;
     // Backend returns flat GalleryDetailResponse structure
     // API client wraps it: { data: GalleryDetailResponse }
-    const response = await apiClient.get<GalleryDetailData>(endpoint, { headers: undefined, signal } as any);
+    const response = await apiClient.get<GalleryDetailData>(endpoint, {
+      headers: { 'X-Workspace-ID': workspaceId },
+      signal
+    } as any);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch gallery');
     }
@@ -93,8 +99,10 @@ export class GalleryService {
     workspaceId: string,
     data: GalleryCreateRequest
   ): Promise<GalleryDetailData> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries`;
-    const response = await apiClient.post<GalleryDetailData>(endpoint, data);
+    const endpoint = `/api/v1/galleries`;
+    const response = await apiClient.post<GalleryDetailData>(endpoint, data, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to create gallery');
     }
@@ -109,8 +117,10 @@ export class GalleryService {
     galleryId: string,
     data: GalleryUpdateRequest
   ): Promise<GalleryDetailData> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}`;
-    const response = await apiClient.patch<GalleryDetailData>(endpoint, data);
+    const endpoint = `/api/v1/galleries/${galleryId}`;
+    const response = await apiClient.patch<GalleryDetailData>(endpoint, data, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to update gallery');
     }
@@ -121,8 +131,10 @@ export class GalleryService {
    * Delete gallery
    */
   async deleteGallery(workspaceId: string, galleryId: string): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}`;
-    const response = await apiClient.delete<{ message: string }>(endpoint);
+    const endpoint = `/api/v1/galleries/${galleryId}`;
+    const response = await apiClient.delete<{ message: string }>(endpoint, undefined, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to delete gallery');
     }
@@ -132,8 +144,10 @@ export class GalleryService {
    * Publish gallery
    */
   async publishGallery(workspaceId: string, galleryId: string): Promise<GalleryDetailData> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/publish`;
-    const response = await apiClient.post<GalleryDetailData>(endpoint, { publish: true });
+    const endpoint = `/api/v1/galleries/${galleryId}/publish`;
+    const response = await apiClient.post<GalleryDetailData>(endpoint, { publish: true }, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to publish gallery');
     }
@@ -144,8 +158,10 @@ export class GalleryService {
    * Unpublish gallery
    */
   async unpublishGallery(workspaceId: string, galleryId: string): Promise<GalleryDetailData> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/publish`;
-    const response = await apiClient.post<GalleryDetailData>(endpoint, { publish: false });
+    const endpoint = `/api/v1/galleries/${galleryId}/publish`;
+    const response = await apiClient.post<GalleryDetailData>(endpoint, { publish: false }, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to unpublish gallery');
     }
@@ -168,6 +184,9 @@ export class GalleryService {
       search_query?: string;
       sort_by?: string;
       asset_ids?: string[];
+      // Emotion filtering (Phase 3: Frontend Integration)
+      emotion?: string | null;
+      min_emotion_confidence?: number;
       signal?: AbortSignal;
     }
   ): Promise<GalleryAssetsResponse> {
@@ -176,6 +195,13 @@ export class GalleryService {
     if (options?.limit) params.append('limit', options.limit.toString());
     if (options?.sub_gallery_id !== undefined) {
       params.append('sub_gallery_id', options.sub_gallery_id || '');
+    }
+    // Emotion filtering parameters
+    if (options?.emotion) {
+      params.append('emotion', options.emotion);
+    }
+    if (options?.min_emotion_confidence !== undefined) {
+      params.append('min_emotion_confidence', options.min_emotion_confidence.toString());
     }
     if (options?.picks_only) params.append('picks_only', 'true');
     if (options?.favorites_only) params.append('favorites_only', 'true');
@@ -187,9 +213,12 @@ export class GalleryService {
     }
 
     const query = params.toString();
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets${query ? `?${query}` : ''}`;
+    const endpoint = `/api/v1/galleries/${galleryId}/assets${query ? `?${query}` : ''}`;
 
-    const response = await apiClient.get<GalleryAssetsResponse>(endpoint, { headers: undefined, signal: options?.signal } as any);
+    const response = await apiClient.get<GalleryAssetsResponse>(endpoint, {
+      headers: { 'X-Workspace-ID': workspaceId },
+      signal: options?.signal
+    } as any);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch gallery assets');
     }
@@ -203,6 +232,24 @@ export class GalleryService {
     workspaceId: string,
     data: UploadSessionRequest
   ): Promise<UploadSessionResponse> {
+    // Note: Upload service might still use workspace prefix if not modernized yet?
+    // User asked to modernize gallery service. Upload service uses /api/v1/workspaces/{id}/uploads per backend routing (step 414).
+    // I will checking upload service modernization status later, for now keep it as is unless instructed.
+    // Wait, the User said "yes, completly modernise". This context was about Gallery Service.
+    // I should stick to gallery service methods. 
+    // createUploadSession uses `/api/v1/workspaces/${workspaceId}/uploads`. 
+    // This is routed to `upload-service` or `backend` (uploads_router).
+    // I will NOT touch this if it's not part of gallery-service routes.
+    // In `traefik`, `upload-service-router-local` is `/api/v1/uploads` (chunked) and `upload-router-local` is `/api/v1/photos/upload`.
+    // The `uploads_router` in `backend` is mounted at `/api/v1/workspaces/{workspace_id}/uploads`.
+    // So `createUploadSession` calls backend/upload service. I should leave it alone to avoid breaking uploads.
+    // I will return the original content for this block or simply not replace it.
+    // Actually, I'll abort this chunk and only replace the ones clearly gallery-service related.
+    // I will replace unpublishGallery and listGalleryAssets.
+    // I will skip createUploadSession for now.
+    // Wait, I can't conditionally skip inside a chunk.
+    // I will just use the code as is for createUploadSession in the replacement to be safe.
+
     const endpoint = `/api/v1/workspaces/${workspaceId}/uploads`;
     const response = await apiClient.post<UploadSessionResponse>(endpoint, data);
     if (response.error) {
@@ -338,13 +385,15 @@ export class GalleryService {
     galleryId: string,
     data: { name: string; sort_order?: number }
   ): Promise<{ sub_gallery_id: string; name: string; sort_order: number; visible: boolean }> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/sub-galleries`;
+    const endpoint = `/api/v1/galleries/${galleryId}/sub-galleries`;
     const response = await apiClient.post<{
       sub_gallery_id: string;
       name: string;
       sort_order: number;
       visible: boolean;
-    }>(endpoint, data);
+    }>(endpoint, data, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to create sub-gallery');
     }
@@ -360,8 +409,10 @@ export class GalleryService {
     subGalleryId: string,
     data: { name?: string; sort_order?: number; visible?: boolean; cover_asset_id?: string }
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/sub-galleries/${subGalleryId}`;
-    const response = await apiClient.patch<{ message: string }>(endpoint, data);
+    const endpoint = `/api/v1/galleries/${galleryId}/sub-galleries/${subGalleryId}`;
+    const response = await apiClient.patch<{ message: string }>(endpoint, data, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to update sub-gallery');
     }
@@ -375,8 +426,10 @@ export class GalleryService {
     galleryId: string,
     subGalleryId: string
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/sub-galleries/${subGalleryId}`;
-    const response = await apiClient.delete<{ message: string }>(endpoint);
+    const endpoint = `/api/v1/galleries/${galleryId}/sub-galleries/${subGalleryId}`;
+    const response = await apiClient.delete<{ message: string }>(endpoint, undefined, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to delete sub-gallery');
     }
@@ -390,8 +443,10 @@ export class GalleryService {
     galleryId: string,
     assetIds: string[]
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets/sort-order`;
-    const response = await apiClient.patch<{ message: string }>(endpoint, { asset_ids: assetIds });
+    const endpoint = `/api/v1/galleries/${galleryId}/assets/sort-order`;
+    const response = await apiClient.patch<{ message: string }>(endpoint, { asset_ids: assetIds }, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to update sort order');
     }
@@ -429,10 +484,12 @@ export class GalleryService {
     assetIds: string[],
     subGalleryId: string | null
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets/move`;
+    const endpoint = `/api/v1/galleries/${galleryId}/assets/move`;
     const response = await apiClient.patch<{ message: string }>(endpoint, {
       asset_ids: assetIds,
       sub_gallery_id: subGalleryId || null,
+    }, {
+      headers: { 'X-Workspace-ID': workspaceId }
     });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to move assets');
@@ -447,9 +504,11 @@ export class GalleryService {
     galleryId: string,
     assetIds: string[]
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets`;
+    const endpoint = `/api/v1/galleries/${galleryId}/assets`;
     const response = await apiClient.delete<{ message: string }>(endpoint, {
       asset_ids: assetIds,
+    }, {
+      headers: { 'X-Workspace-ID': workspaceId }
     });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to delete assets');
@@ -464,9 +523,11 @@ export class GalleryService {
     galleryId: string,
     assetIds: string[]
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets/restore`;
+    const endpoint = `/api/v1/galleries/${galleryId}/assets/restore`;
     const response = await apiClient.patch<{ message: string }>(endpoint, {
       asset_ids: assetIds,
+    }, {
+      headers: { 'X-Workspace-ID': workspaceId }
     });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to restore assets');
@@ -487,8 +548,10 @@ export class GalleryService {
       is_private?: boolean;
     }
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets/${assetId}`;
-    const response = await apiClient.patch<{ message: string }>(endpoint, data);
+    const endpoint = `/api/v1/galleries/${galleryId}/assets/${assetId}`;
+    const response = await apiClient.patch<{ message: string }>(endpoint, data, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to update asset');
     }
@@ -503,10 +566,12 @@ export class GalleryService {
     assetIds: string[],
     favorited: boolean
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets/favorite`;
+    const endpoint = `/api/v1/galleries/${galleryId}/assets/favorite`;
     const response = await apiClient.patch<{ message: string }>(endpoint, {
       asset_ids: assetIds,
       favorited,
+    }, {
+      headers: { 'X-Workspace-ID': workspaceId }
     });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to toggle favorite');
@@ -522,10 +587,12 @@ export class GalleryService {
     assetIds: string[],
     selected: boolean
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets/selection`;
+    const endpoint = `/api/v1/galleries/${galleryId}/assets/selection`;
     const response = await apiClient.patch<{ message: string }>(endpoint, {
       asset_ids: assetIds,
       selected,
+    }, {
+      headers: { 'X-Workspace-ID': workspaceId }
     });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to toggle selection');
@@ -540,9 +607,11 @@ export class GalleryService {
     galleryId: string,
     subGalleryIds: string[]
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/sub-galleries/sort-order`;
+    const endpoint = `/api/v1/galleries/${galleryId}/sub-galleries/sort-order`;
     const response = await apiClient.patch<{ message: string }>(endpoint, {
       sub_gallery_ids: subGalleryIds,
+    }, {
+      headers: { 'X-Workspace-ID': workspaceId }
     });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to update sub-galleries sort order');
@@ -600,8 +669,9 @@ export class GalleryService {
     assetIds: string[]
   ): Promise<{ count: number }> {
     const response = await apiClient.post<{ success: boolean; count: number }>(
-      `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets`,
-      { asset_ids: assetIds }
+      `/api/v1/galleries/${galleryId}/assets`,
+      { asset_ids: assetIds },
+      { headers: { 'X-Workspace-ID': workspaceId } }
     );
     return response.data!;
   }
@@ -612,23 +682,28 @@ export class GalleryService {
     assetIds: string[]
   ): Promise<{ count: number }> {
     const response = await apiClient.delete<{ success: boolean; count: number }>(
-      `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/assets`,
-      { asset_ids: assetIds }
+      `/api/v1/galleries/${galleryId}/assets`,
+      { asset_ids: assetIds },
+      { headers: { 'X-Workspace-ID': workspaceId } }
     );
     return response.data!;
   }
 
   async pinGallery(workspaceId: string, galleryId: string): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/pin`;
-    const response = await apiClient.post<{ success: boolean }>(endpoint, {});
+    const endpoint = `/api/v1/galleries/${galleryId}/pin`;
+    const response = await apiClient.post<{ success: boolean }>(endpoint, {}, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to pin gallery');
     }
   }
 
   async unpinGallery(workspaceId: string, galleryId: string): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/unpin`;
-    const response = await apiClient.post<{ success: boolean }>(endpoint, {});
+    const endpoint = `/api/v1/galleries/${galleryId}/unpin`;
+    const response = await apiClient.post<{ success: boolean }>(endpoint, {}, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to unpin gallery');
     }
@@ -708,8 +783,10 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string
   ): Promise<GalleryCredentialsResponse> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/credentials`;
-    const response = await apiClient.get<GalleryCredentialsResponse>(endpoint);
+    const endpoint = `/api/v1/galleries/${galleryId}/credentials`;
+    const response = await apiClient.get<GalleryCredentialsResponse>(endpoint, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to get gallery credentials');
     }
@@ -728,8 +805,10 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string
   ): Promise<Record<string, unknown>> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/summary`;
-    const response = await apiClient.get<Record<string, unknown>>(endpoint);
+    const endpoint = `/api/v1/galleries/${galleryId}/favorites/analytics/summary`;
+    const response = await apiClient.get<Record<string, unknown>>(endpoint, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to get favorites summary');
     }
@@ -765,7 +844,7 @@ export class GalleryService {
     if (options?.limit) params.append('limit', String(options.limit));
 
     const query = params.toString();
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics${query ? `?${query}` : ''}`;
+    const endpoint = `/api/v1/galleries/${galleryId}/favorites/analytics${query ? `?${query}` : ''}`;
     const response = await apiClient.get<{
       data: Array<Record<string, unknown>>;
       meta: {
@@ -774,7 +853,7 @@ export class GalleryService {
         total: number;
         total_pages: number;
       };
-    }>(endpoint);
+    }>(endpoint, { headers: { 'X-Workspace-ID': workspaceId } } as any);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to get favorites analytics');
     }
@@ -824,8 +903,10 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string
   ): Promise<void> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/refresh`;
-    const response = await apiClient.post(endpoint);
+    const endpoint = `/api/v1/galleries/${galleryId}/favorites/analytics/refresh`;
+    const response = await apiClient.post(endpoint, undefined, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to refresh analytics');
     }
@@ -838,8 +919,10 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string
   ): Promise<string> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/export`;
-    const response = await apiClient.get<string>(endpoint);
+    const endpoint = `/api/v1/galleries/${galleryId}/favorites/analytics/export`;
+    const response = await apiClient.get<string>(endpoint, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to export favorites');
     }
@@ -858,8 +941,10 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string
   ): Promise<Record<string, unknown>> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/settings`;
-    const response = await apiClient.get<Record<string, unknown>>(endpoint);
+    const endpoint = `/api/v1/galleries/${galleryId}/favorites/settings`;
+    const response = await apiClient.get<Record<string, unknown>>(endpoint, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to get favorites settings');
     }
@@ -875,8 +960,10 @@ export class GalleryService {
     galleryId: string,
     settings: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/settings`;
-    const response = await apiClient.patch<Record<string, unknown>>(endpoint, settings);
+    const endpoint = `/api/v1/galleries/${galleryId}/favorites/settings`;
+    const response = await apiClient.patch<Record<string, unknown>>(endpoint, settings, {
+      headers: { 'X-Workspace-ID': workspaceId }
+    });
     if (response.error) {
       throw new Error(response.error.message || 'Failed to update favorites settings');
     }

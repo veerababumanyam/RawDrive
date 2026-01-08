@@ -166,10 +166,10 @@ export type { GradientConfiguration, ColorStop } from './gradient';
 export type { PaginationMeta, PaginatedResponse, ErrorResponse, SuccessResponse } from './common';
 
 // ---------------------------------------------------------------------------
-// Sync Types & Enums (Live Camera Sync)
+// LiveSync Types & Enums (Live Camera Sync)
 // ---------------------------------------------------------------------------
 
-// Sync enums
+// LiveSync enums
 export {
   SyncMappingStatus,
   SyncSessionStatus,
@@ -178,26 +178,26 @@ export {
   SyncEventType,
   SyncErrorCode,
   SyncWebSocketMessageType,
-} from './sync';
+} from './livesync';
 
-// Sync mapping interfaces
+// LiveSync mapping interfaces
 export type {
   SyncMapping,
   CreateSyncMappingRequest,
   UpdateSyncMappingRequest,
   CreateSyncMappingResponse,
-} from './sync';
+} from './livesync';
 
-// Sync session interfaces
+// LiveSync session interfaces
 export type {
   SyncSession,
   StartSyncSessionRequest,
   StartSyncSessionResponse,
   SyncStatusUpdate,
   SyncProgress,
-} from './sync';
+} from './livesync';
 
-// Sync event interfaces
+// LiveSync event interfaces
 export type {
   SyncEvent,
   SyncFileInfo,
@@ -205,26 +205,26 @@ export type {
   ReportFileEventsRequest,
   ReportFileEventsResponse,
   FileUploadInstruction,
-} from './sync';
+} from './livesync';
 
-// Sync error interfaces
-export type { SyncError } from './sync';
+// LiveSync error interfaces
+export type { SyncError } from './livesync';
 
-// Sync statistics interfaces
+// LiveSync statistics interfaces
 export type {
   SyncMappingStats,
   WorkspaceSyncStats,
-} from './sync';
+} from './livesync';
 
-// Sync WebSocket interfaces
-export type { SyncWebSocketMessage } from './sync';
+// LiveSync WebSocket interfaces
+export type { SyncWebSocketMessage } from './livesync';
 
-// Sync query interfaces
+// LiveSync query interfaces
 export type {
   ListSyncMappingsQuery,
   ListSyncSessionsQuery,
   ListSyncEventsQuery,
-} from './sync';
+} from './livesync';
 
 // ---------------------------------------------------------------------------
 // Collaboration Types & Enums (Real-time Gallery Editing)

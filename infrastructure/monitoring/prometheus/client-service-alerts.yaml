@@ -165,3 +165,123 @@ groups:
         annotations:
           summary: "Import/export operations are slow"
           description: "P95 latency is {{ $value }}s (threshold: 30s)"
+
+  # GDPR + SOC2 Compliance Alerts (Added: 2026-01-08)
+  - name: client-service-gdpr-soc2
+    interval: 60s
+    rules:
+      # Audit Logging Alerts (SOC2 CC6.3)
+      - alert: AuditLogCreationFailureRate
+        expr: rate(audit_log_errors_total{service="client-service"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+          service: client-service
+          compliance: soc2-cc6.3
+        annotations:
+          summary: "High audit log failure rate in client-service"
+          description: "Audit log creation failures exceed 10 per 5 minutes (current: {{ $value | humanize }}). This violates SOC2 CC6.3 compliance requirements."
+          runbook_url: "https://docs.rawdrive.com/runbooks/audit-log-failures"
+
+      - alert: AuditLogCreationStopped
+        expr: rate(audit_logs_created_total{service="client-service"}[10m]) < 0.01
+        for: 10m
+        labels:
+          severity: warning
+          service: client-service
+          compliance: soc2-cc6.3
+        annotations:
+          summary: "Audit log creation rate abnormally low"
+          description: "Audit logs not being created at expected rate. This may indicate integration issues."
+
+      # GDPR Export Performance Alerts (GDPR Article 15)
+      - alert: GDPRExportPerformanceDegradation
+        expr: histogram_quantile(0.95, rate(client_export_duration_seconds_bucket{service="client-service"}[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: client-service
+          compliance: gdpr-article-15
+        annotations:
+          summary: "GDPR export p95 latency exceeded 5 seconds"
+          description: "Export performance degraded. p95 latency: {{ $value | humanize }}s (target: <5s)"
+
+      - alert: GDPRExportCriticalLatency
+        expr: histogram_quantile(0.95, rate(client_export_duration_seconds_bucket{service="client-service"}[5m])) > 30
+        for: 2m
+        labels:
+          severity: critical
+          service: client-service
+          compliance: gdpr-article-15
+        annotations:
+          summary: "GDPR export critically slow"
+          description: "Export p95 latency: {{ $value | humanize }}s. Immediate investigation required."
+
+      # Connection Pool Alerts
+      - alert: ConnectionPoolExhaustion
+        expr: client_service_db_pool_available < 5
+        for: 2m
+        labels:
+          severity: critical
+          service: client-service
+        annotations:
+          summary: "Client service connection pool critically low"
+          description: "Available database connections: {{ $value }}. Performance and functionality at risk."
+
+      # GDPR Cleanup Job Alerts (GDPR Article 17)
+      - alert: GDPRCleanupJobFailed
+        expr: time() - gdpr_cleanup_last_success_timestamp_seconds > 86400
+        for: 1h
+        labels:
+          severity: warning
+          service: client-service
+          compliance: gdpr-article-17
+        annotations:
+          summary: "GDPR cleanup job has not succeeded in 24 hours"
+          description: "Last successful GDPR cleanup: {{ $value | humanizeDuration }} ago"
+
+      - alert: GDPRCleanupJobStale
+        expr: gdpr_cleanup_last_run_timestamp_seconds > 0 and time() - gdpr_cleanup_last_run_timestamp_seconds > 172800
+        for: 1h
+        labels:
+          severity: critical
+          service: client-service
+          compliance: gdpr-article-17
+        annotations:
+          summary: "GDPR cleanup job has not run in 48 hours"
+          description: "GDPR Article 17 compliance at risk - data not being deleted after retention period"
+
+      - alert: GDPRRetentionBacklog
+        expr: client_service_retention_expired_count > 500
+        for: 30m
+        labels:
+          severity: warning
+          service: client-service
+          compliance: gdpr-article-17
+        annotations:
+          summary: "Large backlog of clients pending permanent deletion"
+          description: "{{ $value }} clients past retention period awaiting deletion"
+
+      # Soft Delete Operation Alerts
+      - alert: SoftDeleteFailureRate
+        expr: rate(client_soft_delete_errors_total{service="client-service"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: client-service
+          compliance: gdpr-article-17
+        annotations:
+          summary: "High soft delete failure rate"
+          description: "GDPR Article 17 (Right to Erasure) requests may be failing"
+
+      # Audit Metadata Coverage (SOC2 CC6.3)
+      - alert: AuditLogMetadataCoverageLow
+        expr: (audit_logs_with_metadata_total / audit_logs_created_total) < 0.95
+        for: 15m
+        labels:
+          severity: warning
+          service: client-service
+          compliance: soc2-cc6.3
+        annotations:
+          summary: "Audit log metadata coverage below 95%"
+          description: "{{ $value | humanizePercentage }} of audit logs have metadata (target: >95%)"

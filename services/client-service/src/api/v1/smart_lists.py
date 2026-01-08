@@ -24,61 +24,15 @@ from src.schemas.smart_list import (
 )
 from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
+from src.middleware.workspace_auth import verify_workspace_access
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(
-    prefix="/api/v1/workspaces/{workspace_id}/clients/smart-lists",
+    prefix="/workspaces/{workspace_id}/clients/smart-lists",
     tags=["smart-lists"],
 )
-
-
-# =============================================================================
-# Dependency Injection
-# =============================================================================
-
-
-def get_service() -> SmartListService:
-    """Get SmartListService instance."""
-    return get_smart_list_service()
-
-
-async def verify_workspace_access(
-    workspace_id: UUID = Path(...),
-    current_user: JWTPayload = Depends(get_current_user),
-) -> UUID:
-    """
-    Verify user has access to workspace.
-
-    Args:
-        workspace_id: Workspace ID from path
-        current_user: JWT payload from auth middleware
-
-    Returns:
-        UUID: Validated workspace_id
-
-    Raises:
-        HTTPException: 403 if user doesn't have access
-    """
-    if str(current_user.workspace_id) != str(workspace_id):
-        logger.warning(
-            "Workspace access denied",
-            extra={
-                "user_id": str(current_user.user_id),
-                "requested_workspace": str(workspace_id),
-                "user_workspace": str(current_user.workspace_id),
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorResponse(
-                error="WORKSPACE_ACCESS_DENIED",
-                message="You do not have access to this workspace",
-            ).model_dump(),
-        )
-
-    return workspace_id
 
 
 # =============================================================================
@@ -89,7 +43,7 @@ async def verify_workspace_access(
 @router.get("", response_model=SmartListListResponse)
 async def list_smart_lists(
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListService = Depends(get_service),
+    service: SmartListsService = Depends(get_smart_lists_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListListResponse:
     """
@@ -125,7 +79,7 @@ async def list_smart_lists(
 async def create_smart_list(
     data: SmartListCreate,
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListService = Depends(get_service),
+    service: SmartListsService = Depends(get_smart_lists_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListResponse:
     """
@@ -194,7 +148,7 @@ async def create_smart_list(
 async def get_smart_list(
     list_id: UUID = Path(..., description="Smart list ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListService = Depends(get_service),
+    service: SmartListsService = Depends(get_smart_lists_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListResponse:
     """
@@ -234,7 +188,7 @@ async def update_smart_list(
     data: SmartListUpdate,
     list_id: UUID = Path(..., description="Smart list ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListService = Depends(get_service),
+    service: SmartListsService = Depends(get_smart_lists_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListResponse:
     """
@@ -298,7 +252,7 @@ async def update_smart_list(
 async def delete_smart_list(
     list_id: UUID = Path(..., description="Smart list ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListService = Depends(get_service),
+    service: SmartListsService = Depends(get_smart_lists_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> None:
     """
@@ -350,7 +304,7 @@ async def evaluate_smart_list(
     workspace_id: UUID = Depends(verify_workspace_access),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
-    service: SmartListService = Depends(get_service),
+    service: SmartListsService = Depends(get_smart_lists_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListEvaluationResponse:
     """

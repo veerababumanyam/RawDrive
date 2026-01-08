@@ -25,7 +25,7 @@ import {
   getGoogleOAuthUrl,
   getStoredTokens,
 } from '../services/auth';
-import { refreshAccessToken, AUTH_EVENTS } from '../services/api';
+import { refreshAccessToken, coordinatedRefreshAccessToken, AUTH_EVENTS } from '../services/api';
 
 // OAuth error codes to user-friendly messages
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
@@ -194,7 +194,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Only attempt refresh if we have a refresh token
           if (tokens?.refreshToken) {
             console.log('[Auth] Access token expired, attempting silent refresh...');
-            const newAccessToken = await refreshAccessToken();
+            const newAccessToken = await coordinatedRefreshAccessToken();
 
             if (!newAccessToken) {
               // Refresh failed - refresh token is also invalid/expired

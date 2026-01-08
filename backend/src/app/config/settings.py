@@ -364,6 +364,11 @@ class AppSettings(BaseSettings):
         description="URL for invitations microservice (e.g., http://invitations-api:8000)",
     )
 
+    # Milvus Vector Database
+    milvus_enabled: bool = Field(default=False, alias="MILVUS_ENABLED")
+    milvus_host: str = Field(default="localhost", alias="MILVUS_HOST")
+    milvus_port: int = Field(default=19530, alias="MILVUS_PORT")
+
     # Observability
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     log_format: str = Field(

@@ -1,82 +1,173 @@
 # KEDA ScaledObject for Gallery Service
-# Scales based on HTTP request rate and WebSocket connections
-# Target: 5-20 pods for 50K concurrent users
+# Scales gallery-service pods based on Traefik metrics and agent workload
+#
+# Prerequisites:
+# - KEDA installed: helm install keda kedacore/keda --namespace keda --create-namespace
+# - Prometheus running with Traefik + gallery-service metrics
+# - Traefik v3 with metrics enabled
+#
+# Agent Features:
+# - MCP tools (12 tools)
+# - Google A2A endpoints (3 agents)
+# - WebSocket notifications (real-time)
+# - Batch operations (bulk processing)
+# - AI service integration (circuit breaker)
+#
+# Scaling Strategy:
+# - Scale 5-30 replicas based on agent workload
+# - HTTP request rate (Traefik metrics)
+# - Agent operation rate (Prometheus metrics)
+# - WebSocket connections (gallery metrics)
+# - Request latency P95 (Traefik metrics)
+# - AI service call rate (gallery metrics)
 
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: gallery-service-scaledobject
+  name: gallery-service-scaler
+  namespace: rawdrive
   labels:
-    app: gallery-service
+    app.kubernetes.io/name: gallery-service
+    app.kubernetes.io/component: microservice
+    app.kubernetes.io/part-of: rawdrive
 spec:
+  # Target deployment to scale
   scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
     name: gallery-service
-  # Polling interval for metrics
-  pollingInterval: 15
-  # Cooldown period before scaling down
-  cooldownPeriod: 60
-  # Min/max replicas
-  minReplicaCount: 5
-  maxReplicaCount: 20
-  # Scale down gradually
+    kind: Deployment
+
+  # Scaling boundaries optimized for agent workloads
+  minReplicaCount: 5          # Higher minimum for agent availability
+  maxReplicaCount: 30         # Can handle 100+ concurrent agents
+
+  # Cooldown periods
+  cooldownPeriod: 60          # 1 min after scale-down (faster recovery)
+  pollingInterval: 15         # Check metrics every 15 seconds
+
+  # Advanced scaling behavior
   advanced:
+    restoreToOriginalReplicaCount: false
     horizontalPodAutoscalerConfig:
       behavior:
         scaleDown:
-          stabilizationWindowSeconds: 120
+          stabilizationWindowSeconds: 120  # 2 min stabilization
           policies:
             - type: Percent
-              value: 25
+              value: 10               # Scale down 10% at a time
               periodSeconds: 60
         scaleUp:
-          stabilizationWindowSeconds: 0
+          stabilizationWindowSeconds: 0    # Immediate scale up
           policies:
             - type: Percent
-              value: 100
+              value: 100              # Double replicas if needed
               periodSeconds: 15
             - type: Pods
-              value: 4
+              value: 5                # Add up to 5 pods at once
               periodSeconds: 15
-          selectPolicy: Max
+          selectPolicy: Max           # Use the highest value
+
   triggers:
-    # Primary trigger: HTTP request rate from Prometheus
+    # =========================================================================
+    # Trigger 1: HTTP Request Rate (Traefik metrics)
+    # Scale when total requests per second exceed threshold
+    # =========================================================================
     - type: prometheus
       metadata:
-        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
-        metricName: gallery_http_requests_total
+        serverAddress: http://prometheus.monitoring:9090
+        metricName: gallery_traefik_requests_per_second
+        threshold: "100"          # 100 RPS per replica
         query: |
-          sum(rate(gallery_http_requests_total{endpoint=~"/api/v1/public/.*"}[1m]))
-        threshold: "100"  # Scale up when >100 RPS
-        activationThreshold: "50"  # Activate scaling at 50 RPS
+          sum(rate(traefik_service_requests_total{service=~"gallery-service.*"}[1m]))
+        activationThreshold: "10"
 
-    # Secondary trigger: WebSocket connections
+    # =========================================================================
+    # Trigger 2: Agent Operation Rate (Gallery metrics)
+    # Scale based on MCP + A2A agent operation rate
+    # =========================================================================
     - type: prometheus
       metadata:
-        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
-        metricName: gallery_websocket_connections_active
+        serverAddress: http://prometheus.monitoring:9090
+        metricName: gallery_agent_operations_rate
+        threshold: "50"           # 50 agent ops/sec threshold
         query: |
-          sum(gallery_websocket_connections_active)
-        threshold: "500"  # Scale up when >500 connections
-        activationThreshold: "200"
+          sum(rate(gallery_agent_operations_total[1m])) +
+          sum(rate(gallery_batch_operations_total[1m]))
+        activationThreshold: "10"
 
-    # Tertiary trigger: Request latency
+    # =========================================================================
+    # Trigger 3: WebSocket Connections (Gallery metrics)
+    # Scale based on active agent WebSocket connections
+    # =========================================================================
     - type: prometheus
       metadata:
-        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
-        metricName: gallery_http_request_duration_seconds
+        serverAddress: http://prometheus.monitoring:9090
+        metricName: gallery_websocket_connections
+        threshold: "100"          # 100 WebSocket connections per replica
         query: |
-          histogram_quantile(0.95, sum(rate(gallery_http_request_duration_seconds_bucket[1m])) by (le))
-        threshold: "1"  # Scale up when P95 latency > 1s
+          sum(gallery_agent_websocket_connections{agent_type="ai"})
+        activationThreshold: "20"
+
+    # =========================================================================
+    # Trigger 4: Request Latency P95 (Traefik metrics)
+    # Scale up when latency exceeds 1 second
+    # =========================================================================
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring:9090
+        metricName: gallery_traefik_latency_p95
+        threshold: "1"            # 1 second P95 latency
+        query: |
+          histogram_quantile(0.95,
+            sum(rate(traefik_service_request_duration_seconds_bucket{service=~"gallery-service.*"}[5m])) by (le)
+          )
         activationThreshold: "0.5"
 
+    # =========================================================================
+    # Trigger 5: AI Service Call Rate (Gallery metrics)
+    # Scale when AI service integration calls increase
+    # =========================================================================
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring:9090
+        metricName: gallery_ai_service_calls_rate
+        threshold: "20"           # 20 AI service calls/sec
+        query: |
+          sum(rate(gallery_ai_service_calls_total{status="success"}[1m]))
+        activationThreshold: "5"
+
+    # =========================================================================
+    # Trigger 6: Batch Operation Queue Length (Redis)
+    # Scale based on pending batch operations
+    # Optional: Enable if using Redis queue for batch operations
+    # =========================================================================
+    # - type: redis
+    #   metadata:
+    #     address: redis.rawdrive:6379
+    #     listName: gallery_batch_queue
+    #     listLength: "20"        # 20 pending batch operations
+    #     activationListLength: "5"
+
+    # =========================================================================
+    # Trigger 7: CPU Usage (fallback metric)
+    # Scale when CPU usage exceeds 70%
+    # =========================================================================
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"
+
 ---
-# Trigger Authentication for Prometheus
-apiVersion: keda.sh/v1alpha1
-kind: TriggerAuthentication
-metadata:
-  name: gallery-prometheus-trigger-auth
-spec:
-  secretTargetRef: []
-  # No authentication needed for internal Prometheus
+# =============================================================================
+# TriggerAuthentication for Redis (if auth required)
+# =============================================================================
+# Uncomment if Redis requires authentication
+# apiVersion: keda.sh/v1alpha1
+# kind: TriggerAuthentication
+# metadata:
+#   name: gallery-redis-auth
+#   namespace: rawdrive
+# spec:
+#   secretTargetRef:
+#     - parameter: password
+#       name: redis-secret
+#       key: redis-password

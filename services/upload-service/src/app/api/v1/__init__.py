@@ -13,5 +13,5 @@ from app.api.v1.upload import router as upload_router
 
 router = APIRouter(prefix="/v1")
 
-# Upload routes - POST /session, PATCH /chunk/{id}, POST /complete, etc.
-router.include_router(upload_router, prefix="/upload", tags=["upload"])
+# Upload routes - POST /uploads, PATCH /uploads/{id}/chunks, POST /uploads/{id}/complete, etc.
+router.include_router(upload_router, prefix="/uploads", tags=["uploads"])

@@ -77,10 +77,10 @@ class UploadUser(HttpUser):
         }
 
         with self.client.post(
-            "/api/v1/upload/session",
+            "/api/v1/uploads",
             json=payload,
             headers=self.headers,
-            name="POST /upload/session",
+            name="POST /uploads",
             catch_response=True,
         ) as response:
             if response.status_code == 201:
@@ -130,10 +130,10 @@ class UploadUser(HttpUser):
         }
 
         with self.client.patch(
-            f"/api/v1/upload/chunk/{upload_id}",
+            f"/api/v1/uploads/{upload_id}/chunks",
             data=chunk_data,
             headers=headers,
-            name="PATCH /upload/chunk/{id}",
+            name="PATCH /uploads/{id}/chunks",
             catch_response=True,
         ) as response:
             if response.status_code == 204:
@@ -161,9 +161,9 @@ class UploadUser(HttpUser):
         upload_id = session["upload_id"]
 
         with self.client.head(
-            f"/api/v1/upload/chunk/{upload_id}",
+            f"/api/v1/uploads/{upload_id}/chunks",
             headers=self.headers,
-            name="HEAD /upload/chunk/{id}",
+            name="HEAD /uploads/{id}/chunks",
             catch_response=True,
         ) as response:
             if response.status_code == 200:
@@ -199,10 +199,10 @@ class UploadUser(HttpUser):
         }
 
         with self.client.post(
-            f"/api/v1/upload/complete/{upload_id}",
+            f"/api/v1/uploads/{upload_id}/complete",
             json=payload,
             headers=self.headers,
-            name="POST /upload/complete/{id}",
+            name="POST /uploads/{id}/complete",
             catch_response=True,
         ) as response:
             # Remove session regardless of outcome
@@ -224,10 +224,10 @@ class UploadUser(HttpUser):
         payload = {"sha256": sha256}
 
         with self.client.post(
-            "/api/v1/upload/check-duplicate",
+            "/api/v1/uploads/check-duplicate",
             json=payload,
             headers=self.headers,
-            name="POST /upload/check-duplicate",
+            name="POST /uploads/check-duplicate",
             catch_response=True,
         ) as response:
             if response.status_code == 200:
@@ -245,9 +245,9 @@ class UploadUser(HttpUser):
         upload_id = session["upload_id"]
 
         with self.client.delete(
-            f"/api/v1/upload/chunk/{upload_id}",
+            f"/api/v1/uploads/{upload_id}",
             headers=self.headers,
-            name="DELETE /upload/chunk/{id}",
+            name="DELETE /uploads/{id}",
             catch_response=True,
         ) as response:
             # Remove session regardless of outcome

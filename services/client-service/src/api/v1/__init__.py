@@ -20,6 +20,7 @@ from src.api.v1.import_export import router as import_export_router
 from src.api.v1.duplicates import router as duplicates_router
 from src.api.v1.visitors import router as visitors_router
 from src.api.v1.analytics import router as analytics_router
+from src.api.v1.gdpr import router as gdpr_router
 
 # Create main API v1 router
 router = APIRouter()
@@ -38,6 +39,7 @@ router.include_router(bulk_ops_router, prefix="/workspaces/{workspace_id}/client
 router.include_router(duplicates_router)
 router.include_router(visitors_router)
 router.include_router(analytics_router)
+router.include_router(gdpr_router)
 
 
 # Temporary ping endpoint to verify service is running

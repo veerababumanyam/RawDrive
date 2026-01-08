@@ -265,7 +265,7 @@ class RequestMetrics:
     """Context manager for tracking request metrics.
 
     Usage:
-        with RequestMetrics("POST", "/api/v1/upload/session") as m:
+        with RequestMetrics("POST", "/api/v1/uploads") as m:
             # Handle request
             m.set_status_code(201)
     """
@@ -347,7 +347,7 @@ def track_request(method: str, endpoint: str):
         endpoint: Endpoint path
 
     Usage:
-        @track_request("POST", "/api/v1/upload/session")
+        @track_request("POST", "/api/v1/uploads")
         async def create_session(...):
             ...
     """

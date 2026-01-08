@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-standalone
+  namespace: rawdrive
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus-standalone
+  template:
+    metadata:
+      labels:
+        app: milvus-standalone
+    spec:
+      containers:
+      - name: milvus
+        image: milvusdb/milvus:v2.3.4
+        command: ["milvus", "run", "standalone"]
+        env:
+        - name: ETCD_ENDPOINTS
+          value: etcd:2379
+        - name: MINIO_ADDRESS
+          value: minio:9000
+        ports:
+        - containerPort: 19530
+        - containerPort: 9091
+        volumeMounts:
+        - name: milvus-data
+          mountPath: /var/lib/milvus
+      volumes:
+      - name: milvus-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus
+  namespace: rawdrive
+spec:
+  ports:
+  - name: milvus
+    port: 19530
+    targetPort: 19530
+  - name: metrics
+    port: 9091
+    targetPort: 9091
+  selector:
+    app: milvus-standalone

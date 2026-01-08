@@ -160,7 +160,7 @@ upload_concurrent_total{workspace_id="..."} 0
 ```powershell
 # This should fail with 401
 try {
-    Invoke-RestMethod -Uri "http://localhost:8005/api/v1/upload/session" -Method Post
+    Invoke-RestMethod -Uri "http://localhost:8005/api/v1/uploads" -Method Post
 } catch {
     Write-Host "Status Code: $($_.Exception.Response.StatusCode.value__)"
 }
@@ -200,7 +200,7 @@ npm run dev
 3. **Open DevTools** (F12) → Network tab
 4. **Upload a file** via the gallery
 5. **Verify in Network tab:**
-   - Request to `http://localhost:8005/api/v1/upload/session`
+   - Request to `http://localhost:8005/api/v1/uploads`
    - Response contains `upload_id` and `upload_url`
 6. **Verify upload completes** → Asset appears in gallery
 
@@ -222,7 +222,7 @@ VITE_FEATURE_UPLOAD_MICROSERVICE=true
 ```
 
 **Verify:**
-- Upload goes back to `http://localhost:8005/api/v1/upload/session`
+- Upload goes back to `http://localhost:8005/api/v1/uploads`
 
 ---
 
@@ -267,7 +267,7 @@ VITE_FEATURE_UPLOAD_MICROSERVICE=true
 - [ ] **Auth middleware rejects unauthenticated requests**
   ```powershell
   # Should return 401
-  try { Invoke-RestMethod -Uri "http://localhost:8005/api/v1/upload/session" -Method Post } catch { $_.Exception.Response.StatusCode }
+  try { Invoke-RestMethod -Uri "http://localhost:8005/api/v1/uploads" -Method Post } catch { $_.Exception.Response.StatusCode }
   ```
 
 ### Frontend Integration ✅
@@ -276,7 +276,7 @@ VITE_FEATURE_UPLOAD_MICROSERVICE=true
   - Network tab shows: `localhost:8000/api/v1/workspaces/.../uploads`
 
 - [ ] **Feature flag enabled routes to upload service**
-  - Network tab shows: `localhost:8005/api/v1/upload/session`
+  - Network tab shows: `localhost:8005/api/v1/uploads`
 
 - [ ] **File upload completes successfully**
   - Session created

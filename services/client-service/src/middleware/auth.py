@@ -1,16 +1,29 @@
 """
 JWT authentication middleware and dependencies.
 
-Validates JWT tokens and extracts user/workspace context for authorization.
-MUST use same JWT_SECRET as other services for interoperability.
+Validates JWT tokens (EdDSA) and extracts user/workspace context for authorization.
+Uses Ed25519 public key for token verification (same as backend).
 """
 
 import jwt
 from typing import Optional, Dict, Any
+from functools import lru_cache
+from pathlib import Path
 from fastapi import Header, HTTPException, status
 from pydantic import BaseModel
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 from src.config import settings
+
+
+@lru_cache(maxsize=None)
+def _load_public_key():
+    """Load and cache the Ed25519 public key for JWT verification."""
+    key_path = Path(settings.JWT_PUBLIC_KEY_PATH).expanduser()
+    if not key_path.exists():
+        raise FileNotFoundError(f"JWT public key not found at {key_path}")
+    key_bytes = key_path.read_bytes()
+    return load_pem_public_key(key_bytes)
 
 
 class JWTPayload(BaseModel):
@@ -26,7 +39,7 @@ class JWTPayload(BaseModel):
 
 def decode_jwt(token: str) -> Dict[str, Any]:
     """
-    Decode and validate JWT token.
+    Decode and validate JWT token using EdDSA public key.
 
     Args:
         token: JWT token string
@@ -42,10 +55,13 @@ def decode_jwt(token: str) -> Dict[str, Any]:
         if token.startswith("Bearer "):
             token = token[7:]
 
-        # Decode token with shared secret
+        # Load public key for verification
+        public_key = _load_public_key()
+
+        # Decode token with EdDSA public key
         payload = jwt.decode(
             token,
-            settings.JWT_SECRET,
+            public_key,
             algorithms=[settings.JWT_ALGORITHM],
         )
 
@@ -62,6 +78,11 @@ def decode_jwt(token: str) -> Dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"JWT configuration error: {str(e)}",
         )
 
 
@@ -105,51 +126,53 @@ async def get_current_user(
 
 
 async def get_workspace_id(
-    x_workspace_id: Optional[str] = Header(None, alias="X-Workspace-ID"),
-    authorization: Optional[str] = Header(None),
+    authorization: str = Header(..., description="JWT Bearer token"),
 ) -> str:
     """
-    FastAPI dependency to extract workspace ID from headers or JWT.
+    FastAPI dependency to extract workspace ID from JWT.
 
-    Priority:
-    1. X-Workspace-ID header (explicit workspace context)
-    2. JWT token workspace_id claim (fallback)
+    SECURITY: Workspace ID is ONLY extracted from JWT to prevent
+    cross-tenant access via X-Workspace-ID header manipulation.
 
     Usage:
         @router.get("/clients")
         async def list_clients(workspace_id: str = Depends(get_workspace_id)):
-            # workspace_id guaranteed to be present
+            # workspace_id guaranteed to be from validated JWT
             ...
 
     Args:
-        x_workspace_id: Optional X-Workspace-ID header
-        authorization: Optional Authorization header with JWT
+        authorization: Required Authorization header with JWT
 
     Returns:
-        str: Workspace ID
+        str: Workspace ID from JWT token
 
     Raises:
-        HTTPException: If workspace ID cannot be determined
+        HTTPException: If JWT is invalid or missing workspace_id claim
     """
-    # Option 1: Explicit header
-    if x_workspace_id:
-        return x_workspace_id
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    # Option 2: Extract from JWT
-    if authorization:
-        try:
-            payload = decode_jwt(authorization)
-            workspace_id = payload.get("workspace_id")
-            if workspace_id:
-                return workspace_id
-        except HTTPException:
-            pass  # JWT invalid, fall through to error
-
-    # No workspace ID found
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Workspace ID required. Provide X-Workspace-ID header or valid JWT token.",
-    )
+    try:
+        payload = decode_jwt(authorization)
+        workspace_id = payload.get("workspace_id")
+        if not workspace_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="JWT token missing workspace_id claim",
+            )
+        return workspace_id
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 async def verify_workspace_access(
@@ -188,18 +211,6 @@ async def verify_workspace_access(
     return workspace_id, user
 
 
-def create_jwt(payload: Dict[str, Any]) -> str:
-    """
-    Create JWT token (for testing or internal use).
-
-    Args:
-        payload: Token payload
-
-    Returns:
-        str: Encoded JWT token
-    """
-    return jwt.encode(
-        payload,
-        settings.JWT_SECRET,
-        algorithm=settings.JWT_ALGORITHM,
-    )
+# NOTE: JWT token creation is ONLY done by the backend service.
+# Client-service only verifies tokens using the public key.
+# Do NOT add create_jwt() function here - it violates security architecture.

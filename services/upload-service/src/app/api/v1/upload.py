@@ -1,12 +1,12 @@
 """Upload API endpoints for the Upload Microservice.
 
 This module provides the REST API endpoints for file uploads:
-- POST /v1/upload/session - Create upload session [T013]
-- PATCH /v1/upload/chunk/{upload_id} - Upload chunk (TUS protocol) [T014]
-- HEAD /v1/upload/chunk/{upload_id} - Get upload status (TUS HEAD) [T014]
-- DELETE /v1/upload/chunk/{upload_id} - Cancel upload (TUS DELETE) [T014]
-- POST /v1/upload/complete/{upload_id} - Commit upload [T015]
-- POST /v1/upload/check-duplicate - Check for duplicates [T016]
+- POST /v1/uploads - Create upload session [T013]
+- PATCH /v1/uploads/{upload_id}/chunks - Upload chunk (TUS protocol) [T014]
+- HEAD /v1/uploads/{upload_id}/chunks - Get upload status (TUS HEAD) [T014]
+- DELETE /v1/uploads/{upload_id} - Cancel upload (TUS DELETE) [T014]
+- POST /v1/uploads/{upload_id}/complete - Commit upload [T015]
+- POST /v1/uploads/check-duplicate - Check for duplicates [T016]
 
 The endpoints follow TUS protocol (https://tus.io/protocols/resumable-upload)
 for resumable uploads with chunk buffering in Redis.
@@ -276,7 +276,7 @@ WorkspaceIdDep = Annotated[UUID, Depends(get_workspace_id)]
 
 
 @router.post(
-    "/session",
+    "",
     response_model=UploadSessionResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create upload session",
@@ -491,7 +491,7 @@ async def create_upload_session(
 
 
 @router.patch(
-    "/chunk/{upload_id}",
+    "/{upload_id}/chunks",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Upload file chunk (TUS protocol)",
     description="""
@@ -931,7 +931,7 @@ async def upload_chunk(
 
 
 @router.head(
-    "/chunk/{upload_id}",
+    "/{upload_id}/chunks",
     status_code=status.HTTP_200_OK,
     summary="Get upload status (TUS HEAD)",
     description="""
@@ -1067,7 +1067,7 @@ async def get_upload_status(
 
 
 @router.delete(
-    "/chunk/{upload_id}",
+    "/{upload_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Cancel upload (TUS DELETE)",
     description="""
@@ -1204,7 +1204,7 @@ async def cancel_upload(
 
 
 @router.post(
-    "/complete/{upload_id}",
+    "/{upload_id}/complete",
     response_model=UploadCommitResponse,
     status_code=status.HTTP_200_OK,
     summary="Commit upload (finalize)",

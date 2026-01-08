@@ -520,7 +520,7 @@ upload = await upload_service.create_upload(
 | 148 | `/webhooks/razorpay` | billing-service | None (webhooks) |
 | 145 | `/api/v1/subscription/*` | billing-service | 100 req/min |
 | 140 | `/api/v1/galleries/*` | gallery-service | 200 req/min |
-| 135 | `/api/v1/upload/*` | upload-service | 50 req/min |
+| 135 | `/api/v1/uploads/*` | upload-service | 50 req/min |
 | 100 | `/api/*` | backend (fallback) | 100 req/min |
 
 **Features:**

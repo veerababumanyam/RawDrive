@@ -39,17 +39,73 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
+    import asyncio
+    import os
+    import uuid
+
     # Startup
     logger.info("Starting Digital Invitations Microservice...")
     await redis_client.connect()
     await get_pool()  # Initialize database pool
     logger.info("Service started successfully")
-    yield
-    # Shutdown
-    logger.info("Shutting down...")
-    await redis_client.disconnect()
-    await close_pool()
-    logger.info("Shutdown complete")
+
+    # Register service in A2A registry (Phase 4: A2A Integration)
+    import sys
+    sys.path.insert(0, '/app/backend/src')
+    from app.services.service_registry import (
+        get_service_registry,
+        ServiceRegistration,
+        ServiceCapability,
+    )
+
+    registry = get_service_registry()
+    service_id = os.getenv("SERVICE_ID", str(uuid.uuid4()))
+    registration = ServiceRegistration(
+        service_name="invitations-service",
+        service_id=service_id,
+        base_url=os.getenv("SERVICE_BASE_URL", "http://invitations-api:8007"),
+        capabilities=[
+            ServiceCapability(name="invitations:create", version="1.0", endpoint="/api/v1/invitations"),
+            ServiceCapability(name="invitations:rsvp", version="1.0", endpoint="/api/v1/invitations/rsvp"),
+            ServiceCapability(name="invitations:bulk", version="1.0", endpoint="/api/v1/invitations/bulk"),
+        ],
+        health_check_endpoint="/health",
+    )
+
+    await registry.register(registration)
+    logger.info(f"Invitations service registered in A2A registry: {service_id}")
+
+    # Start heartbeat loop
+    async def heartbeat_loop():
+        """Send heartbeat every 15 seconds."""
+        while True:
+            try:
+                await asyncio.sleep(15)
+                await registry.heartbeat("invitations-service", service_id)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Heartbeat failed: {e}")
+
+    heartbeat_task = asyncio.create_task(heartbeat_loop())
+
+    try:
+        yield
+    finally:
+        # Shutdown: Unregister from A2A registry
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        await registry.unregister("invitations-service", service_id)
+        logger.info("Invitations service unregistered from A2A registry")
+
+        # Original shutdown
+        logger.info("Shutting down...")
+        await redis_client.disconnect()
+        await close_pool()
+        logger.info("Shutdown complete")
 
 
 app = FastAPI(

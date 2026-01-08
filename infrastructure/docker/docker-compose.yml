@@ -218,13 +218,13 @@ services:
       ARGON2_MEMORY_COST: ${ARGON2_MEMORY_COST:-65536}
       ARGON2_TIME_COST: ${ARGON2_TIME_COST:-3}
       ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-4}
-      DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-1}
-      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
+      DB_POOL_MIN_SIZE: ${DB_POOL_MIN_SIZE:-10}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-50}
       DB_POOL_MAX_LIFETIME_SEC: ${DB_POOL_MAX_LIFETIME_SEC:-1800}
       # Public base URL for API (fixes localhost issues)
-      API_BASE_URL: ${API_BASE_URL:-https://rawdrive.ai}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
       # Public URL for profile pages (QR codes, public URLs)
-      PUBLIC_URL: ${PUBLIC_URL:-https://rawdrive.ai}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8000}
       # Disable embedded face detection worker (now separate service)
       DISABLE_FACE_WORKER: "true"
       # Invitations microservice URL for proxy routing
@@ -409,6 +409,15 @@ services:
     environment:
       # Database connection (shared with main backend)
       DATABASE_URL: postgresql://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
+      DB_POOL_MIN_SIZE: 5
+      DB_POOL_MAX_SIZE: 20
+      DB_COMMAND_TIMEOUT: 60
+
+      # PgBouncer connection pooler (for 5000+ concurrent scaling)
+      PGBOUNCER_ENABLED: ${PGBOUNCER_ENABLED:-false}
+      PGBOUNCER_HOST: ${PGBOUNCER_HOST:-pgbouncer}
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT:-6432}
+
       REDIS_URL: redis://redis:${PORT_REDIS}/0
       # Celery configuration (use separate Redis DBs to avoid key collisions)
       CELERY_BROKER_URL: redis://redis:${PORT_REDIS}/3
@@ -509,6 +518,12 @@ services:
       DATABASE_URL: postgresql://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
       DB_POOL_MIN_SIZE: 5
       DB_POOL_MAX_SIZE: 20
+      DB_COMMAND_TIMEOUT: 60
+
+      # PgBouncer connection pooler (for 5000+ concurrent scaling)
+      PGBOUNCER_ENABLED: ${PGBOUNCER_ENABLED:-false}
+      PGBOUNCER_HOST: ${PGBOUNCER_HOST:-pgbouncer}
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT:-6432}
 
       # Redis
       REDIS_URL: redis://redis:${PORT_REDIS}/0
@@ -597,6 +612,11 @@ services:
       DB_POOL_MAX_SIZE: ${GALLERY_DB_POOL_MAX_SIZE:-100}
       DB_COMMAND_TIMEOUT: ${DB_COMMAND_TIMEOUT:-60}
 
+      # PgBouncer connection pooler (for 5000+ concurrent scaling)
+      PGBOUNCER_ENABLED: ${PGBOUNCER_ENABLED:-false}
+      PGBOUNCER_HOST: ${PGBOUNCER_HOST:-pgbouncer}
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT:-6432}
+
       # Redis - Multi-tier caching
       REDIS_URL: redis://redis:${PORT_REDIS}/0
       REDIS_MAX_CONNECTIONS: ${GALLERY_REDIS_MAX_CONNECTIONS:-50}
@@ -651,6 +671,9 @@ services:
       # Bind to localhost only - accessible via Traefik reverse proxy
       - "127.0.0.1:${PORT_GALLERY}:${PORT_GALLERY}"
 
+    volumes:
+      - ../../services/gallery-service:/app
+
     depends_on:
       postgres:
         condition: service_healthy
@@ -699,6 +722,11 @@ services:
       DB_POOL_MIN_SIZE: ${BILLING_DB_POOL_MIN_SIZE:-10}
       DB_POOL_MAX_SIZE: ${BILLING_DB_POOL_MAX_SIZE:-50}
       DB_COMMAND_TIMEOUT: ${DB_COMMAND_TIMEOUT:-60}
+
+      # PgBouncer connection pooler (for 5000+ concurrent scaling)
+      PGBOUNCER_ENABLED: ${PGBOUNCER_ENABLED:-false}
+      PGBOUNCER_HOST: ${PGBOUNCER_HOST:-pgbouncer}
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT:-6432}
 
       # Redis
       REDIS_URL: redis://redis:${PORT_REDIS}/0
@@ -776,6 +804,119 @@ services:
           memory: 256M
 
   # ============================================================================
+  # Client CRM Microservice
+  # Comprehensive client relationship management with gallery linking, activity tracking,
+  # visitor conversion, and KEDA autoscaling (2-20 replicas)
+  # ============================================================================
+  client-service:
+    build:
+      context: ../../services/client-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-client-service
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Service
+      SERVICE_NAME: client-service
+      SERVICE_VERSION: "1.0.0"
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Database (shared with backend)
+      DATABASE_URL: postgresql://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
+      DATABASE_READ_REPLICA_URL: ${DATABASE_READ_REPLICA_URL:-}
+      # Reduced pool size: 4 workers × 3 min = 12 connections total
+      DB_POOL_MIN_SIZE: 2
+      DB_POOL_MAX_SIZE: 10
+      DB_COMMAND_TIMEOUT: ${DB_COMMAND_TIMEOUT:-60}
+
+      # PgBouncer connection pooler (for 5000+ concurrent scaling)
+      PGBOUNCER_ENABLED: ${PGBOUNCER_ENABLED:-false}
+      PGBOUNCER_HOST: ${PGBOUNCER_HOST:-pgbouncer}
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT:-6432}
+
+      # Redis - 3-tier caching (L1: 5min, L2: 2min, L3: 30sec)
+      REDIS_URL: redis://redis:${PORT_REDIS}/0
+      REDIS_MAX_CONNECTIONS: ${CLIENT_REDIS_MAX_CONNECTIONS:-30}
+      REDIS_KEY_PREFIX: "client:"
+
+      # JWT (must match backend - EdDSA with public key)
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public_key
+      JWT_ALGORITHM: EdDSA
+
+      # CORS
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+
+      # Rate Limiting
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_DEFAULT: "100/minute"
+      RATE_LIMIT_IMPORT: "10/hour"
+      RATE_LIMIT_EXPORT: "20/hour"
+      RATE_LIMIT_BULK_OPS: "30/minute"
+
+      # Cache TTLs (seconds)
+      CACHE_TTL_CLIENT_METADATA: 300 # 5 min - L1
+      CACHE_TTL_CLIENT_DETAILS: 120 # 2 min - L2
+      CACHE_TTL_ACTIVITY_TIMELINE: 30 # 30 sec - L3
+      CACHE_TTL_SMART_LIST: 180 # 3 min
+
+      # Import/Export Settings
+      IMPORT_MAX_FILE_SIZE_MB: 10
+      IMPORT_MAX_RECORDS: 10000
+      EXPORT_BATCH_SIZE: 1000
+
+      # Duplicate Detection
+      DUPLICATE_SIMILARITY_THRESHOLD: 0.85
+      DUPLICATE_EMAIL_FUZZY_MATCH: "true"
+
+      # Storage (R2) for client avatars
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-rawdrive}
+
+      # Circuit Breaker
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      CIRCUIT_BREAKER_RECOVERY_TIMEOUT: ${CIRCUIT_BREAKER_RECOVERY_TIMEOUT:-30}
+
+      # Metrics
+      METRICS_ENABLED: "true"
+      METRICS_CUSTOM_PREFIX: client
+
+      PORT: ${PORT_CLIENT:-8011}
+
+    ports:
+      # Bind to localhost only - accessible via Traefik reverse proxy
+      - "127.0.0.1:${PORT_CLIENT:-8011}:${PORT_CLIENT:-8011}"
+
+    volumes:
+      # Mount JWT public key for token verification
+      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_CLIENT:-8011}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ============================================================================
   # Notifications Microservice
   # Centralized notification service for multi-channel communications
   # Handles email (SendGrid), SMS (Twilio placeholder), and in-app notifications
@@ -802,6 +943,11 @@ services:
       DB_POOL_MIN_SIZE: ${NOTIFICATIONS_DB_POOL_MIN_SIZE:-10}
       DB_POOL_MAX_SIZE: ${NOTIFICATIONS_DB_POOL_MAX_SIZE:-50}
       DB_COMMAND_TIMEOUT: ${DB_COMMAND_TIMEOUT:-60}
+
+      # PgBouncer connection pooler (for 5000+ concurrent scaling)
+      PGBOUNCER_ENABLED: ${PGBOUNCER_ENABLED:-false}
+      PGBOUNCER_HOST: ${PGBOUNCER_HOST:-pgbouncer}
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT:-6432}
 
       # Redis - Caching and queue management
       REDIS_URL: redis://redis:${PORT_REDIS}/0
@@ -915,6 +1061,11 @@ services:
       DB_POOL_MIN_SIZE: ${UPLOAD_DB_POOL_MIN_SIZE:-5}
       DB_POOL_MAX_SIZE: ${UPLOAD_DB_POOL_MAX_SIZE:-20}
 
+      # PgBouncer connection pooler (for 5000+ concurrent scaling)
+      PGBOUNCER_ENABLED: ${PGBOUNCER_ENABLED:-false}
+      PGBOUNCER_HOST: ${PGBOUNCER_HOST:-pgbouncer}
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT:-6432}
+
       # Redis - Chunk buffering
       REDIS_URL: redis://redis:${PORT_REDIS}/0
       REDIS_MAX_CONNECTIONS: ${UPLOAD_REDIS_MAX_CONNECTIONS:-50}
@@ -988,9 +1139,174 @@ services:
           memory: 512M
 
   # ============================================================================
-  # Prometheus - Metrics Collection (for production monitoring)
-  # Use docker-compose.prod.yml for full stack with AlertManager
+  # AI Processing Service
+  # Handles duplicate detection, content moderation, and AI tagging
   # ============================================================================
+  ai-processing-service:
+    build:
+      context: ../../services/ai-processing-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-ai-processing
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      PORT: ${PORT_AI_PROCESSING:-8012}
+      DATABASE_URL: postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/${POSTGRES_DB:-rawdrive}
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+    ports:
+      - "127.0.0.1:${PORT_AI_PROCESSING:-8012}:${PORT_AI_PROCESSING:-8012}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+
+  # AI Service (MCP)
+  # Workspace agent tools and RAG integration
+  # ============================================================================
+  ai-service:
+    build:
+      context: ../../services/ai-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-ai-service-mcp
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Service configuration
+      PORT_AI_SERVICE: ${PORT_AI_SERVICE:-8013}
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Database connection
+      DATABASE_URL: postgresql://rawdrive:rawdrive@postgres:5432/${POSTGRES_DB:-rawdrive}
+      DB_POOL_MIN_SIZE: 2
+      DB_POOL_MAX_SIZE: 10
+      DB_COMMAND_TIMEOUT: 60
+
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+
+      # AI Processing integration
+      AI_PROCESSING_URL: http://ai-processing-service:${PORT_AI_PROCESSING:-8012}
+
+      # Milvus Vector DB
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+
+      # JWT Authentication (EdDSA with public key)
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public_key
+      JWT_ALGORITHM: EdDSA
+      JWT_ISSUER: rawdrive
+
+      # CORS - Security hardening (comma-separated list)
+      ALLOWED_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8000}
+
+      # Rate Limiting
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_DEFAULT: "100/minute"
+      RATE_LIMIT_HEALTH: "60/minute"
+      RATE_LIMIT_AI_FILTER: "30/minute"
+
+      # Circuit Breaker
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      CIRCUIT_BREAKER_RECOVERY_TIMEOUT: ${CIRCUIT_BREAKER_RECOVERY_TIMEOUT:-30}
+
+      # Prometheus Metrics
+      METRICS_ENABLED: "true"
+
+    ports:
+      - "127.0.0.1:${PORT_AI_SERVICE:-8013}:${PORT_AI_SERVICE:-8013}"
+
+    volumes:
+      # Mount JWT public key for token verification
+      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_AI_SERVICE:-8013}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # Prometheus - Metrics Collection (for production monitoring)
+  # ============================================================================
+  # ============================================================================
+  # Milvus - Vector Database
+  # Handles face and image embeddings for high-performance similarity search
+  # ============================================================================
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: rawdrive-etcd
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - etcd_data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:${PORT_ETCD:-2379} -listen-client-urls http://0.0.0.0:${PORT_ETCD:-2379} --data-dir /etcd
+    ports:
+      - "127.0.0.1:${PORT_ETCD:-2379}:${PORT_ETCD:-2379}"
+    healthcheck:
+      test: [ "CMD", "etcdctl", "endpoint", "health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: rawdrive-minio
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "127.0.0.1:${PORT_MINIO:-9000}:9000"
+      - "127.0.0.1:${PORT_MINIO_CONSOLE:-9001}:9001"
+    volumes:
+      - minio_data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  milvus:
+    image: milvusdb/milvus:v2.3.4
+    container_name: rawdrive-milvus
+    command: [ "milvus", "run", "standalone" ]
+    environment:
+      ETCD_ENDPOINTS: etcd:${PORT_ETCD:-2379}
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - milvus_data:/var/lib/milvus
+    ports:
+      - "127.0.0.1:${PORT_MILVUS:-19530}:19530"
+      - "127.0.0.1:${PORT_MILVUS_METRICS:-9091}:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9091/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   prometheus:
     image: prom/prometheus:v2.47.0
     container_name: rawdrive-prometheus
@@ -1026,6 +1342,10 @@ volumes:
     name: rawdrive-traefik-letsencrypt
   traefik_logs:
     name: rawdrive-traefik-logs
+  etcd_data:
+  minio_data:
+  milvus_data:
+
 
 networks:
   default:

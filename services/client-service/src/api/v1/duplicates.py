@@ -25,61 +25,15 @@ from src.schemas.duplicate import (
 )
 from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
+from src.middleware.workspace_auth import verify_workspace_access
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(
-    prefix="/api/v1/workspaces/{workspace_id}/clients",
+    prefix="/workspaces/{workspace_id}/clients",
     tags=["duplicates"],
 )
-
-
-# =============================================================================
-# Dependency Injection
-# =============================================================================
-
-
-def get_service() -> DuplicateService:
-    """Get DuplicateService instance."""
-    return get_duplicate_service()
-
-
-async def verify_workspace_access(
-    workspace_id: UUID = Path(...),
-    current_user: JWTPayload = Depends(get_current_user),
-) -> UUID:
-    """
-    Verify user has access to workspace.
-
-    Args:
-        workspace_id: Workspace ID from path
-        current_user: JWT payload from auth middleware
-
-    Returns:
-        UUID: Validated workspace_id
-
-    Raises:
-        HTTPException: 403 if user doesn't have access
-    """
-    if str(current_user.workspace_id) != str(workspace_id):
-        logger.warning(
-            "Workspace access denied",
-            extra={
-                "user_id": str(current_user.user_id),
-                "requested_workspace": str(workspace_id),
-                "user_workspace": str(current_user.workspace_id),
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorResponse(
-                error="WORKSPACE_ACCESS_DENIED",
-                message="You do not have access to this workspace",
-            ).model_dump(),
-        )
-
-    return workspace_id
 
 
 # =============================================================================
@@ -91,7 +45,7 @@ async def verify_workspace_access(
 async def detect_duplicates(
     request: DuplicateDetectionRequest = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: DuplicateService = Depends(get_service),
+    service: DuplicatesService = Depends(get_duplicates_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> DuplicateDetectionResponse:
     """
@@ -186,7 +140,7 @@ async def detect_duplicates(
 async def merge_clients(
     strategy: MergeStrategy = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: DuplicateService = Depends(get_service),
+    service: DuplicatesService = Depends(get_duplicates_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> MergeResult:
     """

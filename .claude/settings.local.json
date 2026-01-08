@@ -221,7 +221,8 @@
       "Bash(powershell.exe -Command \"docker run -d --name rawdrive-gallery-service --network infrastructure_default -p 127.0.0.1:8004:8004 --env-file .env -e DATABASE_URL=''postgresql://rawdrive:rawdrive@postgres:5432/rawdrive'' -e REDIS_URL=''redis://redis:6379/0'' -e R2_ENDPOINT=''$env:R2_ENDPOINT'' -e R2_ACCESS_KEY_ID=''$env:R2_ACCESS_KEY_ID'' -e R2_SECRET_ACCESS_KEY=''$env:R2_SECRET_ACCESS_KEY'' -e R2_BUCKET_NAME=''rawdrive'' -e JWT_SECRET=''$env:JWT_SECRET'' rawdrive-gallery-service:latest\")",
       "Bash(powershell.exe -Command \"docker network ls | Select-String ''rawdrive''\")",
       "Bash(powershell.exe -Command \"docker run -d --name rawdrive-gallery-service --network docker_default -p 127.0.0.1:8004:8004 --env-file .env -e DATABASE_URL=''postgresql://rawdrive:rawdrive@postgres:5432/rawdrive'' -e REDIS_URL=''redis://redis:6379/0'' rawdrive-gallery-service:latest 2>&1\")",
-      "Bash(powershell.exe -Command \"docker run -d --name rawdrive-gallery-service --network rawdrive_default -p 127.0.0.1:8004:8004 --env-file .env -e DATABASE_URL=''postgresql://rawdrive:rawdrive@postgres:5432/rawdrive'' -e REDIS_URL=''redis://redis:6379/0'' rawdrive-gallery-service:latest 2>&1\")"
+      "Bash(powershell.exe -Command \"docker run -d --name rawdrive-gallery-service --network rawdrive_default -p 127.0.0.1:8004:8004 --env-file .env -e DATABASE_URL=''postgresql://rawdrive:rawdrive@postgres:5432/rawdrive'' -e REDIS_URL=''redis://redis:6379/0'' rawdrive-gallery-service:latest 2>&1\")",
+      "Bash(npm run:*)"
     ]
   }
 }

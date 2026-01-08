@@ -91,7 +91,7 @@ http:
     # Upload Microservice - TUS chunked uploads
     # -------------------------------------------------------------------------
     upload-service-router:
-      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/upload`)"
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/uploads`)"
       entryPoints:
         - websecure
       service: upload-service
@@ -133,18 +133,173 @@ http:
         certResolver: letsencrypt
 
     # -------------------------------------------------------------------------
-    # Sync Service - Live Camera Sync (folder-to-gallery sync)
+    # Gallery Microservice - Authenticated Endpoints
     # -------------------------------------------------------------------------
-    sync-service-router:
-      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/sync`)"
+    gallery-auth-router:
+      rule: "Host(`api.rawdrive.ai`) && (PathPrefix(`/api/v1/galleries`) || PathPrefix(`/api/v1/magic-links`))"
       entryPoints:
         - websecure
-      service: sync-service
+      service: gallery-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+        - cors-headers
+      priority: 140
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Gallery Microservice - Public Endpoints
+    # -------------------------------------------------------------------------
+    gallery-public-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/public/galleries`)"
+      entryPoints:
+        - websecure
+      service: gallery-service
+      middlewares:
+        - rate-limit-public
+        - security-headers
+      priority: 135
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Onboarding Microservice - User registration and onboarding flow
+    # -------------------------------------------------------------------------
+    onboarding-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/onboarding`)"
+      entryPoints:
+        - websecure
+      service: onboarding-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+      priority: 140
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Billing Microservice - Webhooks (Highest Priority)
+    # -------------------------------------------------------------------------
+    billing-webhooks-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/webhooks/razorpay`, `/webhooks/stripe`)"
+      entryPoints:
+        - websecure
+      service: billing-service
+      middlewares:
+        - rate-limit-webhooks
+        - security-headers
+      priority: 148
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Billing Microservice - API Endpoints
+    # -------------------------------------------------------------------------
+    billing-api-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/subscription`)"
+      entryPoints:
+        - websecure
+      service: billing-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+      priority: 145
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Client CRM Microservice
+    # -------------------------------------------------------------------------
+    client-service-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/workspaces/{workspace_id:[0-9a-f-]+}/clients`)"
+      entryPoints:
+        - websecure
+      service: client-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+        - cors-headers
+      priority: 138
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # LiveSync Service - Real-time photo sync from camera/folder to gallery
+    # -------------------------------------------------------------------------
+    livesync-service-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/livesync`)"
+      entryPoints:
+        - websecure
+      service: livesync-service
       middlewares:
         - rate-limit-api
         - security-headers
         - cors-headers
       priority: 130
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Gallery Service - MCP Tools (Highest Priority)
+    # -------------------------------------------------------------------------
+    gallery-mcp-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/mcp/gallery/`)"
+      entryPoints:
+        - websecure
+      service: gallery-service
+      middlewares:
+        - rate-limit-mcp
+        - security-headers
+        - cors-headers
+      priority: 155
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Gallery Service - A2A Agent Endpoints
+    # -------------------------------------------------------------------------
+    gallery-agents-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/agents/`)"
+      entryPoints:
+        - websecure
+      service: gallery-service
+      middlewares:
+        - rate-limit-agents
+        - security-headers
+        - cors-headers
+      priority: 150
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Gallery Service - WebSocket Agent Notifications
+    # -------------------------------------------------------------------------
+    gallery-websocket-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/ws/agents/`)"
+      entryPoints:
+        - websecure
+      service: gallery-service
+      middlewares:
+        - security-headers
+        - cors-headers
+      priority: 148
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Gallery Service - Batch Operations
+    # -------------------------------------------------------------------------
+    gallery-batch-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/batch/`)"
+      entryPoints:
+        - websecure
+      service: gallery-service
+      middlewares:
+        - rate-limit-batch
+        - security-headers
+        - cors-headers
+      priority: 146
       tls:
         certResolver: letsencrypt
 
@@ -181,13 +336,13 @@ http:
         certResolver: letsencrypt
 
     # -------------------------------------------------------------------------
-    # Sync Service - Local Development
+    # LiveSync Service - Local Development
     # -------------------------------------------------------------------------
-    sync-service-localhost-router:
-      rule: "PathPrefix(`/api/v1/sync`)"
+    livesync-service-localhost-router:
+      rule: "PathPrefix(`/api/v1/livesync`)"
       entryPoints:
         - web
-      service: sync-service
+      service: livesync-service
       middlewares:
         - rate-limit-api
         - cors-headers
@@ -205,6 +360,54 @@ http:
         - rate-limit-ai
         - security-headers
       priority: 100
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Smart Tagging Routes - AI-powered content analysis
+    # Routes to ai-service FastAPI
+    # -------------------------------------------------------------------------
+    smart-tagging-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/workspaces/`) && PathRegexp(`/api/v1/workspaces/[0-9a-f-]+/smart-tagging`)"
+      entryPoints:
+        - websecure
+      service: ai-service
+      middlewares:
+        - rate-limit-ai
+        - security-headers
+        - cors-headers
+      priority: 132
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # A2A Service Registry Endpoints (Phase 4: A2A Integration)
+    # -------------------------------------------------------------------------
+    a2a-registry-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/a2a/registry`)"
+      entryPoints:
+        - websecure
+      service: backend-service
+      middlewares:
+        - rate-limit-a2a
+        - security-headers
+        - a2a-headers
+      priority: 165
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # A2A Agent API Keys Management (Phase 4: A2A Integration)
+    # -------------------------------------------------------------------------
+    a2a-api-keys-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/workspaces/`) && PathRegexp(`/agent-api-keys`)"
+      entryPoints:
+        - websecure
+      service: backend-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+      priority: 142
       tls:
         certResolver: letsencrypt
 
@@ -249,7 +452,7 @@ http:
     invitations-service:
       loadBalancer:
         servers:
-          - url: "http://invitations-api:8000"
+          - url: "http://invitations-api:8007"
         healthCheck:
           path: /health
           interval: 10s
@@ -258,16 +461,16 @@ http:
     upload-service:
       loadBalancer:
         servers:
-          - url: "http://upload-service:8000"
+          - url: "http://upload-service:8008"
         healthCheck:
           path: /health
           interval: 10s
           timeout: 3s
 
-    sync-service:
+    livesync-service:
       loadBalancer:
         servers:
-          - url: "http://sync-service:8007"
+          - url: "http://livesync-service:8007"
         healthCheck:
           path: /health
           interval: 10s
@@ -282,10 +485,56 @@ http:
           interval: 10s
           timeout: 3s
 
+    gallery-service:
+      loadBalancer:
+        servers:
+          - url: "http://gallery-service:8004"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+        sticky:
+          cookie:
+            name: rawdrive_gallery_agent
+            secure: true
+            httpOnly: true
+
     grafana-service:
       loadBalancer:
         servers:
           - url: "http://grafana:3000"
+
+    onboarding-service:
+      loadBalancer:
+        servers:
+          - url: "http://onboarding-service:8006"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    billing-service:
+      loadBalancer:
+        servers:
+          - url: "http://billing-service:8005"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    client-service:
+      loadBalancer:
+        servers:
+          - url: "http://client-service:8011"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+        sticky:
+          cookie:
+            name: rawdrive_client
+            secure: true
+            httpOnly: true
 
   # ===========================================================================
   # Middlewares
@@ -337,6 +586,42 @@ http:
       rateLimit:
         average: 100
         burst: 200
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-mcp:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-a2a:
+      rateLimit:
+        average: 50
+        burst: 100
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-agents:
+      rateLimit:
+        average: 50
+        burst: 100
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-batch:
+      rateLimit:
+        average: 20
+        burst: 40
         period: 1m
         sourceCriterion:
           ipStrategy:
@@ -413,6 +698,17 @@ http:
       stripPrefix:
         prefixes:
           - /grafana
+
+    # -------------------------------------------------------------------------
+    # A2A Service Headers (Phase 4: A2A Integration)
+    # -------------------------------------------------------------------------
+    a2a-headers:
+      headers:
+        customRequestHeaders:
+          X-A2A-Enabled: "true"
+          X-Service-Name: "traefik-gateway"
+        customResponseHeaders:
+          X-A2A-Version: "1.0"
 
 # =============================================================================
 # TCP Configuration (for future use)

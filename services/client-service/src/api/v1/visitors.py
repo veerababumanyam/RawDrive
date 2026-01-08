@@ -26,61 +26,15 @@ from src.schemas.visitor import (
 )
 from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
+from src.middleware.workspace_auth import verify_workspace_access
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(
-    prefix="/api/v1/workspaces/{workspace_id}",
+    prefix="/workspaces/{workspace_id}",
     tags=["visitor-conversion"],
 )
-
-
-# =============================================================================
-# Dependency Injection
-# =============================================================================
-
-
-def get_service() -> VisitorConversionService:
-    """Get VisitorConversionService instance."""
-    return get_visitor_conversion_service()
-
-
-async def verify_workspace_access(
-    workspace_id: UUID = Path(...),
-    current_user: JWTPayload = Depends(get_current_user),
-) -> UUID:
-    """
-    Verify user has access to workspace.
-
-    Args:
-        workspace_id: Workspace ID from path
-        current_user: JWT payload from auth middleware
-
-    Returns:
-        UUID: Validated workspace_id
-
-    Raises:
-        HTTPException: 403 if user doesn't have access
-    """
-    if str(current_user.workspace_id) != str(workspace_id):
-        logger.warning(
-            "Workspace access denied",
-            extra={
-                "user_id": str(current_user.user_id),
-                "requested_workspace": str(workspace_id),
-                "user_workspace": str(current_user.workspace_id),
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorResponse(
-                error="WORKSPACE_ACCESS_DENIED",
-                message="You do not have access to this workspace",
-            ).model_dump(),
-        )
-
-    return workspace_id
 
 
 # =============================================================================
@@ -92,7 +46,7 @@ async def verify_workspace_access(
 async def convert_visitor_to_client(
     request: VisitorConversionRequest = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: VisitorConversionService = Depends(get_service),
+    service: VisitorsService = Depends(get_visitors_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> VisitorConversionResult:
     """
@@ -178,7 +132,7 @@ async def convert_visitor_to_client(
 async def auto_match_visitor(
     request: AutoMatchRequest = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: VisitorConversionService = Depends(get_service),
+    service: VisitorsService = Depends(get_visitors_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> AutoMatchResult:
     """
@@ -255,7 +209,7 @@ async def auto_match_visitor(
 async def bulk_convert_visitors(
     request: BulkConversionRequest = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: VisitorConversionService = Depends(get_service),
+    service: VisitorsService = Depends(get_visitors_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> BulkConversionResult:
     """

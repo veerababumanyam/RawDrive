@@ -1,0 +1,19 @@
+fastmcp>=0.4.0
+fastapi>=0.115.0  # FastAPI for REST endpoints
+uvicorn[standard]>=0.32.0
+pydantic>=2.9.0
+httpx>=0.28.0
+asyncpg>=0.30.0
+redis[hiredis]>=5.2.0
+pgvector>=0.3.0
+pymilvus>=2.3.0
+marshmallow>=3.13.0,<4.0.0  # Pin for environs compatibility
+google-cloud-vision>=3.5.0  # Vision API for emotion detection
+google-generativeai>=0.8.0  # Gemini API
+python-jose[cryptography]>=3.3.0  # JWT decoding
+python-multipart>=0.0.9  # Form data parsing
+
+# Security & Performance (SECURITY_REVIEW.md fixes)
+slowapi>=0.1.9  # Rate limiting middleware
+prometheus-fastapi-instrumentator>=6.1.0  # Prometheus metrics
+circuitbreaker>=2.0.0  # Circuit breaker pattern for resilience

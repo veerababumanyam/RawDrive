@@ -15,11 +15,13 @@ try {
     $response = Invoke-RestMethod -Uri "$baseUrl/health" -Method Get -TimeoutSec 5
     if ($response.status -eq "ok") {
         Write-Host "✅ PASSED - Status: $($response.status), Service: $($response.service)" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Host "❌ FAILED - Unexpected response" -ForegroundColor Red
         $allPassed = $false
     }
-} catch {
+}
+catch {
     Write-Host "❌ FAILED - $($_.Exception.Message)" -ForegroundColor Red
     $allPassed = $false
 }
@@ -36,11 +38,13 @@ try {
         if ($response.checks.r2) {
             Write-Host "   R2: $($response.checks.r2)" -ForegroundColor Gray
         }
-    } else {
+    }
+    else {
         Write-Host "❌ FAILED - Service not ready" -ForegroundColor Red
         $allPassed = $false
     }
-} catch {
+}
+catch {
     Write-Host "❌ FAILED - $($_.Exception.Message)" -ForegroundColor Red
     $allPassed = $false
 }
@@ -62,14 +66,16 @@ try {
         Write-Host "   upload_concurrent_total: ✓" -ForegroundColor Gray
         Write-Host "   upload_requests_total: ✓" -ForegroundColor Gray
         Write-Host "   upload_service_info: ✓" -ForegroundColor Gray
-    } else {
+    }
+    else {
         Write-Host "❌ FAILED - Missing metrics" -ForegroundColor Red
         if (-not $hasUploadConcurrent) { Write-Host "   Missing: upload_concurrent_total" -ForegroundColor Red }
         if (-not $hasUploadRequests) { Write-Host "   Missing: upload_requests_total" -ForegroundColor Red }
         if (-not $hasServiceInfo) { Write-Host "   Missing: upload_service_info" -ForegroundColor Red }
         $allPassed = $false
     }
-} catch {
+}
+catch {
     Write-Host "❌ FAILED - $($_.Exception.Message)" -ForegroundColor Red
     $allPassed = $false
 }
@@ -78,13 +84,15 @@ Write-Host ""
 # Test 4: Auth (should fail without token)
 Write-Host "[4/4] Testing authentication..." -ForegroundColor Yellow
 try {
-    $response = Invoke-RestMethod -Uri "$baseUrl/api/v1/upload/session" -Method Post -TimeoutSec 5 -ErrorAction Stop
+    $response = Invoke-RestMethod -Uri "$baseUrl/api/v1/uploads" -Method Post -TimeoutSec 5 -ErrorAction Stop
     Write-Host "❌ FAILED - Auth should reject unauthenticated requests" -ForegroundColor Red
     $allPassed = $false
-} catch {
+}
+catch {
     if ($_.Exception.Response.StatusCode -eq 401) {
         Write-Host "✅ PASSED - Correctly rejected unauthenticated request (401)" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Host "⚠️  WARNING - Unexpected status code: $($_.Exception.Response.StatusCode)" -ForegroundColor Yellow
     }
 }
@@ -94,7 +102,8 @@ Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 if ($allPassed) {
     Write-Host "All Tests PASSED! ✅" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "Some Tests FAILED ❌" -ForegroundColor Red
 }
 Write-Host "========================================" -ForegroundColor Cyan

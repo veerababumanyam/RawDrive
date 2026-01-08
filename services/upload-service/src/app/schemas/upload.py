@@ -270,7 +270,7 @@ class UploadSessionResponse(BaseModel):
         {
             "upload_id": "123e4567-e89b-12d3-a456-426614174000",
             "provider": "r2",
-            "upload_url": "https://upload.rawdrive.app/api/v1/upload/chunk/123e4567-e89b-12d3-a456-426614174000",
+            "upload_url": "https://upload.rawdrive.app/api/v1/uploads/123e4567-e89b-12d3-a456-426614174000/chunks",
             "headers": {
                 "Tus-Resumable": "1.0.0"
             },

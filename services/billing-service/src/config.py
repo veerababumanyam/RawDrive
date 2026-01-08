@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     DB_POOL_MAX_SIZE: int = 50
     DB_COMMAND_TIMEOUT: int = 60
 
+    # PgBouncer connection pooler (for 5000+ concurrent scaling)
+    # When enabled, all connections route through PgBouncer for efficient pooling
+    PGBOUNCER_ENABLED: bool = os.getenv("PGBOUNCER_ENABLED", "false").lower() == "true"
+    PGBOUNCER_HOST: str = os.getenv("PGBOUNCER_HOST", "pgbouncer")
+    PGBOUNCER_PORT: int = int(os.getenv("PGBOUNCER_PORT", "6432"))
+
     # Redis - Caching and rate limiting
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     REDIS_MAX_CONNECTIONS: int = 20

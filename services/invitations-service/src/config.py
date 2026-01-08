@@ -19,6 +19,14 @@ class Settings(BaseSettings):
         "DATABASE_URL",
         "postgresql://postgres:postgres@localhost:5432/rawdrive"
     )
+    DB_POOL_MIN_SIZE: int = 5
+    DB_POOL_MAX_SIZE: int = 20
+    DB_COMMAND_TIMEOUT: int = 60
+
+    # PgBouncer connection pooler (for 5000+ concurrent scaling)
+    PGBOUNCER_ENABLED: bool = os.getenv("PGBOUNCER_ENABLED", "false").lower() == "true"
+    PGBOUNCER_HOST: str = os.getenv("PGBOUNCER_HOST", "pgbouncer")
+    PGBOUNCER_PORT: int = int(os.getenv("PGBOUNCER_PORT", "6432"))
 
     # Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")

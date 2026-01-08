@@ -41,6 +41,7 @@ import {
 import { AppButton } from '../../ui/AppButton';
 import { AppInput } from '../../ui/AppInput';
 import { magicLinkService, MagicLinkError } from '../../../services/magicLinkService';
+import { galleryService } from '../../../services/galleryService';
 import type { MagicLink, CreateMagicLinkRequest } from '../../../types/gallery';
 
 export interface ShareDialogProps {
@@ -49,6 +50,8 @@ export interface ShareDialogProps {
   workspaceId: string;
   galleryId: string;
   galleryTitle: string;
+  isPublished?: boolean;
+  onPublished?: () => void;
 }
 
 type ViewMode = 'create' | 'list' | 'qr';
@@ -59,6 +62,8 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   workspaceId,
   galleryId,
   galleryTitle,
+  isPublished = false,
+  onPublished,
 }) => {
   // State
   const [viewMode, setViewMode] = useState<ViewMode>('create');
@@ -113,12 +118,18 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     setIsCreating(true);
     setError(null);
     try {
+      // Auto-publish gallery if not already published (required for share links to work)
+      if (!isPublished) {
+        try {
+          await galleryService.publishGallery(workspaceId, galleryId);
+          onPublished?.();
+        } catch (publishErr) {
+          console.error('Failed to auto-publish gallery:', publishErr);
+          // Continue anyway - backend will handle the error when creating link
+        }
+      }
+
       const newLink = await magicLinkService.createLink(workspaceId, galleryId, formData);
-      // #region agent log
-      try {
-        fetch('http://127.0.0.1:7242/ingest/9ae53fb2-7e05-4977-88b5-8f95a6db3036',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShareDialog.tsx:handleCreateLink',message:'Link created - checking response',data:{has_url:!!newLink.url,has_public_url:!!newLink.public_url,has_token:!!newLink.token,link_id:newLink.link_id,url_preview:newLink.url?.substring(0,80)||newLink.public_url?.substring(0,80)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-      } catch {}
-      // #endregion
       setLinks((prev) => [newLink, ...prev]);
       setSelectedLink(newLink);
       setViewMode('qr');
@@ -148,11 +159,6 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       console.error('Magic link URL not available - token may have been lost', link);
       throw new Error('Magic link URL not available. Please create a new link.');
     }
-    // #region agent log
-    try {
-      fetch('http://127.0.0.1:7242/ingest/9ae53fb2-7e05-4977-88b5-8f95a6db3036',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShareDialog.tsx:handleCopyLink',message:'URL being copied',data:{has_url:!!link.url,has_public_url:!!link.public_url,has_token:!!link.token,url:url?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-    } catch {}
-    // #endregion
     const success = await magicLinkService.copyToClipboard(url);
     if (success) {
       setCopiedLinkId(link.link_id);
@@ -600,11 +606,6 @@ const QRCodeView: React.FC<QRCodeViewProps> = ({
     // Instead, show an error to the user
     linkUrl = '#error-missing-url';
   }
-  // #region agent log
-  try {
-    fetch('http://127.0.0.1:7242/ingest/9ae53fb2-7e05-4977-88b5-8f95a6db3036',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ShareDialog.tsx:QRView',message:'Link URL for display',data:{has_url:!!link.url,has_public_url:!!link.public_url,has_token:!!link.token,link_id:link.link_id,url_preview:linkUrl?.substring(0,80)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-  } catch {}
-  // #endregion
 
   return (
     <div className="space-y-4">

@@ -10,7 +10,7 @@ export type { ApiError, ApiResponse } from './api';
 export * from './abTestingService';
 export * from './complianceService';
 export * from './engagementService';
-export * from './syncService';
+export * from './liveSyncService';
 export * from './searchService';
 export * from './cleanupService';
 export * from './galleryExportService';

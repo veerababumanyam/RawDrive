@@ -9,7 +9,7 @@ import { galleryService } from '../services/galleryService';
 import { calculateSHA256 } from '../utils/sha256';
 import { useBrowserCloseWarning } from './useBrowserCloseWarning';
 import { getStoredTokens, isTokenExpired } from '../services/tokenStorage';
-import { refreshAccessToken, API_BASE_URL } from '../services/api';
+import { coordinatedRefreshAccessToken, API_BASE_URL } from '../services/api';
 import { createTusUpload, type TusUploadClient } from '../services/tusUploadService';
 import type { DuplicateAssetResponse } from '../types/gallery';
 import { isRawFile } from '../utils/fileUtils';
@@ -38,7 +38,7 @@ async function createUploadSessionViaService(
     : API_BASE_URL;
 
   const tokens = getStoredTokens();
-  const response = await fetch(`${baseUrl}/api/v1/upload/session`, {
+  const response = await fetch(`${baseUrl}/api/v1/uploads`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -74,7 +74,7 @@ async function commitUploadViaService(
     : API_BASE_URL;
 
   const tokens = getStoredTokens();
-  const response = await fetch(`${baseUrl}/api/v1/upload/complete/${uploadId}`, {
+  const response = await fetch(`${baseUrl}/api/v1/uploads/${uploadId}/complete`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -449,8 +449,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       const now = Date.now();
 
       if (expiresAt - now < 60000) { // Less than 1 minute remaining
-        // Trigger refresh via API client (which has refresh logic and stores new tokens)
-        const newAccessToken = await refreshAccessToken();
+        // Trigger coordinated refresh via API client (which has refresh logic and stores new tokens)
+        const newAccessToken = await coordinatedRefreshAccessToken();
         if (newAccessToken) {
           // Tokens were refreshed and stored, retrieve the updated tokens
           const updatedTokens = getStoredTokens();
@@ -504,13 +504,8 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
         // Update status to preparing (for SHA256 calculation)
         updateFile(fileId, { status: 'preparing', progress: 0, preparationProgress: 0 });
 
-        // Check for token expiry before starting - fail early if refresh fails
-        if (isTokenExpired()) {
-          const newToken = await refreshAccessToken();
-          if (!newToken) {
-            throw new Error('Session expired. Please log in again to continue uploading.');
-          }
-        }
+        // API client will automatically refresh token on 401, no need to check here
+        // This reduces duplicate refresh attempts and simplifies upload logic
 
         // Calculate SHA256 with progress tracking (runs in Web Worker for large files)
         const sha256 = await calculateSHA256(uploadFile.file, (hashProgress) => {
@@ -800,7 +795,9 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
 
         // Handle 401 specifically
         if (status === 401) {
-          await refreshAccessToken();
+          // API client already attempted token refresh in its 401 handler
+          // If we're still getting 401, the session is truly expired
+          // Don't retry refresh again - it's redundant and creates log spam
         }
 
         if (retryCount <= retryAttempts) {
@@ -870,10 +867,12 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
       activeUploadsRef.current.add(file.id);
       updateFile(file.id, { status: 'queued' });
       // Use ref to avoid dependency on uploadSingleFile function
-      uploadSingleFileRef.current(file).catch((error) => {
-        console.error('Upload error:', error);
-        activeUploadsRef.current.delete(file.id);
-      });
+      if (uploadSingleFileRef.current) {
+        uploadSingleFileRef.current(file).catch((error) => {
+          console.error('Upload error:', error);
+          activeUploadsRef.current.delete(file.id);
+        });
+      }
     }
   }, [isPaused, maxConcurrent, updateFile]);
 

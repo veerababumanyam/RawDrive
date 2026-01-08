@@ -14,8 +14,11 @@ Features:
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.config import settings
 from src.api.v1 import router as api_v1_router
@@ -39,6 +42,10 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
+    import asyncio
+    import os
+    import uuid
+
     # Startup
     logger.info(
         "Starting Gallery Microservice...",
@@ -46,10 +53,73 @@ async def lifespan(app: FastAPI):
     )
     await redis_client.connect()
     await get_pool()  # Initialize database pool
+
+    # Register service in A2A registry (Phase 4: A2A Integration)
+    # Optional: Only register if backend service_registry is available
+    import sys
+    sys.path.insert(0, '/app/backend/src')  # Adjust path as needed
+    try:
+        from app.services.service_registry import (
+            get_service_registry,
+            ServiceRegistration,
+            ServiceCapability,
+        )
+        registry = get_service_registry()
+        service_id = os.getenv("SERVICE_ID", str(uuid.uuid4()))
+        registration = ServiceRegistration(
+            service_name="gallery-service",
+            service_id=service_id,
+            base_url=os.getenv("SERVICE_BASE_URL", "http://gallery-service:8004"),
+            capabilities=[
+                ServiceCapability(name="gallery:read", version="1.0", endpoint="/api/v1/galleries"),
+                ServiceCapability(name="gallery:write", version="1.0", endpoint="/api/v1/galleries"),
+                ServiceCapability(name="photo:search", version="1.0", endpoint="/api/v1/search"),
+                ServiceCapability(name="face:search", version="1.0", endpoint="/api/v1/face-groups/search"),
+                ServiceCapability(name="magic-links:validate", version="1.0", endpoint="/api/v1/magic-links"),
+            ],
+            health_check_endpoint="/health",
+        )
+
+        await registry.register(registration)
+        logger.info(f"Gallery service registered in A2A registry: {service_id}")
+
+        # Start heartbeat loop
+        async def heartbeat_loop():
+            """Send heartbeat every 15 seconds."""
+            while True:
+                try:
+                    await asyncio.sleep(15)
+                    await registry.heartbeat("gallery-service", service_id)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Heartbeat failed: {e}")
+
+        heartbeat_task = asyncio.create_task(heartbeat_loop())
+    except (ImportError, ModuleNotFoundError):
+        logger.warning("A2A service registry not available - skipping registration")
+        registry = None
+        heartbeat_task = None
+
     logger.info("Service started successfully")
     yield
     # Shutdown
     logger.info("Shutting down...")
+
+    # Unregister from A2A registry
+    if heartbeat_task:
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+    if registry:
+        try:
+            await registry.unregister("gallery-service", service_id)
+            logger.info("Gallery service unregistered from A2A registry")
+        except Exception as e:
+            logger.warning(f"Failed to unregister from A2A registry: {e}")
+
     await redis_client.disconnect()
     await close_pool()
     logger.info("Shutdown complete")
@@ -100,6 +170,115 @@ app.add_middleware(CorrelationMiddleware)
 
 # Rate limiting
 app.add_middleware(RateLimiterMiddleware)
+
+# Exception handlers
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handle all unhandled exceptions and return JSON response."""
+    # #region agent log
+    import json
+    import time
+    import traceback
+    try:
+        debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
+        log_entry = {
+            "id": "log_entry",
+            "timestamp": int(time.time() * 1000),
+            "location": "main.py:global_exception_handler",
+            "message": "Global exception handler called",
+            "data": {
+                "exception_type": type(exc).__name__,
+                "exception_message": str(exc),
+                "exception_args": str(exc.args) if hasattr(exc, 'args') else None,
+                "traceback": traceback.format_exc(),
+                "path": str(request.url.path),
+                "method": request.method
+            },
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "A"
+        }
+        with open(debug_log_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(log_entry) + '\n')
+            f.flush()
+    except Exception:
+        pass
+    # #endregion
+    
+    logger.exception(
+        "Unhandled exception",
+        extra={
+            "path": request.url.path,
+            "method": request.method,
+            "exception_type": type(exc).__name__,
+        }
+    )
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An internal error occurred",
+                "requestId": getattr(request.state, "correlation_id", None),
+            }
+        }
+    )
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Handle HTTP exceptions and return JSON response."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": "HTTP_ERROR",
+                "message": str(exc.detail),
+                "requestId": getattr(request.state, "correlation_id", None),
+            }
+        }
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Handle validation errors and return JSON response."""
+    # #region agent log
+    import json
+    import time
+    try:
+        debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
+        log_entry = {
+            "id": "log_entry",
+            "timestamp": int(time.time() * 1000),
+            "location": "main.py:validation_exception_handler",
+            "message": "Validation error",
+            "data": {
+                "errors": str(exc.errors()),
+                "body": str(exc.body) if hasattr(exc, 'body') else None,
+                "path": str(request.url.path)
+            },
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "A"
+        }
+        with open(debug_log_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(log_entry) + '\n')
+            f.flush()
+    except Exception:
+        pass
+    # #endregion
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "details": exc.errors(),
+                "requestId": getattr(request.state, "correlation_id", None),
+            }
+        }
+    )
 
 # API routes
 app.include_router(api_v1_router, prefix="/api/v1")

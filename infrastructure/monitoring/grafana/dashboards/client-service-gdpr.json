@@ -1,0 +1,381 @@
+{
+  "dashboard": {
+    "title": "Client Service - GDPR & SOC2 Compliance",
+    "tags": ["client-service", "gdpr", "soc2", "compliance"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Audit Log Creation Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(audit_logs_created_total{service=\"client-service\"}[5m])",
+            "legendFormat": "Audit logs/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Logs per second"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "pointradius": 5,
+        "points": false,
+        "alert": {
+          "name": "Audit Log Creation Failure",
+          "conditions": [
+            {
+              "evaluator": {"params": [0.1], "type": "lt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "message": "Audit log creation rate dropped below threshold",
+          "name": "Audit logs not being created",
+          "noDataState": "alerting",
+          "notifications": []
+        }
+      },
+      {
+        "id": 2,
+        "title": "GDPR Export Performance (p50, p95, p99)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(client_export_duration_seconds_bucket{service=\"client-service\"}[5m]))",
+            "legendFormat": "p50 latency",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(client_export_duration_seconds_bucket{service=\"client-service\"}[5m]))",
+            "legendFormat": "p95 latency",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(client_export_duration_seconds_bucket{service=\"client-service\"}[5m]))",
+            "legendFormat": "p99 latency",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Latency"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 0,
+        "linewidth": 2,
+        "thresholds": [
+          {
+            "value": 5,
+            "colorMode": "critical",
+            "op": "gt",
+            "fill": true,
+            "line": true
+          }
+        ],
+        "alert": {
+          "name": "Export Performance Degradation",
+          "conditions": [
+            {
+              "evaluator": {"params": [5], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["B", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "message": "Export p95 latency exceeded 5 seconds",
+          "name": "Export performance degraded",
+          "noDataState": "ok",
+          "notifications": []
+        }
+      },
+      {
+        "id": 3,
+        "title": "GDPR Export Request Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 8, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(gdpr_exports_total{service=\"client-service\"}[1h])",
+            "legendFormat": "Exports/hour",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Exports per hour"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2
+      },
+      {
+        "id": 4,
+        "title": "Connection Pool Utilization",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 8, "w": 8, "h": 6},
+        "targets": [
+          {
+            "expr": "client_service_db_pool_available",
+            "legendFormat": "Available connections",
+            "refId": "A"
+          },
+          {
+            "expr": "client_service_db_pool_total",
+            "legendFormat": "Total connections",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Connections"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "thresholds": [
+          {
+            "value": 5,
+            "colorMode": "critical",
+            "op": "lt",
+            "fill": true,
+            "line": true
+          }
+        ],
+        "alert": {
+          "name": "Connection Pool Exhaustion",
+          "conditions": [
+            {
+              "evaluator": {"params": [5], "type": "lt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "min"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "60s",
+          "handler": 1,
+          "message": "Connection pool critically low",
+          "name": "Connection pool exhaustion",
+          "noDataState": "alerting",
+          "notifications": []
+        }
+      },
+      {
+        "id": 5,
+        "title": "Audit Log Failure Rate",
+        "type": "singlestat",
+        "gridPos": {"x": 16, "y": 8, "w": 4, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(audit_log_errors_total{service=\"client-service\"}[5m])",
+            "refId": "A"
+          }
+        ],
+        "format": "ops",
+        "valueName": "current",
+        "thresholds": "0,10",
+        "colors": ["#299c46", "#e5ac0e", "#bf1b00"],
+        "sparkline": {
+          "show": true,
+          "full": false,
+          "lineColor": "rgb(31, 120, 193)",
+          "fillColor": "rgba(31, 118, 189, 0.18)"
+        }
+      },
+      {
+        "id": 6,
+        "title": "Soft Delete Operations",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 14, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(client_soft_deletes_total{service=\"client-service\"}[5m])",
+            "legendFormat": "Soft deletes/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(client_restores_total{service=\"client-service\"}[5m])",
+            "legendFormat": "Restores/sec",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Operations per second"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2
+      },
+      {
+        "id": 7,
+        "title": "Clients Pending Permanent Deletion",
+        "type": "singlestat",
+        "gridPos": {"x": 12, "y": 14, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "client_service_retention_expired_count",
+            "refId": "A"
+          }
+        ],
+        "format": "none",
+        "valueName": "current",
+        "thresholds": "0,100,500",
+        "colors": ["#299c46", "#e5ac0e", "#bf1b00"],
+        "sparkline": {
+          "show": true,
+          "full": false
+        }
+      },
+      {
+        "id": 8,
+        "title": "Audit Log Metadata Coverage",
+        "type": "singlestat",
+        "gridPos": {"x": 18, "y": 14, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "(audit_logs_with_metadata_total / audit_logs_created_total) * 100",
+            "refId": "A"
+          }
+        ],
+        "format": "percent",
+        "valueName": "current",
+        "thresholds": "80,95",
+        "colors": ["#bf1b00", "#e5ac0e", "#299c46"],
+        "sparkline": {
+          "show": false
+        },
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholdMarkers": true
+        }
+      },
+      {
+        "id": 9,
+        "title": "GDPR Cleanup Job Status",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 20, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "gdpr_cleanup_last_run_timestamp_seconds",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          },
+          {
+            "expr": "gdpr_cleanup_clients_deleted_total",
+            "format": "table",
+            "instant": true,
+            "refId": "B"
+          }
+        ],
+        "styles": [
+          {
+            "pattern": "Time",
+            "type": "date",
+            "dateFormat": "YYYY-MM-DD HH:mm:ss"
+          },
+          {
+            "pattern": "Value",
+            "type": "number",
+            "unit": "short",
+            "decimals": 0
+          }
+        ],
+        "transform": "table"
+      },
+      {
+        "id": 10,
+        "title": "Compliance Status Summary",
+        "type": "table",
+        "gridPos": {"x": 12, "y": 20, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "label_replace(vector(1), \"compliance\", \"GDPR Article 15 (Access)\", \"\", \"\")",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          },
+          {
+            "expr": "label_replace(vector(1), \"compliance\", \"GDPR Article 17 (Erasure)\", \"\", \"\")",
+            "format": "table",
+            "instant": true,
+            "refId": "B"
+          },
+          {
+            "expr": "label_replace(vector(1), \"compliance\", \"GDPR Article 20 (Portability)\", \"\", \"\")",
+            "format": "table",
+            "instant": true,
+            "refId": "C"
+          },
+          {
+            "expr": "label_replace(vector(1), \"compliance\", \"SOC2 CC6.3 (Audit Trails)\", \"\", \"\")",
+            "format": "table",
+            "instant": true,
+            "refId": "D"
+          },
+          {
+            "expr": "label_replace(vector(1), \"compliance\", \"SOC2 CC6.7 (Log Retention)\", \"\", \"\")",
+            "format": "table",
+            "instant": true,
+            "refId": "E"
+          },
+          {
+            "expr": "label_replace(vector(1), \"compliance\", \"SOC2 CC7.2 (Monitoring)\", \"\", \"\")",
+            "format": "table",
+            "instant": true,
+            "refId": "F"
+          }
+        ],
+        "styles": [
+          {
+            "pattern": "compliance",
+            "type": "string",
+            "alias": "Compliance Requirement"
+          },
+          {
+            "pattern": "Value",
+            "type": "string",
+            "valueMaps": [
+              {"value": "1", "text": "✓ Operational"}
+            ]
+          }
+        ],
+        "transform": "table"
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "templating": {"list": []},
+    "annotations": {"list": []},
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 1,
+    "links": [],
+    "hideControls": false
+  },
+  "overwrite": true
+}

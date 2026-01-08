@@ -79,11 +79,13 @@ class WorkspaceAnalyticsSummary(BaseModel):
 class TimeSeriesDataPoint(BaseModel):
     """Single data point in time series."""
 
-    date: date = Field(..., description="Date")
+    timestamp_date: date = Field(..., description="Date", alias="date")
     value: float = Field(..., description="Value")
     metadata: Optional[Dict[str, Any]] = Field(
         None, description="Additional metadata"
     )
+
+    model_config = {"populate_by_name": True}
 
 
 class TimeSeriesMetric(BaseModel):

@@ -14,22 +14,13 @@ import {
   Settings,
   Upload,
   Trash2,
-  Globe,
-  EyeOff,
-  ScanFace,
 } from 'lucide-react';
 
 export interface GalleryActionBarProps {
-  /** Whether gallery is published */
-  isPublished?: boolean;
-  /** Whether gallery has photos (needed for publish validation) */
-  hasPhotos?: boolean;
   /** Callback for View as Client action */
   onViewAsClient?: () => void;
   /** Callback for Find People action */
   onFindPeople?: () => void;
-  /** Callback for Scan Faces action */
-  onScanFaces?: () => void;
   /** Callback for AI Tools Hub action (replaces AI Story + Smart Curate) */
   onAITools?: () => void;
   /** Whether AI Tools panel is open */
@@ -42,10 +33,6 @@ export interface GalleryActionBarProps {
   onUpload?: () => void;
   /** Callback for Delete action */
   onDelete?: () => void;
-  /** Callback for Publish/Unpublish action */
-  onPublishToggle?: () => void;
-  /** Whether publish action is loading */
-  isPublishLoading?: boolean;
   /** Whether upload panel is open */
   uploadOpen?: boolean;
   /** Additional class names */
@@ -53,19 +40,14 @@ export interface GalleryActionBarProps {
 }
 
 export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
-  isPublished = false,
-  hasPhotos = true,
   onViewAsClient,
   onFindPeople,
-  onScanFaces,
   onAITools,
   aiToolsOpen = false,
   onShare,
   onSettings,
   onUpload,
   onDelete,
-  onPublishToggle,
-  isPublishLoading = false,
   uploadOpen = false,
   className = '',
 }) => {
@@ -99,18 +81,6 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </button>
           )}
 
-          {/* Scan Faces - Purple (AI) */}
-          {onScanFaces && (
-            <button
-              onClick={onScanFaces}
-              className="btn-gallery-action btn-action-purple min-h-[36px] sm:min-h-[38px]"
-              aria-label="Scan Faces"
-            >
-              <ScanFace size={16} className="flex-shrink-0" />
-              <span className="hidden sm:inline">Scan Faces</span>
-            </button>
-          )}
-
           {/* AI Tools - Purple (AI) - Opens AI Tools Hub */}
           {onAITools && (
             <button
@@ -132,37 +102,24 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
 
         {/* Secondary Actions Group - Right */}
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-          {/* Publish/Unpublish - Green */}
-          {onPublishToggle && (
-            <button
-              onClick={onPublishToggle}
-              disabled={isPublishLoading || (!isPublished && !hasPhotos)}
-              title={!hasPhotos && !isPublished ? 'Add at least one photo before publishing' : ''}
-              className="btn-gallery-action btn-action-green min-h-[36px] sm:min-h-[38px]"
-              aria-label={isPublished ? 'Unpublish gallery' : 'Publish gallery'}
-            >
-              {isPublished ? <EyeOff size={16} className="flex-shrink-0" /> : <Globe size={16} className="flex-shrink-0" />}
-              <span className="hidden sm:inline">{isPublished ? 'Unpublish' : 'Publish'}</span>
-            </button>
-          )}
-
           {/* Share - Blue */}
           {onShare && (
             <button
               onClick={onShare}
               className="btn-gallery-action btn-action-blue min-h-[36px] sm:min-h-[38px]"
               aria-label="Share gallery"
+              title="Create share links - Generate URLs to send to clients"
             >
               <Share2 size={16} className="flex-shrink-0" />
               <span className="hidden sm:inline">Share</span>
             </button>
           )}
 
-          {/* Upload - Primary when active, neutral otherwise */}
+          {/* Upload - Orange */}
           {onUpload && (
             <button
               onClick={onUpload}
-              className={`btn-gallery-action min-h-[36px] sm:min-h-[38px] ${uploadOpen ? 'btn-action-primary' : 'btn-action-neutral'}`}
+              className={`btn-gallery-action min-h-[36px] sm:min-h-[38px] ${uploadOpen ? 'btn-action-primary' : 'btn-action-orange'}`}
               aria-label="Upload photos"
               aria-pressed={uploadOpen}
             >
@@ -171,11 +128,27 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </button>
           )}
 
-          {/* Settings - Visible outline style */}
+          {/* Settings - iOS style with gradient color */}
           {onSettings && (
             <button
               onClick={onSettings}
-              className="btn-gallery-action btn-action-ghost min-h-[36px] sm:min-h-[38px]"
+              className="
+                inline-flex items-center justify-center gap-1.5
+                px-3 sm:px-4
+                min-h-[36px] sm:min-h-[38px]
+                rounded-full
+                backdrop-blur-sm
+                bg-gradient-to-r from-slate-500/20 to-slate-600/20 dark:from-slate-400/20 dark:to-slate-500/20
+                border border-slate-400/30 dark:border-slate-500/30
+                text-slate-700 dark:text-slate-200
+                hover:from-slate-500/30 hover:to-slate-600/30 dark:hover:from-slate-400/30 dark:hover:to-slate-500/30
+                hover:border-slate-500/50 dark:hover:border-slate-400/50
+                hover:text-slate-900 dark:hover:text-slate-100
+                hover:shadow-md hover:shadow-slate-500/20
+                transition-all duration-200 ease-out
+                font-medium text-sm
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500/50 focus-visible:ring-offset-2
+              "
               aria-label="Settings"
             >
               <Settings size={16} className="flex-shrink-0" />

@@ -54,21 +54,49 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
         mock_redis.publish = AsyncMock(return_value=True)
 
         # Mock database pool
-        with patch("src.database.get_pool") as mock_pool:
-            mock_pool.return_value = AsyncMock()
+        pool_instance = MagicMock()
+        
+        # Setup acquire() to return an async context manager
+        connection_mock = AsyncMock()
+        connection_mock.fetchrow = AsyncMock(return_value=None)
+        connection_mock.fetch = AsyncMock(return_value=[])
+        connection_mock.fetchval = AsyncMock(return_value=None)
+        connection_mock.execute = AsyncMock(return_value=None)
+        
+        acquire_context = MagicMock()
+        acquire_context.__aenter__ = AsyncMock(return_value=connection_mock)
+        acquire_context.__aexit__ = AsyncMock(return_value=None)
+        
+        pool_instance.acquire.return_value = acquire_context
 
+        # Use dependencies overrides for get_pool instead of patch if possible, 
+        # but patch works if get_pool is called directly.
+        # Since get_pool is an async function, we mock it with AsyncMock returning pool_instance.
+        with patch("src.database.get_pool", new=AsyncMock(return_value=pool_instance)):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 yield client
 
 
+
+
 @pytest.fixture
 def auth_headers() -> dict:
     """Authentication headers for protected endpoints."""
+    import jwt
+    import datetime
+    
+    payload = {
+        "sub": "550e8400-e29b-41d4-a716-446655440001",
+        "wids": ["550e8400-e29b-41d4-a716-446655440000"],
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    }
+    token = jwt.encode(payload, "test-secret-key", algorithm="HS256")
+    
     return {
-        "Authorization": "Bearer test-token",
-        "X-Workspace-ID": "test-workspace-id",
-        "X-User-ID": "test-user-id",
+        "Authorization": f"Bearer {token}",
+        "X-Workspace-Id": "550e8400-e29b-41d4-a716-446655440000",
+        "X-User-ID": "550e8400-e29b-41d4-a716-446655440001",
     }
 
 

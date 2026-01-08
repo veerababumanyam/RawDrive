@@ -304,7 +304,6 @@ export class CurationService {
 
     const query = params.toString();
     const endpoint = `/api/v1/workspaces/${workspaceId}/smart-tagging/galleries/${galleryId}/quality-analysis${query ? `?${query}` : ''}`;
-
     const response = await apiClient.get<QualityAnalysisResponse>(endpoint);
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch analysis');

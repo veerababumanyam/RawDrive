@@ -117,11 +117,6 @@ const PublicGalleryPage: React.FC = () => {
                 // Magic link tokens are base64-encoded (43 chars), not UUIDs (36 chars with dashes)
                 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 if (uuidPattern.test(token)) {
-                    // #region agent log
-                    try {
-                        fetch('http://127.0.0.1:7242/ingest/9ae53fb2-7e05-4977-88b5-8f95a6db3036',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PublicGalleryPage.tsx:security_check',message:'SECURITY: Gallery ID detected in URL instead of token',data:{token:token,is_uuid:true,url:window.location.href},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-                    } catch {}
-                    // #endregion
                     console.error('Security: Detected gallery_id in URL instead of magic link token', {
                         token,
                         url: window.location.href,

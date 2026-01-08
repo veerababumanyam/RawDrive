@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     DB_POOL_MAX_SIZE: int = 100  # High for 50K concurrent users
     DB_COMMAND_TIMEOUT: int = 60
 
+    # PgBouncer connection pooler (for 5000+ concurrent scaling)
+    # When enabled, all connections route through PgBouncer for efficient pooling
+    PGBOUNCER_ENABLED: bool = os.getenv("PGBOUNCER_ENABLED", "false").lower() == "true"
+    PGBOUNCER_HOST: str = os.getenv("PGBOUNCER_HOST", "pgbouncer")
+    PGBOUNCER_PORT: int = int(os.getenv("PGBOUNCER_PORT", "6432"))
+
     # Redis - Multi-tier caching
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     REDIS_MAX_CONNECTIONS: int = 50
@@ -59,6 +65,9 @@ class Settings(BaseSettings):
     # JWT Authentication
     JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
     JWT_ALGORITHM: str = "HS256"
+
+    # Encryption
+    ENCRYPTION_MASTER_KEY: str = os.getenv("ENCRYPTION_MASTER_KEY", "0000000000000000000000000000000000000000000000000000000000000000")
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True

@@ -70,13 +70,14 @@ export const useGalleryAssets = ({
       setError(null);
       try {
         // Check if AI filters are active
+        // Note: 0 means "no filter", not "filter by 0"
         const hasAIFilters = aiFilters && (
           aiFilters.qualityTier !== 'all' ||
           aiFilters.qualityMin !== undefined ||
           aiFilters.blurHide ||
-          aiFilters.minSharpness !== undefined ||
-          aiFilters.minExposure !== undefined ||
-          aiFilters.minComposition !== undefined
+          (aiFilters.minSharpness !== undefined && aiFilters.minSharpness > 0) ||
+          (aiFilters.minExposure !== undefined && aiFilters.minExposure > 0) ||
+          (aiFilters.minComposition !== undefined && aiFilters.minComposition > 0)
         );
 
         let assetIds: string[] | undefined;

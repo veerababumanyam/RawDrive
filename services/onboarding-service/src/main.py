@@ -38,6 +38,10 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
+    import asyncio
+    import os
+    import uuid
+
     # Startup
     logger.info(
         "Starting Onboarding Microservice...",
@@ -53,18 +57,68 @@ async def lifespan(app: FastAPI):
         await get_pool()
         logger.info("Database pool initialized")
 
+        # Register service in A2A registry (Phase 4: A2A Integration)
+        import sys
+        sys.path.insert(0, '/app/backend/src')
+        from app.services.service_registry import (
+            get_service_registry,
+            ServiceRegistration,
+            ServiceCapability,
+        )
+
+        registry = get_service_registry()
+        service_id = os.getenv("SERVICE_ID", str(uuid.uuid4()))
+        registration = ServiceRegistration(
+            service_name="onboarding-service",
+            service_id=service_id,
+            base_url=os.getenv("SERVICE_BASE_URL", "http://onboarding-service:8006"),
+            capabilities=[
+                ServiceCapability(name="onboarding:register", version="1.0", endpoint="/api/v1/onboarding/register"),
+                ServiceCapability(name="onboarding:verify", version="1.0", endpoint="/api/v1/onboarding/verify-email"),
+                ServiceCapability(name="onboarding:complete", version="1.0", endpoint="/api/v1/onboarding/complete"),
+            ],
+            health_check_endpoint="/health",
+        )
+
+        await registry.register(registration)
+        logger.info(f"Onboarding service registered in A2A registry: {service_id}")
+
+        # Start heartbeat loop
+        async def heartbeat_loop():
+            """Send heartbeat every 15 seconds."""
+            while True:
+                try:
+                    await asyncio.sleep(15)
+                    await registry.heartbeat("onboarding-service", service_id)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Heartbeat failed: {e}")
+
+        heartbeat_task = asyncio.create_task(heartbeat_loop())
+
         logger.info("Service started successfully")
     except Exception as e:
         logger.error("Failed to start service", extra={"error": str(e)})
         raise
 
-    yield
+    try:
+        yield
+    finally:
+        # Shutdown: Unregister from A2A registry
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        await registry.unregister("onboarding-service", service_id)
+        logger.info("Onboarding service unregistered from A2A registry")
 
-    # Shutdown
-    logger.info("Shutting down...")
-    await redis_client.disconnect()
-    await close_pool()
-    logger.info("Shutdown complete")
+        # Original shutdown
+        logger.info("Shutting down...")
+        await redis_client.disconnect()
+        await close_pool()
+        logger.info("Shutdown complete")
 
 
 # Create FastAPI application

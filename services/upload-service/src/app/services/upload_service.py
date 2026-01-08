@@ -653,10 +653,12 @@ class UploadService:
         else:
             base_url = f"http://localhost:{settings.PORT}"
 
+        upload_url = f"{base_url}/api/v1/uploads/{upload_id}/chunks"
+        
         return {
             "upload_id": str(upload_id),
             "provider": "r2",
-            "upload_url": f"{base_url}/api/v1/upload/chunk/{upload_id}",
+            "upload_url": upload_url,
             "headers": {
                 "Tus-Resumable": settings.TUS_RESUMABLE_VERSION,
             },

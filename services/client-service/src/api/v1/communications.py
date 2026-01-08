@@ -29,61 +29,15 @@ from src.schemas.communication import (
 )
 from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
+from src.middleware.workspace_auth import verify_workspace_access
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(
-    prefix="/api/v1/workspaces/{workspace_id}/clients/{client_id}/communications",
+    prefix="/workspaces/{workspace_id}/clients/{client_id}/communications",
     tags=["communications"],
 )
-
-
-# =============================================================================
-# Dependency Injection
-# =============================================================================
-
-
-def get_service() -> CommunicationService:
-    """Get CommunicationService instance."""
-    return get_communication_service()
-
-
-async def verify_workspace_access(
-    workspace_id: UUID = Path(...),
-    current_user: JWTPayload = Depends(get_current_user),
-) -> UUID:
-    """
-    Verify user has access to workspace.
-
-    Args:
-        workspace_id: Workspace ID from path
-        current_user: JWT payload from auth middleware
-
-    Returns:
-        UUID: Validated workspace_id
-
-    Raises:
-        HTTPException: 403 if user doesn't have access
-    """
-    if str(current_user.workspace_id) != str(workspace_id):
-        logger.warning(
-            "Workspace access denied",
-            extra={
-                "user_id": str(current_user.user_id),
-                "requested_workspace": str(workspace_id),
-                "user_workspace": str(current_user.workspace_id),
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorResponse(
-                error="WORKSPACE_ACCESS_DENIED",
-                message="You do not have access to this workspace",
-            ).model_dump(),
-        )
-
-    return workspace_id
 
 
 # =============================================================================
@@ -112,7 +66,7 @@ async def list_communications(
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     sort_by: str = Query("created_at", description="Sort field"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
-    service: CommunicationService = Depends(get_service),
+    service: CommunicationService = Depends(get_communication_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> CommunicationListResponse:
     """
@@ -190,7 +144,7 @@ async def create_communication(
     data: CommunicationCreate,
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: CommunicationService = Depends(get_service),
+    service: CommunicationService = Depends(get_communication_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> CommunicationResponse:
     """
@@ -274,7 +228,7 @@ async def get_communication(
     communication_id: UUID = Path(..., description="Communication ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: CommunicationService = Depends(get_service),
+    service: CommunicationService = Depends(get_communication_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> CommunicationResponse:
     """
@@ -326,7 +280,7 @@ async def update_communication(
     communication_id: UUID = Path(..., description="Communication ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: CommunicationService = Depends(get_service),
+    service: CommunicationService = Depends(get_communication_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> CommunicationResponse:
     """
@@ -395,7 +349,7 @@ async def delete_communication(
     communication_id: UUID = Path(..., description="Communication ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: CommunicationService = Depends(get_service),
+    service: CommunicationService = Depends(get_communication_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> None:
     """
@@ -451,7 +405,7 @@ async def complete_follow_up(
     communication_id: UUID = Path(..., description="Communication ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: CommunicationService = Depends(get_service),
+    service: CommunicationService = Depends(get_communication_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> CommunicationResponse:
     """

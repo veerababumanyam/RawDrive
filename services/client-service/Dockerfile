@@ -56,15 +56,16 @@ RUN useradd -m -u 1000 appuser && \
 USER appuser
 
 # Expose port
-EXPOSE 8007
+EXPOSE 8011
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8007/health || exit 1
+    CMD curl -f http://localhost:8011/health || exit 1
 
 # Environment variables (override with docker-compose or k8s)
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Run application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8007", "--workers", "4", "--limit-concurrency", "1000"]
+# Using 1 worker for testing to avoid database connection exhaustion
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8011", "--workers", "1", "--limit-concurrency", "1000"]

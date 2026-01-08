@@ -56,6 +56,30 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second
 const TIMEOUT_MS = 60000; // 60 seconds
 
+// Global token refresh coordination
+let globalRefreshPromise: Promise<string | null> | null = null;
+
+/**
+ * Coordinated token refresh - ensures only one refresh happens at a time.
+ * All callers share the same promise to avoid duplicate requests.
+ */
+export async function coordinatedRefreshAccessToken(): Promise<string | null> {
+  if (globalRefreshPromise) {
+    console.log('[Auth] Token refresh already in progress, waiting...');
+    return globalRefreshPromise;
+  }
+
+  console.log('[Auth] Starting token refresh...');
+  globalRefreshPromise = refreshAccessToken();
+
+  try {
+    const token = await globalRefreshPromise;
+    return token;
+  } finally {
+    globalRefreshPromise = null;
+  }
+}
+
 // Unauthenticated endpoints that should not trigger session expiration on 401
 const UNAUTHENTICATED_ENDPOINTS = [
   '/api/v1/auth/login',
@@ -310,19 +334,22 @@ class ApiClient {
 
       // Parse response
       let data: any = {};
+      let responseText = '';
       try {
-        const text = await response.text();
-        if (text) {
-          data = JSON.parse(text);
+        responseText = await response.text();
+        if (responseText) {
+          data = JSON.parse(responseText);
         }
       } catch (parseError) {
         console.error('Failed to parse response:', parseError);
-        // If response is not JSON, try to extract error message
+        // If response is not JSON, extract error message from plain text
         if (!response.ok) {
+          // Extract meaningful error message from plain text response
+          const errorMessage = responseText.trim() || response.statusText || `Request failed with status ${response.status}`;
           return {
             error: {
               code: `HTTP_${response.status}`,
-              message: `Request failed with status ${response.status}`,
+              message: errorMessage,
               status: response.status,
             },
           };

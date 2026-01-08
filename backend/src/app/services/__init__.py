@@ -88,6 +88,7 @@ from app.services.task_queue import (
 from app.services.tag_service import TagService, get_tag_service, TagError, TagNotFoundError, DuplicateTagError
 from app.services.comment_service import CommentService, get_comment_service, CommentError, CommentNotFoundError, CommentForbiddenError
 from app.services.people_service import PeopleService, get_people_service, PeopleError, PersonNotFoundError, FaceNotFoundError
+from app.services.milvus_service import MilvusService, get_milvus_service
 from app.services.search_service import SearchService, get_search_service
 from app.services.communication_service import CommunicationService, get_communication_service
 from app.services.client_tag_service import ClientTagService, get_client_tag_service
@@ -279,6 +280,9 @@ __all__ = [
     "PeopleError",
     "PersonNotFoundError",
     "FaceNotFoundError",
+    # Milvus
+    "MilvusService",
+    "get_milvus_service",
     # Search
     "SearchService",
     "get_search_service",

@@ -218,7 +218,7 @@ class ChunkRateLimitMiddleware(BaseHTTPMiddleware):
             Response from handler or 429 if rate limited
         """
         # Only apply to chunk upload endpoint
-        if not request.url.path.startswith("/api/v1/upload/chunk/"):
+        if not request.url.path.startswith("/api/v1/uploads/") or not request.url.path.endswith("/chunks"):
             return await call_next(request)
 
         # Only apply to PATCH requests (actual chunk data)

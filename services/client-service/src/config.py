@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     DB_COMMAND_TIMEOUT: int = 60  # seconds
     DB_STATEMENT_CACHE_SIZE: int = 0  # Disable for PgBouncer compatibility
 
+    # PgBouncer connection pooler (for 5000+ concurrent scaling)
+    # When enabled, all connections route through PgBouncer for efficient pooling
+    PGBOUNCER_ENABLED: bool = False
+    PGBOUNCER_HOST: str = "pgbouncer"
+    PGBOUNCER_PORT: int = 6432
+
     # ==========================================================================
     # Redis Configuration (Shared Cache)
     # ==========================================================================
@@ -41,8 +47,10 @@ class Settings(BaseSettings):
     # ==========================================================================
     # JWT Authentication (MUST match other services)
     # ==========================================================================
-    JWT_SECRET: str
-    JWT_ALGORITHM: str = "HS256"
+    # Backend uses EdDSA (Ed25519) with asymmetric keys
+    # Client-service only needs public key for token verification
+    JWT_PUBLIC_KEY_PATH: str = "/run/secrets/jwt_public_key"
+    JWT_ALGORITHM: str = "EdDSA"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
@@ -107,6 +115,24 @@ class Settings(BaseSettings):
     AVATAR_SIZES: List[int] = [64, 128, 256]  # Generate multiple sizes
 
     # ==========================================================================
+    # GDPR Compliance
+    # ==========================================================================
+    # Data retention period for soft-deleted clients (GDPR Article 17)
+    GDPR_RETENTION_DAYS: int = 30
+    # Maximum clients to export in single GDPR data export request
+    GDPR_MAX_EXPORT_CLIENTS: int = 10000
+
+    # ==========================================================================
+    # SOC2 Compliance
+    # ==========================================================================
+    # Enable comprehensive audit logging for all CRUD operations (SOC2 CC6.3)
+    AUDIT_LOG_ENABLED: bool = True
+    # Audit log retention period in days (SOC2 CC6.7 - 7 years = 2555 days)
+    AUDIT_LOG_RETENTION_DAYS: int = 2555
+    # Log IP addresses and user agents for security monitoring (SOC2 CC7.2)
+    AUDIT_LOG_IP_TRACKING: bool = True
+
+    # ==========================================================================
     # Observability
     # ==========================================================================
     METRICS_ENABLED: bool = True
@@ -131,3 +157,13 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
+
+
+def get_settings() -> Settings:
+    """
+    Get the settings instance.
+
+    Used as a FastAPI dependency for dependency injection.
+    Returns the global settings instance.
+    """
+    return settings

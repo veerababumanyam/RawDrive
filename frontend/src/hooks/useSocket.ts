@@ -87,9 +87,18 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
       // Use VITE_API_URL if set (even if empty string for relative URLs), otherwise default to localhost for dev
       const apiUrl = import.meta.env.VITE_API_URL !== undefined
         ? import.meta.env.VITE_API_URL
-        : 'http://localhost:8000';
+        : window.location.origin; // Use current origin to go through Traefik
       // Convert http/https to ws/wss
-      const wsUrl = apiUrl.replace(/^http/, 'ws');
+      let wsUrl = apiUrl.replace(/^http/, 'ws');
+      // If using localhost:8000, keep it for direct connection
+      // Otherwise use relative URL or current origin
+      if (apiUrl === 'http://localhost:8000') {
+        wsUrl = 'ws://localhost:8000';
+      } else if (!apiUrl || apiUrl.trim() === '') {
+        // Empty string means relative URL - use current origin
+        wsUrl = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl += '//' + window.location.host;
+      }
       return `${wsUrl}/api/v1/ws?token=${encodeURIComponent(token)}`;
     } catch (err) {
       console.error('Failed to get access token:', err);

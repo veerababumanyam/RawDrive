@@ -13,14 +13,13 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Lock as LockIcon, ScanFace } from 'lucide-react';
+import { ArrowLeft, Lock as LockIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useGallery } from '../../hooks/useGallery';
 import { useGalleryAssets } from '../../hooks/useGalleryAssets';
 import { useSocket } from '../../hooks/useSocket';
 import {
   PhotoListView,
-  GalleryUpload,
   GalleryHeader,
   GalleryToolbar,
   SubGalleryTabs,
@@ -34,6 +33,7 @@ import {
   ShareDialog,
   PinVerificationModal,
 } from '../../components/features/gallery';
+import { GalleryUploadModal } from '../../components/features/gallery/GalleryUploadModal';
 import { AppButton } from '../../components/ui/AppButton';
 import { AppInput } from '../../components/ui/AppInput';
 import Modal, { ModalBody, ModalFooter } from '../../components/ui/Modal';
@@ -46,10 +46,7 @@ import { SignedUrlProvider } from '../../contexts/SignedUrlContext';
 import {
   StoryGenerator,
   SmartCurationPanel,
-  AIToolsHub,
-  QualityFilterSection,
-  BlurFilterSection,
-  TechnicalScoreFilterSection,
+  UnifiedAIPanel,
   SaveFilteredGalleryModal,
 } from '../../components/features/ai';
 import { SimpleAnalysisBar } from '../../components/ai/SimpleAnalysisBar';
@@ -100,7 +97,6 @@ const GalleryDetailPage: React.FC = () => {
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [showSmartCurationModal, setShowSmartCurationModal] = useState(false);
-  const [showAITools, setShowAITools] = useState(false);
   const [showSaveFilteredGalleryModal, setShowSaveFilteredGalleryModal] = useState(false);
   
   // Private photo unlock state (admin also needs PIN to see private photos)
@@ -284,10 +280,7 @@ const GalleryDetailPage: React.FC = () => {
   }, [workspace?.workspace_id, gallery, isAIFeatureReady, filteredStats.totalItems, addToast]);
 
   // Handle AI Tools Hub open
-  const handleOpenAITools = useCallback(() => {
-    if (!workspace?.workspace_id || !gallery) return;
-    setShowAITools(true);
-  }, [workspace?.workspace_id, gallery]);
+  // AI Tools is now integrated, no separate handler needed
 
   const handleViewAsClient = useCallback(() => {
     if (!galleryId) return;
@@ -313,35 +306,6 @@ const GalleryDetailPage: React.FC = () => {
     // Which is what we want.
     setAppliedFilters(undefined);
   }, [resetFilters]);
-
-  // Handle Scan Faces
-  const handleScanFaces = useCallback(async () => {
-    if (!workspace?.workspace_id || !galleryId) return;
-
-    try {
-      addToast({ message: 'Starting face scan...', variant: 'info' });
-      const result = await faceApiService.scanGalleryFaces(workspace.workspace_id, galleryId);
-
-      if (result.jobs_queued > 0) {
-        addToast({
-          message: result.message || `Scanning ${result.jobs_queued} new photos`,
-          variant: 'success',
-        });
-      } else if (result.pending && result.pending > 0) {
-        addToast({
-          message: `Scan already in progress: ${result.pending} photos pending`,
-          variant: 'info',
-        });
-      } else {
-        addToast({
-          message: 'No new faces to scan',
-          variant: 'info',
-        });
-      }
-    } catch (error) {
-      addToast({ message: 'Failed to start face scan', variant: 'error' });
-    }
-  }, [workspace?.workspace_id, galleryId, addToast]);
 
   // WebSocket for real-time updates
   useSocket({
@@ -907,6 +871,18 @@ const GalleryDetailPage: React.FC = () => {
           onMetadataUpdate={async (updates) => {
             if (!workspace?.workspace_id || !galleryId) return;
             await galleryService.updateGallery(workspace.workspace_id, galleryId, updates);
+            
+            // Auto-publish when client is assigned (if not already published)
+            if (updates.client_id && gallery.status !== 'published') {
+              try {
+                await galleryService.publishGallery(workspace.workspace_id, galleryId);
+                addToast({ message: 'Gallery published automatically', variant: 'success' });
+              } catch (publishError) {
+                console.error('Failed to auto-publish gallery:', publishError);
+                // Don't fail the update if publish fails
+              }
+            }
+            
             await refetchGallery();
             addToast({ message: 'Gallery details updated', variant: 'success' });
           }}
@@ -914,7 +890,7 @@ const GalleryDetailPage: React.FC = () => {
 
         {/* Row 2: Sub-Gallery Tabs */}
         <SubGalleryTabs
-          subGalleries={gallery.sub_galleries}
+          subGalleries={gallery.sub_galleries || []}
           activeSubGalleryId={activeSubGalleryId}
           onTabSelect={handleSubGalleryChange}
           onCreateSubGallery={() => setShowCreateSubGallery(true)}
@@ -948,96 +924,45 @@ const GalleryDetailPage: React.FC = () => {
 
           {/* Action Bar - Right (wraps on mobile) */}
           <GalleryActionBar
-            isPublished={gallery.status === 'published'}
-            hasPhotos={(gallery.stats?.total_items || 0) > 0}
             onViewAsClient={handleViewAsClient}
             onFindPeople={() => setShowPeoplePanel(true)}
-            onScanFaces={handleScanFaces}
-            onAITools={handleOpenAITools}
-            aiToolsOpen={showAITools}
+            onAITools={undefined}
+            aiToolsOpen={false}
             onShare={() => setShowShareDialog(true)}
             onSettings={() => setShowSettings(true)}
             onUpload={() => setShowUpload(!showUpload)}
             onDelete={() => setShowDeleteDialog(true)}
-            onPublishToggle={async () => {
-              if (!workspace?.workspace_id || !galleryId) return;
-              try {
-                if (gallery.status === 'published') {
-                  await galleryService.unpublishGallery(workspace.workspace_id, galleryId);
-                  addToast({ message: 'Gallery unpublished', variant: 'success' });
-                } else {
-                  await galleryService.publishGallery(workspace.workspace_id, galleryId);
-                  addToast({ message: 'Gallery published', variant: 'success' });
-                }
-                await refetchGallery();
-              } catch (error) {
-                addToast({ message: 'Failed to update gallery status', variant: 'error' });
-              }
-            }}
             uploadOpen={showUpload}
           />
         </div>
 
-        {/* AI Filters (quality/blur/technical) */}
-        <div className="glass-card rounded-2xl border border-border/60 bg-surface p-4 sm:p-6 space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-text-primary">AI Filters</div>
-              <p className="text-xs text-text-tertiary">Quality tiers, blur, and technical scores</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-sm text-text-secondary">
-                Matches: {countLoading ? '...' : matchCount ?? '—'}
-              </div>
-              <AppButton
-                variant="primary"
-                size="sm"
-                onClick={handleApplyAIFilters}
-                disabled={applyLoading || !workspace?.workspace_id || !galleryId}
-                isLoading={applyLoading}
-              >
-                Apply Filters
-              </AppButton>
-              <AppButton variant="ghost" size="sm" onClick={handleResetAIFilters}>
-                Reset
-              </AppButton>
-            </div>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-3">
-            <QualityFilterSection
-              qualityTier={filters.qualityTier}
-              qualityMin={filters.qualityMin}
-              onChange={(vals) => updateFilter(vals)}
-            />
-            <BlurFilterSection
-              blurHide={filters.blurHide}
-              blurShowBokeh={filters.blurShowBokeh}
-              onChange={(vals) => updateFilter(vals)}
-            />
-            <TechnicalScoreFilterSection
-              minSharpness={filters.minSharpness}
-              minExposure={filters.minExposure}
-              minComposition={filters.minComposition}
-              onChange={(vals) => updateFilter(vals)}
-            />
-          </div>
-
-          {appliedFilters && meta && (
-            <div className="text-xs text-text-tertiary">
-              Applied to {meta.total} item{meta.total === 1 ? '' : 's'}. Showing filtered results in the grid.
-            </div>
-          )}
-        </div>
-
-        {/* AI Analysis Bar */}
+        {/* Unified AI Panel (includes AI Filters) */}
         {workspace?.workspace_id && galleryId && (
-          <div className="mb-4">
-            <SimpleAnalysisBar
-              workspaceId={workspace.workspace_id}
-              galleryId={galleryId}
-            />
-          </div>
+          <UnifiedAIPanel
+            workspaceId={workspace.workspace_id}
+            galleryId={galleryId}
+            galleryName={gallery.title}
+            totalPhotos={gallery.stats?.total_photos ?? filteredStats.totalItems}
+            selectedAssetIds={Array.from(selectedAssetIds)}
+            onQualityAnalysisComplete={() => {
+              addToast({ message: 'Quality analysis complete', variant: 'success' });
+              refetchAssets();
+            }}
+            onCurationComplete={(assetIds) => {
+              setSelectedAssetIds(new Set(assetIds));
+              addToast({
+                message: `Selected ${assetIds.length} photos from AI curation`,
+                variant: 'success',
+              });
+            }}
+            filters={filters}
+            onFiltersChange={updateFilter}
+            onFiltersApply={handleApplyAIFilters}
+            onFiltersReset={handleResetAIFilters}
+            filtersMatchCount={matchCount}
+            filtersCountLoading={countLoading}
+            filtersApplyLoading={applyLoading}
+          />
         )}
 
         {/* Row 4: Toolbar (view toggle, filters, search) */}
@@ -1088,18 +1013,16 @@ const GalleryDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Upload Section - Collapsible with enhanced styling */}
-        {showUpload && (
-          <div className="glass-card glass-card-hover glass-card-shimmer rounded-2xl p-4 sm:p-6 border border-primary/20 animate-in slide-in-from-top-2 duration-300 shadow-lg shadow-primary/5">
-            <GalleryUpload
-              galleryId={gallery.gallery_id}
-              subGalleryId={activeSubGalleryId}
-              onUploadComplete={handleUploadComplete}
-              onUploadError={handleUploadError}
-              onBatchComplete={handleBatchComplete}
-            />
-          </div>
-        )}
+        {/* Upload Modal - opens above content when triggered from action bar */}
+        <GalleryUploadModal
+          isOpen={showUpload}
+          onClose={() => setShowUpload(false)}
+          galleryId={gallery.gallery_id}
+          subGalleryId={activeSubGalleryId}
+          onUploadComplete={handleUploadComplete}
+          onUploadError={handleUploadError}
+          onBatchComplete={handleBatchComplete}
+        />
 
         {/* Bulk Action Bar - Shows when items selected */}
           {selectedAssetIds.size > 0 && (
@@ -1456,27 +1379,6 @@ const GalleryDetailPage: React.FC = () => {
           </ModalBody>
         </Modal>
 
-        {/* AI Tools Hub - Slide-out Panel */}
-        <AIToolsHub
-          isOpen={showAITools}
-          onClose={() => setShowAITools(false)}
-          workspaceId={workspace?.workspace_id || ''}
-          galleryId={gallery.gallery_id}
-          galleryName={gallery.title}
-          totalPhotos={gallery.stats?.total_photos ?? filteredStats.totalItems}
-          selectedAssetIds={Array.from(selectedAssetIds)}
-          onQualityAnalysisComplete={() => {
-            addToast({ message: 'Quality analysis complete', variant: 'success' });
-            refetchAssets();
-          }}
-          onCurationComplete={(assetIds) => {
-            setSelectedAssetIds(new Set(assetIds));
-            addToast({
-              message: `Selected ${assetIds.length} photos from AI curation`,
-              variant: 'success',
-            });
-          }}
-        />
 
         {/* People Panel */}
         <PeoplePanel
@@ -1497,6 +1399,11 @@ const GalleryDetailPage: React.FC = () => {
           workspaceId={workspace?.workspace_id || ''}
           galleryId={gallery.gallery_id}
           galleryTitle={gallery.title}
+          isPublished={gallery.status === 'published'}
+          onPublished={async () => {
+            await refetchGallery();
+            addToast({ message: 'Gallery published automatically', variant: 'success' });
+          }}
         />
 
         {/* PIN Verification Modal for unlocking private photos */}

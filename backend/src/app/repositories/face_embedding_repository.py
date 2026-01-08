@@ -23,6 +23,8 @@ from app.services.face_exceptions import (
     EmbeddingNotNormalizedError,
     FaceNotFoundError,
 )
+from app.services.milvus_service import get_milvus_service
+from app.config.settings import get_settings
 
 
 logger = logging.getLogger(__name__)
@@ -112,26 +114,29 @@ class FaceEmbeddingRepository:
     ) -> list[dict[str, Any]]:
         """Find faces similar to the given embedding using cosine distance.
         
-        Uses pgvector's cosine distance operator (<=>) for efficient
-        similarity search. Results are ordered by similarity (descending).
+        If Milvus is enabled, searches Milvus first and re-hydrates metadata from PostgreSQL.
+        Otherwise, uses pgvector's cosine distance operator (<=>).
         
         Args:
-            embedding: The query embedding vector (512 dimensions, normalized)
+            embedding: The embedding vector to search for
             workspace_id: Workspace ID for tenant isolation
-            threshold: Minimum similarity threshold (0-1, default 0.7)
-            limit: Maximum number of results (default 10)
+            threshold: Minimum similarity threshold (0.0 to 1.0)
+            limit: Maximum number of results to return
             
         Returns:
-            List of dicts with 'face' and 'similarity' keys, ordered by
-            descending similarity
+            List of dicts containing face ID and similarity
             
         Raises:
-            EmbeddingDimensionMismatchError: If embedding dimension is wrong
+            EmbeddingDimensionMismatchError: If dimension is not 512
             EmbeddingNotNormalizedError: If embedding is not normalized
         """
-        # Validate embedding
         self._validate_embedding(embedding)
         
+        settings = get_settings()
+        if settings.milvus_enabled:
+            return await self._find_similar_milvus(embedding, workspace_id, threshold, limit)
+            
+        # Fallback to pgvector
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             # Convert threshold to distance (cosine distance = 1 - similarity)
@@ -199,6 +204,95 @@ class FaceEmbeddingRepository:
             
             return results
     
+    async def _find_similar_milvus(
+        self,
+        embedding: list[float],
+        workspace_id: UUID,
+        threshold: float,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Internal method to find similar faces using Milvus."""
+        milvus = get_milvus_service()
+        
+        # Search Milvus
+        milvus_results = milvus.search_vectors(
+            collection_name="faces",
+            query_vector=embedding,
+            filter_expression=f"workspace_id == '{workspace_id}'",
+            limit=limit,
+            output_fields=["id", "workspace_id", "photo_id"],
+        )
+        
+        # Filter by threshold and prepare IDs for PostgreSQL lookup
+        face_ids = []
+        milvus_similarities = {}
+        for hit in milvus_results:
+            similarity = hit.score # Milvus returns similarity directly for COSINE
+            if similarity >= threshold:
+                face_ids.append(UUID(hit.id))
+                milvus_similarities[UUID(hit.id)] = similarity
+        
+        if not face_ids:
+            return []
+        
+        # Re-hydrate full face data from PostgreSQL
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT 
+                    id,
+                    workspace_id,
+                    photo_id,
+                    face_group_id,
+                    bounding_box,
+                    confidence,
+                    embedding::text as embedding_str,
+                    provider,
+                    detection_metadata,
+                    thumbnail_urls,
+                    created_at,
+                    updated_at
+                FROM faces
+                WHERE id = ANY($1::uuid[])
+                AND workspace_id = $2
+                """,
+                face_ids,
+                workspace_id,
+            )
+        
+        results = []
+        for row in rows:
+            face_dict = dict(row)
+            
+            if face_dict.get("embedding_str"):
+                face_dict["embedding"] = self._pgvector_to_embedding(
+                    face_dict.pop("embedding_str")
+                )
+            else:
+                face_dict.pop("embedding_str", None)
+                face_dict["embedding"] = None
+            
+            results.append({
+                "face": face_dict,
+                "similarity": float(milvus_similarities[face_dict["id"]]),
+            })
+        
+        # Sort results by similarity in descending order
+        results.sort(key=lambda x: x["similarity"], reverse=True)
+        
+        logger.debug(
+            "Milvus similarity search completed",
+            extra={
+                "workspace_id": str(workspace_id),
+                "threshold": threshold,
+                "milvus_hits": len(milvus_results),
+                "pg_rehydrated_count": len(results),
+            },
+        )
+        
+        return results
+
     async def find_similar_to_face(
         self,
         face_id: UUID,
@@ -248,7 +342,79 @@ class FaceEmbeddingRepository:
             embedding = self._pgvector_to_embedding(row["embedding_str"])
             photo_id = row["photo_id"]
             
-            # Convert threshold to distance
+            settings = get_settings()
+            if settings.milvus_enabled:
+                milvus = get_milvus_service()
+                
+                # Build Milvus filter expression
+                filter_parts = [f"workspace_id == '{workspace_id}'", f"id != '{face_id}'"]
+                if exclude_same_photo:
+                    filter_parts.append(f"photo_id != '{photo_id}'")
+                milvus_filter = " and ".join(filter_parts)
+
+                milvus_results = milvus.search_vectors(
+                    collection_name="faces",
+                    query_vector=embedding,
+                    filter_expression=milvus_filter,
+                    limit=limit,
+                    output_fields=["id", "workspace_id", "photo_id"],
+                )
+
+                face_ids = []
+                milvus_similarities = {}
+                for hit in milvus_results:
+                    similarity = hit.score
+                    if similarity >= threshold:
+                        face_ids.append(UUID(hit.id))
+                        milvus_similarities[UUID(hit.id)] = similarity
+                
+                if not face_ids:
+                    return []
+
+                # Re-hydrate full face data from PostgreSQL
+                pg_rows = await conn.fetch(
+                    """
+                    SELECT 
+                        id,
+                        workspace_id,
+                        photo_id,
+                        face_group_id,
+                        bounding_box,
+                        confidence,
+                        embedding::text as embedding_str,
+                        provider,
+                        detection_metadata,
+                        thumbnail_urls,
+                        created_at,
+                        updated_at
+                    FROM faces
+                    WHERE id = ANY($1::uuid[])
+                    AND workspace_id = $2
+                    """,
+                    face_ids,
+                    workspace_id,
+                )
+                
+                results = []
+                for pg_row in pg_rows:
+                    face_dict = dict(pg_row)
+                    if face_dict.get("embedding_str"):
+                        face_dict["embedding"] = self._pgvector_to_embedding(
+                            face_dict.pop("embedding_str")
+                        )
+                    else:
+                        face_dict.pop("embedding_str", None)
+                        face_dict["embedding"] = None
+                    
+                    results.append({
+                        "face": face_dict,
+                        "similarity": float(milvus_similarities[face_dict["id"]]),
+                    })
+                
+                results.sort(key=lambda x: x["similarity"], reverse=True)
+                return results
+            
+            # Fallback to pgvector if Milvus is not enabled
             max_distance = 1.0 - threshold
             
             # Build query with optional photo exclusion
@@ -366,38 +532,54 @@ class FaceEmbeddingRepository:
         # Validate all embeddings first
         for face in faces:
             self._validate_embedding(face["embedding"])
-        
+            
+        # PostgreSQL bulk update
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            async with conn.transaction():
-                updated_count = 0
+            # Use a temporary table for bulk update
+            # (Assuming standard bulk update pattern)
+            await conn.execute("CREATE TEMP TABLE bulk_faces (id uuid, embedding vector(512)) ON COMMIT DROP")
+            
+            data = [(f["id"], self._embedding_to_pgvector(f["embedding"])) for f in faces]
+            await conn.copy_records_to_table("bulk_faces", records=data)
+            
+            result = await conn.execute(
+                """
+                UPDATE faces f
+                SET embedding = bf.embedding,
+                    updated_at = NOW()
+                FROM bulk_faces bf
+                WHERE f.id = bf.id
+                """
+            )
+            updated_count = int(result.split()[-1]) if result else 0
                 
-                for face in faces:
-                    result = await conn.execute(
-                        """
-                        UPDATE faces
-                        SET embedding = $1::vector,
-                            updated_at = NOW()
-                        WHERE id = $2
-                        """,
-                        self._embedding_to_pgvector(face["embedding"]),
-                        face["id"],
-                    )
-                    
-                    # Extract count from "UPDATE N"
-                    if result:
-                        count = int(result.split()[-1])
-                        updated_count += count
-                
-                logger.info(
-                    "Bulk embedding update completed",
-                    extra={
-                        "requested_count": len(faces),
-                        "updated_count": updated_count,
-                    },
-                )
-                
-                return updated_count
+        # Milvus dual-write
+        settings = get_settings()
+        if settings.milvus_enabled:
+            milvus = get_milvus_service()
+            milvus.upsert_vectors(
+                collection_name="faces",
+                entities=[
+                    {
+                        "id": str(f["id"]),
+                        "workspace_id": str(f["workspace_id"]),
+                        "embedding": f["embedding"],
+                        "metadata": {"photo_id": str(f.get("photo_id", ""))}
+                    }
+                    for f in faces
+                ]
+            )
+        
+        logger.info(
+            "Bulk embedding update completed",
+            extra={
+                "requested_count": len(faces),
+                "updated_count": updated_count,
+            },
+        )
+        
+        return updated_count
     
     # =========================================================================
     # SINGLE EMBEDDING OPERATIONS
@@ -460,8 +642,26 @@ class FaceEmbeddingRepository:
                     "Face embedding updated",
                     extra={"face_id": str(face_id)},
                 )
-            
-            return updated
+                settings = get_settings()
+                if settings.MILVUS_ENABLED:
+                    # Fetch photo_id for Milvus metadata
+                    photo_id_row = await conn.fetchrow(
+                        "SELECT photo_id FROM faces WHERE id = $1", face_id
+                    )
+                    photo_id = photo_id_row["photo_id"] if photo_id_row else None
+
+                    milvus = get_milvus_service()
+                    milvus.upsert_vectors(
+                        collection_name="faces",
+                        entities=[{
+                            "id": str(face_id),
+                            "workspace_id": str(workspace_id),
+                            "embedding": embedding,
+                            "metadata": {"photo_id": str(photo_id) if photo_id else ""}
+                        }]
+                    )
+                return True
+            return False
     
     async def get_embedding(
         self,
@@ -521,7 +721,13 @@ class FaceEmbeddingRepository:
                 workspace_id,
             )
             
-            return result and int(result.split()[-1]) > 0
+            if result and int(result.split()[-1]) > 0:
+                settings = get_settings()
+                if settings.MILVUS_ENABLED:
+                    milvus = get_milvus_service()
+                    milvus.delete_vectors(collection_name="faces", ids=[str(face_id)])
+                return True
+            return False
     
     # =========================================================================
     # STATISTICS

@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
+    import asyncio
+    import os
+    import uuid
+
     # Startup
     logger.info(f"Starting {settings.SERVICE_NAME} v{settings.SERVICE_VERSION}")
 
@@ -38,13 +42,65 @@ async def lifespan(app: FastAPI):
     await redis_client.connect()
     logger.info("Redis connection initialized")
 
-    yield
+    # Register service in A2A registry (Phase 4: A2A Integration)
+    import sys
+    sys.path.insert(0, '/app/backend/src')
+    from app.services.service_registry import (
+        get_service_registry,
+        ServiceRegistration,
+        ServiceCapability,
+    )
 
-    # Shutdown
-    logger.info("Shutting down...")
-    await close_pool()
-    await redis_client.disconnect()
-    logger.info("Shutdown complete")
+    registry = get_service_registry()
+    service_id = os.getenv("SERVICE_ID", str(uuid.uuid4()))
+    registration = ServiceRegistration(
+        service_name="billing-service",
+        service_id=service_id,
+        base_url=os.getenv("SERVICE_BASE_URL", "http://billing-service:8005"),
+        capabilities=[
+            ServiceCapability(name="subscription:read", version="1.0", endpoint="/api/v1/subscription"),
+            ServiceCapability(name="subscription:write", version="1.0", endpoint="/api/v1/subscription"),
+            ServiceCapability(name="payment:process", version="1.0", endpoint="/api/v1/subscription/checkout"),
+            ServiceCapability(name="webhook:stripe", version="1.0", endpoint="/webhooks/stripe"),
+            ServiceCapability(name="webhook:razorpay", version="1.0", endpoint="/webhooks/razorpay"),
+        ],
+        health_check_endpoint="/health",
+    )
+
+    await registry.register(registration)
+    logger.info(f"Billing service registered in A2A registry: {service_id}")
+
+    # Start heartbeat loop
+    async def heartbeat_loop():
+        """Send heartbeat every 15 seconds."""
+        while True:
+            try:
+                await asyncio.sleep(15)
+                await registry.heartbeat("billing-service", service_id)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Heartbeat failed: {e}")
+
+    heartbeat_task = asyncio.create_task(heartbeat_loop())
+
+    try:
+        yield
+    finally:
+        # Shutdown: Unregister from A2A registry
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        await registry.unregister("billing-service", service_id)
+        logger.info("Billing service unregistered from A2A registry")
+
+        # Original shutdown
+        logger.info("Shutting down...")
+        await close_pool()
+        await redis_client.disconnect()
+        logger.info("Shutdown complete")
 
 
 # Create FastAPI application

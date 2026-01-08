@@ -204,6 +204,10 @@ export type {
   UseAIHighlightsResult,
 } from './useAIHighlights';
 
+// Client Management hooks
+export { useClientActivities } from './useClientActivities';
+export { useClientCommunications } from './useClientCommunications';
+
 // Team Management hooks
 export {
   // Query hooks
@@ -260,3 +264,18 @@ export type {
   InvitationStatus,
   MemberStatus,
 } from './useTeam';
+
+// Duplicate Detection hooks (Phase 2: AI Duplicate Detection)
+export { useDuplicateDetection } from './useDuplicateDetection';
+export type {
+  DuplicatePhotoMember,
+  DuplicatePhotoGroup,
+  DuplicateClientMember,
+  DuplicateClientGroup,
+  DetectPhotoDuplicatesRequest,
+  DetectPhotoDuplicatesResponse,
+  DetectClientDuplicatesRequest,
+  DetectClientDuplicatesResponse,
+  DuplicateGroupListItem,
+  DuplicateGroupListResponse,
+} from './useDuplicateDetection';

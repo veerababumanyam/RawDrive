@@ -119,8 +119,8 @@ const InvitationCreatePage = lazy(() => import('../pages/workspace/InvitationCre
 const InvitationEditPage = lazy(() => import('../pages/workspace/InvitationEditPage'));
 const InvitationDetailPage = lazy(() => import('../pages/workspace/InvitationDetailPage'));
 
-// Live Camera Sync page
-const SyncPage = lazy(() => import('../pages/workspace/SyncPage'));
+// LiveSync (Live Camera Sync) page
+const LiveSyncPage = lazy(() => import('../pages/workspace/LiveSyncPage'));
 
 // Calendar & Booking Management page
 const BookingsPage = lazy(() => import('../pages/workspace/BookingsPage'));
@@ -423,10 +423,10 @@ export const workspaceRoutes: RouteObject[] = [
         path: 'invitations/:id/edit',
         element: <CriticalLazyPage component={InvitationEditPage} />,
       },
-      // Live Camera Sync route
+      // LiveSync route
       {
-        path: 'sync',
-        element: <CriticalLazyPage component={SyncPage} />,
+        path: 'livesync',
+        element: <CriticalLazyPage component={LiveSyncPage} />,
       },
       // Calendar & Booking Management routes
       {

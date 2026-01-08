@@ -1,0 +1,71 @@
+# AI Processing Service Dependencies
+# Python 3.11+
+
+# FastAPI and async runtime
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.7.4
+pydantic-settings==2.6.1
+
+# Database (PostgreSQL + pgvector)
+asyncpg==0.30.0
+sqlalchemy[asyncio]==2.0.36
+alembic==1.14.0
+
+# Redis for caching and queues
+redis[hiredis]==5.2.1
+
+# Kafka event streaming
+aiokafka==0.11.0
+kafka-python==2.0.2
+
+# AI/ML Libraries
+torch==2.5.1  # PyTorch for model inference
+torchvision==0.20.1
+transformers==4.47.1  # Hugging Face transformers (CLIP, etc.)
+pillow==11.0.0  # Image processing
+imagehash==4.3.1  # Perceptual hashing for duplicate detection
+numpy==2.2.1
+scipy==1.15.0
+
+# Google Cloud AI
+google-cloud-vision==3.8.1  # Vision API for content moderation
+google-generativeai==0.8.3  # Gemini API
+
+# Google Agent-to-Agent (A2A) Protocol
+# Note: As of 2026-01, Google A2A SDK is in preview
+# Install from source or use REST API directly
+# google-aip-agent==0.1.0  # Placeholder - check latest version
+
+# Anthropic MCP (Model Context Protocol)
+mcp==1.1.2  # Anthropic MCP SDK
+
+# HTTP client for API calls
+httpx==0.28.1
+aiohttp==3.11.11
+
+# Utilities
+python-dotenv==1.0.1
+pymilvus==2.3.4
+marshmallow>=3.13.0,<4.0.0  # Pin for environs compatibility
+python-multipart==0.0.20
+orjson==3.10.12  # Fast JSON serialization
+tenacity==9.0.0  # Retry logic
+
+# Observability
+prometheus-client==0.21.1
+opentelemetry-api==1.29.0
+opentelemetry-sdk==1.29.0
+opentelemetry-instrumentation-fastapi==0.50b0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0
+pytest-mock==3.15.0
+httpx==0.28.1  # For AsyncClient testing
+
+# Development
+ruff==0.8.5
+mypy==1.14.1
+black==24.10.0

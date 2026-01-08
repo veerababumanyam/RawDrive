@@ -13,61 +13,15 @@ from src.services.contact_service import ContactService, get_contact_service
 from src.schemas.contact import ContactCreate, ContactUpdate, ContactResponse
 from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
+from src.middleware.workspace_auth import verify_workspace_access
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(
-    prefix="/api/v1/workspaces/{workspace_id}/clients/{client_id}/contacts",
+    prefix="/workspaces/{workspace_id}/clients/{client_id}/contacts",
     tags=["contacts"],
 )
-
-
-# =============================================================================
-# Dependency Injection
-# =============================================================================
-
-
-def get_service() -> ContactService:
-    """Get ContactService instance."""
-    return get_contact_service()
-
-
-async def verify_workspace_access(
-    workspace_id: UUID = Path(...),
-    current_user: JWTPayload = Depends(get_current_user),
-) -> UUID:
-    """
-    Verify user has access to workspace.
-
-    Args:
-        workspace_id: Workspace ID from path
-        current_user: JWT payload from auth middleware
-
-    Returns:
-        UUID: Validated workspace_id
-
-    Raises:
-        HTTPException: 403 if user doesn't have access
-    """
-    if str(current_user.workspace_id) != str(workspace_id):
-        logger.warning(
-            "Workspace access denied",
-            extra={
-                "user_id": str(current_user.user_id),
-                "requested_workspace": str(workspace_id),
-                "user_workspace": str(current_user.workspace_id),
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorResponse(
-                error="WORKSPACE_ACCESS_DENIED",
-                message="You do not have access to this workspace",
-            ).model_dump(),
-        )
-
-    return workspace_id
 
 
 # =============================================================================
@@ -80,7 +34,7 @@ async def list_contacts(
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
     contact_type: Optional[str] = Query(None, description="Filter by contact type"),
-    service: ContactService = Depends(get_service),
+    service: ContactService = Depends(get_contact_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> List[ContactResponse]:
     """
@@ -124,7 +78,7 @@ async def create_contact(
     data: ContactCreate,
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: ContactService = Depends(get_service),
+    service: ContactService = Depends(get_contact_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> ContactResponse:
     """
@@ -198,7 +152,7 @@ async def get_contact(
     contact_id: UUID = Path(..., description="Contact ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: ContactService = Depends(get_service),
+    service: ContactService = Depends(get_contact_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> ContactResponse:
     """
@@ -244,7 +198,7 @@ async def update_contact(
     contact_id: UUID = Path(..., description="Contact ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: ContactService = Depends(get_service),
+    service: ContactService = Depends(get_contact_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> ContactResponse:
     """
@@ -330,7 +284,7 @@ async def delete_contact(
     contact_id: UUID = Path(..., description="Contact ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: ContactService = Depends(get_service),
+    service: ContactService = Depends(get_contact_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> None:
     """

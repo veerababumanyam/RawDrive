@@ -372,12 +372,30 @@ class AuthService:
                     trial_end,
                 )
 
+        # Create session for tracking and token refresh
+        session_id = await self._create_session(
+            user_id,
+            workspace_id,
+            device_info=None,
+            device_fingerprint=None,
+            ip_address=None,
+            user_agent=None,
+        )
+
         # Build tokens
         permissions = await _get_user_permissions(pool, user_id, workspace_id)
         if not permissions:
             permissions = ["workspace:*"]
 
-        token_pair = self._issue_tokens(user_id, workspace_id, permissions)
+        token_pair = self._issue_tokens(
+            user_id,
+            workspace_id,
+            permissions,
+            session_id=session_id,  # CRITICAL: Include session_id for token refresh
+        )
+
+        # Store refresh token hash for rotation/revocation
+        await self._store_refresh_token(session_id, token_pair.refresh_token)
 
         auth_user = AuthUser(
             user_id=user_id,
@@ -492,7 +510,7 @@ class AuthService:
         )
 
         # Store refresh token hash in Redis for rotation/revocation
-        await self._store_refresh_token(session_id, token_pair.refresh_token)
+        await self._store_refresh_token(session_id, token_pair.refresh_token, remember_me=remember_me)
 
         auth_user = AuthUser(
             user_id=user_id,
@@ -528,9 +546,27 @@ class AuthService:
         session_id_str = payload.get("session_id")
 
         if not session_id_str:
-            raise TokenInvalidError()
+            # Backward compatibility: Create session for tokens without session_id (legacy signup tokens)
+            logger.warning(
+                "Token refresh for legacy token without session_id, creating new session",
+                extra={"user_id": str(user_id)}
+            )
 
-        session_id = uuid.UUID(session_id_str)
+            # Resolve workspace
+            workspace_id: Optional[uuid.UUID] = None
+            if workspace_id_str:
+                workspace_id = uuid.UUID(workspace_id_str)
+            else:
+                pool = await get_db_pool()
+                workspace_id = await _get_default_workspace(pool, user_id)
+
+            if workspace_id is None:
+                raise AuthError("No active workspace", "AUTH_NO_WORKSPACE", 403)
+
+            # Create new session for legacy token
+            session_id = await self._create_session(user_id, workspace_id)
+        else:
+            session_id = uuid.UUID(session_id_str)
 
         # Verify session not revoked
         redis = await get_redis_client()
@@ -667,11 +703,24 @@ class AuthService:
         )
         return session.session_id
 
-    async def _store_refresh_token(self, session_id: uuid.UUID, refresh_token: str) -> None:
+    async def _store_refresh_token(
+        self,
+        session_id: uuid.UUID,
+        refresh_token: str,
+        remember_me: bool = False
+    ) -> None:
         """Store refresh token hash in Redis for validation/rotation."""
         redis = await get_redis_client()
         token_hash = _hash_refresh_token(refresh_token)
-        ttl = self._settings.refresh_token_ttl_days * 86400
+
+        # Match TTL to refresh token expiry (7 days default, 30 days for remember_me)
+        ttl_days = (
+            self._settings.extended_refresh_token_ttl_days
+            if remember_me
+            else self._settings.refresh_token_ttl_days
+        )
+        ttl = ttl_days * 86400
+
         await redis.setex(f"session:{session_id}:refresh_hash", ttl, token_hash)
 
         # Also update DB hash

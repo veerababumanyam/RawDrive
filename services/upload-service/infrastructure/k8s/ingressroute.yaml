@@ -1,0 +1,116 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: upload-service
+  labels:
+    app: upload-service
+    component: uploads
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    # Main upload API routes
+    - match: Host(`api.rawdrive.io`) && PathPrefix(`/api/v1/uploads`)
+      kind: Rule
+      middlewares:
+        - name: upload-service-rate-limit
+        - name: upload-service-headers
+        - name: upload-service-circuit-breaker
+        - name: upload-service-retry
+      services:
+        - name: upload-service
+          port: 80
+      priority: 100
+    # Internal service route (for service-to-service communication)
+    - match: Host(`upload-service.rawdrive.internal`)
+      kind: Rule
+      middlewares:
+        - name: upload-service-headers
+      services:
+        - name: upload-service
+          port: 80
+      priority: 50
+  tls:
+    certResolver: letsencrypt
+---
+# Rate limiting middleware for upload service
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: upload-service-rate-limit
+  labels:
+    app: upload-service
+spec:
+  rateLimit:
+    average: 100
+    burst: 200
+    period: 1s
+---
+# Headers middleware
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: upload-service-headers
+  labels:
+    app: upload-service
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Service: upload-service
+    customResponseHeaders:
+      X-Service: upload-service
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+    accessControlAllowMethods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+      - HEAD
+    accessControlAllowHeaders:
+      - Authorization
+      - Content-Type
+      - X-Workspace-ID
+      - X-Correlation-ID
+      - X-Request-ID
+      - Tus-Resumable
+      - Tus-Version
+      - Upload-Offset
+      - Upload-Length
+      - Upload-Metadata
+      - Upload-Checksum
+    accessControlExposeHeaders:
+      - X-Correlation-ID
+      - X-Request-ID
+      - Tus-Resumable
+      - Tus-Version
+      - Upload-Offset
+      - Upload-Length
+      - Location
+    accessControlAllowCredentials: true
+    accessControlMaxAge: 86400
+---
+# Circuit breaker middleware (optional, for additional resilience)
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: upload-service-circuit-breaker
+  labels:
+    app: upload-service
+spec:
+  circuitBreaker:
+    expression: ResponseCodeRatio(500, 600, 0, 600) > 0.30 || NetworkErrorRatio() > 0.10
+---
+# Retry middleware for transient failures
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: upload-service-retry
+  labels:
+    app: upload-service
+spec:
+  retry:
+    attempts: 3
+    initialInterval: 100ms

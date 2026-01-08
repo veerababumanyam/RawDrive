@@ -8,6 +8,7 @@ import {
 import { galleryService } from './galleryService';
 import { getStoredTokens } from './tokenStorage';
 import { getApiBaseUrl } from './api';
+import { featureFlags, getUploadServiceUrl } from '../config/featureFlags';
 
 export interface TusUploadOptions {
   /** Workspace ID */
@@ -181,16 +182,50 @@ export class TusUploadClient {
     this.encryptionKey = await generateEncryptionKey();
     this.encryptionIV = generateIV();
 
-    const session = await galleryService.createUploadSession(this.options.workspaceId, {
-      file_name: this.options.file.name,
-      mime_type: this.options.file.type,
-      size_bytes: this.options.file.size,
-      gallery_id: this.options.galleryId,
-      sub_gallery_id: this.options.subGalleryId,
-      sha256: sha256,
-      // Note: resumable_protocol will be added to UploadSessionRequest type when backend supports it
-      // For now, backend will default to TUS if supported
-    });
+    // Use upload microservice if feature flag is enabled
+    let session;
+    if (featureFlags.uploadMicroservice) {
+      const baseUrl = getUploadServiceUrl();
+      const tokens = getStoredTokens();
+      const response = await fetch(`${baseUrl}/api/v1/uploads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': tokens ? `Bearer ${tokens.accessToken}` : '',
+          'X-Workspace-ID': this.options.workspaceId,
+        },
+        body: JSON.stringify({
+          file_name: this.options.file.name,
+          mime_type: this.options.file.type,
+          size_bytes: this.options.file.size,
+          gallery_id: this.options.galleryId,
+          sub_gallery_id: this.options.subGalleryId,
+          sha256: sha256,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Upload service error: ${response.statusText} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      session = {
+        upload_id: result.upload_id,
+        upload_url: result.upload_url,
+      };
+    } else {
+      session = await galleryService.createUploadSession(this.options.workspaceId, {
+        file_name: this.options.file.name,
+        mime_type: this.options.file.type,
+        size_bytes: this.options.file.size,
+        gallery_id: this.options.galleryId,
+        sub_gallery_id: this.options.subGalleryId,
+        sha256: sha256,
+        // Note: resumable_protocol will be added to UploadSessionRequest type when backend supports it
+        // For now, backend will default to TUS if supported
+      });
+    }
 
     this.uploadId = session.upload_id;
   }
@@ -259,15 +294,18 @@ export class TusUploadClient {
       'Content-Type': 'application/offset+octet-stream',
       'Upload-Offset': offset.toString(),
       'Content-Length': (chunkEnd - offset).toString(),
+      'X-Workspace-ID': this.options.workspaceId,
     };
 
     if (tokens?.accessToken) {
       headers['Authorization'] = `Bearer ${tokens.accessToken}`;
     }
 
-    // Use centralized API base URL logic
-    const apiUrl = getApiBaseUrl();
-    const endpoint = `${apiUrl}/api/v1/workspaces/${this.options.workspaceId}/uploads/${this.uploadId}/chunk`;
+    // Use upload microservice URL if feature flag is enabled, otherwise use main API
+    const apiUrl = featureFlags.uploadMicroservice
+      ? getUploadServiceUrl()
+      : getApiBaseUrl();
+    const endpoint = `${apiUrl}/api/v1/uploads/${this.uploadId}/chunks`;
 
     const response = await fetch(endpoint, {
       method: 'PATCH',
@@ -302,17 +340,19 @@ export class TusUploadClient {
     const sha256 = await calculateStreamingSHA256(this.options.file);
     const tokens = await getStoredTokens();
 
-    // Use the chunked commit endpoint for streaming encryption + multipart upload
-    const apiUrl = import.meta.env.VITE_API_URL !== undefined
-      ? import.meta.env.VITE_API_URL
-      : 'http://localhost:8000';
-    const endpoint = `${apiUrl}/api/v1/workspaces/${this.options.workspaceId}/uploads/${this.uploadId}/commit-chunked`;
+    // Use upload microservice URL if feature flag is enabled, otherwise use main API
+    const apiUrl = featureFlags.uploadMicroservice
+      ? getUploadServiceUrl()
+      : getApiBaseUrl();
+    const endpoint = `${apiUrl}/api/v1/uploads/${this.uploadId}/complete`;
 
     const formData = new FormData();
     formData.append('total_size', this.totalBytes.toString());
     formData.append('sha256', sha256);
 
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+      'X-Workspace-ID': this.options.workspaceId,
+    };
     if (tokens?.accessToken) {
       headers['Authorization'] = `Bearer ${tokens.accessToken}`;
     }

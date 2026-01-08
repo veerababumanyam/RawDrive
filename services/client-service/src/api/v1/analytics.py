@@ -24,61 +24,15 @@ from src.schemas.analytics import (
 )
 from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
+from src.middleware.workspace_auth import verify_workspace_access
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(
-    prefix="/api/v1/workspaces/{workspace_id}/clients/analytics",
+    prefix="/workspaces/{workspace_id}/clients/analytics",
     tags=["analytics"],
 )
-
-
-# =============================================================================
-# Dependency Injection
-# =============================================================================
-
-
-def get_service() -> AnalyticsService:
-    """Get AnalyticsService instance."""
-    return get_analytics_service()
-
-
-async def verify_workspace_access(
-    workspace_id: UUID = Path(...),
-    current_user: JWTPayload = Depends(get_current_user),
-) -> UUID:
-    """
-    Verify user has access to workspace.
-
-    Args:
-        workspace_id: Workspace ID from path
-        current_user: JWT payload from auth middleware
-
-    Returns:
-        UUID: Validated workspace_id
-
-    Raises:
-        HTTPException: 403 if user doesn't have access
-    """
-    if str(current_user.workspace_id) != str(workspace_id):
-        logger.warning(
-            "Workspace access denied",
-            extra={
-                "user_id": str(current_user.user_id),
-                "requested_workspace": str(workspace_id),
-                "user_workspace": str(current_user.workspace_id),
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorResponse(
-                error="WORKSPACE_ACCESS_DENIED",
-                message="You do not have access to this workspace",
-            ).model_dump(),
-        )
-
-    return workspace_id
 
 
 # =============================================================================
@@ -98,7 +52,7 @@ async def get_workspace_analytics(
         True, description="Include communication analytics"
     ),
     top_limit: int = Query(10, ge=1, le=100, description="Limit for top lists"),
-    service: AnalyticsService = Depends(get_service),
+    service: AnalyticsService = Depends(get_analytics_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> WorkspaceAnalyticsSummary:
     """
@@ -199,7 +153,7 @@ async def get_client_engagement(
     workspace_id: UUID = Depends(verify_workspace_access),
     start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-    service: AnalyticsService = Depends(get_service),
+    service: AnalyticsService = Depends(get_analytics_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> ClientEngagementMetrics:
     """

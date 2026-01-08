@@ -1,0 +1,152 @@
+# KEDA ScaledObject for GPU Upscaling Workers
+# Autoscales based on Kafka queue depth, GPU utilization, and inference latency
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ai-upscaler-gpu-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: ai-upscaler-gpu
+    kind: Deployment
+
+  # GPU workers scale conservatively (expensive resources)
+  minReplicaCount: 1
+  maxReplicaCount: 8
+
+  pollingInterval: 15  # Check metrics every 15 seconds
+  cooldownPeriod: 180  # 3 minutes cooldown before scaling down
+
+  # Advanced HPA behavior for GPU workloads
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0  # Scale up immediately
+          policies:
+          - type: Percent
+            value: 100  # Double replicas
+            periodSeconds: 30
+          - type: Pods
+            value: 2  # Or add 2 pods
+            periodSeconds: 30
+          selectPolicy: Max  # Take max of both policies
+        scaleDown:
+          stabilizationWindowSeconds: 300  # 5 minute stabilization
+          policies:
+          - type: Percent
+            value: 20  # Reduce by 20%
+            periodSeconds: 60
+          selectPolicy: Min  # Conservative scale down
+
+  triggers:
+    # =========================================================================
+    # Primary Trigger: Redis Queue Depth for Upscaling Jobs
+    # =========================================================================
+    - type: redis
+      metadata:
+        address: redis.rawdrive:6379
+        listName: gpu_upscale_queue
+        listLength: "5"  # Scale up when >5 jobs queued
+        activationListLength: "1"  # Start scaling at 1 job
+        databaseIndex: "0"
+      authenticationRef:
+        name: redis-auth
+
+    # =========================================================================
+    # Secondary Trigger: GPU Utilization (requires nvidia-dcgm-exporter)
+    # =========================================================================
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.rawdrive:9090
+        metricName: gpu_utilization
+        threshold: "70"  # Scale at 70% GPU utilization
+        activationThreshold: "50"  # Activate at 50%
+        query: |
+          avg(
+            DCGM_FI_DEV_GPU_UTIL{
+              kubernetes_pod_name=~"ai-upscaler-gpu.*"
+            }
+          )
+      authenticationRef:
+        name: prometheus-auth
+
+    # =========================================================================
+    # Tertiary Trigger: Inference Latency (P95)
+    # =========================================================================
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.rawdrive:9090
+        metricName: upscale_inference_latency_p95
+        threshold: "10"  # Scale when P95 latency > 10 seconds
+        activationThreshold: "5"  # Activate at 5 seconds
+        query: |
+          histogram_quantile(0.95,
+            sum(
+              rate(upscale_inference_duration_seconds_bucket{
+                job="ai-upscaler-gpu"
+              }[1m])
+            ) by (le)
+          )
+
+    # =========================================================================
+    # Quaternary Trigger: Kafka Consumer Lag
+    # =========================================================================
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.rawdrive:9092
+        consumerGroup: upscaling-consumer
+        topic: asset-ai-processing
+        lagThreshold: "20"  # Scale when lag > 20 messages
+        activationLagThreshold: "5"  # Activate at 5 message lag
+      authenticationRef:
+        name: kafka-auth
+
+---
+# TriggerAuthentication for Redis
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-auth
+  namespace: default
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: redis-secret
+      key: password
+
+---
+# TriggerAuthentication for Prometheus
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: prometheus-auth
+  namespace: default
+spec:
+  secretTargetRef:
+    - parameter: username
+      name: prometheus-secret
+      key: username
+    - parameter: password
+      name: prometheus-secret
+      key: password
+
+---
+# TriggerAuthentication for Kafka
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: kafka-auth
+  namespace: default
+spec:
+  secretTargetRef:
+    - parameter: sasl
+      name: kafka-secret
+      key: sasl
+    - parameter: username
+      name: kafka-secret
+      key: username
+    - parameter: password
+      name: kafka-secret
+      key: password

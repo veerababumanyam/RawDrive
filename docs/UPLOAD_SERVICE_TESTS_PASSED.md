@@ -110,7 +110,7 @@ upload_service_info{service="upload-service",version="1.0.0"} 1.0
 
 ### 5. Authentication Middleware Test
 ```bash
-POST http://localhost:8005/api/v1/upload/session
+POST http://localhost:8005/api/v1/uploads
 (No Authorization header)
 ```
 **Response:**
@@ -221,7 +221,7 @@ cd C:\Users\admin\Desktop\RawDrive
 "C:\Program Files\Docker\Docker\resources\bin\docker.exe" exec rawdrive-upload-service curl http://localhost:8080/metrics
 
 # Auth test (should return 401)
-"C:\Program Files\Docker\Docker\resources\bin\docker.exe" exec rawdrive-upload-service curl -w "\n%{http_code}" -X POST http://localhost:8080/api/v1/upload/session
+"C:\Program Files\Docker\Docker\resources\bin\docker.exe" exec rawdrive-upload-service curl -w "\n%{http_code}" -X POST http://localhost:8080/api/v1/uploads
 ```
 
 ### Stop Services

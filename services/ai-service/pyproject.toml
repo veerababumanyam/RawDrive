@@ -12,6 +12,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "redis[hiredis]>=5.2.0",
     "pgvector>=0.3.0",
+    "pymilvus>=2.3.0",
 ]
 
 [project.optional-dependencies]

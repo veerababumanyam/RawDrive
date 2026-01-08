@@ -1,0 +1,251 @@
+# GPU Deployment for AI Upscaling Workers
+# Requires GPU nodes with NVIDIA drivers and CUDA runtime
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-upscaler-gpu
+  namespace: default
+  labels:
+    app: ai-upscaler
+    component: gpu
+    tier: ai-processing
+spec:
+  replicas: 1  # Managed by KEDA
+  selector:
+    matchLabels:
+      app: ai-upscaler
+      component: gpu
+  template:
+    metadata:
+      labels:
+        app: ai-upscaler
+        component: gpu
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8009"
+        prometheus.io/path: "/metrics"
+    spec:
+      # =========================================================================
+      # Node Selection - GPU nodes only
+      # =========================================================================
+      nodeSelector:
+        accelerator: nvidia-gpu
+        gpu-type: a100  # Or v100, h100, t4, etc.
+
+      # Tolerate GPU taints
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+      # Anti-affinity to spread across GPU nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: ai-upscaler
+                  component: gpu
+              topologyKey: kubernetes.io/hostname
+
+      # =========================================================================
+      # Init Container - Download Model Weights
+      # =========================================================================
+      initContainers:
+      - name: download-models
+        image: alpine:3.19
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            apk add --no-cache wget
+            mkdir -p /weights
+
+            echo "Downloading Real-ESRGAN x4plus model..."
+            wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth \
+              -O /weights/RealESRGAN_x4plus.pth
+
+            echo "Downloading Real-ESRGAN x2plus model..."
+            wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/RealESRGAN_x2plus.pth \
+              -O /weights/RealESRGAN_x2plus.pth
+
+            echo "Model download complete"
+            ls -lh /weights/
+        volumeMounts:
+        - name: model-weights
+          mountPath: /weights
+
+      # =========================================================================
+      # Main Container - GPU Upscaler
+      # =========================================================================
+      containers:
+      - name: upscaler
+        image: rawdrive/ai-processing-service:latest-gpu
+        imagePullPolicy: Always
+
+        # GPU resource request (1 GPU per pod)
+        resources:
+          requests:
+            nvidia.com/gpu: "1"
+            cpu: "2"
+            memory: "8Gi"
+          limits:
+            nvidia.com/gpu: "1"
+            cpu: "4"
+            memory: "16Gi"
+
+        # Environment variables
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: SERVICE_NAME
+          value: "ai-upscaler-gpu"
+
+        # GPU Configuration
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: GPU_MEMORY_FRACTION
+          value: "0.9"
+        - name: UPSCALE_GPU_ENABLED
+          value: "true"
+        - name: UPSCALE_GPU_DEVICE
+          value: "cuda"
+
+        # Database
+        - name: DATABASE_HOST
+          value: "postgres.rawdrive"
+        - name: DATABASE_PORT
+          value: "5432"
+        - name: DATABASE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: database
+        - name: DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: username
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+
+        # Redis
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: url
+
+        # Kafka
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka.rawdrive:9092"
+
+        # Milvus
+        - name: MILVUS_ENABLED
+          value: "true"
+        - name: MILVUS_HOST
+          value: "milvus.rawdrive"
+        - name: MILVUS_PORT
+          value: "19530"
+
+        # Upscaling Configuration
+        - name: UPSCALE_MODEL
+          value: "RealESRGAN_x4plus"
+        - name: UPSCALE_DEFAULT_FACTOR
+          value: "4"
+
+        # Ports
+        ports:
+        - containerPort: 8009
+          name: http
+          protocol: TCP
+
+        # Volume mounts
+        volumeMounts:
+        - name: model-weights
+          mountPath: /app/weights
+          readOnly: true
+
+        # Liveness probe
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8009
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        # Readiness probe (check if model loaded)
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8009
+          initialDelaySeconds: 120  # Model loading takes time
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+      # =========================================================================
+      # Volumes
+      # =========================================================================
+      volumes:
+      - name: model-weights
+        emptyDir:
+          sizeLimit: 1Gi  # ~500MB for both models
+
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      # Restart policy
+      restartPolicy: Always
+
+---
+# Service for GPU Upscaler
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-upscaler-gpu
+  namespace: default
+  labels:
+    app: ai-upscaler
+    component: gpu
+spec:
+  selector:
+    app: ai-upscaler
+    component: gpu
+  ports:
+  - name: http
+    port: 8009
+    targetPort: 8009
+    protocol: TCP
+  type: ClusterIP
+
+---
+# ServiceMonitor for Prometheus (if using Prometheus Operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ai-upscaler-gpu
+  namespace: default
+  labels:
+    app: ai-upscaler
+    component: gpu
+spec:
+  selector:
+    matchLabels:
+      app: ai-upscaler
+      component: gpu
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s

@@ -179,6 +179,19 @@ class GalleryPinRequest(BaseModel):
     pin: Optional[str] = Field(None, pattern=r"^\d{4,8}$")
 
 
+class GalleryCredentialsResponse(BaseModel):
+    """Gallery credentials response."""
+
+    gallery_id: str
+    password_set: bool
+    password: Optional[str] = None
+    password_recoverable: bool = False
+    pin_set: bool
+    pin: Optional[str] = None
+    pin_recoverable: bool = False
+
+
+
 # =============================================================================
 # Gallery Asset Schemas
 # =============================================================================
@@ -251,3 +264,11 @@ class RemoveAssetsRequest(BaseModel):
     """Request to remove assets from a gallery."""
 
     asset_ids: List[str] = Field(..., min_length=1)
+
+
+class UpdateAssetRequest(BaseModel):
+    """Request to update gallery asset metadata."""
+
+    title: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = Field(None, max_length=2000)
+    is_private: Optional[bool] = Field(None, description="Lock/unlock the photo")

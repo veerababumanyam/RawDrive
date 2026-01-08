@@ -1,0 +1,32 @@
+---
+# PgBouncer Client ConfigMap
+# Shared configuration for all microservices to connect through PgBouncer
+# Services can reference this ConfigMap in their deployment manifests
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-client-config
+  labels:
+    app.kubernetes.io/component: database-config
+    app.kubernetes.io/part-of: rawdrive
+    app.kubernetes.io/managed-by: kustomize
+data:
+  # PgBouncer connection pooler settings
+  # Set PGBOUNCER_ENABLED to "true" to route all database connections through PgBouncer
+  # This is critical for scaling to 5000+ concurrent users
+  PGBOUNCER_ENABLED: "true"
+  PGBOUNCER_HOST: "pgbouncer"
+  PGBOUNCER_PORT: "6432"
+---
+# Example usage in a service deployment:
+#
+# spec:
+#   template:
+#     spec:
+#       containers:
+#         - name: my-service
+#           envFrom:
+#             - configMapRef:
+#                 name: pgbouncer-client-config
+#             - configMapRef:
+#                 name: my-service-config

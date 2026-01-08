@@ -13,7 +13,7 @@ import { AppCard } from '@/components/ui/AppCard';
 interface AILoadingProps {
   message?: string;
   progress?: number;
-  featureType?: 'analysis' | 'caption' | 'hashtag' | 'story' | 'curation';
+  featureType?: 'analysis' | 'caption' | 'hashtag' | 'story' | 'curation' | 'duplicate-detection';
 }
 
 /**
@@ -44,6 +44,11 @@ const FEATURE_CONFIG = {
     icon: Wand2,
     defaultMessage: 'Curating photos...',
     steps: ['Scoring quality', 'Checking diversity', 'Selecting best'],
+  },
+  'duplicate-detection': {
+    icon: Camera,
+    defaultMessage: 'Detecting duplicates...',
+    steps: ['Analyzing content', 'Comparing similarity', 'Grouping matches'],
   },
 };
 
@@ -147,20 +152,18 @@ export const AISteppedLoader: React.FC<AILoadingProps & { currentStep?: number }
           <div key={step} className="flex items-center gap-3">
             <div
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium
-                ${
-                  index < currentStep
-                    ? 'bg-success text-white'
-                    : index === currentStep
-                      ? 'bg-accent text-white animate-pulse'
-                      : 'bg-surface-hover text-text-tertiary'
+                ${index < currentStep
+                  ? 'bg-success text-white'
+                  : index === currentStep
+                    ? 'bg-accent text-white animate-pulse'
+                    : 'bg-surface-hover text-text-tertiary'
                 }`}
             >
               {index < currentStep ? '✓' : index + 1}
             </div>
             <span
-              className={`text-sm ${
-                index <= currentStep ? 'text-text-primary' : 'text-text-tertiary'
-              }`}
+              className={`text-sm ${index <= currentStep ? 'text-text-primary' : 'text-text-tertiary'
+                }`}
             >
               {step}
             </span>

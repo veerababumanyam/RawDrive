@@ -37,6 +37,48 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
     await init_redis_client(settings)
     start_audit_worker()  # Start Loki audit log worker
 
+    # Register service in A2A registry (Phase 4: A2A Integration)
+    from app.services.service_registry import (
+        get_service_registry,
+        ServiceRegistration,
+        ServiceCapability,
+    )
+    import uuid
+
+    registry = get_service_registry()
+    service_id = os.getenv("SERVICE_ID", str(uuid.uuid4()))
+    registration = ServiceRegistration(
+        service_name="backend",
+        service_id=service_id,
+        base_url=os.getenv("SERVICE_BASE_URL", "http://backend:8000"),
+        capabilities=[
+            ServiceCapability(name="auth:login", version="1.0", endpoint="/api/v1/auth/login"),
+            ServiceCapability(name="users:manage", version="1.0", endpoint="/api/v1/users"),
+            ServiceCapability(name="workspaces:manage", version="1.0", endpoint="/api/v1/workspaces"),
+            ServiceCapability(name="roles:manage", version="1.0", endpoint="/api/v1/roles"),
+            ServiceCapability(name="clients:read", version="1.0", endpoint="/api/v1/clients"),
+            ServiceCapability(name="clients:write", version="1.0", endpoint="/api/v1/clients"),
+        ],
+        health_check_endpoint="/health",
+    )
+
+    await registry.register(registration)
+    logger.info(f"Backend service registered in A2A registry: {service_id}")
+
+    # Start heartbeat loop for service registry
+    async def heartbeat_loop():
+        """Send heartbeat every 15 seconds."""
+        while True:
+            try:
+                await asyncio.sleep(15)
+                await registry.heartbeat("backend", service_id)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Heartbeat failed: {e}")
+
+    heartbeat_task = asyncio.create_task(heartbeat_loop())
+
     # Import worker handlers to register them
     # This must happen before starting the worker
     import app.services.asset_processing_worker  # noqa: F401
@@ -73,6 +115,15 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
     try:
         yield
     finally:
+        # Unregister from A2A registry and stop heartbeat
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        await registry.unregister("backend", service_id)
+        logger.info("Backend service unregistered from A2A registry")
+
         # Stop background services
         if enable_worker:
             # Stop face detection worker (if running embedded)

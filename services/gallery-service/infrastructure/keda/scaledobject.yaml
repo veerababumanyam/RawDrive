@@ -1,0 +1,82 @@
+# KEDA ScaledObject for Gallery Service
+# Scales based on HTTP request rate and WebSocket connections
+# Target: 5-20 pods for 50K concurrent users
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: gallery-service-scaledobject
+  labels:
+    app: gallery-service
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gallery-service
+  # Polling interval for metrics
+  pollingInterval: 15
+  # Cooldown period before scaling down
+  cooldownPeriod: 60
+  # Min/max replicas
+  minReplicaCount: 5
+  maxReplicaCount: 20
+  # Scale down gradually
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 120
+          policies:
+            - type: Percent
+              value: 25
+              periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+            - type: Pods
+              value: 4
+              periodSeconds: 15
+          selectPolicy: Max
+  triggers:
+    # Primary trigger: HTTP request rate from Prometheus
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
+        metricName: gallery_http_requests_total
+        query: |
+          sum(rate(gallery_http_requests_total{endpoint=~"/api/v1/public/.*"}[1m]))
+        threshold: "100"  # Scale up when >100 RPS
+        activationThreshold: "50"  # Activate scaling at 50 RPS
+
+    # Secondary trigger: WebSocket connections
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
+        metricName: gallery_websocket_connections_active
+        query: |
+          sum(gallery_websocket_connections_active)
+        threshold: "500"  # Scale up when >500 connections
+        activationThreshold: "200"
+
+    # Tertiary trigger: Request latency
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
+        metricName: gallery_http_request_duration_seconds
+        query: |
+          histogram_quantile(0.95, sum(rate(gallery_http_request_duration_seconds_bucket[1m])) by (le))
+        threshold: "1"  # Scale up when P95 latency > 1s
+        activationThreshold: "0.5"
+
+---
+# Trigger Authentication for Prometheus
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: gallery-prometheus-trigger-auth
+spec:
+  secretTargetRef: []
+  # No authentication needed for internal Prometheus

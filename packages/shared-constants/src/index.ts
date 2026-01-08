@@ -22,7 +22,20 @@ export {
   SyncEventType,
   SyncErrorCode,
   SyncWebSocketMessageType,
-  // Sync-specific constants
+  // LiveSync-specific constants
+  LIVESYNC_RATE_LIMITS,
+  LIVESYNC_TIMING,
+  LIVESYNC_RETRY,
+  LIVESYNC_QUEUE_LIMITS,
+  LIVESYNC_FILE_LIMITS,
+  LIVESYNC_SESSION_LIMITS,
+  LIVESYNC_WEBSOCKET,
+  LIVESYNC_ERROR_MESSAGES,
+  LIVESYNC_FILE_PATTERNS,
+  LIVESYNC_API_PATHS,
+  LIVESYNC_QUOTA_THRESHOLDS,
+  LIVESYNC,
+  // Backwards compatibility aliases
   SYNC_RATE_LIMITS,
   SYNC_TIMING,
   SYNC_RETRY,
@@ -35,7 +48,7 @@ export {
   SYNC_API_PATHS,
   SYNC_QUOTA_THRESHOLDS,
   SYNC,
-} from './sync';
+} from './livesync';
 export {
   // Re-exported from shared-types for convenience
   PlatformRoleType,

@@ -80,7 +80,7 @@ http:
     # Upload Microservice - TUS chunked uploads
     # -------------------------------------------------------------------------
     upload-service-router-local:
-      rule: "Host(`localhost`) && PathPrefix(`/api/v1/upload`)"
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/uploads`)"
       entryPoints:
         - web
       service: upload-service
@@ -105,16 +105,29 @@ http:
       priority: 120
 
     # -------------------------------------------------------------------------
+    # WebSocket Router - Routes to backend service (highest priority for WS)
+    # -------------------------------------------------------------------------
+    websocket-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/ws`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - cors-headers-dev
+      priority: 160
+
+    # -------------------------------------------------------------------------
     # Gallery Microservice - Authenticated Endpoints
     # -------------------------------------------------------------------------
     gallery-auth-router-local:
-      rule: "Host(`localhost`) && PathPrefix(`/api/v1/galleries`, `/api/v1/magic-links`, `/api/v1/ws`)"
+      rule: "Host(`localhost`) && (PathPrefix(`/api/v1/galleries`) || PathPrefix(`/api/v1/magic-links`))"
       entryPoints:
         - web
       service: gallery-service
       middlewares:
         - rate-limit-api
         - security-headers-dev
+        - cors-headers-dev
       priority: 140
 
     # -------------------------------------------------------------------------
@@ -170,6 +183,20 @@ http:
       priority: 145
 
     # -------------------------------------------------------------------------
+    # Client CRM Microservice
+    # -------------------------------------------------------------------------
+    client-service-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/workspaces/{workspace_id:[0-9a-f-]+}/clients`)"
+      entryPoints:
+        - web
+      service: client-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 138
+
+    # -------------------------------------------------------------------------
     # Notifications Microservice - Webhooks (SendGrid callbacks)
     # Higher priority to match before generic notifications routes
     # -------------------------------------------------------------------------
@@ -209,6 +236,49 @@ http:
         - rate-limit-ai
         - security-headers-dev
       priority: 130
+
+    # -------------------------------------------------------------------------
+    # Smart Tagging Routes - AI-powered content analysis
+    # Routes to ai-service FastAPI
+    # Higher priority to match before generic api-router-local
+    # -------------------------------------------------------------------------
+    smart-tagging-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/workspaces/`) && PathRegexp(`^/api/v1/workspaces/[0-9a-f\\-]+/smart-tagging`)"
+      entryPoints:
+        - web
+      service: ai-service
+      middlewares:
+        - rate-limit-ai
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 150
+
+    # -------------------------------------------------------------------------
+    # A2A Service Registry Endpoints (Phase 4: A2A Integration)
+    # -------------------------------------------------------------------------
+    a2a-registry-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/a2a/registry`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-a2a
+        - security-headers-dev
+        - a2a-headers
+      priority: 165
+
+    # -------------------------------------------------------------------------
+    # A2A Agent API Keys Management (Phase 4: A2A Integration)
+    # -------------------------------------------------------------------------
+    a2a-api-keys-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/workspaces/`) && PathRegexp(`/agent-api-keys`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+      priority: 142
 
     # -------------------------------------------------------------------------
     # Monitoring - Grafana
@@ -285,6 +355,19 @@ http:
           interval: 10s
           timeout: 3s
 
+    client-service:
+      loadBalancer:
+        servers:
+          - url: "http://client-service:8011"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+        sticky:
+          cookie:
+            name: rawdrive_client
+            httpOnly: true
+
     upload-service:
       loadBalancer:
         servers:
@@ -298,6 +381,15 @@ http:
       loadBalancer:
         servers:
           - url: "http://notifications-service:8007"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    ai-service:
+      loadBalancer:
+        servers:
+          - url: "http://ai-service:8013"
         healthCheck:
           path: /health
           interval: 10s
@@ -356,6 +448,15 @@ http:
         average: 100
         burst: 200
         period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-a2a:
+      rateLimit:
+        average: 50
+        burst: 100
+        period: 1s
         sourceCriterion:
           ipStrategy:
             depth: 1
@@ -421,6 +522,17 @@ http:
       stripPrefix:
         prefixes:
           - /grafana
+
+    # -------------------------------------------------------------------------
+    # A2A Service Headers (Phase 4: A2A Integration)
+    # -------------------------------------------------------------------------
+    a2a-headers:
+      headers:
+        customRequestHeaders:
+          X-A2A-Enabled: "true"
+          X-Service-Name: "traefik-gateway"
+        customResponseHeaders:
+          X-A2A-Version: "1.0"
 
 # =============================================================================
 # TCP Configuration (for future use)

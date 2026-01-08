@@ -5,6 +5,8 @@ from src.api.v1.galleries import router as galleries_router
 from src.api.v1.magic_links import router as magic_links_router
 from src.api.v1.public import router as public_router
 from src.api.v1.websocket import router as websocket_router
+from src.api.v1.agents import router as agents_router
+from src.api.v1.websocket_agents import router as websocket_agents_router
 
 router = APIRouter()
 
@@ -34,6 +36,20 @@ router.include_router(
     websocket_router,
     prefix="/ws",
     tags=["websocket"],
+)
+
+# WebSocket for AI agent notifications
+router.include_router(
+    websocket_agents_router,
+    prefix="/ws",
+    tags=["websocket", "agents"],
+)
+
+# Google A2A Agent endpoints (authenticated)
+router.include_router(
+    agents_router,
+    prefix="/agents",
+    tags=["agents", "a2a"],
 )
 
 __all__ = ["router"]

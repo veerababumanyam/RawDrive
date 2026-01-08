@@ -1,0 +1,191 @@
+# =============================================================================
+# Traefik v3 Routing Configuration - Client CRM Service
+# =============================================================================
+#
+# Routes client management requests to the client-service microservice.
+# Priority: 138 (between upload-service at 135 and gallery-service at 140)
+# Rate Limit: 100 requests/minute per IP
+#
+# Routes:
+#   - /api/v1/workspaces/{workspace_id}/clients/*
+#   - /api/v1/workspaces/{workspace_id}/client-tags/*
+#   - /api/v1/workspaces/{workspace_id}/client-smart-lists/*
+#
+# =============================================================================
+
+http:
+  # ---------------------------------------------------------------------------
+  # Routers
+  # ---------------------------------------------------------------------------
+  routers:
+    # Development/Local Router
+    client-service-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/workspaces/{workspace_id:[0-9a-f-]+}/clients`)"
+      entryPoints:
+        - web
+      service: client-service
+      middlewares:
+        - client-rate-limit
+        - client-cors
+        - security-headers-dev
+        - correlation-id
+      priority: 138
+
+    # Production Router (HTTPS)
+    client-service-router-prod:
+      rule: "Host(`api.rawdrive.io`) && PathPrefix(`/api/v1/workspaces/{workspace_id:[0-9a-f-]+}/clients`)"
+      entryPoints:
+        - websecure
+      service: client-service
+      middlewares:
+        - client-rate-limit
+        - client-cors
+        - security-headers-prod
+        - correlation-id
+        - compression
+      priority: 138
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "rawdrive.io"
+            sans:
+              - "*.rawdrive.io"
+
+    # Health Check Router (no auth, no rate limit)
+    client-service-health-router:
+      rule: "PathPrefix(`/client-service/health`)"
+      entryPoints:
+        - web
+      service: client-service-health
+      priority: 200
+
+  # ---------------------------------------------------------------------------
+  # Services (Load Balancers)
+  # ---------------------------------------------------------------------------
+  services:
+    # Main Service
+    client-service:
+      loadBalancer:
+        servers:
+          - url: "http://client-service:8007"
+
+        # Health Check Configuration
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+          scheme: http
+          followRedirects: false
+          headers:
+            X-Health-Check: "traefik"
+
+        # Sticky Sessions (for WebSocket support if needed)
+        sticky:
+          cookie:
+            name: rawdrive_client_session
+            secure: true
+            httpOnly: true
+            sameSite: strict
+
+        # Pass client IP to service
+        passHostHeader: true
+
+        # Response buffering
+        responseForwarding:
+          flushInterval: 100ms
+
+    # Health Check Service (direct, no load balancing)
+    client-service-health:
+      loadBalancer:
+        servers:
+          - url: "http://client-service:8007"
+        healthCheck:
+          path: /health
+          interval: 5s
+          timeout: 2s
+
+  # ---------------------------------------------------------------------------
+  # Middlewares
+  # ---------------------------------------------------------------------------
+  middlewares:
+    # Rate Limiting for Client Service
+    client-rate-limit:
+      rateLimit:
+        average: 100  # 100 requests per minute
+        period: 1m
+        burst: 50     # Allow burst of 50 requests
+        sourceCriterion:
+          requestHeaderName: X-Forwarded-For
+          ipStrategy:
+            depth: 1
+            excludedIPs:
+              - 127.0.0.1/32
+              - 10.0.0.0/8  # Internal network
+
+    # CORS Headers for Client Service
+    client-cors:
+      headers:
+        accessControlAllowOriginList:
+          - "http://localhost:3000"
+          - "https://rawdrive.io"
+          - "https://*.rawdrive.io"
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Authorization
+          - Content-Type
+          - X-Requested-With
+          - X-Correlation-ID
+          - X-Workspace-ID
+        accessControlExposeHeaders:
+          - X-Total-Count
+          - X-Page
+          - X-Limit
+          - X-Correlation-ID
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 3600
+
+    # Security Headers (Development)
+    security-headers-dev:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        forceSTSHeader: false
+        stsIncludeSubdomains: false
+        stsPreload: false
+        customFrameOptionsValue: "DENY"
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+
+    # Security Headers (Production)
+    security-headers-prod:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        forceSTSHeader: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        customFrameOptionsValue: "DENY"
+        contentSecurityPolicy: "default-src 'self'"
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+
+    # Correlation ID (for distributed tracing)
+    correlation-id:
+      headers:
+        customRequestHeaders:
+          X-Correlation-ID: "{{.RequestID}}"
+
+    # Compression
+    compression:
+      compress:
+        excludedContentTypes:
+          - text/event-stream

@@ -5,11 +5,13 @@ Optimized for 50K concurrent gallery views with:
 - Connection pooling (up to 100 connections per pod)
 - Read replica support for public endpoints
 - Async operations with asyncpg
+- PgBouncer routing for 5000+ concurrent user scaling
 """
 
 from __future__ import annotations
 
 from typing import AsyncGenerator, Optional, List
+from urllib.parse import urlparse, urlunparse
 import asyncpg
 from contextlib import asynccontextmanager
 
@@ -23,17 +25,68 @@ _pool: Optional[asyncpg.Pool] = None
 _read_pool: Optional[asyncpg.Pool] = None
 
 
+def _build_database_url(database_url: str) -> str:
+    """Build database URL with optional PgBouncer routing.
+
+    When PGBOUNCER_ENABLED=true, routes connections through PgBouncer
+    connection pooler instead of directly to PostgreSQL.
+
+    PgBouncer handles connection pooling at the server level, allowing
+    hundreds of application pods to share a smaller pool of actual
+    PostgreSQL connections (critical for scaling to 50K+ concurrent users).
+    """
+    url = database_url
+
+    # Normalize SQLAlchemy DSN to standard PostgreSQL format
+    if url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+    if not settings.PGBOUNCER_ENABLED:
+        return url
+
+    try:
+        parsed = urlparse(url)
+        # Replace host and port with PgBouncer settings
+        # Keep original username, password, database, and query params
+        netloc = f"{parsed.username}:{parsed.password}@{settings.PGBOUNCER_HOST}:{settings.PGBOUNCER_PORT}"
+        pgbouncer_url = urlunparse((
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        ))
+
+        logger.info(
+            "PgBouncer enabled - routing connections through connection pooler",
+            extra={
+                "pgbouncer_host": settings.PGBOUNCER_HOST,
+                "pgbouncer_port": settings.PGBOUNCER_PORT,
+            }
+        )
+        return pgbouncer_url
+
+    except Exception as e:
+        logger.warning(
+            f"Failed to construct PgBouncer URL, falling back to direct connection: {e}"
+        )
+        return url
+
+
 async def get_pool() -> asyncpg.Pool:
     """Get or create the primary database connection pool."""
     global _pool
     if _pool is None:
+        database_url = _build_database_url(settings.DATABASE_URL)
         logger.info("Creating primary database connection pool")
         _pool = await asyncpg.create_pool(
-            settings.DATABASE_URL,
+            database_url,
             min_size=settings.DB_POOL_MIN_SIZE,
             max_size=settings.DB_POOL_MAX_SIZE,
             command_timeout=settings.DB_COMMAND_TIMEOUT,
-            # PgBouncer compatibility
+            # PgBouncer compatibility - disable statement caching
+            # (incompatible with transaction pooling mode)
             statement_cache_size=0,
         )
         logger.info(
@@ -41,6 +94,7 @@ async def get_pool() -> asyncpg.Pool:
             extra={
                 "min_size": settings.DB_POOL_MIN_SIZE,
                 "max_size": settings.DB_POOL_MAX_SIZE,
+                "pgbouncer_enabled": settings.PGBOUNCER_ENABLED,
             }
         )
     return _pool
@@ -58,15 +112,19 @@ async def get_read_pool() -> asyncpg.Pool:
         return await get_pool()
 
     if _read_pool is None:
+        database_url = _build_database_url(settings.DATABASE_READ_REPLICA_URL)
         logger.info("Creating read replica connection pool")
         _read_pool = await asyncpg.create_pool(
-            settings.DATABASE_READ_REPLICA_URL,
+            database_url,
             min_size=settings.DB_POOL_MIN_SIZE,
             max_size=settings.DB_POOL_MAX_SIZE,
             command_timeout=settings.DB_COMMAND_TIMEOUT,
             statement_cache_size=0,
         )
-        logger.info("Read replica pool created")
+        logger.info(
+            "Read replica pool created",
+            extra={"pgbouncer_enabled": settings.PGBOUNCER_ENABLED}
+        )
     return _read_pool
 
 

@@ -123,7 +123,7 @@ Invoke-WebRequest -Uri "http://localhost:8005/metrics" | Select-Object -ExpandPr
 
 # 7. Test auth (should return 401)
 try {
-    Invoke-RestMethod -Uri "http://localhost:8005/api/v1/upload/session" -Method Post
+    Invoke-RestMethod -Uri "http://localhost:8005/api/v1/uploads" -Method Post
 } catch {
     Write-Host "Status Code: $($_.Exception.Response.StatusCode.value__)"
 }
@@ -193,7 +193,7 @@ npm run dev
 2. Login with test user
 3. **Open DevTools (F12) → Network tab**
 4. Upload a file
-5. **Verify:** Request goes to `http://localhost:8005/api/v1/upload/session` ✅
+5. **Verify:** Request goes to `http://localhost:8005/api/v1/uploads` ✅
 6. **Verify:** Upload completes and asset appears in gallery ✅
 
 ---

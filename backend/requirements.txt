@@ -3,6 +3,8 @@ uvicorn[standard]==0.32.0
 python-multipart==0.0.9
 asyncpg==0.30.0
 redis[hiredis]==5.1.1
+pymilvus==2.3.4
+marshmallow>=3.13.0,<4.0.0  # Pin to <4.0 for environs compatibility (pymilvus dependency)
 pydantic==2.9.2
 pydantic-settings==2.4.0
 PyJWT[crypto]==2.9.0

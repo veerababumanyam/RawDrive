@@ -3,17 +3,60 @@ Database connection management using asyncpg.
 
 Provides connection pooling for primary database and optional read replicas.
 All queries MUST include workspace_id for multi-tenant isolation.
+Supports PgBouncer routing for 5000+ concurrent user scaling.
 """
 
 import asyncpg
+import logging
 from typing import Optional
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse, urlunparse
 
 from src.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Global connection pools
 _pool: Optional[asyncpg.Pool] = None
 _read_pool: Optional[asyncpg.Pool] = None
+
+
+def _build_database_url(database_url: str) -> str:
+    """
+    Build database URL with optional PgBouncer routing.
+
+    When PGBOUNCER_ENABLED=true, routes connections through PgBouncer
+    connection pooler instead of directly to PostgreSQL.
+    """
+    url = database_url
+
+    # Normalize SQLAlchemy DSN to standard PostgreSQL format
+    if url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+    if not settings.PGBOUNCER_ENABLED:
+        return url
+
+    try:
+        parsed = urlparse(url)
+        netloc = f"{parsed.username}:{parsed.password}@{settings.PGBOUNCER_HOST}:{settings.PGBOUNCER_PORT}"
+        pgbouncer_url = urlunparse((
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        ))
+
+        logger.info(
+            f"PgBouncer enabled - routing to {settings.PGBOUNCER_HOST}:{settings.PGBOUNCER_PORT}"
+        )
+        return pgbouncer_url
+
+    except Exception as e:
+        logger.warning(f"Failed to construct PgBouncer URL, falling back to direct connection: {e}")
+        return url
 
 
 async def get_pool() -> asyncpg.Pool:
@@ -30,8 +73,9 @@ async def get_pool() -> asyncpg.Pool:
     """
     global _pool
     if _pool is None:
+        database_url = _build_database_url(settings.DATABASE_URL)
         _pool = await asyncpg.create_pool(
-            settings.DATABASE_URL,
+            database_url,
             min_size=settings.DB_POOL_MIN_SIZE,
             max_size=settings.DB_POOL_MAX_SIZE,
             command_timeout=settings.DB_COMMAND_TIMEOUT,
@@ -40,6 +84,9 @@ async def get_pool() -> asyncpg.Pool:
             server_settings={
                 "application_name": settings.SERVICE_NAME,
             },
+        )
+        logger.info(
+            f"Primary pool created (pgbouncer={settings.PGBOUNCER_ENABLED})"
         )
     return _pool
 
@@ -63,8 +110,9 @@ async def get_read_pool() -> asyncpg.Pool:
         return await get_pool()
 
     if _read_pool is None:
+        database_url = _build_database_url(settings.DATABASE_READ_REPLICA_URL)
         _read_pool = await asyncpg.create_pool(
-            settings.DATABASE_READ_REPLICA_URL,
+            database_url,
             min_size=settings.DB_POOL_MIN_SIZE,
             max_size=settings.DB_POOL_MAX_SIZE,
             command_timeout=settings.DB_COMMAND_TIMEOUT,
@@ -72,6 +120,9 @@ async def get_read_pool() -> asyncpg.Pool:
             server_settings={
                 "application_name": f"{settings.SERVICE_NAME}-read",
             },
+        )
+        logger.info(
+            f"Read replica pool created (pgbouncer={settings.PGBOUNCER_ENABLED})"
         )
     return _read_pool
 

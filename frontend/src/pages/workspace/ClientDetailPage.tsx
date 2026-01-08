@@ -32,11 +32,23 @@ import { useToast } from '../../components/ui/Toast';
 import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmationDialog';
 import { clientService } from '../../services/clientService';
 import { useClientAvatar } from '../../hooks/useClientAvatar';
+// New CRM components
+import { ActivityTimeline } from '../../components/features/clients/ActivityTimeline';
+import { ActivityRecorder } from '../../components/features/clients/ActivityRecorder';
+import { CommunicationHistory } from '../../components/features/clients/CommunicationHistory';
+import { CommunicationLogger } from '../../components/features/clients/CommunicationLogger';
+import { ContactsSection } from '../../components/features/clients/ContactsSection';
+import { ContactForm } from '../../components/features/clients/ContactForm';
+import { AddressesSection } from '../../components/features/clients/AddressesSection';
+import { AddressForm } from '../../components/features/clients/AddressForm';
+import { TagAssignmentUI } from '../../components/features/clients/TagAssignmentUI';
 import type {
   ClientDetail,
   ClientActivity,
   ClientCommunication,
   GalleryLinkDetail,
+  ClientContact,
+  ClientAddress,
 } from '../../types/client';
 
 /* =============================================================================
@@ -77,6 +89,14 @@ const ClientDetailPage: React.FC = () => {
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Modal state for new CRM components
+  const [activityRecorderOpen, setActivityRecorderOpen] = useState(false);
+  const [communicationLoggerOpen, setCommunicationLoggerOpen] = useState(false);
+  const [contactFormOpen, setContactFormOpen] = useState(false);
+  const [addressFormOpen, setAddressFormOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<ClientContact | undefined>(undefined);
+  const [editingAddress, setEditingAddress] = useState<ClientAddress | undefined>(undefined);
 
   // Fetch client data
   const fetchClient = useCallback(async () => {
@@ -324,7 +344,7 @@ const ClientDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Contact Information */}
+          {/* Contact Information - Enhanced with new ContactsSection component */}
           <CollapsibleSection
             title="Contact Information"
             icon={<Phone size={18} />}
@@ -332,52 +352,23 @@ const ClientDetailPage: React.FC = () => {
             onToggle={() => toggleSection('contacts')}
             count={client.contacts.length}
           >
-            <div className="space-y-3">
-              {client.contacts.length === 0 ? (
-                <p className="text-text-tertiary text-sm text-center py-4">No contacts added</p>
-              ) : (
-                client.contacts.map((contact) => (
-                  <div
-                    key={contact.contact_id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-surface-hover/30 hover:bg-gradient-to-r hover:from-primary/5 hover:to-accent/5 border border-transparent hover:border-border/30 transition-all duration-200 group"
-                  >
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 group-hover:scale-110 ${
-                      contact.contact_type === 'email' ? 'bg-primary/10' :
-                      contact.contact_type === 'phone' ? 'bg-success/10' :
-                      contact.contact_type === 'website' ? 'bg-accent/10' : 'bg-info/10'
-                    }`}>
-                      {contact.contact_type === 'email' && <Mail size={16} className="text-primary" />}
-                      {contact.contact_type === 'phone' && <Phone size={16} className="text-success" />}
-                      {contact.contact_type === 'website' && <Globe size={16} className="text-accent" />}
-                      {contact.contact_type === 'social' && <Users size={16} className="text-info" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-text-primary truncate group-hover:text-primary transition-colors">{contact.value}</p>
-                      <p className="text-xs text-text-tertiary capitalize">
-                        {contact.contact_subtype || contact.contact_type}
-                        {contact.is_primary && ' (Primary)'}
-                      </p>
-                    </div>
-                    {contact.verified && (
-                      <AppBadge variant="success" size="sm">Verified</AppBadge>
-                    )}
-                  </div>
-                ))
-              )}
-              <AppButton
-                variant="ghost"
-                size="sm"
-                leftIcon={<Plus size={14} />}
-                className="w-full hover:bg-primary/10 hover:text-primary transition-all"
-                onClick={() => navigate(`/workspace/clients/${clientId}/edit?tab=contacts`)}
-                title="Add new contact"
-              >
-                Add Contact
-              </AppButton>
-            </div>
+            <ContactsSection
+              workspaceId={workspace!.workspace_id}
+              clientId={clientId!}
+              contacts={client.contacts}
+              onContactsChanged={fetchClient}
+              onAddContact={() => {
+                setEditingContact(undefined);
+                setContactFormOpen(true);
+              }}
+              onEditContact={(contact) => {
+                setEditingContact(contact);
+                setContactFormOpen(true);
+              }}
+            />
           </CollapsibleSection>
 
-          {/* Addresses */}
+          {/* Addresses - Enhanced with new AddressesSection component */}
           <CollapsibleSection
             title="Addresses"
             icon={<MapPin size={18} />}
@@ -385,48 +376,23 @@ const ClientDetailPage: React.FC = () => {
             onToggle={() => toggleSection('addresses')}
             count={client.addresses.length}
           >
-            <div className="space-y-3">
-              {client.addresses.length === 0 ? (
-                <p className="text-text-tertiary text-sm">No addresses added</p>
-              ) : (
-                client.addresses.map((address) => (
-                  <div
-                    key={address.address_id}
-                    className="p-3 rounded-xl bg-surface-hover/30"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <AppBadge variant="outline" size="sm">
-                        {address.address_type}
-                      </AppBadge>
-                      {address.is_primary && (
-                        <AppBadge variant="primary" size="sm">Primary</AppBadge>
-                      )}
-                    </div>
-                    <p className="text-sm text-text-primary">
-                      {[address.address_line1, address.address_line2].filter(Boolean).join(', ')}
-                    </p>
-                    <p className="text-sm text-text-secondary">
-                      {[address.city, address.state, address.postal_code].filter(Boolean).join(', ')}
-                    </p>
-                    {address.country && (
-                      <p className="text-sm text-text-tertiary">{address.country}</p>
-                    )}
-                  </div>
-                ))
-              )}
-              <AppButton
-                variant="ghost"
-                size="sm"
-                leftIcon={<Plus size={14} />}
-                className="w-full"
-                onClick={() => navigate(`/workspace/clients/${clientId}/edit?tab=addresses`)}
-              >
-                Add Address
-              </AppButton>
-            </div>
+            <AddressesSection
+              workspaceId={workspace!.workspace_id}
+              clientId={clientId!}
+              addresses={client.addresses}
+              onAddressesChanged={fetchClient}
+              onAddAddress={() => {
+                setEditingAddress(undefined);
+                setAddressFormOpen(true);
+              }}
+              onEditAddress={(address) => {
+                setEditingAddress(address);
+                setAddressFormOpen(true);
+              }}
+            />
           </CollapsibleSection>
 
-          {/* Tags */}
+          {/* Tags - Enhanced with new TagAssignmentUI component */}
           <CollapsibleSection
             title="Tags"
             icon={<Tag size={18} />}
@@ -434,34 +400,12 @@ const ClientDetailPage: React.FC = () => {
             onToggle={() => toggleSection('tags')}
             count={client.tags.length}
           >
-            <div className="flex flex-wrap gap-2">
-              {client.tags.length === 0 ? (
-                <p className="text-text-tertiary text-sm">No tags added</p>
-              ) : (
-                client.tags.map((tag) => (
-                  <AppBadge
-                    key={tag.tag_id}
-                    variant="outline"
-                    icon={
-                      <span
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: tag.color || '#6B7280' }}
-                      />
-                    }
-                  >
-                    {tag.name}
-                  </AppBadge>
-                ))
-              )}
-              <AppButton
-                variant="ghost"
-                size="sm"
-                leftIcon={<Plus size={14} />}
-                onClick={() => navigate(`/workspace/clients/${clientId}/edit?tab=tags`)}
-              >
-                Add Tag
-              </AppButton>
-            </div>
+            <TagAssignmentUI
+              workspaceId={workspace!.workspace_id}
+              clientId={clientId}
+              currentTags={client.tags}
+              onTagsChanged={fetchClient}
+            />
           </CollapsibleSection>
 
           {/* Additional Details - Enhanced with gradient and glassmorphism */}
@@ -609,164 +553,34 @@ const ClientDetailPage: React.FC = () => {
             )}
           </CollapsibleSection>
 
-          {/* Activity Timeline */}
+          {/* Activity Timeline - Enhanced with new ActivityTimeline component */}
           <CollapsibleSection
             title="Activity Timeline"
             icon={<Activity size={18} />}
             expanded={expandedSections.activity}
             onToggle={() => toggleSection('activity')}
             count={activities.length}
-            action={
-              <AppButton
-                variant="ghost"
-                size="sm"
-                leftIcon={<Plus size={14} />}
-                onClick={() => navigate(`/workspace/clients/${clientId}/edit?tab=activity`)}
-              >
-                Add Note
-              </AppButton>
-            }
           >
-            {activities.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/10 to-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Activity size={32} className="text-accent/50" />
-                </div>
-                <p className="text-text-tertiary font-medium">No activities recorded yet</p>
-                <p className="text-text-tertiary/70 text-sm mt-1">Activities will appear as you interact</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {activities.map((activity) => (
-                  <div
-                    key={activity.activity_id}
-                    className="activity-item flex gap-4 p-3 rounded-xl hover:bg-gradient-to-r hover:from-primary/5 hover:to-accent/5 border border-transparent hover:border-border/20 transition-all duration-200 group/activity"
-                  >
-                    <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center shadow-sm group-hover/activity:shadow-md group-hover/activity:scale-110 transition-all duration-200">
-                      {getActivityIcon(activity.activity_type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-text-primary font-medium group-hover/activity:text-primary transition-colors">
-                        {activity.description || activity.activity_type.replace(/_/g, ' ')}
-                      </p>
-                      <p className="text-xs text-text-tertiary mt-1 flex items-center gap-1">
-                        <Clock size={10} />
-                        {formatDateTime(activity.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {activities.length >= 10 && (
-                  <AppButton variant="ghost" size="sm" className="w-full hover:bg-primary/10 hover:text-primary mt-2">
-                    View All Activities
-                  </AppButton>
-                )}
-              </div>
-            )}
+            <ActivityTimeline
+              workspaceId={workspace!.workspace_id}
+              clientId={clientId!}
+              onAddActivity={() => setActivityRecorderOpen(true)}
+            />
           </CollapsibleSection>
 
-          {/* Communications */}
+          {/* Communications - Enhanced with new CommunicationHistory component */}
           <CollapsibleSection
             title="Communication History"
             icon={<MessageSquare size={18} />}
             expanded={expandedSections.communications}
             onToggle={() => toggleSection('communications')}
             count={communications.length}
-            action={
-              <AppButton
-                variant="ghost"
-                size="sm"
-                leftIcon={<Plus size={14} />}
-                onClick={() => navigate(`/workspace/clients/${clientId}/edit?tab=communications`)}
-              >
-                Log Communication
-              </AppButton>
-            }
           >
-            {communications.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/10 to-info/10 flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare size={32} className="text-primary/50" />
-                </div>
-                <p className="text-text-tertiary font-medium">No communications logged yet</p>
-                <p className="text-text-tertiary/70 text-sm mt-1">Log emails, calls, and messages here</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {communications.map((comm) => (
-                  <div
-                    key={comm.communication_id}
-                    className="communication-item relative p-4 rounded-xl overflow-hidden border border-border/20 hover:border-primary/30 shadow-sm hover:shadow-md transition-all duration-200 group/comm"
-                  >
-                    {/* Background gradient */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-surface-hover/30 to-surface" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-accent/5 opacity-0 group-hover/comm:opacity-100 transition-opacity duration-300" />
-
-                    <div className="relative">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shadow-sm group-hover/comm:scale-110 transition-transform ${
-                            comm.communication_type === 'email' ? 'bg-primary/10' :
-                            comm.communication_type === 'phone' ? 'bg-success/10' :
-                            'bg-accent/10'
-                          }`}>
-                            {getCommunicationIcon(comm.communication_type)}
-                          </div>
-                          <div>
-                            <span className="text-sm font-semibold text-text-primary capitalize group-hover/comm:text-primary transition-colors">
-                              {comm.communication_type}
-                            </span>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                comm.direction === 'outbound'
-                                  ? 'bg-primary/10 text-primary'
-                                  : 'bg-accent/10 text-accent'
-                              }`}>
-                                {comm.direction}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        {comm.follow_up_required && (
-                          <div className="px-2.5 py-1 rounded-full bg-warning/15 text-warning text-xs font-semibold flex items-center gap-1 animate-pulse-slow">
-                            <span className="w-1.5 h-1.5 rounded-full bg-warning" />
-                            Follow-up needed
-                          </div>
-                        )}
-                      </div>
-                      {comm.subject && (
-                        <p className="text-sm font-medium text-text-primary mb-2">{comm.subject}</p>
-                      )}
-                      {comm.notes && (
-                        <p className="text-sm text-text-secondary line-clamp-2 leading-relaxed">{comm.notes}</p>
-                      )}
-                      <div className="flex items-center flex-wrap gap-3 mt-3 pt-3 border-t border-border/10">
-                        <span className="text-xs text-text-tertiary flex items-center gap-1">
-                          <Clock size={10} />
-                          {formatDateTime(comm.created_at)}
-                        </span>
-                        {comm.duration_minutes && (
-                          <span className="text-xs text-text-tertiary px-2 py-0.5 rounded bg-surface-hover/50">
-                            {comm.duration_minutes} min
-                          </span>
-                        )}
-                        {comm.follow_up_date && (
-                          <span className="text-xs text-warning flex items-center gap-1">
-                            <Calendar size={10} />
-                            Follow-up: {formatDate(comm.follow_up_date)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {communications.length >= 10 && (
-                  <AppButton variant="ghost" size="sm" className="w-full hover:bg-primary/10 hover:text-primary mt-2">
-                    View All Communications
-                  </AppButton>
-                )}
-              </div>
-            )}
+            <CommunicationHistory
+              workspaceId={workspace!.workspace_id}
+              clientId={clientId!}
+              onLogCommunication={() => setCommunicationLoggerOpen(true)}
+            />
           </CollapsibleSection>
 
           {/* Internal Notes - Enhanced with gradient */}
@@ -801,6 +615,50 @@ const ClientDetailPage: React.FC = () => {
         entityType="client"
         entityName={client.full_name}
         isLoading={isDeleting}
+      />
+
+      {/* Activity Recorder Modal */}
+      <ActivityRecorder
+        isOpen={activityRecorderOpen}
+        onClose={() => setActivityRecorderOpen(false)}
+        workspaceId={workspace!.workspace_id}
+        clientId={clientId!}
+        onActivityRecorded={fetchClient}
+      />
+
+      {/* Communication Logger Modal */}
+      <CommunicationLogger
+        isOpen={communicationLoggerOpen}
+        onClose={() => setCommunicationLoggerOpen(false)}
+        workspaceId={workspace!.workspace_id}
+        clientId={clientId!}
+        onCommunicationLogged={fetchClient}
+      />
+
+      {/* Contact Form Modal */}
+      <ContactForm
+        isOpen={contactFormOpen}
+        onClose={() => {
+          setContactFormOpen(false);
+          setEditingContact(undefined);
+        }}
+        workspaceId={workspace!.workspace_id}
+        clientId={clientId!}
+        contact={editingContact}
+        onSaved={fetchClient}
+      />
+
+      {/* Address Form Modal */}
+      <AddressForm
+        isOpen={addressFormOpen}
+        onClose={() => {
+          setAddressFormOpen(false);
+          setEditingAddress(undefined);
+        }}
+        workspaceId={workspace!.workspace_id}
+        clientId={clientId!}
+        address={editingAddress}
+        onSaved={fetchClient}
       />
     </motion.div>
   );

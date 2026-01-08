@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     DB_POOL_MAX_SIZE: int = 20
     DB_COMMAND_TIMEOUT: int = 60
 
+    # PgBouncer connection pooler (for 5000+ concurrent scaling)
+    PGBOUNCER_ENABLED: bool = False
+    PGBOUNCER_HOST: str = "pgbouncer"
+    PGBOUNCER_PORT: int = 6432
+
     # Redis configuration
     REDIS_URL: str
     REDIS_MAX_CONNECTIONS: int = 20

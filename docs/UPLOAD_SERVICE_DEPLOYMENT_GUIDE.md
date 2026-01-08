@@ -96,7 +96,7 @@ npm run dev
 1. **Open browser** → `http://localhost:3000`
 2. **Login** with test credentials
 3. **Upload a file** via the gallery
-4. **Open DevTools Network tab** → Verify requests go to `http://localhost:8005/api/v1/upload/session`
+4. **Open DevTools Network tab** → Verify requests go to `http://localhost:8005/api/v1/uploads`
 5. **Check upload completes** → Asset appears in gallery
 
 ---
@@ -126,7 +126,7 @@ npm run dev
 
 - [ ] **Auth Middleware** (requests without token should fail)
   ```bash
-  curl -X POST http://localhost:8005/api/v1/upload/session
+  curl -X POST http://localhost:8005/api/v1/uploads
   # Status: 401 Unauthorized
   ```
 
@@ -146,7 +146,7 @@ npm run dev
   - Set `VITE_FEATURE_UPLOAD_MICROSERVICE=true`
   - Restart frontend
   - Upload file
-  - Verify network tab shows `http://localhost:8005/api/v1/upload/session` (upload service)
+  - Verify network tab shows `http://localhost:8005/api/v1/uploads` (upload service)
 
 - [ ] **File Upload Success**
   - Small file (< 10MB) - single request upload
@@ -166,7 +166,7 @@ npm run dev
     sha256 = "abc123..."
   } | ConvertTo-Json
 
-  Invoke-RestMethod -Uri http://localhost:8005/api/v1/upload/session `
+  Invoke-RestMethod -Uri http://localhost:8005/api/v1/uploads `
     -Method POST `
     -Headers @{ Authorization = "Bearer $token" } `
     -Body $body `

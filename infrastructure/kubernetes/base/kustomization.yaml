@@ -22,6 +22,7 @@ resources:
   - pgbouncer.yaml
   - pgbouncer-service.yaml
   - pgbouncer-configmap.yaml
+  - pgbouncer-client-config.yaml  # Shared settings for services to connect through PgBouncer
 
   # Traefik API Gateway
   - traefik/
@@ -29,14 +30,17 @@ resources:
   # KEDA Autoscaling
   - keda/
 
+  # Milvus Vector Database
+  - milvus/
+
   # Gallery Microservice (50K concurrent users)
   - gallery-service/
 
   # Billing Microservice (subscription & payment processing)
   - billing-service/
 
-  # Upload Microservice (50K concurrent uploads)
-  - upload-service/
+  # Note: Upload service now manages its own K8s manifests
+  # Deploy separately: kubectl apply -k services/upload-service/infrastructure/k8s/
 
 # ConfigMaps generated from files
 configMapGenerator:

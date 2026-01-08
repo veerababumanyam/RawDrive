@@ -21,61 +21,15 @@ from src.services.import_export_service import (
 from src.schemas.import_export import ImportResult
 from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
+from src.middleware.workspace_auth import verify_workspace_access
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(
-    prefix="/api/v1/workspaces/{workspace_id}/clients",
+    prefix="/workspaces/{workspace_id}/clients",
     tags=["import-export"],
 )
-
-
-# =============================================================================
-# Dependency Injection
-# =============================================================================
-
-
-def get_service() -> ImportExportService:
-    """Get ImportExportService instance."""
-    return get_import_export_service()
-
-
-async def verify_workspace_access(
-    workspace_id: UUID = Path(...),
-    current_user: JWTPayload = Depends(get_current_user),
-) -> UUID:
-    """
-    Verify user has access to workspace.
-
-    Args:
-        workspace_id: Workspace ID from path
-        current_user: JWT payload from auth middleware
-
-    Returns:
-        UUID: Validated workspace_id
-
-    Raises:
-        HTTPException: 403 if user doesn't have access
-    """
-    if str(current_user.workspace_id) != str(workspace_id):
-        logger.warning(
-            "Workspace access denied",
-            extra={
-                "user_id": str(current_user.user_id),
-                "requested_workspace": str(workspace_id),
-                "user_workspace": str(current_user.workspace_id),
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ErrorResponse(
-                error="WORKSPACE_ACCESS_DENIED",
-                message="You do not have access to this workspace",
-            ).model_dump(),
-        )
-
-    return workspace_id
 
 
 # =============================================================================
@@ -90,7 +44,7 @@ async def import_clients(
         True, description="Skip rows with duplicate emails"
     ),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: ImportExportService = Depends(get_service),
+    service: ImportExportService = Depends(get_import_export_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> ImportResult:
     """
@@ -205,7 +159,7 @@ async def import_clients(
 @router.get("/import/template")
 async def get_import_template(
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: ImportExportService = Depends(get_service),
+    service: ImportExportService = Depends(get_import_export_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> StreamingResponse:
     """
@@ -251,7 +205,7 @@ async def export_clients(
     include_contacts: bool = Query(True, description="Include contact information"),
     include_addresses: bool = Query(True, description="Include address information"),
     include_tags: bool = Query(True, description="Include tags"),
-    service: ImportExportService = Depends(get_service),
+    service: ImportExportService = Depends(get_import_export_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> StreamingResponse:
     """

@@ -694,7 +694,8 @@ export const smartTaggingService = {
      * Get tagging health for a gallery
      */
     async getGalleryHealth(workspaceId: string, galleryId: string): Promise<GalleryHealth> {
-        return api.get(`/api/v1/workspaces/${workspaceId}/smart-tagging/galleries/${galleryId}/health`);
+        const endpoint = `/api/v1/workspaces/${workspaceId}/smart-tagging/galleries/${galleryId}/health`;
+        return api.get(endpoint);
     },
 
     /**

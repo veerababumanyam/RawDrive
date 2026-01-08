@@ -2,6 +2,15 @@
 
 High-performance upload microservice for RawDrive with TUS protocol support and KEDA autoscaling.
 
+## Recent Changes (v2.0.0)
+
+✅ **API Modernization**: Migrated to RESTful resource-based routes
+✅ **Full Service Ownership**: All manifests, scripts, and docs in service folder
+✅ **Comprehensive Testing**: Integration tests and E2E route validation
+✅ **Updated Documentation**: 7 comprehensive docs (ARCHITECTURE, API, DEPLOYMENT, etc.)
+
+See [docs/](docs/) for detailed documentation.
+
 ## Features
 
 - **TUS Protocol**: Resumable uploads with pause/resume capability
@@ -44,14 +53,16 @@ docker compose -f infrastructure/docker/docker-compose.dev.yml up upload-service
 
 ## API Endpoints
 
+**RESTful v2.0.0 Routes** (Current):
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/upload/session` | Create upload session |
-| PATCH | `/api/v1/upload/chunk/{upload_id}` | Upload chunk (TUS) |
-| HEAD | `/api/v1/upload/chunk/{upload_id}` | Get upload status |
-| DELETE | `/api/v1/upload/chunk/{upload_id}` | Cancel upload |
-| POST | `/api/v1/upload/complete/{upload_id}` | Commit upload |
-| POST | `/api/v1/upload/check-duplicate` | Check for duplicates |
+| POST | `/api/v1/uploads` | Create upload session |
+| PATCH | `/api/v1/uploads/{upload_id}/chunks` | Upload chunk (TUS) |
+| HEAD | `/api/v1/uploads/{upload_id}/chunks` | Get upload status |
+| DELETE | `/api/v1/uploads/{upload_id}` | Cancel upload |
+| POST | `/api/v1/uploads/{upload_id}/complete` | Complete upload |
+| POST | `/api/v1/uploads/check-duplicate` | Check for duplicates |
 | GET | `/health` | Liveness probe |
 | GET | `/ready` | Readiness probe |
 | GET | `/metrics` | Prometheus metrics |
@@ -59,10 +70,10 @@ docker compose -f infrastructure/docker/docker-compose.dev.yml up upload-service
 ## Upload Flow
 
 ```
-1. POST /session → Create session, get upload_id
-2. PATCH /chunk/{upload_id} → Upload chunks (repeat)
-3. HEAD /chunk/{upload_id} → Check progress (optional)
-4. POST /complete/{upload_id} → Commit upload
+1. POST /api/v1/uploads → Create session, get upload_id
+2. PATCH /api/v1/uploads/{upload_id}/chunks → Upload chunks (repeat)
+3. HEAD /api/v1/uploads/{upload_id}/chunks → Check progress (optional)
+4. POST /api/v1/uploads/{upload_id}/complete → Complete upload
 ```
 
 ## Environment Variables
@@ -87,11 +98,11 @@ See [.env.example](.env.example) for all configuration options.
 ┌─────────────────────────────────────────────────────────┐
 │                    Upload Service                        │
 ├─────────────────────────────────────────────────────────┤
-│  API Layer                                               │
-│  ├── POST /session     → Create upload session          │
-│  ├── PATCH /chunk      → Store chunks (TUS protocol)    │
-│  ├── POST /complete    → Assemble, encrypt, upload      │
-│  └── POST /check-dup   → Deduplicate by SHA256          │
+│  API Layer (RESTful v2.0.0)                              │
+│  ├── POST /uploads                → Create session      │
+│  ├── PATCH /uploads/{id}/chunks   → Store chunks (TUS)  │
+│  ├── POST /uploads/{id}/complete  → Assemble & upload   │
+│  └── POST /uploads/check-duplicate → Deduplicate        │
 ├─────────────────────────────────────────────────────────┤
 │  Service Layer                                           │
 │  ├── UploadService     → Session management             │
@@ -116,7 +127,9 @@ The service scales based on:
 2. **Concurrent Uploads**: Scale when active uploads > 50
 3. **Request Rate**: Scale when requests > 1000/min
 
-Configuration: `infrastructure/kubernetes/base/upload-service/scaledobject.yaml`
+Configuration: `services/upload-service/infrastructure/keda/scaledobject.yaml`
+
+**Scaling Range**: 2-50 pods (configurable)
 
 ## Metrics
 
@@ -139,21 +152,56 @@ pytest tests/unit/
 # Integration tests (requires running services)
 pytest tests/integration/
 
+# E2E route validation tests
+cd ../../tests/e2e && npx playwright test upload-routes.spec.ts
+
 # Load tests
 locust -f tests/load/locustfile.py
 ```
+
+## Documentation
+
+Comprehensive documentation is available in the [docs/](docs/) directory:
+
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, TUS protocol, encryption pipeline |
+| [API.md](docs/API.md) | Complete API reference with request/response schemas |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment procedures for Docker and Kubernetes |
+| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions |
+| [PERFORMANCE.md](docs/PERFORMANCE.md) | Performance tuning and optimization |
+| [SECURITY.md](docs/SECURITY.md) | Security practices, JWT validation, SOC2/GDPR compliance |
+| [TRAEFIK_ROUTING.md](docs/TRAEFIK_ROUTING.md) | Traefik routing configuration reference |
 
 ## Deployment
 
 ### Kubernetes
 
 ```bash
-# Apply manifests
-kubectl apply -k infrastructure/kubernetes/base/upload-service/
+# Apply manifests from service folder
+kubectl apply -k services/upload-service/infrastructure/k8s/
 
 # Verify deployment
 kubectl get pods -l app=upload-service
 kubectl get scaledobject upload-service-scaledobject
+
+# Check service routing (Traefik)
+kubectl get ingressroute upload-service
+```
+
+### Development Scripts
+
+```bash
+# Start service locally
+bash services/upload-service/scripts/dev.sh
+# OR on Windows:
+pwsh services/upload-service/scripts/dev.ps1
+
+# Run integration tests
+bash services/upload-service/scripts/test-integration.sh
+
+# Test autoscaling
+bash services/upload-service/scripts/test-autoscaling.sh
 ```
 
 ### Blue-Green Deployment

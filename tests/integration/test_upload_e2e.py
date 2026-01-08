@@ -116,7 +116,7 @@ async def create_upload_session(
     file_size = file_path.stat().st_size
     
     response = await client.post(
-        f"{UPLOAD_SERVICE_URL}/api/v1/upload/session",
+        f"{UPLOAD_SERVICE_URL}/api/v1/uploads",
         headers={
             "Authorization": f"Bearer {token}",
             "X-Workspace-ID": WORKSPACE_ID,
@@ -153,7 +153,7 @@ async def upload_file_chunk(
         return offset
     
     response = await client.patch(
-        f"{UPLOAD_SERVICE_URL}/api/v1/upload/chunk/{upload_id}",
+        f"{UPLOAD_SERVICE_URL}/api/v1/uploads/{upload_id}/chunks",
         headers={
             "Authorization": f"Bearer {token}",
             "X-Workspace-ID": WORKSPACE_ID,
@@ -180,7 +180,7 @@ async def complete_upload(
 ) -> dict:
     """Complete/commit the upload."""
     response = await client.post(
-        f"{UPLOAD_SERVICE_URL}/api/v1/upload/complete/{upload_id}",
+        f"{UPLOAD_SERVICE_URL}/api/v1/uploads/{upload_id}/complete",
         headers={
             "Authorization": f"Bearer {token}",
             "X-Workspace-ID": WORKSPACE_ID,

@@ -140,11 +140,13 @@ async function generateThumbnail(file: File, maxSize: number = 200): Promise<str
 function isValidFileType(file: File, accept?: string): boolean {
   if (!accept) {
     // Default: check against all supported types
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    // Handle files without extensions (README, .gitignore, Makefile)
+    const extPart = file.name.split('.').pop();
+    const ext = extPart ? '.' + extPart.toLowerCase() : '';
     return (
       (SUPPORTED_IMAGE_TYPES as unknown as string[]).includes(file.type) ||
       (SUPPORTED_VIDEO_TYPES as unknown as string[]).includes(file.type) ||
-      (SUPPORTED_RAW_TYPES as unknown as string[]).includes(ext!)
+      (ext !== '' && (SUPPORTED_RAW_TYPES as unknown as string[]).includes(ext))
     );
   }
 

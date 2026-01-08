@@ -38,6 +38,17 @@ export { CurateTab } from './tabs/CurateTab';
 export { CreateTab } from './tabs/CreateTab';
 
 // ---------------------------------------------------------------------------
+// Unified AI Panel - Consolidated AI Interface (AI Services Consolidation)
+// Replaces sidebar AIToolsHub with integrated panel
+// ---------------------------------------------------------------------------
+export { UnifiedAIPanel } from './UnifiedAIPanel';
+export type { UnifiedAIPanelProps } from './UnifiedAIPanel';
+export { CompactAIFilters } from './CompactAIFilters';
+export type { CompactAIFiltersProps } from './CompactAIFilters';
+export { FeatureCard } from './FeatureCard';
+export type { FeatureCardProps, FeatureStatus } from './FeatureCard';
+
+// ---------------------------------------------------------------------------
 // Quality Analysis Components (023-enhanced-smart-curate)
 // Used by AnalyzeTab and standalone quality displays
 // ---------------------------------------------------------------------------
@@ -76,3 +87,9 @@ export { SimilarityStackSection } from './SimilarityStackSection';
 
 // US6: AI Create Panel
 export { AICreatePanel } from './AICreatePanel';
+
+// ---------------------------------------------------------------------------
+// Duplicate Detection Panels (Phase 2: AI Duplicate Detection)
+// ---------------------------------------------------------------------------
+export { PhotoDuplicatesPanel } from './PhotoDuplicatesPanel';
+export { ClientDuplicatesPanel } from './ClientDuplicatesPanel';
