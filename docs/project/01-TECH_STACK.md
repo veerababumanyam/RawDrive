@@ -109,11 +109,14 @@ graph TB
         Invitations["💌 Invitations Svc"]
         Notifications["🔔 Notifications Svc"]
         Onboarding["🚀 Onboarding Svc"]
+        ClientSvc["👥 Client Service"]
+        AISvc["🧠 AI Service"]
     end
     
     DB["🗄️ PostgreSQL 16<br/>(pgvector)"]
     Cache["⚡ Redis 7<br/>(Cache/Queues)"]
     Storage["📦 Cloudflare R2<br/>(Object Storage)"]
+    Milvus["🧠 Milvus<br/>(Vector DB)"]
     
     Obs["📊 Observability stack<br/>(Prometheus, Grafana, Loki)"]
     OneAPI["🤖 One-API / LLM Proxy"]
@@ -128,13 +131,16 @@ graph TB
     Ingress --> Invitations
     Ingress --> Notifications
     Ingress --> Onboarding
+    Ingress --> ClientSvc
+    Ingress --> AISvc
     
-    Backend & Gallery & Billing & Upload & Invitations & Notifications & Onboarding --> DB
-    Backend & Gallery & Upload --> Storage
-    Backend & Billing & Upload --> Cache
+    Backend & Gallery & Billing & Upload & Invitations & Notifications & Onboarding & ClientSvc & AISvc --> DB
+    Backend & Gallery & Upload & ClientSvc --> Storage
+    Backend & Billing & Upload & AISvc --> Cache
+    AISvc --> Milvus
     Backend --> OneAPI
     
-    Backend & Gallery & Billing & Upload & Invitations & Notifications & Onboarding --> Obs
+    Backend & Gallery & Billing & Upload & Invitations & Notifications & Onboarding & ClientSvc & AISvc --> Obs
 ```
 
 ### Key Connections Explained

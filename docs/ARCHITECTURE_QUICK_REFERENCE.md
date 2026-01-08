@@ -1,6 +1,6 @@
 # RawDrive Architecture Quick Reference
 
-**Last Updated**: January 27, 2026
+**Last Updated**: January 27, 2026 (v0.3.1)
 
 ## System Overview
 
@@ -26,12 +26,14 @@ flowchart TB
         ServiceE[Invitations Service]
         ServiceF[Notifications Service]
         ServiceG[Onboarding Service]
+        ServiceH[Client Service]
+        ServiceI[AI Service]
     end
 
     subgraph Processing["🤖 AI & Processing"]
         OneAPI[One-API / LLM Proxy]
         Workers[Celery/BullMQ Workers]
-        Workers --> Face[Face Recognition]
+        Workers --> Face[FaceID Processing]
         Workers --> Quality[Quality Scoring]
     end
 
@@ -39,6 +41,7 @@ flowchart TB
         PG[(PostgreSQL 16 + pgvector)]
         Redis[(Redis 7)]
         R2[(Cloudflare R2)]
+        Milvus[(Milvus Vector DB)]
     end
 
     subgraph Observability["📊 Monitoring Stack"]
@@ -105,7 +108,10 @@ flowchart TB
   - **Onboarding Service**: User registration and workspace initialization.
   - **Invitations Service**: Digital event invitations and RSVP management.
   - **Notifications Service**: Multi-channel communications (Email/Alerts).
+  - **Client Service**: CRM, visitor tracking, and gallery permissions.
+  - **AI Service**: AI Agent tools, RAG, and vector operations via MCP.
   - **Background Jobs (Celery/BullMQ)**: Asset processing and AI analysis.
+
 
 ### 6. Data Layer
 
@@ -464,6 +470,6 @@ For questions about the architecture:
 
 ---
 
-**Version**: 1.3
+**Version**: 0.3.1
 **Last Updated**: January 27, 2026
 **Maintained By**: Engineering Team

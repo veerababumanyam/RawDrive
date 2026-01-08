@@ -5,7 +5,7 @@
 
   ## Enterprise SaaS Professional Photography Management Platform
 
-  [![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/rawdrive/RawDrive)
+  [![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](https://github.com/rawdrive/RawDrive)
   [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
   [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -37,7 +37,7 @@
 ### 🎨 Professional Features
 
 - **✨ AI-Enhanced Curation**: Smart photo selection and automated quality scoring
-- **👥 Face Recognition**: Automatic people clustering and identification across photo libraries with privacy controls
+- **👥 FaceIDs**: Automatic face clustering and identification across photo libraries with privacy controls
 - **🔍 Semantic Search**: Natural language search powered by CLIP embeddings and vector similarity
 - **🎭 Custom Branding**: White-label galleries with custom domains and gradient branding themes
 - **📅 Event Management**: Complete event lifecycle from booking to delivery
@@ -95,7 +95,7 @@
 - **📸 Blur Detection**: Distinguishes motion blur, focus blur, and intentional bokeh
 - **🚫 Technical Reject Filter**: Auto-exclude severely blurry or out-of-focus shots
 - **🎯 Smart Selection**: Select your best N photos with quality and diversity balance
-- **👥 People Priority**: Optionally prioritize photos containing faces
+- **👥 FaceID Priority**: Optionally prioritize photos containing faces
 - **📊 Quality Analytics**: Gallery-wide quality summaries and distribution
 - **🔧 Customizable Thresholds**: Adjust quality, diversity, and filter settings per session
 
@@ -117,29 +117,32 @@ graph TB
         B --> G[Invitations Service]
         B --> H[Upload Service]
         B --> I[Notifications Service]
+        B --> J[Client Service]
+        B --> K[AI Service]
     end
 
     subgraph "Data Layer"
-        C & D & E & F & G & H & I --> J[(PostgreSQL 16 + pgvector)]
-        C & D & E & F & G & H & I --> K[(Redis 7 Cache)]
-        C & D & H --> L[(Cloudflare R2 / S3)]
+        C & D & E & F & G & H & I & J & K --> L[(PostgreSQL 16 + pgvector)]
+        C & D & E & F & G & H & I & J & K --> M[(Redis 7 Cache)]
+        C & D & H --> N[(Cloudflare R2 / S3)]
+        K --> O[(Milvus Vector DB)]
     end
 
     subgraph "AI & ML Processing"
-        C --> M[One-API / LLM Proxy]
-        M --> N[Google Gemini / Claude]
-        O[Celery Workers] --> P[Face Recognition]
-        O --> Q[Content Analysis]
-        O --> R[Quality Scoring]
+        C --> P[One-API / LLM Proxy]
+        P --> Q[Google Gemini / Claude]
+        R[Celery Workers] --> S[FaceID Processing]
+        R --> T[Content Analysis]
+        R --> U[Quality Scoring]
     end
 
     subgraph "Observability"
-        S[Prometheus] --> T[Grafana Dashboards]
-        U[Loki] --> T
-        V[Promtail] --> U
+        V[Prometheus] --> W[Grafana Dashboards]
+        X[Loki] --> W
+        Y[Promtail] --> X
     end
 
-    H -- Events --> W[Kafka / BullMQ]
+    H -- Events --> Z[Kafka / BullMQ]
 ```
 
 ### 🛠️ Tech Stack
@@ -330,6 +333,9 @@ All users password: Test@123 Subscription Tier Users:
    Invitations API:    http://localhost:8007
    Upload Service:     http://localhost:8008
    Notifications:      http://localhost:8010
+   Client Service:     http://localhost:8011
+   AI Processing:      http://localhost:8012
+   AI Service (MCP):   http://localhost:8013
    Traefik Dashboard:  http://traefik.localhost
    Grafana:            http://localhost:3000 (admin/admin)
    Prometheus:         http://localhost:9090
@@ -504,7 +510,7 @@ RawDrive supports multiple storage backends:
 
 ### Core AI Features
 
-- **Face Recognition**: Automatic face detection and people clustering using advanced computer vision
+- **FaceIDs**: Automatic face detection and clustering using advanced computer vision
 - **Semantic Search**: Natural language photo search powered by CLIP embeddings
 - **Auto Tagging**: Intelligent content recognition and metadata generation with local caching layer
 - **Quality Scoring**: Automated assessment of photo quality and technical metrics
@@ -526,7 +532,7 @@ RawDrive uses **Google Gemini** for all AI capabilities. Users must provide thei
 
 **Available AI Operations:**
 - Automatic photo tagging and categorization
-- Face detection and people clustering
+- Face detection and FaceID clustering
 - Smart gallery curation and photo selection
 - Duplicate detection across libraries
 - Content analysis and metadata enrichment
@@ -603,7 +609,13 @@ RawDrive exclusively uses **Google Gemini** for all AI features:
 
 ### Latest Additions (2025-2026)
 
-#### Version 0.3.0 (Latest)
+#### Version 0.3.1 (Latest)
+- **AI Service Enhancements**: Implemented rate limiting, circuit breakers, and Redis caching for the AI service. Integration of Prometheus metrics and Milvus for vector search.
+- **Frontend Types**: Hardened TypeScript configurations and resolved all strict mode errors.
+- **Microservices Routing**: Optimized routing path for Gallery and Upload services behind Traefik.
+- **Data Cleanup**: Automated removal of deprecated upload routes and legacy test data.
+
+#### Version 0.3.0
 - **"View as Client" Gallery Preview**: New high-fidelity preview mode that renders galleries exactly as they appear to end clients, accessible directly from the workspace.
 - **Security Hardening**: Implemented UUID validation for public URLs to prevent gallery ID exposure, complying with SOC 2 and GDPR/CCPA best practices.
 - **Magic Link Reliability**: Revamped magic link generation and validation logic for enterprise-scale reliability.
