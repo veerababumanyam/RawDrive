@@ -192,7 +192,7 @@ async def stream_media(
                                 iter([legacy_data]),
                                 media_type="image/webp",
                                 headers={
-                                    "Cache-Control": "private, max-age=3600",
+                                    "Cache-Control": "private, max-age=31536000, immutable",
                                     "X-Legacy-Asset": "true",
                                 },
                             )
@@ -279,6 +279,14 @@ async def stream_media(
             logger.warning(f"Failed to log media access: {e}")
 
         # Stream decrypted content
+        # Thumbnails/previews are immutable once generated - cache aggressively
+        # Originals use shorter cache for download freshness
+        cache_control = (
+            "private, max-age=31536000, immutable"  # 1 year for thumbnails/previews
+            if variant in ("thumbnail", "preview")
+            else "private, max-age=3600"  # 1 hour for originals
+        )
+
         return StreamingResponse(
             iter([decrypted_data]),
             media_type=content_type,
@@ -288,7 +296,7 @@ async def stream_media(
                     if is_download
                     else "inline"
                 ),
-                "Cache-Control": "private, max-age=3600",  # Cache for 1 hour (matches signed URL TTL)
+                "Cache-Control": cache_control,
             },
         )
 
@@ -515,7 +523,7 @@ async def stream_face_thumbnail(
 
         headers = {
             "Content-Type": "image/jpeg",
-            "Cache-Control": "private, max-age=3600",
+            "Cache-Control": "private, max-age=31536000, immutable",  # Face thumbs are immutable
         }
         if content_length:
             headers["Content-Length"] = str(content_length)

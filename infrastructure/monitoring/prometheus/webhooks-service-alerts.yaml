@@ -1,0 +1,203 @@
+# Prometheus alerting rules for webhooks-service
+# Load with: -v ./webhooks-service-alerts.yaml:/etc/prometheus/webhooks-service-alerts.yaml
+
+groups:
+  - name: webhooks-service
+    interval: 30s
+    rules:
+      # High delivery failure rate
+      - alert: WebhookDeliveryFailureRateHigh
+        expr: |
+          (
+            sum(rate(webhook_deliveries_total{status="failed"}[5m]))
+            /
+            sum(rate(webhook_deliveries_total[5m]))
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: critical
+          service: webhooks-service
+        annotations:
+          summary: "Webhook delivery failure rate is high"
+          description: "Failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+      # Delivery failure rate warning
+      - alert: WebhookDeliveryFailureRateWarning
+        expr: |
+          (
+            sum(rate(webhook_deliveries_total{status="failed"}[5m]))
+            /
+            sum(rate(webhook_deliveries_total[5m]))
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: webhooks-service
+        annotations:
+          summary: "Webhook delivery failure rate elevated"
+          description: "Failure rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      # Dead letter queue growing
+      - alert: WebhookDLQGrowing
+        expr: |
+          increase(webhook_dead_letter_queue_size[1h]) > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: webhooks-service
+        annotations:
+          summary: "Dead letter queue is growing rapidly"
+          description: "DLQ grew by {{ $value }} items in the last hour"
+
+      # Dead letter queue critically large
+      - alert: WebhookDLQCritical
+        expr: |
+          sum(webhook_dead_letter_queue_size) > 1000
+        for: 5m
+        labels:
+          severity: critical
+          service: webhooks-service
+        annotations:
+          summary: "Dead letter queue is critically large"
+          description: "DLQ contains {{ $value }} items"
+
+      # Circuit breaker open
+      - alert: WebhookCircuitBreakerOpen
+        expr: |
+          webhook_circuit_breaker_state == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: webhooks-service
+        annotations:
+          summary: "Circuit breaker is open for webhook endpoint"
+          description: "Circuit breaker for {{ $labels.endpoint_domain }} has been open for 5 minutes"
+
+      # Multiple circuit breakers open
+      - alert: WebhookMultipleCircuitBreakersOpen
+        expr: |
+          count(webhook_circuit_breaker_state == 1) > 3
+        for: 2m
+        labels:
+          severity: critical
+          service: webhooks-service
+        annotations:
+          summary: "Multiple circuit breakers are open"
+          description: "{{ $value }} webhook endpoints have open circuit breakers"
+
+      # Pending deliveries backlog
+      - alert: WebhookPendingBacklog
+        expr: |
+          webhook_pending_deliveries > 10000
+        for: 10m
+        labels:
+          severity: warning
+          service: webhooks-service
+        annotations:
+          summary: "Webhook delivery backlog is large"
+          description: "{{ $value }} deliveries pending (threshold: 10,000)"
+
+      # Critical pending deliveries
+      - alert: WebhookPendingCritical
+        expr: |
+          webhook_pending_deliveries > 50000
+        for: 5m
+        labels:
+          severity: critical
+          service: webhooks-service
+        annotations:
+          summary: "Webhook delivery backlog is critical"
+          description: "{{ $value }} deliveries pending (threshold: 50,000)"
+
+      # High delivery latency
+      - alert: WebhookHighDeliveryLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(webhook_delivery_duration_seconds_bucket[5m])) by (le)
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: webhooks-service
+        annotations:
+          summary: "Webhook delivery P95 latency is high"
+          description: "P95 latency is {{ $value }}s (threshold: 10s)"
+
+      # Critical delivery latency
+      - alert: WebhookCriticalDeliveryLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(webhook_delivery_duration_seconds_bucket[5m])) by (le)
+          ) > 25
+        for: 3m
+        labels:
+          severity: critical
+          service: webhooks-service
+        annotations:
+          summary: "Webhook delivery P95 latency is critically high"
+          description: "P95 latency is {{ $value }}s (threshold: 25s)"
+
+      # Service down
+      - alert: WebhooksServiceDown
+        expr: up{job="webhooks-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: webhooks-service
+        annotations:
+          summary: "Webhooks Service is down"
+          description: "Webhooks Service has been down for more than 2 minutes"
+
+      # No deliveries processed (service may be stuck)
+      - alert: WebhookNoDeliveriesProcessed
+        expr: |
+          rate(webhook_deliveries_total[10m]) == 0
+          and
+          webhook_pending_deliveries > 0
+        for: 15m
+        labels:
+          severity: critical
+          service: webhooks-service
+        annotations:
+          summary: "No webhooks being delivered despite pending queue"
+          description: "Deliveries stuck with {{ $value }} pending items"
+
+      # High retry rate
+      - alert: WebhookHighRetryRate
+        expr: |
+          sum(rate(webhook_retries_total[5m])) > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: webhooks-service
+        annotations:
+          summary: "High webhook retry rate"
+          description: "{{ $value }} retries/second (may indicate endpoint issues)"
+
+      # Exhausted deliveries spike
+      - alert: WebhookExhaustedDeliveriesSpike
+        expr: |
+          increase(webhook_exhausted_total[1h]) > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: webhooks-service
+        annotations:
+          summary: "Many deliveries exhausting retries"
+          description: "{{ $value }} deliveries exhausted all retries in the last hour"
+
+      # Endpoint consistently failing
+      - alert: WebhookEndpointConsistentlyFailing
+        expr: |
+          (
+            sum(rate(webhook_delivery_response_code_total{status_code=~"5.."}[30m])) by (endpoint_domain)
+            /
+            sum(rate(webhook_delivery_response_code_total[30m])) by (endpoint_domain)
+          ) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          service: webhooks-service
+        annotations:
+          summary: "Webhook endpoint consistently returning 5xx errors"
+          description: "Endpoint {{ $labels.endpoint_domain }} has {{ $value | humanizePercentage }} 5xx rate"

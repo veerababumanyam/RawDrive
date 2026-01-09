@@ -1,9 +1,0 @@
-{
-  "category": "Database Query Optimization",
-  "description": "Implement SQL query batching with eager loading (selectinload/joinedload) for common relationships. Currently, repositories perform N+1 queries: get gallery → fetch assets (N calls) → fetch quality analysis (N more calls). Create batch endpoints for retrieving multiple asset IDs' signed URLs, metadata, and quality scores in single queries. Target: reduce asset list endpoint from 50 queries to 2-3.",
-  "id": "feature-1767788779286-p220r0ejm",
-  "steps": [],
-  "status": "backlog",
-  "skipTests": true,
-  "priority": 1
-}

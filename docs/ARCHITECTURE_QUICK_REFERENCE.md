@@ -1,6 +1,6 @@
 # RawDrive Architecture Quick Reference
 
-**Last Updated**: January 27, 2026 (v0.3.1)
+**Last Updated**: January 9, 2026 (v0.3.2)
 
 ## System Overview
 
@@ -28,6 +28,7 @@ flowchart TB
         ServiceG[Onboarding Service]
         ServiceH[Client Service]
         ServiceI[AI Service]
+        ServiceJ[Webhooks Service]
     end
 
     subgraph Processing["🤖 AI & Processing"]
@@ -68,6 +69,10 @@ flowchart TB
 - **CDN**: Global content delivery network
 - **Rate Limiting**: Per-IP and per-user limits
 - **Bot Management**: Challenge pages for suspicious traffic
+- **Edge Decryption Worker**: Cloudflare Worker for decrypting thumbnails at edge (Phase 3)
+  - AES-256-GCM decryption using workspace keys from Workers KV
+  - HMAC-SHA256 signed token validation
+  - <50ms global latency target
 
 ### 3. Frontend Layer
 - **Framework**: React 19 + TypeScript + Vite
@@ -75,6 +80,10 @@ flowchart TB
 - **Shared Packages**: pnpm workspaces (`@rawdrive/shared-*`)
 - **Deployment**: Hostinger VPS / Kubernetes
 - **Build**: Optimized production builds with code splitting
+- **PWA**: Service Worker with Workbox for offline caching
+  - `rawdrive-thumbnails`: CacheFirst (500 entries, 7-day expiry)
+  - `rawdrive-gallery-api`: StaleWhileRevalidate (100 entries, 5-min)
+  - `rawdrive-auth`: NetworkFirst (20 entries, 10-min)
 
 ### 4. API Gateway & Ingress
 - **API Gateway**: Traefik v3 (Kubernetes IngressRoute CRDs)
@@ -101,8 +110,8 @@ flowchart TB
 - **Shared Types**: Generated Pydantic models from TypeScript (`app.shared.*`)
 - **Scaling**: All services KEDA-enabled for production autoscaling
 - **Services** (independently scalable):
-  - **Backend API**: Core multi-tenant logic and RBAC.
-  - **Gallery Service**: Public viewing, Magic Links, and Client Preview.
+  - **Backend API**: Core multi-tenant logic, RBAC, Personal Profiles, Workspace Settings.
+  - **Gallery Service**: Public viewing, Magic Links, Client Preview, batch operations.
   - **Billing Service**: Stripe/Razorpay integration and subscription quotas.
   - **Upload Service**: Resumable TUS uploads with AES-256 encryption.
   - **Onboarding Service**: User registration and workspace initialization.
@@ -110,7 +119,8 @@ flowchart TB
   - **Notifications Service**: Multi-channel communications (Email/Alerts).
   - **Client Service**: CRM, visitor tracking, and gallery permissions.
   - **AI Service**: AI Agent tools, RAG, and vector operations via MCP.
-  - **Background Jobs (Celery/BullMQ)**: Asset processing and AI analysis.
+  - **Webhooks Service**: Event-driven webhook delivery with HMAC signing, retries, circuit breaker.
+  - **Background Jobs (Celery/BullMQ)**: Asset processing, AI analysis, webhook delivery.
 
 
 ### 6. Data Layer
@@ -137,12 +147,13 @@ flowchart TB
 - **Python Jobs**: Celery + Redis (backend processing)
 - **Node.js Jobs**: BullMQ (frontend/service workers)
 - **Tasks**:
-  - Photo processing (thumbnails, derivatives)
-  - AI analysis (quality scoring, face detection)
+  - Photo processing (thumbnails, derivatives, LQIP generation)
+  - AI analysis (quality scoring, face detection, profile optimization)
   - Email delivery (transactional, newsletters)
-  - Webhook delivery (event notifications)
-  - Scheduled tasks (cleanup, reports)
+  - Webhook delivery (event notifications with retries and circuit breaker)
+  - Scheduled tasks (cleanup, reports, workspace deletion)
   - Type generation (TS → Python sync)
+  - SEO tasks (sitemap generation, search console indexing)
 
 ### 8. Observability Layer
 
@@ -248,6 +259,12 @@ RawDrive uses a **pnpm workspace monorepo** for cross-platform type sharing:
 - **CDN**: Cloudflare for global content delivery
 - **Optimization**: Image derivatives, lazy loading
 - **Monitoring**: P95 latency target <300ms
+- **Gallery Performance** (v0.3.2):
+  - **LQIP**: 20x20 WebP blur placeholders (~100-200 bytes) for instant visual feedback
+  - **Extended Signed URLs**: 4-hour TTL for thumbnails (300% cache hit improvement)
+  - **Immutable Cache Headers**: `private, max-age=31536000, immutable` for thumbnails
+  - **Prefetching**: Next page at 75% scroll, lightbox neighbors on open
+  - **Denormalized Stats**: photo_count, video_count, total_size_bytes in galleries table
 
 ### Scalability (KEDA-First Architecture)
 - **Autoscaling**: All production components use KEDA for event-driven scaling
@@ -334,12 +351,23 @@ RawDrive uses a **pnpm workspace monorepo** for cross-platform type sharing:
 | **Uptime** | 99.9% |
 | **Error Rate** | <1% |
 
+### Gallery Performance Targets (v0.3.2)
+
+| Metric | Before | Target | Method |
+|--------|--------|--------|--------|
+| **First Contentful Paint** | 2-3s | <1s | LQIP placeholders |
+| **Thumbnail Load (cached)** | 200-500ms | <100ms | Service Worker + immutable cache |
+| **Gallery Scroll** | 150-300ms | <50ms | Prefetching at 75% scroll |
+| **Lightbox Open** | 300-500ms | <100ms | Neighbor prefetching |
+| **Cache Hit Rate** | ~30% | >80% | Extended URL TTL (4hr) |
+
 ## Security Checklist
 
 - [x] HTTPS/TLS 1.3 everywhere
 - [x] OWASP Top 10 protections
 - [x] Multi-tenant isolation via workspace_id
-- [x] Signed URLs for media access (1-hour TTL)
+- [x] Signed URLs for media access (4-hour TTL for thumbnails, 1-hour for originals)
+- [x] CDN key encryption with AES-256-GCM for edge decryption
 - [x] Rate limiting on all endpoints
 - [x] Audit logging for sensitive actions
 - [x] Encryption at rest and in transit
@@ -377,6 +405,7 @@ RawDrive uses a **pnpm workspace monorepo** for cross-platform type sharing:
 - **Development Roadmap**: `docs/project/roadmap.md`
 - **Technical Specifications**: `docs/TechnicalSpecs/`
 - **Feature Documentation**: `docs/Features/`
+- **Gallery Performance Deployment**: `docs/GALLERY_PERFORMANCE_DEPLOYMENT.md`
 
 ## Quick Links
 
@@ -446,6 +475,10 @@ docker compose exec redis redis-cli FLUSHALL
 | `GOOGLE_CLIENT_ID` | ⚪ | Google OAuth client ID |
 | `RAZORPAY_KEY_ID` | ⚪ | Razorpay payment key |
 | `GEMINI_API_KEY` | ⚪ | Google Gemini AI API key |
+| `CLOUDFLARE_ACCOUNT_ID` | ⚪ | Cloudflare account ID for CDN keys |
+| `CLOUDFLARE_API_TOKEN` | ⚪ | Cloudflare API token for Workers KV |
+| `CLOUDFLARE_KV_NAMESPACE_ID` | ⚪ | Workers KV namespace for CDN keys |
+| `KV_ENCRYPTION_KEY` | ⚪ | Master encryption key for CDN keys |
 
 ## Troubleshooting Quick Reference
 
@@ -470,6 +503,6 @@ For questions about the architecture:
 
 ---
 
-**Version**: 0.3.1
-**Last Updated**: January 27, 2026
+**Version**: 0.3.2
+**Last Updated**: January 9, 2026
 **Maintained By**: Engineering Team

@@ -24,6 +24,7 @@ rule_files:
   - /etc/prometheus/alerts.yaml
   - /etc/prometheus/traefik-alerts.yaml
   - /etc/prometheus/client-service-alerts.yaml
+  - /etc/prometheus/webhooks-service-alerts.yaml
 
 # Scrape configurations
 scrape_configs:
@@ -259,6 +260,28 @@ scrape_configs:
     #     selectors:
     #       - role: "endpoints"
     #         label: "app=gallery-service"
+
+  # ==========================================================================
+  # Webhooks Microservice
+  # Event-driven webhook delivery with circuit breakers and DLQ
+  # Autoscales based on delivery queue depth and Kafka lag
+  # ==========================================================================
+  - job_name: 'webhooks-service'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['webhooks-service:8015']
+        labels:
+          service: 'webhooks-service'
+          component: 'webhooks'
+    # In Kubernetes, use service discovery
+    # kubernetes_sd_configs:
+    #   - role: endpoints
+    #     namespaces:
+    #       names: ['rawdrive']
+    #     selectors:
+    #       - role: "endpoints"
+    #         label: "app=webhooks-service"
 
   # ==========================================================================
   # Milvus Vector Database

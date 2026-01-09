@@ -42,6 +42,8 @@ class NotificationCategory(str, Enum):
 
     GALLERY_ACTIVITY = "gallery_activity"
     CLIENT_INTERACTIONS = "client_interactions"
+    ASSET_PROCESSING = "asset_processing"  # New: Upload/processing notifications
+    RSVP = "rsvp"  # New: RSVP management notifications
     SYSTEM_ALERTS = "system_alerts"
     BILLING = "billing"
     MARKETING = "marketing"

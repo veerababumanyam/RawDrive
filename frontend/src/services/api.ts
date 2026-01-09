@@ -48,7 +48,9 @@ export function getApiBaseUrl(): string {
   if (viteUrl && typeof viteUrl === 'string' && viteUrl.trim() !== '') {
     return viteUrl.trim();
   }
-  return 'http://localhost:8000';
+  // Use Traefik (port 80) instead of direct backend (port 8000) to route through API gateway
+  // This ensures microservices like webhooks-service are accessible
+  return 'http://localhost';
 }
 
 export const API_BASE_URL = getApiBaseUrl();
@@ -258,7 +260,6 @@ class ApiClient {
       ...this.getAuthHeader(),
       ...(options.headers as Record<string, string>),
     };
-
     // Create AbortController for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(new Error('Request timed out')), TIMEOUT_MS);
@@ -338,13 +339,25 @@ class ApiClient {
       try {
         responseText = await response.text();
         if (responseText) {
-          data = JSON.parse(responseText);
+          // Try to parse as JSON, but handle non-JSON responses gracefully
+          const trimmedText = responseText.trim();
+          if (trimmedText && (trimmedText.startsWith('{') || trimmedText.startsWith('['))) {
+            data = JSON.parse(trimmedText);
+          } else if (!response.ok) {
+            // Non-JSON error response (e.g., Traefik "no available server")
+            const errorMessage = trimmedText || response.statusText || `Request failed with status ${response.status}`;
+            return {
+              error: {
+                code: `HTTP_${response.status}`,
+                message: errorMessage,
+                status: response.status,
+              },
+            };
+          }
         }
       } catch (parseError) {
-        console.error('Failed to parse response:', parseError);
-        // If response is not JSON, extract error message from plain text
+        // JSON parse failed - treat as error if response is not OK
         if (!response.ok) {
-          // Extract meaningful error message from plain text response
           const errorMessage = responseText.trim() || response.statusText || `Request failed with status ${response.status}`;
           return {
             error: {
@@ -354,6 +367,8 @@ class ApiClient {
             },
           };
         }
+        // If response is OK but JSON parse failed, log and continue with empty data
+        console.warn('Failed to parse JSON response (but status is OK):', parseError);
       }
 
       if (!response.ok) {

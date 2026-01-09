@@ -1,9 +1,0 @@
-{
-  "category": "Microservice Connection Pooling",
-  "description": "Enable PgBouncer by default (PGBOUNCER_ENABLED=true) and set per-pod connection limits. Current default is false, meaning each of 50+ backend pods maintains 10 direct PostgreSQL connections (500+ total), exceeding PostgreSQL's 100-connection limit. This forces connection timeouts and cascading failures during peak load. Configure PgBouncer in transaction pooling mode (4-connection pool per pod × 50 pods = 200 managed connections).",
-  "id": "feature-1767788779286-mrt58uhem",
-  "steps": [],
-  "status": "backlog",
-  "skipTests": true,
-  "priority": 1
-}

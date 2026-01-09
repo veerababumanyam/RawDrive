@@ -60,8 +60,10 @@ class Settings(BaseSettings):
     REDIS_KEY_PREFIX: str = "notifications:"
 
     # JWT Authentication - CRITICAL: Must match backend exactly
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
-    JWT_ALGORITHM: str = "HS256"
+    # Backend uses EdDSA with public/private key pairs
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")  # Fallback for HS256 (legacy)
+    JWT_PUBLIC_KEY_PATH: str = os.getenv("JWT_PUBLIC_KEY_PATH", "")
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "EdDSA")  # Backend uses EdDSA
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True

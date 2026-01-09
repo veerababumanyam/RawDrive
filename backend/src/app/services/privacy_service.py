@@ -128,14 +128,15 @@ class PrivacyService:
         except Exception as e:
             logger.warning(f"Cache invalidate error: {e}")
 
-    async def get_settings(self, user_id: str) -> PrivacySettings:
+    async def get_settings(self, user_id: str, workspace_id: Any = None) -> PrivacySettings:
         """Get privacy settings for a user.
 
         Returns cached settings if available, otherwise fetches from database.
-        Falls back to defaults if no settings are stored.
+        Falls back to workspace defaults if provided, then to global defaults.
 
         Args:
             user_id: The user's ID
+            workspace_id: Optional workspace ID to fetch defaults from
 
         Returns:
             PrivacySettings with current values
@@ -160,7 +161,22 @@ class PrivacyService:
         if row and row["privacy_settings"]:
             settings = PrivacySettings.from_dict(row["privacy_settings"])
         else:
-            settings = PrivacySettings.get_defaults()
+            # Fallback to workspace defaults
+            if workspace_id:
+                try:
+                    from app.services.workspace_privacy_service import get_workspace_privacy_service
+                    ws_service = get_workspace_privacy_service()
+                    ws_settings = await ws_service.get_privacy_settings(workspace_id)
+                    
+                    settings = PrivacySettings(
+                        analytics_enabled=ws_settings.analytics_enabled,
+                        public_profile_enabled=ws_settings.public_profile_enabled
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to fetch workspace privacy defaults: {e}")
+                    settings = PrivacySettings.get_defaults()
+            else:
+                settings = PrivacySettings.get_defaults()
 
         # Cache the result
         await self._set_cache(user_id, settings)

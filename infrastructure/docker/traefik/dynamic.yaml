@@ -304,6 +304,37 @@ http:
         certResolver: letsencrypt
 
     # -------------------------------------------------------------------------
+    # Webhooks Microservice - External webhook subscriptions
+    # -------------------------------------------------------------------------
+    webhooks-service-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/webhooks`)"
+      entryPoints:
+        - websecure
+      service: webhooks-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+        - cors-headers
+      priority: 142
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
+    # Webhooks Microservice - Admin endpoints
+    # -------------------------------------------------------------------------
+    webhooks-admin-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/admin/webhooks`)"
+      entryPoints:
+        - websecure
+      service: webhooks-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+      priority: 145
+      tls:
+        certResolver: letsencrypt
+
+    # -------------------------------------------------------------------------
     # Notifications Microservice - Webhooks (SendGrid callbacks)
     # Higher priority to match before generic notifications routes
     # -------------------------------------------------------------------------
@@ -332,6 +363,37 @@ http:
         - security-headers
         - cors-headers
       priority: 140
+
+    # -------------------------------------------------------------------------
+    # Notifications Microservice - Preferences Endpoints
+    # Higher priority to match before generic api-router
+    # -------------------------------------------------------------------------
+    notifications-preferences-router:
+      rule: "Host(`api.rawdrive.ai`) && PathRegexp(`^/api/v1/workspaces/[^/]+/preferences`)"
+      entryPoints:
+        - websecure
+      service: notifications-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+        - cors-headers
+      priority: 165
+
+    # -------------------------------------------------------------------------
+    # Notifications Microservice - Event Types Endpoints
+    # Higher priority to match before generic api-router
+    # Pattern [^/]+ matches any workspace_id format (UUID with dashes)
+    # -------------------------------------------------------------------------
+    notifications-event-types-router:
+      rule: "Host(`api.rawdrive.ai`) && PathRegexp(`^/api/v1/workspaces/[^/]+/event-types`)"
+      entryPoints:
+        - websecure
+      service: notifications-service
+      middlewares:
+        - rate-limit-api
+        - security-headers
+        - cors-headers
+      priority: 165
       tls:
         certResolver: letsencrypt
 
@@ -479,7 +541,7 @@ http:
     notifications-service:
       loadBalancer:
         servers:
-          - url: "http://notifications-service:8007"
+          - url: "http://notifications-service:8010"
         healthCheck:
           path: /health
           interval: 10s
@@ -535,6 +597,15 @@ http:
             name: rawdrive_client
             secure: true
             httpOnly: true
+
+    webhooks-service:
+      loadBalancer:
+        servers:
+          - url: "http://webhooks-service:8015"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
 
   # ===========================================================================
   # Middlewares

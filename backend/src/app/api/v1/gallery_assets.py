@@ -157,20 +157,25 @@ async def update_sort_order(
         if asset_count != len(request.asset_ids):
             raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
 
-        # Update sort_order for each asset
-        for index, asset_id in enumerate(request.asset_ids):
-            await conn.execute(
-                """
-                UPDATE gallery_assets
-                SET sort_order = $1
-                WHERE workspace_id = $2 AND gallery_id = $3 AND asset_id = $4
-                """,
-                index,
-                workspace_id,
-                gallery_id,
-                asset_id,
-            )
-        
+        # Update sort_order for all assets in a single batch query
+        # Uses UNNEST WITH ORDINALITY to preserve array order and assign sort_order
+        await conn.execute(
+            """
+            UPDATE gallery_assets ga
+            SET sort_order = batch.new_sort_order
+            FROM (
+                SELECT asset_id, (ord - 1)::int as new_sort_order
+                FROM unnest($1::uuid[]) WITH ORDINALITY AS t(asset_id, ord)
+            ) batch
+            WHERE ga.asset_id = batch.asset_id
+                AND ga.workspace_id = $2
+                AND ga.gallery_id = $3
+            """,
+            request.asset_ids,
+            workspace_id,
+            gallery_id,
+        )
+
         return {"message": "Sort order updated successfully"}
 
 
@@ -239,20 +244,21 @@ async def move_assets(
         if asset_count != len(request.asset_ids):
             raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
 
-        # Update sub_gallery_id for each asset
-        for asset_id in request.asset_ids:
-            await conn.execute(
-                """
-                UPDATE gallery_assets
-                SET sub_gallery_id = $1
-                WHERE workspace_id = $2 AND gallery_id = $3 AND asset_id = $4
-                """,
-                request.sub_gallery_id,
-                workspace_id,
-                gallery_id,
-                asset_id,
-            )
-        
+        # Update sub_gallery_id for all assets in a single batch query
+        await conn.execute(
+            """
+            UPDATE gallery_assets
+            SET sub_gallery_id = $1
+            WHERE workspace_id = $2
+                AND gallery_id = $3
+                AND asset_id = ANY($4::uuid[])
+            """,
+            request.sub_gallery_id,
+            workspace_id,
+            gallery_id,
+            request.asset_ids,
+        )
+
         return {"message": f"Moved {len(request.asset_ids)} asset(s) successfully"}
 
 

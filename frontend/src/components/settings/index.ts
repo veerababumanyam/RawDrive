@@ -7,12 +7,16 @@ export { SettingsTabs, SETTINGS_TAB_CONFIG } from './SettingsTabs';
 
 // Tab content components
 export { ProfileTabContent } from './ProfileTabContent';
+export { PersonalProfileTabContent } from './PersonalProfileTabContent';
 export { SecurityTabContent } from './SecurityTabContent';
 export { NotificationsTabContent } from './NotificationsTabContent';
 export { PrivacyTabContent } from './PrivacyTabContent';
-export { AITabContent } from './AITabContent';
-export { SubscriptionTabContent } from './SubscriptionTabContent';
 export { AccountTabContent } from './AccountTabContent';
+
+// Personal Profile components
+export { PersonalProfilePreview } from './PersonalProfilePreview';
+export { PersonalProfileAIAssistant } from './PersonalProfileAIAssistant';
+export { ProfileCompletenessIndicator } from './ProfileCompletenessIndicator';
 
 // Profile components
 export { AvatarUploader } from './AvatarUploader';

@@ -31,8 +31,8 @@ function lazyWithRetry<T extends ComponentType<any>>(
         // Only retry on chunk load errors
         const isChunkError = error instanceof Error &&
           (error.message.includes('Failed to fetch dynamically imported module') ||
-           error.message.includes('Loading chunk') ||
-           error.message.includes('Loading CSS chunk'));
+            error.message.includes('Loading chunk') ||
+            error.message.includes('Loading CSS chunk'));
 
         if (!isChunkError || attempt === retries - 1) {
           throw error;
@@ -66,6 +66,7 @@ const FAQPage = lazy(() => import('../pages/public/FAQPage'));
 const HowItWorksPage = lazy(() => import('../pages/public/HowItWorksPage'));
 const ContactPage = lazy(() => import('../pages/public/ContactPage'));
 const PublicProfilePage = lazy(() => import('../pages/public/PublicProfilePage'));
+const PublicPersonalProfilePage = lazy(() => import('../pages/public/PublicPersonalProfilePage'));
 const PublicGalleryPage = lazy(() => import('../pages/public/PublicGalleryPage'));
 const PublicInvitationPage = lazy(() => import('../pages/public/PublicInvitationPage'));
 
@@ -110,8 +111,11 @@ const ClientDetailPage = lazy(() => import('../pages/workspace/ClientDetailPage'
 const ClientFormPage = lazy(() => import('../pages/workspace/ClientFormPage'));
 const VisitorsPage = lazy(() => import('../pages/workspace/VisitorsPage'));
 const CompanyProfilePage = lazy(() => import('../pages/workspace/settings/CompanyProfilePage'));
-const GeneralSettingsPage = lazy(() => import('../pages/workspace/settings/GeneralSettingsPage'));
+const WorkspaceSettingsHub = lazy(() => import('../pages/workspace/settings/WorkspaceSettingsHub'));
 const HelpSupportPage = lazy(() => import('../pages/workspace/settings/HelpSupportPage'));
+
+
+// Digital Invitations pages (016-save-the-date)
 
 // Digital Invitations pages (016-save-the-date)
 const InvitationsPage = lazy(() => import('../pages/workspace/InvitationsPage'));
@@ -213,6 +217,11 @@ export const publicRoutes: RouteObject[] = [
   {
     path: '/p/:slug',
     element: <LazyPage component={PublicProfilePage} />,
+  },
+  // Personal profile public page (Digital Visiting Cards)
+  {
+    path: '/u/:slug',
+    element: <LazyPage component={PublicPersonalProfilePage} />,
   },
   {
     path: '/g/:galleryId',
@@ -386,7 +395,7 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'favorites',
-        element: <LazyPage component={FavoritesPage} />, 
+        element: <LazyPage component={FavoritesPage} />,
       },
       {
         path: 'trash',
@@ -394,12 +403,15 @@ export const workspaceRoutes: RouteObject[] = [
       },
       {
         path: 'settings',
-        element: <CriticalLazyPage component={GeneralSettingsPage} />,
+        element: <CriticalLazyPage component={WorkspaceSettingsHub} />,
       },
       {
-        path: 'settings/profile',
-        element: <LazyPage component={CompanyProfilePage} />,
+        path: 'settings/:tabId',
+        element: <CriticalLazyPage component={WorkspaceSettingsHub} />,
       },
+      // Settings sub-routes are handled by the Hub component tabs
+      // but we can add aliases/redirects if needed in the future.
+      // Profile is now a tab in Hub.
       // Note: Additional workspace settings sub-routes can be added here as needed
       // The catch-all was removed to prevent confusing redirects to dashboard
       {

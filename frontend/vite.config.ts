@@ -1,11 +1,91 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // PWA/Service Worker for offline caching and performance
+    VitePWA({
+      registerType: 'autoUpdate',
+      devOptions: {
+        enabled: false, // Disable in dev to avoid caching issues
+      },
+      workbox: {
+        // Cache strategies for optimal gallery performance
+        runtimeCaching: [
+          // Cache-first for media/thumbnails - immutable once created
+          {
+            urlPattern: /\/api\/v1\/media\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'rawdrive-thumbnails',
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 1 week
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          // Stale-while-revalidate for gallery metadata API
+          {
+            urlPattern: /\/api\/v1\/workspaces\/.*\/galleries\/.*/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'rawdrive-gallery-api',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 5, // 5 minutes
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          // Network-first for auth/user data
+          {
+            urlPattern: /\/api\/v1\/(auth|users|workspaces\/[^/]+$)/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'rawdrive-auth',
+              networkTimeoutSeconds: 5,
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 10, // 10 minutes
+              },
+            },
+          },
+        ],
+        // Don't precache - just runtime cache
+        globPatterns: [],
+      },
+      manifest: {
+        name: 'RawDrive',
+        short_name: 'RawDrive',
+        description: 'Professional Photography Platform',
+        theme_color: '#000000',
+        background_color: '#000000',
+        display: 'standalone',
+        icons: [
+          {
+            src: '/icons/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+        ],
+      },
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

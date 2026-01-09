@@ -225,6 +225,64 @@ http:
       priority: 145
 
     # -------------------------------------------------------------------------
+    # Notifications Microservice - Preferences Endpoints
+    # Higher priority to match before generic api-router-local
+    # -------------------------------------------------------------------------
+    notifications-preferences-router-local:
+      rule: "Host(`localhost`) && PathRegexp(`^/api/v1/workspaces/[^/]+/preferences`)"
+      entryPoints:
+        - web
+      service: notifications-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 150
+
+    # -------------------------------------------------------------------------
+    # Notifications Microservice - Event Types Endpoints  
+    # Uses PathRegexp like preferences router (which works)
+    # Pattern [^/]+ matches any workspace_id format (UUID with dashes)
+    # -------------------------------------------------------------------------
+    notifications-event-types-router-local:
+      rule: "Host(`localhost`) && PathRegexp(`^/api/v1/workspaces/[^/]+/event-types`)"
+      entryPoints:
+        - web
+      service: notifications-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 165
+
+    # -------------------------------------------------------------------------
+    # Webhooks Microservice - External webhook subscriptions
+    # -------------------------------------------------------------------------
+    webhooks-service-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/webhooks`)"
+      entryPoints:
+        - web
+      service: webhooks-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 142
+
+    # -------------------------------------------------------------------------
+    # Webhooks Microservice - Admin endpoints
+    # -------------------------------------------------------------------------
+    webhooks-admin-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/admin/webhooks`)"
+      entryPoints:
+        - web
+      service: webhooks-service
+      middlewares:
+        - rate-limit-api
+        - security-headers-dev
+      priority: 147
+
+    # -------------------------------------------------------------------------
     # AI Service - Stricter rate limiting
     # -------------------------------------------------------------------------
     ai-router-local:
@@ -380,7 +438,16 @@ http:
     notifications-service:
       loadBalancer:
         servers:
-          - url: "http://notifications-service:8007"
+          - url: "http://notifications-service:8010"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    webhooks-service:
+      loadBalancer:
+        servers:
+          - url: "http://webhooks-service:8015"
         healthCheck:
           path: /health
           interval: 10s

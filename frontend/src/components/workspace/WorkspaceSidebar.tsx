@@ -7,7 +7,6 @@ import {
   UsersRound,
   Eye,
   Share2,
-  Settings,
   HelpCircle,
   Crown,
   LayoutGrid,
@@ -100,10 +99,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   ], [t]);
 
   const bottomNavItems = React.useMemo(() => [
-    { id: 'companyProfile', label: t('nav.companyProfile', 'Company Profile'), icon: <Building2 size={20} />, path: '/workspace/settings/profile' },
+    { id: 'companyProfile', label: t('nav.companyProfile', 'Company Profile'), icon: <Building2 size={20} />, path: '/workspace/settings?tab=profile' },
     { id: 'myProfile', label: t('nav.myProfile', 'My Profile'), icon: <User size={20} />, path: '/settings' },
     { id: 'team', label: t('nav.team', 'Team'), icon: <UsersRound size={20} />, path: '/workspace/team' },
-    { id: 'settings', label: t('nav.settings'), icon: <Settings size={20} />, path: '/workspace/settings' },
     { id: 'help', label: t('nav.helpSupport', 'Help & Support'), icon: <HelpCircle size={20} />, path: '/workspace/help' },
   ], [t]);
 
@@ -261,7 +259,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               <AppButton
                 variant="gold"
                 size="sm"
-                onClick={() => navigate('/settings?tab=subscription')}
+                onClick={() => navigate('/workspace/settings?tab=subscription')}
                 fullWidth
                 leftIcon={<Crown size={14} />}
                 className="mt-3"

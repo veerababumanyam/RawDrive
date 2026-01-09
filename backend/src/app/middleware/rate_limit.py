@@ -39,7 +39,8 @@ def get_client_ip(request: Request) -> str:
 RATE_LIMIT_ROUTES = {
     "/api/v1/auth/": RateLimitType.AUTH,
     "/api/v1/search": RateLimitType.SEARCH,
-    "/api/v1/public/profiles/": RateLimitType.PUBLIC,  # Public profile endpoints
+    "/api/v1/public/profiles/": RateLimitType.PUBLIC,  # Public profile endpoints (company)
+    "/api/v1/public/personal-profiles/": RateLimitType.PUBLIC,  # Public personal profile endpoints (SOC2: vCard, QR, avatar)
     "/api/v1/public/galleries/": RateLimitType.PUBLIC,  # Public gallery endpoints (SOC2: rate limit PIN verify, favorites, selections)
     "/api/v1/public/invitations/": RateLimitType.PUBLIC,  # Public invitation endpoints (read-only)
     "/api/": RateLimitType.API,

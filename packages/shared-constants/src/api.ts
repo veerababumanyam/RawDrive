@@ -17,6 +17,8 @@ export const WORKSPACE_PATHS = {
   ROLES: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/roles`,
   COMPANY_PROFILE: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/company-profile`,
   companyProfile: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/company-profile`,
+  PERSONAL_PROFILE: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/personal-profiles`,
+  personalProfile: (workspaceId: string) => `${API_BASE}/workspaces/${workspaceId}/personal-profiles`,
 } as const;
 
 /**
@@ -25,6 +27,7 @@ export const WORKSPACE_PATHS = {
 export const PUBLIC_PATHS = {
   GALLERY: (slug: string) => `${API_BASE}/public/galleries/${slug}`,
   INVITATION: (token: string) => `${API_BASE}/public/invitations/${token}`,
+  // Company profiles (legacy paths)
   PROFILES: (slug: string) => `${API_BASE}/public/profiles/${slug}`,
   VCARD: (slug: string) => `${API_BASE}/public/profiles/${slug}/vcard`,
   QR_CODE: (slug: string) => `${API_BASE}/public/profiles/${slug}/qr-code`,
@@ -33,4 +36,13 @@ export const PUBLIC_PATHS = {
   vcard: (slug: string) => `${API_BASE}/public/profiles/${slug}/vcard`,
   qrCode: (slug: string) => `${API_BASE}/public/profiles/${slug}/qr-code`,
   logo: (slug: string, size?: 'sm' | 'md' | 'lg' | number) => `${API_BASE}/public/profiles/${slug}/logo${size ? `/${size}` : ''}`,
+  // Personal profiles (Digital Visiting Cards)
+  PERSONAL_PROFILE: (slug: string) => `${API_BASE}/public/personal-profiles/${slug}`,
+  PERSONAL_VCARD: (slug: string) => `${API_BASE}/public/personal-profiles/${slug}/vcard`,
+  PERSONAL_QR_CODE: (slug: string) => `${API_BASE}/public/personal-profiles/${slug}/qr-code`,
+  PERSONAL_AVATAR: (slug: string, size?: 64 | 128 | 256 | 512) => `${API_BASE}/public/personal-profiles/${slug}/avatar${size ? `/${size}` : '/256'}`,
+  personalProfile: (slug: string) => `${API_BASE}/public/personal-profiles/${slug}`,
+  personalVcard: (slug: string) => `${API_BASE}/public/personal-profiles/${slug}/vcard`,
+  personalQrCode: (slug: string) => `${API_BASE}/public/personal-profiles/${slug}/qr-code`,
+  personalAvatar: (slug: string, size?: 64 | 128 | 256 | 512) => `${API_BASE}/public/personal-profiles/${slug}/avatar${size ? `/${size}` : '/256'}`,
 } as const;

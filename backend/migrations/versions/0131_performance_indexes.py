@@ -69,7 +69,7 @@ def upgrade() -> None:
     # Index for asset type filtering
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_assets_workspace_type
-        ON assets(workspace_id, asset_type, created_at DESC)
+        ON assets(workspace_id, type, created_at DESC)
         WHERE deleted = FALSE
     """)
 
@@ -148,11 +148,11 @@ def upgrade() -> None:
     # Client Contacts - Email lookups and deduplication
     # -------------------------------------------------------------------------
 
-    # Partial index for email lookups (only non-null emails)
+    # Partial index for email lookups (using value column where type is email)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_client_contacts_workspace_email
-        ON client_contacts(workspace_id, email)
-        WHERE email IS NOT NULL
+        CREATE INDEX IF NOT EXISTS idx_client_contacts_workspace_email_value
+        ON client_contacts(workspace_id, value)
+        WHERE contact_type = 'email'
     """)
 
     # Index for finding primary contacts
@@ -178,7 +178,7 @@ def upgrade() -> None:
     # Index for subscription status and billing cycle
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_subscriptions_workspace_status
-        ON subscriptions(workspace_id, status, next_billing_date ASC)
+        ON workspace_subscriptions(workspace_id, status, next_payment_at ASC)
     """)
 
     # Index for payment transaction history
@@ -193,7 +193,7 @@ def upgrade() -> None:
 
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_invoices_workspace_status
-        ON invoices(workspace_id, status, due_date ASC)
+        ON invoices(workspace_id, status, created_at ASC)
     """)
 
     # -------------------------------------------------------------------------
@@ -223,8 +223,8 @@ def upgrade() -> None:
     # -------------------------------------------------------------------------
 
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_smart_lists_workspace_active
-        ON smart_lists(workspace_id, is_active, created_at DESC)
+        CREATE INDEX IF NOT EXISTS idx_client_smart_lists_workspace_created
+        ON client_smart_lists(workspace_id, created_at DESC)
     """)
 
     # =========================================================================
@@ -237,7 +237,7 @@ def upgrade() -> None:
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_faces_group_stats
         ON faces(face_group_id, workspace_id)
-        INCLUDE (person_id, thumbnail_urls)
+        INCLUDE (thumbnail_urls)
     """)
 
     # Covering index for gallery asset listings
@@ -245,7 +245,7 @@ def upgrade() -> None:
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_gallery_assets_browse
         ON gallery_assets(workspace_id, gallery_id, visible)
-        INCLUDE (asset_id, display_order, created_at)
+        INCLUDE (asset_id, sort_order, created_at)
     """)
 
 

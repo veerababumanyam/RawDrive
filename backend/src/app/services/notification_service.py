@@ -175,14 +175,15 @@ class NotificationService:
         except Exception as e:
             logger.warning(f"Cache invalidate error: {e}")
 
-    async def get_preferences(self, user_id: str) -> NotificationPreferences:
+    async def get_preferences(self, user_id: str, workspace_id: Any = None) -> NotificationPreferences:
         """Get notification preferences for a user.
 
         Returns cached preferences if available, otherwise fetches from database.
-        Falls back to defaults if no preferences are stored.
+        Falls back to workspace defaults if provided, then to global defaults.
 
         Args:
             user_id: The user's ID
+            workspace_id: Optional workspace ID to fetch defaults from
 
         Returns:
             NotificationPreferences with current settings
@@ -207,7 +208,26 @@ class NotificationService:
         if row and row["notification_preferences"]:
             prefs = NotificationPreferences.from_dict(row["notification_preferences"])
         else:
-            prefs = NotificationPreferences.get_defaults()
+            # Fallback logic
+            if workspace_id:
+                try:
+                    from app.services.workspace_notification_service import get_workspace_notification_service
+                    ws_service = get_workspace_notification_service()
+                    ws_settings = await ws_service.get_notification_settings(workspace_id)
+                    
+                    # Map workspace settings to NotificationPreferences
+                    # Assuming workspace settings structure matches closely or we map explicitly
+                    # WorkspaceNotificationSettings has default_email_preferences (dict), default_in_app_preferences (dict)
+                    
+                    email_prefs = NotificationChannelPrefs.from_dict(ws_settings.default_email_preferences or {})
+                    in_app_prefs = NotificationChannelPrefs.from_dict(ws_settings.default_in_app_preferences or {})
+                    
+                    prefs = NotificationPreferences(email=email_prefs, in_app=in_app_prefs)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch workspace notification defaults: {e}")
+                    prefs = NotificationPreferences.get_defaults()
+            else:
+                prefs = NotificationPreferences.get_defaults()
 
         # Cache the result
         await self._set_cache(user_id, prefs)

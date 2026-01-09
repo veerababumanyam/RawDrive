@@ -15,7 +15,7 @@ from uuid import uuid4
 import redis.asyncio as aioredis
 from pydantic import BaseModel, Field
 
-from app.core.config import settings
+from app.config.settings import get_settings
 
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class ServiceRegistry:
             redis_url: Redis connection URL (default from settings)
             ttl_seconds: Service registration TTL in seconds (default 30)
         """
-        self.redis_url = redis_url or settings.REDIS_URL
+        self.redis_url = redis_url or str(get_settings().redis_url)
         self.ttl_seconds = ttl_seconds
         self._redis: Optional[aioredis.Redis] = None
 

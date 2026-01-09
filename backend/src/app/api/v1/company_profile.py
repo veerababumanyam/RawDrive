@@ -25,10 +25,22 @@ from app.services.company_profile_service import (
 )
 from app.services.vcard_service import VCardService
 from app.services.qr_service import QRCodeService
-from app.services.seo_service import SEOSchemaService
+from app.services.seo_service import SEOSchemaService, get_seo_service
 from app.services.ai_policy_service import get_ai_policy_service, PolicyType
 from app.api.exceptions import AppError, ForbiddenError, NotFoundError, ValidationAppError, InternalError
 from app.services.audit_service import log_workspace_event, AuditEventType
+from app.api.workspace_settings_schemas import (
+    WorkspaceAISettings,
+    UpdateWorkspaceAISettingsRequest,
+    WorkspaceSecuritySettings,
+    UpdateWorkspaceSecuritySettingsRequest,
+    WorkspaceNotificationSettings,
+    UpdateWorkspaceNotificationSettingsRequest,
+    WorkspacePrivacySettings,
+    UpdateWorkspacePrivacySettingsRequest,
+    WorkspaceDeletionRequest
+)
+from app.services.workspace_settings_service import get_workspace_settings_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,21 +60,26 @@ async def get_public_profile(
     service = get_company_profile_service()
     try:
         data = await service.get_public_profile(slug)
-        # We can inject SEO schema into the response or return it alongside
-        # For now, client likely requests schema separately or we include it in 'seo_schema' field
-        # Use full profile model to generate schema? 
-        # get_public_profile returns dict. We need to cast it or change service to return Model.
-        # But let's assume dict is sufficient if we match schema fields.
-        # Actually Service returns filtered dict.
-        
-        # NOTE: SEOSchemaService expects CompanyProfileResponse (Pydantic).
-        # We should probably instantiate it to be safe.
+
+        # Check if workspace allows search engine indexing
+        indexable = False
+        workspace_id = data.get("workspace_id")
+        if workspace_id:
+            try:
+                seo_service = get_seo_service()
+                indexable = await seo_service.is_profile_indexable(workspace_id)
+            except Exception:
+                logger.warning("Failed to check indexable status", exc_info=True)
+
+        data["indexable"] = indexable
+
+        # Generate SEO schema
         try:
             profile_obj = CompanyProfileResponse(**data)
             data["seo_schema"] = SEOSchemaService.generate_business_schema(profile_obj)
         except Exception:
             logger.warning("Failed to generate SEO schema, skipping", exc_info=True)
-            
+
         return data
     except CompanyProfileError as e:
         if e.status == 404:
@@ -430,3 +447,239 @@ async def generate_policy(
     except Exception as e:
         logger.exception("Failed to generate policy")
         raise InternalError("Failed to generate policy")
+
+
+# ---------------------------------------------------------------------------
+# Workspace Settings Routes
+# ---------------------------------------------------------------------------
+
+from app.services.workspace_ai_settings_service import get_workspace_ai_settings_service
+from app.services.workspace_security_service import get_workspace_security_service
+from app.services.workspace_notification_service import get_workspace_notification_service
+from app.services.workspace_privacy_service import get_workspace_privacy_service
+from app.services.workspace_deletion_service import get_workspace_deletion_service
+
+# ... (Previous imports kept by tool, but we need to remove get_workspace_settings_service if no longer used)
+# Actually, I should remove 'from app.services.workspace_settings_service import get_workspace_settings_service' 
+# but replace_file_content targets a block. I will target the imports + the routes.
+
+# Let's replace the imports first or include them in the chunk.
+# The user tool 'replace_file_content' replaces a contiguous block. 
+# I will do a large replacement from line 43 (import) to the end.
+
+# ---------------------------------------------------------------------------
+# Workspace Settings Routes
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/settings/ai",
+    response_model=WorkspaceAISettings,
+    summary="Get AI settings"
+)
+async def get_ai_settings(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+):
+    """Get workspace AI settings."""
+    service = get_workspace_ai_settings_service()
+    return await service.get_ai_settings(workspace_id)
+
+@router.patch(
+    "/settings/ai",
+    response_model=WorkspaceAISettings,
+    summary="Update AI settings"
+)
+async def update_ai_settings(
+    request: UpdateWorkspaceAISettingsRequest,
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Update workspace AI settings."""
+    _, workspace_id = workspace_access
+    service = get_workspace_ai_settings_service()
+    result = await service.update_ai_settings(workspace_id, request)
+    
+    await log_workspace_event(
+        event_type=AuditEventType.SETTINGS_CHANGED,
+        workspace_id=workspace_id,
+        actor_user_id=current_user.user_id,
+        target_entity_type="workspace_settings",
+        details={"type": "ai", "updated_fields": list(request.model_dump(exclude_unset=True).keys())}
+    )
+    return result
+
+@router.get(
+    "/settings/security",
+    response_model=WorkspaceSecuritySettings,
+    summary="Get security settings"
+)
+async def get_security_settings(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+):
+    """Get workspace security settings."""
+    service = get_workspace_security_service()
+    return await service.get_security_settings(workspace_id)
+
+@router.patch(
+    "/settings/security",
+    response_model=WorkspaceSecuritySettings,
+    summary="Update security settings"
+)
+async def update_security_settings(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    request: UpdateWorkspaceSecuritySettingsRequest,
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Update workspace security settings."""
+    service = get_workspace_security_service()
+    result = await service.update_security_settings(workspace_id, request)
+    
+    await log_workspace_event(
+        event_type=AuditEventType.SETTINGS_CHANGED,
+        workspace_id=workspace_id,
+        actor_user_id=current_user.user_id,
+        target_entity_type="workspace_settings",
+        details={"type": "security", "updated_fields": list(request.model_dump(exclude_unset=True).keys())}
+    )
+    return result
+
+@router.get(
+    "/settings/notifications",
+    response_model=WorkspaceNotificationSettings,
+    summary="Get notification settings"
+)
+async def get_notification_settings(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+):
+    """Get workspace notification settings."""
+    service = get_workspace_notification_service()
+    return await service.get_notification_settings(workspace_id)
+
+@router.patch(
+    "/settings/notifications",
+    response_model=WorkspaceNotificationSettings,
+    summary="Update notification settings"
+)
+async def update_notification_settings(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    request: UpdateWorkspaceNotificationSettingsRequest,
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Update workspace notification settings."""
+    service = get_workspace_notification_service()
+    result = await service.update_notification_settings(workspace_id, request)
+    
+    await log_workspace_event(
+        event_type=AuditEventType.SETTINGS_CHANGED,
+        workspace_id=workspace_id,
+        actor_user_id=current_user.user_id,
+        target_entity_type="workspace_settings",
+        details={"type": "notifications", "updated_fields": list(request.model_dump(exclude_unset=True).keys())}
+    )
+    return result
+
+@router.get(
+    "/settings/privacy",
+    response_model=WorkspacePrivacySettings,
+    summary="Get privacy settings"
+)
+async def get_privacy_settings(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+):
+    """Get workspace privacy settings."""
+    service = get_workspace_privacy_service()
+    return await service.get_privacy_settings(workspace_id)
+
+@router.patch(
+    "/settings/privacy",
+    response_model=WorkspacePrivacySettings,
+    summary="Update privacy settings"
+)
+async def update_privacy_settings(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    request: UpdateWorkspacePrivacySettingsRequest,
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Update workspace privacy settings."""
+    service = get_workspace_privacy_service()
+    result = await service.update_privacy_settings(workspace_id, request)
+    
+    await log_workspace_event(
+        event_type=AuditEventType.SETTINGS_CHANGED,
+        workspace_id=workspace_id,
+        actor_user_id=current_user.user_id,
+        target_entity_type="workspace_settings",
+        details={"type": "privacy", "updated_fields": list(request.model_dump(exclude_unset=True).keys())}
+    )
+    return result
+
+@router.post(
+    "/delete",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Request workspace deletion"
+)
+async def request_workspace_deletion(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    request: WorkspaceDeletionRequest,
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Request deletion of the workspace."""
+    if request.confirmation_phrase != "DELETE":
+         raise ValidationAppError("Confirmation phrase mismatch. Please type DELETE.", field="confirmation_phrase")
+    
+    service = get_workspace_deletion_service()
+    result = await service.request_workspace_deletion(workspace_id, request.reason, request.reason_details, current_user.user_id)
+    
+    await log_workspace_event(
+        event_type=AuditEventType.WORKSPACE_DELETED, # Intentional reuse for tracking
+        workspace_id=workspace_id,
+        actor_user_id=current_user.user_id,
+        target_entity_type="workspace",
+        details={"action": "deletion_requested", "reason": request.reason.value}
+    )
+    
+    return result
+
+@router.delete(
+    "/delete",
+    status_code=status.HTTP_200_OK,
+    summary="Cancel workspace deletion"
+)
+async def cancel_workspace_deletion(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Cancel a pending workspace deletion request."""
+    service = get_workspace_deletion_service()
+    result = await service.cancel_workspace_deletion(workspace_id, current_user.user_id)
+    
+    await log_workspace_event(
+        event_type=AuditEventType.WORKSPACE_DELETED,
+        workspace_id=workspace_id,
+        actor_user_id=current_user.user_id,
+        target_entity_type="workspace",
+        details={"action": "deletion_cancelled"}
+    )
+    
+    return result
+
+@router.get(
+    "/delete/status",
+    status_code=status.HTTP_200_OK,
+    summary="Get deletion status"
+)
+async def get_deletion_status(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+):
+    """Get current workspace deletion status."""
+    service = get_workspace_deletion_service()
+    return await service.get_deletion_status(workspace_id)

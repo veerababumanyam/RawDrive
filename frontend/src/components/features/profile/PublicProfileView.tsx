@@ -300,6 +300,10 @@ export const PublicProfileView: React.FC<Props> = ({ slug }) => {
             <Helmet>
                 <title>{displayName} | Profile</title>
                 <meta name="description" content={profile.tagline || `${displayName} business profile`} />
+                {/* Robots directive based on workspace indexing settings */}
+                {!profile.indexable && (
+                    <meta name="robots" content="noindex, nofollow" />
+                )}
                 {/* Preconnect to Google Fonts for faster font loading */}
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

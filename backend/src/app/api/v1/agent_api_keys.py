@@ -363,12 +363,12 @@ async def get_agent_api_key(
     )
 
 
-@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_agent_api_key(
     workspace_id: uuid.UUID,
     key_id: uuid.UUID,
     user: CurrentUserDep,
-) -> None:
+):
     """Delete (revoke) an agent API key.
 
     This permanently deactivates the key.

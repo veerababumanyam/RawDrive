@@ -1,0 +1,105 @@
+# RawDrive Cloudflare Workers Configuration
+# Deploy: wrangler deploy
+
+name = "rawdrive-media-edge"
+main = "workers/media-edge-decrypt.js"
+compatibility_date = "2024-01-01"
+
+# Production environment
+[env.production]
+name = "rawdrive-media-edge"
+routes = [
+  { pattern = "cdn.rawdrive.com/cdn/media/*", zone_name = "rawdrive.com" }
+]
+
+# Staging environment
+[env.staging]
+name = "rawdrive-media-edge-staging"
+routes = [
+  { pattern = "cdn-staging.rawdrive.com/cdn/media/*", zone_name = "rawdrive.com" }
+]
+
+# Development environment (uses workers.dev subdomain)
+[env.development]
+name = "rawdrive-media-edge-dev"
+
+# ============================================================================
+# KV Namespace Bindings
+# ============================================================================
+# Workers KV for workspace encryption keys
+# Create with: wrangler kv:namespace create "RAWDRIVE_KEYS"
+
+[[kv_namespaces]]
+binding = "RAWDRIVE_KEYS"
+id = "YOUR_KV_NAMESPACE_ID"  # Replace after creating namespace
+preview_id = "YOUR_PREVIEW_KV_NAMESPACE_ID"  # For wrangler dev
+
+[env.production.kv_namespaces]
+[[env.production.kv_namespaces]]
+binding = "RAWDRIVE_KEYS"
+id = "YOUR_PRODUCTION_KV_NAMESPACE_ID"
+
+[env.staging.kv_namespaces]
+[[env.staging.kv_namespaces]]
+binding = "RAWDRIVE_KEYS"
+id = "YOUR_STAGING_KV_NAMESPACE_ID"
+
+# ============================================================================
+# R2 Bucket Binding
+# ============================================================================
+# R2 bucket containing encrypted assets
+
+[[r2_buckets]]
+binding = "RAWDRIVE_ASSETS"
+bucket_name = "rawdrive-assets"
+preview_bucket_name = "rawdrive-assets-dev"
+
+[env.production.r2_buckets]
+[[env.production.r2_buckets]]
+binding = "RAWDRIVE_ASSETS"
+bucket_name = "rawdrive-assets"
+
+[env.staging.r2_buckets]
+[[env.staging.r2_buckets]]
+binding = "RAWDRIVE_ASSETS"
+bucket_name = "rawdrive-assets-staging"
+
+# ============================================================================
+# Secrets (set via wrangler secret put)
+# ============================================================================
+# SIGNING_SECRET - HMAC signing secret (same as backend JWT_SECRET)
+#   wrangler secret put SIGNING_SECRET
+#
+# KV_ENCRYPTION_KEY - 32-byte hex key to encrypt workspace keys in KV
+#   wrangler secret put KV_ENCRYPTION_KEY
+
+# ============================================================================
+# Worker Configuration
+# ============================================================================
+
+# Limits
+[limits]
+cpu_ms = 50  # 50ms CPU time limit per request
+
+# Observability
+[observability]
+enabled = true
+
+# Analytics Engine (optional, for metrics)
+# [[analytics_engine_datasets]]
+# binding = "RAWDRIVE_METRICS"
+# dataset = "rawdrive_cdn_metrics"
+
+# ============================================================================
+# Cron Triggers (optional, for cache warming)
+# ============================================================================
+# [triggers]
+# crons = ["0 * * * *"]  # Every hour for cache warming
+
+# ============================================================================
+# Development Settings
+# ============================================================================
+
+[dev]
+port = 8787
+local_protocol = "http"

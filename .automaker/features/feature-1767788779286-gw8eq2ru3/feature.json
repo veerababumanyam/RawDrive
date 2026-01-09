@@ -1,9 +1,0 @@
-{
-  "category": "API Batching & Bulk Operations",
-  "description": "Add POST /api/v1/assets/batch-get-signed-urls endpoint accepting array of 100+ asset IDs, returning all signed URLs in single response. Add PATCH /api/v1/assets/batch-update supporting bulk favorite/tag operations. Current implementation requires N separate requests (100 assets = 100 PUT requests with 100 JWT validations and 100 database transactions). Batch endpoint: 1 request, 1 validation, 1 transaction.",
-  "id": "feature-1767788779286-gw8eq2ru3",
-  "steps": [],
-  "status": "backlog",
-  "skipTests": true,
-  "priority": 2
-}

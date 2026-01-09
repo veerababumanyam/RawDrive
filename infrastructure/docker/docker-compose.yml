@@ -954,9 +954,10 @@ services:
       REDIS_MAX_CONNECTIONS: ${NOTIFICATIONS_REDIS_MAX_CONNECTIONS:-30}
       REDIS_KEY_PREFIX: "notifications:"
 
-      # JWT (must match backend)
+      # JWT (must match backend - backend uses EdDSA with public/private key pairs)
       JWT_SECRET: ${JWT_SECRET:-}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public_key
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-EdDSA}
 
       # CORS
       CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
@@ -1020,6 +1021,109 @@ services:
 
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:${PORT_NOTIFICATIONS:-8010}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    volumes:
+      # Mount JWT public key for token verification (EdDSA)
+      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ============================================================================
+  # Webhooks Microservice
+  # Event-driven webhook delivery system for external integrations
+  # Supports HMAC-SHA256 signatures, exponential backoff retry, and circuit breaker
+  # ============================================================================
+  webhooks-service:
+    build:
+      context: ../../services/webhooks-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-webhooks-service
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Service
+      SERVICE_NAME: webhooks-service
+      SERVICE_VERSION: "1.0.0"
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Database (shared with backend)
+      DATABASE_URL: postgresql://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
+      DATABASE_READ_REPLICA_URL: ${DATABASE_READ_REPLICA_URL:-}
+      DB_POOL_MIN_SIZE: ${WEBHOOKS_DB_POOL_MIN_SIZE:-5}
+      DB_POOL_MAX_SIZE: ${WEBHOOKS_DB_POOL_MAX_SIZE:-30}
+      DB_COMMAND_TIMEOUT: ${DB_COMMAND_TIMEOUT:-60}
+
+      # PgBouncer connection pooler (for 5000+ concurrent scaling)
+      PGBOUNCER_ENABLED: ${PGBOUNCER_ENABLED:-false}
+      PGBOUNCER_HOST: ${PGBOUNCER_HOST:-pgbouncer}
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT:-6432}
+
+      # Redis - Circuit breaker state and caching
+      REDIS_URL: redis://redis:${PORT_REDIS}/0
+      REDIS_MAX_CONNECTIONS: ${WEBHOOKS_REDIS_MAX_CONNECTIONS:-30}
+      REDIS_KEY_PREFIX: "webhooks:"
+
+      # JWT (must match backend)
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+
+      # CORS
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+
+      # Rate Limiting
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_DEFAULT: "100/minute"
+      RATE_LIMIT_DELIVERY: "1000/minute"
+
+      # Kafka (optional - for event consumption)
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-}
+      KAFKA_CONSUMER_GROUP: webhooks-service
+
+      # Webhook Delivery Settings
+      DELIVERY_TIMEOUT_SECONDS: 30
+      DELIVERY_MAX_RETRIES: 5
+      DELIVERY_RETRY_SCHEDULE: "10,60,300,1800,3600"
+      DELIVERY_CONCURRENT_LIMIT: 50
+
+      # Circuit Breaker
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      CIRCUIT_BREAKER_RECOVERY_TIMEOUT: ${CIRCUIT_BREAKER_RECOVERY_TIMEOUT:-60}
+      CIRCUIT_BREAKER_HALF_OPEN_SUCCESSES: 2
+
+      # Signature Settings
+      SIGNATURE_MAX_TIMESTAMP_AGE: 300
+
+      # Metrics
+      METRICS_ENABLED: "true"
+      METRICS_CUSTOM_PREFIX: webhooks
+
+      PORT: ${PORT_WEBHOOKS:-8015}
+
+    ports:
+      # Bind to localhost only - accessible via Traefik reverse proxy
+      - "127.0.0.1:${PORT_WEBHOOKS:-8015}:${PORT_WEBHOOKS:-8015}"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_WEBHOOKS:-8015}/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1322,6 +1426,9 @@ services:
     volumes:
       - ../monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
       - ../monitoring/prometheus/alerts.yaml:/etc/prometheus/alerts.yaml:ro
+      - ../monitoring/prometheus/traefik-alerts.yaml:/etc/prometheus/traefik-alerts.yaml:ro
+      - ../monitoring/prometheus/client-service-alerts.yaml:/etc/prometheus/client-service-alerts.yaml:ro
+      - ../monitoring/prometheus/webhooks-service-alerts.yaml:/etc/prometheus/webhooks-service-alerts.yaml:ro
       - prometheus_data:/prometheus
     depends_on:
       backend:

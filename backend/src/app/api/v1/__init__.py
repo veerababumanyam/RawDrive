@@ -26,6 +26,9 @@ from app.api.v1.search import router as search_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.company_profile import router as company_profile_router
 from app.api.v1.company_profile import public_router as public_profile_router
+from app.api.v1.personal_profile import router as personal_profile_router
+from app.api.v1.personal_profile import public_router as public_personal_profile_router
+from app.api.v1.personal_profile_ai import router as personal_profile_ai_router
 # from app.api.v1.public_galleries import router as public_galleries_router  # Moved to gallery-service
 from app.api.v1.profile_editor import router as profile_editor_router
 from app.api.v1.profile_editor import public_router as themes_router
@@ -134,6 +137,26 @@ router.include_router(
     public_profile_router,
     prefix="/api/v1/public/profiles",
     tags=["public-profiles"],
+)
+
+# Personal Profile routes (Digital Visiting Cards)
+# Workspace-scoped endpoints for managing personal photographer profiles
+router.include_router(
+    personal_profile_router,
+    prefix="/api/v1/workspaces/{workspace_id}/personal-profiles",
+    tags=["personal-profiles"],
+)
+# Public endpoints for viewing personal profiles at /u/{slug}
+router.include_router(
+    public_personal_profile_router,
+    prefix="/api/v1/public/personal-profiles",
+    tags=["public-personal-profiles"],
+)
+# Personal Profile AI routes (AI-powered content generation)
+router.include_router(
+    personal_profile_ai_router,
+    prefix="/api/v1/workspaces/{workspace_id}/personal-profiles",
+    tags=["personal-profile-ai"],
 )
 # router.include_router(  # Moved to gallery-service
 #     public_galleries_router,
@@ -495,4 +518,22 @@ router.include_router(
 # Service-to-service authentication and authorization
 from app.api.v1.agent_api_keys import router as agent_api_keys_router
 router.include_router(agent_api_keys_router)
+
+# CDN Key Sync routes (Phase 3: Edge Decryption CDN)
+# Admin endpoints for syncing workspace encryption keys to Cloudflare Workers KV
+# Enables edge decryption while maintaining full encryption at rest
+from app.api.v1.cdn_keys import router as cdn_keys_router
+router.include_router(cdn_keys_router)
+
+# SEO routes (Sitemap and Search Console integration)
+# Public sitemap.xml endpoint for search engine crawlers
+# Search Console integration for workspace indexing management
+from app.api.v1.sitemap import router as sitemap_router
+from app.api.v1.search_console import router as search_console_router
+router.include_router(sitemap_router, tags=["seo"])
+router.include_router(
+    search_console_router,
+    prefix="/api/v1/workspaces/{workspace_id}",
+    tags=["seo"],
+)
 

@@ -141,12 +141,14 @@ RawDrive/
 │   └── shared-utils/       # @rawdrive/shared-utils
 ├── frontend/          # React 19 + TypeScript + Vite + TailwindCSS
 ├── backend/           # Python 3.11 + FastAPI + SQLAlchemy + Alembic
-├── services/          # Microservices (6 services)
+├── services/          # Microservices (8 services)
 │   ├── billing-service/      # Payment processing (Stripe/Razorpay)
 │   ├── gallery-service/      # High-performance gallery (50K concurrent)
 │   ├── upload-service/       # TUS resumable uploads
 │   ├── onboarding-service/   # User registration & workspace setup
 │   ├── invitations-service/  # Digital wedding invitations
+│   ├── notifications-service/# Multi-channel notifications
+│   ├── webhooks-service/     # Event-driven webhook delivery (NEW)
 │   └── workspace-service/    # Workspace management (partial)
 ├── infrastructure/    # Docker, Kubernetes, Traefik, monitoring
 │   ├── docker/             # Docker Compose configurations
@@ -186,6 +188,9 @@ RawDrive/
 | Gallery API | `services/gallery-service/src/api/v1/` |
 | Upload API | `services/upload-service/src/app/api/v1/` |
 | Onboarding API | `services/onboarding-service/src/api/v1/` |
+| Webhooks API | `services/webhooks-service/src/api/v1/` |
+| Personal Profile API | `backend/src/app/api/v1/personal_profile.py` |
+| Workspace Settings API | `backend/src/app/api/v1/workspace_settings.py` |
 | **Shared Packages** | |
 | Types package | `packages/shared-types/src/` |
 | Constants package | `packages/shared-constants/src/` |
@@ -223,6 +228,12 @@ AI_MODEL=<model-name>
 STRIPE_SECRET_KEY=<stripe-key>
 RAZORPAY_KEY_ID=<razorpay-id>
 RAZORPAY_KEY_SECRET=<razorpay-secret>
+
+# CDN Edge Encryption (Cloudflare Workers)
+CLOUDFLARE_ACCOUNT_ID=<cloudflare-account-id>
+CLOUDFLARE_API_TOKEN=<cloudflare-api-token>
+CLOUDFLARE_KV_NAMESPACE_ID=<workers-kv-namespace>
+KV_ENCRYPTION_KEY=<32-byte-master-key>
 ```
 
 ## Shared Packages (pnpm Workspaces)
@@ -489,7 +500,7 @@ upload = await upload_service.create_upload(
 
 ### Microservices Architecture
 
-**All 6 Microservices:**
+**All 8 Microservices:**
 
 | Service | Port | Purpose | Scaling | Status |
 |---------|------|---------|---------|--------|
@@ -498,7 +509,9 @@ upload = await upload_service.create_upload(
 | **Gallery Service** | 8004 | High-performance gallery viewing, Magic Links, WebSocket proofing, face search | 5-20 replicas | ✅ Production |
 | **Upload Service** | 8080 | TUS protocol resumable uploads, chunking, AES-256 encryption, Kafka events | 2-50 replicas | ✅ Production |
 | **Onboarding Service** | 8005 | User registration, email verification, workspace creation, Stripe payment | 2-20 replicas | ✅ Production |
-| **Invitations Service** | 8003 | Digital wedding invitations, guest management, RSVP, bulk email | Standard | ✅ Production |
+| **Invitations Service** | 8007 | Digital wedding invitations, guest management, RSVP, bulk email | Standard | ✅ Production |
+| **Notifications Service** | 8010 | Multi-channel notifications, email, push, in-app | 2-10 replicas | ✅ Production |
+| **Webhooks Service** | 8003 | Event-driven webhook delivery, HMAC signing, retries, circuit breaker | 2-20 replicas | ✅ Production |
 | **Workspace Service** | TBD | Workspace management, team collaboration | - | 🚧 Partial |
 
 **Service Communication:**
@@ -519,8 +532,10 @@ upload = await upload_service.create_upload(
 | 150 | `/webhooks/stripe` | billing-service | None (webhooks) |
 | 148 | `/webhooks/razorpay` | billing-service | None (webhooks) |
 | 145 | `/api/v1/subscription/*` | billing-service | 100 req/min |
+| 142 | `/api/v1/webhooks/*` | webhooks-service | 100 req/min |
 | 140 | `/api/v1/galleries/*` | gallery-service | 200 req/min |
 | 135 | `/api/v1/uploads/*` | upload-service | 50 req/min |
+| 130 | `/api/v1/personal-profile/*` | backend | 100 req/min |
 | 100 | `/api/*` | backend (fallback) | 100 req/min |
 
 **Features:**
@@ -661,7 +676,80 @@ else:
 
 ## Version History
 
-### Current: v0.3.0 (2025-01-27)
+### Current: v0.3.2 (2026-01-09)
+
+Major platform expansion with Personal Profiles, Webhooks microservice, and Workspace Settings.
+
+**Personal Profile Digital Visiting Card:**
+- Professional profile pages at `/u/{slug}` with QR code and vCard download
+- Brand themes: dark, pastel, bold, cinematic, minimal
+- Social media integration (Instagram, TikTok, YouTube, Spotify, LinkedIn, etc.)
+- Embedded Spotify playlists and TikTok profile links
+- AI-powered profile assistant for completeness scoring and SEO optimization
+- Per-field visibility controls for privacy management
+- Avatar upload with multi-size variants (64x64 to 512x512)
+- API: `backend/src/app/api/v1/personal_profile.py`, `personal_profile_ai.py`
+
+**Webhooks Microservice (NEW):**
+- New dedicated microservice at `services/webhooks-service/` (port 8003)
+- HMAC-SHA256 signature verification with secret rotation (24h grace period)
+- Exponential backoff retry with configurable max retries (0-10)
+- Circuit breaker pattern per endpoint to prevent cascading failures
+- Dead letter queue for permanently failed deliveries
+- Event catalog: gallery.*, asset.*, user.*, workspace.* events
+- Prometheus metrics and health checks
+
+**Workspace Settings System:**
+- Workspace AI Settings: Per-workspace AI provider configuration with encrypted API keys
+- Workspace Security Settings: 2FA requirements, password policies, session management, IP whitelists
+- Workspace Notification Settings: Default notification preferences and channels
+- Workspace Privacy Settings: Analytics, data retention, GDPR compliance, search engine indexing
+- Workspace Deletion: Scheduled deletion with 30-day grace period
+
+**Gallery Performance Optimizations:**
+- LQIP (Low Quality Image Placeholders): 20x20 WebP blur-up placeholders for instant visual feedback
+- Extended Signed URL TTL: 4-hour TTL for thumbnails (300% cache hit improvement)
+- Immutable Browser Cache Headers: `private, max-age=31536000, immutable` for thumbnails
+- Prefetching: Next page at 75% scroll, lightbox neighbor preloading
+- Denormalized Gallery Stats: photo_count, video_count, total_size_bytes via PostgreSQL triggers
+- Batch Query Operations: Reduce N+1 queries with batch signed URLs, metadata, quality scores
+- Service Worker Caching: Workbox PWA with tiered caching strategies
+
+**SEO & Search Engine Integration:**
+- Dynamic sitemap generation at `/api/v1/sitemap.xml`
+- Search Console integration for URL submission and indexing status
+- Per-workspace search engine indexing control
+- JSON-LD schema markup for profiles
+
+**CDN Edge Encryption (Phase 3):**
+- CDN Keys API: `/api/v1/admin/cdn-keys/*` for workspace key management
+- AES-256-GCM encryption for keys in Workers KV storage
+- Admin endpoints for bulk sync and key management
+
+**Database Migrations (0141-0156):**
+- 0141-0145: Workspace settings tables (AI, security, notification, privacy, deletion)
+- 0146: Batch query optimization indexes
+- 0147: User to workspace settings migration
+- 0148: Add `lqip` column to assets table
+- 0149: Add denormalized stats columns with PostgreSQL triggers
+- 0150-0153: Webhook subscriptions, events, deliveries, event types
+- 0154: Search engine indexing settings
+- 0155: Personal profiles and avatars
+- 0156: Notification category expansion
+
+**New Frontend Components:**
+- `PersonalProfileTabContent.tsx`, `PersonalProfilePreview.tsx`, `PersonalProfileAIAssistant.tsx`
+- `EmbeddedSpotify.tsx`, `EmbeddedTikTok.tsx`, `ProfileCompletenessIndicator.tsx`
+- Workspace settings components in `frontend/src/components/workspace/settings/`
+
+**New Hooks & Services:**
+- `useWebhooks.ts`, `useWorkspaceSettings.ts`, `useWorkspaceNotificationPreferences.ts`, `usePrefetch.ts`
+- `webhooksService.ts`, `personalProfileService.ts`, `workspaceSettingsService.ts`, `cdnService.ts`
+
+**Scripts:**
+- `scripts/backfill_lqip.py`: Batch backfill LQIP for existing assets
+
+### Previous: v0.3.0 (2025-01-27)
 
 Gallery Preview feature and platform stability:
 
@@ -709,6 +797,11 @@ Major platform enhancements and microservices expansion:
 
 ## Recent Changes
 
+- **033-personal-profile**: Personal Profile Digital Visiting Card feature with `/u/{slug}` public pages, QR code, vCard download, social media integration, embedded media (Spotify, TikTok), AI profile assistant, brand themes
+- **034-webhooks-service**: New webhooks microservice for event-driven integration, HMAC signing, exponential backoff retries, circuit breaker, dead letter queue, event catalog
+- **035-workspace-settings**: Per-workspace settings system for AI configuration, security policies, notification preferences, privacy controls, scheduled deletion
+- **036-seo-integration**: Dynamic sitemap generation, Search Console integration, per-workspace indexing controls, JSON-LD schema markup
+- **032-gallery-performance**: Sub-second gallery loading with LQIP blur placeholders, extended signed URL TTL (4hr), immutable cache headers, Service Worker (Workbox), prefetching, denormalized stats, batch operations, CDN edge decryption architecture
 - **026-traefik-keda**: Traefik v3 API Gateway replaces Nginx Ingress, KEDA autoscaling with Prometheus metrics, Grafana dashboards for traffic monitoring
 - **025-pgvectorscale**: Enabled pgvectorscale extension for enhanced vector search (StreamingDiskANN indexes), switched to timescale/timescaledb-ha Docker image
 - **022-shared-packages**: Implemented shared packages infrastructure with 4 npm packages (`@rawdrive/shared-types`, `@rawdrive/shared-constants`, `@rawdrive/shared-validation`, `@rawdrive/shared-utils`), TypeScript-to-Python type generation, pnpm workspaces

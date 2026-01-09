@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     CACHE_TTL_GALLERY_METADATA: int = 300      # 5 minutes - L1
     CACHE_TTL_GALLERY_ASSETS: int = 120        # 2 minutes - L2
     CACHE_TTL_PROOFING_STATE: int = 30         # 30 seconds - L3 (real-time)
-    CACHE_TTL_SIGNED_URL: int = 900            # 15 minutes - R2 signed URLs (security/freshness balance)
+    CACHE_TTL_SIGNED_URL: int = 14400          # 4 hours - R2 signed URLs (optimized for cache hits)
     CACHE_TTL_MAGIC_LINK: int = 600            # 10 minutes
 
     # Storage (R2)
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     R2_ACCESS_KEY_ID: str = os.getenv("R2_ACCESS_KEY_ID", "")
     R2_SECRET_ACCESS_KEY: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
     R2_BUCKET_NAME: str = os.getenv("R2_BUCKET_NAME", "rawdrive")
-    R2_SIGNED_URL_EXPIRY: int = 900  # 15 minutes (security/freshness balance)
+    R2_SIGNED_URL_EXPIRY: int = 14400  # 4 hours (optimized for browser/CDN cache hits)
 
     # WebSocket - Real-time proofing
     WS_MAX_CONNECTIONS_PER_GALLERY: int = 1000

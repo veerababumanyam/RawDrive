@@ -5,7 +5,7 @@
 
   ## Enterprise SaaS Professional Photography Management Platform
 
-  [![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](https://github.com/rawdrive/RawDrive)
+  [![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](https://github.com/rawdrive/RawDrive)
   [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
   [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -67,6 +67,27 @@
 - **🔍 SEO Optimized**: Search engine optimization for client discovery
 - **📞 Lead Generation**: Contact forms and booking integration
 
+### 📇 Personal Profile Digital Visiting Card (NEW)
+
+- **🪪 Digital Business Card**: Professional profile at `/u/{slug}` with QR code and vCard download
+- **🎨 Brand Themes**: Dark, pastel, bold, cinematic, and minimal background themes
+- **📱 Social Integration**: Link Instagram, TikTok, YouTube, Spotify, LinkedIn, and more
+- **🎵 Embedded Media**: Spotify playlist and TikTok profile embeds
+- **🤖 AI Profile Assistant**: AI-powered recommendations for profile completeness and SEO
+- **📍 Location & Service Areas**: Structured address with GPS coordinates and service regions
+- **🔒 Visibility Controls**: Per-field privacy settings for public profile display
+- **📊 Completeness Scoring**: Track profile quality with actionable suggestions
+
+### 🔗 Webhooks & Event-Driven Integration (NEW)
+
+- **📡 Webhook Subscriptions**: Subscribe to platform events with custom endpoints
+- **🔐 HMAC Signing**: SHA-256 signature verification for secure webhook delivery
+- **🔄 Automatic Retries**: Exponential backoff with configurable max retries (0-10)
+- **⚡ Circuit Breaker**: Per-endpoint circuit breaker to prevent cascading failures
+- **🔑 Secret Rotation**: 24-hour grace period for seamless secret rotation
+- **📊 Event Catalog**: gallery.*, asset.*, user.*, workspace.* events
+- **💀 Dead Letter Queue**: Permanently failed deliveries for debugging
+
 ### 🎯 Client Experience Features
 
 - **⭐ Client Favorites**: Allow clients to mark and manage their favorite photos
@@ -119,6 +140,7 @@ graph TB
         B --> I[Notifications Service]
         B --> J[Client Service]
         B --> K[AI Service]
+        B --> L2[Webhooks Service]
     end
 
     subgraph "Data Layer"
@@ -336,6 +358,7 @@ All users password: Test@123 Subscription Tier Users:
    Client Service:     http://localhost:8011
    AI Processing:      http://localhost:8012
    AI Service (MCP):   http://localhost:8013
+   Webhooks Service:   http://localhost:8003
    Traefik Dashboard:  http://traefik.localhost
    Grafana:            http://localhost:3000 (admin/admin)
    Prometheus:         http://localhost:9090
@@ -389,8 +412,8 @@ start-all-services.bat  # Windows
 manage-services.bat status
 ```
 
-**Production Services (21 total):**
-- 7 Microservices: backend, gallery, billing, onboarding, invitations, upload, notifications
+**Production Services (22 total):**
+- 8 Microservices: backend, gallery, billing, onboarding, invitations, upload, notifications, webhooks
 - 4 Workers: face-worker, content-worker, quality-worker, invitations-worker
 - 10 Infrastructure: postgres, redis, pgbouncer, traefik, prometheus, grafana, loki, promtail, alertmanager, one-api
 
@@ -430,7 +453,8 @@ RawDrive/
 │   ├── upload-service/      # Resumable TUS Uploads
 │   ├── onboarding-service/  # Registration & Setup
 │   ├── invitations-service/ # Digital RSVP & Events
-│   └── notifications-service/# Multi-channel Communications
+│   ├── notifications-service/# Multi-channel Communications
+│   └── webhooks-service/    # Event-driven Webhook Delivery (NEW)
 ├── infrastructure/          # Traefik, Docker, K8s, Monitoring
 ├── docs/                   # 150+ Documentation files
 ├── specs/                  # Feature technical specifications
@@ -609,7 +633,60 @@ RawDrive exclusively uses **Google Gemini** for all AI features:
 
 ### Latest Additions (2025-2026)
 
-#### Version 0.3.1 (Latest)
+#### Version 0.3.2 (Latest)
+
+**Personal Profile Digital Visiting Card:**
+- Professional profile pages at `/u/{slug}` with QR code generation and vCard download
+- Brand themes (dark, pastel, bold, cinematic, minimal) and custom brand colors
+- Social media integration (Instagram, TikTok, YouTube, Spotify, LinkedIn, etc.)
+- Embedded Spotify playlists and TikTok profile links
+- AI-powered profile assistant for completeness scoring and SEO optimization
+- Per-field visibility controls for privacy management
+- Avatar upload with multi-size variants (64x64 to 512x512)
+
+**Webhooks Microservice:**
+- New dedicated microservice for event-driven webhook delivery
+- HMAC-SHA256 signature verification with secret rotation (24h grace period)
+- Exponential backoff retry with configurable max retries (0-10)
+- Circuit breaker pattern per endpoint to prevent cascading failures
+- Dead letter queue for permanently failed deliveries
+- Event catalog: gallery.*, asset.*, user.*, workspace.* events
+- Prometheus metrics and health checks
+
+**Workspace Settings System:**
+- Workspace AI Settings: Per-workspace AI provider configuration with encrypted API keys
+- Workspace Security Settings: 2FA requirements, password policies, session management, IP whitelists
+- Workspace Notification Settings: Default notification preferences and channels
+- Workspace Privacy Settings: Analytics, data retention, GDPR compliance, search engine indexing
+- Workspace Deletion: Scheduled deletion with 30-day grace period
+
+**Gallery Performance Optimizations:**
+- LQIP (Low Quality Image Placeholders): 20x20 WebP blur-up placeholders for instant loading
+- Extended Signed URL TTL: 4-hour TTL for thumbnails (300% cache hit improvement)
+- Denormalized Gallery Stats: PostgreSQL triggers for photo_count, video_count, total_size_bytes
+- Batch Query Operations: Reduce N+1 queries with batch signed URLs, metadata, and quality scores
+- Service Worker Caching: Workbox PWA with tiered caching strategies
+- Prefetching: Next page at 75% scroll, lightbox neighbor preloading
+
+**SEO & Search Engine Integration:**
+- Dynamic sitemap generation at `/api/v1/sitemap.xml`
+- Search Console integration for URL submission and indexing status
+- Per-workspace search engine indexing control
+- JSON-LD schema markup for profiles
+
+**CDN Edge Encryption (Phase 3):**
+- CDN Keys API for syncing workspace encryption keys to Cloudflare Workers KV
+- AES-256-GCM encryption for keys in Workers KV storage
+- Admin endpoints for bulk sync and key management
+
+**Database Migrations (0141-0156):**
+- Workspace settings tables (AI, security, notification, privacy)
+- Personal profiles and avatar storage
+- Webhook subscriptions, events, deliveries, and event types
+- LQIP column and denormalized gallery stats
+- Batch query optimization indexes
+
+#### Version 0.3.1
 - **AI Service Enhancements**: Implemented rate limiting, circuit breakers, and Redis caching for the AI service. Integration of Prometheus metrics and Milvus for vector search.
 - **Frontend Types**: Hardened TypeScript configurations and resolved all strict mode errors.
 - **Microservices Routing**: Optimized routing path for Gallery and Upload services behind Traefik.
@@ -681,8 +758,8 @@ manage-services.bat status
 
 **Auto-Restart:** All services restart automatically with Docker Desktop - perfect for development and production!
 
-**All 20 Services:**
-- ✅ Backend API + 5 microservices (gallery, billing, upload, onboarding, invitations)
+**All 22 Services:**
+- ✅ Backend API + 7 microservices (gallery, billing, upload, onboarding, invitations, notifications, webhooks)
 - ✅ 4 background workers (face, content, quality, email)
 - ✅ Full monitoring stack (Traefik, Prometheus, Grafana, Loki)
 - ✅ Database & cache (PostgreSQL 16 + pgvector, Redis 7, PgBouncer)
@@ -751,6 +828,8 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - **[RBAC & User Management](docs/Features/RBAC_AND_USER_MANAGEMENT.md)** - Permissions and access control
 - **[Authentication & Security](docs/Features/AUTHENTICATION_AND_SECURITY.md)** - OAuth, security, and compliance
 - **[Developer Tools & MCP](docs/Features/DEVELOPER_TOOLS_AND_PROTOCOLS.md)** - MCP, APIs, and integrations
+- **[Personal Profile Digital Visiting Card](docs/Features/PERSONAL_PROFILE_DIGITAL_VISITING_CARD.md)** - Professional photographer profiles
+- **[Notification Preferences](docs/Features/NOTIFICATION_PREFERENCES.md)** - User notification settings
 
 ### Marketing & Business
 

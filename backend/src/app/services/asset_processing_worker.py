@@ -235,6 +235,18 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                 logger.error(f"Failed to upload variants to R2 for asset {asset_id}: {e}")
                 raise
 
+            # Generate LQIP (Low Quality Image Placeholder) for blur-up effect
+            # Use thumbnail data for efficiency (already resized)
+            lqip_data_uri = None
+            try:
+                lqip_data_uri = image_processing_service.generate_lqip(
+                    thumbnail_data, workspace_id
+                )
+                logger.debug(f"Generated LQIP for asset {asset_id}")
+            except ImageProcessingError as e:
+                # LQIP is optional - don't fail processing if it fails
+                logger.warning(f"Failed to generate LQIP for asset {asset_id}: {e}")
+
             logger.info(
                 f"Successfully processed asset {asset_id}: "
                 f"thumbnail={thumb_width}x{thumb_height}, "
@@ -242,17 +254,29 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                 f"preview={preview_width}x{preview_height}"
             )
 
-        # Update asset status to 'available'
+        # Update asset status to 'available' and store LQIP
         async with pool.acquire() as conn:
-            await conn.execute(
-                """
-                UPDATE assets
-                SET status = 'available'
-                WHERE asset_id = $1 AND workspace_id = $2
-                """,
-                asset_id,
-                workspace_id,
-            )
+            if file_type == "photo" and lqip_data_uri:
+                await conn.execute(
+                    """
+                    UPDATE assets
+                    SET status = 'available', lqip = $3
+                    WHERE asset_id = $1 AND workspace_id = $2
+                    """,
+                    asset_id,
+                    workspace_id,
+                    lqip_data_uri,
+                )
+            else:
+                await conn.execute(
+                    """
+                    UPDATE assets
+                    SET status = 'available'
+                    WHERE asset_id = $1 AND workspace_id = $2
+                    """,
+                    asset_id,
+                    workspace_id,
+                )
 
         logger.info(f"Asset {asset_id} processing completed successfully")
 

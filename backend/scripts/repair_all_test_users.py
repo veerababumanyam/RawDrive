@@ -26,16 +26,9 @@ async def repair_all():
     print(f"Starting repair for {len(users_to_fix)} test users...")
     
     for user in users_to_fix:
-        # Determine workspace_id 
-        # Logic from seed_static.py: workspace_id = uuid.uuid5(actual_user_id, "workspace")
-        # But for test users, we know the UUIDs are deterministic.
-        # Let's re-calculate it to be sure, or check if the user exists first.
-        
-        # In seed_static.py logic:
-        # actual_user_id = user.user_id (since we force the ID on insert)
-        # workspace_id = uuid.uuid5(user.user_id, "workspace")
-        
-        ws_id = uuid.uuid5(user.user_id, "workspace")
+        # Use the hardcoded workspace_id from test_constants.py
+        # This matches the workspace IDs created by seed_all_test_users.py
+        ws_id = user.workspace_id
         
         print(f"\n--------------------------------------------------")
         print(f"Processing User: {user.display_name}")

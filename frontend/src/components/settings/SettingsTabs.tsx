@@ -7,62 +7,20 @@
 
 import {
   User,
-  Shield,
-  Bell,
-  Lock,
-  Sparkles,
-  CreditCard,
-  Trash2,
 } from 'lucide-react';
 import { Tabs, type TabItem } from '../ui/Tabs';
 import type { SettingsTabId, SettingsTabConfig } from '../../types/settings';
 
 /**
  * Full tab configuration array with icons and descriptions
+ * Consolidated to single profile tab - public visibility is controlled via toggle within the profile
  */
 export const SETTINGS_TAB_CONFIG: SettingsTabConfig[] = [
   {
     id: 'profile',
     label: 'Profile',
     icon: User,
-    description: 'Manage your personal information and avatar',
-  },
-  {
-    id: 'security',
-    label: 'Security',
-    icon: Shield,
-    description: 'Password, two-factor authentication, and sessions',
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    icon: Bell,
-    description: 'Email and in-app notification preferences',
-  },
-  {
-    id: 'privacy',
-    label: 'Privacy',
-    icon: Lock,
-    description: 'Data export and privacy controls',
-  },
-  {
-    id: 'ai',
-    label: 'AI & Gemini',
-    icon: Sparkles,
-    description: 'Configure Gemini API key and model preferences',
-  },
-  {
-    id: 'subscription',
-    label: 'Subscription',
-    icon: CreditCard,
-    description: 'Manage your plan, usage, and billing',
-  },
-  {
-    id: 'account',
-    label: 'Account',
-    icon: Trash2,
-    description: 'Delete account',
-    isDanger: true,
+    description: 'Manage your profile and public visibility',
   },
 ];
 

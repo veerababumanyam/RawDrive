@@ -28,7 +28,7 @@ def upgrade() -> None:
     # Used by: /api/v1/workspaces/{workspace_id}/smart-tagging/galleries/{gallery_id}/ai-filter
     op.execute(
         """
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_photo_quality_workspace_score
+        CREATE INDEX IF NOT EXISTS idx_photo_quality_workspace_score
         ON photo_quality_analysis(workspace_id, overall_score DESC)
         WHERE overall_score IS NOT NULL;
         """
@@ -38,7 +38,7 @@ def upgrade() -> None:
     # Used by: AI filter blur_hide parameter
     op.execute(
         """
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_photo_quality_workspace_blur
+        CREATE INDEX IF NOT EXISTS idx_photo_quality_workspace_blur
         ON photo_quality_analysis(workspace_id, blur_detected)
         WHERE blur_detected = TRUE;
         """
@@ -52,7 +52,7 @@ def upgrade() -> None:
     # Used by: Gallery health endpoint joins
     op.execute(
         """
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_asset_analysis_workspace_asset
+        CREATE INDEX IF NOT EXISTS idx_asset_analysis_workspace_asset
         ON asset_analysis(workspace_id, asset_id);
         """
     )
@@ -61,7 +61,7 @@ def upgrade() -> None:
     # Used by: Gallery health statistics queries
     op.execute(
         """
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_asset_analysis_workspace_status_composite
+        CREATE INDEX IF NOT EXISTS idx_asset_analysis_workspace_status_composite
         ON asset_analysis(workspace_id, vision_status, face_status);
         """
     )

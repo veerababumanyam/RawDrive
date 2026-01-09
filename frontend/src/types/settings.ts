@@ -9,29 +9,14 @@ import type { LucideIcon } from 'lucide-react';
 
 /**
  * Valid tab identifiers for user settings
- * Matches the existing settings pages
+ * Consolidated to single profile tab with public toggle
  */
-export type SettingsTabId =
-  | 'profile'
-  | 'security'
-  | 'notifications'
-  | 'privacy'
-  | 'ai'
-  | 'subscription'
-  | 'account';
+export type SettingsTabId = 'profile';
 
 /**
  * Array of valid tab IDs for validation
  */
-export const SETTINGS_TABS: SettingsTabId[] = [
-  'profile',
-  'security',
-  'notifications',
-  'privacy',
-  'ai',
-  'subscription',
-  'account',
-];
+export const SETTINGS_TABS: SettingsTabId[] = ['profile'];
 
 /**
  * Default tab when none specified or invalid

@@ -22,6 +22,7 @@ from src.api.v1.notifications import router as notifications_router
 from src.api.v1.preferences import router as preferences_router
 from src.api.v1.templates import router as templates_router
 from src.api.v1.webhooks import router as webhooks_router
+from src.api.v1.event_types import router as event_types_router
 
 # Create the main API v1 router
 # Note: Individual routers already have their full prefix paths:
@@ -55,6 +56,12 @@ router.include_router(
     tags=["templates"],
 )
 
+# Event type endpoints: event catalog, event type details
+router.include_router(
+    event_types_router,
+    tags=["event-types"],
+)
+
 # =============================================================================
 # Provider webhooks (no auth, signature verification)
 # =============================================================================
@@ -76,4 +83,5 @@ __all__ = [
     "preferences_router",
     "templates_router",
     "webhooks_router",
+    "event_types_router",
 ]

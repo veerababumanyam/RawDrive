@@ -232,6 +232,14 @@ class PreferenceCreateRequest(BaseModel):
         default=None,
         description="Client interaction notification preferences",
     )
+    asset_processing: Optional[CategoryPreference] = Field(
+        default=None,
+        description="Asset processing notification preferences (uploads, processing)",
+    )
+    rsvp: Optional[CategoryPreference] = Field(
+        default=None,
+        description="RSVP management notification preferences",
+    )
     system_alerts: Optional[CategoryPreference] = Field(
         default=None,
         description="System alert notification preferences (always instant)",
@@ -334,6 +342,12 @@ class PreferenceUpdateRequest(BaseModel):
     )
     client_interactions: Optional[CategoryPreference] = Field(
         None, description="Client interaction notification preferences"
+    )
+    asset_processing: Optional[CategoryPreference] = Field(
+        None, description="Asset processing notification preferences"
+    )
+    rsvp: Optional[CategoryPreference] = Field(
+        None, description="RSVP management notification preferences"
     )
     system_alerts: Optional[CategoryPreference] = Field(
         None, description="System alert notification preferences"
@@ -440,6 +454,8 @@ class PreferenceResponse(BaseModel):
     # Category preferences (expanded)
     gallery_activity: CategoryPreference = Field(default_factory=CategoryPreference)
     client_interactions: CategoryPreference = Field(default_factory=CategoryPreference)
+    asset_processing: CategoryPreference = Field(default_factory=CategoryPreference)
+    rsvp: CategoryPreference = Field(default_factory=CategoryPreference)
     system_alerts: CategoryPreference = Field(default_factory=CategoryPreference)
     billing: CategoryPreference = Field(default_factory=CategoryPreference)
     marketing: CategoryPreference = Field(
@@ -587,6 +603,8 @@ class MergedPreferences(BaseModel):
     # Merged category preferences
     gallery_activity: CategoryPreference = Field(default_factory=CategoryPreference)
     client_interactions: CategoryPreference = Field(default_factory=CategoryPreference)
+    asset_processing: CategoryPreference = Field(default_factory=CategoryPreference)
+    rsvp: CategoryPreference = Field(default_factory=CategoryPreference)
     system_alerts: CategoryPreference = Field(default_factory=CategoryPreference)
     billing: CategoryPreference = Field(default_factory=CategoryPreference)
     marketing: CategoryPreference = Field(
@@ -659,6 +677,8 @@ class PreferenceExport(BaseModel):
 
     gallery_activity: CategoryPreference
     client_interactions: CategoryPreference
+    asset_processing: CategoryPreference
+    rsvp: CategoryPreference
     system_alerts: CategoryPreference
     billing: CategoryPreference
     marketing: CategoryPreference

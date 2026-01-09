@@ -35,6 +35,10 @@ interface UseGalleryAssetsReturn {
   loadMore: () => Promise<void>;
   hasMore: boolean;
   updateAsset: (assetId: string, changes: Partial<GalleryAssetItem>) => void;
+  /** Current page number (for prefetching) */
+  currentPage: number;
+  /** Total pages (for prefetching) */
+  totalPages: number;
 }
 
 export const useGalleryAssets = ({
@@ -89,7 +93,7 @@ export const useGalleryAssets = ({
             page: pageNum,
             limit,
           });
-          
+
           assetIds = aiResult.assetIds;
           aiMeta = aiResult.meta;
 
@@ -127,10 +131,10 @@ export const useGalleryAssets = ({
         } else {
           setAssets(response.data);
         }
-        
+
         // If using AI filters, use the AI meta for total counts/pagination
         setMeta(hasAIFilters && aiMeta ? aiMeta : response.meta);
-        
+
         setCurrentPage(pageNum);
         setLoading(false);
       } catch (err) {
@@ -197,7 +201,9 @@ export const useGalleryAssets = ({
     error,
     refetch,
     loadMore,
-    hasMore: meta?.hasMore || false,
+    hasMore: meta?.hasMore ?? false,
     updateAsset,
+    currentPage,
+    totalPages: meta ? Math.ceil(meta.total / (meta.limit || 1)) : 1,
   };
 };

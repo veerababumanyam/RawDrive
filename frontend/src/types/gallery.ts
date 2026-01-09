@@ -222,6 +222,7 @@ export interface AssetInfo {
   file_size?: number;       // File size in bytes
   created_at?: string;     // Upload timestamp
   exif?: AssetExif;
+  lqip?: string;           // LQIP (Low Quality Image Placeholder) data URI for blur-up effect
   // Signed URL metadata (for refresh)
   _signed_urls?: {
     thumbnail?: SignedUrlResponse;

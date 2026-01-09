@@ -1,4 +1,4 @@
-"""Visibility Filter Service for Company Profiles.
+"""Visibility Filter Service for Company and Personal Profiles.
 
 Provides granular per-field and per-platform social media visibility filtering
 for the Public Profile Editor system.
@@ -10,7 +10,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Supported profile fields for visibility control
+# Supported profile fields for visibility control (Company Profiles)
 PROFILE_FIELDS = frozenset({
     "name",
     "tagline",
@@ -22,6 +22,49 @@ PROFILE_FIELDS = frozenset({
     "address_structured",  # Legacy/DB field name
     "socials",
     "custom_links",
+})
+
+# Supported personal profile fields for visibility control
+PERSONAL_PROFILE_FIELDS = frozenset({
+    # Identity
+    "display_name",
+    "profile_title",
+    "avatar_url",
+    "bio",
+    "location",
+    # Contact
+    "email",
+    "phone",
+    "website",
+    "address",
+    "address_structured",
+    # Social media (individual platforms)
+    "socials_instagram",
+    "socials_facebook",
+    "socials_twitter",
+    "socials_linkedin",
+    "socials_youtube",
+    "socials_tiktok",
+    "socials_pinterest",
+    "socials_behance",
+    "socials_dribbble",
+    "socials_spotify",
+    "socials_whatsapp",
+    # Other
+    "custom_links",
+    "embedded_media",
+    "featured_gallery",
+    "categories",
+    "service_areas",
+    "booking_calendar",
+    # Secondary contacts
+    "secondary_email_1",
+    "secondary_email_2",
+    "secondary_phone_1",
+    "secondary_phone_2",
+    # Public profile features
+    "qr_code",
+    "vcard",
 })
 
 # Supported social media platforms
@@ -311,6 +354,165 @@ class VisibilityFilterService:
             True if valid, False if contains unknown platforms.
         """
         return all(platform in SOCIAL_PLATFORMS for platform in social_visibility.keys())
+
+    # =========================================================================
+    # Personal Profile Visibility Methods
+    # =========================================================================
+
+    @staticmethod
+    def get_default_personal_profile_visibility() -> dict[str, bool]:
+        """Get default visibility configuration for new personal profiles.
+
+        Returns sensible defaults based on field type:
+        - Identity fields: Visible (display_name, profile_title, avatar, bio, location)
+        - Contact info: Visible but can be hidden (email, phone)
+        - Social media: All visible by default
+        - Secondary contacts: Visible
+        - Features: QR code and vCard visible
+        """
+        return {
+            # Identity
+            "display_name": True,
+            "profile_title": True,
+            "avatar_url": True,
+            "bio": True,
+            "location": True,
+            # Contact
+            "email": True,
+            "phone": True,
+            "website": True,
+            "address": True,
+            # Social media
+            "socials_instagram": True,
+            "socials_facebook": True,
+            "socials_twitter": True,
+            "socials_linkedin": True,
+            "socials_youtube": True,
+            "socials_tiktok": True,
+            "socials_pinterest": True,
+            "socials_behance": True,
+            "socials_dribbble": True,
+            "socials_spotify": True,
+            "socials_whatsapp": True,
+            # Other
+            "custom_links": True,
+            "embedded_media": True,
+            "featured_gallery": True,
+            "categories": True,
+            "service_areas": True,
+            "booking_calendar": True,
+            # Secondary contacts
+            "secondary_email_1": True,
+            "secondary_email_2": True,
+            "secondary_phone_1": True,
+            "secondary_phone_2": True,
+            # Public profile features
+            "qr_code": True,
+            "vcard": True,
+        }
+
+    @staticmethod
+    def filter_personal_profile(
+        profile_data: dict[str, Any],
+        visibility_config: Optional[dict[str, bool]] = None,
+    ) -> dict[str, Any]:
+        """
+        Apply visibility filtering for personal profiles.
+
+        Handles:
+        1. Field-level visibility (display_name, bio, email, phone, etc.)
+        2. Per-platform social media visibility (socials_instagram, socials_facebook, etc.)
+        3. Secondary contact visibility (secondary_email_1, secondary_email_2, etc.)
+
+        Args:
+            profile_data: Complete personal profile data dictionary
+            visibility_config: Field-level visibility configuration
+
+        Returns:
+            Filtered profile with hidden fields and social platforms removed.
+        """
+        if not visibility_config:
+            return profile_data.copy()
+
+        filtered = {}
+
+        for key, value in profile_data.items():
+            # Handle socials dict specially - filter individual platforms
+            if key == "socials" and isinstance(value, dict):
+                filtered_socials = {}
+                for platform, url in value.items():
+                    visibility_key = f"socials_{platform.lower()}"
+                    if visibility_config.get(visibility_key, True):
+                        filtered_socials[platform] = url
+                filtered["socials"] = filtered_socials
+
+            # Handle secondary_emails list
+            elif key == "secondary_emails" and isinstance(value, list):
+                filtered_emails = []
+                for i, contact in enumerate(value[:2]):  # Max 2
+                    visibility_key = f"secondary_email_{i + 1}"
+                    if visibility_config.get(visibility_key, True):
+                        filtered_emails.append(contact)
+                filtered["secondary_emails"] = filtered_emails
+
+            # Handle secondary_phones list
+            elif key == "secondary_phones" and isinstance(value, list):
+                filtered_phones = []
+                for i, contact in enumerate(value[:2]):  # Max 2
+                    visibility_key = f"secondary_phone_{i + 1}"
+                    if visibility_config.get(visibility_key, True):
+                        filtered_phones.append(contact)
+                filtered["secondary_phones"] = filtered_phones
+
+            # Handle featured_gallery_id
+            elif key == "featured_gallery_id":
+                if visibility_config.get("featured_gallery", True):
+                    filtered[key] = value
+
+            # Handle booking_calendar_url
+            elif key == "booking_calendar_url":
+                if visibility_config.get("booking_calendar", True):
+                    filtered[key] = value
+
+            # Handle address_structured (mapped from "address" visibility key)
+            elif key == "address_structured":
+                if visibility_config.get("address", True):
+                    filtered[key] = value
+
+            # Standard field visibility check
+            else:
+                if visibility_config.get(key, True):
+                    filtered[key] = value
+
+        return filtered
+
+    @staticmethod
+    def validate_personal_profile_visibility(visibility_config: dict[str, bool]) -> bool:
+        """Validate that visibility config only contains known personal profile fields.
+
+        Args:
+            visibility_config: Personal profile visibility configuration to validate
+
+        Returns:
+            True if valid, False if contains unknown fields.
+        """
+        return all(field in PERSONAL_PROFILE_FIELDS for field in visibility_config.keys())
+
+    @staticmethod
+    def apply_bulk_personal_profile_visibility(
+        visibility_config: dict[str, bool],
+        visible: bool,
+    ) -> dict[str, bool]:
+        """Apply bulk show/hide to all personal profile fields.
+
+        Args:
+            visibility_config: Current visibility config
+            visible: True for "Show All", False for "Hide All"
+
+        Returns:
+            Updated visibility config with all fields set to the given value.
+        """
+        return {field: visible for field in PERSONAL_PROFILE_FIELDS}
 
 
 # Singleton instance getter

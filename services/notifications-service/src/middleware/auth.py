@@ -19,11 +19,14 @@ Task: T031 - Create JWT authentication middleware
 """
 
 import logging
+from functools import lru_cache
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from uuid import UUID
 
 import jwt
-from fastapi import Header, HTTPException, Path, Query, status
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
+from fastapi import Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from src.config import settings
@@ -41,23 +44,33 @@ class JWTPayload(BaseModel):
 
     Contains all claims extracted from a valid JWT token.
     Must be compatible with the backend service's token structure.
+    
+    Note: The backend JWT uses 'sub' for user_id, so we accept either.
+    Email may not be present in all tokens.
     """
 
-    user_id: str = Field(..., description="Unique user identifier (UUID)")
-    workspace_id: str = Field(..., description="Current workspace context (UUID)")
-    email: str = Field(..., description="User's email address")
+    # user_id can come from 'sub' claim - handled in get_current_user
+    user_id: Optional[str] = Field(None, description="Unique user identifier (UUID)")
+    sub: Optional[str] = Field(None, description="Subject claim (user ID)")
+    workspace_id: Optional[str] = Field(None, description="Current workspace context (UUID)")
+    email: Optional[str] = Field(None, description="User's email address")
     role: Optional[str] = Field(None, description="User's role in the workspace")
     permissions: List[str] = Field(
         default_factory=list,
         description="List of permission strings (e.g., 'notifications:send')"
     )
-    exp: int = Field(..., description="Token expiration timestamp (Unix epoch)")
-    iat: int = Field(..., description="Token issued at timestamp (Unix epoch)")
+    exp: Optional[int] = Field(None, description="Token expiration timestamp (Unix epoch)")
+    iat: Optional[int] = Field(None, description="Token issued at timestamp (Unix epoch)")
 
     class Config:
         """Pydantic model configuration."""
 
         extra = "allow"  # Allow extra fields from JWT (sub, aud, etc.)
+    
+    @property
+    def effective_user_id(self) -> str:
+        """Get the effective user ID from either user_id or sub claim."""
+        return self.user_id or self.sub or ""
 
 
 # =============================================================================
@@ -65,12 +78,23 @@ class JWTPayload(BaseModel):
 # =============================================================================
 
 
+@lru_cache(maxsize=None)
+def _load_public_key(path: str):
+    """Load and cache the Ed25519 public key."""
+    key_path = Path(path).expanduser()
+    if not key_path.exists():
+        raise FileNotFoundError(f"JWT public key not found at {key_path}")
+    key_bytes = key_path.read_bytes()
+    return load_pem_public_key(key_bytes)
+
+
 def decode_jwt(token: str) -> Dict[str, Any]:
     """
     Decode and validate JWT token.
 
     Strips "Bearer " prefix if present and validates the token against
-    the shared secret. Token expiration is automatically checked.
+    the public key (EdDSA) or shared secret (HS256 fallback).
+    Token expiration is automatically checked.
 
     Args:
         token: JWT token string (with or without "Bearer " prefix)
@@ -86,12 +110,23 @@ def decode_jwt(token: str) -> Dict[str, Any]:
         if token.startswith("Bearer "):
             token = token[7:]
 
-        # Decode token with shared secret
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM],
-        )
+        # Use EdDSA with public key if configured, otherwise fallback to HS256
+        if settings.JWT_ALGORITHM == "EdDSA":
+            if not settings.JWT_PUBLIC_KEY_PATH:
+                raise ValueError("JWT_PUBLIC_KEY_PATH must be set when using EdDSA")
+            public_key = _load_public_key(settings.JWT_PUBLIC_KEY_PATH)
+            payload = jwt.decode(
+                token,
+                public_key,
+                algorithms=["EdDSA"],
+            )
+        else:
+            # Fallback to HS256 with secret
+            payload = jwt.decode(
+                token,
+                settings.JWT_SECRET,
+                algorithms=[settings.JWT_ALGORITHM],
+            )
 
         return payload
 
@@ -107,6 +142,13 @@ def decode_jwt(token: str) -> Dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error decoding JWT: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token validation error: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -176,6 +218,10 @@ async def get_current_user(
         # Handle alternative claim names (sub vs user_id)
         if "user_id" not in payload and "sub" in payload:
             payload["user_id"] = payload["sub"]
+        
+        # Handle workspace_id from wid claim if not present
+        if "workspace_id" not in payload and "wid" in payload:
+            payload["workspace_id"] = payload["wid"]
 
         return JWTPayload(**payload)
 
@@ -294,7 +340,7 @@ async def get_workspace_id(
 
 
 async def verify_workspace_access(
-    workspace_id: UUID = Path(..., description="Workspace ID"),
+    workspace_id: UUID,
     current_user: JWTPayload = None,  # Will be injected by Depends
 ) -> UUID:
     """

@@ -199,6 +199,16 @@ class EventType(str, Enum):
     EXPORT_FAILED = "export.failed"
     EXPORT_EXPIRING = "export.expiring"
 
+    # -------------------------------------------------------------------------
+    # Asset Processing Events - Upload and processing notifications
+    # -------------------------------------------------------------------------
+    ASSET_UPLOAD_STARTED = "asset.upload_started"
+    ASSET_UPLOAD_COMPLETE = "asset.upload_complete"
+    ASSET_PROCESSING_STARTED = "asset.processing_started"
+    ASSET_PROCESSING_COMPLETE = "asset.processing_complete"
+    ASSET_PROCESSING_FAILED = "asset.processing_failed"
+    ASSET_AI_ANALYSIS_COMPLETE = "asset.ai_analysis_complete"
+
 
 # =============================================================================
 # EVENT DEFINITION DATA CLASS
@@ -505,13 +515,121 @@ EVENT_CATALOG: dict[EventType, EventDefinition] = {
     ),
 
     # -------------------------------------------------------------------------
+    # Asset Processing Events - Upload and processing notifications
+    # -------------------------------------------------------------------------
+    EventType.ASSET_UPLOAD_STARTED: EventDefinition(
+        event_type=EventType.ASSET_UPLOAD_STARTED,
+        name="Upload Started",
+        description="Sent when file upload begins",
+        category=NotificationCategory.ASSET_PROCESSING,
+        default_channel=NotificationChannel.IN_APP,
+        default_priority=NotificationPriority.LOW,
+        supports_digest=True,
+        cooldown_minutes=0,
+        required_payload_fields=["upload_id", "filename"],
+        optional_payload_fields=["file_size_bytes", "workspace_id", "gallery_id"],
+        tags=["photographer-facing", "upload"],
+    ),
+    EventType.ASSET_UPLOAD_COMPLETE: EventDefinition(
+        event_type=EventType.ASSET_UPLOAD_COMPLETE,
+        name="Upload Complete",
+        description="Sent when file upload finishes successfully",
+        category=NotificationCategory.ASSET_PROCESSING,
+        default_priority=NotificationPriority.NORMAL,
+        supports_digest=True,
+        cooldown_minutes=5,
+        required_payload_fields=["upload_id", "filename", "asset_id"],
+        optional_payload_fields=["file_size_bytes", "gallery_id", "gallery_name", "thumbnail_url"],
+        sample_payload={
+            "upload_id": "uuid",
+            "filename": "photo_001.jpg",
+            "asset_id": "uuid",
+            "file_size_bytes": 5242880,
+            "gallery_name": "Wedding Photos",
+        },
+        tags=["photographer-facing", "upload", "success"],
+    ),
+    EventType.ASSET_PROCESSING_STARTED: EventDefinition(
+        event_type=EventType.ASSET_PROCESSING_STARTED,
+        name="Processing Started",
+        description="Sent when asset processing begins (thumbnails, variants)",
+        category=NotificationCategory.ASSET_PROCESSING,
+        default_channel=NotificationChannel.IN_APP,
+        default_priority=NotificationPriority.LOW,
+        supports_digest=True,
+        cooldown_minutes=0,
+        required_payload_fields=["asset_id"],
+        optional_payload_fields=["filename", "processing_type", "gallery_id"],
+        tags=["photographer-facing", "processing"],
+    ),
+    EventType.ASSET_PROCESSING_COMPLETE: EventDefinition(
+        event_type=EventType.ASSET_PROCESSING_COMPLETE,
+        name="Processing Complete",
+        description="Sent when asset processing finishes successfully",
+        category=NotificationCategory.ASSET_PROCESSING,
+        default_priority=NotificationPriority.NORMAL,
+        supports_digest=True,
+        cooldown_minutes=10,
+        required_payload_fields=["asset_id"],
+        optional_payload_fields=["filename", "processing_type", "variants_created", "gallery_id", "thumbnail_url"],
+        sample_payload={
+            "asset_id": "uuid",
+            "filename": "photo_001.jpg",
+            "processing_type": "thumbnail_generation",
+            "variants_created": ["small", "medium", "large"],
+        },
+        tags=["photographer-facing", "processing", "success"],
+    ),
+    EventType.ASSET_PROCESSING_FAILED: EventDefinition(
+        event_type=EventType.ASSET_PROCESSING_FAILED,
+        name="Processing Failed",
+        description="Sent when asset processing encounters an error",
+        category=NotificationCategory.ASSET_PROCESSING,
+        default_priority=NotificationPriority.HIGH,
+        is_transactional=False,
+        supports_digest=False,  # Failures should be immediate
+        required_payload_fields=["asset_id", "error_message"],
+        optional_payload_fields=["filename", "processing_type", "retry_count", "gallery_id"],
+        sample_payload={
+            "asset_id": "uuid",
+            "filename": "photo_001.jpg",
+            "error_message": "Failed to generate thumbnails: corrupted file",
+            "processing_type": "thumbnail_generation",
+        },
+        tags=["photographer-facing", "processing", "error", "action-required"],
+    ),
+    EventType.ASSET_AI_ANALYSIS_COMPLETE: EventDefinition(
+        event_type=EventType.ASSET_AI_ANALYSIS_COMPLETE,
+        name="AI Analysis Complete",
+        description="Sent when AI analysis/processing completes for an asset",
+        category=NotificationCategory.ASSET_PROCESSING,
+        default_priority=NotificationPriority.NORMAL,
+        supports_digest=True,
+        cooldown_minutes=30,
+        required_payload_fields=["asset_id"],
+        optional_payload_fields=[
+            "filename", "analysis_type", "tags_detected", "faces_detected",
+            "quality_score", "gallery_id", "thumbnail_url"
+        ],
+        sample_payload={
+            "asset_id": "uuid",
+            "filename": "photo_001.jpg",
+            "analysis_type": "smart_tagging",
+            "tags_detected": ["wedding", "outdoor", "sunset"],
+            "faces_detected": 2,
+            "quality_score": 0.92,
+        },
+        tags=["photographer-facing", "ai", "processing", "success"],
+    ),
+
+    # -------------------------------------------------------------------------
     # RSVP Events
     # -------------------------------------------------------------------------
     EventType.RSVP_RECEIVED: EventDefinition(
         event_type=EventType.RSVP_RECEIVED,
         name="RSVP Received",
         description="Sent to host when a guest submits an RSVP",
-        category=NotificationCategory.CLIENT_INTERACTIONS,
+        category=NotificationCategory.RSVP,
         default_priority=NotificationPriority.NORMAL,
         default_template_code="rsvp_host_immediate",
         supports_digest=True,
@@ -537,7 +655,7 @@ EVENT_CATALOG: dict[EventType, EventDefinition] = {
         event_type=EventType.RSVP_UPDATED,
         name="RSVP Updated",
         description="Sent to host when a guest updates their RSVP response",
-        category=NotificationCategory.CLIENT_INTERACTIONS,
+        category=NotificationCategory.RSVP,
         default_priority=NotificationPriority.NORMAL,
         supports_digest=True,
         required_payload_fields=["guest_name", "attending", "invitation_title", "previous_response"],
@@ -559,7 +677,7 @@ EVENT_CATALOG: dict[EventType, EventDefinition] = {
         event_type=EventType.RSVP_DIGEST,
         name="RSVP Daily Digest",
         description="Daily summary of RSVP responses for event hosts",
-        category=NotificationCategory.CLIENT_INTERACTIONS,
+        category=NotificationCategory.RSVP,
         default_priority=NotificationPriority.NORMAL,
         default_template_code="rsvp_host_digest",
         supports_digest=False,  # This IS the digest

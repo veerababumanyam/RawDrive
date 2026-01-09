@@ -45,14 +45,14 @@ def upgrade() -> None:
     # Used by: MCP get_gallery(), A2A gallery-manager, list_galleries()
     # Query: WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_galleries_workspace_id_deleted
+        CREATE INDEX IF NOT EXISTS idx_galleries_workspace_id_deleted
         ON galleries(workspace_id, gallery_id, deleted)
     """)
 
     # Partial index for active galleries only (90%+ of queries)
     # Reduces index size and improves query performance
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_galleries_workspace_active
+        CREATE INDEX IF NOT EXISTS idx_galleries_workspace_active
         ON galleries(workspace_id, created_at DESC)
         WHERE deleted = FALSE
     """)
@@ -61,14 +61,14 @@ def upgrade() -> None:
     # Used by: Public gallery endpoints, validate_magic_link()
     # Query: WHERE gallery_id = $1 AND deleted = FALSE AND status = 'published'
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_galleries_public_access
+        CREATE INDEX IF NOT EXISTS idx_galleries_public_access
         ON galleries(gallery_id, deleted, status)
         WHERE status = 'published' AND deleted = FALSE
     """)
 
     # Index for gallery status filtering (used in list queries)
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_galleries_workspace_status
+        CREATE INDEX IF NOT EXISTS idx_galleries_workspace_status
         ON galleries(workspace_id, status, created_at DESC)
         WHERE deleted = FALSE
     """)
@@ -81,7 +81,7 @@ def upgrade() -> None:
     # Used by: get_gallery() with sub-galleries, sub-gallery enumeration
     # Query: WHERE gallery_id = $1 AND deleted = FALSE ORDER BY sort_order ASC
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sub_galleries_gallery_sort
+        CREATE INDEX IF NOT EXISTS idx_sub_galleries_gallery_sort
         ON sub_galleries(gallery_id, deleted, sort_order ASC)
         WHERE deleted = FALSE
     """)
@@ -89,7 +89,7 @@ def upgrade() -> None:
     # Index for visible sub-galleries (public access)
     # Used by: Public gallery viewing, Magic Link access
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sub_galleries_gallery_visible
+        CREATE INDEX IF NOT EXISTS idx_sub_galleries_gallery_visible
         ON sub_galleries(gallery_id, visible, sort_order ASC)
         WHERE deleted = FALSE AND visible = TRUE
     """)
@@ -102,7 +102,7 @@ def upgrade() -> None:
     # Used by: Sub-gallery asset count queries in get_gallery()
     # Query: SELECT COUNT(*) FROM gallery_assets WHERE sub_gallery_id = $1
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_gallery_assets_sub_gallery
+        CREATE INDEX IF NOT EXISTS idx_gallery_assets_sub_gallery
         ON gallery_assets(sub_gallery_id, workspace_id)
         WHERE visible = TRUE
     """)
@@ -110,7 +110,7 @@ def upgrade() -> None:
     # Composite index for workspace + asset ID lookups
     # Used by: Asset ownership validation, cross-gallery asset queries
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_gallery_assets_workspace_asset
+        CREATE INDEX IF NOT EXISTS idx_gallery_assets_workspace_asset
         ON gallery_assets(workspace_id, asset_id)
     """)
 
@@ -122,23 +122,23 @@ def upgrade() -> None:
     # Used by: Public gallery access, Magic Link validation
     # Query: WHERE token = $1
     op.execute("""
-        CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_magic_links_token
-        ON magic_links(token)
-        WHERE status IN ('active', 'pending')
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_magic_links_token_hash
+        ON magic_links(token_hash)
+        WHERE status = 'active'
     """)
 
     # Index for gallery-scoped magic link queries
     # Used by: List magic links for a gallery, create_magic_link()
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_magic_links_gallery_workspace
+        CREATE INDEX IF NOT EXISTS idx_magic_links_gallery_workspace
         ON magic_links(gallery_id, workspace_id, created_at DESC)
-        WHERE status IN ('active', 'pending', 'expired')
+        WHERE status IN ('active', 'expired')
     """)
 
     # Index for expiration cleanup and validation
     # Used by: Magic link expiration queries, cleanup jobs
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_magic_links_expires_at
+        CREATE INDEX IF NOT EXISTS idx_magic_links_expires_at
         ON magic_links(expires_at ASC)
         WHERE status = 'active' AND expires_at IS NOT NULL
     """)
@@ -150,19 +150,19 @@ def upgrade() -> None:
     # Covering index for gallery list queries (avoid heap lookups)
     # Includes commonly requested fields in index
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_galleries_list_covering
+        CREATE INDEX IF NOT EXISTS idx_galleries_list_covering
         ON galleries(workspace_id, created_at DESC)
-        INCLUDE (gallery_id, title, status, client_name, asset_count)
+        INCLUDE (gallery_id, title, status, client_name)
         WHERE deleted = FALSE
     """)
 
     # Covering index for magic link validation
     # Includes all fields needed for validation in index
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_magic_links_validate_covering
-        ON magic_links(token)
-        INCLUDE (gallery_id, workspace_id, status, expires_at, view_count, view_limit, password_hash, require_email)
-        WHERE status IN ('active', 'pending')
+        CREATE INDEX IF NOT EXISTS idx_magic_links_validate_covering
+        ON magic_links(token_hash)
+        INCLUDE (gallery_id, workspace_id, status, expires_at, access_count, max_accesses)
+        WHERE status = 'active'
     """)
 
 

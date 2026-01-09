@@ -7,6 +7,7 @@ from src.api.v1.public import router as public_router
 from src.api.v1.websocket import router as websocket_router
 from src.api.v1.agents import router as agents_router
 from src.api.v1.websocket_agents import router as websocket_agents_router
+from src.api.v1.batch import router as batch_router
 
 router = APIRouter()
 
@@ -50,6 +51,13 @@ router.include_router(
     agents_router,
     prefix="/agents",
     tags=["agents", "a2a"],
+)
+
+# Batch operations endpoints (authenticated)
+router.include_router(
+    batch_router,
+    prefix="/batch",
+    tags=["batch"],
 )
 
 __all__ = ["router"]

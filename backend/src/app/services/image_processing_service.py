@@ -44,6 +44,11 @@ MEDIUM_QUALITY = 85
 PREVIEW_MAX_DIMENSION = 2048
 PREVIEW_QUALITY = 85
 
+# LQIP (Low Quality Image Placeholder) constants
+# Tiny placeholder for instant blur-up effect
+LQIP_MAX_DIMENSION = 20
+LQIP_QUALITY = 60  # Lower quality is fine for blur placeholder
+
 # Open Graph (OG) image constants - optimized for social sharing
 OG_IMAGE_WIDTH = 1200
 OG_IMAGE_HEIGHT = 630
@@ -136,6 +141,90 @@ class ImageProcessingService:
             logger.error(f"Failed to generate thumbnail: {e}")
             raise ImageProcessingError(
                 f"Thumbnail generation failed: {e}", "THUMBNAIL_FAILED"
+            ) from e
+
+    def generate_lqip(
+        self, image_data: bytes, workspace_id: UUID
+    ) -> str:
+        """Generate LQIP (Low Quality Image Placeholder) as base64 data URI.
+
+        Creates a tiny 20x20 WebP placeholder (~100-200 bytes) for instant
+        blur-up effect while full thumbnails load. Dramatically improves
+        perceived loading speed.
+
+        Args:
+            image_data: Original image bytes (or thumbnail bytes for efficiency)
+            workspace_id: Workspace UUID (for logging)
+
+        Returns:
+            Base64-encoded data URI string (e.g., "data:image/webp;base64,...")
+
+        Raises:
+            ImageProcessingError: If processing fails
+        """
+        import base64
+
+        try:
+            # Open image
+            image = Image.open(io.BytesIO(image_data))
+
+            # Handle animated images - extract first frame
+            if getattr(image, 'is_animated', False):
+                image.seek(0)
+                image = image.copy()
+
+            # Auto-rotate based on EXIF orientation
+            image = ImageOps.exif_transpose(image)
+
+            # Calculate LQIP size (preserve aspect ratio)
+            width, height = image.size
+            if width > height:
+                new_width = LQIP_MAX_DIMENSION
+                new_height = max(1, int(height * (LQIP_MAX_DIMENSION / width)))
+            else:
+                new_height = LQIP_MAX_DIMENSION
+                new_width = max(1, int(width * (LQIP_MAX_DIMENSION / height)))
+
+            # Resize with fast resampling (quality doesn't matter for blur)
+            lqip = image.resize(
+                (new_width, new_height), Image.Resampling.BILINEAR
+            )
+
+            # Convert to RGB if necessary (for WebP)
+            if lqip.mode in ("RGBA", "LA", "P"):
+                rgb_image = Image.new("RGB", lqip.size, (255, 255, 255))
+                if lqip.mode == "P":
+                    lqip = lqip.convert("RGBA")
+                rgb_image.paste(lqip, mask=lqip.split()[-1] if lqip.mode == "RGBA" else None)
+                lqip = rgb_image
+            elif lqip.mode != "RGB":
+                lqip = lqip.convert("RGB")
+
+            # Save as WebP with low quality
+            output = io.BytesIO()
+            lqip.save(
+                output,
+                format="WEBP",
+                quality=LQIP_QUALITY,
+                method=4,  # Faster compression (good enough for tiny images)
+            )
+            lqip_bytes = output.getvalue()
+
+            # Encode as base64 data URI
+            lqip_base64 = base64.b64encode(lqip_bytes).decode('utf-8')
+            data_uri = f"data:image/webp;base64,{lqip_base64}"
+
+            logger.debug(
+                f"Generated LQIP: {new_width}x{new_height}, {len(lqip_bytes)} bytes "
+                f"(workspace={workspace_id})"
+            )
+
+            return data_uri
+
+        except Exception as e:
+            logger.error(f"Failed to generate LQIP: {e}")
+            raise ImageProcessingError(
+                f"LQIP generation failed: {e}", "LQIP_FAILED"
             ) from e
 
     def generate_preview(

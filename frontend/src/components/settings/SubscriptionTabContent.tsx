@@ -197,7 +197,7 @@ const InvoiceList: React.FC = () => {
 
       {/* View All Link */}
       <button
-        onClick={() => navigate('/settings?tab=subscription')}
+        onClick={() => navigate('/workspace/settings?tab=subscription')}
         className="w-full py-2 text-sm text-primary hover:text-primary-hover font-medium transition-colors"
       >
         View all invoices

@@ -22,6 +22,9 @@ import type { GalleryAssetItem } from '../../../types/gallery';
 import { HoverOverlay } from './HoverOverlay';
 import { InlineEditForm } from './InlineEditForm';
 
+// Track loaded images for instant display (no placeholder needed)
+const loadedImageCache = new Set<string>();
+
 export interface PhotoCardProps {
   asset: GalleryAssetItem;
   index: number;
@@ -83,12 +86,21 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [useOriginalFallback, setUseOriginalFallback] = useState(false);
+  // Track if full image has loaded for blur-up transition
+  const [imageLoaded, setImageLoaded] = useState(() =>
+    loadedImageCache.has(asset.asset_id)
+  );
   const imgRef = useRef<HTMLImageElement>(null);
+
+  // Get LQIP (Low Quality Image Placeholder) from asset if available
+  const lqip = asset.asset.lqip;
 
   // Reset image error state when asset changes
   useEffect(() => {
     setImageError(false);
     setUseOriginalFallback(false);
+    // Check if this image was already loaded
+    setImageLoaded(loadedImageCache.has(asset.asset_id));
   }, [asset.asset_id]);
 
   // Fetch signed URL for thumbnail - simplified without variant switching
@@ -244,31 +256,48 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         />
       )}
 
-      {/* Thumbnail Image */}
+      {/* Thumbnail Image with LQIP blur-up effect */}
       {displayUrl && !imageError ? (
-        <img
-          ref={imgRef}
-          src={displayUrl}
-          alt={asset.asset.filename || `Photo ${index + 1}`}
-          className={`w-full h-full object-cover transition-all duration-300 ${
-            isLocked ? 'blur-[40px] scale-110' : 'group-hover:scale-105'
-          }`}
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          onError={() => {
-            // If thumbnail fails and we haven't tried original yet, fallback to original
-            if (!useOriginalFallback && !originalUrlLoading) {
-              setUseOriginalFallback(true);
-            } else {
-              setImageError(true);
-              // Try refreshing URL on error
-              if (!urlLoading && !useOriginalFallback) {
-                refreshUrl();
+        <div className="relative w-full h-full">
+          {/* LQIP Placeholder - shows immediately as blurred background */}
+          {lqip && !imageLoaded && (
+            <img
+              src={lqip}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover blur-lg scale-110"
+            />
+          )}
+          {/* Full thumbnail image - fades in over LQIP */}
+          <img
+            ref={imgRef}
+            src={displayUrl}
+            alt={asset.asset.filename || `Photo ${index + 1}`}
+            className={`w-full h-full object-cover transition-all duration-300 ${
+              isLocked ? 'blur-[40px] scale-110' : 'group-hover:scale-105'
+            } ${!imageLoaded && lqip ? 'opacity-0' : 'opacity-100'}`}
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            onLoad={() => {
+              setImageLoaded(true);
+              // Cache that this image has loaded
+              loadedImageCache.add(asset.asset_id);
+            }}
+            onError={() => {
+              // If thumbnail fails and we haven't tried original yet, fallback to original
+              if (!useOriginalFallback && !originalUrlLoading) {
+                setUseOriginalFallback(true);
+              } else {
+                setImageError(true);
+                // Try refreshing URL on error
+                if (!urlLoading && !useOriginalFallback) {
+                  refreshUrl();
+                }
               }
-            }
-          }}
-        />
+            }}
+          />
+        </div>
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center bg-surface-hover p-4 text-center">
           {asset.asset.status === 'processing' ? (
@@ -278,13 +307,21 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
             </>
           ) : asset.asset.status === 'failed' ? (
             <div className="text-error text-xs font-medium">Upload Failed</div>
-          ) : urlLoading ? (
-            // Skeleton Loader
+          ) : urlLoading && !lqip ? (
+            // Skeleton Loader (only if no LQIP available)
             <div className="w-full h-full absolute inset-0 bg-surface-hover animate-pulse flex items-center justify-center">
                <div className="w-8 h-8 opacity-20 text-text-tertiary">
                  <Image size={32} />
                </div>
             </div>
+          ) : lqip && urlLoading ? (
+            // LQIP Placeholder while URL is loading
+            <img
+              src={lqip}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover blur-lg scale-110"
+            />
           ) : (
             <div className="text-text-tertiary text-sm">
               {urlError ? 'Failed to load' : 'No image'}

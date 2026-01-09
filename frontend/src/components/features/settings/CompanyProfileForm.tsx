@@ -44,6 +44,7 @@ import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '../../ui
 import { useAuth } from '../../../contexts/AuthContext';
 import { companyProfileService, LogoCropData } from '../../../services/companyProfileService';
 import { CreateCompanyProfileRequest, CompanyVisibilityConfig } from '../../../types/companyProfile';
+import { useWorkspacePrivacySettings } from '../../../hooks/useWorkspaceSettings';
 import { ThemeSelector } from './ThemeSelector';
 import { ThemeCustomization } from './ThemeCustomization';
 import { UndoRedoControls } from './UndoRedoControls';
@@ -314,6 +315,10 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(true);
     const [profileExists, setProfileExists] = useState(false);
+    const [updatingVisibility, setUpdatingVisibility] = useState(false);
+    
+    // Workspace privacy settings for public profile visibility
+    const { settings: privacySettings, update: updatePrivacy } = useWorkspacePrivacySettings(workspace?.workspace_id || '');
 
     const { register, control, handleSubmit, watch, reset, setValue, formState: { errors } } = useForm<CreateCompanyProfileRequest>({
         defaultValues: DEFAULT_PROFILE
@@ -904,6 +909,56 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                     </AppButton>
                 </div>
             </div>
+
+            {/* Public Profile Visibility Toggle */}
+            {workspace?.workspace_id && (
+                <div className="bg-surface rounded-xl border border-border p-4 mb-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-start gap-3 flex-1">
+                            <Eye className="w-5 h-5 text-text-tertiary mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                                <div className="font-medium text-text-primary">Public Profile Visibility</div>
+                                <div className="text-sm text-text-secondary mt-0.5">
+                                    Make the company profile visible to the public. When enabled, your profile will be accessible at the public URL.
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={!!privacySettings?.public_profile_enabled}
+                            aria-label={privacySettings?.public_profile_enabled ? 'Disable public profile visibility' : 'Enable public profile visibility'}
+                            onClick={async () => {
+                                if (!privacySettings || updatingVisibility) return;
+                                setUpdatingVisibility(true);
+                                try {
+                                    await updatePrivacy({ public_profile_enabled: !privacySettings.public_profile_enabled });
+                                } catch (err) {
+                                    toast.error('Failed to update public profile visibility');
+                                } finally {
+                                    setUpdatingVisibility(false);
+                                }
+                            }}
+                            disabled={updatingVisibility || !privacySettings}
+                            className={`
+                                relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full
+                                border-2 border-transparent transition-colors duration-200 ease-in-out
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
+                                disabled:cursor-not-allowed disabled:opacity-50
+                                ${privacySettings?.public_profile_enabled ? 'bg-primary' : 'bg-border'}
+                            `}
+                        >
+                            <span
+                                className={`
+                                    pointer-events-none inline-block h-5 w-5 transform rounded-full
+                                    bg-white shadow ring-0 transition duration-200 ease-in-out
+                                    ${privacySettings?.public_profile_enabled ? 'translate-x-5' : 'translate-x-0'}
+                                `}
+                            />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Logo & QR Code */}
             <CollapsibleSection

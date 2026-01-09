@@ -55,7 +55,7 @@ logger = get_logger(__name__)
 
 
 async def verify_workspace_access(
-    workspace_id: UUID = Path(..., description="Workspace ID"),
+    workspace_id: UUID,
     current_user: JWTPayload = Depends(get_current_user),
 ) -> UUID:
     """

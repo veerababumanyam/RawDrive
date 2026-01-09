@@ -206,7 +206,7 @@ export const AIToolsHubPage: React.FC = () => {
             <AppButton
               variant="outline"
               leftIcon={<Settings size={20} />}
-              onClick={() => navigate('/settings?tab=ai')}
+              onClick={() => navigate('/workspace/settings?tab=ai')}
             >
               {t('ai.tools.settings', 'AI Settings')}
             </AppButton>

@@ -1,0 +1,9 @@
+{
+  "category": "AI & Machine Learning",
+  "description": "Build an AI-powered portfolio recommendation engine that analyzes a photographer's entire asset library, engagement metrics, and client preferences to suggest optimized photo selections for different client types, occasions, and seasons. Use CLIP embeddings for similarity search, engagement scoring to identify high-performing shots, and contextual recommendations based on gallery themes, client profile, and historical conversions. Include A/B testing capabilities to measure recommendation quality impact on client engagement.",
+  "id": "feature-1767922134085-ssmngw5ih",
+  "steps": [],
+  "status": "backlog",
+  "skipTests": true,
+  "priority": 1
+}

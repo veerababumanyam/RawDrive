@@ -138,4 +138,6 @@ export interface PublicCompanyProfile extends Partial<CompanyProfile> {
     seo_schema?: Record<string, any>;
     theme?: PublicProfileTheme;
     theme_id?: string;
+    /** Whether this profile should be indexed by search engines */
+    indexable?: boolean;
 }

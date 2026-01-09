@@ -1,34 +1,47 @@
 # Client-Facing Features
 
-> Terminology: See [`GLOSSARY.md`](GLOSSARY.md) (canonical terms for Workspace, Asset, Share Link, Trial, etc.).
+> Terminology: See [`GLOSSARY.md`](GLOSSARY.md) for canonical terms (Workspace, Asset, Share Link, Trial, etc.).
 
-## Overview
+## Executive Summary
 
 RawDrive provides a comprehensive suite of client-facing features that enable photographers to share galleries with clients in a professional, branded, and interactive environment. Clients can view photos, provide feedback, make selections, and download content—all within a customizable, secure interface.
 
-## Purpose
+This document defines production-ready business requirements from the client's perspective, informed by leading platforms (Pixieset, SmugMug, Zenfolio, ShootProof).
+
+## Business Objectives
 
 The client-facing features serve to:
+
 - **Professional Presentation**: Display photos in a branded, polished gallery experience
 - **Client Engagement**: Enable clients to interact with photos through selections, ratings, and comments
 - **Feedback Collection**: Gather client preferences and approvals through proofing workflows
 - **Secure Access**: Protect galleries with passwords, access codes, and expiration dates
 - **Seamless Sharing**: Provide multiple sharing methods (links, QR codes, social media)
 - **Print Integration**: Allow clients to view and approve print album designs
+- **Monetization**: Enable downloads and print purchases directly from galleries
+- **FindMe**: Face Identifications to sort photos
+- **WACG 2.1 AA Standards**: Support standards for visibility, Dark/Light them (Auto Adopt to client theme), Keyboard Navigations 
 
-## Gallery Access & Entry
+---
 
-### Lock Screen (Password Protection)
+## 1. Gallery Access & Entry
+
+### 1.1 Lock Screen (Password Protection)
 
 When a gallery is password-protected, clients see a branded lock screen before accessing content.
 
-**Features:**
+**Requirements:**
 - Modern, branded entry interface
 - Studio logo and name display
+- Galss Morphisims inspired from apple and other simialr designs UI
 - Password input field with validation
 - "Remember me" option for convenience
 - Error messaging for incorrect passwords
-- Responsive design for mobile and desktop
+- Mobile-First, Responsive design for mobile and desktop
+- Hashed password storage (backend)
+- Brute-force protection with rate limiting
+- Session management
+- Password reset capability
 
 **Configuration:**
 ```typescript
@@ -47,16 +60,17 @@ interface GalleryLockScreen {
 - High contrast password input
 - 44x44px minimum touch targets
 
-### Email Registration
+### 1.2 Email Registration
 
 Photographers can require clients to enter their email before viewing galleries.
 
-**Features:**
+**Requirements:**
 - Email capture for lead generation
 - Optional email verification
 - Pre-filled email for returning visitors
 - Email stored in client database
 - Activity tracking by email
+- Email validation
 
 **Configuration:**
 ```typescript
@@ -67,16 +81,17 @@ interface EmailRegistration {
 }
 ```
 
-### Access Codes
+### 1.3 Access Codes
 
 Individual photos can be protected with unique access codes, separate from gallery password.
 
-**Features:**
+**Requirements:**
 - Per-photo access control
 - Unique codes generated per photo
 - Clients enter code to unlock photo
 - Separate from gallery-level password
 - Useful for private/sensitive photos
+- Access tracking by code
 
 **Usage:**
 ```typescript
@@ -87,9 +102,26 @@ interface PhotoAccess {
 }
 ```
 
-## Gallery Navigation & Layout
+### 1.4 Access Control & Expiration
 
-### Floating Navigation Header
+Fine-grained access control with time-based restrictions.
+
+**Requirements:**
+- Per-photo access codes
+- Gallery-level expiration dates
+- Email-based access restrictions
+- IP whitelisting (Enterprise)
+- Revoke access anytime
+- Audit logging of all access attempts
+- Display expiration date to client ("Available until DATE")
+- Display password protection status
+- Display access restrictions
+
+---
+
+## 2. Gallery Navigation & Layout
+
+### 2.1 Floating Navigation Header
 
 Sticky header that remains visible while scrolling through gallery.
 
@@ -98,6 +130,7 @@ Sticky header that remains visible while scrolling through gallery.
 - Gallery title
 - Sub-gallery tabs (if applicable)
 - Search bar (if enabled)
+- FindMe button (face identification)
 - Action buttons (favorites, selections, downloads)
 - Theme toggle (light/dark)
 - Language selector
@@ -107,7 +140,205 @@ Sticky header that remains visible while scrolling through gallery.
 - Tablet: Condensed layout with menu icon
 - Mobile: Hamburger menu with collapsible navigation
 
-### Sub-Gallery Tabs
+**Accessibility:**
+- Keyboard navigation
+- Screen reader support
+- High contrast mode support
+
+### 2.2 Gallery Header Section
+
+Top of gallery displays photographer branding and gallery information.
+
+**Components:**
+- Logo (clickable, links to profile)
+- Studio name
+- Gallery title (e.g., "Sarah & John's Wedding")
+- Gallery description/tagline
+- Session date prominently displayed
+- Total photo count visible at a glance
+- Cover photo/hero image (photographer's choice or first photo)
+- Share button
+
+**Requirements:**
+- Clear, professional presentation
+- Photographer branding visible but not intrusive
+- Optional gallery description field
+- Session date display
+- Photo count display
+- Hero image sets emotional tone
+
+### 2.3 FindMe (Face Identification)
+
+AI-powered face identification feature to find all photos containing a specific person.
+
+**Overview:**
+Clients can use their device camera to capture a face, and the system identifies all photos in the gallery containing that person. Results are displayed as a curated group with multiple viewing and interaction options.
+
+**Core Functionality:**
+
+**Face Capture:**
+- Click "FindMe" button in header
+- Opens device camera interface
+- Capture or upload photo with face
+- Real-time face detection validation
+- Clear instructions for optimal capture
+- Retry option if face not detected
+- Cancel option to exit
+
+**Face Identification:**
+- AI-powered face recognition engine
+- Matches captured face against all gallery photos
+- Confidence scoring (0-100%)
+- Configurable confidence threshold (photographer-controlled)
+- Handles multiple faces in single photo
+- Identifies partial/profile views
+- Works with different lighting conditions
+- Handles different angles and expressions
+
+**Results Display:**
+
+**Shortlist View:**
+- Grid layout of all matching photos
+- Confidence score displayed per photo
+- Photo count ("Found 12 photos")
+- Sort options:
+  - By confidence (highest first)
+  - By date (newest first)
+  - By date (oldest first)
+- Filter by confidence threshold
+- Thumbnail preview with face highlight box
+- Hover effects showing confidence percentage
+
+**Interaction Options:**
+
+**Browse Mode:**
+- Click thumbnail to view in lightbox
+- Previous/Next navigation
+- Confidence score displayed
+- Photo metadata visible
+- Favorite toggle
+- Pick/selection toggle
+- Rating system
+- Comment option
+
+**Full-Screen Mode:**
+- Full-screen photo viewer
+- Previous/Next arrows
+- Zoom controls
+- Download button (if enabled)
+- Share button
+- Favorite toggle
+- Pick toggle
+- Photo counter
+- Face highlight overlay (optional)
+- Close button
+
+**Download Options:**
+- Download individual photo
+- Bulk download all matching photos as ZIP
+- Format selection (Original/Web Optimized)
+- Progress tracking
+- Download confirmation
+
+**Additional Features:**
+
+**Face Grouping:**
+- Group photos by detected face
+- Show multiple faces per photo
+- Highlight specific face in results
+- Switch between faces in multi-face photos
+
+**Privacy & Consent:**
+- Clear privacy notice before camera access
+- Explain face data usage
+- Option to delete captured face data after session
+- No storage of captured face images
+- Photographer can disable FindMe feature
+- GDPR compliance for face data
+
+**Performance:**
+- Fast face detection (< 1 second)
+- Quick gallery search (< 3 seconds for 1000+ photos)
+- Efficient face matching algorithm
+- Caching of face embeddings
+- Background processing for large galleries
+
+**Accessibility:**
+- Keyboard accessible camera interface
+- Screen reader support for results
+- High contrast mode support
+- Clear error messages
+- Alternative text input option (if camera unavailable)
+- Focus management in results grid
+- ARIA labels for confidence scores
+
+**Mobile Optimization:**
+- Full-screen camera interface
+- Touch-friendly controls
+- Portrait and landscape support
+- Optimized for front-facing camera
+- Haptic feedback on successful capture
+- Swipe navigation in results
+
+**Configuration:**
+```typescript
+interface FindMeSettings {
+  enabled: boolean;
+  confidenceThreshold: number; // 0-100%, default 70%
+  maxResults?: number; // Limit results display
+  allowDownload: boolean; // Download matched photos
+  storeCaptures: boolean; // Store face data (privacy)
+  highlightFace: boolean; // Show face box in results
+  multipleMatches: boolean; // Show multiple faces per photo
+}
+```
+
+**Error Handling:**
+- No face detected in capture
+- Camera permission denied
+- Network error during matching
+- No matching photos found
+- Confidence threshold too high
+- Clear error messages with recovery options
+
+**User Flows:**
+
+**Desktop Flow:**
+1. User clicks "FindMe" button
+2. Camera permission dialog appears
+3. Camera interface opens
+4. User captures face photo
+5. Face detection validates capture
+6. System searches gallery
+7. Results displayed in grid
+8. User clicks photo to view in lightbox
+9. User can favorite, pick, rate, or download
+10. User can bulk download all results
+
+**Mobile Flow:**
+1. User taps "FindMe" button
+2. Camera permission dialog appears
+3. Full-screen camera opens
+4. User captures face
+5. Face detection validates
+6. Results displayed in grid
+7. User swipes through results
+8. Taps photo to open in lightbox
+9. Double-tap to zoom
+10. Swipe to navigate between matches
+11. Download or share individual photos
+
+**Success Metrics:**
+- Face detection accuracy > 95%
+- Face matching accuracy > 90%
+- Search completes in < 3 seconds
+- Users find their photos successfully
+- High engagement with matched photos
+- Positive user feedback on feature
+
+---
+
+### 2.4 Sub-Gallery Tabs
 
 Navigate between different categories/folders within a gallery.
 
@@ -117,6 +348,7 @@ Navigate between different categories/folders within a gallery.
 - Visual indicator of current tab
 - Smooth transitions
 - Keyboard accessible (Arrow keys)
+- Photo count per tab
 
 **Alternative: Continuous Scroll**
 - Single scrollable view of all photos
@@ -124,7 +356,7 @@ Navigate between different categories/folders within a gallery.
 - Better for smaller galleries
 - Photographer configurable
 
-### View Modes
+### 2.5 View Modes
 
 #### Grid Layout
 Uniform square cells arranged in responsive columns.
@@ -140,6 +372,7 @@ Uniform square cells arranged in responsive columns.
 - Fast rendering
 - Predictable layout
 - Best for uniform collections
+- Lazy loading for performance
 
 #### Masonry Layout
 Pinterest-style waterfall layout preserving image aspect ratios.
@@ -149,9 +382,9 @@ Pinterest-style waterfall layout preserving image aspect ratios.
 - Preserves image proportions
 - Balanced column heights
 - More engaging visual presentation
-- Slightly slower rendering
+- Lazy loading for performance
 
-### Search & Filtering
+### 2.6 Search & Filtering
 
 #### Text Search
 Search photos by filename, title, or AI-generated tags.
@@ -186,9 +419,11 @@ Search photos by filename, title, or AI-generated tags.
 - Useful for multi-day events
 - Calendar picker interface
 
-## Photo Interaction
+---
 
-### Photo Card Display
+## 3. Photo Interaction
+
+### 3.1 Photo Card Display
 
 Individual photo item in the gallery grid.
 
@@ -208,8 +443,9 @@ Individual photo item in the gallery grid.
 - Upload date
 - EXIF data (camera, ISO, aperture, shutter speed, focal length)
 - AI-generated tags and captions
+- Optional photographer notes/captions
 
-### Favorites (Heart Icon)
+### 3.2 Favorites (Heart Icon)
 
 Mark photos as personal favorites.
 
@@ -220,6 +456,7 @@ Mark photos as personal favorites.
 - Filter by favorites
 - Count display
 - Photographer can see client favorites
+- Favorites instantly move to "Favorites" tab
 
 **Behavior:**
 - Click to toggle favorite status
@@ -227,7 +464,7 @@ Mark photos as personal favorites.
 - Saved to client profile
 - Synced across devices
 
-### Picks/Selections (Checkmark Icon)
+### 3.3 Picks/Selections (Checkmark Icon)
 
 Select photos for proofing or purchase.
 
@@ -238,16 +475,18 @@ Select photos for proofing or purchase.
 - Bulk selection options
 - Photographer can see client picks
 - Export selections
+- Selections instantly move to "Selections" tab
 
 **Behavior:**
 - Click to select/deselect
 - Immediate visual feedback
 - Selections persist
 - Can be submitted for approval
+- Ability to clear selections and start fresh
 
-### Ratings (Star System)
+### 3.4 Ratings (Star System)
 
-Rate photos on a 5-star scale (optional).
+Rate photos on a 5-star scale.
 
 **Features:**
 - 1-5 star rating system
@@ -256,6 +495,7 @@ Rate photos on a 5-star scale (optional).
 - Photographer can see ratings
 - Filter by rating
 - Average rating display
+- Persistent storage
 
 **Accessibility:**
 - Keyboard navigation (Arrow keys)
@@ -263,15 +503,17 @@ Rate photos on a 5-star scale (optional).
 - Clear focus indicators
 - ARIA labels for each star
 
-## Media Viewing
+---
 
-### Media Viewer (Lightbox)
+## 4. Media Viewing
+
+### 4.1 Media Viewer (Lightbox)
 
 Full-screen photo/video viewer with navigation and controls.
 
 **Features:**
 - Full-screen display
-- Previous/next navigation
+- Previous/next navigation arrows
 - Keyboard shortcuts (Arrow keys, Escape)
 - Zoom controls (pinch, scroll wheel)
 - Download button (if enabled)
@@ -280,6 +522,8 @@ Full-screen photo/video viewer with navigation and controls.
 - Pick toggle
 - Photo information panel
 - Watermark display
+- Photo counter (e.g., "5 of 14")
+- Close button
 
 **Navigation:**
 - Arrow keys: Previous/next photo
@@ -296,7 +540,7 @@ Full-screen photo/video viewer with navigation and controls.
 - Escape key to close
 - ARIA labels for all controls
 
-### Deep Zoom
+### 4.2 Deep Zoom
 
 Zoom into high-resolution images for detail inspection.
 
@@ -315,7 +559,7 @@ Zoom into high-resolution images for detail inspection.
 - 0: Reset zoom
 - Arrow keys: Pan while zoomed
 
-### Slideshow
+### 4.3 Slideshow
 
 Auto-play gallery in full-screen mode.
 
@@ -327,6 +571,7 @@ Auto-play gallery in full-screen mode.
 - Music/background audio (optional)
 - Repeat options (loop, once)
 - Keyboard controls
+- Smooth transitions
 
 **Controls:**
 - Space: Play/pause
@@ -334,7 +579,7 @@ Auto-play gallery in full-screen mode.
 - Escape: Exit slideshow
 - +/-: Adjust speed
 
-### Video Playback
+### 4.4 Video Playback
 
 Play videos within the gallery.
 
@@ -347,6 +592,8 @@ Play videos within the gallery.
 - Progress bar with scrubbing
 - Duration display
 - Keyboard controls
+- Captions/subtitles support
+- Audio descriptions (optional)
 
 **Supported Formats:**
 - MP4 (H.264)
@@ -360,9 +607,55 @@ Play videos within the gallery.
 - Screen reader announcements
 - High contrast controls
 
-## Selection & Proofing
+---
 
-### Client Proofing View
+## 5. Collections & Organization
+
+### 5.1 Photo Collections/Folders
+
+Organize photos by moment/group within a gallery.
+
+**Features:**
+- Organize photos by moment/group (e.g., "Getting Ready", "Ceremony", "Reception")
+- Essential for weddings and multi-day events
+- Clickable folder names
+- Photo count per folder visible
+- Folder navigation
+- Nested folder support (optional)
+- Folder descriptions
+
+**Requirements:**
+- Hierarchical organization
+- Visual folder indicators
+- Easy navigation between folders
+- Breadcrumb navigation
+- Back button to parent folder
+
+### 5.2 Tab/Category System
+
+Navigate between different photo categories.
+
+**Features:**
+- "All Photos" tab - complete gallery
+- "Photographer Favorites" tab - photographer's picks (marked with star/heart)
+- "Client Favorites" tab - client's picks (marked with star/heart)
+- "Guest Favorites" tab - guest's picks (marked with star/heart) with like counts
+- "Selections" tab - client's personal selections/picks
+- Photo count per tab
+- Visual indicator of current tab
+
+**Requirements:**
+- Tab-based navigation
+- Smooth transitions between tabs
+- Keyboard accessible (Arrow keys)
+- Photo counts update in real-time
+- Guest favorites show aggregated like counts (Instagram-style)
+
+---
+
+## 6. Selection & Proofing
+
+### 6.1 Client Proofing View
 
 Dedicated interface for clients to review and select photos.
 
@@ -383,7 +676,7 @@ Dedicated interface for clients to review and select photos.
 4. Submits selections
 5. Photographer receives notification
 
-### Bulk Selection
+### 6.2 Bulk Selection
 
 Select multiple photos at once.
 
@@ -399,8 +692,9 @@ Select multiple photos at once.
 - Add to picks
 - Share selected photos
 - Print selected photos
+- Clear selections
 
-### Comments & Feedback
+### 6.3 Comments & Feedback
 
 Leave comments on photos with pin positioning.
 
@@ -413,6 +707,8 @@ Leave comments on photos with pin positioning.
 - Comment threads
 - Notification on replies
 - Delete own comments
+- Edit comments
+- Comment count display
 
 **Accessibility:**
 - Keyboard accessible comment form
@@ -420,9 +716,11 @@ Leave comments on photos with pin positioning.
 - Clear focus indicators
 - ARIA labels for inputs
 
-## Downloads
+---
 
-### Download Options
+## 7. Downloads
+
+### 7.1 Download Options
 
 Multiple download methods for clients.
 
@@ -435,6 +733,7 @@ Download individual photo.
 - Automatic filename
 - Progress indicator
 - Error handling
+- Download confirmation
 
 #### Bulk Download
 Download multiple selected photos.
@@ -446,6 +745,7 @@ Download multiple selected photos.
 - Pause/resume capability
 - Estimated time remaining
 - File size preview
+- Download confirmation
 
 #### Format Selection
 
@@ -462,7 +762,7 @@ Download multiple selected photos.
 - Faster download
 - Suitable for web/social media
 
-### Download Permissions
+### 7.2 Download Permissions
 
 Photographers control download capabilities.
 
@@ -483,9 +783,11 @@ interface DownloadSettings {
 - Rate limiting on bulk downloads
 - Audit logging of downloads
 
-## Sharing
+---
 
-### Share Links
+## 8. Sharing
+
+### 8.1 Share Links
 
 Generate shareable links for galleries, sub-galleries, or individual photos.
 
@@ -498,26 +800,30 @@ Generate shareable links for galleries, sub-galleries, or individual photos.
 - Expiration date option
 - Password protection option
 - Access tracking
+- Share analytics (photographer sees who shared)
 
-### QR Code
+### 8.2 QR Code
 
 Auto-generated QR code for easy mobile access.
 
 **Features:**
 - Scannable QR code
-- Download as image
+- Download as image (photographer only)
 - Print-friendly
 - Customizable size
 - Branded with logo (optional)
 - Links to gallery
+- Photographer can download for print packages
+- Not displayed on client page
 
 **Usage:**
 - Print on business cards
 - Display in studio
 - Share on social media
 - Include in emails
+- Include in print packages
 
-### Social Sharing
+### 8.3 Social Sharing
 
 One-click share to social platforms.
 
@@ -535,8 +841,9 @@ One-click share to social platforms.
 - Gallery link included
 - Photographer branding
 - Custom message option
+- Share analytics
 
-### Email Sharing
+### 8.4 Email Sharing
 
 Send gallery link via email.
 
@@ -547,6 +854,7 @@ Send gallery link via email.
 - Recipient tracking
 - Resend capability
 - Email template customization
+- Email validation
 
 **Accessibility:**
 - Email input with validation
@@ -554,9 +862,11 @@ Send gallery link via email.
 - Keyboard navigable form
 - Screen reader support
 
-## Branding & Customization
+---
 
-### Photographer Branding
+## 9. Branding & Customization
+
+### 9.1 Photographer Branding
 
 Galleries display photographer's branding throughout.
 
@@ -571,7 +881,7 @@ Galleries display photographer's branding throughout.
 - Social media links
 - Custom menu links
 
-### Header Branding
+### 9.2 Header Branding
 
 Top of gallery displays photographer branding.
 
@@ -583,7 +893,7 @@ Top of gallery displays photographer branding.
 - Search bar
 - Action buttons
 
-### Footer Branding
+### 9.3 Footer Branding
 
 Bottom of gallery displays contact and social info.
 
@@ -596,7 +906,7 @@ Bottom of gallery displays contact and social info.
 - Custom links
 - "Powered by RawDrive" (optional)
 
-### Watermarking
+### 9.4 Watermarking
 
 Optional watermark overlay on images.
 
@@ -621,7 +931,7 @@ interface WatermarkSettings {
 - Sufficient contrast with image
 - Doesn't interfere with zoom/pan
 
-### Theme Support
+### 9.5 Theme Support
 
 Light and dark theme support.
 
@@ -639,9 +949,11 @@ Light and dark theme support.
 - Clear focus indicators
 - Readable text in all themes
 
-## Print Album Features
+---
 
-### Album Preview
+## 10. Print Album Features
+
+### 10.1 Album Preview
 
 View print album designs before ordering.
 
@@ -653,8 +965,9 @@ View print album designs before ordering.
 - Cover preview
 - Back cover preview
 - Spine preview
+- 3D preview (optional)
 
-### Album Proofing
+### 10.2 Album Proofing
 
 Client approval workflow for print albums.
 
@@ -666,8 +979,9 @@ Client approval workflow for print albums.
 - Version history tracking
 - Approval workflow
 - Print-ready export
+- Revision notifications
 
-### Album Customization
+### 10.3 Album Customization
 
 Clients can customize album designs.
 
@@ -679,6 +993,7 @@ Clients can customize album designs.
 - Cover design
 - Page ordering
 - Add/remove pages
+- Save custom designs
 
 **Limitations:**
 - Photographer controls customization level
@@ -686,9 +1001,11 @@ Clients can customize album designs.
 - Photo selection limits
 - Text field limits
 
-## Activity & Notifications
+---
 
-### Client Activity Tracking
+## 11. Activity & Notifications
+
+### 11.1 Client Activity Tracking
 
 Photographers can see what clients do in galleries.
 
@@ -701,6 +1018,7 @@ Photographers can see what clients do in galleries.
 - Downloads
 - Time spent
 - Device/browser info
+- Share events
 
 **Display:**
 - Activity timeline
@@ -709,7 +1027,7 @@ Photographers can see what clients do in galleries.
 - Engagement metrics
 - Export activity report
 
-### Notifications
+### 11.2 Notifications
 
 Clients receive notifications for important events.
 
@@ -727,9 +1045,11 @@ Clients receive notifications for important events.
 - SMS (optional)
 - Push notifications (web app)
 
-## Accessibility Features
+---
 
-### WCAG 2.1 AA Compliance
+## 12. Accessibility Features
+
+### 12.1 WCAG 2.1 AA Compliance
 
 All client-facing features meet WCAG 2.1 Level AA standards.
 
@@ -763,7 +1083,7 @@ All client-facing features meet WCAG 2.1 Level AA standards.
 - Touch-friendly controls
 - Landscape/portrait support
 
-### Language Support
+### 12.2 Language Support
 
 Multi-language interface for international clients.
 
@@ -782,7 +1102,7 @@ Multi-language interface for international clients.
 - Punjabi (ਪੰਜਾਬੀ)
 - Urdu (اردو)
 
-**Future expansion:** additional global languages can be added via the same i18n framework (translation keys + locale packs).
+**Future expansion:** Additional global languages can be added via the same i18n framework (translation keys + locale packs).
 
 **Features:**
 - Language selector (Client Portal header)
@@ -792,9 +1112,11 @@ Multi-language interface for international clients.
 - Translated error messages
 - Translated notifications
 
-## Security & Privacy
+---
 
-### Password Protection
+## 13. Security & Privacy
+
+### 13.1 Password Protection
 
 Gallery-level password protection.
 
@@ -806,7 +1128,7 @@ Gallery-level password protection.
 - "Remember me" option
 - Password reset capability
 
-### Access Control
+### 13.2 Access Control
 
 Fine-grained access control.
 
@@ -818,7 +1140,7 @@ Fine-grained access control.
 - Revoke access anytime
 - Audit logging
 
-### Data Privacy
+### 13.3 Data Privacy
 
 Client data protection.
 
@@ -831,7 +1153,7 @@ Client data protection.
 - Data deletion on request
 - Activity logs
 
-### Watermarking
+### 13.4 Watermarking
 
 Protect photos from unauthorized use.
 
@@ -842,9 +1164,11 @@ Protect photos from unauthorized use.
 - Customizable opacity
 - Multiple positioning options
 
-## Performance Optimization
+---
 
-### Image Optimization
+## 14. Performance Optimization
+
+### 14.1 Image Optimization
 
 Fast image loading and display.
 
@@ -860,8 +1184,10 @@ Fast image loading and display.
 - Largest Contentful Paint (LCP): < 2.5s
 - First Input Delay (FID): < 100ms
 - Cumulative Layout Shift (CLS): < 0.1
+- Thumbnail grid loads in < 2 seconds
+- Lightbox image opens in < 1 second
 
-### Virtual Scrolling
+### 14.2 Virtual Scrolling
 
 Efficient rendering of large galleries.
 
@@ -872,7 +1198,7 @@ Efficient rendering of large galleries.
 - Maintains 60fps
 - Reduced memory usage
 
-### Caching
+### 14.3 Caching
 
 Smart caching strategies.
 
@@ -883,9 +1209,11 @@ Smart caching strategies.
 - API response caching
 - Stale-while-revalidate pattern
 
-## Mobile Experience
+---
 
-### Responsive Design
+## 15. Mobile Experience
+
+### 15.1 Responsive Design
 
 Optimized for all screen sizes.
 
@@ -902,8 +1230,9 @@ Optimized for all screen sizes.
 - Optimized modals
 - Readable text sizes
 - Adequate spacing
+- Portrait and landscape support
 
-### Touch Interactions
+### 15.2 Touch Interactions
 
 Optimized for touch devices.
 
@@ -920,6 +1249,95 @@ Optimized for touch devices.
 - Adequate spacing between targets
 - No hover-dependent features
 - Haptic feedback (optional)
+- Swipe left/right for next/previous photo
+- Up swipe to close lightbox
+
+---
+
+## 16. User Flows
+
+### 16.1 First-Time Client Flow
+
+1. Client receives email with gallery link
+2. Clicks "View your photos"
+3. Gallery loads with cover photo
+4. Sees title, date, photo count
+5. Scrolls through grid
+6. Clicks photo to open in lightbox
+7. Favorites best photos
+8. Marks photos for print selections
+9. Shares gallery link on WhatsApp
+10. Downloads digital files (if enabled)
+
+### 16.2 Mobile Client Flow
+
+1. Client taps link in WhatsApp
+2. Gallery opens in mobile browser
+3. Grid adapts to portrait orientation
+4. Swipes left/right through photos
+5. Double-taps to zoom on faces
+6. Adds favorites with heart icon
+7. Shares to Instagram story
+8. Bookmarks for later download
+
+---
+
+## 17. Success Metrics
+
+Clients will be satisfied when:
+
+- Gallery loads in < 2 seconds
+- Photos are beautifully large (lightbox works great)
+- Can easily find and favorite preferred photos
+- Can download/print without difficulty
+- Looks professional on mobile
+- Can easily share with family/friends
+- No confusing buttons or options
+- Feels like a premium experience
+- All features work seamlessly across devices
+- Accessibility features work properly
+
+---
+
+## 18. Feature Comparison Matrix
+
+| Feature | Status | Priority |
+|---------|--------|----------|
+| Photo Grid | ✅ Implemented | Critical |
+| Lightbox/Fullscreen View | ❌ Missing | Critical |
+| Favorites System | ✅ Implemented | Critical |
+| Selections/Picks | ✅ Implemented | Critical |
+| Collections/Folders | ❌ Missing | Critical |
+| Download (Single) | ❌ Missing | Critical |
+| Download (Bulk/ZIP) | ❌ Missing | Critical |
+| Social Sharing | ⚠️ Partial | Critical |
+| Mobile Swipe Navigation | ❌ Missing | Critical |
+| Dark Theme | ✅ Implemented | Critical |
+| Password Protection | ✅ Implemented | Critical |
+| FindMe (Face Identification) | ❌ Missing | Critical |
+| Email Registration | ✅ Implemented | High |
+| Access Codes | ✅ Implemented | High |
+| Watermarking | ✅ Implemented | High |
+| QR Code | ❌ Missing | High |
+| Comments/Feedback | ❌ Missing | High |
+| Photo Captions | ❌ Missing | High |
+| Ratings (Star System) | ✅ Implemented | High |
+| Slideshow | ✅ Implemented | High |
+| Video Playback | ✅ Implemented | High |
+| Album Preview | ⚠️ Partial | High |
+| Album Proofing | ⚠️ Partial | High |
+| Album Customization | ⚠️ Partial | High |
+| Activity Tracking | ✅ Implemented | Medium |
+| Notifications | ✅ Implemented | Medium |
+| WCAG 2.1 AA Compliance | ⚠️ Partial | Medium |
+| Multi-Language Support | ⚠️ Partial | Medium |
+| Deep Zoom | ✅ Implemented | Medium |
+| Virtual Scrolling | ✅ Implemented | Medium |
+| Image Optimization | ✅ Implemented | Medium |
+| Responsive Design | ✅ Implemented | Medium |
+| Touch Interactions | ⚠️ Partial | Medium |
+
+---
 
 ## Related Files
 
@@ -935,6 +1353,8 @@ Optimized for touch devices.
 - `docs/GALLERY_CANVAS.md` - Gallery canvas documentation
 - `docs/RBAC_AND_USER_MANAGEMENT.md` - Access control documentation
 
+---
+
 ## Last Updated
 
-2025-12-17
+January 9, 2026

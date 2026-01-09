@@ -273,7 +273,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
         {/* AI Settings Button */}
         <button
-          onClick={() => navigate('/settings?tab=ai')}
+          onClick={() => navigate('/workspace/settings?tab=ai')}
           className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
           aria-label="AI Settings"
           title="AI Settings"
