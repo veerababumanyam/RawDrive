@@ -8,10 +8,15 @@ all pgvector-based operations for face embeddings:
 
 The repository uses PostgreSQL's pgvector extension for efficient
 vector similarity search at scale.
+
+Timeout Protection:
+- find_similar: 45s default (vector search can be slow on large datasets)
+- find_similar_to_face: 45s default
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from typing import Any, Optional
@@ -35,6 +40,20 @@ EMBEDDING_DIMENSION = 512
 
 # Tolerance for L2 norm validation
 NORM_TOLERANCE = 0.001
+
+# Default timeout for vector search operations (seconds)
+VECTOR_SEARCH_TIMEOUT = 45.0
+
+
+class VectorSearchTimeoutError(Exception):
+    """Raised when a vector search operation times out."""
+
+    def __init__(self, operation: str, timeout_seconds: float):
+        self.operation = operation
+        self.timeout_seconds = timeout_seconds
+        super().__init__(
+            f"Vector search operation '{operation}' timed out after {timeout_seconds}s"
+        )
 
 
 class FaceEmbeddingRepository:
@@ -280,7 +299,7 @@ class FaceEmbeddingRepository:
         
         # Sort results by similarity in descending order
         results.sort(key=lambda x: x["similarity"], reverse=True)
-        
+
         logger.debug(
             "Milvus similarity search completed",
             extra={
@@ -290,8 +309,56 @@ class FaceEmbeddingRepository:
                 "pg_rehydrated_count": len(results),
             },
         )
-        
+
         return results
+
+    async def find_similar_with_timeout(
+        self,
+        embedding: list[float],
+        workspace_id: UUID,
+        threshold: float = 0.7,
+        limit: int = 10,
+        timeout_seconds: float = VECTOR_SEARCH_TIMEOUT,
+    ) -> list[dict[str, Any]]:
+        """Find similar faces with timeout protection.
+
+        Wraps find_similar with asyncio.timeout to prevent indefinite hangs
+        when the vector database is overloaded.
+
+        Args:
+            embedding: The embedding vector to search for
+            workspace_id: Workspace ID for tenant isolation
+            threshold: Minimum similarity threshold (0.0 to 1.0)
+            limit: Maximum number of results to return
+            timeout_seconds: Maximum time to wait (default: 45s)
+
+        Returns:
+            List of dicts containing face ID and similarity
+
+        Raises:
+            VectorSearchTimeoutError: If search times out
+            EmbeddingDimensionMismatchError: If dimension is not 512
+            EmbeddingNotNormalizedError: If embedding is not normalized
+        """
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                return await self.find_similar(
+                    embedding=embedding,
+                    workspace_id=workspace_id,
+                    threshold=threshold,
+                    limit=limit,
+                )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Face similarity search timed out",
+                extra={
+                    "workspace_id": str(workspace_id),
+                    "timeout_seconds": timeout_seconds,
+                    "threshold": threshold,
+                    "limit": limit,
+                },
+            )
+            raise VectorSearchTimeoutError("find_similar", timeout_seconds)
 
     async def find_similar_to_face(
         self,
@@ -500,9 +567,60 @@ class FaceEmbeddingRepository:
                     "face": face_dict,
                     "similarity": float(similarity),
                 })
-            
+
             return results
-    
+
+    async def find_similar_to_face_with_timeout(
+        self,
+        face_id: UUID,
+        workspace_id: UUID,
+        threshold: float = 0.7,
+        limit: int = 10,
+        exclude_same_photo: bool = True,
+        timeout_seconds: float = VECTOR_SEARCH_TIMEOUT,
+    ) -> list[dict[str, Any]]:
+        """Find similar faces to an existing face with timeout protection.
+
+        Wraps find_similar_to_face with asyncio.timeout to prevent indefinite hangs
+        when the vector database is overloaded.
+
+        Args:
+            face_id: ID of the face to find similar faces for
+            workspace_id: Workspace ID for tenant isolation
+            threshold: Minimum similarity threshold (0-1)
+            limit: Maximum number of results
+            exclude_same_photo: Whether to exclude faces from the same photo
+            timeout_seconds: Maximum time to wait (default: 45s)
+
+        Returns:
+            List of similar faces with similarity scores
+
+        Raises:
+            VectorSearchTimeoutError: If search times out
+            FaceNotFoundError: If the face doesn't exist
+        """
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                return await self.find_similar_to_face(
+                    face_id=face_id,
+                    workspace_id=workspace_id,
+                    threshold=threshold,
+                    limit=limit,
+                    exclude_same_photo=exclude_same_photo,
+                )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Face-to-face similarity search timed out",
+                extra={
+                    "face_id": str(face_id),
+                    "workspace_id": str(workspace_id),
+                    "timeout_seconds": timeout_seconds,
+                    "threshold": threshold,
+                    "limit": limit,
+                },
+            )
+            raise VectorSearchTimeoutError("find_similar_to_face", timeout_seconds)
+
     # =========================================================================
     # BULK OPERATIONS
     # =========================================================================

@@ -7,6 +7,11 @@ Proxies requests to the dedicated invitations microservice for:
 - Audit logging
 
 Feature: 018-invitations-production-readiness
+
+Circuit Breaker Protection:
+- Opens after 3 consecutive failures
+- 30 second recovery period
+- Exponential backoff: 1s -> 2s -> 4s
 """
 
 from __future__ import annotations
@@ -19,6 +24,11 @@ import httpx
 from fastapi import HTTPException, status
 
 from app.config.settings import get_settings
+from app.services.resilience import (
+    CircuitBreakerOpen,
+    MicroserviceCircuitBreaker,
+    MicroserviceCircuitBreakerConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +67,19 @@ class InvitationsProxyService:
         self._timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
 
+        # Circuit breaker for fail-fast behavior
+        self._circuit_breaker = MicroserviceCircuitBreaker(
+            MicroserviceCircuitBreakerConfig(
+                service_name="invitations-service",
+                failure_threshold=3,  # Open after 3 failures
+                recovery_time_ms=30000,  # 30 second recovery
+                half_open_requests=2,  # 2 successes to close
+                initial_backoff_ms=1000,  # 1s initial
+                backoff_multiplier=2.0,
+                max_backoff_ms=4000,  # 4s cap
+            )
+        )
+
     @property
     def is_available(self) -> bool:
         """Check if microservice URL is configured."""
@@ -87,7 +110,7 @@ class InvitationsProxyService:
         params: Optional[dict] = None,
         headers: Optional[dict] = None,
     ) -> dict[str, Any]:
-        """Make request to microservice.
+        """Make request to microservice with circuit breaker protection.
 
         Args:
             method: HTTP method (GET, POST, PATCH, DELETE)
@@ -100,7 +123,7 @@ class InvitationsProxyService:
             Response JSON
 
         Raises:
-            InvitationsProxyError: If request fails
+            InvitationsProxyError: If request fails or circuit is open
         """
         if not self.is_available:
             raise InvitationsProxyError(
@@ -108,6 +131,39 @@ class InvitationsProxyService:
                 status_code=503,
             )
 
+        # Wrap in circuit breaker for fail-fast behavior
+        try:
+            return await self._circuit_breaker.execute(
+                lambda: self._do_request(method, path, json=json, params=params, headers=headers)
+            )
+        except CircuitBreakerOpen as e:
+            logger.warning(
+                "Circuit breaker open for invitations service",
+                extra={
+                    "service": e.service_name,
+                    "recovery_in_ms": e.recovery_in_ms,
+                    "path": path,
+                },
+            )
+            raise InvitationsProxyError(
+                "Invitations service temporarily unavailable (circuit breaker open)",
+                status_code=503,
+                details={"recovery_in_ms": e.recovery_in_ms},
+            ) from e
+
+    async def _do_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Optional[dict] = None,
+        params: Optional[dict] = None,
+        headers: Optional[dict] = None,
+    ) -> dict[str, Any]:
+        """Execute the actual HTTP request.
+
+        This method is wrapped by the circuit breaker.
+        """
         client = await self._get_client()
         request_headers = headers or {}
 
@@ -143,6 +199,10 @@ class InvitationsProxyService:
                 "Invitations service unavailable",
                 status_code=503,
             ) from e
+
+        except InvitationsProxyError:
+            # Re-raise proxy errors as-is
+            raise
 
         except Exception as e:
             logger.error(f"Error calling invitations service: {path}", exc_info=True)

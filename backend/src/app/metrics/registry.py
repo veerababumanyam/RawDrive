@@ -139,6 +139,47 @@ app_info = Gauge(
 
 
 # =============================================================================
+# Request Timeout Metrics
+# =============================================================================
+
+request_timeout_total = Counter(
+    "request_timeout_total",
+    "Total number of request timeouts",
+    ["method", "path", "timeout_type"],
+)
+
+request_timeout_duration_seconds = Histogram(
+    "request_timeout_duration_seconds",
+    "Duration when timeout occurred",
+    ["method", "path"],
+    buckets=(5, 10, 15, 30, 45, 60, 90, 120, float("inf")),
+)
+
+
+# =============================================================================
+# Circuit Breaker Metrics
+# =============================================================================
+
+circuit_breaker_state = Gauge(
+    "circuit_breaker_state",
+    "Circuit breaker state (0=closed, 1=half_open, 2=open)",
+    ["service"],
+)
+
+circuit_breaker_calls_total = Counter(
+    "circuit_breaker_calls_total",
+    "Total number of calls through circuit breaker",
+    ["service", "result"],
+)
+
+circuit_breaker_opens_total = Counter(
+    "circuit_breaker_opens_total",
+    "Total number of times circuit breaker opened",
+    ["service"],
+)
+
+
+# =============================================================================
 # Path Normalization
 # =============================================================================
 

@@ -39,16 +39,21 @@ class CircuitState(str, Enum):
 
 
 class CircuitBreakerConfig(BaseModel):
-    """Circuit breaker configuration."""
+    """Circuit breaker configuration.
+
+    Tuned for faster failure detection:
+    - 3 failures to open (was 5) for quicker fail-fast
+    - 30 second timeout (was 60) for faster recovery
+    """
 
     failure_threshold: int = Field(
-        default=5, description="Number of failures before opening circuit"
+        default=3, description="Number of failures before opening circuit"
     )
     success_threshold: int = Field(
         default=2, description="Number of successes to close circuit from half-open"
     )
     timeout_seconds: int = Field(
-        default=60, description="Seconds before attempting to close open circuit"
+        default=30, description="Seconds before attempting to close open circuit"
     )
 
 

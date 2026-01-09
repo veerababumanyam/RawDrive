@@ -17,6 +17,7 @@ from app.middleware.audit_logging import AuditLoggingMiddleware  # type: ignore
 from app.middleware.correlation import CorrelationMiddleware  # type: ignore
 from app.middleware.rate_limit import RateLimitMiddleware  # type: ignore
 from app.middleware.request_id import RequestIdMiddleware  # type: ignore
+from app.middleware.timeout import TimeoutMiddleware, TimeoutConfig  # type: ignore
 from app.metrics.middleware import PrometheusMiddleware  # type: ignore
 from app.api.versioning import VersioningMiddleware  # type: ignore
 from app.services.audit_service import start_audit_worker, stop_audit_worker  # type: ignore
@@ -59,7 +60,7 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
             ServiceCapability(name="clients:read", version="1.0", endpoint="/api/v1/clients"),
             ServiceCapability(name="clients:write", version="1.0", endpoint="/api/v1/clients"),
         ],
-        health_check_endpoint="/health",
+        health_endpoint="/health",
     )
 
     await registry.register(registration)
@@ -175,7 +176,16 @@ app.add_middleware(VersioningMiddleware)  # type: ignore
 app.add_middleware(AuditLoggingMiddleware)  # type: ignore
 # 5. Rate limiting - before processing
 app.add_middleware(RateLimitMiddleware)  # type: ignore
-# 6. Prometheus metrics - track request metrics
+# 6. Request timeout - enforce 30s read / 60s write timeouts
+app.add_middleware(
+    TimeoutMiddleware,
+    config=TimeoutConfig(
+        read_timeout=30.0,
+        write_timeout=60.0,
+        expensive_timeout=120.0,
+    ),
+)  # type: ignore
+# 7. Prometheus metrics - track request metrics
 app.add_middleware(PrometheusMiddleware)  # type: ignore
 
 # CORS middleware - MUST be added last to update ALL responses (including errors from other middleware)
