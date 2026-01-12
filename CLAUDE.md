@@ -2,7 +2,7 @@
 
 **RawDrive** is an enterprise SaaS professional photography platform with microservices architecture.
 
-**Version**: 0.3.2 | **Status**: Production | **Updated**: 2026-01-09
+**Version**: 0.3.3 | **Status**: Production | **Updated**: 2026-01-12
 
 ---
 

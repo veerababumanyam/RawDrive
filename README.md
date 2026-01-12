@@ -5,7 +5,7 @@
 
   ## Enterprise SaaS Professional Photography Management Platform
 
-  [![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](https://github.com/rawdrive/RawDrive)
+  [![Version](https://img.shields.io/badge/version-0.3.3-blue.svg)](https://github.com/rawdrive/RawDrive)
   [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
   [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://reactjs.org/)
@@ -633,7 +633,7 @@ RawDrive exclusively uses **Google Gemini** for all AI features:
 
 ### Latest Additions (2025-2026)
 
-#### Version 0.3.2 (Latest)
+#### Version 0.3.3 (Latest)
 
 **Personal Profile Digital Visiting Card:**
 - Professional profile pages at `/u/{slug}` with QR code generation and vCard download

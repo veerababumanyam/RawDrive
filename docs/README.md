@@ -1,6 +1,6 @@
 # RawDrive Documentation
 
-**Version**: 0.3.2 | **Last Updated**: 2026-01-09
+**Version**: 0.3.3 | **Last Updated**: 2026-01-12
 
 Welcome to the RawDrive documentation hub. This directory contains all operational, architectural, and feature documentation for the platform.
 
