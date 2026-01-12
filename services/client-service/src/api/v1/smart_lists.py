@@ -43,7 +43,7 @@ router = APIRouter(
 @router.get("", response_model=SmartListListResponse)
 async def list_smart_lists(
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListsService = Depends(get_smart_lists_service),
+    service: SmartListService = Depends(get_smart_list_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListListResponse:
     """
@@ -79,7 +79,7 @@ async def list_smart_lists(
 async def create_smart_list(
     data: SmartListCreate,
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListsService = Depends(get_smart_lists_service),
+    service: SmartListService = Depends(get_smart_list_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListResponse:
     """
@@ -148,7 +148,7 @@ async def create_smart_list(
 async def get_smart_list(
     list_id: UUID = Path(..., description="Smart list ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListsService = Depends(get_smart_lists_service),
+    service: SmartListService = Depends(get_smart_list_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListResponse:
     """
@@ -188,7 +188,7 @@ async def update_smart_list(
     data: SmartListUpdate,
     list_id: UUID = Path(..., description="Smart list ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListsService = Depends(get_smart_lists_service),
+    service: SmartListService = Depends(get_smart_list_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListResponse:
     """
@@ -252,7 +252,7 @@ async def update_smart_list(
 async def delete_smart_list(
     list_id: UUID = Path(..., description="Smart list ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: SmartListsService = Depends(get_smart_lists_service),
+    service: SmartListService = Depends(get_smart_list_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> None:
     """
@@ -304,7 +304,7 @@ async def evaluate_smart_list(
     workspace_id: UUID = Depends(verify_workspace_access),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
-    service: SmartListsService = Depends(get_smart_lists_service),
+    service: SmartListService = Depends(get_smart_list_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> SmartListEvaluationResponse:
     """

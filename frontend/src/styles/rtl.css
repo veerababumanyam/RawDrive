@@ -1,0 +1,275 @@
+/**
+ * RTL (Right-to-Left) Layout Support
+ *
+ * Provides CSS logical properties and RTL-specific adjustments
+ * for proper bidirectional layout support.
+ *
+ * Feature: 027-gallery-feature-completion
+ * User Story: US5 - RTL Layout for Urdu
+ *
+ * Supported Languages: Arabic (ar), Hebrew (he), Persian (fa), Urdu (ur),
+ * Pashto (ps), Sindhi (sd), Yiddish (yi), Kurdish (ku), Uyghur (ug), Divehi (dv)
+ */
+
+/* =============================================================================
+   CSS LOGICAL PROPERTIES HELPERS
+
+   Use these utility classes for RTL-aware spacing and positioning.
+   Prefer logical properties over physical properties for new CSS.
+   ============================================================================= */
+
+/* Margin utilities using logical properties */
+.ms-0 { margin-inline-start: 0; }
+.ms-1 { margin-inline-start: 0.25rem; }
+.ms-2 { margin-inline-start: 0.5rem; }
+.ms-3 { margin-inline-start: 0.75rem; }
+.ms-4 { margin-inline-start: 1rem; }
+.ms-auto { margin-inline-start: auto; }
+
+.me-0 { margin-inline-end: 0; }
+.me-1 { margin-inline-end: 0.25rem; }
+.me-2 { margin-inline-end: 0.5rem; }
+.me-3 { margin-inline-end: 0.75rem; }
+.me-4 { margin-inline-end: 1rem; }
+.me-auto { margin-inline-end: auto; }
+
+/* Padding utilities using logical properties */
+.ps-0 { padding-inline-start: 0; }
+.ps-1 { padding-inline-start: 0.25rem; }
+.ps-2 { padding-inline-start: 0.5rem; }
+.ps-3 { padding-inline-start: 0.75rem; }
+.ps-4 { padding-inline-start: 1rem; }
+
+.pe-0 { padding-inline-end: 0; }
+.pe-1 { padding-inline-end: 0.25rem; }
+.pe-2 { padding-inline-end: 0.5rem; }
+.pe-3 { padding-inline-end: 0.75rem; }
+.pe-4 { padding-inline-end: 1rem; }
+
+/* Border utilities using logical properties */
+.border-s { border-inline-start-width: 1px; }
+.border-e { border-inline-end-width: 1px; }
+.border-s-0 { border-inline-start-width: 0; }
+.border-e-0 { border-inline-end-width: 0; }
+
+/* Text alignment utilities */
+.text-start { text-align: start; }
+.text-end { text-align: end; }
+
+/* Float utilities for RTL */
+.float-start { float: inline-start; }
+.float-end { float: inline-end; }
+
+/* =============================================================================
+   RTL-SPECIFIC OVERRIDES
+   ============================================================================= */
+
+[dir="rtl"] {
+  /* Ensure text direction is properly set */
+  direction: rtl;
+  text-align: right;
+}
+
+/* Gallery grid - flows naturally with CSS Grid */
+[dir="rtl"] .gallery-grid,
+[dir="rtl"] .photo-grid {
+  direction: rtl;
+}
+
+/* Navigation arrows - flip horizontally for RTL */
+[dir="rtl"] .nav-arrow-prev,
+[dir="rtl"] .carousel-prev,
+[dir="rtl"] .lightbox-prev {
+  transform: scaleX(-1);
+}
+
+[dir="rtl"] .nav-arrow-next,
+[dir="rtl"] .carousel-next,
+[dir="rtl"] .lightbox-next {
+  transform: scaleX(-1);
+}
+
+/* Chevron icons - flip direction */
+[dir="rtl"] .chevron-left,
+[dir="rtl"] .chevron-right,
+[dir="rtl"] [data-icon="chevron-left"],
+[dir="rtl"] [data-icon="chevron-right"] {
+  transform: scaleX(-1);
+}
+
+/* Progress bars - reverse direction */
+[dir="rtl"] .progress-bar {
+  direction: rtl;
+}
+
+/* Sliders and ranges */
+[dir="rtl"] input[type="range"] {
+  direction: rtl;
+}
+
+/* =============================================================================
+   BIDIRECTIONAL TEXT ISOLATION
+
+   Ensures mixed LTR/RTL content (like URLs, numbers, code) displays correctly.
+   ============================================================================= */
+
+/* Force LTR for URLs, code, numbers */
+.ltr-isolate,
+[dir="rtl"] .url,
+[dir="rtl"] .code,
+[dir="rtl"] code,
+[dir="rtl"] pre,
+[dir="rtl"] .filename,
+[dir="rtl"] .timestamp,
+[dir="rtl"] .number {
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+
+/* Explicit bidi-isolate for embedded content */
+.bidi-isolate {
+  unicode-bidi: isolate;
+}
+
+/* Override to force RTL in LTR context */
+.rtl-isolate {
+  unicode-bidi: isolate;
+  direction: rtl;
+}
+
+/* =============================================================================
+   FORM ELEMENTS IN RTL
+   ============================================================================= */
+
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select {
+  text-align: right;
+}
+
+/* Number and email inputs should remain LTR */
+[dir="rtl"] input[type="email"],
+[dir="rtl"] input[type="url"],
+[dir="rtl"] input[type="tel"],
+[dir="rtl"] input[type="number"] {
+  direction: ltr;
+  text-align: left;
+}
+
+/* Search input text alignment */
+[dir="rtl"] input[type="search"] {
+  text-align: right;
+}
+
+/* Placeholder alignment */
+[dir="rtl"] input::placeholder,
+[dir="rtl"] textarea::placeholder {
+  text-align: right;
+}
+
+/* =============================================================================
+   FLEXBOX RTL ADJUSTMENTS
+   ============================================================================= */
+
+/* Flexbox row-reverse for RTL navigation */
+[dir="rtl"] .flex-row {
+  flex-direction: row-reverse;
+}
+
+/* Keep normal order for explicitly LTR flex containers */
+[dir="rtl"] .flex-row-ltr {
+  flex-direction: row;
+}
+
+/* =============================================================================
+   ICONS AND IMAGES
+   ============================================================================= */
+
+/* Icons that should flip in RTL */
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* Arrow icons */
+[dir="rtl"] .arrow-left,
+[dir="rtl"] .arrow-right,
+[dir="rtl"] [data-lucide="arrow-left"],
+[dir="rtl"] [data-lucide="arrow-right"] {
+  transform: scaleX(-1);
+}
+
+/* Icons that should NOT flip (like social media, brand logos) */
+[dir="rtl"] .no-rtl-flip {
+  transform: none !important;
+}
+
+/* =============================================================================
+   ANIMATIONS
+   ============================================================================= */
+
+/* Slide animations - reverse direction for RTL */
+@keyframes slideInFromStart {
+  from {
+    transform: translateX(calc(-100% * var(--direction-multiplier, 1)));
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromEnd {
+  from {
+    transform: translateX(calc(100% * var(--direction-multiplier, 1)));
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+[dir="ltr"] {
+  --direction-multiplier: 1;
+}
+
+[dir="rtl"] {
+  --direction-multiplier: -1;
+}
+
+/* =============================================================================
+   TOOLTIPS AND POPOVERS
+   ============================================================================= */
+
+[dir="rtl"] .tooltip-left {
+  /* Tooltip appearing on the right in RTL */
+  left: auto;
+  right: 100%;
+}
+
+[dir="rtl"] .tooltip-right {
+  /* Tooltip appearing on the left in RTL */
+  right: auto;
+  left: 100%;
+}
+
+/* =============================================================================
+   SCROLLBARS
+   ============================================================================= */
+
+/* Ensure scrollbar stays on correct side */
+[dir="rtl"] {
+  scrollbar-gutter: stable;
+}
+
+/* =============================================================================
+   PRINT STYLES
+   ============================================================================= */
+
+@media print {
+  [dir="rtl"] {
+    direction: rtl;
+    text-align: right;
+  }
+}

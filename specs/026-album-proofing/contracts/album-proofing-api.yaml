@@ -1,0 +1,1266 @@
+openapi: 3.1.0
+info:
+  title: Album Proofing API
+  description: |
+    API for album preview and proofing functionality.
+    Enables photographers to share albums with clients for review,
+    positioned commenting, approval workflow, and version control.
+  version: 1.0.0
+  contact:
+    name: RawDrive API Team
+
+servers:
+  - url: /api/v1
+    description: Backend API (authenticated workspace routes)
+  - url: /api/v1/public
+    description: Public API (share link authenticated routes)
+
+tags:
+  - name: Albums
+    description: Album CRUD operations (photographer)
+  - name: Album Proofing
+    description: Public proofing viewer (client via share link)
+  - name: Album Comments
+    description: Positioned comment management
+  - name: Album Versions
+    description: Version snapshots and rollback
+  - name: Album Renders
+    description: PDF generation and downloads
+
+paths:
+  # ============================================
+  # ALBUM CRUD (Authenticated Workspace Routes)
+  # ============================================
+
+  /workspaces/{workspace_id}/albums:
+    get:
+      tags: [Albums]
+      summary: List albums in workspace
+      operationId: listAlbums
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/AlbumStatus'
+        - name: gallery_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: List of albums
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlbumSummary'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Albums]
+      summary: Create new album
+      operationId: createAlbum
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAlbumRequest'
+      responses:
+        '201':
+          description: Album created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /workspaces/{workspace_id}/albums/{album_id}:
+    get:
+      tags: [Albums]
+      summary: Get album details
+      operationId: getAlbum
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+      responses:
+        '200':
+          description: Album details with spreads
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Albums]
+      summary: Update album
+      operationId: updateAlbum
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAlbumRequest'
+      responses:
+        '200':
+          description: Album updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+
+    delete:
+      tags: [Albums]
+      summary: Delete album
+      operationId: deleteAlbum
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+      responses:
+        '204':
+          description: Album deleted
+
+  # ============================================
+  # ALBUM PROOFING (Public Share Link Routes)
+  # ============================================
+
+  /public/albums/{token}:
+    get:
+      tags: [Album Proofing]
+      summary: Get album proof for client viewing
+      description: |
+        Access album via share link token. Returns album with all spreads
+        for client review. Validates token expiration and access limits.
+      operationId: getAlbumProof
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Share link token
+      responses:
+        '200':
+          description: Album proof data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumProof'
+        '403':
+          description: Link expired or access limit reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /public/albums/{token}/approve:
+    post:
+      tags: [Album Proofing]
+      summary: Approve album for print
+      description: |
+        Client approves album design for printing. Records approval
+        timestamp and client identity. Notifies photographer.
+      operationId: approveAlbum
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveAlbumRequest'
+      responses:
+        '200':
+          description: Album approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approved: { type: boolean }
+                  approved_at: { type: string, format: date-time }
+        '400':
+          description: Unresolved comments exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Album modified since proof sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /public/albums/{token}/download:
+    get:
+      tags: [Album Proofing]
+      summary: Download preview PDF
+      description: |
+        Download watermarked low-resolution PDF preview of album.
+        Returns signed URL for download.
+      operationId: downloadAlbumPreview
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Download URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  download_url:
+                    type: string
+                    format: uri
+                  expires_at:
+                    type: string
+                    format: date-time
+        '202':
+          description: PDF generation in progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [generating] }
+                  estimated_seconds: { type: integer }
+        '403':
+          description: Download not permitted for this share link
+
+  # ============================================
+  # ALBUM COMMENTS
+  # ============================================
+
+  /workspaces/{workspace_id}/albums/{album_id}/comments:
+    get:
+      tags: [Album Comments]
+      summary: List album comments
+      operationId: listAlbumComments
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+        - name: spread_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/CommentStatus'
+        - name: include_resolved
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlbumComment'
+                  summary:
+                    $ref: '#/components/schemas/CommentSummary'
+
+  /public/albums/{token}/comments:
+    get:
+      tags: [Album Comments]
+      summary: List comments for client
+      operationId: listAlbumCommentsPublic
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: spread_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of comments (excluding internal notes)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlbumComment'
+
+    post:
+      tags: [Album Comments]
+      summary: Add comment as client
+      operationId: createAlbumCommentPublic
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAlbumCommentRequest'
+      responses:
+        '201':
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumComment'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /workspaces/{workspace_id}/albums/{album_id}/comments/{comment_id}:
+    patch:
+      tags: [Album Comments]
+      summary: Update comment status
+      operationId: updateAlbumComment
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+        - $ref: '#/components/parameters/CommentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCommentRequest'
+      responses:
+        '200':
+          description: Comment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumComment'
+
+    delete:
+      tags: [Album Comments]
+      summary: Delete comment
+      operationId: deleteAlbumComment
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+        - $ref: '#/components/parameters/CommentId'
+      responses:
+        '204':
+          description: Comment deleted (soft delete)
+
+  /workspaces/{workspace_id}/albums/{album_id}/comments/{comment_id}/resolve:
+    post:
+      tags: [Album Comments]
+      summary: Resolve comment
+      operationId: resolveAlbumComment
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+        - $ref: '#/components/parameters/CommentId'
+      responses:
+        '200':
+          description: Comment resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumComment'
+
+  # ============================================
+  # ALBUM VERSIONS
+  # ============================================
+
+  /workspaces/{workspace_id}/albums/{album_id}/versions:
+    get:
+      tags: [Album Versions]
+      summary: List album versions
+      operationId: listAlbumVersions
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+      responses:
+        '200':
+          description: List of versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlbumVersionSummary'
+
+    post:
+      tags: [Album Versions]
+      summary: Create version snapshot
+      operationId: createAlbumVersion
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                  maxLength: 255
+                  example: "V2 - After client round 1"
+      responses:
+        '201':
+          description: Version created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumVersion'
+
+  /workspaces/{workspace_id}/albums/{album_id}/versions/{version_id}:
+    get:
+      tags: [Album Versions]
+      summary: Get version details
+      operationId: getAlbumVersion
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Version with full snapshot data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumVersion'
+
+  /workspaces/{workspace_id}/albums/{album_id}/versions/{version_id}/rollback:
+    post:
+      tags: [Album Versions]
+      summary: Rollback to version
+      operationId: rollbackAlbumVersion
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Album rolled back
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+
+  /workspaces/{workspace_id}/albums/{album_id}/versions/compare:
+    get:
+      tags: [Album Versions]
+      summary: Compare two versions
+      operationId: compareAlbumVersions
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+        - name: version_a
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: version_b
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Version comparison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionComparison'
+
+  # ============================================
+  # ALBUM RENDERS
+  # ============================================
+
+  /workspaces/{workspace_id}/albums/{album_id}/renders:
+    get:
+      tags: [Album Renders]
+      summary: List album renders
+      operationId: listAlbumRenders
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+        - name: render_type
+          in: query
+          schema:
+            $ref: '#/components/schemas/RenderType'
+      responses:
+        '200':
+          description: List of renders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlbumRender'
+
+    post:
+      tags: [Album Renders]
+      summary: Request new render
+      operationId: createAlbumRender
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [render_type]
+              properties:
+                render_type:
+                  $ref: '#/components/schemas/RenderType'
+                options:
+                  type: object
+                  properties:
+                    watermark:
+                      type: boolean
+                      default: true
+                    resolution_dpi:
+                      type: integer
+                      enum: [72, 150, 300]
+                      default: 150
+      responses:
+        '202':
+          description: Render queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumRender'
+
+  /workspaces/{workspace_id}/albums/{album_id}/renders/{render_id}:
+    get:
+      tags: [Album Renders]
+      summary: Get render status and download URL
+      operationId: getAlbumRender
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+        - name: render_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Render details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumRender'
+
+  # ============================================
+  # SEND PROOF (Photographer Action)
+  # ============================================
+
+  /workspaces/{workspace_id}/albums/{album_id}/send-proof:
+    post:
+      tags: [Albums]
+      summary: Send album proof to client
+      description: |
+        Creates share link and sends notification to client.
+        Automatically creates version snapshot.
+      operationId: sendAlbumProof
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/AlbumId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_email]
+              properties:
+                client_email:
+                  type: string
+                  format: email
+                client_name:
+                  type: string
+                message:
+                  type: string
+                  description: Personal message to client
+                expires_in_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 90
+                  default: 30
+                allow_download:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Proof sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  share_link:
+                    type: string
+                    format: uri
+                  expires_at:
+                    type: string
+                    format: date-time
+                  notification_sent:
+                    type: boolean
+
+components:
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AlbumId:
+      name: album_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CommentId:
+      name: comment_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    AlbumStatus:
+      type: string
+      enum: [draft, proof_sent, changes_requested, approved, exported]
+
+    CommentStatus:
+      type: string
+      enum: [open, in_progress, resolved]
+
+    RenderType:
+      type: string
+      enum: [preview_pdf, print_pdf, spread_images]
+
+    Album:
+      type: object
+      properties:
+        album_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        gallery_id:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/AlbumStatus'
+        page_size:
+          type: string
+          example: "12x36"
+        spread_count:
+          type: integer
+        version_number:
+          type: integer
+        cover_thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+        created_by_user_id:
+          type: string
+          format: uuid
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        proof_sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AlbumSummary:
+      type: object
+      properties:
+        album_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          $ref: '#/components/schemas/AlbumStatus'
+        spread_count:
+          type: integer
+        cover_thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+        unresolved_comments:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+
+    AlbumDetail:
+      allOf:
+        - $ref: '#/components/schemas/Album'
+        - type: object
+          properties:
+            spreads:
+              type: array
+              items:
+                $ref: '#/components/schemas/AlbumSpread'
+            comment_summary:
+              $ref: '#/components/schemas/CommentSummary'
+
+    AlbumProof:
+      type: object
+      description: Public album view for clients
+      properties:
+        album_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          $ref: '#/components/schemas/AlbumStatus'
+        spreads:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlbumSpreadPublic'
+        branding:
+          $ref: '#/components/schemas/Branding'
+        permissions:
+          type: object
+          properties:
+            can_comment:
+              type: boolean
+            can_approve:
+              type: boolean
+            can_download:
+              type: boolean
+
+    AlbumSpread:
+      type: object
+      properties:
+        spread_id:
+          type: string
+          format: uuid
+        page_number:
+          type: integer
+        template_id:
+          type: string
+          nullable: true
+        background_color:
+          type: string
+          nullable: true
+        elements:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlbumElement'
+        thumbnail_url:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+
+    AlbumSpreadPublic:
+      type: object
+      properties:
+        spread_id:
+          type: string
+          format: uuid
+        page_number:
+          type: integer
+        image_url:
+          type: string
+          format: uri
+          description: Signed URL for spread preview image
+        thumbnail_url:
+          type: string
+          format: uri
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlbumCommentPublic'
+
+    AlbumElement:
+      type: object
+      properties:
+        element_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [photo, text, shape]
+        asset_id:
+          type: string
+          format: uuid
+          nullable: true
+        text_content:
+          type: string
+          nullable: true
+        position_x:
+          type: number
+        position_y:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        rotation:
+          type: number
+          default: 0
+        opacity:
+          type: number
+          default: 1
+        z_index:
+          type: integer
+        styling:
+          type: object
+          nullable: true
+
+    AlbumComment:
+      type: object
+      properties:
+        comment_id:
+          type: string
+          format: uuid
+        spread_id:
+          type: string
+          format: uuid
+        author_name:
+          type: string
+        author_email:
+          type: string
+          nullable: true
+        body:
+          type: string
+        position_x:
+          type: number
+          minimum: 0
+          maximum: 100
+        position_y:
+          type: number
+          minimum: 0
+          maximum: 100
+        status:
+          $ref: '#/components/schemas/CommentStatus'
+        parent_comment_id:
+          type: string
+          format: uuid
+          nullable: true
+        replies:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlbumComment'
+        is_internal:
+          type: boolean
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    AlbumCommentPublic:
+      type: object
+      description: Comment visible to clients (excludes internal notes)
+      properties:
+        comment_id:
+          type: string
+          format: uuid
+        author_name:
+          type: string
+        body:
+          type: string
+        position_x:
+          type: number
+        position_y:
+          type: number
+        status:
+          $ref: '#/components/schemas/CommentStatus'
+        replies:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlbumCommentPublic'
+        created_at:
+          type: string
+          format: date-time
+
+    CreateAlbumRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+        gallery_id:
+          type: string
+          format: uuid
+          description: Optional source gallery for photos
+        page_size:
+          type: string
+          example: "12x36"
+        lab_preset_id:
+          type: string
+          format: uuid
+
+    UpdateAlbumRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        page_size:
+          type: string
+
+    CreateAlbumCommentRequest:
+      type: object
+      required: [spread_id, body, position_x, position_y, author_name]
+      properties:
+        spread_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        position_x:
+          type: number
+          minimum: 0
+          maximum: 100
+        position_y:
+          type: number
+          minimum: 0
+          maximum: 100
+        author_name:
+          type: string
+          maxLength: 255
+        author_email:
+          type: string
+          format: email
+        parent_comment_id:
+          type: string
+          format: uuid
+          description: For threaded replies
+
+    UpdateCommentRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        status:
+          $ref: '#/components/schemas/CommentStatus'
+
+    ApproveAlbumRequest:
+      type: object
+      required: [client_name, client_email]
+      properties:
+        client_name:
+          type: string
+        client_email:
+          type: string
+          format: email
+        acknowledge_unresolved:
+          type: boolean
+          default: false
+          description: If true, approve despite unresolved comments
+
+    AlbumVersion:
+      type: object
+      properties:
+        version_id:
+          type: string
+          format: uuid
+        album_id:
+          type: string
+          format: uuid
+        version_number:
+          type: integer
+        label:
+          type: string
+          nullable: true
+        snapshot_data:
+          type: object
+          description: Full serialized album state
+        created_by_user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    AlbumVersionSummary:
+      type: object
+      properties:
+        version_id:
+          type: string
+          format: uuid
+        version_number:
+          type: integer
+        label:
+          type: string
+          nullable: true
+        spread_count:
+          type: integer
+        thumbnail_url:
+          type: string
+          format: uri
+        created_by_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    VersionComparison:
+      type: object
+      properties:
+        version_a:
+          $ref: '#/components/schemas/AlbumVersionSummary'
+        version_b:
+          $ref: '#/components/schemas/AlbumVersionSummary'
+        differences:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [spread_added, spread_removed, spread_modified, element_added, element_removed, element_modified]
+              page_number:
+                type: integer
+              description:
+                type: string
+
+    AlbumRender:
+      type: object
+      properties:
+        render_id:
+          type: string
+          format: uuid
+        album_id:
+          type: string
+          format: uuid
+        render_type:
+          $ref: '#/components/schemas/RenderType'
+        status:
+          type: string
+          enum: [queued, running, ready, failed]
+        download_url:
+          type: string
+          format: uri
+          nullable: true
+        file_size_bytes:
+          type: integer
+          nullable: true
+        page_count:
+          type: integer
+          nullable: true
+        watermarked:
+          type: boolean
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CommentSummary:
+      type: object
+      properties:
+        total:
+          type: integer
+        open:
+          type: integer
+        in_progress:
+          type: integer
+        resolved:
+          type: integer
+
+    Branding:
+      type: object
+      properties:
+        photographer_name:
+          type: string
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+        primary_color:
+          type: string
+        theme:
+          type: string
+          enum: [light, dark, system]
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        pages:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+        request_id:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Permission denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

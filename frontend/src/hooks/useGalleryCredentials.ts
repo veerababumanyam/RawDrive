@@ -74,10 +74,15 @@ export function useGalleryCredentials({
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null);
   const [revealedPin, setRevealedPin] = useState<string | null>(null);
 
-  // Fetch initial credential status on mount
+  // Fetch initial credential status on mount and when gallery changes
   useEffect(() => {
     const fetchCredentials = async () => {
-      if (!workspaceId || !galleryId) return;
+      if (!workspaceId || !galleryId) {
+        // If no workspace/gallery, use fallback values
+        setHasPassword(fallback?.passwordProtected ?? false);
+        setHasPin(fallback?.pinProtected ?? false);
+        return;
+      }
 
       setIsLoading(true);
       try {
@@ -85,6 +90,7 @@ export function useGalleryCredentials({
           workspaceId,
           galleryId
         );
+        // Always update from API response (source of truth)
         setHasPassword(credentials.has_password);
         setHasPin(credentials.has_pin);
         setPasswordRecoverable(credentials.password_recoverable);

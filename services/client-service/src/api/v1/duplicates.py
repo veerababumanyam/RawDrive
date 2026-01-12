@@ -45,7 +45,7 @@ router = APIRouter(
 async def detect_duplicates(
     request: DuplicateDetectionRequest = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: DuplicatesService = Depends(get_duplicates_service),
+    service: DuplicateService = Depends(get_duplicate_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> DuplicateDetectionResponse:
     """
@@ -140,7 +140,7 @@ async def detect_duplicates(
 async def merge_clients(
     strategy: MergeStrategy = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: DuplicatesService = Depends(get_duplicates_service),
+    service: DuplicateService = Depends(get_duplicate_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> MergeResult:
     """

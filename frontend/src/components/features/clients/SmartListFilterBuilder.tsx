@@ -313,7 +313,7 @@ const FilterConditionRow: React.FC<FilterConditionRowProps> = ({
   // Render value input based on field type
   const renderValueInput = () => {
     switch (fieldConfig?.type) {
-      case 'select':
+      case 'select': {
         const options = SELECT_OPTIONS[condition.field] || [];
         return (
           <div className="relative">
@@ -349,6 +349,7 @@ const FilterConditionRow: React.FC<FilterConditionRowProps> = ({
             )}
           </div>
         );
+      }
 
       case 'date':
         return (

@@ -235,7 +235,12 @@ class MagicLinkService:
                         g.title as gallery_title,
                         COALESCE(g.email_registration_required, FALSE) as requires_email,
                         g.status as gallery_status,
-                        g.workspace_id
+                        g.workspace_id,
+                        g.gradient_config,
+                        g.theme,
+                        g.layout_style,
+                        g.font_family,
+                        g.primary_color
                     FROM magic_links ml
                     JOIN galleries g ON ml.gallery_id = g.gallery_id
                     WHERE ml.token_hash = $1 AND ml.status = 'active'
@@ -314,6 +319,11 @@ class MagicLinkService:
             "expired": False,
             "max_views_reached": False,
             "gallery_title": link["gallery_title"],
+            "gradient_config": link["gradient_config"],
+            "theme": link["theme"],
+            "layout_style": link["layout_style"],
+            "font_family": link["font_family"],
+            "primary_color": link["primary_color"],
         }
 
         # Cache valid result

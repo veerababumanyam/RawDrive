@@ -1,7 +1,8 @@
 /**
  * GallerySettingsPanel Component
  * Slide-in panel for gallery settings
- * Organizes settings into sections: General, Access, Downloads, Branding
+ * Organizes settings into sections: General, Access, Downloads, Branding,
+ * Interactions, Watermark, FindMe, Slideshow, Notifications, AI
  */
 
 import React, { useState, useEffect } from 'react';
@@ -15,6 +16,11 @@ import { AccessSettings } from './AccessSettings';
 import { DownloadSettings } from './DownloadSettings';
 import { BrandingSettings } from './BrandingSettings';
 import { AISettings } from './AISettings';
+import { ClientInteractionSettings } from './ClientInteractionSettings';
+import { WatermarkSettings } from './WatermarkSettings';
+import { FindMeSettings } from './FindMeSettings';
+import { SlideshowSettings } from './SlideshowSettings';
+import { GalleryNotificationSettings } from './GalleryNotificationSettings';
 
 export interface GallerySettingsPanelProps {
   isOpen: boolean;
@@ -31,17 +37,20 @@ export const GallerySettingsPanel: React.FC<GallerySettingsPanelProps> = ({
   onSave,
 }) => {
   const { addToast } = useToast();
-  const [activeSection, setActiveSection] = useState<'general' | 'access' | 'downloads' | 'branding' | 'ai'>('general');
+  const [activeSection, setActiveSection] = useState<
+    'general' | 'access' | 'downloads' | 'branding' | 'interactions' | 'watermark' | 'findme' | 'slideshow' | 'notifications' | 'ai'
+  >('general');
   const [isSaving, setIsSaving] = useState(false);
   const [updates, setUpdates] = useState<Partial<GalleryUpdateRequest>>({});
 
-  // Reset state when panel opens/closes to prevent stale data
+  // Reset state when panel opens/closes or gallery changes to prevent stale data
   useEffect(() => {
     if (isOpen) {
       setUpdates({});
+      // Reset to general section when opening to ensure fresh state
       setActiveSection('general');
     }
-  }, [isOpen]);
+  }, [isOpen, gallery.gallery_id]); // Also reset when gallery ID changes
 
   // Handle Escape key to close modal (WCAG 2.1 AA requirement)
   useEffect(() => {
@@ -88,6 +97,11 @@ export const GallerySettingsPanel: React.FC<GallerySettingsPanelProps> = ({
     { id: 'access' as const, label: 'Access' },
     { id: 'downloads' as const, label: 'Downloads' },
     { id: 'branding' as const, label: 'Branding' },
+    { id: 'interactions' as const, label: 'Interactions' },
+    { id: 'watermark' as const, label: 'Watermark' },
+    { id: 'findme' as const, label: 'FindMe' },
+    { id: 'slideshow' as const, label: 'Slideshow' },
+    { id: 'notifications' as const, label: 'Alerts' },
     { id: 'ai' as const, label: 'AI' },
   ];
 
@@ -207,6 +221,41 @@ export const GallerySettingsPanel: React.FC<GallerySettingsPanelProps> = ({
 
           {activeSection === 'branding' && (
             <BrandingSettings
+              gallery={gallery}
+              onUpdate={handleUpdate}
+            />
+          )}
+
+          {activeSection === 'interactions' && (
+            <ClientInteractionSettings
+              gallery={gallery}
+              onUpdate={handleUpdate}
+            />
+          )}
+
+          {activeSection === 'watermark' && (
+            <WatermarkSettings
+              gallery={gallery}
+              onUpdate={handleUpdate}
+            />
+          )}
+
+          {activeSection === 'findme' && (
+            <FindMeSettings
+              gallery={gallery}
+              onUpdate={handleUpdate}
+            />
+          )}
+
+          {activeSection === 'slideshow' && (
+            <SlideshowSettings
+              gallery={gallery}
+              onUpdate={handleUpdate}
+            />
+          )}
+
+          {activeSection === 'notifications' && (
+            <GalleryNotificationSettings
               gallery={gallery}
               onUpdate={handleUpdate}
             />

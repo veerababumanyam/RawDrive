@@ -15,6 +15,8 @@ interface MediaUploaderProps {
   className?: string;
   purpose?: MediaPurpose;
   label?: string;
+  acceptedTypes?: string[];
+  maxSizeMB?: number;
 }
 
 interface UploadState {
@@ -30,6 +32,8 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
   className = '',
   purpose = 'content',
   label,
+  acceptedTypes,
+  maxSizeMB = 500,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -67,27 +71,37 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
 
   const handleFile = (file: File) => {
     // Validate file type
-    const validTypes = [
-      'video/mp4', 'video/quicktime', 
+    const validTypes = acceptedTypes || [
+      'video/mp4', 'video/quicktime',
       'audio/mpeg', 'audio/mp4', 'audio/wav',
       'image/jpeg', 'image/png', 'image/webp', 'image/gif'
     ];
-    if (!validTypes.includes(file.type)) {
+
+    // Check if file type matches any of the valid types (supports wildcard like image/*)
+    const isValidType = validTypes.some(type => {
+      if (type.endsWith('/*')) {
+        const baseType = type.split('/')[0];
+        return file.type.startsWith(`${baseType}/`);
+      }
+      return file.type === type;
+    });
+
+    if (!isValidType) {
       setUploadState({
         progress: 0,
         status: 'error',
-        error: 'Invalid file type. Supported: MP4, MOV, MP3, WAV, JPG, PNG, WEBP.',
+        error: `Invalid file type. Supported: ${validTypes.join(', ')}`,
       });
       return;
     }
 
-    // Validate size (500MB limit)
-    const maxSize = 500 * 1024 * 1024; // 500MB
+    // Validate size
+    const maxSize = maxSizeMB * 1024 * 1024;
     if (file.size > maxSize) {
       setUploadState({
         progress: 0,
         status: 'error',
-        error: 'File too large. Maximum size is 500MB.',
+        error: `File too large. Maximum size is ${maxSizeMB}MB.`,
       });
       return;
     }
@@ -164,112 +178,113 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
 
   return (
     <div className={`w-full ${className}`}>
-        {/* Upload Area */}
-        {uploadState.status === 'idle' || uploadState.status === 'error' ? (
-            <div
-            className={`relative border-2 border-dashed rounded-xl p-8 transition-colors ${
-                dragActive ? 'border-primary bg-primary/5' : 'border-border'
+      {/* Upload Area */}
+      {uploadState.status === 'idle' || uploadState.status === 'error' ? (
+        <div
+          className={`relative border-2 border-dashed rounded-xl p-8 transition-colors ${dragActive ? 'border-primary bg-primary/5' : 'border-border'
             } ${uploadState.status === 'error' ? 'border-destructive/50 bg-destructive/5' : ''}`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            >
-            <input
-                type="file"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                onChange={handleChange}
-                accept="video/*,audio/*,image/*"
-            />
-            
-            <div className="flex flex-col items-center justify-center text-center">
-                {file ? (
-                <div className="flex flex-col items-center gap-2">
-                    {file.type.startsWith('image/') ? (
-                      <FileImage className="w-10 h-10 text-primary" />
-                    ) : file.type.startsWith('video/') ? (
-                      <FileVideo className="w-10 h-10 text-primary" />
-                    ) : (
-                      <FileAudio className="w-10 h-10 text-primary" />
-                    )}
-                    <div>
-                    <p className="font-medium text-text-primary">{file.name}</p>
-                    <p className="text-sm text-text-secondary">
-                        {(file.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
-                    </div>
-                </div>
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+        >
+          <input
+            type="file"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            onChange={handleChange}
+            accept={acceptedTypes ? acceptedTypes.join(',') : "video/*,audio/*,image/*"}
+          />
+
+          <div className="flex flex-col items-center justify-center text-center">
+            {file ? (
+              <div className="flex flex-col items-center gap-2">
+                {file.type.startsWith('image/') ? (
+                  <FileImage className="w-10 h-10 text-primary" />
+                ) : file.type.startsWith('video/') ? (
+                  <FileVideo className="w-10 h-10 text-primary" />
                 ) : (
-                <>
-                    <Upload className="w-10 h-10 text-text-tertiary mb-3" />
-                    <p className="font-medium text-text-primary mb-1">
-                    {label || 'Click to upload or drag and drop'}
-                    </p>
-                    <p className="text-sm text-text-secondary">
-                    Photos, Videos & Audio (max 500MB)
-                    </p>
-                </>
+                  <FileAudio className="w-10 h-10 text-primary" />
                 )}
-            </div>
-
-            {/* Error Message */}
-            {uploadState.status === 'error' && (
-                <div className="absolute bottom-4 left-0 right-0 text-center text-sm text-destructive font-medium flex items-center justify-center gap-1">
-                <AlertCircle className="w-4 h-4" />
-                {uploadState.error}
+                <div>
+                  <p className="font-medium text-text-primary">{file.name}</p>
+                  <p className="text-sm text-text-secondary">
+                    {(file.size / (1024 * 1024)).toFixed(2)} MB
+                  </p>
                 </div>
+              </div>
+            ) : (
+              <>
+                <Upload className="w-10 h-10 text-text-tertiary mb-3" />
+                <p className="font-medium text-text-primary mb-1">
+                  {label || 'Click to upload or drag and drop'}
+                </p>
+                <p className="text-sm text-text-secondary">
+                  {acceptedTypes
+                    ? `Supported: ${acceptedTypes.join(', ')} (max ${maxSizeMB}MB)`
+                    : `Photos, Videos & Audio (max ${maxSizeMB}MB)`}
+                </p>
+              </>
             )}
-            </div>
-        ) : null}
+          </div>
 
-        {/* Action Buttons */}
-        {uploadState.status === 'idle' && file && (
-            <div className="flex gap-3 mt-4">
-            <AppButton variant="outline" className="flex-1" onClick={resetUpload}>
-                Cancel
-            </AppButton>
-            <AppButton variant="primary" className="flex-1" onClick={uploadFile}>
-                Upload
-            </AppButton>
+          {/* Error Message */}
+          {uploadState.status === 'error' && (
+            <div className="absolute bottom-4 left-0 right-0 text-center text-sm text-destructive font-medium flex items-center justify-center gap-1">
+              <AlertCircle className="w-4 h-4" />
+              {uploadState.error}
             </div>
-        )}
+          )}
+        </div>
+      ) : null}
+
+      {/* Action Buttons */}
+      {uploadState.status === 'idle' && file && (
+        <div className="flex gap-3 mt-4">
+          <AppButton variant="outline" className="flex-1" onClick={resetUpload}>
+            Cancel
+          </AppButton>
+          <AppButton variant="primary" className="flex-1" onClick={uploadFile}>
+            Upload
+          </AppButton>
+        </div>
+      )}
 
       {/* Progress View */}
       {(uploadState.status === 'uploading' || uploadState.status === 'processing') && (
         <div className="border border-border rounded-xl p-6 bg-surface">
-            <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-text-primary">
-                {uploadState.status === 'uploading' ? 'Uploading...' : 'Processing...'}
+              {uploadState.status === 'uploading' ? 'Uploading...' : 'Processing...'}
             </span>
             <span className="text-sm text-text-secondary">
-                {Math.round(uploadState.progress)}%
+              {Math.round(uploadState.progress)}%
             </span>
-            </div>
-            <div className="h-2 bg-border rounded-full overflow-hidden">
+          </div>
+          <div className="h-2 bg-border rounded-full overflow-hidden">
             <div
-                className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${uploadState.progress}%` }}
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${uploadState.progress}%` }}
             />
-            </div>
-            {uploadState.status === 'processing' && (
+          </div>
+          {uploadState.status === 'processing' && (
             <p className="text-xs text-text-tertiary mt-2">
-                Optimizing media for playback...
+              Optimizing media for playback...
             </p>
-            )}
+          )}
         </div>
       )}
 
       {/* Completed View */}
       {uploadState.status === 'completed' && (
         <div className="border border-green-200 bg-green-50 rounded-xl p-6 flex flex-col items-center justify-center text-center">
-            <CheckCircle className="w-10 h-10 text-green-500 mb-2" />
-            <p className="font-medium text-green-800">Upload Complete</p>
-            <p className="text-sm text-green-600 mb-4">
+          <CheckCircle className="w-10 h-10 text-green-500 mb-2" />
+          <p className="font-medium text-green-800">Upload Complete</p>
+          <p className="text-sm text-green-600 mb-4">
             Your media has been added to the invitation.
-            </p>
-            <AppButton variant="outline" size="sm" onClick={resetUpload}>
+          </p>
+          <AppButton variant="outline" size="sm" onClick={resetUpload}>
             Upload Another
-            </AppButton>
+          </AppButton>
         </div>
       )}
     </div>

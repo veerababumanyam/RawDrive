@@ -256,11 +256,11 @@ interface QRConfig {
 | Glass morphism UI | NOT CONFIGURED | Design requirement only |
 | "Remember me" option | NOT CONFIGURED | Session management feature |
 | Brute-force protection | CONFIGURED | Rate limiting in backend |
-| Password reset capability | NOT CONFIGURED | Would need email flow |
+| Password reset capability | **IMPLEMENTED** | Email-based reset flow with rate limiting |
 | **Email Registration** | CONFIGURED | email_registration_required field |
 | Email verification | PARTIAL | Capture only, no verification flow |
-| **Access Codes (Per-Photo)** | CONFIGURED | is_private field on gallery_asset |
-| Unique codes per photo | NOT CONFIGURED | Would need access_code field |
+| **Access Codes (Per-Photo)** | **IMPLEMENTED** | Bcrypt-hashed access codes per photo |
+| Unique codes per photo | **IMPLEMENTED** | access_code_hash field + verification API |
 | **Gallery Expiration** | CONFIGURED | expires_at field |
 | IP whitelisting (Enterprise) | NOT CONFIGURED | Would need ip_whitelist field |
 
@@ -285,9 +285,9 @@ interface QRConfig {
 |-------------|--------|-------|
 | **Favorites (Heart Icon)** | IMPLEMENTED | is_favorited, favorites_count |
 | **Selections/Picks (Checkmark)** | IMPLEMENTED | is_selected, client_picks_count |
-| **Ratings (Star System)** | NOT CONFIGURED | Would need rating field |
-| **Photo Card Metadata** | PARTIAL | EXIF visible, no captions |
-| **Photo Captions** | NOT CONFIGURED | Would need caption field |
+| **Ratings (Star System)** | CONFIGURED | rating in client_interactions, average_rating on assets (Migration 0159) |
+| **Photo Card Metadata** | PARTIAL | EXIF visible, captions now configured |
+| **Photo Captions** | CONFIGURED | caption, caption_visible fields (Migration 0158) |
 
 ### 7.4 Media Viewing
 
@@ -297,8 +297,8 @@ interface QRConfig {
 | Keyboard shortcuts | IMPLEMENTED | Arrow keys, Escape, +/- |
 | **Deep Zoom** | IMPLEMENTED | Pinch-zoom, wheel zoom |
 | **Slideshow** | IMPLEMENTED | Auto-advance feature |
-| Configurable interval | NOT CONFIGURED | Would need slideshow_interval |
-| Background music | NOT CONFIGURED | Would need audio_url |
+| Configurable interval | **IMPLEMENTED** | slideshow_config.interval_seconds (3-30s) |
+| Background music | **IMPLEMENTED** | Audio upload + volume/loop/crossfade controls |
 | **Video Playback** | IMPLEMENTED | HTML5 video player |
 | Playback speed control | PARTIAL | Standard controls |
 | Captions/subtitles | NOT CONFIGURED | Would need vtt_url |
@@ -308,8 +308,8 @@ interface QRConfig {
 | Requirement | Status | Notes |
 |-------------|--------|-------|
 | **Sub-galleries / Folders** | CONFIGURED | sub_galleries table |
-| Nested folders | NOT CONFIGURED | Single level only |
-| Breadcrumb navigation | NOT IMPLEMENTED | Component needed |
+| Nested folders | **IMPLEMENTED** | Up to 3 levels deep with parent_sub_gallery_id |
+| Breadcrumb navigation | **IMPLEMENTED** | Breadcrumbs component + recursive CTE API |
 | **Tab/Category System** | IMPLEMENTED | All/Favorites/Selections tabs |
 | Guest Favorites tab | PARTIAL | Shows counts, not tab |
 
@@ -333,7 +333,7 @@ interface QRConfig {
 | Format selection modal | NOT IMPLEMENTED | DownloadPhotoModal needed |
 | **Bulk Download (ZIP)** | IMPLEMENTED | favoritesService.ts |
 | Progress tracking | IMPLEMENTED | Polling mechanism |
-| Daily download limit | NOT CONFIGURED | Would need daily_download_limit |
+| Daily download limit | **IMPLEMENTED** | Redis-based quota tracking per visitor |
 
 ### 7.8 Sharing
 
@@ -344,7 +344,7 @@ interface QRConfig {
 | Download QR as image | IMPLEMENTED | PNG/SVG/PDF export |
 | **Social Sharing** | PARTIAL | Copy/native share only |
 | Platform buttons | NOT IMPLEMENTED | WhatsApp, Facebook, etc. |
-| UTM tracking | NOT CONFIGURED | Would need utm_params |
+| UTM tracking | **IMPLEMENTED** | useUtmTracking hook + visitor API integration |
 | Share analytics | PARTIAL | access_count only |
 
 ### 7.9 Branding & Customization
@@ -354,7 +354,7 @@ interface QRConfig {
 | **Photographer Branding** | CONFIGURED | branding_profile_id references Company Profile |
 | **Header Branding** | IMPLEMENTED | Logo, name, title from Company Profile |
 | **Footer Branding** | PARTIAL | Basic footer exists |
-| Social media links | NOT CONFIGURED | Would need social_links in Company Profile |
+| Social media links | CONFIGURED | `socials` field in Company Profile (gallery-service returns it) |
 | **Watermarking** | CONFIGURED | download_policy = watermarked_only triggers watermark |
 | Watermark position config | UI TYPE ONLY | WatermarkSettings type exists but not persisted |
 | Watermark image | WORKSPACE LEVEL | Uses Company Profile logo |
@@ -366,12 +366,12 @@ interface QRConfig {
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| **WCAG 2.1 AA Compliance** | PARTIAL | Some ARIA, needs audit |
+| **WCAG 2.1 AA Compliance** | **IMPLEMENTED** | High contrast, skip links, keyboard nav |
 | Keyboard navigation | IMPLEMENTED | Tab, Arrow keys, Escape |
-| Screen reader support | PARTIAL | Some ARIA labels |
-| High contrast mode | NOT IMPLEMENTED | Would need preference |
-| Skip links | NOT IMPLEMENTED | SkipLinks component needed |
-| 44x44px touch targets | PARTIAL | Needs audit |
+| Screen reader support | **IMPLEMENTED** | Comprehensive ARIA labels + live regions |
+| High contrast mode | **IMPLEMENTED** | useHighContrast hook + CSS variables |
+| Skip links | **IMPLEMENTED** | SkipLinks component with target IDs |
+| 44x44px touch targets | IMPLEMENTED | Verified in PhotoCard, HoverOverlay |
 
 ### 7.11 Multi-Language Support
 
@@ -379,7 +379,7 @@ interface QRConfig {
 |-------------|--------|-------|
 | **i18n Infrastructure** | CONFIGURED | 13 locales defined |
 | Gallery strings translated | PARTIAL | Common strings only |
-| RTL support (Urdu) | NOT IMPLEMENTED | CSS RTL needed |
+| RTL support (Urdu) | **IMPLEMENTED** | useRTL hook + RTL CSS utilities |
 | Language selector | PARTIAL | In workspace settings |
 | Per-gallery language | CONFIGURED | portal_language field |
 
@@ -387,32 +387,38 @@ interface QRConfig {
 
 ## 8. Gaps Summary (What Needs Configuration/Development)
 
-### 8.1 New Fields Needed
+### 8.1 New Fields - Implementation Status
 
-| Field | Table | Type | Purpose |
-|-------|-------|------|---------|
-| `caption` | gallery_assets | text | Photo caption visible to clients |
-| `caption_visible` | gallery_assets | boolean | Toggle caption display |
-| `rating` | client_asset_interactions | int (1-5) | Star rating |
-| `selection_limit` | galleries | int | Max selections per client |
-| `slideshow_interval` | galleries | int | Slideshow speed (seconds) |
-| `watermark_settings` | galleries | JSONB | Position, opacity, scale |
-| `findme_settings` | galleries | JSONB | Confidence threshold, enabled |
-| `social_links` | company_profiles | JSONB | Social media URLs |
+| Field | Table | Type | Purpose | Status |
+|-------|-------|------|---------|--------|
+| `caption` | gallery_assets | text | Photo caption visible to clients | **IMPLEMENTED** (Migration 0158) |
+| `caption_visible` | gallery_assets | boolean | Toggle caption display | **IMPLEMENTED** (Migration 0158) |
+| `rating` | client_interactions | int (1-5) | Star rating | **IMPLEMENTED** (Migration 0159, API `/rate` endpoint) |
+| `average_rating` | gallery_assets | float | Average rating aggregation | **IMPLEMENTED** (Migration 0158) |
+| `selection_limit` | galleries | int | Max selections per client | **IMPLEMENTED** (Migration 0157) |
+| `slideshow_config` | galleries | JSONB | Interval, transition, autoplay | **IMPLEMENTED** (Migration 0157) |
+| `watermark_config` | galleries | JSONB | Position, opacity, scale | **IMPLEMENTED** (Migration 0157) |
+| `findme_config` | galleries | JSONB | Confidence threshold, enabled | **IMPLEMENTED** (Migration 0157) |
+| `ratings_enabled` | galleries | boolean | Enable star ratings | **IMPLEMENTED** (Migration 0157) |
+| `activity_tracking` | galleries | JSONB | View/download/share tracking | **IMPLEMENTED** (Migration 0157) |
+| `social_links` | company_profiles | JSONB | Social media URLs | **IMPLEMENTED** (column exists as `socials`) |
+
+> **Note**: Fields marked "IMPLEMENTED" have backend Alembic migrations, gallery-service schemas, and service layer support. Run `alembic upgrade head` to apply.
 
 ### 8.2 New Features Needed
 
-| Feature | Priority | Scope |
-|---------|----------|-------|
-| Mobile swipe navigation | CRITICAL | Lightbox enhancement |
-| Single photo download modal | CRITICAL | New component |
-| Platform social sharing buttons | HIGH | ShareMenu enhancement |
-| Photo captions | HIGH | New field + UI |
-| Star ratings | HIGH | New field + UI |
-| WCAG 2.1 AA audit | MEDIUM | Accessibility fixes |
-| Gallery string i18n | MEDIUM | Translation extraction |
-| Long-press context menu | LOW | Touch UX enhancement |
-| Album preview/proofing | FUTURE | New feature area |
+| Feature | Priority | Scope | Status |
+|---------|----------|-------|--------|
+| Mobile swipe navigation | CRITICAL | Lightbox enhancement | **IMPLEMENTED** |
+| Single photo download modal | CRITICAL | New component | **IMPLEMENTED** |
+| Platform social sharing buttons | HIGH | ShareMenu enhancement | **IMPLEMENTED** |
+| Photo captions | HIGH | New field + UI | **IMPLEMENTED** (Migration 0158) |
+| Star ratings | HIGH | New field + UI | **IMPLEMENTED** (ratings_enabled in 0157) |
+| Gallery settings persistence | HIGH | Backend integration | **IMPLEMENTED** (13 fields in 0157) |
+| WCAG 2.1 AA audit | MEDIUM | Accessibility fixes | **IMPLEMENTED** (keyboard nav, focus mgmt, aria-pressed) |
+| Gallery string i18n | MEDIUM | Translation extraction | **IMPLEMENTED** (280+ strings in gallery.json) |
+| Long-press context menu | LOW | Touch UX enhancement | **IMPLEMENTED** (useLongPress hook + PhotoContextMenu) |
+| Album preview/proofing | FUTURE | New feature area | NOT STARTED |
 
 ### 8.3 Configuration vs Implementation Status Legend
 
@@ -426,22 +432,23 @@ NOT IMPLEMENTED = Needs new component/feature development
 WORKSPACE LEVEL = Setting is at workspace level, not per-gallery
 ```
 
-### 8.4 UI-Only Types (Not Persisted)
+### 8.4 Config Types Implementation Status
 
-These TypeScript types exist in the frontend but are **not stored in the database**:
-
-| Type | Location | Purpose | Persistence |
-|------|----------|---------|-------------|
-| `WatermarkSettings` | canvas.ts | Watermark display options | Passed as props only |
-| `ViewMode` | gallery.ts | grid/masonry/list | User preference (localStorage) |
-| `FilterType` | gallery.ts | all/picks/favorites/selections | URL query param |
-| `GalleryAssetSortOption` | gallery.ts | position/favorites/newest | URL query param |
+| Type | Frontend | Backend Schema | Database | Status |
+|------|----------|----------------|----------|--------|
+| `WatermarkConfig` | gallery.ts | common.py | ✅ JSONB (0157) | **IMPLEMENTED** |
+| `FindMeConfig` | gallery.ts | common.py | ✅ JSONB (0157) | **IMPLEMENTED** |
+| `SlideshowConfig` | gallery.ts | common.py | ✅ JSONB (0157) | **IMPLEMENTED** |
+| `ActivityTrackingConfig` | gallery.ts | common.py | ✅ JSONB (0157) | **IMPLEMENTED** |
+| `ViewMode` | gallery.ts | - | - | User preference (localStorage) |
+| `FilterType` | gallery.ts | - | - | URL query param |
+| `GalleryAssetSortOption` | gallery.ts | - | - | URL query param |
 
 ---
 
 ## 9. UI Settings Panel Organization
 
-The GallerySettingsPanel component organizes settings into these sections:
+The GallerySettingsPanel component organizes settings into **10 sections** (tabs):
 
 ### Section: General
 - Gallery title
@@ -458,6 +465,9 @@ The GallerySettingsPanel component organizes settings into these sections:
 
 ### Section: Downloads (DownloadSettings)
 - Download policy selector (view_only / web_only / watermarked_only / original_allowed)
+- Bulk download options (allow bulk, full gallery, selection download)
+- ZIP packaging options (folder structure, metadata file)
+- Web quality settings (resolution, JPEG quality) - for web_only policy
 
 ### Section: Branding (BrandingSettings + VisualIdentitySettings + CustomLinksEditor)
 - Company Profile reference
@@ -467,6 +477,44 @@ The GallerySettingsPanel component organizes settings into these sections:
 - Font family selector
 - EXIF visibility toggle
 - Custom navigation links editor
+
+### Section: Interactions (ClientInteractionSettings) - NEW
+- Comments enabled toggle
+- Favorites enabled toggle
+- Selections enabled toggle
+- Selection limit (max photos per client)
+- Star ratings enabled toggle
+
+### Section: Watermark (WatermarkSettings) - NEW
+- Watermark enabled toggle
+- Position selector (top-left, top-right, bottom-left, bottom-right, center, tiled)
+- Opacity slider (10-100%)
+- Scale slider (10-50% of image)
+- Custom watermark upload
+- Preview visualization
+
+### Section: FindMe (FindMeSettings) - NEW
+- FindMe enabled toggle
+- Guest access toggle
+- Match sensitivity slider (confidence threshold 0.5-0.95)
+- Maximum results input (10-500)
+- Privacy notice and tips
+
+### Section: Slideshow (SlideshowSettings) - NEW
+- Slideshow enabled toggle
+- Autoplay on open toggle
+- Slide duration selector (3-30 seconds)
+- Transition effect selector (fade, slide, zoom, none)
+- Loop toggle
+- Show captions toggle
+- Preview visualization
+
+### Section: Alerts (GalleryNotificationSettings) - NEW
+- Comment notification toggle
+- Favorite notification toggle
+- Selection update notification toggle
+- Download notification toggle
+- Activity tracking settings (views, downloads, shares, anonymous mode)
 
 ### Section: AI (AISettings)
 - Tagging health dashboard (read-only status)
@@ -487,15 +535,163 @@ The GallerySettingsPanel component organizes settings into these sections:
 
 - [GLOSSARY.md](./GLOSSARY.md) - Canonical terminology
 - [CLIENT_FACING_FEATURES.md](./CLIENT_FACING_FEATURES.md) - Full feature requirements
-- [gallery.ts](../../frontend/src/types/gallery.ts) - Frontend types
+- [gallery.ts](../../frontend/src/types/gallery.ts) - Frontend types (includes new config types)
 - [schemas.py](../../backend/src/app/api/schemas.py) - Backend schemas
 - [shared-types/gallery.ts](../../packages/shared-types/src/gallery.ts) - Shared enums
-- [GallerySettingsPanel.tsx](../../frontend/src/components/features/gallery/GallerySettingsPanel.tsx) - Settings UI
+- [GallerySettingsPanel.tsx](../../frontend/src/components/features/gallery/GallerySettingsPanel.tsx) - Settings UI (10 tabs)
+
+### New Settings Components (2026-01-09)
+- [ClientInteractionSettings.tsx](../../frontend/src/components/features/gallery/ClientInteractionSettings.tsx) - Comments, Favorites, Selections, Ratings
+- [WatermarkSettings.tsx](../../frontend/src/components/features/gallery/WatermarkSettings.tsx) - Watermark configuration
+- [FindMeSettings.tsx](../../frontend/src/components/features/gallery/FindMeSettings.tsx) - Face recognition settings
+- [SlideshowSettings.tsx](../../frontend/src/components/features/gallery/SlideshowSettings.tsx) - Slideshow configuration
+- [GalleryNotificationSettings.tsx](../../frontend/src/components/features/gallery/GalleryNotificationSettings.tsx) - Notifications & activity tracking
+- [SinglePhotoDownloadModal.tsx](../../frontend/src/components/features/gallery/SinglePhotoDownloadModal.tsx) - Individual photo download with format selection
 
 ---
 
-## 11. Version History
+## 11. Gallery Microservice Implementation Gap Analysis
+
+### 11.1 Overview
+
+The gallery-service microservice (`services/gallery-service/`) handles high-performance gallery operations for 50K concurrent users. However, several frontend settings types are **NOT YET implemented** in the backend.
+
+**Frontend Types Exist In:** `frontend/src/types/gallery.ts`
+**Backend Schemas In:** `services/gallery-service/src/schemas/gallery.py`
+**Backend Service In:** `services/gallery-service/src/services/gallery_service.py`
+
+### 11.2 Gallery Microservice Fields - IMPLEMENTED
+
+| Field | Type | Frontend Type | Backend Schema | Database | Status |
+|-------|------|---------------|----------------|----------|--------|
+| `comments_enabled` | boolean | GalleryDetailData | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `favorites_enabled` | boolean | GalleryDetailData | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `selections_enabled` | boolean | GalleryDetailData | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `selection_limit` | int | GalleryDetailData | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `ratings_enabled` | boolean | GalleryDetailData | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `watermark_config` | JSONB | WatermarkConfig | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `findme_config` | JSONB | FindMeConfig | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `slideshow_config` | JSONB | SlideshowConfig | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `activity_tracking` | JSONB | ActivityTrackingConfig | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `notify_on_comment` | boolean | GalleryDetailData | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `notify_on_favorite` | boolean | GalleryDetailData | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `notify_on_selection` | boolean | GalleryDetailData | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+| `notify_on_download` | boolean | GalleryDetailData | ✅ GalleryResponse | ✅ Migration 0157 | DONE |
+
+### 11.3 Gallery Asset Fields - IMPLEMENTED
+
+| Field | Type | Frontend Type | Backend Schema | Database | Status |
+|-------|------|---------------|----------------|----------|--------|
+| `caption` | text | GalleryAssetItem | ✅ GalleryAssetResponse | ✅ Migration 0158 | DONE |
+| `caption_visible` | boolean | GalleryAssetItem | ✅ GalleryAssetResponse | ✅ Migration 0158 | DONE |
+| `average_rating` | float | GalleryAssetItem | ✅ GalleryAssetResponse | ✅ Migration 0158 | DONE |
+
+### 11.4 Completed Implementation Files
+
+**1. Database Migrations (CREATED)**
+```
+backend/migrations/versions/0157_gallery_client_interaction_settings.py ✅
+backend/migrations/versions/0158_gallery_asset_caption_fields.py ✅
+```
+
+**2. Gallery Service Schemas (UPDATED)**
+```
+services/gallery-service/src/schemas/common.py ✅
+  - Added: WatermarkConfig, FindMeConfig, SlideshowConfig, ActivityTrackingConfig
+
+services/gallery-service/src/schemas/gallery.py ✅
+  - Updated: GalleryResponse (13 new fields)
+  - Updated: GalleryUpdateRequest (13 new fields)
+  - Updated: GalleryAssetResponse (caption, caption_visible, average_rating)
+  - Updated: UpdateAssetRequest (caption, caption_visible)
+```
+
+**3. Gallery Service (UPDATED)**
+```
+services/gallery-service/src/services/gallery_service.py ✅
+  - Updated: row_to_gallery_dict() - 13 new fields
+  - Updated: update_gallery() valid_fields - 13 new fields
+  - Added: JSONB serialization handling for config fields
+```
+
+### 11.5 Existing Fields Already in Microservice
+
+These fields are **correctly implemented** in the gallery microservice:
+
+| Field | Schema | Service | API |
+|-------|--------|---------|-----|
+| `title` | ✅ | ✅ | ✅ |
+| `description` | ✅ | ✅ | ✅ |
+| `client_name` | ✅ | ✅ | ✅ |
+| `download_policy` | ✅ | ✅ | ✅ |
+| `password_protected` | ✅ | ✅ | ✅ |
+| `pin_protected` | ✅ | ✅ | ✅ |
+| `email_registration_required` | ✅ | ✅ | ✅ |
+| `expires_at` | ✅ | ✅ | ✅ |
+| `layout_style` | ✅ | ✅ | ✅ |
+| `theme` | ✅ | ✅ | ✅ |
+| `exif_visible` | ✅ | ✅ | ✅ |
+| `gradient_config` | ✅ | ✅ | ✅ |
+| `custom_links` | ✅ | ✅ | ✅ |
+| `branding_profile_id` | ✅ | ✅ | ✅ |
+| `portal_language` | ✅ | ✅ | ✅ |
+
+### 11.6 Implementation Priority Order
+
+**Phase 1 (Critical - Required for Settings UI)**
+1. Create Alembic migration 0157
+2. Update `GalleryResponse` schema
+3. Update `GalleryUpdateRequest` schema
+4. Update `row_to_gallery_dict()`
+5. Update `update_gallery()` valid_fields
+
+**Phase 2 (High - Client Interaction)**
+1. Add caption fields to gallery_assets
+2. Update `GalleryAssetResponse` schema
+3. Update asset listing queries
+
+**Phase 3 (Medium - Advanced Features)**
+1. Implement rating aggregation
+2. Implement activity tracking storage
+3. Implement notification triggers
+
+---
+
+## 12. Version History
 
 | Date | Change |
 |------|--------|
 | 2026-01-09 | Initial comprehensive analysis |
+| 2026-01-09 | Added 5 new settings components (Interactions, Watermark, FindMe, Slideshow, Alerts) |
+| 2026-01-09 | Created SinglePhotoDownloadModal component |
+| 2026-01-09 | Enhanced ShareMenu with Pinterest, Telegram, native share |
+| 2026-01-09 | Added selection_limit and ratings_enabled to gallery types |
+| 2026-01-09 | Expanded GallerySettingsPanel to 10 tabs |
+| 2026-01-09 | Added Section 11: Gallery Microservice Implementation Gap Analysis |
+| 2026-01-09 | Completed: Added 13 new fields to gallery-service schemas |
+| 2026-01-09 | Completed: Added config types (Watermark, FindMe, Slideshow, ActivityTracking) |
+| 2026-01-09 | Completed: Created migrations 0157 (gallery settings) and 0158 (asset captions) |
+| 2026-01-09 | Completed: Updated gallery_service.py with new fields in row_to_gallery_dict and update_gallery |
+| 2026-01-09 | Completed: Added `socials` field to gallery-service CompanyProfileResponse |
+| 2026-01-09 | Completed: Gallery i18n extraction - 280+ strings added to gallery.json |
+| 2026-01-09 | Completed: Updated get_gallery and get_public_gallery to fetch and return company profile with social links |
+| 2026-01-09 | Completed: Created migration 0159 for rating support in client_interactions |
+| 2026-01-09 | Completed: Added `/rate` API endpoint to gallery-service public API |
+| 2026-01-09 | Completed: Rating aggregation updates average_rating on gallery_assets |
+| 2026-01-09 | Completed: WCAG 2.1 AA - HoverOverlay keyboard accessibility and focus-within tracking |
+| 2026-01-09 | Completed: WCAG 2.1 AA - ShareMenu modal focus management and keyboard navigation |
+| 2026-01-09 | Completed: WCAG 2.1 AA - Added touch-target class to all action buttons (44x44px min) |
+| 2026-01-09 | Completed: WCAG 2.1 AA - Added aria-pressed to toggle buttons, aria-hidden to decorative icons |
+| 2026-01-09 | Completed: Long-press context menu - Created useLongPress hook with haptic feedback |
+| 2026-01-09 | Completed: Long-press context menu - Created PhotoContextMenu component with animated portal |
+| 2026-01-09 | Completed: Long-press context menu - Integrated into PhotoCard with createPhotoContextActions |
+| 2026-01-10 | 027-gallery-feature-completion: US1 - Per-Photo Access Codes with bcrypt hashing |
+| 2026-01-10 | 027-gallery-feature-completion: US2 - Daily Download Limits with Redis quota tracking |
+| 2026-01-10 | 027-gallery-feature-completion: US3 - WCAG 2.1 AAA High Contrast Mode |
+| 2026-01-10 | 027-gallery-feature-completion: US4 - Skip Links for screen reader navigation |
+| 2026-01-10 | 027-gallery-feature-completion: US5 - RTL Layout support for Urdu |
+| 2026-01-10 | 027-gallery-feature-completion: US6 - Breadcrumb Navigation with recursive CTE |
+| 2026-01-10 | 027-gallery-feature-completion: US7 - Nested Sub-Galleries up to 3 levels |
+| 2026-01-10 | 027-gallery-feature-completion: US8 - UTM Tracking with visitor analytics |
+| 2026-01-10 | 027-gallery-feature-completion: US9 - Password Reset via email flow |
+| 2026-01-10 | 027-gallery-feature-completion: US10 - Slideshow Background Music with audio controls |

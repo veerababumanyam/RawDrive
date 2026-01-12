@@ -73,3 +73,54 @@ class CustomLink(BaseModel):
     label: str = Field(..., min_length=1, max_length=50, description="Link label")
     url: str = Field(..., description="Link URL")
     icon: Optional[str] = Field(None, description="Optional icon identifier")
+
+
+# =============================================================================
+# Gallery Configuration Schemas
+# =============================================================================
+
+
+class WatermarkConfig(BaseModel):
+    """Watermark configuration for gallery downloads."""
+
+    enabled: bool = Field(default=False, description="Whether watermark is enabled")
+    position: Optional[str] = Field(
+        default="bottom-right",
+        description="Watermark position (top-left, top-right, bottom-left, bottom-right, center, tiled)"
+    )
+    opacity: Optional[int] = Field(default=50, ge=10, le=100, description="Watermark opacity (10-100%)")
+    scale: Optional[int] = Field(default=20, ge=10, le=50, description="Watermark scale (10-50% of image)")
+    custom_watermark_asset_id: Optional[str] = Field(None, description="Custom watermark image asset ID")
+
+
+class FindMeConfig(BaseModel):
+    """FindMe (face recognition) configuration for galleries."""
+
+    enabled: bool = Field(default=False, description="Whether FindMe is enabled")
+    confidence_threshold: Optional[float] = Field(
+        default=0.7, ge=0.5, le=0.95, description="Face match confidence threshold"
+    )
+    max_results: Optional[int] = Field(default=100, ge=10, le=500, description="Maximum search results")
+    allow_guest_search: Optional[bool] = Field(default=True, description="Allow guests to use face search")
+
+
+class SlideshowConfig(BaseModel):
+    """Slideshow configuration for galleries."""
+
+    enabled: bool = Field(default=True, description="Whether slideshow is enabled")
+    interval_seconds: Optional[int] = Field(default=5, ge=3, le=30, description="Slide interval in seconds")
+    transition: Optional[str] = Field(
+        default="fade", description="Transition effect (fade, slide, zoom, none)"
+    )
+    show_captions: Optional[bool] = Field(default=True, description="Show photo captions in slideshow")
+    loop: Optional[bool] = Field(default=True, description="Loop slideshow")
+    autoplay: Optional[bool] = Field(default=False, description="Autoplay slideshow on gallery open")
+
+
+class ActivityTrackingConfig(BaseModel):
+    """Activity tracking configuration for galleries."""
+
+    track_views: bool = Field(default=True, description="Track photo views")
+    track_downloads: bool = Field(default=True, description="Track photo downloads")
+    track_shares: bool = Field(default=True, description="Track photo shares")
+    anonymous_mode: bool = Field(default=False, description="Anonymize tracking data")

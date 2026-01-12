@@ -31,6 +31,7 @@ class Settings(BaseSettings):
         env_file=".env",
         case_sensitive=True,
         extra="ignore",  # Ignore extra env vars
+        protected_namespaces=('settings_',),
     )
 
     # Service

@@ -131,11 +131,15 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
 
         const response = await clientService.getActivities(workspaceId, clientId, params);
 
+
+
         if (reset) {
           setActivities(response.activities);
         } else {
           setActivities((prev) => [...prev, ...response.activities]);
         }
+
+
 
         setHasMore(response.meta.total > pageNum * 20);
       } catch (error) {

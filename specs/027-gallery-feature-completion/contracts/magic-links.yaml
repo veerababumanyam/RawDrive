@@ -1,0 +1,297 @@
+openapi: 3.0.3
+info:
+  title: Magic Links UTM Tracking API
+  version: 1.0.0
+  description: Extended magic links API with UTM tracking parameters
+
+paths:
+  /api/v1/galleries/{gallery_id}/magic-links:
+    post:
+      summary: Create magic link with UTM tracking
+      description: |
+        Creates a new magic link for sharing a gallery.
+        Optional UTM parameters for marketing attribution.
+      operationId: createMagicLink
+      tags:
+        - Magic Links
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                  maxLength: 100
+                  description: Internal label for the link
+                  example: "Instagram Story Share"
+                expires_at:
+                  type: string
+                  format: date-time
+                  description: Optional expiry date
+                max_accesses:
+                  type: integer
+                  minimum: 1
+                  description: Optional access limit
+                target_type:
+                  type: string
+                  enum: [gallery, sub_gallery, asset]
+                  default: gallery
+                target_id:
+                  type: string
+                  format: uuid
+                  description: Target ID (if not whole gallery)
+                utm_params:
+                  type: object
+                  description: UTM tracking parameters
+                  properties:
+                    utm_source:
+                      type: string
+                      maxLength: 100
+                      description: Traffic source (e.g., instagram, facebook, email)
+                      example: "instagram"
+                    utm_medium:
+                      type: string
+                      maxLength: 100
+                      description: Marketing medium (e.g., social, cpc, email)
+                      example: "social"
+                    utm_campaign:
+                      type: string
+                      maxLength: 100
+                      description: Campaign name
+                      example: "wedding_showcase_2026"
+                    utm_content:
+                      type: string
+                      maxLength: 100
+                      description: Content identifier
+                      example: "story_link"
+                    utm_term:
+                      type: string
+                      maxLength: 100
+                      description: Paid search keyword
+      responses:
+        '201':
+          description: Magic link created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MagicLink'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/galleries/{gallery_id}/magic-links/{link_id}:
+    patch:
+      summary: Update magic link UTM parameters
+      description: Updates UTM tracking parameters on an existing magic link
+      operationId: updateMagicLink
+      tags:
+        - Magic Links
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: link_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                utm_params:
+                  $ref: '#/components/schemas/UTMParams'
+      responses:
+        '200':
+          description: Magic link updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MagicLink'
+        '404':
+          description: Magic link not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/galleries/{gallery_id}/magic-links/{link_id}/stats:
+    get:
+      summary: Get magic link analytics with UTM breakdown
+      description: Returns detailed analytics including UTM source attribution
+      operationId: getMagicLinkStats
+      tags:
+        - Magic Links
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: link_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link_id:
+                    type: string
+                    format: uuid
+                  total_accesses:
+                    type: integer
+                  unique_visitors:
+                    type: integer
+                  utm_params:
+                    $ref: '#/components/schemas/UTMParams'
+                  accesses_by_day:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        count:
+                          type: integer
+                  accesses_by_device:
+                    type: object
+                    properties:
+                      desktop:
+                        type: integer
+                      mobile:
+                        type: integer
+                      tablet:
+                        type: integer
+                  accesses_by_country:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        country_code:
+                          type: string
+                        country_name:
+                          type: string
+                        count:
+                          type: integer
+        '404':
+          description: Magic link not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    MagicLink:
+      type: object
+      properties:
+        link_id:
+          type: string
+          format: uuid
+        gallery_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        public_url:
+          type: string
+          format: uri
+          description: Full shareable URL with UTM params if configured
+        short_url:
+          type: string
+          format: uri
+        target_type:
+          type: string
+          enum: [gallery, sub_gallery, asset]
+        target_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        max_accesses:
+          type: integer
+        access_count:
+          type: integer
+        status:
+          type: string
+          enum: [active, expired, revoked]
+        utm_params:
+          $ref: '#/components/schemas/UTMParams'
+        created_at:
+          type: string
+          format: date-time
+
+    UTMParams:
+      type: object
+      properties:
+        utm_source:
+          type: string
+        utm_medium:
+          type: string
+        utm_campaign:
+          type: string
+        utm_content:
+          type: string
+        utm_term:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+        requestId:
+          type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

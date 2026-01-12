@@ -45,6 +45,39 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info("Starting Digital Invitations Microservice...")
+    
+    # Initialize central config client if enabled
+    config_client_task = None
+    if settings.CENTRAL_CONFIG_ENABLED:
+        try:
+            from src.services.config_client import get_config_client
+            from src.config import reload_settings_from_central
+            
+            config_client = get_config_client()
+            
+            # Load initial config from central service
+            await reload_settings_from_central()
+            
+            # Start background refresh
+            await config_client.start_background_refresh()
+            
+            # Start periodic settings reload
+            async def settings_reload_loop():
+                """Periodically reload settings from central config."""
+                while True:
+                    try:
+                        await asyncio.sleep(settings.CENTRAL_CONFIG_REFRESH_INTERVAL)
+                        await reload_settings_from_central()
+                    except asyncio.CancelledError:
+                        break
+                    except Exception as e:
+                        logger.warning(f"Settings reload loop error: {e}")
+            
+            config_client_task = asyncio.create_task(settings_reload_loop())
+            logger.info(f"Central config enabled: refreshing every {settings.CENTRAL_CONFIG_REFRESH_INTERVAL}s")
+        except Exception as e:
+            logger.warning(f"Failed to initialize central config: {e}. Using environment variables.")
+    
     await redis_client.connect()
     await get_pool()  # Initialize database pool
     logger.info("Service started successfully")
@@ -92,6 +125,21 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        # Shutdown: Stop config refresh if enabled
+        if config_client_task:
+            config_client_task.cancel()
+            try:
+                await config_client_task
+            except asyncio.CancelledError:
+                pass
+            
+            try:
+                from src.services.config_client import get_config_client
+                config_client = get_config_client()
+                await config_client.stop_background_refresh()
+            except Exception as e:
+                logger.warning(f"Error stopping config client: {e}")
+        
         # Shutdown: Unregister from A2A registry
         heartbeat_task.cancel()
         try:

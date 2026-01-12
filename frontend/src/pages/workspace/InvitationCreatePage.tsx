@@ -141,6 +141,7 @@ const InvitationCreatePage: React.FC = () => {
         setCurrentStep(data.currentStep);
       }
     },
+
     onSaveError: () => {
       // Silent - indicator shows error state
     },
@@ -322,13 +323,12 @@ const InvitationCreatePage: React.FC = () => {
               {[1, 2, 3].map((step) => (
                 <div key={step} className="flex items-center">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                      step < currentStep
-                        ? 'bg-success text-white'
-                        : step === currentStep
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${step < currentStep
+                      ? 'bg-success text-white'
+                      : step === currentStep
                         ? 'bg-primary text-white'
                         : 'bg-surface-hover text-text-tertiary'
-                    }`}
+                      }`}
                   >
                     {step < currentStep ? (
                       <Check className="w-4 h-4" />
@@ -338,9 +338,8 @@ const InvitationCreatePage: React.FC = () => {
                   </div>
                   {step < 3 && (
                     <div
-                      className={`w-12 h-0.5 ${
-                        step < currentStep ? 'bg-success' : 'bg-surface-hover'
-                      }`}
+                      className={`w-12 h-0.5 ${step < currentStep ? 'bg-success' : 'bg-surface-hover'
+                        }`}
                     />
                   )}
                 </div>
@@ -364,6 +363,35 @@ const InvitationCreatePage: React.FC = () => {
               onComplete={handleComplete}
               onDataChange={handleDataChange}
               isSubmitting={createMutation.isPending}
+              onCreateDraft={async () => {
+                try {
+                  const data = {
+                    title: wizardData.title,
+                    event_type: wizardData.event_type as CreateInvitationRequest['event_type'],
+                    event_datetime: wizardData.event_datetime,
+                    event_end_datetime: wizardData.event_end_datetime,
+                    event_timezone: wizardData.event_timezone,
+                    venue: wizardData.venue,
+                    host_names: wizardData.host_names,
+                    host_contact_phone: wizardData.host_contact_phone,
+                    host_contact_email: wizardData.host_contact_email,
+                    primary_language: wizardData.primary_language,
+                    secondary_language: wizardData.secondary_language,
+                    rsvp_settings: wizardData.rsvp_settings,
+                    customization: wizardData.customization,
+                  };
+                  const draft = await invitationService.createInvitation(workspaceId!, data);
+                  // Update wizard data with ID and Slug
+                  handleDataChange({
+                    invitation_id: draft.invitation_id,
+                    slug: draft.slug
+                  });
+                  return draft.invitation_id;
+                } catch (e) {
+                  console.error("Failed to create draft", e);
+                  throw e;
+                }
+              }}
             />
           </div>
 
@@ -389,6 +417,7 @@ const InvitationCreatePage: React.FC = () => {
                   customization={{
                     colors: wizardData.customization?.colors as Record<string, string> | undefined,
                     layout_config: wizardData.customization?.layout_config,
+                    tagline: wizardData.customization?.tagline,
                     fonts: Object.fromEntries(
                       Object.entries({
                         heading: wizardData.font_heading,
@@ -397,6 +426,7 @@ const InvitationCreatePage: React.FC = () => {
                     ) as Record<string, string>,
                   }}
                   rsvpSettings={wizardData.rsvp_settings}
+                  invitationSlug={wizardData.slug}
                   viewMode={previewMode}
                   onViewModeChange={setPreviewMode}
                   compact

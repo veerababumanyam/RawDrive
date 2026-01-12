@@ -456,6 +456,12 @@ class GoogleOAuthService:
         )
 
         logger.info("Google OAuth login", extra={"user_id": str(user_id)})
+        
+        # NOTE: Gallery settings are NOT automatically synced with Google OAuth.
+        # Gallery settings remain independent and are managed separately.
+        # Studio defaults (CompanyProfile) can be applied manually via the UI,
+        # but there is no automatic syncing of gallery settings with Google OAuth.
+        
         return auth_user, token_pair
 
     async def _create_new_user(
@@ -590,6 +596,12 @@ class GoogleOAuthService:
         )
 
         logger.info("New user created via Google OAuth", extra={"user_id": str(user_id)})
+        
+        # NOTE: Gallery settings are NOT automatically synced with Google OAuth.
+        # Gallery settings remain independent and are managed separately.
+        # Studio defaults (CompanyProfile) can be applied manually via the UI,
+        # but there is no automatic syncing of gallery settings with Google OAuth.
+        
         return auth_user, token_pair
 
     async def _get_user_permissions(

@@ -171,7 +171,7 @@ export const ContactForm: React.FC<ContactFormProps> = ({
     }
 
     if (contactType === 'phone') {
-      const phoneRegex = /^[\d\s\-\(\)\+]+$/;
+      const phoneRegex = /^[\d\s\-()+]+$/;
       if (!phoneRegex.test(value) || value.replace(/\D/g, '').length < 10) {
         return { valid: false, error: 'Please enter a valid phone number (at least 10 digits)' };
       }

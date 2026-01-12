@@ -375,72 +375,95 @@ class InvitationRepository:
             # Generate invitation_id if not provided
             final_invitation_id = invitation_id or uuid.uuid4()
 
-            row = await conn.fetchrow(
-                """
-                INSERT INTO digital_invitations (
-                    invitation_id, workspace_id, template_id, title, slug, description,
-                    event_type, event_datetime, event_end_datetime, event_timezone,
-                    venue_name, venue_address, venue_city, venue_state,
-                    venue_country, venue_postal_code, venue_latitude, venue_longitude,
-                    venue_map_url, host_names, host_contact_phone, host_contact_email,
-                    rsvp_enabled, rsvp_deadline, rsvp_max_party_size,
-                    rsvp_collect_dietary, rsvp_collect_phone, rsvp_custom_questions,
-                    primary_language, secondary_language, customization, content_i18n,
-                    auto_delete_enabled, auto_delete_days, created_by_user_id,
-                    video_object_key, audio_object_key, layout_density,
-                    font_heading, font_body, ai_generated_content, has_sub_events
+            # #region agent log
+            import json as json_module
+            import traceback
+            import time
+            try:
+                with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    json_module.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E,G", "location": "invitation_repository.py:376", "message": "before INSERT", "data": {"primary_language": primary_language, "primary_language_type": type(primary_language).__name__, "venue_country": venue_country, "event_datetime": str(event_datetime), "has_template_id": template_id is not None}, "timestamp": time.time() * 1000}, f, ensure_ascii=False)
+                    f.write("\n")
+            except Exception:
+                pass
+            # #endregion
+
+            try:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO digital_invitations (
+                        invitation_id, workspace_id, template_id, title, slug, description,
+                        event_type, event_datetime, event_end_datetime, event_timezone,
+                        venue_name, venue_address, venue_city, venue_state,
+                        venue_country, venue_postal_code, venue_latitude, venue_longitude,
+                        venue_map_url, host_names, host_contact_phone, host_contact_email,
+                        rsvp_enabled, rsvp_deadline, rsvp_max_party_size,
+                        rsvp_collect_dietary, rsvp_collect_phone, rsvp_custom_questions,
+                        primary_language, secondary_language, customization, content_i18n,
+                        auto_delete_enabled, auto_delete_days, created_by_user_id,
+                        video_object_key, audio_object_key, layout_density,
+                        font_heading, font_body, ai_generated_content, has_sub_events
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+                        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+                        $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42
+                    )
+                    RETURNING *
+                    """,
+                    final_invitation_id,
+                    workspace_id,
+                    template_id,
+                    title,
+                    slug,
+                    description,
+                    event_type,
+                    event_datetime,
+                    event_end_datetime,
+                    event_timezone,
+                    venue_name,
+                    venue_address,
+                    venue_city,
+                    venue_state,
+                    venue_country,
+                    venue_postal_code,
+                    venue_latitude,
+                    venue_longitude,
+                    venue_map_url,
+                    host_names or [],
+                    host_contact_phone,
+                    host_contact_email,
+                    rsvp_enabled,
+                    rsvp_deadline,
+                    rsvp_max_party_size,
+                    rsvp_collect_dietary,
+                    rsvp_collect_phone,
+                    json.dumps(rsvp_custom_questions or []),
+                    primary_language,
+                    secondary_language,
+                    json.dumps(customization or {}),
+                    json.dumps(content_i18n or {}),
+                    auto_delete_enabled,
+                    auto_delete_days,
+                    created_by_user_id,
+                    video_object_key,
+                    audio_object_key,
+                    layout_density,
+                    font_heading,
+                    font_body,
+                    json.dumps(ai_generated_content or {}),
+                    has_sub_events,
                 )
-                VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                    $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                    $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42
-                )
-                RETURNING *
-                """,
-                final_invitation_id,
-                workspace_id,
-                template_id,
-                title,
-                slug,
-                description,
-                event_type,
-                event_datetime,
-                event_end_datetime,
-                event_timezone,
-                venue_name,
-                venue_address,
-                venue_city,
-                venue_state,
-                venue_country,
-                venue_postal_code,
-                venue_latitude,
-                venue_longitude,
-                venue_map_url,
-                host_names or [],
-                host_contact_phone,
-                host_contact_email,
-                rsvp_enabled,
-                rsvp_deadline,
-                rsvp_max_party_size,
-                rsvp_collect_dietary,
-                rsvp_collect_phone,
-                json.dumps(rsvp_custom_questions or []),
-                primary_language,
-                secondary_language,
-                json.dumps(customization or {}),
-                json.dumps(content_i18n or {}),
-                auto_delete_enabled,
-                auto_delete_days,
-                created_by_user_id,
-                video_object_key,
-                audio_object_key,
-                layout_density,
-                font_heading,
-                font_body,
-                json.dumps(ai_generated_content or {}),
-                has_sub_events,
-            )
+            except Exception as db_error:
+                # #region agent log
+                try:
+                    with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                        json_module.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "invitation_repository.py:444", "message": "database INSERT failed", "data": {"error": str(db_error), "error_type": type(db_error).__name__, "error_code": getattr(db_error, "pgcode", None), "traceback": traceback.format_exc()}, "timestamp": time.time() * 1000}, f, ensure_ascii=False)
+                        f.write("\n")
+                except Exception:
+                    pass
+                # #endregion
+                raise
 
             logger.info(
                 "Invitation created",

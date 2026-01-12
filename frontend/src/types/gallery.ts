@@ -132,6 +132,51 @@ export interface GalleryStats {
   selections_count: number;
 }
 
+// Watermark position options
+export type WatermarkPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'tiled';
+
+// Watermark configuration
+export interface WatermarkConfig {
+  enabled: boolean;
+  position?: WatermarkPosition;
+  opacity?: number; // 0-100
+  scale?: number; // 10-100 (percentage of image)
+  custom_watermark_asset_id?: string; // Custom watermark image
+}
+
+// FindMe (face recognition) settings
+export interface FindMeConfig {
+  enabled: boolean;
+  confidence_threshold?: number; // 0.5-1.0, default 0.7
+  max_results?: number; // Max photos to return per search
+  allow_guest_search?: boolean; // Allow non-registered visitors to use FindMe
+}
+
+// Slideshow settings
+export interface SlideshowConfig {
+  enabled: boolean;
+  interval_seconds?: number; // 3-30 seconds
+  transition?: 'fade' | 'slide' | 'zoom' | 'none';
+  show_captions?: boolean;
+  loop?: boolean;
+  autoplay?: boolean;
+  // Audio settings (US10 - Slideshow Background Music)
+  audio_enabled?: boolean; // Enable background music
+  audio_url?: string; // URL to audio track
+  audio_volume?: number; // 0.0 to 1.0
+  audio_autoplay?: boolean; // Start audio with slideshow
+  audio_loop?: boolean; // Loop audio track
+  audio_crossfade?: boolean; // Crossfade audio between slides
+}
+
+// Activity tracking settings
+export interface ActivityTrackingConfig {
+  track_views?: boolean; // Track individual photo views
+  track_downloads?: boolean; // Track download events
+  track_shares?: boolean; // Track share events
+  anonymous_tracking?: boolean; // Track without identifying info
+}
+
 // Gallery Detail Response (matches backend GalleryDetailResponse schema)
 // Backend returns flat structure, API client wraps it in { data: GalleryDetailResponse }
 export interface GalleryDetailData {
@@ -171,6 +216,29 @@ export interface GalleryDetailData {
   pinned_at?: string;
   is_pinned?: boolean;
   last_accessed_at?: string;
+  // Client interaction settings
+  comments_enabled?: boolean;
+  favorites_enabled?: boolean;
+  selections_enabled?: boolean;
+  /** Maximum photos a client can select (null = unlimited) */
+  selection_limit?: number | null;
+  /** Enable star ratings on photos */
+  ratings_enabled?: boolean;
+  // Watermark settings
+  watermark_config?: WatermarkConfig;
+  // FindMe (face recognition) settings
+  findme_config?: FindMeConfig;
+  // Slideshow settings
+  slideshow_config?: SlideshowConfig;
+  // Activity tracking settings
+  activity_tracking?: ActivityTrackingConfig;
+  // Notification preferences for this gallery
+  notify_on_comment?: boolean;
+  notify_on_favorite?: boolean;
+  notify_on_selection?: boolean;
+  notify_on_download?: boolean;
+  // Daily download limit (US2 - Daily Download Limits)
+  daily_download_limit?: number | null;
 }
 
 // Wrapper for API client response
@@ -204,6 +272,10 @@ export interface PublicGalleryAsset {
   is_selected?: boolean;
   favorites_count?: number;
   is_private?: boolean;
+  // Caption fields
+  caption?: string; // Photographer-provided caption
+  ai_caption?: string; // AI-generated caption from metadata
+  ai_tags?: string[]; // AI-generated tags
 }
 
 // Asset Info (nested in GalleryAssetItem)
@@ -269,6 +341,15 @@ export interface GalleryAssetItem {
   description?: string;
   tags?: string[];
   asset: AssetInfo;
+  // Caption fields - visible to clients
+  caption?: string;
+  caption_visible?: boolean;
+  // Rating (1-5 stars)
+  rating?: number;
+  average_rating?: number;
+  rating_count?: number;
+  // Access code protection (US1 - Per-Photo Access Codes)
+  has_access_code?: boolean;
 }
 
 // Gallery Assets Response
@@ -316,6 +397,29 @@ export interface GalleryUpdateRequest {
   font_family?: string | null;
   custom_domain?: string | null;
   custom_links?: Array<{ label: string; url: string }> | null;
+  // Client interaction settings
+  comments_enabled?: boolean;
+  favorites_enabled?: boolean;
+  selections_enabled?: boolean;
+  /** Maximum photos a client can select (null = unlimited) */
+  selection_limit?: number | null;
+  /** Enable star ratings on photos */
+  ratings_enabled?: boolean;
+  // Watermark settings
+  watermark_config?: WatermarkConfig | null;
+  // FindMe (face recognition) settings
+  findme_config?: FindMeConfig | null;
+  // Slideshow settings
+  slideshow_config?: SlideshowConfig | null;
+  // Activity tracking settings
+  activity_tracking?: ActivityTrackingConfig | null;
+  // Notification preferences for this gallery
+  notify_on_comment?: boolean;
+  notify_on_favorite?: boolean;
+  notify_on_selection?: boolean;
+  notify_on_download?: boolean;
+  // Daily download limit (US2 - Daily Download Limits)
+  daily_download_limit?: number | null;
 }
 
 // Upload Session Request
@@ -504,6 +608,16 @@ export interface ValidatedMagicLink {
     custom_links?: Array<{ label: string; url: string }>;
     pin_protected: boolean;
     email_registration_required: boolean;
+    // Branding fields from magic link validation
+    gradient_config?: GradientConfiguration | null;
+    layout_style?: LayoutStyle;
+    theme?: ThemeMode;
+    download_policy?: DownloadPolicy;
+    watermark_config?: WatermarkConfig;
+    findme_config?: FindMeConfig;
+    slideshow_config?: SlideshowConfig;
+    activity_tracking?: ActivityTrackingConfig;
+    custom_domain?: string;
   };
   company_profile?: {
     name: string;

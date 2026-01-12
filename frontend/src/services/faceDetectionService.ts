@@ -87,7 +87,7 @@ class FaceDetectionService {
     }
 
     if (withDescriptors) {
-      // @ts-ignore - TS types can be tricky with the chaining
+      // @ts-expect-error - TS types can be tricky with the chaining
       task = task.withFaceDescriptors();
     }
 

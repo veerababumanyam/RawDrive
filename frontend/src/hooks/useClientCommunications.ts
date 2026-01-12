@@ -72,11 +72,15 @@ export const useClientCommunications = ({
           requestParams
         );
 
+
+
         if (reset) {
           setCommunications(response.communications);
         } else {
           setCommunications((prev) => [...prev, ...response.communications]);
         }
+
+
 
         setHasMore(response.meta.total > page * (params.limit || 20));
         setTotalCount(response.meta.total);

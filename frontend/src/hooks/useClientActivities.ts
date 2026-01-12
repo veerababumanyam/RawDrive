@@ -72,11 +72,15 @@ export const useClientActivities = ({
           requestParams
         );
 
+
+
         if (reset) {
           setActivities(response.activities);
         } else {
           setActivities((prev) => [...prev, ...response.activities]);
         }
+
+
 
         setHasMore(response.meta.total > page * (params.limit || 20));
         setTotalCount(response.meta.total);

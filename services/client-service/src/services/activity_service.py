@@ -187,7 +187,7 @@ class ActivityService:
         }
 
         # Cache with short TTL for real-time updates
-        await redis_client.set_json(cache_key, result, ttl=self.cache_ttl)
+        await redis_client.set_json(cache_key, result, ex=self.cache_ttl)
 
         logger.debug(
             "Activity list fetched",

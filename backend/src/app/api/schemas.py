@@ -49,13 +49,20 @@ class ClientInteractionRequest(BaseModel):
 
 
 class VisitorRegisterRequest(BaseModel):
-    """Request to register a visitor."""
+    """Request to register a visitor with optional UTM tracking."""
     email: str = Field(..., description="Visitor email")
     first_name: Optional[str] = Field(None, description="First name")
     last_name: Optional[str] = Field(None, description="Last name")
     phone: Optional[str] = Field(None, description="Phone number")
     address: Optional[str] = Field(None, description="Address")
     metadata: Optional[dict] = Field({}, description="Additional metadata")
+    # UTM tracking parameters for marketing attribution (US8)
+    utm_source: Optional[str] = Field(None, max_length=200, description="Traffic source (e.g., google, facebook)")
+    utm_medium: Optional[str] = Field(None, max_length=100, description="Marketing medium (e.g., cpc, email, social)")
+    utm_campaign: Optional[str] = Field(None, max_length=200, description="Campaign name")
+    utm_content: Optional[str] = Field(None, max_length=200, description="Specific content/ad variant")
+    utm_term: Optional[str] = Field(None, max_length=200, description="Paid search keywords")
+    referrer: Optional[str] = Field(None, max_length=500, description="HTTP referrer URL")
     
 
 class RefreshTokenRequest(BaseModel):

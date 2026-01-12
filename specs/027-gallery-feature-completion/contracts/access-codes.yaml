@@ -1,0 +1,234 @@
+openapi: 3.0.3
+info:
+  title: Gallery Access Codes API
+  version: 1.0.0
+  description: API for per-photo access code management and verification
+
+paths:
+  /api/v1/public/galleries/{gallery_id}/assets/{asset_id}/verify-code:
+    post:
+      summary: Verify access code for a protected photo
+      description: |
+        Verifies the submitted access code against the stored hash for a protected asset.
+        Rate limited to prevent brute force attacks (3 attempts per 5 minutes).
+      operationId: verifyAccessCode
+      tags:
+        - Access Codes
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  minLength: 4
+                  maxLength: 8
+                  pattern: '^[A-Za-z0-9]+$'
+                  description: The access code to verify
+                  example: "GIFT2026"
+      responses:
+        '200':
+          description: Code verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified:
+                    type: boolean
+                    example: true
+                  session_token:
+                    type: string
+                    description: Token to include in subsequent requests for this asset
+        '401':
+          description: Invalid access code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many failed attempts - locked for 5 minutes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "rate_limit_exceeded"
+                  message:
+                    type: string
+                    example: "Too many failed attempts. Please try again in 5 minutes."
+                  retry_after:
+                    type: integer
+                    description: Seconds until lockout expires
+                    example: 300
+        '404':
+          description: Asset not found or not protected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/galleries/{gallery_id}/assets/{asset_id}/access-code:
+    put:
+      summary: Set or update access code for a photo
+      description: |
+        Allows photographers to set an access code on a specific photo.
+        The code is hashed before storage.
+      operationId: setAccessCode
+      tags:
+        - Access Codes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  minLength: 4
+                  maxLength: 8
+                  pattern: '^[A-Za-z0-9]+$'
+                  description: The access code to set (4-8 alphanumeric characters)
+                  example: "SURPRISE"
+      responses:
+        '200':
+          description: Access code set successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Access code set successfully"
+        '400':
+          description: Invalid code format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - not gallery owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Gallery or asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Remove access code from a photo
+      description: Removes the access code protection from a photo
+      operationId: removeAccessCode
+      tags:
+        - Access Codes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Access code removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Gallery or asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+        requestId:
+          type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

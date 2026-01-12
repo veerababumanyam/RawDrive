@@ -248,6 +248,30 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         code = exc.detail.get("code", code)
         message = exc.detail.get("message", message)
 
+    # #region agent log
+    import json
+    try:
+        with open(r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({
+                "location": "backend/src/app/api/exceptions.py:241",
+                "message": "HTTP exception handler called",
+                "data": {
+                    "status_code": exc.status_code,
+                    "path": request.url.path,
+                    "method": request.method,
+                    "code": code,
+                    "is_clients_path": "/clients" in request.url.path,
+                    "workspace_id_in_path": "/workspaces/" in request.url.path,
+                    "hypothesisId": "H3"
+                },
+                "timestamp": int(__import__('time').time() * 1000),
+                "sessionId": "debug-session",
+                "runId": "initial"
+            }) + '\n')
+    except Exception:
+        pass
+    # #endregion agent log
+
     response = build_error_response(
         status_code=exc.status_code,
         code=code,

@@ -5,7 +5,7 @@
 
 // V8 Error.captureStackTrace type extension
 type ErrorConstructorWithCaptureStackTrace = ErrorConstructor & {
-    captureStackTrace?: (targetObject: object, constructorOpt?: Function) => void;
+    captureStackTrace?: (targetObject: object, constructorOpt?: new (...args: unknown[]) => unknown) => void;
 };
 
 /**

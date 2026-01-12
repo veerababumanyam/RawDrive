@@ -89,6 +89,16 @@ class EventType(str, Enum):
     ALBUM_DOWNLOADED = "album.downloaded"
 
     # -------------------------------------------------------------------------
+    # Album Proofing Events - Album proof review workflow (026-album-proofing)
+    # -------------------------------------------------------------------------
+    ALBUM_PROOF_SENT = "album.proof_sent"
+    ALBUM_COMMENT_ADDED = "album.comment_added"
+    ALBUM_COMMENT_RESOLVED = "album.comment_resolved"
+    ALBUM_APPROVED = "album.approved"
+    ALBUM_VERSION_CREATED = "album.version_created"
+    ALBUM_CHANGES_REQUESTED = "album.changes_requested"
+
+    # -------------------------------------------------------------------------
     # Client Interaction Events - Client actions and engagement
     # -------------------------------------------------------------------------
     CLIENT_REGISTERED = "client.registered"
@@ -444,6 +454,113 @@ EVENT_CATALOG: dict[EventType, EventDefinition] = {
         required_payload_fields=["photo_id", "gallery_id"],
         optional_payload_fields=["client_name", "download_quality"],
         tags=["engagement", "photographer-facing"],
+    ),
+
+    # -------------------------------------------------------------------------
+    # Album Proofing Events (026-album-proofing)
+    # -------------------------------------------------------------------------
+    EventType.ALBUM_PROOF_SENT: EventDefinition(
+        event_type=EventType.ALBUM_PROOF_SENT,
+        name="Album Proof Sent",
+        description="Sent to client when photographer shares an album proof for review",
+        category=NotificationCategory.GALLERY_ACTIVITY,
+        default_priority=NotificationPriority.HIGH,
+        is_transactional=False,
+        supports_digest=False,
+        required_payload_fields=["album_id", "album_name", "proof_url", "photographer_name"],
+        optional_payload_fields=[
+            "spread_count", "custom_message", "expiry_date",
+            "cover_image_url", "workspace_name"
+        ],
+        sample_payload={
+            "album_id": "uuid",
+            "album_name": "Wedding Album - Smith Family",
+            "proof_url": "https://rawdrive.io/album/abc123",
+            "photographer_name": "John Smith Photography",
+            "spread_count": 20,
+            "custom_message": "Please review and let me know your thoughts!",
+        },
+        tags=["client-facing", "album-proofing", "action-required"],
+    ),
+    EventType.ALBUM_COMMENT_ADDED: EventDefinition(
+        event_type=EventType.ALBUM_COMMENT_ADDED,
+        name="Album Comment Added",
+        description="Sent to photographer when client adds a comment on album proof",
+        category=NotificationCategory.CLIENT_INTERACTIONS,
+        default_priority=NotificationPriority.NORMAL,
+        supports_digest=True,
+        cooldown_minutes=5,
+        required_payload_fields=[
+            "album_id", "album_name", "comment_id",
+            "commenter_name", "comment_preview", "spread_number"
+        ],
+        optional_payload_fields=["album_url", "position_x", "position_y"],
+        sample_payload={
+            "album_id": "uuid",
+            "album_name": "Wedding Album",
+            "comment_id": "uuid",
+            "commenter_name": "Jane Smith",
+            "comment_preview": "Can we swap this photo for...",
+            "spread_number": 5,
+        },
+        tags=["engagement", "photographer-facing", "album-proofing"],
+    ),
+    EventType.ALBUM_COMMENT_RESOLVED: EventDefinition(
+        event_type=EventType.ALBUM_COMMENT_RESOLVED,
+        name="Album Comment Resolved",
+        description="Sent to client when photographer resolves their comment",
+        category=NotificationCategory.CLIENT_INTERACTIONS,
+        default_priority=NotificationPriority.LOW,
+        supports_digest=True,
+        cooldown_minutes=10,
+        required_payload_fields=["album_id", "album_name", "comment_preview"],
+        optional_payload_fields=["album_url", "resolved_by", "resolution_note"],
+        tags=["client-facing", "album-proofing"],
+    ),
+    EventType.ALBUM_APPROVED: EventDefinition(
+        event_type=EventType.ALBUM_APPROVED,
+        name="Album Approved",
+        description="Sent to photographer when client approves album for print",
+        category=NotificationCategory.CLIENT_INTERACTIONS,
+        default_priority=NotificationPriority.HIGH,
+        is_transactional=False,
+        supports_digest=False,
+        required_payload_fields=[
+            "album_id", "album_name", "client_name", "client_email", "approval_date"
+        ],
+        optional_payload_fields=["album_url", "unresolved_comment_count", "version_number"],
+        sample_payload={
+            "album_id": "uuid",
+            "album_name": "Wedding Album - Smith Family",
+            "client_name": "Jane Smith",
+            "client_email": "jane@example.com",
+            "approval_date": "2026-01-10T15:30:00Z",
+        },
+        tags=["action-required", "photographer-facing", "album-proofing", "milestone"],
+    ),
+    EventType.ALBUM_VERSION_CREATED: EventDefinition(
+        event_type=EventType.ALBUM_VERSION_CREATED,
+        name="New Album Version",
+        description="Sent to client when photographer creates a new album version",
+        category=NotificationCategory.GALLERY_ACTIVITY,
+        default_priority=NotificationPriority.NORMAL,
+        supports_digest=True,
+        required_payload_fields=[
+            "album_id", "album_name", "version_number", "version_label", "proof_url"
+        ],
+        optional_payload_fields=["photographer_name", "change_summary"],
+        tags=["client-facing", "album-proofing"],
+    ),
+    EventType.ALBUM_CHANGES_REQUESTED: EventDefinition(
+        event_type=EventType.ALBUM_CHANGES_REQUESTED,
+        name="Album Changes Requested",
+        description="Sent to photographer when client requests changes to album",
+        category=NotificationCategory.CLIENT_INTERACTIONS,
+        default_priority=NotificationPriority.HIGH,
+        supports_digest=False,
+        required_payload_fields=["album_id", "album_name", "client_name", "comment_count"],
+        optional_payload_fields=["album_url", "summary"],
+        tags=["action-required", "photographer-facing", "album-proofing"],
     ),
 
     # -------------------------------------------------------------------------

@@ -12,15 +12,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Lock,
+  Key,
   Play,
   Image,
 } from 'lucide-react';
 
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useLongPress } from '../../../hooks/useLongPress';
 import type { GalleryAssetItem } from '../../../types/gallery';
 import { HoverOverlay } from './HoverOverlay';
 import { InlineEditForm } from './InlineEditForm';
+import { PhotoContextMenu, createPhotoContextActions } from './PhotoContextMenu';
 
 // Track loaded images for instant display (no placeholder needed)
 const loadedImageCache = new Set<string>();
@@ -55,6 +58,10 @@ export interface PhotoCardProps {
   aspectRatio?: 'square' | 'auto';
   isPrivateUnlocked?: boolean;
   onUnlockPrivate?: () => void;
+  /** Whether the access code has been verified for this photo */
+  isAccessCodeVerified?: boolean;
+  /** Callback to trigger access code verification modal */
+  onVerifyAccessCode?: () => void;
 }
 
 export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
@@ -79,8 +86,12 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   aspectRatio: aspectRatioMode = 'auto',
   isPrivateUnlocked,
   onUnlockPrivate,
+  isAccessCodeVerified,
+  onVerifyAccessCode,
 }) => {
-  const isLocked = asset.is_private && !isPrivateUnlocked;
+  const isPrivateLocked = asset.is_private && !isPrivateUnlocked;
+  const isAccessCodeLocked = asset.has_access_code && !isAccessCodeVerified;
+  const isLocked = isPrivateLocked || isAccessCodeLocked;
   const { workspace } = useAuth();
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -91,6 +102,50 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     loadedImageCache.has(asset.asset_id)
   );
   const imgRef = useRef<HTMLImageElement>(null);
+
+  // Context menu state for long-press
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+
+  // Long-press handler for touch devices
+  const handleLongPress = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (isLocked) return;
+
+    // Get position from touch or mouse event
+    let x: number, y: number;
+    if ('touches' in e) {
+      const touch = e.touches[0] || e.changedTouches[0];
+      x = touch.clientX;
+      y = touch.clientY;
+    } else {
+      x = e.clientX;
+      y = e.clientY;
+    }
+
+    setContextMenuPosition({ x, y });
+    setContextMenuOpen(true);
+  }, [isLocked]);
+
+  const longPressProps = useLongPress({
+    onLongPress: handleLongPress,
+    delay: 500,
+    threshold: 10,
+    disabled: isLocked || isEditing,
+  });
+
+  // Context menu actions
+  const contextMenuActions = createPhotoContextActions({
+    isFavorited: asset.is_favorited,
+    isSelected: asset.is_selected,
+    isPrivate: asset.is_private,
+    onView: onClick ? () => onClick(asset, index, {} as React.MouseEvent) : undefined,
+    onFavorite: onFavorite ? () => onFavorite(asset.asset_id, !asset.is_favorited) : undefined,
+    onSelect: onCustomerSelectionToggle ? () => onCustomerSelectionToggle(asset.asset_id, !asset.is_selected) : undefined,
+    onDownload: onDownload ? () => onDownload(asset.asset_id) : undefined,
+    onShare: onShare ? () => onShare(asset.asset_id) : undefined,
+    onLock: onLock ? () => onLock(asset.asset_id, !asset.is_private) : undefined,
+    onDelete: onDelete ? () => onDelete(asset.asset_id) : undefined,
+  });
 
   // Get LQIP (Low Quality Image Placeholder) from asset if available
   const lqip = asset.asset.lqip;
@@ -133,14 +188,18 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     aspectRatioMode === 'square'
       ? '1 / 1'
       : asset.asset.width && asset.asset.height
-      ? `${asset.asset.width} / ${asset.asset.height}`
-      : '4 / 3';
+        ? `${asset.asset.width} / ${asset.asset.height}`
+        : '4 / 3';
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     if (isLocked) {
-        e.stopPropagation();
+      e.stopPropagation();
+      if (isAccessCodeLocked) {
+        onVerifyAccessCode?.();
+      } else {
         onUnlockPrivate?.();
-        return;
+      }
+      return;
     }
     if (managementSelectable && (e.ctrlKey || e.metaKey)) {
       e.stopPropagation();
@@ -148,7 +207,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     } else {
       onClick?.(asset, index, e);
     }
-  }, [managementSelectable, onManagementSelect, onClick, asset, index, isLocked, onUnlockPrivate, isPrivateUnlocked]);
+  }, [managementSelectable, onManagementSelect, onClick, asset, index, isLocked, isAccessCodeLocked, onUnlockPrivate, onVerifyAccessCode]);
 
   const handleFavorite = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -203,7 +262,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   };
 
   // Use signed URL if available, fallback to cached thumbnail_url, then original as last resort
-  const displayUrl = useOriginalFallback 
+  const displayUrl = useOriginalFallback
     ? (originalUrl || asset.asset.original_url || undefined)
     : (thumbnailUrl || asset.asset.thumbnail_url || undefined);
 
@@ -232,14 +291,17 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
       style={{ aspectRatio }}
       role="gridcell"
       tabIndex={0}
+      {...longPressProps}
       onClick={handleClick}
-      onContextMenu={(e) => e.preventDefault()}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={(e) => {
+        setIsHovered(false);
+        longPressProps.onMouseLeave?.(e);
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          const syntheticEvent = { stopPropagation: () => {}, preventDefault: () => {}, ctrlKey: false, metaKey: false } as unknown as React.MouseEvent;
+          const syntheticEvent = { stopPropagation: () => { }, preventDefault: () => { }, ctrlKey: false, metaKey: false } as unknown as React.MouseEvent;
           onClick?.(asset, index, syntheticEvent);
         }
       }}
@@ -273,9 +335,8 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
             ref={imgRef}
             src={displayUrl}
             alt={asset.asset.filename || `Photo ${index + 1}`}
-            className={`w-full h-full object-cover transition-all duration-300 ${
-              isLocked ? 'blur-[40px] scale-110' : 'group-hover:scale-105'
-            } ${!imageLoaded && lqip ? 'opacity-0' : 'opacity-100'}`}
+            className={`w-full h-full object-cover transition-all duration-300 ${isLocked ? 'blur-[40px] scale-110' : 'group-hover:scale-105'
+              } ${!imageLoaded && lqip ? 'opacity-0' : 'opacity-100'}`}
             loading="lazy"
             decoding="async"
             draggable={false}
@@ -310,9 +371,9 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           ) : urlLoading && !lqip ? (
             // Skeleton Loader (only if no LQIP available)
             <div className="w-full h-full absolute inset-0 bg-surface-hover animate-pulse flex items-center justify-center">
-               <div className="w-8 h-8 opacity-20 text-text-tertiary">
-                 <Image size={32} />
-               </div>
+              <div className="w-8 h-8 opacity-20 text-text-tertiary">
+                <Image size={32} />
+              </div>
             </div>
           ) : lqip && urlLoading ? (
             // LQIP Placeholder while URL is loading
@@ -373,35 +434,46 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
 
       {/* Locked Overlay */}
       {isLocked && (
-        <div 
-            className="absolute inset-0 z-20 flex flex-col items-center justify-center text-white cursor-pointer group/lock"
-            onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (onUnlockPrivate) {
-                    onUnlockPrivate();
-                } else {
-                    console.warn('[PhotoCard] onUnlockPrivate is undefined!');
-                }
-            }}
+        <div
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center text-white cursor-pointer group/lock"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (isAccessCodeLocked) {
+              if (onVerifyAccessCode) {
+                onVerifyAccessCode();
+              } else {
+                console.warn('[PhotoCard] onVerifyAccessCode is undefined!');
+              }
+            } else if (onUnlockPrivate) {
+              onUnlockPrivate();
+            } else {
+              console.warn('[PhotoCard] onUnlockPrivate is undefined!');
+            }
+          }}
         >
-            {/* Background gradient for better visibility */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-black/20" />
-            
-            {/* Content */}
-            <div className="relative flex flex-col items-center gap-2">
-                <div className="p-4 bg-black/50 rounded-full backdrop-blur-md shadow-lg 
-                            group-hover/lock:bg-primary/80 group-hover/lock:scale-110 
-                            transition-all duration-200 animate-pulse group-hover/lock:animate-none">
-                    <Lock size={24} className="text-white" />
-                </div>
-                <span className="text-sm font-medium drop-shadow-md tracking-wide uppercase opacity-90">
-                    Private
-                </span>
-                <span className="text-xs text-white/70 group-hover/lock:text-white transition-colors mt-1">
-                    Tap to unlock
-                </span>
+          {/* Background gradient for better visibility */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-black/20" />
+
+          {/* Content */}
+          <div className="relative flex flex-col items-center gap-2">
+            <div className={`p-4 rounded-full backdrop-blur-md shadow-lg
+                            group-hover/lock:scale-110 transition-all duration-200
+                            animate-pulse group-hover/lock:animate-none
+                            ${isAccessCodeLocked ? 'bg-primary/50 group-hover/lock:bg-primary/80' : 'bg-black/50 group-hover/lock:bg-primary/80'}`}>
+              {isAccessCodeLocked ? (
+                <Key size={24} className="text-white" />
+              ) : (
+                <Lock size={24} className="text-white" />
+              )}
             </div>
+            <span className="text-sm font-medium drop-shadow-md tracking-wide uppercase opacity-90">
+              {isAccessCodeLocked ? 'Protected' : 'Private'}
+            </span>
+            <span className="text-xs text-white/70 group-hover/lock:text-white transition-colors mt-1">
+              {isAccessCodeLocked ? 'Enter code to view' : 'Tap to unlock'}
+            </span>
+          </div>
         </div>
       )}
 
@@ -419,10 +491,10 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           onManagementSelect={handleManagementSelect}
           onCustomerSelectionToggle={handleCustomerSelectionToggle}
           onFavorite={handleFavorite}
-          onClick={(e) => {
-             e.stopPropagation();
-             onClick?.(asset, index, e);
-          }}
+          onClick={onClick ? (e) => {
+            e.stopPropagation();
+            onClick(asset, index, e);
+          } : undefined}
           onDownload={handleDownload}
           onShare={handleShare}
           onLock={handleLock}
@@ -432,6 +504,14 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         />
       )}
 
+      {/* Long-press Context Menu for Touch Devices */}
+      <PhotoContextMenu
+        isOpen={contextMenuOpen}
+        position={contextMenuPosition}
+        onClose={() => setContextMenuOpen(false)}
+        actions={contextMenuActions}
+        title={asset.asset.filename || 'Photo'}
+      />
     </div>
   );
 };

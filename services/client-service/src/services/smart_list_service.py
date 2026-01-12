@@ -114,7 +114,7 @@ class SmartListService:
         smart_lists = await self.repository.list_by_workspace(workspace_id)
 
         # Cache
-        await redis_client.set_json(cache_key, smart_lists, ttl=self.cache_ttl)
+        await redis_client.set_json(cache_key, smart_lists, ex=self.cache_ttl)
 
         return smart_lists
 
@@ -261,7 +261,7 @@ class SmartListService:
         }
 
         # Cache with short TTL
-        await redis_client.set_json(cache_key, result, ttl=self.cache_ttl)
+        await redis_client.set_json(cache_key, result, ex=self.cache_ttl)
 
         logger.debug(
             "Smart list evaluated",

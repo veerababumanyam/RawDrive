@@ -58,6 +58,12 @@ class MagicLinkValidateResponse(BaseModel):
     gallery_title: Optional[str] = None
     company_name: Optional[str] = None
     logo_url: Optional[str] = None
+    # Branding fields
+    gradient_config: Optional[dict] = None
+    theme: Optional[str] = None
+    layout_style: Optional[str] = None
+    font_family: Optional[str] = None
+    primary_color: Optional[str] = None
 
 
 class PinVerifyRequest(BaseModel):

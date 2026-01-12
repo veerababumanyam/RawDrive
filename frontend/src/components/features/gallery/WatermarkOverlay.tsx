@@ -65,7 +65,7 @@ const getPositionStyles = (
         backgroundSize: sizePercent,
       };
 
-    case 'tiled':
+    case 'tiled': {
       // For tiled mode, scale determines the size of each tile
       const tileSize = `${scale * 100}px`;
       return {
@@ -73,6 +73,7 @@ const getPositionStyles = (
         backgroundRepeat: 'repeat',
         backgroundSize: `${tileSize} ${tileSize}`,
       };
+    }
 
     default:
       return {
@@ -87,13 +88,13 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({
   settings,
   className = '',
 }) => {
-  // Early return if watermark is disabled or no image URL
-  if (!settings.enabled || !settings.imageUrl) {
-    return null;
-  }
-
   // Memoize styles to prevent unnecessary recalculations
-  const overlayStyles = useMemo((): React.CSSProperties => {
+  // Must be called unconditionally per React hooks rules
+  const overlayStyles = useMemo((): React.CSSProperties | null => {
+    if (!settings.enabled || !settings.imageUrl) {
+      return null;
+    }
+
     const positionStyles = getPositionStyles(settings.position, settings.scale);
 
     return {
@@ -109,7 +110,12 @@ export const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({
       overflow: 'hidden',
       ...positionStyles,
     };
-  }, [settings.imageUrl, settings.position, settings.opacity, settings.scale]);
+  }, [settings.enabled, settings.imageUrl, settings.position, settings.opacity, settings.scale]);
+
+  // Early return if watermark is disabled or no image URL
+  if (!overlayStyles) {
+    return null;
+  }
 
   return (
     <div

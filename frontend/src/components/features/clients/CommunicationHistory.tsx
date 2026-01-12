@@ -138,11 +138,15 @@ export const CommunicationHistory: React.FC<CommunicationHistoryProps> = ({
 
         const response = await clientService.getCommunications(workspaceId, clientId, params);
 
+
+
         if (reset) {
           setCommunications(response.communications);
         } else {
           setCommunications((prev) => [...prev, ...response.communications]);
         }
+
+
 
         setHasMore(response.meta.total > pageNum * 20);
       } catch (error) {
@@ -374,8 +378,8 @@ export const CommunicationHistory: React.FC<CommunicationHistoryProps> = ({
                               <div className="mt-2">
                                 <span
                                   className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${followUpOverdue
-                                      ? 'bg-red-50 text-red-700'
-                                      : 'bg-yellow-50 text-yellow-700'
+                                    ? 'bg-red-50 text-red-700'
+                                    : 'bg-yellow-50 text-yellow-700'
                                     }`}
                                 >
                                   {followUpOverdue ? (

@@ -122,6 +122,63 @@ ai_operation_duration_seconds = Histogram(
 
 
 # =============================================================================
+# Download Quota Metrics (027-gallery-feature-completion)
+# =============================================================================
+
+download_quota_checks_total = Counter(
+    "download_quota_checks_total",
+    "Total number of download quota checks",
+    ["result", "gallery_id"],  # result: allowed, denied, error
+)
+
+download_quota_consumed_total = Counter(
+    "download_quota_consumed_total",
+    "Total downloads consumed against quotas",
+    ["gallery_id"],
+)
+
+download_quota_limit_reached_total = Counter(
+    "download_quota_limit_reached_total",
+    "Total number of times download limit was reached",
+    ["gallery_id"],
+)
+
+
+# =============================================================================
+# Access Code Metrics (027-gallery-feature-completion)
+# =============================================================================
+
+access_code_verifications_total = Counter(
+    "access_code_verifications_total",
+    "Total number of access code verification attempts",
+    ["result", "gallery_id"],  # result: success, failure, locked_out
+)
+
+access_code_lockouts_total = Counter(
+    "access_code_lockouts_total",
+    "Total number of access code lockouts due to failed attempts",
+    ["gallery_id"],
+)
+
+
+# =============================================================================
+# Password Reset Metrics (027-gallery-feature-completion)
+# =============================================================================
+
+password_reset_requests_total = Counter(
+    "password_reset_requests_total",
+    "Total number of password reset requests",
+    ["result"],  # result: sent, rate_limited, error
+)
+
+password_reset_completions_total = Counter(
+    "password_reset_completions_total",
+    "Total number of completed password resets",
+    ["result"],  # result: success, invalid_token, expired_token
+)
+
+
+# =============================================================================
 # Health Metrics
 # =============================================================================
 

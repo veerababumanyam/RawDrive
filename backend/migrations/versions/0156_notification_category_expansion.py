@@ -16,7 +16,7 @@ from alembic import op
 
 # Revision identifiers used by Alembic
 revision = "0156"
-down_revision = "0155"
+down_revision = "0155_personal_profiles"
 branch_labels = None
 depends_on = None
 

@@ -13,7 +13,8 @@ from uuid import UUID
 from typing import Union
 
 from src.middleware.auth import get_current_user, JWTPayload
-from src.log_config import get_logger
+# Import directly to avoid circular import through middleware/__init__.py
+from src.log_config.logging import get_logger
 
 logger = get_logger(__name__)
 

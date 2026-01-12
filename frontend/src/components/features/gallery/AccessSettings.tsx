@@ -8,7 +8,7 @@
  * Feature: 007-fix-gallery-pin-password
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Lock, Mail, Calendar, Globe, Eye, EyeOff } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
 import { Toggle } from '../../ui/FormControls';
@@ -35,6 +35,19 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
 
   const [isPasswordEnabled, setIsPasswordEnabled] = useState(gallery.password_protected || false);
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Sync state with gallery prop when it changes (e.g., after successful save)
+  useEffect(() => {
+    setIsPasswordEnabled(gallery.password_protected || false);
+    setEmailRequired(gallery.email_registration_required || false);
+    setExpiresAt(gallery.expires_at ? new Date(gallery.expires_at).toISOString().slice(0, 16) : '');
+    setCustomDomain(gallery.custom_domain || '');
+    // Clear password input when password is disabled (but don't clear if it's enabled and has value)
+    if (!gallery.password_protected) {
+      setPassword('');
+      lastSentPasswordRef.current = null;
+    }
+  }, [gallery.password_protected, gallery.email_registration_required, gallery.expires_at, gallery.custom_domain]);
 
   // Use shared credentials hook - single API call for both password and PIN
   const credentials = useGalleryCredentials({
@@ -52,26 +65,47 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
   const handlePasswordToggle = (enabled: boolean) => {
     setIsPasswordEnabled(enabled);
     if (!enabled) {
+      // Disable password protection
       onUpdate({ remove_password: true });
       setPassword('');
       lastSentPasswordRef.current = null;
       // Reset credential display state via hook
       credentials.resetCredentials('password');
       setShowPassword(false);
+    } else {
+      // Enable password protection
+      // If password already exists in backend, the toggle state will sync via useEffect
+      // If no password exists, user must enter one - input field will appear and they can set it
+      // Don't send update here - only send when password is actually set or removed
+      // The backend determines password_protected based on password_hash existence
     }
   };
 
   const handlePasswordChange = useCallback((value: string) => {
-    setPassword(value);
-    // Clear revealed password when user starts typing new value
-    if (credentials.revealedPassword && value !== credentials.revealedPassword) {
+    // Remove any masked asterisks if present (from placeholder value)
+    const cleanedValue = value.replace(/\*/g, '');
+    
+    // If user clears the field completely, allow it (they might be replacing the password)
+    setPassword(cleanedValue);
+    
+    // Clear revealed password when user starts typing new value (and it's different from revealed)
+    if (credentials.revealedPassword && cleanedValue && cleanedValue !== credentials.revealedPassword) {
       credentials.clearRevealed('password');
       setShowPassword(false);
     }
+    
+    // If user deletes all characters, clear the last sent ref so they can set a new password
+    if (!cleanedValue) {
+      lastSentPasswordRef.current = null;
+      // If password was previously set and user clears field, they're replacing it - don't send remove yet
+      // Wait for them to either set a new password or disable the toggle
+      return;
+    }
+    
     // Only send password update if non-empty and different from last sent
-    if (value && value !== lastSentPasswordRef.current) {
-      lastSentPasswordRef.current = value;
-      onUpdate({ password: value });
+    if (cleanedValue && cleanedValue !== lastSentPasswordRef.current) {
+      lastSentPasswordRef.current = cleanedValue;
+      onUpdate({ password: cleanedValue });
     }
   }, [onUpdate, credentials]);
 
@@ -80,7 +114,13 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
       // Fetch fresh credentials when revealing for the first time
       await credentials.revealCredentials();
     }
+    // Toggle reveal state
     setShowPassword(!showPassword);
+    // If hiding, clear any local password value to show masked value again
+    if (showPassword && !password) {
+      // User is hiding the password - keep it cleared so masked value shows
+      setPassword('');
+    }
   };
 
   const handleEmailRequiredToggle = (enabled: boolean) => {
@@ -118,21 +158,86 @@ export const AccessSettings: React.FC<AccessSettingsProps> = ({ gallery, onUpdat
           />
           {isPasswordEnabled && (
             <div className="relative">
-              {/* Hidden fields to trick password managers */}
-              <input type="text" name="prevent_autofill" id="prevent_autofill" value="" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} readOnly />
-              <input type="password" name="password_fake" id="password_fake" value="" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} readOnly />
+              {/* Prevent Google Password Manager and other password managers from detecting this field */}
+              <input
+                type="text"
+                name="username"
+                id="username_fake"
+                autoComplete="username"
+                style={{ position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' }}
+                aria-hidden="true"
+                tabIndex={-1}
+                readOnly
+                value=""
+              />
+              <input
+                type="password"
+                name="password"
+                id="password_fake"
+                autoComplete="current-password"
+                style={{ position: 'absolute', left: '-9999px', opacity: 0, pointerEvents: 'none' }}
+                aria-hidden="true"
+                tabIndex={-1}
+                readOnly
+                value=""
+              />
               <AppInput
                 type={showPassword ? 'text' : 'password'}
                 name="gallery_access_code"
+                id="gallery_access_code_input"
                 label="Gallery Password"
-                value={showPassword && credentials.revealedPassword && !password ? credentials.revealedPassword : password}
-                onChange={(e) => handlePasswordChange(e.target.value)}
-                placeholder={credentials.isLoading ? "Loading..." : (credentials.hasPassword ? "********" : "Enter gallery password")}
-                autoComplete="new-password"
+                value={
+                  // Priority 1: Show revealed password if user clicked eye icon and password exists
+                  showPassword && credentials.revealedPassword && !password 
+                    ? credentials.revealedPassword 
+                    // Priority 2: Show what user is typing if they're editing
+                    : password 
+                      ? password
+                      // Priority 3: Show masked value if password exists but isn't revealed and user hasn't typed
+                      // Use asterisks that will display as masked dots in password type field (browser masks any value)
+                      : credentials.hasPassword && !password && !showPassword
+                        ? '********' // 8 asterisks that display as masked dots in password type field
+                        // Priority 4: Empty field if no password exists
+                        : ''
+                }
+                onChange={(e) => {
+                  // Handle user input
+                  const inputValue = e.target.value;
+                  // If masked value is shown and user types, clear it and process their input
+                  if (credentials.hasPassword && !password && !showPassword && inputValue && inputValue !== '********') {
+                    // User is typing - remove masked asterisks and process
+                    const cleanedValue = inputValue.replace(/\*/g, '');
+                    handlePasswordChange(cleanedValue);
+                  } else {
+                    // Normal input processing
+                    handlePasswordChange(inputValue);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  // When user presses any key (except navigation keys), if masked value is shown, clear it first
+                  if (credentials.hasPassword && !password && !showPassword && 
+                      e.key !== 'Escape' && e.key !== 'Tab' && 
+                      !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'].includes(e.key) &&
+                      !e.ctrlKey && !e.metaKey) {
+                    // User is starting to type - clear the masked value first
+                    setPassword('');
+                    lastSentPasswordRef.current = null;
+                  }
+                }}
+                placeholder={
+                  credentials.isLoading 
+                    ? "Loading..." 
+                    : credentials.hasPassword && !password && !showPassword
+                      ? "" // Empty placeholder when showing masked value
+                      : "Enter gallery password"
+                }
+                autoComplete="off"
                 data-form-type="other"
                 data-lpignore="true"
                 data-1p-ignore="true"
                 data-bwignore="true"
+                data-non-login-password="true"
+                data-gallery-password="true"
                 disabled={credentials.isLoading}
                 helperText={
                   credentials.hasPassword && !credentials.passwordRecoverable

@@ -142,6 +142,170 @@ class RedisClient:
         except Exception as e:
             logger.warning(f"Redis INCR error: {e}")
             return 0
+    
+    # Additional methods for draft service and other features
+    async def setex(self, key: str, ttl: int, value: str) -> bool:
+        """Set key with expiration time."""
+        return await self.set(key, value, ttl)
+    
+    async def scard(self, key: str) -> int:
+        """Get set cardinality (number of members)."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.scard(key)
+        except Exception as e:
+            logger.warning(f"Redis SCARD error: {e}")
+            return 0
+    
+    async def sadd(self, key: str, *values: str) -> int:
+        """Add members to a set."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.sadd(key, *values)
+        except Exception as e:
+            logger.warning(f"Redis SADD error: {e}")
+            return 0
+    
+    async def srem(self, key: str, *values: str) -> int:
+        """Remove members from a set."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.srem(key, *values)
+        except Exception as e:
+            logger.warning(f"Redis SREM error: {e}")
+            return 0
+    
+    async def smembers(self, key: str) -> set[str]:
+        """Get all members of a set."""
+        if not self._client:
+            return set()
+        try:
+            return await self._client.smembers(key)
+        except Exception as e:
+            logger.warning(f"Redis SMEMBERS error: {e}")
+            return set()
+    
+    async def expire(self, key: str, ttl: int) -> bool:
+        """Set expiration time for a key."""
+        if not self._client:
+            return False
+        try:
+            return await self._client.expire(key, ttl)
+        except Exception as e:
+            logger.warning(f"Redis EXPIRE error: {e}")
+            return False
+    
+    async def exists(self, key: str) -> bool:
+        """Check if key exists."""
+        if not self._client:
+            return False
+        try:
+            return bool(await self._client.exists(key))
+        except Exception as e:
+            logger.warning(f"Redis EXISTS error: {e}")
+            return False
+    
+    # Sorted Set operations (for task queue)
+    async def zadd(self, key: str, mapping: dict[str, float]) -> int:
+        """Add members to sorted set with scores."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.zadd(key, mapping)
+        except Exception as e:
+            logger.warning(f"Redis ZADD error: {e}")
+            return 0
+    
+    async def zrangebyscore(self, key: str, min_score: str, max_score: str, start: int = 0, num: int = 1) -> list[str]:
+        """Get members from sorted set by score range."""
+        if not self._client:
+            return []
+        try:
+            results = await self._client.zrangebyscore(key, min_score, max_score, start=start, num=num)
+            return [r.decode() if isinstance(r, bytes) else r for r in results]
+        except Exception as e:
+            logger.warning(f"Redis ZRANGEBYSCORE error: {e}")
+            return []
+    
+    async def zrem(self, key: str, *members: str) -> int:
+        """Remove members from sorted set."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.zrem(key, *members)
+        except Exception as e:
+            logger.warning(f"Redis ZREM error: {e}")
+            return 0
+    
+    async def zcard(self, key: str) -> int:
+        """Get sorted set cardinality."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.zcard(key)
+        except Exception as e:
+            logger.warning(f"Redis ZCARD error: {e}")
+            return 0
+    
+    # List operations
+    async def lpush(self, key: str, *values: str) -> int:
+        """Push values to left of list."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.lpush(key, *values)
+        except Exception as e:
+            logger.warning(f"Redis LPUSH error: {e}")
+            return 0
+    
+    async def rpush(self, key: str, *values: str) -> int:
+        """Push values to right of list."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.rpush(key, *values)
+        except Exception as e:
+            logger.warning(f"Redis RPUSH error: {e}")
+            return 0
+    
+    async def lrange(self, key: str, start: int, end: int) -> list[str]:
+        """Get range of elements from list."""
+        if not self._client:
+            return []
+        try:
+            results = await self._client.lrange(key, start, end)
+            return [r.decode() if isinstance(r, bytes) else r for r in results]
+        except Exception as e:
+            logger.warning(f"Redis LRANGE error: {e}")
+            return []
+    
+    async def llen(self, key: str) -> int:
+        """Get list length."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.llen(key)
+        except Exception as e:
+            logger.warning(f"Redis LLEN error: {e}")
+            return 0
+    
+    async def lrem(self, key: str, count: int, value: str) -> int:
+        """Remove elements from list."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.lrem(key, count, value)
+        except Exception as e:
+            logger.warning(f"Redis LREM error: {e}")
+            return 0
+    
+    @property
+    def client(self):
+        """Access underlying redis client for advanced operations."""
+        return self._client
 
 
 # Singleton instance

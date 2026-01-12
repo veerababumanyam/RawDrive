@@ -12,7 +12,7 @@ before/after states to enable forensic analysis and compliance audits.
 
 from typing import Optional, Dict, Any, List
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 import json
 
 from src.database import execute_query
@@ -66,11 +66,24 @@ class AuditService:
             raise ValueError(f"Invalid action '{action}'. Must be one of: {valid_actions}")
 
         # Build metadata with before/after states
+        def convert_uuids_to_strings(obj: Any) -> Any:
+            """Recursively convert UUID objects to strings for JSON serialization."""
+            if isinstance(obj, UUID):
+                return str(obj)
+            elif isinstance(obj, dict):
+                return {k: convert_uuids_to_strings(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_uuids_to_strings(item) for item in obj]
+            elif isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            else:
+                return obj
+
         metadata = {}
         if before:
-            metadata["before"] = before
+            metadata["before"] = convert_uuids_to_strings(before)
         if after:
-            metadata["after"] = after
+            metadata["after"] = convert_uuids_to_strings(after)
 
         metadata_json = json.dumps(metadata) if metadata else None
 

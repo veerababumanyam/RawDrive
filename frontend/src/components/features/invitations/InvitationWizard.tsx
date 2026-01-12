@@ -57,7 +57,9 @@ import type {
   InvitationTemplate,
   InvitationMedia,
   LayoutConfig,
+  TaglineConfig,
 } from '@/types/invitations';
+import { TaglineEditor } from '@/components/features/invitations/TaglineEditor';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,10 +82,15 @@ export interface WizardData {
 
   // Metadata
   invitation_id?: string;
+  slug?: string;
 
   // Step 2: Template & Design
   template_id?: string;
-  customization: Record<string, unknown>;
+  customization: Record<string, unknown> & {
+    tagline?: TaglineConfig;
+    layout_config?: LayoutConfig;
+    colors?: Record<string, string>;
+  };
   font_heading?: string;
   font_body?: string;
   layout_density?: 'compact' | 'normal' | 'spacious';
@@ -108,6 +115,7 @@ interface InvitationWizardProps {
   onComplete: (finalData: Partial<WizardData>) => void;
   onDataChange: (data: Partial<WizardData>) => void;
   isSubmitting: boolean;
+  onCreateDraft?: () => Promise<string | undefined>;
 }
 
 // ---------------------------------------------------------------------------
@@ -269,40 +277,55 @@ const Step1EventDetails: React.FC<Step1Props> = ({
             />
           </div>
 
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-text-primary">
-              Description <span className="text-text-tertiary font-normal">(Optional)</span>
-            </label>
-            <AppButton
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAIModal(true)}
-              className="text-primary h-7 px-2 -mr-2"
-              leftIcon={<Wand2 className="w-3.5 h-3.5" />}
-            >
-              Magic Write
-            </AppButton>
-          </div>
-          <AppTextarea
-            placeholder="Share a brief message about your event..."
-            value={data.description || ''}
-            onChange={(e) => onChange({ description: e.target.value })}
-            rows={4}
-          />
+          <div className="pt-2 pb-4">
+            <TaglineEditor
+              tagline={data.customization.tagline}
+              eventType={data.event_type}
+              workspaceId={workspaceId}
+              onChange={(newTagline) => {
+                onChange({
+                  customization: {
+                    ...data.customization,
+                    tagline: newTagline,
+                  }
+                });
+              }}
+            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-text-primary">
+                Description <span className="text-text-tertiary font-normal">(Optional)</span>
+              </label>
+              <AppButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAIModal(true)}
+                className="text-primary h-7 px-2 -mr-2"
+                leftIcon={<Wand2 className="w-3.5 h-3.5" />}
+              >
+                Magic Write
+              </AppButton>
+            </div>
+            <AppTextarea
+              placeholder="Share a brief message about your event..."
+              value={data.description || ''}
+              onChange={(e) => onChange({ description: e.target.value })}
+              rows={4}
+            />
 
-          <AITextGenerator
-            isOpen={showAIModal}
-            onClose={() => setShowAIModal(false)}
-            onApply={(title, description) => {
-              onChange({ 
-                title: title || data.title, 
-                description 
-              });
-            }}
-            workspaceId={workspaceId}
-            initialEventType={data.event_type}
-            initialLanguage={data.primary_language}
-          />
+            <AITextGenerator
+              isOpen={showAIModal}
+              onClose={() => setShowAIModal(false)}
+              onApply={(title, description) => {
+                onChange({
+                  title: title || data.title,
+                  description
+                });
+              }}
+              workspaceId={workspaceId}
+              initialEventType={data.event_type}
+              initialLanguage={data.primary_language}
+            />
+          </div>
         </div>
       </section>
 
@@ -316,74 +339,34 @@ const Step1EventDetails: React.FC<Step1Props> = ({
         <div className="space-y-4">
           {/* Primary Language Selection */}
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Primary Language
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {LANGUAGES.map((lang) => (
-                <button
-                  key={lang.value}
-                  type="button"
-                  onClick={() => onChange({ primary_language: lang.value })}
-                  className={`p-3 rounded-lg border-2 text-left transition-all ${
-                    data.primary_language === lang.value
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                      : 'border-border hover:border-primary/50 hover:bg-surface-hover'
-                  }`}
-                >
-                  <span className={`block text-sm font-medium text-text-primary ${lang.fontClass}`}>
-                    {lang.nativeLabel}
-                  </span>
-                  <span className="block text-xs text-text-tertiary mt-0.5">
-                    {lang.label}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <Select
+              label="Primary Language"
+              options={LANGUAGES.map(lang => ({
+                value: lang.value,
+                label: `${lang.nativeLabel} (${lang.label})`,
+              }))}
+              value={data.primary_language}
+              onChange={(e) => onChange({ primary_language: e.target.value })}
+              placeholder="Select language"
+            />
           </div>
 
           {/* Secondary Language Selection (Optional) */}
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Secondary Language <span className="text-text-tertiary font-normal">(Optional)</span>
-            </label>
-            <p className="text-xs text-text-secondary mb-2">
-              Add a second language for bilingual invitations
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {/* None option */}
-              <button
-                type="button"
-                onClick={() => onChange({ secondary_language: undefined })}
-                className={`p-3 rounded-lg border-2 text-left transition-all ${
-                  !data.secondary_language
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                    : 'border-border hover:border-primary/50 hover:bg-surface-hover'
-                }`}
-              >
-                <span className="block text-sm font-medium text-text-primary">None</span>
-                <span className="block text-xs text-text-tertiary mt-0.5">Single language</span>
-              </button>
-              {LANGUAGES.filter((lang) => lang.value !== data.primary_language).map((lang) => (
-                <button
-                  key={lang.value}
-                  type="button"
-                  onClick={() => onChange({ secondary_language: lang.value })}
-                  className={`p-3 rounded-lg border-2 text-left transition-all ${
-                    data.secondary_language === lang.value
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                      : 'border-border hover:border-primary/50 hover:bg-surface-hover'
-                  }`}
-                >
-                  <span className={`block text-sm font-medium text-text-primary ${lang.fontClass}`}>
-                    {lang.nativeLabel}
-                  </span>
-                  <span className="block text-xs text-text-tertiary mt-0.5">
-                    {lang.label}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <Select
+              label="Secondary Language (Optional)"
+              options={[
+                { value: '', label: 'None (Single language)' },
+                ...LANGUAGES.filter(lang => lang.value !== data.primary_language).map(lang => ({
+                  value: lang.value,
+                  label: `${lang.nativeLabel} (${lang.label})`,
+                }))
+              ]}
+              value={data.secondary_language || ''}
+              onChange={(e) => onChange({ secondary_language: e.target.value || undefined })}
+              placeholder="Select secondary language"
+              helperText="Add a second language for bilingual invitations"
+            />
           </div>
 
           {/* Language Preview */}
@@ -409,10 +392,10 @@ const Step1EventDetails: React.FC<Step1Props> = ({
             </div>
           )}
         </div>
-      </section>
+      </section >
 
       {/* Date & Time */}
-      <section>
+      < section >
         <h3 className="text-lg font-semibold text-text-primary mb-4">
           Date & Time
         </h3>
@@ -440,10 +423,10 @@ const Step1EventDetails: React.FC<Step1Props> = ({
             onChange={(e) => onChange({ event_timezone: e.target.value })}
           />
         </div>
-      </section>
+      </section >
 
       {/* Venue */}
-      <section>
+      < section >
         <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
           <MapPin className="w-5 h-5 text-primary" />
           Venue Details
@@ -453,10 +436,10 @@ const Step1EventDetails: React.FC<Step1Props> = ({
           value={data.venue}
           onChange={(venue) => onChange({ venue })}
         />
-      </section>
+      </section >
 
       {/* Host Info */}
-      <section>
+      < section >
         <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
           <Users className="w-5 h-5 text-primary" />
           Host Information
@@ -528,16 +511,16 @@ const Step1EventDetails: React.FC<Step1Props> = ({
             />
           </div>
         </div>
-      </section>
+      </section >
 
       {/* Navigation */}
-      <div className="flex justify-end pt-6 border-t border-border">
+      < div className="flex justify-end pt-6 border-t border-border" >
         <AppButton onClick={onNext} className="min-w-[140px]">
           Continue
           <ChevronRight className="w-4 h-4 ml-1" />
         </AppButton>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 
@@ -665,6 +648,12 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
     setCreateError(null);
 
     onCreateDraft()
+      .then((draft) => {
+        // If the draft creation returns an ID (which it does via onCreateDraft prop logic in parent),
+        // we rely on parent to update data. But here we just catch errors.
+        // Actually, looking at parent implementation, onCreateDraft returns promise of string (id).
+        // We need the parent to also update the slug.
+      })
       .catch((err) => {
         console.error('Failed to auto-create invitation draft', err);
         setCreateError(err?.message || 'Failed to create invitation draft');
@@ -703,8 +692,8 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
         updates.audio_url = resolvedUrl;
       } else if (media.media_type === 'image' && media.purpose === 'content') {
         // Treat content images (hero) as video/poster for now, or just cover
-         updates.video_object_key = objectKey; // Reuse video key for hero image?
-         updates.video_url = resolvedUrl;
+        updates.video_object_key = objectKey; // Reuse video key for hero image?
+        updates.video_url = resolvedUrl;
       }
 
       onChange(updates);
@@ -727,11 +716,10 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
           <button
             type="button"
             onClick={() => setShowLanguageCompatibleOnly(!showLanguageCompatibleOnly)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
-              showLanguageCompatibleOnly
-                ? 'bg-primary/10 text-primary border border-primary/20'
-                : 'bg-surface-hover text-text-secondary hover:bg-surface-hover/80'
-            }`}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${showLanguageCompatibleOnly
+              ? 'bg-primary/10 text-primary border border-primary/20'
+              : 'bg-surface-hover text-text-secondary hover:bg-surface-hover/80'
+              }`}
             title={showLanguageCompatibleOnly
               ? `Showing templates for ${data.primary_language}${data.secondary_language ? ` + ${data.secondary_language}` : ''}`
               : 'Showing all templates'
@@ -750,11 +738,10 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
               key={type.value}
               type="button"
               onClick={() => setSelectedCategory(type.value)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                selectedCategory === type.value
-                  ? 'bg-primary text-white'
-                  : 'bg-surface-hover text-text-secondary hover:bg-surface-hover/80'
-              }`}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${selectedCategory === type.value
+                ? 'bg-primary text-white'
+                : 'bg-surface-hover text-text-secondary hover:bg-surface-hover/80'
+                }`}
             >
               {type.label}
             </button>
@@ -797,11 +784,10 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
                 key={template.template_id}
                 type="button"
                 onClick={() => handleSelectTemplate(template)}
-                className={`relative group rounded-lg overflow-hidden border-2 transition-all ${
-                  data.template_id === template.template_id
-                    ? 'border-primary ring-2 ring-primary/20'
-                    : 'border-border hover:border-primary/50'
-                }`}
+                className={`relative group rounded-lg overflow-hidden border-2 transition-all ${data.template_id === template.template_id
+                  ? 'border-primary ring-2 ring-primary/20'
+                  : 'border-border hover:border-primary/50'
+                  }`}
               >
                 {/* Thumbnail */}
                 <div className="aspect-[3/4] bg-surface-hover">
@@ -815,9 +801,8 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
                     <div
                       className="w-full h-full flex items-center justify-center"
                       style={{
-                        background: `linear-gradient(135deg, ${
-                          template.layout.colors?.primary || '#6366f1'
-                        }, ${template.layout.colors?.secondary || '#8b5cf6'})`,
+                        background: `linear-gradient(135deg, ${template.layout.colors?.primary || '#6366f1'
+                          }, ${template.layout.colors?.secondary || '#8b5cf6'})`,
                       }}
                     >
                       <span className="text-white text-4xl font-serif">
@@ -871,15 +856,14 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
               Invitation Layout
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-               {/* Standard Mode */}
-               <button
+              {/* Standard Mode */}
+              <button
                 type="button"
                 onClick={() => updateLayoutConfig({ mode: 'standard' })}
-                className={`p-3 rounded-lg border-2 text-left transition-all ${
-                  layoutConfig.mode === 'standard'
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                    : 'border-border hover:border-primary/50 bg-surface'
-                }`}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${layoutConfig.mode === 'standard'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                  : 'border-border hover:border-primary/50 bg-surface'
+                  }`}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Video className="w-4 h-4 text-primary" />
@@ -892,11 +876,10 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
               <button
                 type="button"
                 onClick={() => updateLayoutConfig({ mode: 'card_only' })}
-                className={`p-3 rounded-lg border-2 text-left transition-all ${
-                  layoutConfig.mode === 'card_only'
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                    : 'border-border hover:border-primary/50 bg-surface'
-                }`}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${layoutConfig.mode === 'card_only'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                  : 'border-border hover:border-primary/50 bg-surface'
+                  }`}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <CreditCard className="w-4 h-4 text-primary" />
@@ -909,11 +892,10 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
               <button
                 type="button"
                 onClick={() => updateLayoutConfig({ mode: 'hybrid' })}
-                className={`p-3 rounded-lg border-2 text-left transition-all ${
-                  layoutConfig.mode === 'hybrid'
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                    : 'border-border hover:border-primary/50 bg-surface'
-                }`}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${layoutConfig.mode === 'hybrid'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                  : 'border-border hover:border-primary/50 bg-surface'
+                  }`}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <div className="flex -space-x-1">
@@ -1001,104 +983,104 @@ const Step2TemplateSelection: React.FC<Step2Props> = ({
           </div>
 
           <div className="border-t border-border pt-6">
-             <LayoutDensitySelector
-               value={data.layout_density || 'normal'}
-               onChange={(density) => onChange({ layout_density: density })}
-             />
+            <LayoutDensitySelector
+              value={data.layout_density || 'normal'}
+              onChange={(density) => onChange({ layout_density: density })}
+            />
           </div>
 
-            {/* Dynamic Media Upload Section */}
-            <div className="border-t border-border pt-6">
-              <h4 className="text-base font-medium text-text-primary mb-4 flex items-center gap-2">
-                {layoutConfig.mode === 'card_only' ? (
-                  <ImageIcon className="w-4 h-4 text-primary" />
-                ) : (
-                  <Video className="w-4 h-4 text-primary" />
-                )}
-                Invitation Media
-              </h4>
-
-              {!data.invitation_id || isCreatingInvitation ? (
-                 <div className="bg-surface p-4 rounded-lg border border-border text-center space-y-3">
-                 {isCreatingInvitation ? (
-                   <>
-                     <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto" />
-                     <p className="text-sm text-text-secondary">
-                       Preparing your invitation so media uploads are ready...
-                     </p>
-                   </>
-                 ) : (
-                   <>
-                     <p className="text-sm text-text-secondary">
-                       We need to create a draft to attach media. Click below to retry.
-                     </p>
-                     <AppButton
-                       variant="outline"
-                       size="sm"
-                       onClick={() => {
-                         setHasRequestedInvitation(true);
-                         setIsCreatingInvitation(true);
-                         setCreateError(null);
-                         onCreateDraft().catch((err) => {
-                           setCreateError(err?.message || 'Failed to create invitation draft');
-                         }).finally(() => setIsCreatingInvitation(false));
-                       }}
-                     >
-                       Enable Media Upload
-                     </AppButton>
-                   </>
-                 )}
-                 {createError && (
-                   <p className="text-xs text-destructive">{createError}</p>
-                 )}
-               </div>
+          {/* Dynamic Media Upload Section */}
+          <div className="border-t border-border pt-6">
+            <h4 className="text-base font-medium text-text-primary mb-4 flex items-center gap-2">
+              {layoutConfig.mode === 'card_only' ? (
+                <ImageIcon className="w-4 h-4 text-primary" />
               ) : (
-                <div className="space-y-6">
-                  {existingMedia.length > 0 && (
-                    <div className="flex justify-end">
-                      <AppButton
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowMediaLibrary((open) => !open)}
-                      >
-                        {showMediaLibrary ? 'Hide library' : 'View media library'}
-                      </AppButton>
-                    </div>
-                  )}
+                <Video className="w-4 h-4 text-primary" />
+              )}
+              Invitation Media
+            </h4>
 
-                  {/* Hero Uploader (Standard & Hybrid) */}
-                  {layoutConfig.mode !== 'card_only' && (
-                    <div className="space-y-2">
-                       <label className="block text-sm font-medium text-text-primary">
-                        Hero Video / Cover
-                      </label>
-                      <MediaUploader
-                        workspaceId={workspaceId}
-                        invitationId={data.invitation_id}
-                        onUploadComplete={handleUploadComplete}
-                        purpose="content"
-                        label="Upload Hero Video or Photo"
-                      />
-                    </div>
-                  )}
+            {!data.invitation_id || isCreatingInvitation ? (
+              <div className="bg-surface p-4 rounded-lg border border-border text-center space-y-3">
+                {isCreatingInvitation ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto" />
+                    <p className="text-sm text-text-secondary">
+                      Preparing your invitation so media uploads are ready...
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-text-secondary">
+                      We need to create a draft to attach media. Click below to retry.
+                    </p>
+                    <AppButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setHasRequestedInvitation(true);
+                        setIsCreatingInvitation(true);
+                        setCreateError(null);
+                        onCreateDraft().catch((err) => {
+                          setCreateError(err?.message || 'Failed to create invitation draft');
+                        }).finally(() => setIsCreatingInvitation(false));
+                      }}
+                    >
+                      Enable Media Upload
+                    </AppButton>
+                  </>
+                )}
+                {createError && (
+                  <p className="text-xs text-destructive">{createError}</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {existingMedia.length > 0 && (
+                  <div className="flex justify-end">
+                    <AppButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowMediaLibrary((open) => !open)}
+                    >
+                      {showMediaLibrary ? 'Hide library' : 'View media library'}
+                    </AppButton>
+                  </div>
+                )}
 
-                  {/* Main Card Uploader (Card Only & Hybrid) */}
-                  {layoutConfig.mode !== 'standard' && (
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-text-primary">
-                        Invitation Design Card
-                      </label>
-                      <MediaUploader
-                        workspaceId={workspaceId}
-                        invitationId={data.invitation_id}
-                        onUploadComplete={handleUploadComplete}
-                        purpose="main_card"
-                        label="Upload Invitation Design (Image)"
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Media Library (Existing code preserved/adapted) */}
+                {/* Hero Uploader (Standard & Hybrid) */}
+                {layoutConfig.mode !== 'card_only' && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-text-primary">
+                      Hero Video / Cover
+                    </label>
+                    <MediaUploader
+                      workspaceId={workspaceId}
+                      invitationId={data.invitation_id}
+                      onUploadComplete={handleUploadComplete}
+                      purpose="content"
+                      label="Upload Hero Video or Photo"
+                    />
+                  </div>
+                )}
+
+                {/* Main Card Uploader (Card Only & Hybrid) */}
+                {layoutConfig.mode !== 'standard' && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-text-primary">
+                      Invitation Design Card
+                    </label>
+                    <MediaUploader
+                      workspaceId={workspaceId}
+                      invitationId={data.invitation_id}
+                      onUploadComplete={handleUploadComplete}
+                      purpose="main_card"
+                      label="Upload Invitation Design (Image)"
+                    />
+                  </div>
+                )}
+
+                {/* Media Library (Existing code preserved/adapted) */}
 
                 {showMediaLibrary && (
                   <div className="bg-surface p-4 rounded-lg border border-border space-y-3">
@@ -1232,7 +1214,7 @@ const Step3RSVPSettings: React.FC<Step3Props> = ({
             checked={data.rsvp_settings.enabled}
             onChange={(e) => updateRSVPSettings({ enabled: e.target.checked })}
           />
-          
+
           {/* Invite-only mode hint */}
           {!data.rsvp_settings.enabled && (
             <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
@@ -1314,38 +1296,38 @@ const Step3RSVPSettings: React.FC<Step3Props> = ({
             </div>
           </section>
 
-            {/* Custom Questions */}
-            <RSVPQuestionBuilder
-              questions={data.rsvp_settings.custom_questions}
-              onChange={(questions) => updateRSVPSettings({ custom_questions: questions })}
-            />
+          {/* Custom Questions */}
+          <RSVPQuestionBuilder
+            questions={data.rsvp_settings.custom_questions}
+            onChange={(questions) => updateRSVPSettings({ custom_questions: questions })}
+          />
 
-            <div className="pt-6 border-t border-border mt-6">
-              <h4 className="text-base font-medium text-text-primary mb-4">
-                Host Notifications
-              </h4>
-              <RadioGroup
-                name="notification_preference"
-                value={data.notification_preference || 'immediate'}
-                onChange={(val) => onChange({ notification_preference: val as any })}
-              >
-                <Radio
-                  value="immediate"
-                  label="Immediate"
-                  description="Receive an email as soon as someone RSVPs"
-                />
-                <Radio
-                  value="daily_digest"
-                  label="Daily Digest"
-                  description="Receive a summary of all RSVPs once a day"
-                />
-                <Radio
-                  value="disabled"
-                  label="Disabled"
-                  description="Don't send email notifications"
-                />
-              </RadioGroup>
-            </div>
+          <div className="pt-6 border-t border-border mt-6">
+            <h4 className="text-base font-medium text-text-primary mb-4">
+              Host Notifications
+            </h4>
+            <RadioGroup
+              name="notification_preference"
+              value={data.notification_preference || 'immediate'}
+              onChange={(val) => onChange({ notification_preference: val as any })}
+            >
+              <Radio
+                value="immediate"
+                label="Immediate"
+                description="Receive an email as soon as someone RSVPs"
+              />
+              <Radio
+                value="daily_digest"
+                label="Daily Digest"
+                description="Receive a summary of all RSVPs once a day"
+              />
+              <Radio
+                value="disabled"
+                label="Disabled"
+                description="Don't send email notifications"
+              />
+            </RadioGroup>
+          </div>
         </>
       )}
 
@@ -1365,11 +1347,11 @@ const Step3RSVPSettings: React.FC<Step3Props> = ({
             <dd className="text-text-primary">
               {data.event_datetime
                 ? new Date(data.event_datetime).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })
                 : '-'}
             </dd>
           </div>
@@ -1444,6 +1426,7 @@ export const InvitationWizard: React.FC<InvitationWizardProps> = ({
   onComplete,
   onDataChange,
   isSubmitting,
+  onCreateDraft,
 }) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -1545,35 +1528,7 @@ export const InvitationWizard: React.FC<InvitationWizardProps> = ({
             onChange={onDataChange}
             onNext={handleStep2Next}
             onBack={handleBack}
-            onCreateDraft={async () => {
-              try {
-                // Determine a template ID if not yet selected (or require it? Invitation needs template?)
-                // Actually create_invitation schema makes template_id optional? Let's check.
-                // Yes, schema says template_id optional.
-                
-                const draft = await invitationService.createInvitation(workspaceId, {
-                  title: data.title,
-                  description: data.description,
-                  event_type: data.event_type as any, // Cast if needed
-                  event_datetime: data.event_datetime,
-                  event_end_datetime: data.event_end_datetime,
-                  event_timezone: data.event_timezone,
-                  venue: data.venue,
-                  host_names: data.host_names,
-                  rsvp_settings: data.rsvp_settings,
-                  primary_language: data.primary_language,
-                  secondary_language: data.secondary_language,
-                  template_id: data.template_id, // Might be undefined, which is OK
-                  customization: data.customization,
-                  notification_preference: data.notification_preference,
-                });
-                onDataChange({ invitation_id: draft.invitation_id });
-                return draft.invitation_id;
-              } catch (e) {
-                console.error("Failed to create draft", e);
-                throw e;
-              }
-            }}
+            onCreateDraft={onCreateDraft!}
           />
         );
       case 3:

@@ -236,7 +236,7 @@ describe('MagicLinkService', () => {
 
   describe('share', () => {
     it('uses Web Share API when available', async () => {
-      // @ts-ignore - Mock navigator.share to exist and succeed
+      // @ts-expect-error - Mock navigator.share to exist and succeed
       Object.defineProperty(navigator, 'share', {
         value: vi.fn().mockResolvedValue(undefined),
         writable: true,
@@ -254,7 +254,7 @@ describe('MagicLinkService', () => {
     });
 
     it('falls back to clipboard when share is not available', async () => {
-      // @ts-ignore - Remove navigator.share
+      // @ts-expect-error - Remove navigator.share
       Object.defineProperty(navigator, 'share', {
         value: undefined,
         writable: true,
@@ -268,7 +268,7 @@ describe('MagicLinkService', () => {
     });
 
     it('falls back to clipboard when share fails', async () => {
-      // @ts-ignore - Mock share to throw
+      // @ts-expect-error - Mock share to throw
       Object.defineProperty(navigator, 'share', {
         value: vi.fn().mockRejectedValue(new Error('Share failed')),
         writable: true,

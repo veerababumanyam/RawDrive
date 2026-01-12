@@ -122,6 +122,7 @@ export interface MergeClientsRequest {
 
 export interface RecordActivityRequest {
   activity_type: string;
+  title: string;
   description?: string;
   related_entity_type?: ActivityEntityType;
   related_entity_id?: string;
@@ -222,10 +223,10 @@ export interface ClientDetail {
   created_by_user_id: string;
   created_at: string;
   updated_at: string;
-  contacts: ClientContact[];
-  addresses: ClientAddress[];
-  tags: ClientTag[];
-  linked_galleries: ClientGalleryLink[];
+  contacts?: ClientContact[];
+  addresses?: ClientAddress[];
+  tags?: ClientTag[];
+  linked_galleries?: ClientGalleryLink[];
   stats?: ClientStats;
 }
 
@@ -241,7 +242,7 @@ export interface ClientListItem {
   primary_email?: string;
   primary_phone?: string;
   linked_galleries_count: number;
-  tags: ClientTag[];
+  tags?: ClientTag[]; // Optional - API may not always include tags in list responses
   created_at: string;
 }
 

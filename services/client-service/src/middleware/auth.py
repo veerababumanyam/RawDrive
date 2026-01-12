@@ -27,14 +27,30 @@ def _load_public_key():
 
 
 class JWTPayload(BaseModel):
-    """JWT token payload structure."""
+    """JWT token payload structure.
+    
+    Matches the backend's JWT token structure.
+    Note: Backend uses 'sub' for user_id, we also support direct user_id field.
+    """
 
-    user_id: str
+    user_id: str  # Populated from 'sub' or 'user_id' field
     workspace_id: str
-    email: str
+    email: Optional[str] = None  # Email may not be in access tokens
     role: Optional[str] = None
+    permissions: Optional[list[str]] = None  # Permission list from backend
     exp: int  # Expiration timestamp
     iat: int  # Issued at timestamp
+    
+    model_config = {"extra": "allow"}  # Allow extra fields like sub, jti, iss, etc.
+    
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        """Pre-process to extract user_id from 'sub' if not directly present."""
+        if isinstance(obj, dict):
+            # Backend tokens use 'sub' as user_id
+            if "user_id" not in obj and "sub" in obj:
+                obj = {**obj, "user_id": obj["sub"]}
+        return super().model_validate(obj, **kwargs)
 
 
 def decode_jwt(token: str) -> Dict[str, Any]:

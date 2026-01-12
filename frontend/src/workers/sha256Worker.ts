@@ -56,6 +56,7 @@ async function calculateSHA256WithProgress(
   const reader = file.stream().getReader();
 
   try {
+    // eslint-disable-next-line no-constant-condition -- Standard stream reading pattern
     while (true) {
       const { done, value } = await reader.read();
 

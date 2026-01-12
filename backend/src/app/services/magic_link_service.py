@@ -421,7 +421,7 @@ class MagicLinkService:
 
         This method:
         1. Checks rate limiting (optional)
-        2. Looks up the link by token hash
+        2. Looks up the link by token hash (checks cache first)
         3. Verifies link is active and not expired
         4. Checks access limits
         5. Verifies gallery sharing is enabled
@@ -446,12 +446,76 @@ class MagicLinkService:
             SharingDisabledError: Gallery sharing disabled
             RateLimitError: Rate limit exceeded
         """
-        # Rate limiting check
+        import json
+        
+        # Helper for JSON serialization
+        class UUIDEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, UUID):
+                    return str(obj)
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+                return super().default(obj)
+
+        # Rate limiting check (always check this even if cached)
         if ip_address and not skip_rate_limit:
             await self._check_rate_limit(ip_address)
 
         # Hash the token for lookup
         token_hash = self._hash_token(token)
+
+        # ---------------------------------------------------------------------
+        # CACHE LOOKUP
+        # ---------------------------------------------------------------------
+        redis = await get_redis_client()
+        cache_key = f"magic_link:v1:token:{token_hash}"
+        cached_data = None
+        
+        try:
+            cached_json = await redis.get(cache_key)
+            if cached_json:
+                cached_data = json.loads(cached_json)
+                # Validation checks on cached data
+                # If these checks fail, we treat it as a miss or error
+                if cached_data.get("max_accesses"):
+                     # If max accesses is set, do not use cache to ensure strict counting
+                     cached_data = None
+        except Exception as e:
+            logger.warning(f"Error reading from magic link cache: {e}")
+            cached_data = None
+
+        if cached_data:
+            link_id_str = cached_data["link_id"]
+            
+            # Fire-and-forget logging/counting (or await if strict)
+            # We await to ensure consistent state
+            try:
+                await self.repo.increment_access_count(UUID(link_id_str))
+                
+                # Parse user agent for device info
+                device_info = self._parse_user_agent(user_agent) if user_agent else {}
+                
+                await self.repo.log_access(
+                    link_id=UUID(link_id_str),
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    referer=referer,
+                    device_type=device_info.get("device_type"),
+                    browser=device_info.get("browser"),
+                    os=device_info.get("os"),
+                )
+            except Exception as e:
+                logger.error(f"Error updating stats for cached link: {e}")
+
+            logger.info(
+                "Magic link validated from cache",
+                extra={"link_id": link_id_str, "token_hash_prefix": token_hash[:8]}
+            )
+            return cached_data
+
+        # ---------------------------------------------------------------------
+        # DATABASE LOOKUP (Cache Miss)
+        # ---------------------------------------------------------------------
 
         # Look up the link
         link = await self.repo.get_by_hash(token_hash)
@@ -517,13 +581,13 @@ class MagicLinkService:
             },
         )
 
-        # Return gallery data for rendering
-        return {
+        # Construct result
+        result = {
             "link_id": link["link_id"],
             "gallery_id": link["gallery_id"],
             "target_type": link["target_type"],
             "target_id": link.get("target_id"),
-            "album_title": link.get("album_title"),  # Client-facing title (fallback to gallery.title if None)
+            "album_title": link.get("album_title"),
             "gallery": {
                 "gallery_id": link["gallery_id"],
                 "title": link.get("gallery_title"),
@@ -532,9 +596,18 @@ class MagicLinkService:
                 "cover_asset_id": link.get("cover_asset_id"),
                 "primary_color": link.get("primary_color"),
                 "font_family": link.get("font_family"),
+                "gradient_config": link.get("gradient_config"),
+                "layout_style": link.get("layout_style"),
+                "theme": link.get("theme"),
+                "download_policy": link.get("download_policy"),
                 "custom_links": link.get("custom_links", []),
                 "pin_protected": link.get("pin_hash") is not None,
                 "email_registration_required": link.get("email_registration_required", False),
+                "watermark_config": link.get("watermark_config"),
+                "findme_config": link.get("findme_config"),
+                "slideshow_config": link.get("slideshow_config"),
+                "activity_tracking": link.get("activity_tracking"),
+                "custom_domain": link.get("custom_domain"),
             },
             "company_profile": {
                 "name": link.get("company_name"),
@@ -542,7 +615,23 @@ class MagicLinkService:
                 "website": link.get("company_website"),
                 "brand_color": link.get("company_brand_color"),
             } if link.get("company_name") else None,
+            # Add cache control metadata (not for client, but for cache logic)
+            "max_accesses": link.get("max_accesses"),
         }
+
+        # Cache the result (if no max_accesses restriction)
+        # Use 60 seconds TTL (short enough for reasonable revocation/expiry propagation)
+        if not link.get("max_accesses"):
+            try:
+                await redis.setex(
+                    cache_key,
+                    60, 
+                    json.dumps(result, cls=UUIDEncoder)
+                )
+            except Exception as e:
+                logger.error(f"Failed to cache magic link result: {e}")
+
+        return result
 
     async def validate_invitation_token(
         self,

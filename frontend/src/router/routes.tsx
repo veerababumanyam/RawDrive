@@ -69,6 +69,7 @@ const PublicProfilePage = lazy(() => import('../pages/public/PublicProfilePage')
 const PublicPersonalProfilePage = lazy(() => import('../pages/public/PublicPersonalProfilePage'));
 const PublicGalleryPage = lazy(() => import('../pages/public/PublicGalleryPage'));
 const PublicInvitationPage = lazy(() => import('../pages/public/PublicInvitationPage'));
+const AlbumProofPage = lazy(() => import('../pages/public/AlbumProofPage'));
 
 // Onboarding pages (automated onboarding system)
 const OnboardingLayout = lazy(() => import('../pages/onboarding/OnboardingLayout'));
@@ -240,6 +241,11 @@ export const publicRoutes: RouteObject[] = [
   {
     path: '/i/:slug',
     element: <LazyPage component={PublicInvitationPage} />,
+  },
+  // Album proofing view (026-album-proofing)
+  {
+    path: '/album/:token',
+    element: <LazyPage component={AlbumProofPage} />,
   },
   // Team invitation accept page (requires token in URL)
   {

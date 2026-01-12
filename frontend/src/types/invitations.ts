@@ -262,6 +262,12 @@ export interface CreateTemplateRequest {
   is_premium?: boolean;
 }
 
+export interface TaglineConfig {
+  text: string;
+  type: 'emoji' | 'icon' | 'image';
+  value?: string; // icon name for 'icon', image URL for 'image'
+}
+
 export interface UpdateTemplateRequest {
   name?: string;
   description?: string;
@@ -287,17 +293,13 @@ export interface TemplateListResponse {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Invitation Types (Frontend-specific extensions)
-// ---------------------------------------------------------------------------
-
 export interface Invitation {
   invitation_id: string;
   workspace_id: string;
+  slug: string; // Unique URL slug
   template_id?: string;
   customization: Record<string, unknown>;
   title: string;
-  slug?: string;
   description?: string;
   event_type: EventType;
   event_datetime: string; // ISO datetime

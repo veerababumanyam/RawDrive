@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import logging
 from datetime import datetime
 from typing import Optional
@@ -72,6 +73,19 @@ from app.services.calendar_service import (
 from app.services.invitation_draft_service import (
     get_invitation_draft_service,
     InvitationDraftService,
+)
+from app.services.invitation_template_service import (
+    InvitationTemplateService,
+    TemplateError,
+    TemplateNotFoundError,
+    get_template_service as get_invitation_template_service,
+)
+from app.api.v1.invitation_templates import (
+    TemplateResponse,
+    TemplateListResponse,
+    CategoryResponse,
+    CreateTemplateRequest,
+    UpdateTemplateRequest,
 )
 from app.services.audit_service import AuditService, AuditEventType
 from app.services.checkin_service import (
@@ -144,13 +158,45 @@ async def create_invitation(
     service: DigitalInvitationService = Depends(get_digital_invitation_service),
 ) -> InvitationResponse:
     """Create a new digital invitation."""
+    import traceback
+    import time
+    # #region agent log
     try:
+        with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+            json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "D", "location": "digital_invitations.py:146", "message": "create_invitation entry", "data": {"workspace_id": str(workspace_id), "title": request.title, "has_venue": request.venue is not None, "venue_country": getattr(request.venue, "country", None) if request.venue else None, "primary_language": request.primary_language}, "timestamp": time.time() * 1000}, f, ensure_ascii=False)
+            f.write("\n")
+    except Exception:
+        pass
+    # #endregion
+    try:
+        # #region agent log
+        venue_country_value = None
+        try:
+            venue_country_value = request.venue.country if request.venue else "India"
+        except Exception as e:
+            try:
+                with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "D", "location": "digital_invitations.py:153", "message": "venue.country access failed", "data": {"error": str(e), "error_type": type(e).__name__, "traceback": traceback.format_exc(), "venue_type": type(request.venue).__name__ if request.venue else None}, "timestamp": time.time() * 1000}, f, ensure_ascii=False)
+                    f.write("\n")
+            except Exception:
+                pass
+            raise
+        # #endregion
+        primary_lang = request.primary_language or "en"
+        # #region agent log
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "G", "location": "digital_invitations.py:165", "message": "before service.create_invitation", "data": {"venue_country": venue_country_value, "primary_language": primary_lang, "event_datetime": str(request.event_datetime)}, "timestamp": time.time() * 1000}, f, ensure_ascii=False)
+                f.write("\n")
+        except Exception:
+            pass
+        # #endregion
         invitation = await service.create_invitation(
             workspace_id=workspace_id,
             created_by_user_id=current_user.user_id,
             title=request.title,
             event_datetime=request.event_datetime,
-            venue_country=request.venue.country if request.venue else "India",
+            venue_country=venue_country_value,
             template_id=request.template_id,
             description=request.description,
             event_type=request.event_type or "wedding",
@@ -161,18 +207,46 @@ async def create_invitation(
             host_contact_phone=request.host_contact_phone,
             host_contact_email=request.host_contact_email,
             rsvp_settings=request.rsvp_settings.model_dump() if request.rsvp_settings else None,
-            primary_language=request.primary_language or "en",
+            primary_language=primary_lang,
             secondary_language=request.secondary_language,
             customization=request.customization,
         )
+        # #region agent log
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E", "location": "digital_invitations.py:192", "message": "service.create_invitation success", "data": {"invitation_id": str(invitation.get("invitation_id")) if invitation else None, "invitation_keys": list(invitation.keys()) if invitation else []}, "timestamp": time.time() * 1000}, f, ensure_ascii=False)
+                f.write("\n")
+        except Exception:
+            pass
+        # #endregion
         return InvitationResponse(**invitation)
     except DigitalInvitationError as e:
+        # #region agent log
+        import traceback
+        import time
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "F", "location": "digital_invitations.py:194", "message": "DigitalInvitationError caught", "data": {"code": e.code, "status_code": e.status_code, "message": e.message}, "timestamp": time.time() * 1000}, f, ensure_ascii=False)
+                f.write("\n")
+        except Exception:
+            pass
+        # #endregion
         logger.warning(
             "Invitation creation failed",
             extra={"code": e.code, "status": e.status_code, "message": e.message},
         )
         raise HTTPException(status_code=e.status_code, detail=e.message)
     except Exception as e:
+        # #region agent log
+        import traceback
+        import time
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "E,F", "location": "digital_invitations.py:203", "message": "generic exception caught", "data": {"error": str(e), "error_type": type(e).__name__, "traceback": traceback.format_exc()}, "timestamp": time.time() * 1000}, f, ensure_ascii=False)
+                f.write("\n")
+        except Exception:
+            pass
+        # #endregion
         logger.error(f"Error creating invitation: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

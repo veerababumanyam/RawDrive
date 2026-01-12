@@ -228,6 +228,7 @@ const InvitationEditPage: React.FC = () => {
                   audioUrl={wizardData.audio_url}
                   customization={{
                     colors: wizardData.customization?.colors as Record<string, string> | undefined,
+                    tagline: wizardData.customization?.tagline,
                     fonts: Object.fromEntries(
                       Object.entries({
                         heading: wizardData.font_heading,
@@ -236,6 +237,7 @@ const InvitationEditPage: React.FC = () => {
                     ) as Record<string, string>,
                   }}
                   rsvpSettings={wizardData.rsvp_settings}
+                  invitationSlug={wizardData.slug}
                   viewMode={previewMode}
                   onViewModeChange={setPreviewMode}
                   compact

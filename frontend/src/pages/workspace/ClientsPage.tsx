@@ -276,7 +276,7 @@ const ClientsPage: React.FC = () => {
       {/* Page Header */}
       <motion.div
         variants={staggerItem}
-        className="card-glass rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        className="glass-adaptive rounded-2xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div>
           <h1 className="text-2xl font-bold text-gradient">{t('nav.clients')}</h1>
@@ -294,7 +294,7 @@ const ClientsPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center glass-light border border-white/20 dark:border-white/10 rounded-xl overflow-hidden p-1 shadow-inner">
+          <div className="hidden sm:flex items-center glass-adaptive-subtle rounded-xl overflow-hidden p-1 shadow-inner">
             <button
               onClick={handleExport}
               className="px-3 py-2 text-sm font-medium text-text-secondary hover:text-primary hover:bg-white/50 dark:hover:bg-white/10 rounded-lg transition-all flex items-center gap-2"
@@ -328,7 +328,7 @@ const ClientsPage: React.FC = () => {
       {/* Search and Filters */}
       <motion.div
         variants={staggerItem}
-        className="card-glass rounded-2xl p-4 flex flex-col sm:flex-row gap-4"
+        className="glass-adaptive rounded-2xl p-4 flex flex-col sm:flex-row gap-4"
       >
         {/* Search */}
         <div className="relative flex-1">
@@ -343,10 +343,9 @@ const ClientsPage: React.FC = () => {
             placeholder={t('actions.search') + ' ' + t('nav.clients').toLowerCase() + '...'}
             className="
               w-full pl-10 pr-4 py-2.5
-              glass-light border border-white/20 dark:border-white/10
+              glass-adaptive-subtle
               rounded-xl text-text-primary placeholder:text-text-tertiary
               focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
-              hover:border-white/30 dark:hover:border-white/20
               transition-all duration-200
               min-h-[44px]
             "
@@ -362,9 +361,8 @@ const ClientsPage: React.FC = () => {
               className="
                 flex items-center gap-2
                 px-4 py-2.5
-                glass-light border border-white/20 dark:border-white/10
-                rounded-xl text-text-secondary hover:text-text-primary hover:border-white/30
-                hover:shadow-md
+                glass-interactive
+                rounded-xl text-text-secondary hover:text-text-primary
                 transition-all duration-200
                 min-h-[44px]
               "
@@ -376,7 +374,7 @@ const ClientsPage: React.FC = () => {
               )}
             </button>
             {showFilters && (
-              <div className="absolute top-full mt-2 right-0 w-48 card-glass rounded-xl shadow-xl z-10 overflow-hidden">
+              <div className="absolute top-full mt-2 right-0 w-48 glass-adaptive-elevated rounded-xl shadow-xl z-10 overflow-hidden">
                 <div className="p-2">
                   <p className="px-3 py-2 text-xs font-semibold text-text-tertiary uppercase">
                     Status
@@ -412,9 +410,8 @@ const ClientsPage: React.FC = () => {
               className="
                 flex items-center gap-2
                 px-4 py-2.5
-                glass-light border border-white/20 dark:border-white/10
-                rounded-xl text-text-secondary hover:text-text-primary hover:border-white/30
-                hover:shadow-md
+                glass-interactive
+                rounded-xl text-text-secondary hover:text-text-primary
                 transition-all duration-200
                 min-h-[44px]
               "
@@ -428,7 +425,7 @@ const ClientsPage: React.FC = () => {
               )}
             </button>
             {showTagFilter && (
-              <div className="absolute top-full mt-2 right-0 w-64 card-glass rounded-xl shadow-xl z-10 overflow-hidden">
+              <div className="absolute top-full mt-2 right-0 w-64 glass-adaptive-elevated rounded-xl shadow-xl z-10 overflow-hidden">
                 <div className="p-2">
                   <div className="flex items-center justify-between px-3 py-2">
                     <p className="text-xs font-semibold text-text-tertiary uppercase">Tags</p>
@@ -476,10 +473,9 @@ const ClientsPage: React.FC = () => {
               className="
                 appearance-none
                 px-4 py-2.5 pr-10
-                glass-light border border-white/20 dark:border-white/10
+                glass-interactive
                 rounded-xl text-text-secondary
                 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
-                hover:border-white/30 hover:shadow-md
                 cursor-pointer transition-all duration-200
                 min-h-[44px]
               "
@@ -495,7 +491,7 @@ const ClientsPage: React.FC = () => {
           </div>
 
           {/* View Toggle */}
-          <div className="hidden sm:flex items-center glass-light border border-white/20 dark:border-white/10 rounded-xl overflow-hidden">
+          <div className="hidden sm:flex items-center glass-adaptive-subtle rounded-xl overflow-hidden">
             <button
               onClick={() => setViewMode('grid')}
               className={`
@@ -592,7 +588,7 @@ const ClientsPage: React.FC = () => {
           ))}
         </motion.div>
       ) : (
-        <motion.div variants={staggerItem} className="card-glass rounded-2xl overflow-hidden backdrop-blur-sm">
+        <motion.div variants={staggerItem} className="glass-adaptive rounded-2xl overflow-hidden">
           <table className="w-full">
             <thead className="bg-surface-hover/30 backdrop-blur-sm border-b border-border/30">
               <tr>
@@ -633,7 +629,7 @@ const ClientsPage: React.FC = () => {
                         <span className="font-medium text-text-primary truncate block group-hover:text-primary transition-colors duration-200">
                           {client.full_name}
                         </span>
-                        {client.tags.length > 0 && (
+                        {client.tags && client.tags.length > 0 && (
                           <div className="flex gap-1 mt-1.5">
                             {client.tags.slice(0, 2).map((tag) => (
                               <span
@@ -723,7 +719,7 @@ const ClientsPage: React.FC = () => {
                           <MoreVertical size={16} />
                         </button>
                         {activeMenu === client.client_id && (
-                          <div className="absolute right-0 top-full mt-2 w-44 bg-surface/95 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/20 z-50 overflow-hidden border border-border/50">
+                          <div className="absolute right-0 top-full mt-2 w-44 glass-adaptive-elevated rounded-xl shadow-2xl z-50 overflow-hidden">
                             <button
                               className="w-full flex items-center gap-3 px-4 py-3 text-sm text-error hover:bg-error/10 transition-all duration-200"
                               onClick={(e) => {
@@ -751,7 +747,7 @@ const ClientsPage: React.FC = () => {
       {meta && meta.total_pages > 1 && (
         <motion.div
           variants={staggerItem}
-          className="flex items-center justify-between card-glass rounded-xl px-4 py-3"
+          className="flex items-center justify-between glass-adaptive rounded-xl px-4 py-3"
         >
           <p className="text-sm text-text-tertiary">
             Showing {(page - 1) * limit + 1} to {Math.min(page * limit, meta.total)} of{' '}
@@ -951,7 +947,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, avatarBlobUrl, onClick,
         </div>
 
         {/* Tags */}
-        {client.tags.length > 0 && (
+        {client.tags && client.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3">
             {client.tags.slice(0, 3).map((tag) => (
               <span

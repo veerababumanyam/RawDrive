@@ -293,21 +293,24 @@ export const CommandBar: React.FC<CommandBarProps> = ({
           onSelectGallery?.((item.data as GallerySearchResult).gallery_id);
           onClose();
           break;
-        case 'asset':
+        case 'asset': {
           const asset = item.data as AssetSearchResult;
           onSelectAsset?.(asset.asset_id, asset.gallery_id);
           onClose();
           break;
-        case 'tag':
+        }
+        case 'tag': {
           const tag = item.data as TagSearchResult;
           onSelectTag?.(tag.tag_id, tag.name);
           onClose();
           break;
-        case 'person':
+        }
+        case 'person': {
           const person = item.data as PersonSearchResult;
           onSelectPerson?.(person.person_id, person.display_name);
           onClose();
           break;
+        }
         case 'action':
           (item.data as QuickAction).action();
           break;

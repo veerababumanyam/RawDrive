@@ -175,36 +175,6 @@ app.add_middleware(RateLimiterMiddleware)
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle all unhandled exceptions and return JSON response."""
-    # #region agent log
-    import json
-    import time
-    import traceback
-    try:
-        debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-        log_entry = {
-            "id": "log_entry",
-            "timestamp": int(time.time() * 1000),
-            "location": "main.py:global_exception_handler",
-            "message": "Global exception handler called",
-            "data": {
-                "exception_type": type(exc).__name__,
-                "exception_message": str(exc),
-                "exception_args": str(exc.args) if hasattr(exc, 'args') else None,
-                "traceback": traceback.format_exc(),
-                "path": str(request.url.path),
-                "method": request.method
-            },
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "A"
-        }
-        with open(debug_log_path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(log_entry) + '\n')
-            f.flush()
-    except Exception:
-        pass
-    # #endregion
-    
     logger.exception(
         "Unhandled exception",
         extra={
@@ -228,12 +198,27 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """Handle HTTP exceptions and return JSON response."""
+    # Handle detail - it can be a dict, string, or list
+    detail = exc.detail
+    if isinstance(detail, dict):
+        # If detail is a dict, use it directly or extract error info
+        error_code = detail.get("error", "HTTP_ERROR")
+        error_message = detail.get("message", str(detail))
+    elif isinstance(detail, list):
+        # If detail is a list (validation errors), join them
+        error_code = "VALIDATION_ERROR"
+        error_message = "; ".join(str(item) for item in detail)
+    else:
+        # If detail is a string
+        error_code = "HTTP_ERROR"
+        error_message = str(detail)
+    
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": {
-                "code": "HTTP_ERROR",
-                "message": str(exc.detail),
+                "code": error_code,
+                "message": error_message,
                 "requestId": getattr(request.state, "correlation_id", None),
             }
         }
@@ -242,32 +227,6 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Handle validation errors and return JSON response."""
-    # #region agent log
-    import json
-    import time
-    try:
-        debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-        log_entry = {
-            "id": "log_entry",
-            "timestamp": int(time.time() * 1000),
-            "location": "main.py:validation_exception_handler",
-            "message": "Validation error",
-            "data": {
-                "errors": str(exc.errors()),
-                "body": str(exc.body) if hasattr(exc, 'body') else None,
-                "path": str(request.url.path)
-            },
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "A"
-        }
-        with open(debug_log_path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(log_entry) + '\n')
-            f.flush()
-    except Exception:
-        pass
-    # #endregion
-    
     return JSONResponse(
         status_code=422,
         content={

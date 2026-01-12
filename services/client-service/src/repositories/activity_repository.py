@@ -168,13 +168,31 @@ class ActivityRepository:
 
         if related_entity_type:
             manual_filters.append(f"ca.related_entity_type = ${param_idx}")
-            analytics_filters.append(f"ae.related_entity_type = ${param_idx}")
+            # analytics_events doesn't have related_entity_type, derive from actual columns
+            if related_entity_type == 'gallery':
+                analytics_filters.append(f"ae.gallery_id IS NOT NULL")
+            elif related_entity_type == 'asset':
+                analytics_filters.append(f"ae.asset_id IS NOT NULL")
+            elif related_entity_type == 'invitation':
+                analytics_filters.append(f"ae.invitation_id IS NOT NULL")
+            # else: don't filter analytics_events for unknown types
             params.append(related_entity_type)
             param_idx += 1
 
         if related_entity_id:
             manual_filters.append(f"ca.related_entity_id = ${param_idx}")
-            analytics_filters.append(f"ae.related_entity_id = ${param_idx}")
+            # analytics_events stores entity IDs in separate columns, filter appropriately
+            if related_entity_type == 'gallery':
+                analytics_filters.append(f"ae.gallery_id = ${param_idx}")
+            elif related_entity_type == 'asset':
+                analytics_filters.append(f"ae.asset_id = ${param_idx}")
+            elif related_entity_type == 'invitation':
+                analytics_filters.append(f"ae.invitation_id = ${param_idx}")
+            else:
+                # Without type, check all entity columns (OR condition)
+                analytics_filters.append(
+                    f"(ae.gallery_id = ${param_idx} OR ae.asset_id = ${param_idx} OR ae.invitation_id = ${param_idx})"
+                )
             params.append(related_entity_id)
             param_idx += 1
 
@@ -185,6 +203,12 @@ class ActivityRepository:
         sort_field = "timestamp" if sort_by == "created_at" else sort_by
         order = "DESC" if sort_order == "desc" else "ASC"
 
+        # Calculate correct parameter indices for LIMIT and OFFSET
+        # After all filters, the next available parameter index is len(params) + 1
+        limit_param_idx = len(params) + 1
+        offset_param_idx = len(params) + 2
+        params.extend([limit, offset])
+
         # Union query combining both sources
         query = f"""
         WITH unified_activities AS (
@@ -194,11 +218,13 @@ class ActivityRepository:
                 ca.workspace_id,
                 ca.client_id,
                 ca.activity_type,
-                ca.title,
+                COALESCE(ca.metadata->>'title', ca.activity_type) AS title,
                 ca.description,
                 ca.related_entity_type,
-                ca.related_entity_id,
+                ca.related_entity_id::text AS related_entity_id,
                 ca.metadata,
+                ca.created_at,
+                ca.created_at AS updated_at,
                 ca.created_at AS timestamp,
                 'manual' AS source
             FROM client_activities ca
@@ -212,11 +238,18 @@ class ActivityRepository:
                 ae.workspace_id,
                 ae.client_id,
                 ae.event_type AS activity_type,
-                COALESCE(ae.event_properties->>'title', ae.event_type) AS title,
-                ae.event_properties->>'description' AS description,
-                ae.related_entity_type,
-                ae.related_entity_id,
-                ae.event_properties AS metadata,
+                COALESCE(ae.metadata->>'title', ae.event_type) AS title,
+                ae.metadata->>'description' AS description,
+                CASE 
+                    WHEN ae.gallery_id IS NOT NULL THEN 'gallery'
+                    WHEN ae.asset_id IS NOT NULL THEN 'asset'
+                    WHEN ae.invitation_id IS NOT NULL THEN 'invitation'
+                    ELSE NULL
+                END AS related_entity_type,
+                COALESCE(ae.gallery_id, ae.asset_id, ae.invitation_id)::text AS related_entity_id,
+                ae.metadata,
+                ae.occurred_at AS created_at,
+                ae.occurred_at AS updated_at,
                 ae.occurred_at AS timestamp,
                 'system' AS source
             FROM analytics_events ae
@@ -224,10 +257,8 @@ class ActivityRepository:
         )
         SELECT * FROM unified_activities
         ORDER BY {sort_field} {order}
-        LIMIT ${param_idx} OFFSET ${param_idx + 1}
+        LIMIT ${limit_param_idx} OFFSET ${offset_param_idx}
         """
-
-        params.extend([limit, offset])
 
         async with pool.acquire() as conn:
             rows = await conn.fetch(query, *params)
@@ -430,12 +461,21 @@ class ActivityRepository:
         if description:
             event_properties["description"] = description
 
+        # Map related_entity_type/id to actual columns
+        gallery_id = related_entity_id if related_entity_type == 'gallery' else None
+        asset_id = related_entity_id if related_entity_type == 'asset' else None
+        invitation_id = related_entity_id if related_entity_type == 'invitation' else None
+        
+        # Determine event_category from entity type or default to 'client'
+        event_category = related_entity_type if related_entity_type in ('gallery', 'asset', 'invitation') else 'client'
+
         query = """
         INSERT INTO analytics_events (
-            event_id, workspace_id, user_id, client_id, event_type,
-            related_entity_type, related_entity_id, event_properties,
+            event_id, workspace_id, client_id, event_type, event_category,
+            gallery_id, asset_id, invitation_id,
+            metadata, actor_type, actor_id,
             occurred_at, created_at
-        ) VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, $8, $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *
         """
 
@@ -446,9 +486,13 @@ class ActivityRepository:
                 workspace_id,
                 client_id,
                 event_type,
-                related_entity_type,
-                related_entity_id,
+                event_category,
+                gallery_id,
+                asset_id,
+                invitation_id,
                 event_properties,
+                'system',  # actor_type
+                None,  # actor_id (system events have no actor)
                 now,
                 now,
             )

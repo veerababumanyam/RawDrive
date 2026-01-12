@@ -315,7 +315,7 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
           shadow-xl
           transition-all duration-300
           relative
-          overflow-hidden
+          overflow-visible
           ${className}
           bg-gradient-to-br
           from-white/70 via-white/60 to-white/50
@@ -323,6 +323,7 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
           border-white/20 dark:border-slate-600/60
           shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.5)]
         `}
+        style={{ isolation: 'isolate' }}
       >
         {/* Subtle gradient overlay for depth - Light mode only */}
         <div
@@ -369,7 +370,7 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
               const colorClass = getToolColor(tool.id, isActive);
 
               return (
-                <div key={tool.id} className="relative group">
+                <div key={tool.id} className="relative group" style={{ zIndex: hoveredTool === tool.id ? 9999 : 'auto' }}>
                   <button
                     onClick={() => handleToolClick(tool.id)}
                     onMouseEnter={() => setHoveredTool(tool.id)}
@@ -388,7 +389,6 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
                     shadow-md hover:shadow-lg dark:shadow-slate-900/50
                   `}
                     aria-label={tool.label}
-                    title={tool.label}
                   >
                     <Icon className={`w-4 h-4 ${isActive ? 'text-white dark:text-white' : ''}`} />
                     {tool.badge && (
@@ -404,23 +404,23 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
                   </button>
 
                   {/* Enhanced Tooltip - iOS 18 style - Instant UX via JS, WCAG 2.1 AA compliant */}
-                  <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 px-3.5 py-2.5 
-                  backdrop-blur-2xl
-                  bg-white/[0.98] dark:bg-slate-700/[0.98]
-                  border border-slate-200/70 dark:border-slate-500/80
-                  rounded-2xl text-xs
+                  <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2.5 px-3 py-2 
+                  backdrop-blur-xl
+                  bg-white dark:bg-slate-800
+                  border border-slate-300 dark:border-slate-600
+                  rounded-xl text-xs
                   pointer-events-none
-                  transition-opacity duration-[50ms] ease-linear z-50
-                  shadow-[0_4px_20px_rgba(0,0,0,0.15)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.45)]
-                  min-w-[140px] max-w-[200px]
-                  whitespace-normal
-                  ${hoveredTool === tool.id ? 'opacity-100' : 'opacity-0'}
-                `}>
-                    <div className="font-semibold text-slate-900 dark:text-slate-50 mb-1 leading-tight">{tool.label}</div>
-                    <div className="text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed">{tool.description}</div>
-                    {/* Arrow - iOS style with proper border matching */}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                      <div className="w-2.5 h-2.5 bg-white/[0.98] dark:bg-slate-700/[0.98] border-r border-b border-slate-200/70 dark:border-slate-500/80 rotate-45" />
+                  transition-opacity duration-[50ms] ease-linear
+                  shadow-[0_8px_24px_rgba(0,0,0,0.25)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.75)]
+                  whitespace-nowrap
+                  ${hoveredTool === tool.id ? 'opacity-100 visible' : 'opacity-0 invisible'}
+                `}
+                  style={{ zIndex: 9999 }}
+                >
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 leading-tight">{tool.label}</div>
+                    {/* Arrow - iOS style with proper border matching - pointing upward */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-px">
+                      <div className="w-2.5 h-2.5 bg-white dark:bg-slate-800 border-l border-t border-slate-300 dark:border-slate-600 rotate-45" />
                     </div>
                   </div>
                 </div>

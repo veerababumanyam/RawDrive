@@ -39,7 +39,7 @@ router = APIRouter(
 async def list_client_galleries(
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: GalleriesService = Depends(get_galleries_service),
+    service: GalleryLinkService = Depends(get_gallery_link_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> GalleryLinkListResponse:
     """
@@ -78,7 +78,7 @@ async def link_gallery_to_client(
     data: GalleryLinkCreate,
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: GalleriesService = Depends(get_galleries_service),
+    service: GalleryLinkService = Depends(get_gallery_link_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> GalleryLinkResponse:
     """
@@ -149,7 +149,7 @@ async def get_gallery_link(
     gallery_id: UUID = Path(..., description="Gallery ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: GalleriesService = Depends(get_galleries_service),
+    service: GalleryLinkService = Depends(get_gallery_link_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> GalleryLinkResponse:
     """
@@ -194,7 +194,7 @@ async def update_gallery_link(
     gallery_id: UUID = Path(..., description="Gallery ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: GalleriesService = Depends(get_galleries_service),
+    service: GalleryLinkService = Depends(get_gallery_link_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> GalleryLinkResponse:
     """
@@ -257,7 +257,7 @@ async def unlink_gallery(
     gallery_id: UUID = Path(..., description="Gallery ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: GalleriesService = Depends(get_galleries_service),
+    service: GalleryLinkService = Depends(get_gallery_link_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> None:
     """
@@ -309,7 +309,7 @@ async def get_proofing_summary(
     gallery_id: UUID = Path(..., description="Gallery ID"),
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: GalleriesService = Depends(get_galleries_service),
+    service: GalleryLinkService = Depends(get_gallery_link_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> ProofingSummaryResponse:
     """

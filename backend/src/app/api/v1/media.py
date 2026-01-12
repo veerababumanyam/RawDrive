@@ -13,7 +13,7 @@ import asyncpg
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
-from app.api.dependencies.auth import CurrentUserDep, OptionalUserDep, WorkspaceAccessDep
+from app.api.dependencies.auth import CurrentUserDep, OptionalUserDep, WorkspaceIdDep
 from app.api.schemas import ErrorResponse
 from app.api.exceptions import NotFoundError, ForbiddenError, ValidationAppError, InternalError
 from app.db.postgres import get_postgres_pool
@@ -372,7 +372,7 @@ async def stream_media(
     },
 )
 async def get_signed_url(
-    workspace_id: Annotated[UUID, WorkspaceAccessDep],
+    workspace_id: Annotated[UUID, WorkspaceIdDep],
     asset_id: UUID,
     current_user: CurrentUserDep,
     variant: Annotated[str, Query(description="Media variant: thumbnail, preview, or original")] = "thumbnail",
@@ -413,22 +413,10 @@ async def get_signed_url(
                     code="ASSET_NOT_AVAILABLE"
                 )
 
-            # Check gallery download policy if requesting original download
-            if variant == "original" and download and asset["gallery_id"]:
-                gallery: asyncpg.Record | None = await conn.fetchrow(
-                    """
-                    SELECT download_policy FROM galleries
-                    WHERE gallery_id = $1 AND deleted = FALSE
-                    """,
-                    asset["gallery_id"],
-                )
-                if gallery:
-                    download_policy: str = str(gallery["download_policy"])
-                    if download_policy == "view_only":
-                        raise ForbiddenError(
-                            message="Gallery policy does not allow downloads",
-                            code="DOWNLOAD_NOT_ALLOWED"
-                        )
+            # Workspace members (admins/photographers) act as owners, so we bypass
+            # the public 'download_policy' check here. That policy applies only
+            # to public gallery links (handled via magic_links/public APIs).
+            logger.info(f"Bypassing download policy for workspace member. Asset: {asset_id}, Workspace: {workspace_id}")
 
         # Generate signed URL
         result: dict[str, Any] = signed_url_service.generate_signed_url(

@@ -4,6 +4,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts';
 import { ToastProvider } from './components/ui';
+import { PWAUpdateNotification } from './components/ui/PWAUpdateNotification';
 import { routes } from './router';
 import ErrorBoundary from './components/error/ErrorBoundary';
 import { AppErrorFallback } from './components/error/ErrorFallbacks';
@@ -44,6 +45,7 @@ const App: React.FC = () => {
           <AuthProvider>
             <ToastProvider position="bottom-center">
               <RouterProvider router={router} future={{ v7_startTransition: true }} />
+              <PWAUpdateNotification />
             </ToastProvider>
           </AuthProvider>
         </HelmetProvider>

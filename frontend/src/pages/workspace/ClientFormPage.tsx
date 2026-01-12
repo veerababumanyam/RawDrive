@@ -144,11 +144,11 @@ const ClientFormPage: React.FC = () => {
         internal_notes: clientData.internal_notes || '',
         referred_by_client_id: clientData.referred_by_client_id || '',
       });
-      setContacts(clientData.contacts);
-      setAddresses(clientData.addresses);
-      setClientTags(clientData.tags);
+      setContacts(clientData.contacts || []);
+      setAddresses(clientData.addresses || []);
+      setClientTags(clientData.tags || []);
 
-      setClientTags(clientData.tags);
+
     } catch (err) {
       addToast({
         variant: 'error',

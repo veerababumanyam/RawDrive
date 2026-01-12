@@ -109,17 +109,40 @@ const ClientDetailPage: React.FC = () => {
       const clientData = await clientService.getClient(workspace.workspace_id, clientId);
       setClient(clientData);
 
-      // Fetch related data in parallel
-      const [activitiesData, communicationsData, galleriesData] = await Promise.all([
+      // Fetch related data in parallel with individual error handling
+      // Use Promise.allSettled to prevent one failure from blocking others
+      const [activitiesResult, communicationsResult, galleriesResult] = await Promise.allSettled([
         clientService.getActivities(workspace.workspace_id, clientId, { limit: 10 }),
         clientService.getCommunications(workspace.workspace_id, clientId, { limit: 10 }),
         clientService.getLinkedGalleries(workspace.workspace_id, clientId),
       ]);
 
-      setActivities(activitiesData.activities);
-      setCommunications(communicationsData.communications);
-      setGalleries(galleriesData);
+      // Handle activities
+      if (activitiesResult.status === 'fulfilled') {
+        setActivities(activitiesResult.value.activities);
+      } else {
+        console.error('Failed to fetch activities:', activitiesResult.reason);
+        setActivities([]); // Set empty array on error
+      }
+
+      // Handle communications
+      if (communicationsResult.status === 'fulfilled') {
+        setCommunications(communicationsResult.value.communications);
+      } else {
+        console.error('Failed to fetch communications:', communicationsResult.reason);
+        setCommunications([]); // Set empty array on error
+      }
+
+      // Handle galleries
+      if (galleriesResult.status === 'fulfilled') {
+        const galleriesData = galleriesResult.value;
+        setGalleries(Array.isArray(galleriesData) ? galleriesData : []);
+      } else {
+        console.error('Failed to fetch galleries:', galleriesResult.reason);
+        setGalleries([]); // Set empty array on error
+      }
     } catch (err) {
+      console.error('Failed to fetch client:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch client'));
     } finally {
       setLoading(false);
@@ -233,7 +256,7 @@ const ClientDetailPage: React.FC = () => {
       className="space-y-6"
     >
       {/* Header */}
-      <motion.div variants={staggerItem} className="flex items-center gap-4 card-glass rounded-2xl p-4 backdrop-blur-sm border border-border/20">
+      <motion.div variants={staggerItem} className="flex items-center gap-4 glass-adaptive rounded-2xl p-4">
         <AppButton
           variant="ghost"
           size="icon"
@@ -285,7 +308,7 @@ const ClientDetailPage: React.FC = () => {
         {/* Left Column - Profile & Details */}
         <motion.div variants={staggerItem} className="space-y-6">
           {/* Profile Card - Enhanced with gradient background and glassmorphism */}
-          <div className="client-profile-card relative rounded-2xl p-6 backdrop-blur-md border border-white/20 shadow-2xl shadow-primary/10 overflow-hidden group/card transition-all duration-500 hover:shadow-3xl hover:shadow-primary/15">
+          <div className="client-profile-card relative rounded-2xl p-6 glass-frosted shadow-2xl shadow-primary/10 overflow-hidden group/card transition-all duration-500 hover:shadow-3xl hover:shadow-primary/15">
             {/* Animated gradient background */}
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-surface to-accent/5 opacity-100" />
             <div className="absolute inset-0 bg-gradient-to-tl from-accent/10 via-transparent to-primary/10 opacity-0 group-hover/card:opacity-100 transition-opacity duration-500" />
@@ -324,21 +347,21 @@ const ClientDetailPage: React.FC = () => {
               )}
 
               {/* Quick Stats with enhanced hover effects */}
-              <div className="grid grid-cols-3 gap-3 w-full mt-6 pt-6 border-t border-white/10">
-                <div className="stat-card relative p-4 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 hover:from-primary/20 hover:to-primary/10 border border-primary/10 hover:border-primary/30 transition-all duration-300 cursor-default group/stat overflow-hidden">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full mt-6 pt-6 border-t border-white/10">
+                <div className="stat-card relative p-3 sm:p-4 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 hover:from-primary/20 hover:to-primary/10 border border-primary/10 hover:border-primary/30 transition-all duration-300 cursor-default group/stat overflow-hidden">
                   <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover/stat:opacity-100 transition-opacity" />
-                  <p className="relative text-3xl font-bold text-primary group-hover/stat:scale-110 transition-transform duration-300">{client.stats?.linked_galleries_count || 0}</p>
-                  <p className="relative text-xs text-text-secondary font-semibold uppercase tracking-wide mt-1">Galleries</p>
+                  <p className="relative text-2xl sm:text-3xl font-bold text-primary group-hover/stat:scale-110 transition-transform duration-300">{client.stats?.linked_galleries_count || 0}</p>
+                  <p className="relative text-[10px] sm:text-xs text-text-secondary font-semibold uppercase tracking-wide mt-1 truncate">Galleries</p>
                 </div>
-                <div className="stat-card relative p-4 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 hover:from-accent/20 hover:to-accent/10 border border-accent/10 hover:border-accent/30 transition-all duration-300 cursor-default group/stat overflow-hidden">
+                <div className="stat-card relative p-3 sm:p-4 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 hover:from-accent/20 hover:to-accent/10 border border-accent/10 hover:border-accent/30 transition-all duration-300 cursor-default group/stat overflow-hidden">
                   <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover/stat:opacity-100 transition-opacity" />
-                  <p className="relative text-3xl font-bold text-accent group-hover/stat:scale-110 transition-transform duration-300">{client.stats?.referrals_count || 0}</p>
-                  <p className="relative text-xs text-text-secondary font-semibold uppercase tracking-wide mt-1">Referrals</p>
+                  <p className="relative text-2xl sm:text-3xl font-bold text-accent group-hover/stat:scale-110 transition-transform duration-300">{client.stats?.referrals_count || 0}</p>
+                  <p className="relative text-[10px] sm:text-xs text-text-secondary font-semibold uppercase tracking-wide mt-1 truncate">Referrals</p>
                 </div>
-                <div className="stat-card relative p-4 rounded-xl bg-gradient-to-br from-success/10 to-success/5 hover:from-success/20 hover:to-success/10 border border-success/10 hover:border-success/30 transition-all duration-300 cursor-default group/stat overflow-hidden">
+                <div className="stat-card relative p-3 sm:p-4 rounded-xl bg-gradient-to-br from-success/10 to-success/5 hover:from-success/20 hover:to-success/10 border border-success/10 hover:border-success/30 transition-all duration-300 cursor-default group/stat overflow-hidden">
                   <div className="absolute inset-0 bg-success/5 opacity-0 group-hover/stat:opacity-100 transition-opacity" />
-                  <p className="relative text-3xl font-bold text-success group-hover/stat:scale-110 transition-transform duration-300">{client.stats?.activities_count || 0}</p>
-                  <p className="relative text-xs text-text-secondary font-semibold uppercase tracking-wide mt-1">Activities</p>
+                  <p className="relative text-2xl sm:text-3xl font-bold text-success group-hover/stat:scale-110 transition-transform duration-300">{client.stats?.activities_count || 0}</p>
+                  <p className="relative text-[10px] sm:text-xs text-text-secondary font-semibold uppercase tracking-wide mt-1 truncate">Activities</p>
                 </div>
               </div>
             </div>
@@ -350,12 +373,12 @@ const ClientDetailPage: React.FC = () => {
             icon={<Phone size={18} />}
             expanded={expandedSections.contacts}
             onToggle={() => toggleSection('contacts')}
-            count={client.contacts.length}
+            count={client.contacts?.length || 0}
           >
             <ContactsSection
               workspaceId={workspace!.workspace_id}
               clientId={clientId!}
-              contacts={client.contacts}
+              contacts={client.contacts || []}
               onContactsChanged={fetchClient}
               onAddContact={() => {
                 setEditingContact(undefined);
@@ -374,12 +397,12 @@ const ClientDetailPage: React.FC = () => {
             icon={<MapPin size={18} />}
             expanded={expandedSections.addresses}
             onToggle={() => toggleSection('addresses')}
-            count={client.addresses.length}
+            count={client.addresses?.length || 0}
           >
             <AddressesSection
               workspaceId={workspace!.workspace_id}
               clientId={clientId!}
-              addresses={client.addresses}
+              addresses={client.addresses || []}
               onAddressesChanged={fetchClient}
               onAddAddress={() => {
                 setEditingAddress(undefined);
@@ -398,18 +421,18 @@ const ClientDetailPage: React.FC = () => {
             icon={<Tag size={18} />}
             expanded={expandedSections.tags}
             onToggle={() => toggleSection('tags')}
-            count={client.tags.length}
+            count={client.tags?.length || 0}
           >
             <TagAssignmentUI
               workspaceId={workspace!.workspace_id}
               clientId={clientId}
-              currentTags={client.tags}
+              currentTags={client.tags || []}
               onTagsChanged={fetchClient}
             />
           </CollapsibleSection>
 
           {/* Additional Details - Enhanced with gradient and glassmorphism */}
-          <div className="relative rounded-2xl p-6 space-y-4 backdrop-blur-md border border-white/20 shadow-xl shadow-primary/5 overflow-hidden group/dates">
+          <div className="relative rounded-2xl p-6 space-y-4 glass-adaptive shadow-xl shadow-primary/5 overflow-hidden group/dates">
             {/* Gradient background */}
             <div className="absolute inset-0 bg-gradient-to-br from-surface via-surface to-accent/5" />
             <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-accent/5 opacity-0 group-hover/dates:opacity-100 transition-opacity duration-500" />
@@ -480,7 +503,7 @@ const ClientDetailPage: React.FC = () => {
             icon={<Image size={18} />}
             expanded={expandedSections.galleries}
             onToggle={() => toggleSection('galleries')}
-            count={galleries.length}
+            count={Array.isArray(galleries) ? galleries.length : 0}
             action={
               <AppButton
                 variant="ghost"
@@ -492,7 +515,7 @@ const ClientDetailPage: React.FC = () => {
               </AppButton>
             }
           >
-            {galleries.length === 0 ? (
+            {!galleries || galleries.length === 0 ? (
               <div className="text-center py-12">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center mx-auto mb-4">
                   <Image size={32} className="text-primary/50" />
@@ -502,10 +525,10 @@ const ClientDetailPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {galleries.map((gallery) => (
+                {Array.isArray(galleries) && galleries.map((gallery) => (
                   <div
                     key={gallery.link_id}
-                    className="gallery-link-card relative p-5 rounded-xl overflow-hidden cursor-pointer group/gallery border border-border/20 hover:border-primary/30 shadow-sm hover:shadow-xl hover:shadow-primary/10 transition-all duration-300"
+                    className="gallery-link-card relative p-5 rounded-xl overflow-hidden cursor-pointer group/gallery glass-adaptive-subtle hover:shadow-xl hover:shadow-primary/10 transition-all duration-300"
                     onClick={() => navigate(`/workspace/galleries/${gallery.gallery_id}`)}
                   >
                     {/* Gradient background */}
@@ -585,7 +608,7 @@ const ClientDetailPage: React.FC = () => {
 
           {/* Internal Notes - Enhanced with gradient */}
           {client.internal_notes && (
-            <div className="relative rounded-2xl p-6 backdrop-blur-md border border-white/20 shadow-lg shadow-info/5 overflow-hidden group/notes">
+            <div className="relative rounded-2xl p-6 glass-adaptive shadow-lg shadow-info/5 overflow-hidden group/notes">
               {/* Gradient background */}
               <div className="absolute inset-0 bg-gradient-to-br from-info/5 via-surface to-primary/5" />
               <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-info/10 opacity-0 group-hover/notes:opacity-100 transition-opacity duration-500" />
@@ -688,7 +711,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   children,
 }) => {
   return (
-    <div className="collapsible-section relative rounded-2xl overflow-hidden backdrop-blur-md border border-white/20 shadow-lg shadow-primary/5 group/section">
+    <div className="collapsible-section relative rounded-2xl overflow-hidden glass-adaptive shadow-lg shadow-primary/5 group/section">
       {/* Gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-surface via-surface to-primary/3" />
       <div className="absolute inset-0 bg-gradient-to-tr from-accent/5 via-transparent to-primary/5 opacity-0 group-hover/section:opacity-100 transition-opacity duration-500" />

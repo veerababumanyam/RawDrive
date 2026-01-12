@@ -26,7 +26,11 @@ from src.schemas.gallery import (
     GalleryPublishRequest,
     SubGalleryCreateRequest,
     SubGalleryUpdateRequest,
+    UpdateSubGalleriesSortOrderRequest,
     UpdateAssetRequest,
+    DownloadLimitRequest,
+    DownloadLimitResponse,
+    DownloadUsageResponse,
 )
 from src.middleware.auth import get_workspace_id, get_current_user
 from src.log_config import get_logger
@@ -169,6 +173,8 @@ async def update_gallery(
         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
     except GalleryError as e:
         raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"error": "INTERNAL_ERROR", "message": str(e)})
 
 
 @router.get("/{gallery_id}/credentials", response_model=GalleryCredentialsResponse)
@@ -186,9 +192,16 @@ async def get_gallery_credentials(
         )
         return result
     except GalleryNotFoundError:
-         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
     except GalleryError as e:
         raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+    except ValueError as e:
+        # UUID conversion errors or other validation errors
+        raise HTTPException(status_code=400, detail={"error": "INVALID_REQUEST", "message": str(e)})
+    except Exception as e:
+        # Re-raise to let FastAPI's exception handlers deal with it
+        # This ensures proper error formatting and prevents 500 errors
+        raise
 
 
 @router.delete("/{gallery_id}", status_code=204)
@@ -238,7 +251,15 @@ async def create_sub_gallery(
     request: SubGalleryCreateRequest,
     workspace_id: str = Depends(get_workspace_id),
 ):
-    """Create a sub-gallery."""
+    """Create a sub-gallery with optional nesting support.
+
+    Sub-galleries can be nested up to 3 levels deep:
+    - Level 1: Direct child of gallery
+    - Level 2: Child of a level 1 sub-gallery
+    - Level 3: Child of a level 2 sub-gallery (maximum)
+
+    To create a nested sub-gallery, provide parent_sub_gallery_id.
+    """
     gallery_service = get_gallery_service()
 
     try:
@@ -247,12 +268,38 @@ async def create_sub_gallery(
             gallery_id=UUID(gallery_id),
             name=request.name,
             sort_order=request.sort_order,
+            parent_sub_gallery_id=UUID(request.parent_sub_gallery_id) if request.parent_sub_gallery_id else None,
         )
         return result
     except GalleryNotFoundError:
         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
     except GalleryError as e:
         raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+
+
+@router.patch("/{gallery_id}/sub-galleries/sort-order", status_code=200)
+async def update_sub_galleries_sort_order(
+    gallery_id: str,
+    request: UpdateSubGalleriesSortOrderRequest,
+    workspace_id: str = Depends(get_workspace_id),
+):
+    """Update sort order for multiple sub-galleries."""
+    gallery_service = get_gallery_service()
+
+    try:
+        await gallery_service.update_sub_galleries_sort_order(
+            workspace_id=UUID(workspace_id),
+            gallery_id=UUID(gallery_id),
+            sub_gallery_ids=request.sub_gallery_ids,  # Pass strings, service handles conversion
+        )
+        
+        return {"message": "Sub-galleries sort order updated successfully"}
+    except GalleryNotFoundError:
+        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryError as e:
+        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+    except Exception as e:
+        raise
 
 
 @router.patch("/{gallery_id}/sub-galleries/{sub_gallery_id}")
@@ -425,238 +472,25 @@ async def get_gallery(
 
     Returns full gallery data including sub-galleries and stats.
     """
-    # #region agent log
-    import json
-    import os
-    import time
-    try:
-        debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-        log_entry = {
-            "id": "log_entry",
-            "timestamp": int(time.time() * 1000),
-            "location": "galleries.py:get_gallery:entry",
-            "message": "Endpoint called",
-            "data": {
-                "gallery_id": gallery_id,
-                "workspace_id": workspace_id,
-                "gallery_id_type": type(gallery_id).__name__,
-                "workspace_id_type": type(workspace_id).__name__
-            },
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "A"
-        }
-        with open(debug_log_path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(log_entry) + '\n')
-            f.flush()
-    except Exception:
-        pass
-    # #endregion
-    
     gallery_service = get_gallery_service()
 
     try:
-        # #region agent log
-        try:
-            debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-            log_entry = {
-                "id": "log_entry",
-                "timestamp": int(time.time() * 1000),
-                "location": "galleries.py:get_gallery:before_call",
-                "message": "Before calling service.get_gallery",
-                "data": {
-                    "gallery_id": gallery_id,
-                    "workspace_id": workspace_id
-                },
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A"
-            }
-            with open(debug_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry) + '\n')
-                f.flush()
-        except Exception:
-            pass
-        # #endregion
-        
         result = await gallery_service.get_gallery(
             workspace_id=workspace_id,
             gallery_id=gallery_id,
         )
         
-        # #region agent log
-        try:
-            debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-            log_entry = {
-                "id": "log_entry",
-                "timestamp": int(time.time() * 1000),
-                "location": "galleries.py:get_gallery:success",
-                "message": "Service call succeeded",
-                "data": {
-                    "result_keys": list(result.keys()) if isinstance(result, dict) else "not_dict",
-                    "result_type": type(result).__name__
-                },
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A"
-            }
-            with open(debug_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry) + '\n')
-                f.flush()
-        except Exception:
-            pass
-        # #endregion
-        
-        # #region agent log
-        try:
-            import json
-            import time
-            from pydantic import ValidationError
-            debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-            
-            # Try to validate the result matches the response model
-            try:
-                from src.schemas.gallery import GalleryResponse
-                validated = GalleryResponse(**result)
-                validation_status = "passed"
-            except ValidationError as ve:
-                validation_status = "failed"
-                validation_errors = ve.errors()
-            except Exception as ve:
-                validation_status = "error"
-                validation_errors = str(ve)
-            else:
-                validation_errors = None
-            
-            log_entry = {
-                "id": "log_entry",
-                "timestamp": int(time.time() * 1000),
-                "location": "galleries.py:get_gallery:before_return",
-                "message": "Before returning result",
-                "data": {
-                    "result_keys": list(result.keys()) if isinstance(result, dict) else "not_dict",
-                    "result_type": type(result).__name__,
-                    "validation_status": validation_status,
-                    "validation_errors": validation_errors,
-                    "custom_links_type": type(result.get("custom_links")).__name__ if isinstance(result, dict) else None,
-                    "custom_links_value": str(result.get("custom_links"))[:200] if isinstance(result, dict) else None
-                },
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A"
-            }
-            with open(debug_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry) + '\n')
-                f.flush()
-        except Exception:
-            pass
-        # #endregion
-        
         # Final safety check - ensure custom_links is always a list before returning
         if isinstance(result, dict) and "custom_links" in result:
             if not isinstance(result["custom_links"], list):
-                # #region agent log
-                try:
-                    debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-                    log_entry = {
-                        "id": "log_entry",
-                        "timestamp": int(time.time() * 1000),
-                        "location": "galleries.py:get_gallery:final_custom_links_check",
-                        "message": "custom_links is not a list in result, forcing to empty list",
-                        "data": {
-                            "custom_links_type": type(result["custom_links"]).__name__,
-                            "custom_links_value": str(result["custom_links"])[:200]
-                        },
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "A"
-                    }
-                    with open(debug_log_path, 'a', encoding='utf-8') as f:
-                        f.write(json.dumps(log_entry) + '\n')
-                        f.flush()
-                except Exception:
-                    pass
-                # #endregion
                 result["custom_links"] = []
         
         return result
     except GalleryNotFoundError:
-        # #region agent log
-        try:
-            debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-            log_entry = {
-                "id": "log_entry",
-                "timestamp": int(time.time() * 1000),
-                "location": "galleries.py:get_gallery:not_found",
-                "message": "GalleryNotFoundError caught",
-                "data": {
-                    "gallery_id": gallery_id,
-                    "workspace_id": workspace_id
-                },
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A"
-            }
-            with open(debug_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry) + '\n')
-                f.flush()
-        except Exception:
-            pass
-        # #endregion
         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
     except GalleryError as e:
-        # #region agent log
-        try:
-            debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-            log_entry = {
-                "id": "log_entry",
-                "timestamp": int(time.time() * 1000),
-                "location": "galleries.py:get_gallery:gallery_error",
-                "message": "GalleryError caught",
-                "data": {
-                    "error_code": e.code,
-                    "error_message": str(e),
-                    "status": e.status,
-                    "gallery_id": gallery_id,
-                    "workspace_id": workspace_id
-                },
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A"
-            }
-            with open(debug_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry) + '\n')
-                f.flush()
-        except Exception:
-            pass
-        # #endregion
         raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
     except Exception as e:
-        # #region agent log
-        try:
-            debug_log_path = r'c:\Users\admin\Desktop\RawDrive\.cursor\debug.log'
-            log_entry = {
-                "id": "log_entry",
-                "timestamp": int(time.time() * 1000),
-                "location": "galleries.py:get_gallery:unhandled_exception",
-                "message": "Unhandled exception caught",
-                "data": {
-                    "exception_type": type(e).__name__,
-                    "exception_message": str(e),
-                    "exception_args": str(e.args) if hasattr(e, 'args') else None,
-                    "gallery_id": gallery_id,
-                    "workspace_id": workspace_id
-                },
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A"
-            }
-            with open(debug_log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry) + '\n')
-                f.flush()
-        except Exception:
-            pass
-        # #endregion
         raise
 
 
@@ -749,3 +583,74 @@ async def warm_cache(
             status_code=500,
             detail={"error": "CACHE_WARM_FAILED", "message": str(e)}
         )
+
+
+# =============================================================================
+# Download Limit Endpoints (US2 - Daily Download Limits)
+# =============================================================================
+
+
+@router.put("/{gallery_id}/download-limit", response_model=DownloadLimitResponse)
+async def set_download_limit(
+    gallery_id: str,
+    request: DownloadLimitRequest,
+    workspace_id: str = Depends(get_workspace_id),
+):
+    """
+    Set daily download limit for a gallery.
+
+    Limits how many photos visitors can download per day.
+    Set to 0 or null for unlimited downloads.
+
+    Common values: 5, 10, 25, 50, 100, or unlimited (null/0).
+    """
+    gallery_service = get_gallery_service()
+
+    try:
+        # Update gallery's daily_download_limit
+        daily_limit = request.daily_limit if request.daily_limit and request.daily_limit > 0 else None
+
+        result = await gallery_service.update_gallery(
+            workspace_id=UUID(workspace_id),
+            gallery_id=UUID(gallery_id),
+            daily_download_limit=daily_limit,
+        )
+
+        return DownloadLimitResponse(
+            gallery_id=gallery_id,
+            daily_limit=result.get('daily_download_limit'),
+            limit_enabled=result.get('daily_download_limit') is not None and result.get('daily_download_limit') > 0,
+        )
+    except GalleryNotFoundError:
+        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryError as e:
+        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+
+
+@router.get("/{gallery_id}/download-limit", response_model=DownloadLimitResponse)
+async def get_download_limit(
+    gallery_id: str,
+    workspace_id: str = Depends(get_workspace_id),
+):
+    """
+    Get current download limit settings for a gallery.
+    """
+    gallery_service = get_gallery_service()
+
+    try:
+        gallery = await gallery_service.get_gallery(
+            workspace_id=UUID(workspace_id),
+            gallery_id=UUID(gallery_id),
+        )
+
+        daily_limit = gallery.get('daily_download_limit')
+
+        return DownloadLimitResponse(
+            gallery_id=gallery_id,
+            daily_limit=daily_limit,
+            limit_enabled=daily_limit is not None and daily_limit > 0,
+        )
+    except GalleryNotFoundError:
+        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryError as e:
+        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})

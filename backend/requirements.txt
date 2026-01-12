@@ -80,3 +80,6 @@ aiohttp==3.11.0
 
 # Utilities
 qrcode==7.4.2
+
+# Security
+bleach>=6.1.0

@@ -980,6 +980,26 @@ async def log_communication(
     request: LogCommunicationRequest,
 ) -> CommunicationCreateResponse:
     """Log a communication with a client."""
+    # #region agent log
+    import json
+    log_data = {
+        "location": "backend/src/app/api/v1/clients.py:975",
+        "message": "log_communication called",
+        "data": {
+            "workspace_id": str(workspace_id),
+            "client_id": str(client_id),
+            "request_data": request.model_dump(),
+            "user_id": str(current_user.user_id),
+        },
+        "timestamp": int(__import__("time").time() * 1000),
+        "sessionId": "debug-session",
+        "runId": "initial",
+        "hypothesisId": "H1"
+    }
+    with open("/app/.cursor/debug.log", "a", encoding="utf-8") as f:
+        f.write(json.dumps(log_data) + "\n")
+    # #endregion agent log
+    
     service = get_client_service()
     try:
         result = await service.log_communication(
@@ -994,7 +1014,42 @@ async def log_communication(
             follow_up_required=request.follow_up_required,
             follow_up_date=request.follow_up_date,
         )
-        return CommunicationCreateResponse(**result)
+        
+        # #region agent log
+        log_data = {
+            "location": "backend/src/app/api/v1/clients.py:985",
+            "message": "service.log_communication returned",
+            "data": {
+                "result": result,
+                "result_type": type(result).__name__,
+                "result_keys": list(result.keys()) if isinstance(result, dict) else None,
+            },
+            "timestamp": int(__import__("time").time() * 1000),
+            "sessionId": "debug-session",
+            "runId": "initial",
+            "hypothesisId": "H2"
+        }
+        with open("/app/.cursor/debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_data) + "\n")
+        # #endregion agent log
+        
+        response = CommunicationCreateResponse(**result)
+        
+        # #region agent log
+        log_data = {
+            "location": "backend/src/app/api/v1/clients.py:997",
+            "message": "CommunicationCreateResponse created successfully",
+            "data": {"response": response.model_dump()},
+            "timestamp": int(__import__("time").time() * 1000),
+            "sessionId": "debug-session",
+            "runId": "initial",
+            "hypothesisId": "H3"
+        }
+        with open("/app/.cursor/debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_data) + "\n")
+        # #endregion agent log
+        
+        return response
     except ClientNotFoundError as e:
         raise NotFoundError("Client", str(client_id))
     except ClientValidationError as e:
@@ -1002,6 +1057,23 @@ async def log_communication(
     except ClientError as e:
         raise AppError(message=str(e), code=e.code, status_code=e.status_code)
     except Exception as e:
+        # #region agent log
+        log_data = {
+            "location": "backend/src/app/api/v1/clients.py:1004",
+            "message": "Exception in log_communication",
+            "data": {
+                "exception_type": type(e).__name__,
+                "exception_message": str(e),
+                "exception_args": str(e.args) if e.args else None,
+            },
+            "timestamp": int(__import__("time").time() * 1000),
+            "sessionId": "debug-session",
+            "runId": "initial",
+            "hypothesisId": "H4"
+        }
+        with open("/app/.cursor/debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_data) + "\n")
+        # #endregion agent log
         logger.exception("Failed to log communication")
         raise InternalError("Failed to log communication")
 
@@ -1065,6 +1137,26 @@ async def record_activity(
     request: RecordActivityRequest,
 ) -> ActivityCreateResponse:
     """Record a new activity for a client."""
+    # #region agent log
+    import json
+    log_data = {
+        "location": "backend/src/app/api/v1/clients.py:1060",
+        "message": "record_activity called",
+        "data": {
+            "workspace_id": str(workspace_id),
+            "client_id": str(client_id),
+            "request_data": request.model_dump(),
+            "user_id": str(current_user.user_id),
+        },
+        "timestamp": int(__import__("time").time() * 1000),
+        "sessionId": "debug-session",
+        "runId": "initial",
+        "hypothesisId": "H1"
+    }
+    with open("/app/.cursor/debug.log", "a", encoding="utf-8") as f:
+        f.write(json.dumps(log_data) + "\n")
+    # #endregion agent log
+    
     service = get_activity_service()
     try:
         result = await service.record_activity(
@@ -1077,12 +1169,64 @@ async def record_activity(
             metadata=request.metadata,
             created_by_user_id=current_user.user_id,
         )
-        return ActivityCreateResponse(**result)
+        
+        # #region agent log
+        log_data = {
+            "location": "backend/src/app/api/v1/clients.py:1070",
+            "message": "service.record_activity returned",
+            "data": {
+                "result": result,
+                "result_type": type(result).__name__,
+                "result_keys": list(result.keys()) if isinstance(result, dict) else None,
+            },
+            "timestamp": int(__import__("time").time() * 1000),
+            "sessionId": "debug-session",
+            "runId": "initial",
+            "hypothesisId": "H2"
+        }
+        with open("/app/.cursor/debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_data) + "\n")
+        # #endregion agent log
+        
+        response = ActivityCreateResponse(**result)
+        
+        # #region agent log
+        log_data = {
+            "location": "backend/src/app/api/v1/clients.py:1080",
+            "message": "ActivityCreateResponse created successfully",
+            "data": {"response": response.model_dump()},
+            "timestamp": int(__import__("time").time() * 1000),
+            "sessionId": "debug-session",
+            "runId": "initial",
+            "hypothesisId": "H3"
+        }
+        with open("/app/.cursor/debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_data) + "\n")
+        # #endregion agent log
+        
+        return response
     except ClientNotFoundError as e:
         raise NotFoundError("Client", str(client_id))
     except ClientError as e:
         raise AppError(message=str(e), code=e.code, status_code=e.status_code)
     except Exception as e:
+        # #region agent log
+        log_data = {
+            "location": "backend/src/app/api/v1/clients.py:1085",
+            "message": "Exception in record_activity",
+            "data": {
+                "exception_type": type(e).__name__,
+                "exception_message": str(e),
+                "exception_args": str(e.args) if e.args else None,
+            },
+            "timestamp": int(__import__("time").time() * 1000),
+            "sessionId": "debug-session",
+            "runId": "initial",
+            "hypothesisId": "H4"
+        }
+        with open("/app/.cursor/debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_data) + "\n")
+        # #endregion agent log
         logger.exception("Failed to record activity")
         raise InternalError("Failed to record activity")
 

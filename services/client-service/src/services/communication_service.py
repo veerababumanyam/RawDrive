@@ -227,7 +227,7 @@ class CommunicationService:
         }
 
         # Cache with short TTL
-        await redis_client.set_json(cache_key, result, ttl=self.cache_ttl)
+        await redis_client.set_json(cache_key, result, ex=self.cache_ttl)
 
         logger.debug(
             "Communications listed",

@@ -1,0 +1,220 @@
+openapi: 3.0.3
+info:
+  title: Gallery Download Limits API
+  version: 1.0.0
+  description: API for managing daily download limits on galleries
+
+paths:
+  /api/v1/galleries/{gallery_id}/download-limit:
+    put:
+      summary: Set daily download limit for a gallery
+      description: |
+        Allows photographers to configure daily download limits.
+        Limits are enforced per client per calendar day (UTC).
+      operationId: setDownloadLimit
+      tags:
+        - Download Limits
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - limit
+              properties:
+                limit:
+                  type: integer
+                  nullable: true
+                  enum: [5, 10, 25, 50, 100, null]
+                  description: |
+                    Daily download limit per client.
+                    Use null for unlimited downloads.
+                  example: 25
+      responses:
+        '200':
+          description: Download limit configured successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  daily_download_limit:
+                    type: integer
+                    nullable: true
+                    example: 25
+                  message:
+                    type: string
+                    example: "Download limit set to 25 per day"
+        '400':
+          description: Invalid limit value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      summary: Get current download limit and usage
+      description: Returns the configured limit and current usage for the requesting client
+      operationId: getDownloadLimit
+      tags:
+        - Download Limits
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current download limit and usage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  daily_limit:
+                    type: integer
+                    nullable: true
+                    description: Configured limit (null = unlimited)
+                    example: 25
+                  used_today:
+                    type: integer
+                    description: Downloads made today by this client
+                    example: 7
+                  remaining:
+                    type: integer
+                    nullable: true
+                    description: Remaining downloads (null if unlimited)
+                    example: 18
+                  resets_at:
+                    type: string
+                    format: date-time
+                    description: When the counter resets (midnight UTC)
+                    example: "2026-01-11T00:00:00Z"
+        '404':
+          description: Gallery not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/public/galleries/{gallery_id}/downloads/{asset_id}:
+    post:
+      summary: Request download for an asset
+      description: |
+        Requests a download URL for an asset. Subject to download limit enforcement.
+        Returns 429 if daily limit exceeded.
+      operationId: requestDownload
+      tags:
+        - Download Limits
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resolution:
+                  type: string
+                  enum: [web, high, original]
+                  default: web
+                format:
+                  type: string
+                  enum: [jpeg, png, webp]
+                  default: jpeg
+      responses:
+        '200':
+          description: Download URL generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  download_url:
+                    type: string
+                    format: uri
+                    description: Signed URL valid for 15 minutes
+                  remaining_today:
+                    type: integer
+                    nullable: true
+                    description: Downloads remaining today (null if unlimited)
+        '429':
+          description: Daily download limit exceeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "download_limit_exceeded"
+                  message:
+                    type: string
+                    example: "You have reached the daily download limit for this gallery."
+                  limit:
+                    type: integer
+                    example: 25
+                  used:
+                    type: integer
+                    example: 25
+                  resets_at:
+                    type: string
+                    format: date-time
+                    example: "2026-01-11T00:00:00Z"
+        '404':
+          description: Gallery or asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+        requestId:
+          type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

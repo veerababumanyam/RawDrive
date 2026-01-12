@@ -51,6 +51,7 @@ class AppSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
+        protected_namespaces=('settings_',),
     )
 
     # Core service metadata and server ports (Requirement 16)
@@ -137,20 +138,31 @@ class AppSettings(BaseSettings):
     argon2_parallelism: int = Field(4, alias="ARGON2_PARALLELISM")
 
     # Google OAuth (Requirement 4)
+    # NOTE: Google OAuth is used ONLY for authentication (login/signup).
+    # Gallery settings are NOT automatically synced with Google OAuth.
+    # Gallery settings remain independent and are managed separately.
     google_client_id: str = Field(
         default="dev-client-id",
         alias="GOOGLE_CLIENT_ID",
-        description="Google OAuth client ID (required in production, optional in development)",
+        description="Google OAuth client ID (required in production, optional in development). Used ONLY for authentication.",
     )
     google_client_secret: SecretStr = Field(
         default="dev-client-secret",
         alias="GOOGLE_CLIENT_SECRET",
-        description="Google OAuth client secret (required in production, optional in development)",
+        description="Google OAuth client secret (required in production, optional in development). Used ONLY for authentication.",
     )
     google_redirect_uri: AnyHttpUrl = Field(
         default="http://localhost:3000/api/v1/auth/oauth/google/callback",
         alias="GOOGLE_REDIRECT_URI",
-        description="Google OAuth redirect URI",
+        description="Google OAuth redirect URI. Used ONLY for authentication.",
+    )
+    
+    # Gallery settings sync disabled by default
+    # This setting ensures gallery settings are never automatically synced with Google OAuth
+    gallery_settings_sync_enabled: bool = Field(
+        default=False,
+        alias="GALLERY_SETTINGS_SYNC_ENABLED",
+        description="Whether to enable automatic syncing of gallery settings with Google OAuth (DISABLED by default for security and privacy)",
     )
 
     # Cloudflare R2 Storage (S3-compatible)

@@ -58,6 +58,9 @@ SPECIFIC_RATE_LIMIT_ROUTES: list[tuple[str, str, RateLimitType]] = [
     ("/microservice/guests/bulk-invite", "POST", RateLimitType.BULK_INVITE),
     # Analytics endpoints: 100/minute per IP
     ("/analytics", "GET", RateLimitType.ANALYTICS),
+    # Album proofing endpoints (Feature: 026-album-proofing)
+    ("/api/v1/public/albums/", "GET", RateLimitType.ALBUM_VIEW),  # Album proof viewing: 60/min
+    ("/api/v1/public/albums/", "POST", RateLimitType.ALBUM_COMMENT),  # Album comments/approval: 10/min
 ]
 
 # AI endpoint patterns - checked separately for more specific matching

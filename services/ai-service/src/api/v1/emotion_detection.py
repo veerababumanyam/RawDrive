@@ -19,7 +19,7 @@ from services.emotion_detection_service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/emotion-detection", tags=["emotion-detection"])
+router = APIRouter(prefix="/ai", tags=["ai-analysis"])
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,654 @@
+/**
+ * Invitation Responsive CSS Module
+ * 
+ * Mobile-first responsive design system for digital invitations.
+ * Uses container queries for isolated preview scaling.
+ * 
+ * Feature: invitation-responsive-redesign
+ */
+
+/* ==========================================================================
+   CSS Custom Properties (Design Tokens)
+   Mobile-first: base values are for mobile, scale up for larger screens
+   ========================================================================== */
+
+:root {
+    /* Responsive Spacing - fluid scaling */
+    --inv-spacing-2xs: clamp(0.25rem, 1vw, 0.375rem);
+    --inv-spacing-xs: clamp(0.5rem, 2vw, 0.75rem);
+    --inv-spacing-sm: clamp(0.75rem, 2.5vw, 1rem);
+    --inv-spacing-md: clamp(1rem, 3vw, 1.5rem);
+    --inv-spacing-lg: clamp(1.5rem, 4vw, 2rem);
+    --inv-spacing-xl: clamp(2rem, 5vw, 3rem);
+    --inv-spacing-2xl: clamp(3rem, 6vw, 4rem);
+
+    /* Responsive Typography - fluid scaling */
+    --inv-font-xs: clamp(0.75rem, 2vw, 0.875rem);
+    --inv-font-sm: clamp(0.8125rem, 2.25vw, 0.9375rem);
+    --inv-font-body: clamp(0.875rem, 2.5vw + 0.25rem, 1rem);
+    --inv-font-lg: clamp(1rem, 2.75vw + 0.25rem, 1.125rem);
+    --inv-font-xl: clamp(1.125rem, 3vw + 0.25rem, 1.25rem);
+    --inv-font-2xl: clamp(1.25rem, 3.5vw + 0.25rem, 1.5rem);
+    --inv-font-3xl: clamp(1.5rem, 4vw + 0.5rem, 2rem);
+    --inv-font-4xl: clamp(1.75rem, 5vw + 0.5rem, 2.5rem);
+    --inv-font-5xl: clamp(2rem, 6vw + 0.5rem, 3rem);
+    --inv-font-hero: clamp(2.25rem, 8vw + 0.5rem, 4rem);
+
+    /* Touch Targets - WCAG minimum */
+    --inv-touch-min: 44px;
+    --inv-touch-comfortable: 48px;
+
+    /* Border Radius - consistent rounding */
+    --inv-radius-sm: 0.5rem;
+    --inv-radius-md: 0.75rem;
+    --inv-radius-lg: 1rem;
+    --inv-radius-xl: 1.25rem;
+    --inv-radius-2xl: 1.5rem;
+    --inv-radius-full: 9999px;
+
+    /* Animation Durations - respect reduced motion */
+    --inv-duration-fast: 150ms;
+    --inv-duration-normal: 250ms;
+    --inv-duration-slow: 400ms;
+
+    /* Safe Area Insets - for notched devices */
+    --inv-safe-top: env(safe-area-inset-top, 0px);
+    --inv-safe-bottom: env(safe-area-inset-bottom, 0px);
+    --inv-safe-left: env(safe-area-inset-left, 0px);
+    --inv-safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* ==========================================================================
+   Container Query Setup
+   Enables independent responsive behavior for preview components
+   ========================================================================== */
+
+.invitation-container {
+    container-type: inline-size;
+    container-name: invitation;
+}
+
+.invitation-preview-container {
+    container-type: inline-size;
+    container-name: invitation-preview;
+}
+
+/* ==========================================================================
+   Mobile-First Layout Components
+   ========================================================================== */
+
+/* Main invitation wrapper */
+.inv-wrapper {
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* Dynamic viewport height for mobile */
+    padding-top: var(--inv-safe-top);
+    padding-bottom: var(--inv-safe-bottom);
+    padding-left: var(--inv-safe-left);
+    padding-right: var(--inv-safe-right);
+}
+
+/* Content container with max-width */
+.inv-content {
+    width: 100%;
+    max-width: 64rem;
+    /* 1024px */
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--inv-spacing-md);
+    padding-right: var(--inv-spacing-md);
+}
+
+/* Hero section - mobile first aspect ratio */
+.inv-hero {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    /* Mobile: taller for portrait */
+    overflow: hidden;
+}
+
+@container invitation (min-width: 640px) {
+    .inv-hero {
+        aspect-ratio: 16 / 9;
+        /* Tablet */
+    }
+}
+
+@container invitation (min-width: 1024px) {
+    .inv-hero {
+        aspect-ratio: 21 / 9;
+        /* Desktop: cinematic */
+        max-height: 60vh;
+    }
+}
+
+/* Hero overlay gradient */
+.inv-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top,
+            rgba(0, 0, 0, 0.7) 0%,
+            rgba(0, 0, 0, 0.4) 40%,
+            rgba(0, 0, 0, 0.15) 70%,
+            transparent 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: var(--inv-spacing-md);
+    text-align: center;
+}
+
+@container invitation (min-width: 640px) {
+    .inv-hero-overlay {
+        padding: var(--inv-spacing-lg);
+    }
+}
+
+@container invitation (min-width: 1024px) {
+    .inv-hero-overlay {
+        padding: var(--inv-spacing-xl);
+        text-align: left;
+    }
+}
+
+/* Hero title */
+.inv-hero-title {
+    font-size: var(--inv-font-hero);
+    font-weight: 700;
+    line-height: 1.1;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    margin: 0;
+}
+
+/* Hero subtitle */
+.inv-hero-subtitle {
+    font-size: var(--inv-font-body);
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: var(--inv-spacing-xs);
+}
+
+@container invitation (min-width: 640px) {
+    .inv-hero-subtitle {
+        font-size: var(--inv-font-lg);
+    }
+}
+
+/* ==========================================================================
+   Countdown Component - Responsive Grid
+   ========================================================================== */
+
+.inv-countdown {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--inv-spacing-xs);
+    padding: var(--inv-spacing-md) var(--inv-spacing-xs);
+    max-width: 28rem;
+    margin: 0 auto;
+}
+
+@container invitation (min-width: 480px) {
+    .inv-countdown {
+        gap: var(--inv-spacing-sm);
+        max-width: 32rem;
+    }
+}
+
+@container invitation (min-width: 768px) {
+    .inv-countdown {
+        gap: var(--inv-spacing-md);
+        max-width: 40rem;
+    }
+}
+
+.inv-countdown-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--inv-touch-min);
+    min-height: var(--inv-touch-min);
+    padding: var(--inv-spacing-sm);
+    border-radius: var(--inv-radius-lg);
+    text-align: center;
+}
+
+.inv-countdown-value {
+    font-size: var(--inv-font-3xl);
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+@container invitation (min-width: 480px) {
+    .inv-countdown-value {
+        font-size: var(--inv-font-4xl);
+    }
+}
+
+@container invitation (min-width: 768px) {
+    .inv-countdown-value {
+        font-size: var(--inv-font-5xl);
+    }
+}
+
+.inv-countdown-label {
+    font-size: var(--inv-font-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: var(--inv-spacing-2xs);
+    opacity: 0.7;
+}
+
+@container invitation (min-width: 480px) {
+    .inv-countdown-label {
+        font-size: var(--inv-font-sm);
+    }
+}
+
+/* ==========================================================================
+   Event Details Cards - Responsive Grid
+   ========================================================================== */
+
+.inv-details-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--inv-spacing-md);
+}
+
+@container invitation (min-width: 640px) {
+    .inv-details-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--inv-spacing-lg);
+    }
+}
+
+.inv-detail-card {
+    padding: var(--inv-spacing-md);
+    border-radius: var(--inv-radius-xl);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--inv-spacing-sm);
+}
+
+@container invitation (min-width: 640px) {
+    .inv-detail-card {
+        padding: var(--inv-spacing-lg);
+    }
+}
+
+.inv-detail-icon-wrap {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--inv-radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@container invitation (min-width: 640px) {
+    .inv-detail-icon-wrap {
+        width: 3rem;
+        height: 3rem;
+    }
+}
+
+.inv-detail-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+@container invitation (min-width: 640px) {
+    .inv-detail-icon {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+}
+
+.inv-detail-content {
+    flex: 1;
+    min-width: 0;
+    /* Prevent flex item overflow */
+}
+
+.inv-detail-title {
+    font-size: var(--inv-font-lg);
+    font-weight: 600;
+    margin: 0 0 var(--inv-spacing-2xs);
+}
+
+.inv-detail-text {
+    font-size: var(--inv-font-body);
+    margin: 0;
+}
+
+.inv-detail-subtext {
+    font-size: var(--inv-font-sm);
+    opacity: 0.7;
+    margin-top: var(--inv-spacing-2xs);
+}
+
+/* Full-width card spanning both columns on larger screens */
+.inv-detail-card--full {
+    grid-column: 1 / -1;
+}
+
+/* ==========================================================================
+   RSVP Form - Mobile Optimized
+   ========================================================================== */
+
+.inv-rsvp-form {
+    padding: var(--inv-spacing-md);
+    border-radius: var(--inv-radius-2xl);
+}
+
+@container invitation (min-width: 640px) {
+    .inv-rsvp-form {
+        padding: var(--inv-spacing-lg);
+    }
+}
+
+.inv-rsvp-title {
+    font-size: var(--inv-font-xl);
+    font-weight: 700;
+    text-align: center;
+    margin: 0 0 var(--inv-spacing-lg);
+}
+
+.inv-form-group {
+    margin-bottom: var(--inv-spacing-md);
+}
+
+.inv-form-label {
+    display: block;
+    font-size: var(--inv-font-sm);
+    font-weight: 500;
+    margin-bottom: var(--inv-spacing-xs);
+}
+
+.inv-form-input,
+.inv-form-select,
+.inv-form-textarea {
+    width: 100%;
+    min-height: var(--inv-touch-comfortable);
+    padding: var(--inv-spacing-sm) var(--inv-spacing-md);
+    font-size: var(--inv-font-body);
+    border-radius: var(--inv-radius-md);
+    border: 1px solid;
+    transition: border-color var(--inv-duration-fast), box-shadow var(--inv-duration-fast);
+}
+
+/* Avoid zoom on iOS when input focused */
+@supports (-webkit-touch-callout: none) {
+
+    .inv-form-input,
+    .inv-form-select {
+        font-size: 16px;
+    }
+}
+
+.inv-form-textarea {
+    min-height: 6rem;
+    resize: vertical;
+}
+
+/* Attendance toggle buttons */
+.inv-attendance-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--inv-spacing-sm);
+}
+
+@container invitation (min-width: 480px) {
+    .inv-attendance-group {
+        flex-direction: row;
+        justify-content: center;
+    }
+}
+
+.inv-attendance-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--inv-spacing-xs);
+    min-height: var(--inv-touch-comfortable);
+    padding: var(--inv-spacing-sm) var(--inv-spacing-lg);
+    font-size: var(--inv-font-body);
+    font-weight: 500;
+    border-radius: var(--inv-radius-md);
+    border: 2px solid;
+    cursor: pointer;
+    transition: all var(--inv-duration-fast);
+}
+
+.inv-attendance-btn--selected {
+    border-color: var(--color-primary-500, #6366f1);
+    background-color: var(--color-primary-50, #eef2ff);
+}
+
+/* Submit button */
+.inv-submit-btn {
+    width: 100%;
+    min-height: var(--inv-touch-comfortable);
+    padding: var(--inv-spacing-sm) var(--inv-spacing-lg);
+    font-size: var(--inv-font-body);
+    font-weight: 600;
+    border-radius: var(--inv-radius-md);
+    border: none;
+    cursor: pointer;
+    transition: transform var(--inv-duration-fast), box-shadow var(--inv-duration-fast);
+}
+
+.inv-submit-btn:active {
+    transform: scale(0.98);
+}
+
+/* ==========================================================================
+   Password Protection Form
+   ========================================================================== */
+
+.inv-password-wrapper {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--inv-spacing-md);
+    padding-top: calc(var(--inv-spacing-md) + var(--inv-safe-top));
+    padding-bottom: calc(var(--inv-spacing-md) + var(--inv-safe-bottom));
+}
+
+.inv-password-card {
+    width: 100%;
+    max-width: 24rem;
+    padding: var(--inv-spacing-md);
+    border-radius: var(--inv-radius-2xl);
+}
+
+@container invitation (min-width: 480px) {
+    .inv-password-card {
+        padding: var(--inv-spacing-lg);
+    }
+}
+
+@container invitation (min-width: 640px) {
+    .inv-password-card {
+        padding: var(--inv-spacing-xl);
+    }
+}
+
+/* ==========================================================================
+   Gallery Images Grid
+   ========================================================================== */
+
+.inv-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--inv-spacing-xs);
+}
+
+@container invitation (min-width: 640px) {
+    .inv-gallery-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--inv-spacing-sm);
+    }
+}
+
+.inv-gallery-item {
+    aspect-ratio: 1;
+    border-radius: var(--inv-radius-md);
+    overflow: hidden;
+}
+
+.inv-gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
+.inv-footer {
+    padding: var(--inv-spacing-md);
+    padding-bottom: calc(var(--inv-spacing-md) + var(--inv-safe-bottom));
+    text-align: center;
+    font-size: var(--inv-font-sm);
+}
+
+/* ==========================================================================
+   Glassmorphism Responsive Variants
+   Lighter effects on mobile for performance
+   ========================================================================== */
+
+.inv-glass {
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+@container invitation (min-width: 640px) {
+    .inv-glass {
+        background: rgba(255, 255, 255, 0.78);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+    }
+}
+
+@container invitation (min-width: 1024px) {
+    .inv-glass {
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+    }
+}
+
+/* Dark mode glass */
+.dark .inv-glass,
+[data-theme="dark"] .inv-glass {
+    background: rgba(15, 23, 42, 0.88);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+@container invitation (min-width: 640px) {
+
+    .dark .inv-glass,
+    [data-theme="dark"] .inv-glass {
+        background: rgba(15, 23, 42, 0.75);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    }
+}
+
+/* ==========================================================================
+   Dividers
+   ========================================================================== */
+
+.inv-divider {
+    height: 1px;
+    max-width: 32rem;
+    margin: var(--inv-spacing-lg) auto;
+    background: linear-gradient(90deg, transparent, var(--color-accent, #f59e0b), transparent);
+}
+
+/* ==========================================================================
+   Reduced Motion Support
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .inv-glass {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: rgba(255, 255, 255, 0.95);
+    }
+
+    .dark .inv-glass,
+    [data-theme="dark"] .inv-glass {
+        background: rgba(15, 23, 42, 0.95);
+    }
+
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ==========================================================================
+   Utility Classes
+   ========================================================================== */
+
+/* Touch target enforcement */
+.inv-touch-target {
+    min-height: var(--inv-touch-min);
+    min-width: var(--inv-touch-min);
+}
+
+/* Hide on mobile */
+.inv-hide-mobile {
+    display: none;
+}
+
+@container invitation (min-width: 640px) {
+    .inv-hide-mobile {
+        display: block;
+    }
+}
+
+/* Show only on mobile */
+.inv-show-mobile {
+    display: block;
+}
+
+@container invitation (min-width: 640px) {
+    .inv-show-mobile {
+        display: none;
+    }
+}
+
+/* Text alignment responsive */
+.inv-text-center-mobile {
+    text-align: center;
+}
+
+@container invitation (min-width: 640px) {
+    .inv-text-center-mobile {
+        text-align: left;
+    }
+}
+
+/* Full width on mobile */
+.inv-full-mobile {
+    width: 100%;
+}
+
+@container invitation (min-width: 640px) {
+    .inv-full-mobile {
+        width: auto;
+    }
+}

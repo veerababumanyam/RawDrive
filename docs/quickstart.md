@@ -1,161 +1,207 @@
-# Quickstart Guide - RawDrive
+# RawDrive Quick Start Guide
 
-This guide provides step-by-step instructions to get RawDrive up and running locally.
+**Last Updated**: 2026-01-09  
+**Get up and running in 5 minutes**
 
-## Prerequisites
+## 🚀 One-Command Setup
 
-- Docker & Docker Compose
-- Node.js 18+ (for frontend development)
-- pnpm 8+ (package manager for monorepo)
-- Python 3.11+ (optional, for local development)
-
-## 1. Environment Setup
-
-### Start Development Stack
-```bash
-# Full development stack (recommended)
-docker compose -f infrastructure/docker/docker-compose.yml up -d
-
-# OR backend-only development (faster for backend work)
-docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
+### Windows
+```powershell
+.\setup-dev-environment.ps1
 ```
 
-This starts PostgreSQL + pgvector, Redis, and all backend services.
-
-### Install Dependencies (pnpm Workspaces)
+### Linux / macOS / WSL
 ```bash
-# Install pnpm if not already installed
-npm install -g pnpm
+bash scripts/setup-all.sh
+```
 
-# Install all workspace dependencies (frontend + shared packages)
-pnpm install
+**That's it!** The script will:
+- ✅ Start all Docker services
+- ✅ Run database migrations
+- ✅ Seed test users
+- ✅ Build shared packages
+- ✅ Configure environment
 
-# Build shared packages
+## 🌐 Access the Application
+
+### Frontend
+Open your browser to: **http://localhost:5173**
+
+### Test Login
+- **Email**: `free@test.rawdrive.in`
+- **Password**: `Test@123`
+
+### Admin Dashboards
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Traefik**: http://localhost:8080
+- **Prometheus**: http://localhost:9090
+
+## 📋 Prerequisites
+
+Make sure you have installed:
+- **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux)
+- **Node.js** 18+ and **pnpm** 8+
+- **Git**
+
+## 🛠️ Common Commands
+
+### Start Development
+```bash
+# Start all services
+manage-services.bat start
+
+# Start frontend dev server
+cd frontend && pnpm dev
+```
+
+### View Logs
+```bash
+# All services
+manage-services.bat logs
+
+# Specific service
+manage-services.bat logs gallery-service
+```
+
+### Run Tests
+```bash
+# Frontend
+cd frontend && pnpm test
+
+# Backend
+docker exec rawdrive-backend pytest
+```
+
+### Database
+```bash
+# Run migrations
+docker exec rawdrive-backend alembic upgrade head
+
+# Create migration
+docker exec rawdrive-backend alembic revision -m "description"
+```
+
+## 🔍 Health Check
+
+Verify all services are running:
+
+```bash
+# Check service status
+docker compose -f infrastructure/docker/docker-compose.yml ps
+
+# Test API endpoints
+curl http://localhost:8000/health/live
+curl http://localhost:8004/health/live
+```
+
+Expected: All services show `healthy` status
+
+## 🎯 What's Running?
+
+After setup, you'll have 20 services running:
+
+### Microservices (8)
+- **Backend** (8000) - Main API
+- **Gallery Service** (8004) - Gallery viewing
+- **Billing Service** (8005) - Payments
+- **Upload Service** (8008) - File uploads
+- **Onboarding Service** (8006) - Registration
+- **Invitations Service** (8007) - Invitations
+- **Webhooks Service** (8003) - Webhooks
+- **Notifications Service** (8010) - Notifications
+
+### Infrastructure (8)
+- **PostgreSQL** (5432) - Database
+- **Redis** (6379) - Cache
+- **Traefik** (80, 8080) - API Gateway
+- **Prometheus** (9090) - Metrics
+- **Grafana** (3000) - Dashboards
+- **Loki** (3100) - Logs
+- **PgBouncer** (6432) - Connection pooling
+- **One-API** (3002) - AI gateway
+
+### Workers (4)
+- Face detection, Content analysis, Quality scoring, Email processing
+
+## 🐛 Troubleshooting
+
+### Port Already in Use
+```bash
+# Windows
+netstat -ano | findstr :8004
+taskkill /F /PID <PID>
+
+# Linux/Mac
+lsof -ti:8004 | xargs kill -9
+```
+
+### Service Won't Start
+```bash
+# Check logs
+manage-services.bat logs <service-name>
+
+# Rebuild service
+docker compose -f infrastructure/docker/docker-compose.yml up -d --build <service-name>
+```
+
+### Frontend Build Errors
+```bash
+# Rebuild shared packages
 pnpm build:packages
+
+# Restart dev server
+cd frontend && pnpm dev
 ```
 
-## 2. Database Setup
-
-### Run Migrations
+### Reset Everything
 ```bash
-docker compose -f infrastructure/docker/docker-compose.yml exec backend alembic upgrade head
+# Stop and remove all containers
+docker compose -f infrastructure/docker/docker-compose.yml down -v
+
+# Start fresh
+.\setup-dev-environment.ps1
 ```
 
-### Seed Development Data
-```bash
-docker compose -f infrastructure/docker/docker-compose.yml exec backend python -m src.scripts.seed_user
-```
+## 📚 Next Steps
 
-## 3. Start Services
+### For Developers
+1. **[Development Setup](guides/development-setup.md)** - Detailed setup guide
+2. **[Coding Standards](development/coding-standards.md)** - Code style guide
+3. **[Testing Guide](guides/testing.md)** - Testing strategy
+4. **[Test Users](development/test-users.md)** - All test accounts
 
-### Development Mode
-```bash
-# Frontend (React dev server)
-cd frontend && npm run dev
+### For Architects
+1. **[Architecture Overview](architecture/overview.md)** - System design
+2. **[Microservices](architecture/microservices.md)** - Service architecture
+3. **[Database Design](architecture/database-design.md)** - Schema and models
+4. **[Tech Stack](architecture/tech-stack.md)** - Technology choices
 
-# Backend (FastAPI) - runs inside Docker
-# Already started with docker compose above
-```
+### For Product Managers
+1. **[Feature Index](features/README.md)** - All features
+2. **[PRD](../.claude/PRD.md)** - Product requirements
+3. **[Business Features](Business_Features/README.md)** - Business specs
 
-Services will be available at:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- AI Service: http://localhost:8001
+## 🆘 Need Help?
 
-### Alternative: Individual Services
-```bash
-# Frontend only
-cd frontend && npm run dev
+1. **Check**: [Troubleshooting Guide](guides/troubleshooting.md)
+2. **Review**: [Documentation Index](README.md)
+3. **Consult**: [Claude Code References](../.claude/reference/)
+4. **View Logs**: `manage-services.bat logs <service>`
 
-# Backend only (if not using Docker)
-cd backend && uvicorn app.main:app --reload --port 8000
-```
+## 💡 Pro Tips
 
-## 4. Start Background Workers
+- **Auto-restart enabled**: Services start automatically with Docker Desktop
+- **Hot reload**: Frontend and backend support hot module replacement
+- **Shared packages**: Run `pnpm build:packages` after pulling changes
+- **Database reset**: Use `down -v` to wipe data and start fresh
+- **Test users**: Multiple test accounts for different subscription tiers
 
-Background workers start automatically with the Docker stack. If running locally:
+---
 
-```bash
-# Using Docker
-docker compose -f infrastructure/docker/docker-compose.yml exec backend celery -A src.tasks worker --loglevel=info
+**Ready to dive deeper?** Check out the [full documentation](README.md) or start coding!
 
-# OR locally
-cd backend && celery -A src.tasks worker --loglevel=info
-```
-
-## 5. Verify Installation
-
-### Health Check
-```bash
-curl http://localhost:8000/api/v1/health
-```
-
-### Test AI Tagging
-1. Upload a photo via the frontend
-2. Check gallery health dashboard for AI analysis status
-3. Use search with tags/people filters
-
-## Testing
-
-### Run Backend Tests
-```bash
-docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest
-docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest --cov=src
-```
-
-### Run Frontend Tests
-```bash
-cd frontend && npm test
-```
-
-### Run Shared Package Tests
-```bash
-# Test all shared packages
-pnpm test:packages
-
-# Run cross-platform type parity tests
-pnpm test:parity
-```
-
-## Troubleshooting
-
-### Database Connection Issues
-- Ensure Docker containers are running: `docker compose -f infrastructure/docker/docker-compose.yml ps`
-- Check logs: `docker compose -f infrastructure/docker/docker-compose.yml logs postgres`
-
-### Worker Not Processing
-- Check worker logs: `docker compose -f infrastructure/docker/docker-compose.yml logs worker`
-- Verify Redis connection: `docker compose -f infrastructure/docker/docker-compose.yml exec redis redis-cli ping`
-
-### AI Provider Issues
-
-### AI Provider Issues
-- Check AI service logs
-- Verify API keys in environment variables
-
-## Working with Shared Packages
-
-RawDrive uses pnpm workspaces for shared code across frontend, backend, and microservices.
-
-### Adding New Shared Types
-
-1. Add TypeScript types in `packages/shared-types/src/`
-2. Export from `packages/shared-types/src/index.ts`
-3. Generate Python models: `pnpm generate:python`
-4. Use in frontend: `import { MyType } from '@rawdrive/shared-types'`
-5. Use in backend: `from app.shared.types import MyType`
-
-### Available Packages
-
-| Package | Import (TS) | Import (Python) |
-|---------|-------------|-----------------|
-| Types | `@rawdrive/shared-types` | `app.shared.types` |
-| Constants | `@rawdrive/shared-constants` | `app.shared.constants` |
-| Validation | `@rawdrive/shared-validation` | `app.shared.validation` |
-| Utils | `@rawdrive/shared-utils` | N/A (TS only) |
-
-## Next Steps
-
-- Explore the [API Documentation](./api/)
-- Review [Architecture Overview](./ARCHITECTURE_QUICK_REFERENCE.md)
-- Check [Development Roadmap](./DEVELOPMENT_ROADMAP.md)
+**Related Documentation**:
+- [Development Setup](guides/development-setup.md)
+- [Architecture Overview](architecture/overview.md)
+- [Testing Guide](guides/testing.md)
+- [API Documentation](api/README.md)

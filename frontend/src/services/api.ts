@@ -380,6 +380,7 @@ class ApiClient {
             status: response.status,
             statusText: response.statusText,
             data,
+            errorDetails: data?.error || data?.detail || data,
           });
         }
 

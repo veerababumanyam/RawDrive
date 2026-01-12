@@ -197,7 +197,11 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
 
       if (followUpRequired) {
         payload.follow_up_required = true;
-        payload.follow_up_date = followUpDate;
+        // Convert date string to ISO datetime string for backend
+        // Backend expects datetime, not just date
+        const followUpDateTime = new Date(followUpDate);
+        followUpDateTime.setHours(0, 0, 0, 0); // Set to start of day
+        payload.follow_up_date = followUpDateTime.toISOString();
       }
 
       // Submit communication
@@ -232,14 +236,14 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
           <div className="space-y-4">
             {/* Communication Type */}
             <div>
-              <label htmlFor="comm-type" className="block text-sm font-medium text-gray-700 mb-2">
-                Type <span className="text-red-500">*</span>
+              <label htmlFor="comm-type" className="block text-sm font-medium text-text-secondary mb-2">
+                Type <span className="text-error">*</span>
               </label>
               <select
                 id="comm-type"
                 value={communicationType}
                 onChange={(e) => setCommunicationType(e.target.value as CommunicationType)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                 required
               >
                 {COMMUNICATION_TYPES.map((type) => (
@@ -252,8 +256,8 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
 
             {/* Direction */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Direction <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Direction <span className="text-error">*</span>
               </label>
               <div className="flex space-x-4">
                 <label className="flex items-center space-x-2 cursor-pointer">
@@ -263,10 +267,10 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
                     value="outbound"
                     checked={direction === 'outbound'}
                     onChange={(e) => setDirection(e.target.value as CommunicationDirection)}
-                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                    className="w-4 h-4 text-primary focus:ring-primary/50"
                   />
-                  <ArrowUpRight className="h-4 w-4 text-purple-600" />
-                  <span className="text-sm text-gray-700">Outbound (I contacted them)</span>
+                  <ArrowUpRight className="h-4 w-4 text-purple-500" />
+                  <span className="text-sm text-text-secondary">Outbound (I contacted them)</span>
                 </label>
 
                 <label className="flex items-center space-x-2 cursor-pointer">
@@ -276,10 +280,10 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
                     value="inbound"
                     checked={direction === 'inbound'}
                     onChange={(e) => setDirection(e.target.value as CommunicationDirection)}
-                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                    className="w-4 h-4 text-primary focus:ring-primary/50"
                   />
-                  <ArrowDownLeft className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm text-gray-700">Inbound (They contacted me)</span>
+                  <ArrowDownLeft className="h-4 w-4 text-info" />
+                  <span className="text-sm text-text-secondary">Inbound (They contacted me)</span>
                 </label>
               </div>
             </div>
@@ -299,8 +303,8 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
 
             {/* Notes */}
             <div>
-              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
-                Notes / Details <span className="text-red-500">*</span>
+              <label htmlFor="notes" className="block text-sm font-medium text-text-secondary mb-2">
+                Notes / Details <span className="text-error">*</span>
               </label>
               <textarea
                 id="notes"
@@ -308,10 +312,10 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Describe what was discussed, agreed upon, or next steps..."
                 rows={5}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">{notes.length} characters</p>
+              <p className="text-xs text-text-tertiary mt-1">{notes.length} characters</p>
             </div>
 
             {/* Duration (conditional) */}
@@ -330,10 +334,10 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
             )}
 
             {/* Follow-up Section */}
-            <div className="border-t border-gray-200 pt-4">
+            <div className="border-t border-border pt-4">
               <div className="flex items-center space-x-2 mb-3">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <h4 className="text-sm font-medium text-gray-700">Follow-up</h4>
+                <Calendar className="h-4 w-4 text-text-tertiary" />
+                <h4 className="text-sm font-medium text-text-secondary">Follow-up</h4>
               </div>
 
               {/* Follow-up Toggle */}
@@ -342,9 +346,9 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
                   type="checkbox"
                   checked={followUpRequired}
                   onChange={(e) => setFollowUpRequired(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-primary rounded focus:ring-primary/50"
                 />
-                <span className="text-sm text-gray-700">Requires follow-up</span>
+                <span className="text-sm text-text-secondary">Requires follow-up</span>
               </label>
 
               {/* Follow-up Date (conditional) */}
@@ -357,7 +361,7 @@ export const CommunicationLogger: React.FC<CommunicationLoggerProps> = ({
                     placeholder="Select date"
                     minDate={new Date()}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-text-tertiary mt-1">
                     You'll be reminded to follow up on this date
                   </p>
                 </div>

@@ -197,14 +197,24 @@ export const ActivityRecorder: React.FC<ActivityRecorderProps> = ({
 
     try {
       // Build request payload
+      const trimmedDescription = description.trim();
+
+      // Backend requires 'title' field - use description as title, or generate from activity type
+      const title = trimmedDescription || `${activityType.charAt(0).toUpperCase() + activityType.slice(1).replace('_', ' ')} Activity`;
+
       const payload: RecordActivityRequest = {
         activity_type: activityType,
-        description: description.trim(),
+        title: title,
         metadata: {
           ...metadata,
           activity_date: activityDate,
         },
       };
+
+      // Only include description if it has content (backend may reject empty strings)
+      if (trimmedDescription) {
+        payload.description = trimmedDescription;
+      }
 
       // Add related entity if specified
       if (relatedEntityType && relatedEntityId) {
@@ -244,14 +254,14 @@ export const ActivityRecorder: React.FC<ActivityRecorderProps> = ({
           <div className="space-y-4">
             {/* Activity Type Selector */}
             <div>
-              <label htmlFor="activity-type" className="block text-sm font-medium text-gray-700 mb-2">
-                Activity Type <span className="text-red-500">*</span>
+              <label htmlFor="activity-type" className="block text-sm font-medium text-text-secondary mb-2">
+                Activity Type <span className="text-error">*</span>
               </label>
               <select
                 id="activity-type"
                 value={activityType}
                 onChange={(e) => setActivityType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                 required
               >
                 {ACTIVITY_TYPES.map((type) => (
@@ -275,8 +285,8 @@ export const ActivityRecorder: React.FC<ActivityRecorderProps> = ({
 
             {/* Description */}
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
-                Description <span className="text-red-500">*</span>
+              <label htmlFor="description" className="block text-sm font-medium text-text-secondary mb-2">
+                Description <span className="text-error">*</span>
               </label>
               <textarea
                 id="description"
@@ -284,18 +294,18 @@ export const ActivityRecorder: React.FC<ActivityRecorderProps> = ({
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={`Describe the ${currentActivityConfig?.label.toLowerCase() || 'activity'}...`}
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-text-tertiary mt-1">
                 {description.length} characters
               </p>
             </div>
 
             {/* Conditional Metadata Fields */}
             {currentActivityConfig?.metadataFields && currentActivityConfig.metadataFields.length > 0 && (
-              <div className="space-y-3 p-4 bg-gray-50 rounded-md">
-                <h4 className="text-sm font-medium text-gray-700">Additional Details</h4>
+              <div className="space-y-3 p-4 bg-surface-hover/50 dark:bg-surface-hover/30 rounded-lg border border-border/50">
+                <h4 className="text-sm font-medium text-text-secondary">Additional Details</h4>
 
                 {currentActivityConfig.metadataFields.includes('duration_minutes') && (
                   <div>
@@ -380,22 +390,22 @@ export const ActivityRecorder: React.FC<ActivityRecorderProps> = ({
             )}
 
             {/* Related Entity (Optional) */}
-            <div className="border-t border-gray-200 pt-4">
+            <div className="border-t border-border pt-4">
               <div className="flex items-center space-x-2 mb-3">
-                <LinkIcon className="h-4 w-4 text-gray-500" />
-                <h4 className="text-sm font-medium text-gray-700">Link to Entity (Optional)</h4>
+                <LinkIcon className="h-4 w-4 text-text-tertiary" />
+                <h4 className="text-sm font-medium text-text-secondary">Link to Entity (Optional)</h4>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="entity-type" className="block text-xs font-medium text-gray-600 mb-1">
+                  <label htmlFor="entity-type" className="block text-xs font-medium text-text-tertiary mb-1">
                     Entity Type
                   </label>
                   <select
                     id="entity-type"
                     value={relatedEntityType}
                     onChange={(e) => setRelatedEntityType(e.target.value as ActivityEntityType | '')}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 text-sm bg-surface border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                   >
                     <option value="">None</option>
                     {ENTITY_TYPES.map((type) => (

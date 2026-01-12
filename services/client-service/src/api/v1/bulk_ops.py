@@ -42,7 +42,7 @@ router = APIRouter(
 async def bulk_add_tags(
     data: BulkTagRequest,
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: BulkOpsService = Depends(get_bulk_ops_service),
+    service: BulkOperationsService = Depends(get_bulk_operations_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> BulkOperationResult:
     """
@@ -101,7 +101,7 @@ async def bulk_add_tags(
 async def bulk_remove_tags(
     data: BulkTagRequest,
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: BulkOpsService = Depends(get_bulk_ops_service),
+    service: BulkOperationsService = Depends(get_bulk_operations_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> BulkOperationResult:
     """
@@ -165,7 +165,7 @@ async def bulk_remove_tags(
 async def bulk_change_status(
     data: BulkStatusChangeRequest,
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: BulkOpsService = Depends(get_bulk_ops_service),
+    service: BulkOperationsService = Depends(get_bulk_operations_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> BulkOperationResult:
     """
@@ -229,7 +229,7 @@ async def bulk_change_status(
 async def bulk_delete(
     data: BulkDeleteRequest,
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: BulkOpsService = Depends(get_bulk_ops_service),
+    service: BulkOperationsService = Depends(get_bulk_operations_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> BulkOperationResult:
     """

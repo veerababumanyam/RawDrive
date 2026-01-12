@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+
 import {
     Plus,
     Image,
@@ -27,6 +28,7 @@ import {
     ScanFace,
     UserCircle,
 } from 'lucide-react';
+
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import dashboardService, { DashboardStats } from '../../services/dashboardService';
@@ -37,7 +39,7 @@ import { useClientAvatars } from '../../hooks/useClientAvatars';
 import { GalleryListItem } from '../../types/gallery';
 import type { ClientAnalyticsResponse, ClientListItem } from '../../types/client';
 import type { Activity as ActivityItem, ActivityType as ActivityTypeEnum } from '../../types/activity';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, subDays, format } from 'date-fns';
 import { DashboardUploadModal } from '../../components/features/dashboard/DashboardUploadModal';
 import { StatusBadge } from '../../components/ui/AppBadge';
 
@@ -56,6 +58,7 @@ import { StatusBadge } from '../../components/ui/AppBadge';
 
 // Activity type to icon mapping
 const getActivityIcon = (type: ActivityTypeEnum) => {
+
     switch (type) {
         case 'gallery_viewed':
             return Eye;
@@ -81,6 +84,7 @@ const getActivityIcon = (type: ActivityTypeEnum) => {
         case 'face_search_performed':
             return ScanFace;
         default:
+
             return Activity;
     }
 };
@@ -165,7 +169,10 @@ const DashboardPage = () => {
                         sort_by: 'created_at',
                         sort_order: 'desc'
                     }).catch(() => ({ clients: [], meta: null })),
-                    clientService.getAnalytics(workspace.workspace_id).catch(() => null)
+                    clientService.getAnalytics(workspace.workspace_id, {
+                        start_date: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
+                        end_date: format(new Date(), 'yyyy-MM-dd')
+                    }).catch(() => null)
                 ]);
 
                 setStats(statsData);

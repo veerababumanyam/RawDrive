@@ -212,7 +212,7 @@ http:
     # Client CRM Microservice
     # -------------------------------------------------------------------------
     client-service-router:
-      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/workspaces/{workspace_id:[0-9a-f-]+}/clients`)"
+      rule: "Host(`api.rawdrive.ai`) && PathRegexp(`^/api/v1/workspaces/[0-9a-f-]+/clients`)"
       entryPoints:
         - websecure
       service: client-service
@@ -220,9 +220,10 @@ http:
         - rate-limit-api
         - security-headers
         - cors-headers
-      priority: 138
+      priority: 160
       tls:
         certResolver: letsencrypt
+
 
     # -------------------------------------------------------------------------
     # LiveSync Service - Real-time photo sync from camera/folder to gallery
@@ -417,13 +418,14 @@ http:
       rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/ai`)"
       entryPoints:
         - websecure
-      service: backend-service
+      service: ai-service
       middlewares:
         - rate-limit-ai
         - security-headers
-      priority: 100
+      priority: 130
       tls:
         certResolver: letsencrypt
+
 
     # -------------------------------------------------------------------------
     # Smart Tagging Routes - AI-powered content analysis

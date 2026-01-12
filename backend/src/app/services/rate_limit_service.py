@@ -33,6 +33,8 @@ class RateLimitType(str, Enum):
     CSV_IMPORT = "csv_import"  # CSV guest imports (authenticated)
     BULK_INVITE = "bulk_invite"  # Bulk invitation sending (authenticated)
     ANALYTICS = "analytics"  # Analytics endpoints (authenticated)
+    ALBUM_VIEW = "album_view"  # Public album proof viewing (Feature: 026-album-proofing)
+    ALBUM_COMMENT = "album_comment"  # Public album comment submission (Feature: 026-album-proofing)
 
 
 @dataclass
@@ -55,6 +57,8 @@ DEFAULT_LIMITS: dict[RateLimitType, RateLimitConfig] = {
     RateLimitType.CSV_IMPORT: RateLimitConfig(requests=5, window_seconds=3600),  # 5 req / hour (CSV imports)
     RateLimitType.BULK_INVITE: RateLimitConfig(requests=10, window_seconds=3600),  # 10 req / hour (bulk invites)
     RateLimitType.ANALYTICS: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min (analytics)
+    RateLimitType.ALBUM_VIEW: RateLimitConfig(requests=60, window_seconds=60),  # 60 req / min (album proof viewing)
+    RateLimitType.ALBUM_COMMENT: RateLimitConfig(requests=10, window_seconds=60),  # 10 req / min (album comments)
 }
 
 # Development rate limits (more lenient)
@@ -69,6 +73,8 @@ DEV_LIMITS: dict[RateLimitType, RateLimitConfig] = {
     RateLimitType.CSV_IMPORT: RateLimitConfig(requests=50, window_seconds=3600),  # 50 req / hour (dev CSV import)
     RateLimitType.BULK_INVITE: RateLimitConfig(requests=100, window_seconds=3600),  # 100 req / hour (dev bulk invite)
     RateLimitType.ANALYTICS: RateLimitConfig(requests=1000, window_seconds=60),  # 1000 req / min (dev analytics)
+    RateLimitType.ALBUM_VIEW: RateLimitConfig(requests=300, window_seconds=60),  # 300 req / min (dev album viewing)
+    RateLimitType.ALBUM_COMMENT: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min (dev album comments)
 }
 
 

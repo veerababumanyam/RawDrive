@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 try:
     from src.api.v1.smart_tagging import router as smart_tagging_router
+    from src.api.v1.emotion_detection import router as emotion_router
     
     router = APIRouter()
     
@@ -13,6 +14,9 @@ try:
         prefix="/workspaces/{workspace_id}/smart-tagging",
         tags=["smart-tagging"],
     )
+    
+    # AI/Emotion routes
+    router.include_router(emotion_router)
 except ImportError as e:
     # Fallback if import fails
     import logging

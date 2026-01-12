@@ -1,8 +1,96 @@
 # CLAUDE.md - RawDrive AI Context
 
-RawDrive is an enterprise SaaS professional photography platform with microservices architecture.
+**RawDrive** is an enterprise SaaS professional photography platform with microservices architecture.
 
-## CRITICAL: File Structure Rules
+**Version**: 0.3.2 | **Status**: Production | **Updated**: 2026-01-09
+
+---
+
+## 📚 Comprehensive Documentation
+
+For detailed best practices, architecture patterns, and product requirements, refer to:
+
+### **Primary References**
+- **[Product Requirements Document (PRD)](.claude/PRD.md)** - Complete product vision, architecture, features, and tech stack
+- **[Best Practices Directory](.claude/reference/)** - 23 comprehensive guides covering all technical domains
+
+### **Claude Code Configuration**
+- **[Commands](.claude/commands/)** - Development workflow commands (health checks, testing, deployment, etc.)
+- **[Skills](.claude/skills/)** - 20 auto-loaded context-aware development skills
+- **[Agents](.claude/agents/)** - 5 specialized AI agents for code review, security, UI design, etc.
+
+---
+
+## ⚡ Quick Start
+
+### Start Development Environment
+```bash
+# One-command setup (recommended)
+.\setup-dev-environment.ps1
+
+# Or manual setup
+docker compose -f infrastructure/docker/docker-compose.yml up -d
+cd frontend && pnpm dev  # http://localhost:5173
+```
+
+### Test Login
+- Email: `free@test.rawdrive.in`
+- Password: `Test@123`
+
+### Common Commands
+```bash
+# Frontend
+cd frontend && pnpm dev          # Start dev server
+cd frontend && pnpm test         # Run tests
+cd frontend && pnpm lint         # Lint code
+
+# Backend (Docker)
+docker exec rawdrive-backend pytest                    # Run tests
+docker exec rawdrive-backend alembic upgrade head      # Run migrations
+docker exec rawdrive-backend alembic revision -m "msg" # Create migration
+
+# Health Checks
+curl http://localhost:8000/health/live   # Backend
+curl http://localhost:8004/health/live   # Gallery service
+```
+
+**📖 For detailed commands, see**: [`.claude/commands/`](.claude/commands/)
+
+---
+
+## 🏗️ Architecture Overview
+
+### Microservices (8 Services)
+
+| Service | Port | Purpose | Reference |
+|---------|------|---------|-----------|
+| **Backend** | 8000 | Main API, core features | [FastAPI Best Practices](.claude/reference/fastapi-best-practices.md) |
+| **Gallery Service** | 8004 | High-performance gallery viewing | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
+| **Billing Service** | 8005 | Payment processing (Stripe/Razorpay) | [Billing Best Practices](.claude/reference/billing-payments-best-practices.md) |
+| **Upload Service** | 8008 | TUS resumable uploads | [Storage Best Practices](.claude/reference/storage-upload-best-practices.md) |
+| **Webhooks Service** | 8003 | Event-driven webhook delivery | [Webhooks Best Practices](.claude/reference/webhooks-integration-best-practices.md) |
+| **Notifications Service** | 8010 | Multi-channel notifications | [Notifications Best Practices](.claude/reference/notifications-email-best-practices.md) |
+| **Onboarding Service** | 8006 | User registration & workspace setup | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
+| **Invitations Service** | 8007 | Digital wedding invitations | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
+
+**📖 For architecture details, see**: [PRD Section 7](.claude/PRD.md#7-architecture--tech-stack)
+
+### Tech Stack
+
+| Layer | Technologies | Reference |
+|-------|--------------|-----------|
+| **Frontend** | React 18.3, TypeScript, Vite, TailwindCSS | [React Best Practices](.claude/reference/react-frontend-best-practices.md) |
+| **Backend** | Python 3.11, FastAPI, SQLAlchemy 2.0 | [FastAPI Best Practices](.claude/reference/fastapi-best-practices.md) |
+| **Database** | PostgreSQL 16, pgvector, Redis 7 | [PostgreSQL Best Practices](.claude/reference/postgresql-best-practices.md) |
+| **Infrastructure** | Traefik v3, KEDA, Kubernetes, Docker | [Deployment Best Practices](.claude/reference/deployment-best-practices.md) |
+| **AI/ML** | Gemini, Cloud Vision, CLIP, Milvus | [AI/ML Best Practices](.claude/reference/ai-ml-best-practices.md) |
+| **Monitoring** | Prometheus, Grafana, Loki | [Observability Best Practices](.claude/reference/observability-best-practices.md) |
+
+**📖 For complete tech stack, see**: [PRD Section 7](.claude/PRD.md#7-architecture--tech-stack)
+
+---
+
+## 📁 Critical File Structure Rules
 
 **ALWAYS follow these strict file placement rules. NEVER create files in random locations.**
 
@@ -10,40 +98,28 @@ RawDrive is an enterprise SaaS professional photography platform with microservi
 ```
 frontend/src/
 ├── components/
-│   ├── ui/              # Design system components (AppButton, AppInput, etc.)
-│   ├── layout/          # Layout components (Header, Sidebar, etc.)
+│   ├── ui/              # Design system (AppButton, AppInput, etc.)
+│   ├── layout/          # Layout components (Header, Sidebar)
 │   └── features/        # Feature-specific components
 │       ├── gallery/     # Gallery components
 │       ├── upload/      # Upload components
-│       └── [feature]/   # Other feature components
+│       └── [feature]/   # Other features
 ├── pages/               # Page components (route handlers)
-│   ├── public/          # Public pages (SignIn, etc.)
-│   ├── workspace/       # Authenticated workspace pages
-│   └── [feature]/       # Feature-specific pages
-├── hooks/               # Custom React hooks (useUpload, useGallery, etc.)
-├── services/            # API client services (api.ts, auth.ts, etc.)
-├── contexts/            # React contexts (AuthContext, OnboardingContext, etc.)
-├── utils/               # Utility functions (fileUtils, formatting, etc.)
-├── router/              # React Router configuration
-├── config/              # Configuration files (featureFlags.ts, etc.)
-├── constants/           # Frontend constants
-└── styles/              # Global styles
+├── hooks/               # Custom React hooks
+├── services/            # API client services
+├── contexts/            # React contexts
+└── utils/               # Utility functions
 ```
 
 ### Backend Files
 ```
 backend/src/app/
-├── api/
-│   ├── v1/              # API v1 endpoints (auth.py, galleries.py, etc.)
-│   └── dependencies/    # FastAPI dependencies
+├── api/v1/              # API endpoints
 ├── models/              # SQLAlchemy models (ONLY database models)
-├── repositories/        # Data access layer (database queries)
-├── services/            # Business logic (NEVER put in models/)
+├── repositories/        # Data access layer
+├── services/            # Business logic (NEVER in models/)
 ├── middleware/          # FastAPI middleware
-├── utils/               # Utility functions
-├── workers/             # Background workers (Celery tasks)
-├── shared/              # Generated Python types from TypeScript
-└── config/              # Configuration modules
+└── workers/             # Background workers (Celery)
 ```
 
 ### Microservices Files
@@ -52,158 +128,181 @@ services/[service-name]/
 ├── src/
 │   ├── api/v1/          # API endpoints
 │   ├── services/        # Business logic
-│   ├── repositories/    # Database access (if needed)
+│   ├── repositories/    # Database access
 │   ├── schemas/         # Pydantic schemas
-│   ├── middleware/      # Service middleware
-│   ├── cache/           # Redis client
-│   ├── observability/   # Metrics, health checks
-│   └── config.py        # Service configuration
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── load/
-├── Dockerfile
-├── requirements.txt
-└── README.md
+│   ├── observability/   # Health checks, metrics
+│   └── config.py        # Configuration
+└── tests/               # Unit, integration, load tests
 ```
 
-### Documentation Files
-```
-docs/
-├── Features/            # Feature documentation
-├── Business_Features/   # Business feature specs (numbered)
-├── project/             # Project documentation (tech stack, roadmap)
-├── runbooks/            # Operational runbooks
-├── troubleshooting/     # Troubleshooting guides
-└── [topic].md           # Root-level topic docs
-```
+**📖 For complete file structure, see**: [Coding Standards](.claude/reference/coding-standards.md)
 
-### Scripts Location
-```
-scripts/                 # Build and utility scripts
-├── dev-*.sh            # Development scripts
-├── test-*.sh           # Test scripts
-└── *.ts                # TypeScript build scripts
+---
+
+## 🔒 Critical Security Rules
+
+### Multi-Tenant Isolation (MANDATORY)
+```python
+# EVERY query MUST include workspace_id
+result = await db.execute(
+    select(Asset).where(Asset.workspace_id == workspace_id)
+)
+# NEVER trust client-provided workspace_id - extract from JWT token
 ```
 
-### **NEVER Create Files In:**
-- ❌ Root directory (except configuration files)
-- ❌ Random nested directories
-- ❌ `src/` without proper parent directory
-- ❌ Temporary or test directories in production code
+### Never Hardcode
+- ❌ API keys, secrets, credentials
+- ❌ LLM provider names or model identifiers  
+- ❌ Colors (use design tokens from `@rawdrive/shared-constants`)
+- ❌ User-facing strings (use i18n)
+- ❌ Magic numbers (use named constants)
 
-### **File Naming Conventions**
-- **React Components**: `PascalCase.tsx` (e.g., `GalleryUpload.tsx`)
-- **Python Files**: `snake_case.py` (e.g., `upload_service.py`)
-- **Scripts**: `kebab-case.sh` or `kebab-case.ts`
-- **Config Files**: `kebab-case.json` or `kebab-case.yaml`
-- **Documentation**: `SCREAMING_SNAKE.md` or `PascalCase.md`
+### Security Checklist
+- ✅ Validate JWT tokens in all microservices
+- ✅ Use shared `JWT_SECRET` across all services
+- ✅ Implement rate limiting on public endpoints
+- ✅ Sanitize user inputs (use `@rawdrive/shared-validation`)
+- ✅ Use parameterized queries (SQLAlchemy prevents SQL injection)
+- ✅ Encrypt sensitive data at rest (AES-256)
 
-## Quick Reference
+**📖 For security details, see**: [Security Best Practices](.claude/reference/security-best-practices.md)
+
+---
+
+## 🎨 Code Style & Conventions
+
+### Naming Conventions
+
+| Type | Convention | Example |
+|------|------------|---------|
+| React components | `PascalCase.tsx` | `GalleryUpload.tsx` |
+| React hooks | `useCamelCase.ts` | `useUpload.ts` |
+| Python services | `snake_case.py` | `upload_service.py` |
+| Python classes | `PascalCase` | `UploadService` |
+| API routes | `/api/v1/kebab-case` | `/api/v1/gallery-items` |
+| Database tables | `snake_case` | `gallery_items` |
+| Environment variables | `SCREAMING_SNAKE` | `JWT_SECRET` |
+
+### Architecture Pattern (Backend)
+```python
+# Repository → Service → API (3-layer architecture)
+
+# 1. Repository (database access)
+class GalleryRepository:
+    async def get_by_id(self, gallery_id: UUID, workspace_id: UUID) -> Gallery:
+        # Database query with workspace isolation
+
+# 2. Service (business logic)
+class GalleryService:
+    async def get_gallery(self, gallery_id: UUID, workspace_id: UUID) -> Gallery:
+        # Business logic + validation
+
+# 3. API (HTTP handling)
+@router.get("/galleries/{gallery_id}")
+async def get_gallery(gallery_id: UUID, service: GalleryService = Depends()):
+    return await service.get_gallery(gallery_id)
+```
+
+**📖 For coding standards, see**: [Coding Standards](.claude/reference/coding-standards.md)
+
+---
+
+## 📦 Shared Packages (pnpm Workspaces)
+
+RawDrive uses a **monorepo with pnpm workspaces** for shared code:
+
+| Package | Purpose | Exports |
+|---------|---------|---------|
+| `@rawdrive/shared-types` | Domain types | `InvitationStatus`, `GalleryStatus`, etc. |
+| `@rawdrive/shared-constants` | Configuration | `API_BASE`, `STORAGE`, `AI_THRESHOLDS`, etc. |
+| `@rawdrive/shared-validation` | Validation | `isValidHexColor`, `sanitizeHtml`, etc. |
+| `@rawdrive/shared-utils` | Utilities | `formatRelativeDate`, `formatFileSize`, etc. |
+
+### Usage
+```typescript
+// Frontend: Import from shared packages
+import { InvitationStatus } from '@rawdrive/shared-types';
+import { API_BASE, PAGINATION } from '@rawdrive/shared-constants';
+import { isValidHexColor } from '@rawdrive/shared-validation';
+```
+
+```python
+# Backend: Import from generated Python modules
+from app.shared.types import InvitationStatus, GalleryStatus
+from app.shared.constants import API_BASE, PAGINATION
+```
 
 ### Commands
-
 ```bash
-# Development (start Docker stack)
-docker compose -f infrastructure/docker/docker-compose.yml up -d
-# OR for backend-only development (faster):
-docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
-
-cd frontend && npm run dev         # localhost:3000
-
-# Backend (using Docker)
-docker compose -f infrastructure/docker/docker-compose.yml exec backend uvicorn app.main:app --reload --port 8000
-docker compose -f infrastructure/docker/docker-compose.yml exec backend alembic upgrade head
-docker compose -f infrastructure/docker/docker-compose.yml exec backend alembic revision --autogenerate -m "description"
-
-# Microservices (dev mode)
-bash scripts/dev-gallery-service.sh       # Gallery service on port 8004
-bash scripts/dev-billing-service.sh       # Billing service on port 8006
-
-# Testing
-cd frontend && npm test            # Vitest
-docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest
-docker compose -f infrastructure/docker/docker-compose.yml exec backend pytest --cov=src
-
-# Linting
-cd frontend && npm run lint
-docker compose -f infrastructure/docker/docker-compose.yml exec backend ruff check src && mypy src
+pnpm build:packages      # Build all shared packages
+pnpm generate:python     # Generate Python types from TypeScript
+pnpm test:packages       # Test shared packages
 ```
 
-### Project Structure
+---
 
-```
-RawDrive/
-├── packages/          # Shared npm packages (pnpm workspace)
-│   ├── shared-types/       # @rawdrive/shared-types
-│   ├── shared-constants/   # @rawdrive/shared-constants
-│   ├── shared-validation/  # @rawdrive/shared-validation
-│   └── shared-utils/       # @rawdrive/shared-utils
-├── frontend/          # React 19 + TypeScript + Vite + TailwindCSS
-├── backend/           # Python 3.11 + FastAPI + SQLAlchemy + Alembic
-├── services/          # Microservices (8 services)
-│   ├── billing-service/      # Payment processing (Stripe/Razorpay)
-│   ├── gallery-service/      # High-performance gallery (50K concurrent)
-│   ├── upload-service/       # TUS resumable uploads
-│   ├── onboarding-service/   # User registration & workspace setup
-│   ├── invitations-service/  # Digital wedding invitations
-│   ├── notifications-service/# Multi-channel notifications
-│   ├── webhooks-service/     # Event-driven webhook delivery (NEW)
-│   └── workspace-service/    # Workspace management (partial)
-├── infrastructure/    # Docker, Kubernetes, Traefik, monitoring
-│   ├── docker/             # Docker Compose configurations
-│   ├── kubernetes/         # K8s manifests
-│   └── monitoring/         # Prometheus, Grafana, Loki configs
-├── docs/              # Documentation (150+ files)
-├── specs/             # Feature specifications (17+ specs)
-├── scripts/           # Build and utility scripts
-├── tests/             # E2E Playwright tests
-└── .claude/           # Claude Code configuration
-    ├── skills/        # 20 development skills
-    └── settings.json  # Claude settings
-```
+## 🛠️ Development Workflows
 
-### Key Files
+### Adding New Features
 
-| Purpose | Location |
-|---------|----------|
-| **Frontend** | |
-| API client | `frontend/src/services/api.ts` |
-| Auth service | `frontend/src/services/auth.ts` |
-| UI Components | `frontend/src/components/ui/` |
-| Feature components | `frontend/src/components/features/` |
-| Hooks | `frontend/src/hooks/` |
-| Pages | `frontend/src/pages/` |
-| Routes | `frontend/src/router/routes.tsx` |
-| **Backend** | |
-| Entry point | `backend/src/app/main.py` |
-| API routes | `backend/src/app/api/v1/` |
-| Services | `backend/src/app/services/` |
-| Repositories | `backend/src/app/repositories/` |
-| Models | `backend/src/app/models/` |
-| Migrations | `backend/migrations/versions/` |
-| Shared Python types | `backend/src/app/shared/` |
-| **Microservices** | |
-| Billing API | `services/billing-service/src/api/v1/` |
-| Gallery API | `services/gallery-service/src/api/v1/` |
-| Upload API | `services/upload-service/src/app/api/v1/` |
-| Onboarding API | `services/onboarding-service/src/api/v1/` |
-| Webhooks API | `services/webhooks-service/src/api/v1/` |
-| Personal Profile API | `backend/src/app/api/v1/personal_profile.py` |
-| Workspace Settings API | `backend/src/app/api/v1/workspace_settings.py` |
-| **Shared Packages** | |
-| Types package | `packages/shared-types/src/` |
-| Constants package | `packages/shared-constants/src/` |
-| Validation package | `packages/shared-validation/src/` |
-| Utils package | `packages/shared-utils/src/` |
-| Python generator | `scripts/generate-python-types.ts` |
-| **Infrastructure** | |
-| Docker Compose | `infrastructure/docker/docker-compose.yml` |
-| Traefik config | `infrastructure/docker/traefik/traefik.yaml` |
-| KEDA scaling | `infrastructure/kubernetes/base/keda/scaledobjects.yaml` |
-| Prometheus | `infrastructure/monitoring/prometheus/prometheus.yaml` |
+1. **Check References**: Review relevant best practices in `.claude/reference/`
+2. **Follow Structure**: Place files in correct directories (see File Structure Rules)
+3. **Use Shared Packages**: Reuse types, constants, validation
+4. **Write Tests**: Unit tests (80%+ coverage), integration tests, E2E tests
+5. **Create Migration**: Database changes require Alembic migration
+6. **Update Documentation**: Add to `docs/Features/` and update PRD
 
-### Environment Variables
+**📖 For workflows, see**: [`.claude/commands/`](.claude/commands/)
+
+### Working with Microservices
+
+1. **Use shared database** - All services connect to same PostgreSQL instance
+2. **Validate JWT tokens** - Use shared `JWT_SECRET` and validate in middleware
+3. **Include workspace_id** - Every query must filter by `workspace_id`
+4. **Follow service templates** - Use gallery-service as reference
+5. **Add health checks** - `/health/live` and `/health/ready` endpoints required
+6. **Expose metrics** - Prometheus `/metrics` endpoint for monitoring
+
+**📖 For microservices patterns, see**: [Microservices Patterns](.claude/reference/microservices-patterns.md)
+
+---
+
+## 🤖 Claude Code Skills & Agents
+
+### Skills (Auto-loaded based on context)
+
+20 specialized skills available in `.claude/skills/`:
+
+| Skill | Use When |
+|-------|----------|
+| `accessibility` | WCAG 2.1 AA compliance, ARIA, keyboard navigation |
+| `ai-mcp-integration` | AI features, MCP integration, LLM tooling |
+| `api-standards` | API conventions, response formats, pagination |
+| `design-system` | Design tokens, UI components, theming |
+| `frontend-design` | Premium UI, animations, modern aesthetics |
+| `security` | Authentication, RBAC, encryption, compliance |
+| `testing` | Vitest, pytest patterns, test coverage |
+| `performance` | Optimization, caching, scaling, web vitals |
+
+**📖 For all skills, see**: [`.claude/skills/README.md`](.claude/skills/README.md)
+
+### Agents (Specialized AI assistants)
+
+5 agents available in `.claude/agents/`:
+
+| Agent | Purpose |
+|-------|---------|
+| `coding-standards-enforcer` | Review code for adherence to standards |
+| `security-code-reviewer` | Comprehensive security-focused code review |
+| `ui-component-designer` | Design modern, accessible UI components |
+| `auth-troubleshooter` | Debug authentication/authorization issues |
+| `skills-architect` | Create and maintain project skills |
+
+**📖 For agent details, see**: [`.claude/agents/`](.claude/agents/)
+
+---
+
+## 🔍 Key Environment Variables
 
 ```bash
 # Database
@@ -224,628 +323,109 @@ AI_PROVIDER=<provider>
 AI_API_KEY=<api-key>
 AI_MODEL=<model-name>
 
-# Payment (Microservices)
+# Payment
 STRIPE_SECRET_KEY=<stripe-key>
 RAZORPAY_KEY_ID=<razorpay-id>
 RAZORPAY_KEY_SECRET=<razorpay-secret>
-
-# CDN Edge Encryption (Cloudflare Workers)
-CLOUDFLARE_ACCOUNT_ID=<cloudflare-account-id>
-CLOUDFLARE_API_TOKEN=<cloudflare-api-token>
-CLOUDFLARE_KV_NAMESPACE_ID=<workers-kv-namespace>
-KV_ENCRYPTION_KEY=<32-byte-master-key>
 ```
 
-## Shared Packages (pnpm Workspaces)
+---
 
-RawDrive uses a **monorepo with pnpm workspaces** for shared code:
-
-| Package | Purpose | Exports |
-|---------|---------|---------|
-| `@rawdrive/shared-types` | Domain types | `InvitationStatus`, `GalleryStatus`, `GradientConfiguration`, etc. |
-| `@rawdrive/shared-constants` | Configuration | `API_BASE`, `STORAGE`, `AI_THRESHOLDS`, `PAGINATION`, `FILE_TYPES` |
-| `@rawdrive/shared-validation` | Validation | `isValidHexColor`, `hexColorSchema`, `sanitizeHtml` |
-| `@rawdrive/shared-utils` | Utilities | `formatRelativeDate`, `formatFileSize`, `truncate` |
-
-### Usage
-
-```typescript
-// Frontend: Import from shared packages
-import { InvitationStatus, GalleryStatus } from '@rawdrive/shared-types';
-import { API_BASE, PAGINATION, FILE_TYPES } from '@rawdrive/shared-constants';
-import { isValidHexColor, sanitizeHtml } from '@rawdrive/shared-validation';
-import { formatRelativeDate, formatFileSize } from '@rawdrive/shared-utils';
-```
-
-```python
-# Backend: Import from generated Python modules
-from app.shared.types import InvitationStatus, GalleryStatus
-from app.shared.constants import API_BASE, PAGINATION
-from app.shared.validation import is_valid_hex_color
-```
-
-### Commands
-
-```bash
-# Build all shared packages
-pnpm build:packages
-
-# Generate Python types from TypeScript
-pnpm generate:python
-
-# Test shared packages
-pnpm test:packages
-
-# Run cross-platform parity tests
-pnpm test:parity
-```
-
-### Adding New Types
-
-1. Add TypeScript types in `packages/shared-types/src/`
-2. Run `pnpm generate:python` to generate Pydantic models
-3. Import from `@rawdrive/shared-types` (TS) or `app.shared.types` (Python)
-
-## Skills Reference
-
-Claude Code loads skills automatically based on context. Use `/skill <name>` to invoke directly.
-
-**All 20 Available Skills:**
-
-| Skill | Use When |
-|-------|----------|
-| `accessibility` | WCAG 2.1 AA compliance, ARIA, keyboard navigation, screen readers |
-| `ai-mcp-integration` | AI features, Model Context Protocol (MCP) integration, LLM tooling |
-| `api-standards` | API conventions, response formats, pagination, HTTP methods |
-| `design-system` | Design tokens, AppButton/AppInput, color system, theming |
-| `doc-coauthoring` | Three-stage documentation workflow for specs, proposals, ADRs |
-| `error-handling` | Error boundaries, API errors, form validation, user feedback |
-| `frontend-design` | Premium UI, effects, animations, avoiding generic AI aesthetics |
-| `git-workflow` | Git conventions, commits, branches, pull requests, code review |
-| `ide` | VS Code and JetBrains IDE integration, extensions |
-| `infrastructure` | Traefik v3, KEDA, Prometheus, Kafka, Kubernetes, Docker |
-| `performance` | Optimization, caching, scaling, web vitals, latency reduction |
-| `project-structure` | Codebase conventions, folder layout, naming patterns |
-| `saas-practices` | Multi-tenancy, billing, onboarding, usage metering |
-| `security` | Authentication, RBAC, encryption, SOC 2 compliance, OWASP |
-| `skill-creator` | Create and maintain Claude Code skills |
-| `storage` | R2/BYOS storage, file uploads, asset management |
-| `testing` | Vitest, pytest patterns, test coverage, fixtures |
-| `web-artifacts-builder` | Build standalone UI component demos, HTML previews |
-| `webapp-testing` | Playwright E2E testing, browser automation, screenshots |
-| `speckit.*` | SpecKit workflow skills (analyze, clarify, plan, implement, tasks) |
-
-**Note:** Skills are located in `.claude/skills/[skill-name]/SKILL.md`
-
-## Critical Rules
-
-### Multi-Tenant Isolation (ALWAYS)
-
-```python
-# EVERY query MUST include workspace_id
-result = await db.execute(
-    select(Asset).where(Asset.workspace_id == workspace_id)
-)
-# NEVER trust client-provided workspace_id - extract from JWT token
-```
-
-### Storage Key Format
-
-```
-workspaces/{workspace_id}/assets/{asset_id}/original/{filename}
-workspaces/{workspace_id}/assets/{asset_id}/thumbnails/{size}/{filename}
-```
-
-### Never Hardcode
-
-- ❌ API keys, secrets, credentials
-- ❌ LLM provider names or model identifiers
-- ❌ Colors (use design tokens from `@rawdrive/shared-constants`)
-- ❌ User-facing strings (use i18n)
-- ❌ Magic numbers (use named constants)
-
-### Input Validation
-
-```python
-from pydantic import BaseModel, Field
-
-class CreateGallery(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
-    workspace_id: UUID = Field(...)  # REQUIRED for multi-tenancy
-```
-
-### Security Requirements
-
-- ✅ Always validate JWT tokens in microservices
-- ✅ Use shared `JWT_SECRET` across all services
-- ✅ Implement rate limiting on all public endpoints
-- ✅ Sanitize user inputs (use `@rawdrive/shared-validation`)
-- ✅ Use parameterized queries (SQLAlchemy prevents SQL injection)
-- ✅ Encrypt sensitive data at rest (AES-256)
-
-## Code Style
-
-### Naming Conventions
-
-| Type | Convention | Example |
-|------|------------|---------|
-| React components | `PascalCase.tsx` | `GalleryUpload.tsx` |
-| React hooks | `useCamelCase.ts` | `useUpload.ts` |
-| Python services | `snake_case.py` | `upload_service.py` |
-| Python classes | `PascalCase` | `UploadService` |
-| API routes | `/api/v1/kebab-case` | `/api/v1/gallery-items` |
-| Database tables | `snake_case` | `gallery_items` |
-| Environment variables | `SCREAMING_SNAKE` | `JWT_SECRET` |
-| Constants | `SCREAMING_SNAKE` | `MAX_UPLOAD_SIZE` |
-
-### Component Structure (Frontend)
-
-```typescript
-// 1. External imports
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-
-// 2. Types (from shared packages)
-import type { Gallery } from '@rawdrive/shared-types';
-
-// 3. Internal imports
-import { AppButton } from '@/components/ui';
-import { useUpload } from '@/hooks/useUpload';
-
-// 4. Constants
-import { MAX_FILE_SIZE } from '@rawdrive/shared-constants';
-
-interface Props {
-  galleryId: string;
-  workspaceId: string;
-}
-
-export const GalleryUpload: React.FC<Props> = ({ galleryId, workspaceId }) => {
-  // Component implementation
-};
-```
-
-### Service Structure (Backend)
-
-```python
-# Repository → Service → API (3-layer architecture)
-
-# 1. Repository (database access)
-class GalleryRepository:
-    async def get_by_id(self, gallery_id: UUID, workspace_id: UUID) -> Gallery:
-        # Database query
-
-# 2. Service (business logic)
-class GalleryService:
-    def __init__(self, repo: GalleryRepository):
-        self.repo = repo
-
-    async def get_gallery(self, gallery_id: UUID, workspace_id: UUID) -> Gallery:
-        # Business logic + validation
-
-# 3. API (HTTP handling)
-@router.get("/galleries/{gallery_id}")
-async def get_gallery(gallery_id: UUID, service: GalleryService = Depends()):
-    return await service.get_gallery(gallery_id)
-```
-
-## Common Patterns
-
-### API Response Format
-
-```typescript
-// Success response
-{
-  data: T,
-  pagination?: { total: number, page: number, limit: number }
-}
-
-// Error response
-{
-  error: string,
-  message: string,
-  details?: Array<{ field: string, message: string }>
-}
-```
-
-### Background Jobs (Celery)
-
-```python
-from app.tasks import process_asset
-
-# Enqueue background task
-process_asset.delay(
-    asset_id=asset_id,
-    workspace_id=workspace_id,
-    operation="thumbnail_generation"
-)
-```
-
-### Caching (Redis)
-
-```python
-import json
-
-# Check cache first
-cached = await redis.get(f"gallery:{gallery_id}")
-if cached:
-    return json.loads(cached)
-
-# Fetch from database
-result = await db.get(gallery_id)
-
-# Cache for 1 hour
-await redis.setex(
-    f"gallery:{gallery_id}",
-    3600,
-    json.dumps(result)
-)
-```
-
-### File Upload Pattern
-
-```python
-from app.services.upload_service import UploadService
-
-# Chunked upload with TUS protocol
-upload = await upload_service.create_upload(
-    filename="photo.jpg",
-    file_size=5_000_000,  # 5MB
-    workspace_id=workspace_id,
-    chunk_size=1_048_576  # 1MB chunks
-)
-```
-
-## Architecture Notes
-
-### Microservices Architecture
-
-**All 8 Microservices:**
-
-| Service | Port | Purpose | Scaling | Status |
-|---------|------|---------|---------|--------|
-| **Backend** | 8000 | Main API, core features | 2-100 replicas | ✅ Production |
-| **Billing Service** | 8005 (prod)<br>8006 (dev) | Payment processing (Stripe/Razorpay), subscriptions, invoices | 2-20 replicas | ✅ Production |
-| **Gallery Service** | 8004 | High-performance gallery viewing, Magic Links, WebSocket proofing, face search | 5-20 replicas | ✅ Production |
-| **Upload Service** | 8080 | TUS protocol resumable uploads, chunking, AES-256 encryption, Kafka events | 2-50 replicas | ✅ Production |
-| **Onboarding Service** | 8005 | User registration, email verification, workspace creation, Stripe payment | 2-20 replicas | ✅ Production |
-| **Invitations Service** | 8007 | Digital wedding invitations, guest management, RSVP, bulk email | Standard | ✅ Production |
-| **Notifications Service** | 8010 | Multi-channel notifications, email, push, in-app | 2-10 replicas | ✅ Production |
-| **Webhooks Service** | 8003 | Event-driven webhook delivery, HMAC signing, retries, circuit breaker | 2-20 replicas | ✅ Production |
-| **Workspace Service** | TBD | Workspace management, team collaboration | - | 🚧 Partial |
-
-**Service Communication:**
-- **Shared Database**: PostgreSQL 16 (multi-tenant with `workspace_id` isolation)
-- **Shared JWT Secret**: Same `JWT_SECRET` environment variable across all services
-- **Shared Redis**: Redis 7 for caching and session management
-- **API Gateway**: Traefik v3 with priority-based routing
-- **Event Bus**: Kafka for asynchronous events (upload completion, etc.)
-
-### Traefik v3 API Gateway
-
-**Replaced**: Nginx Ingress Controller in version 0.26
-
-**Routing Priority Table:**
-
-| Priority | Route | Service | Rate Limit |
-|----------|-------|---------|------------|
-| 150 | `/webhooks/stripe` | billing-service | None (webhooks) |
-| 148 | `/webhooks/razorpay` | billing-service | None (webhooks) |
-| 145 | `/api/v1/subscription/*` | billing-service | 100 req/min |
-| 142 | `/api/v1/webhooks/*` | webhooks-service | 100 req/min |
-| 140 | `/api/v1/galleries/*` | gallery-service | 200 req/min |
-| 135 | `/api/v1/uploads/*` | upload-service | 50 req/min |
-| 130 | `/api/v1/personal-profile/*` | backend | 100 req/min |
-| 100 | `/api/*` | backend (fallback) | 100 req/min |
-
-**Features:**
-- Automatic Let's Encrypt TLS certificates
-- Rate limiting per endpoint
-- Prometheus metrics exposure for KEDA
-- Dynamic configuration via labels/annotations
-- Circuit breaker pattern
-- Request/response logging
-
-**Configuration Files:**
-- Docker: `infrastructure/docker/traefik/traefik.yaml`, `dynamic.yaml`
-- Kubernetes: `infrastructure/kubernetes/base/traefik/deployment.yaml`, `ingressroutes.yaml`
-
-### KEDA Autoscaling
-
-**Triggers:**
-- HTTP request rate (Traefik metrics)
-- P95 latency threshold (Traefik metrics)
-- Kafka queue lag (Upload Service)
-- Redis queue depth (Celery workers)
-- WebSocket connections (Gallery Service)
-
-**Scaling Configurations:**
-
-```yaml
-# Backend: 2-100 replicas
-- type: prometheus
-  threshold: "100"  # 100 RPS per replica
-  query: rate(traefik_service_requests_total{service="backend"}[1m])
-
-# Gallery: 5-20 replicas
-- type: prometheus
-  threshold: "100"  # 100 RPS
-- type: prometheus
-  threshold: "500"  # 500 WebSocket connections
-
-# Upload: 2-50 replicas
-- type: kafka
-  threshold: "100"  # Kafka lag > 100 messages
-```
-
-**Files:**
-- `infrastructure/kubernetes/base/keda/scaledobjects.yaml`
-- `infrastructure/kubernetes/base/keda/billing-scaledobject.yaml`
-- `infrastructure/kubernetes/base/keda/gallery-scaledobject.yaml`
-
-### Auth Flow
-
-- **Access Token**: 15 minutes (JWT in Authorization header)
-- **Refresh Token**: 7 days (httpOnly cookie, secure)
-- **Remember Me**: 30 days extended refresh token
-- **2FA**: TOTP via speakeasy library
-- **Password Hashing**: Argon2id (OWASP recommended)
-- **Session Storage**: Redis with automatic expiration
-
-### Database
-
-- **PostgreSQL 16** with extensions:
-  - `pgvector` - Vector similarity search (HNSW, IVFFlat indexes)
-  - `pgvectorscale` - Enhanced vector indexing (StreamingDiskANN for >10M vectors)
-  - `uuid-ossp` - UUID generation
-  - `pg_trgm` - Fuzzy text search
-- **Redis 7** - Caching, sessions, Celery broker
-- **PgBouncer** - Connection pooling (max 100 connections)
-- **Alembic** - Database migrations
-
-**Docker Image:** `timescale/timescaledb-ha:pg16` (includes pgvector + pgvectorscale)
-
-#### Vector Search Index Selection
-
-| Dataset Size | Index Type | Use Case |
-|--------------|------------|----------|
-| < 100K vectors | HNSW (pgvector) | Face detection, small galleries |
-| 100K - 10M | IVFFlat or HNSW | Medium galleries, AI search |
-| > 10M vectors | StreamingDiskANN (pgvectorscale) | Large-scale similarity search |
-
-```python
-# Check pgvectorscale availability
-from app.core.database import verify_vector_extensions, check_pgvectorscale_ready
-
-status = await verify_vector_extensions()
-if status.can_use_diskann:
-    # Use StreamingDiskANN for large datasets (millions+ vectors)
-    await db.execute("CREATE INDEX ON embeddings USING diskann(vector)")
-else:
-    # Fallback to HNSW
-    await db.execute("CREATE INDEX ON embeddings USING hnsw(vector)")
-```
-
-## Tech Stack
-
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | React 19, TypeScript 5.2+, Vite 5, TailwindCSS 3, React Query, React Router 6 |
-| **Backend** | Python 3.11, FastAPI 0.115+, SQLAlchemy 2.0, Pydantic 2.7+, Alembic |
-| **Database** | PostgreSQL 16 (timescaledb-ha), pgvector, pgvectorscale, Redis 7, PgBouncer 1.21+ |
-| **Storage** | Cloudflare R2, BYOS (S3-compatible APIs) |
-| **AI/ML** | Google Cloud Vision, Gemini Vision API, DeepFace, CLIP embeddings |
-| **Infrastructure** | Traefik v3, KEDA, Docker, Kubernetes, Kafka |
-| **Monitoring** | Prometheus, Grafana, Loki, Promtail, Alertmanager, Tempo (tracing) |
-| **Payments** | Stripe (global), Razorpay (India) |
-| **Validation** | Zod 4.2+ (TypeScript), Pydantic 2.7+ (Python) |
-| **Async** | Celery 5.3+, Redis (broker), Kafka (events) |
-
-## Monitoring Stack
-
-**Observability Services:**
+## 📊 Monitoring & Observability
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| Prometheus | 9090 | Metrics collection and querying |
-| Grafana | 3001 | Dashboards and visualization |
-| Loki | 3100 | Log aggregation |
-| Promtail | - | Log collection agent |
-| Alertmanager | 9093 | Alert routing and grouping |
-| Tempo | 3200 | Distributed tracing |
+| Prometheus | 9090 | Metrics collection |
+| Grafana | 3000 | Dashboards (admin/admin) |
 | Traefik Dashboard | 8080 | API Gateway metrics |
+| Loki | 3100 | Log aggregation |
 
-**Key Dashboards:**
-- `infrastructure/monitoring/grafana/dashboards/traefik-keda.json` - Traefik + KEDA metrics
-- Request rates, error rates, latency percentiles (P50, P95, P99)
-- KEDA autoscaling metrics (current replicas, target metrics)
+**📖 For observability details, see**: [Observability Best Practices](.claude/reference/observability-best-practices.md)
 
-**Alerts:**
-- `infrastructure/monitoring/prometheus/traefik-alerts.yaml` - Traefik-specific alerts
-- `infrastructure/monitoring/prometheus/alerts.yaml` - General service alerts
+---
 
-## Useful Links
+## 📖 Additional Documentation
 
-- **Skills**: `.claude/skills/*/SKILL.md` (20 skills)
-- **Documentation**: `docs/` (150+ files)
-- **Specs**: `specs/` (17+ feature specifications)
-- **Test Users**: `docs/TEST_USERS_CREATED.md`
-- **Architecture**: `docs/ARCHITECTURE_QUICK_REFERENCE.md`
-- **Troubleshooting**: `docs/troubleshooting/`
-- **Runbooks**: `docs/runbooks/`
+### Core Documentation
+- **[PRD](.claude/PRD.md)** - Complete product requirements and architecture
+- **[Best Practices](.claude/reference/)** - 23 comprehensive technical guides
+- **[Architecture](docs/ARCHITECTURE_QUICK_REFERENCE.md)** - Quick architecture reference
+- **[Test Users](docs/TEST_USERS.md)** - Test user credentials and configurations
 
-## Version History
+### Feature Documentation
+- **[Features](docs/Features/)** - Detailed feature specifications
+- **[Business Features](docs/Business_Features/)** - Business feature specs
+- **[Specs](specs/)** - Technical specifications
+
+### Operational Documentation
+- **[Runbooks](docs/runbooks/)** - Operational guides
+- **[Troubleshooting](docs/troubleshooting/)** - Debugging guides
+
+---
+
+## 🎯 Development Principles
+
+### From the PRD
+
+1. **Client Experience is the Product** - End-client viewing experience must be flawless
+2. **AI as a Copilot** - AI features enhance without taking control
+3. **Trust by Design** - Security, privacy, and governance are foundational
+4. **Performance at Scale** - Sub-second retrieval for millions of assets
+5. **Platform Reliability** - Microservices ensure fault isolation and scalability
+
+**📖 For complete principles, see**: [PRD Section 2](.claude/PRD.md#2-product-principles)
+
+### Best Practices
+
+- **Always reference** `.claude/reference/` for domain-specific best practices
+- **Use skills** for context-aware development guidance
+- **Invoke agents** for specialized code review and design tasks
+- **Follow the PRD** for product requirements and architecture decisions
+- **Maintain consistency** across all services and components
+
+---
+
+## 📝 Version History
 
 ### Current: v0.3.2 (2026-01-09)
 
-Major platform expansion with Personal Profiles, Webhooks microservice, and Workspace Settings.
+**Major Features:**
+- Personal Profile Digital Visiting Card (`/u/{slug}`)
+- Webhooks Microservice (event-driven integration)
+- Workspace Settings System (AI, security, notifications, privacy)
+- Gallery Performance Optimizations (LQIP, extended TTL, prefetching)
+- SEO & Search Engine Integration
 
-**Personal Profile Digital Visiting Card:**
-- Professional profile pages at `/u/{slug}` with QR code and vCard download
-- Brand themes: dark, pastel, bold, cinematic, minimal
-- Social media integration (Instagram, TikTok, YouTube, Spotify, LinkedIn, etc.)
-- Embedded Spotify playlists and TikTok profile links
-- AI-powered profile assistant for completeness scoring and SEO optimization
-- Per-field visibility controls for privacy management
-- Avatar upload with multi-size variants (64x64 to 512x512)
-- API: `backend/src/app/api/v1/personal_profile.py`, `personal_profile_ai.py`
+**📖 For complete changelog, see**: [PRD Section 9](.claude/PRD.md#9-delivery-plan)
 
-**Webhooks Microservice (NEW):**
-- New dedicated microservice at `services/webhooks-service/` (port 8003)
-- HMAC-SHA256 signature verification with secret rotation (24h grace period)
-- Exponential backoff retry with configurable max retries (0-10)
-- Circuit breaker pattern per endpoint to prevent cascading failures
-- Dead letter queue for permanently failed deliveries
-- Event catalog: gallery.*, asset.*, user.*, workspace.* events
-- Prometheus metrics and health checks
+---
 
-**Workspace Settings System:**
-- Workspace AI Settings: Per-workspace AI provider configuration with encrypted API keys
-- Workspace Security Settings: 2FA requirements, password policies, session management, IP whitelists
-- Workspace Notification Settings: Default notification preferences and channels
-- Workspace Privacy Settings: Analytics, data retention, GDPR compliance, search engine indexing
-- Workspace Deletion: Scheduled deletion with 30-day grace period
+## 🆘 Getting Help
 
-**Gallery Performance Optimizations:**
-- LQIP (Low Quality Image Placeholders): 20x20 WebP blur-up placeholders for instant visual feedback
-- Extended Signed URL TTL: 4-hour TTL for thumbnails (300% cache hit improvement)
-- Immutable Browser Cache Headers: `private, max-age=31536000, immutable` for thumbnails
-- Prefetching: Next page at 75% scroll, lightbox neighbor preloading
-- Denormalized Gallery Stats: photo_count, video_count, total_size_bytes via PostgreSQL triggers
-- Batch Query Operations: Reduce N+1 queries with batch signed URLs, metadata, quality scores
-- Service Worker Caching: Workbox PWA with tiered caching strategies
+1. **Check References First**: Review `.claude/reference/` for best practices
+2. **Use Skills**: Invoke relevant skills for guided development
+3. **Consult PRD**: Review product requirements and architecture
+4. **Use Commands**: Run `.claude/commands/` for common workflows
+5. **Invoke Agents**: Use specialized agents for code review and design
 
-**SEO & Search Engine Integration:**
-- Dynamic sitemap generation at `/api/v1/sitemap.xml`
-- Search Console integration for URL submission and indexing status
-- Per-workspace search engine indexing control
-- JSON-LD schema markup for profiles
+**Remember**: This file provides quick reference. For comprehensive guidance, always refer to:
+- **[.claude/PRD.md](.claude/PRD.md)** - Product requirements
+- **[.claude/reference/](.claude/reference/)** - Best practices
+- **[.claude/skills/](.claude/skills/)** - Development skills
+- **[.claude/agents/](.claude/agents/)** - Specialized agents
+- **[.claude/commands/](.claude/commands/)** - Workflow commands
 
-**CDN Edge Encryption (Phase 3):**
-- CDN Keys API: `/api/v1/admin/cdn-keys/*` for workspace key management
-- AES-256-GCM encryption for keys in Workers KV storage
-- Admin endpoints for bulk sync and key management
+---
 
-**Database Migrations (0141-0156):**
-- 0141-0145: Workspace settings tables (AI, security, notification, privacy, deletion)
-- 0146: Batch query optimization indexes
-- 0147: User to workspace settings migration
-- 0148: Add `lqip` column to assets table
-- 0149: Add denormalized stats columns with PostgreSQL triggers
-- 0150-0153: Webhook subscriptions, events, deliveries, event types
-- 0154: Search engine indexing settings
-- 0155: Personal profiles and avatars
-- 0156: Notification category expansion
+**Maintained by**: RawDrive Development Team  
+**Last Updated**: 2026-01-10  
+**Status**: Production Ready ✅
 
-**New Frontend Components:**
-- `PersonalProfileTabContent.tsx`, `PersonalProfilePreview.tsx`, `PersonalProfileAIAssistant.tsx`
-- `EmbeddedSpotify.tsx`, `EmbeddedTikTok.tsx`, `ProfileCompletenessIndicator.tsx`
-- Workspace settings components in `frontend/src/components/workspace/settings/`
-
-**New Hooks & Services:**
-- `useWebhooks.ts`, `useWorkspaceSettings.ts`, `useWorkspaceNotificationPreferences.ts`, `usePrefetch.ts`
-- `webhooksService.ts`, `personalProfileService.ts`, `workspaceSettingsService.ts`, `cdnService.ts`
-
-**Scripts:**
-- `scripts/backfill_lqip.py`: Batch backfill LQIP for existing assets
-
-### Previous: v0.3.0 (2025-01-27)
-
-Gallery Preview feature and platform stability:
-
-**New Features:**
-- Gallery Preview: "View as Client" mode for workspace users
-- Security: UUID validation for public URLs
-- Infrastructure: Traefik v3 and KEDA autoscaling maturity
-- Unified Type System: Generated Python types from TypeScript shared packages
-
-### Previous: v0.2.9 (2025-01-06)
-
-Major platform enhancements and microservices expansion:
-
-**New Microservices:**
-- billing-service: Payment processing with Stripe/Razorpay
-- gallery-service: 50K concurrent users support
-- upload-service: TUS resumable uploads with chunking
-- onboarding-service: User registration and workspace creation
-
-**Infrastructure:**
-- Traefik v3 API Gateway with priority routing
-- KEDA autoscaling with Prometheus metrics
-- pgvectorscale extension for vector search
-- Comprehensive monitoring (Prometheus, Grafana, Loki)
-
-**Backend:**
-- 8 new Alembic migrations (0093-0100)
-- Enhanced subscription and payment models
-- Session security improvements
-- Onboarding flow with email verification
-
-**Frontend:**
-- Onboarding pages and context
-- Enhanced upload with chunking
-- Device fingerprinting
-- Remember me functionality
-
-### Previous Versions
-
-- **v0.28** - 5000 concurrent users autoscaling infrastructure
-- **v0.26** - Traefik v3 + KEDA autoscaling
-- **v0.25** - pgvectorscale extension enabled
-- **v0.23** - Enhanced Smart Curate with CLIP embeddings
-- **v0.22** - Shared packages infrastructure (pnpm workspaces)
+## Active Technologies
+- Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, passlib (bcrypt) (027-gallery-feature-completion)
+- PostgreSQL 16 (galleries, magic_links), Redis 7 (quotas, rate-limiting) (027-gallery-feature-completion)
+- Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, reportlab (PDF) (026-album-proofing)
 
 ## Recent Changes
-
-- **033-personal-profile**: Personal Profile Digital Visiting Card feature with `/u/{slug}` public pages, QR code, vCard download, social media integration, embedded media (Spotify, TikTok), AI profile assistant, brand themes
-- **034-webhooks-service**: New webhooks microservice for event-driven integration, HMAC signing, exponential backoff retries, circuit breaker, dead letter queue, event catalog
-- **035-workspace-settings**: Per-workspace settings system for AI configuration, security policies, notification preferences, privacy controls, scheduled deletion
-- **036-seo-integration**: Dynamic sitemap generation, Search Console integration, per-workspace indexing controls, JSON-LD schema markup
-- **032-gallery-performance**: Sub-second gallery loading with LQIP blur placeholders, extended signed URL TTL (4hr), immutable cache headers, Service Worker (Workbox), prefetching, denormalized stats, batch operations, CDN edge decryption architecture
-- **026-traefik-keda**: Traefik v3 API Gateway replaces Nginx Ingress, KEDA autoscaling with Prometheus metrics, Grafana dashboards for traffic monitoring
-- **025-pgvectorscale**: Enabled pgvectorscale extension for enhanced vector search (StreamingDiskANN indexes), switched to timescale/timescaledb-ha Docker image
-- **022-shared-packages**: Implemented shared packages infrastructure with 4 npm packages (`@rawdrive/shared-types`, `@rawdrive/shared-constants`, `@rawdrive/shared-validation`, `@rawdrive/shared-utils`), TypeScript-to-Python type generation, pnpm workspaces
-- **023-enhanced-smart-curate**: Added CLIP embeddings for semantic image search, Gemini Vision API integration for AI-powered photo analysis
-
-## Development Tips
-
-### Working with Microservices
-
-1. **Always use shared database** - All services connect to same PostgreSQL instance
-2. **Validate JWT tokens** - Use shared `JWT_SECRET` and validate in middleware
-3. **Include workspace_id** - Every query must filter by `workspace_id`
-4. **Use service templates** - Follow existing service structure (gallery-service is reference)
-5. **Add health checks** - `/health` and `/ready` endpoints required
-6. **Expose metrics** - Prometheus `/metrics` endpoint for monitoring
-
-### Adding New Features
-
-1. **Check shared packages** - Reuse types, constants, validation from shared packages
-2. **Follow file structure** - Place files in correct directories (see File Structure Rules)
-3. **Write tests** - Unit tests (80%+ coverage), integration tests, E2E tests
-4. **Update documentation** - Add to `docs/Features/` and update this file
-5. **Create migration** - Database changes require Alembic migration
-6. **Add to skills** - Document patterns in `.claude/skills/` if reusable
-
-### Debugging
-
-```bash
-# View service logs
-docker compose -f infrastructure/docker/docker-compose.yml logs -f [service]
-
-# Check Traefik routing
-curl http://localhost:8080/api/rawhttp  # Traefik dashboard
-
-# View Prometheus metrics
-curl http://localhost:9090/metrics
-
-# Access Grafana
-open http://localhost:3001  # admin / admin
-```
-
-## Contact & Support
-
-- **GitHub Issues**: Report bugs and request features
-- **Documentation**: Check `docs/` directory first
-- **Skills**: Use Claude Code skills for guided development
-- **Runbooks**: Operational guides in `docs/runbooks/`
+- 027-gallery-feature-completion: Added passlib (bcrypt) for access code hashing, Redis quota tracking, WCAG 2.1 AAA CSS variables
+- 026-album-proofing: Added Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, reportlab (PDF)

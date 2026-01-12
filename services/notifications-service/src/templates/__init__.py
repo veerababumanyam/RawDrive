@@ -80,6 +80,15 @@ from src.templates.invitation import (
     list_invitation_templates,
 )
 
+from src.templates.album import (
+    ALBUM_EMAIL_STYLES,
+    ALBUM_TEMPLATES,
+    AlbumTemplate,
+    get_album_template,
+    get_template_for_album_event,
+    list_album_templates,
+)
+
 __all__ = [
     # Gallery templates
     "GalleryTemplate",
@@ -138,4 +147,11 @@ __all__ = [
     "get_invitation_transactional_templates",
     "get_invitee_templates",
     "get_inviter_templates",
+    # Album templates (026-album-proofing)
+    "AlbumTemplate",
+    "ALBUM_TEMPLATES",
+    "ALBUM_EMAIL_STYLES",
+    "get_album_template",
+    "get_template_for_album_event",
+    "list_album_templates",
 ]

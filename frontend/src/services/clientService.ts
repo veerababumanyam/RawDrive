@@ -105,9 +105,13 @@ export class ClientService {
     params: ClientListParams = {}
   ): Promise<ClientListResponse> {
     const query = buildQueryString(params);
-    const response = await apiClient.get<ClientListResponse>(
-      `${this.getBaseUrl(workspaceId)}${query}`
-    );
+    const url = `${this.getBaseUrl(workspaceId)}${query}`;
+
+
+
+    const response = await apiClient.get<ClientListResponse>(url);
+
+
 
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch clients');
@@ -499,15 +503,40 @@ export class ClientService {
     params: ActivityListParams = {}
   ): Promise<ClientActivityListResponse> {
     const query = buildQueryString(params);
-    const response = await apiClient.get<ClientActivityListResponse>(
-      `${this.getBaseUrl(workspaceId)}/${clientId}/activities${query}`
-    );
+    const url = `${this.getBaseUrl(workspaceId)}/${clientId}/activities${query}`;
+
+
+
+    const response = await apiClient.get<ClientActivityListResponse>(url);
+
+
 
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch activities');
     }
 
-    return response.data!;
+    // Normalize response structure: API returns {activities, total, page, limit}
+    // but TypeScript expects {activities, meta: {total, page, limit, total_pages}}
+    const data = response.data!;
+    if (data && !('meta' in data) && ('total' in data || 'page' in data || 'limit' in data)) {
+      const normalized: ClientActivityListResponse = {
+        activities: (data as any).activities || [],
+        meta: {
+          total: (data as any).total ?? 0,
+          page: (data as any).page ?? 1,
+          limit: (data as any).limit ?? 20,
+          total_pages: Math.ceil(((data as any).total ?? 0) / ((data as any).limit ?? 20)),
+        },
+      };
+
+
+
+      return normalized;
+    }
+
+
+
+    return data;
   }
 
   /**
@@ -518,10 +547,13 @@ export class ClientService {
     clientId: string,
     data: RecordActivityRequest
   ): Promise<ActivityCreateResponse> {
-    const response = await apiClient.post<ActivityCreateResponse>(
-      `${this.getBaseUrl(workspaceId)}/${clientId}/activities`,
-      data
-    );
+    const url = `${this.getBaseUrl(workspaceId)}/${clientId}/activities`;
+
+
+
+    const response = await apiClient.post<ActivityCreateResponse>(url, data);
+
+
 
     if (response.error) {
       throw new Error(response.error.message || 'Failed to record activity');
@@ -581,15 +613,40 @@ export class ClientService {
     params: CommunicationListParams = {}
   ): Promise<ClientCommunicationListResponse> {
     const query = buildQueryString(params);
-    const response = await apiClient.get<ClientCommunicationListResponse>(
-      `${this.getBaseUrl(workspaceId)}/${clientId}/communications${query}`
-    );
+    const url = `${this.getBaseUrl(workspaceId)}/${clientId}/communications${query}`;
+
+
+
+    const response = await apiClient.get<ClientCommunicationListResponse>(url);
+
+
 
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch communications');
     }
 
-    return response.data!;
+    // Normalize response structure: API returns {communications, total, page, limit}
+    // but TypeScript expects {communications, meta: {total, page, limit, total_pages}}
+    const data = response.data!;
+    if (data && !('meta' in data) && ('total' in data || 'page' in data || 'limit' in data)) {
+      const normalized: ClientCommunicationListResponse = {
+        communications: (data as any).communications || [],
+        meta: {
+          total: (data as any).total ?? 0,
+          page: (data as any).page ?? 1,
+          limit: (data as any).limit ?? 20,
+          total_pages: Math.ceil(((data as any).total ?? 0) / ((data as any).limit ?? 20)),
+        },
+      };
+
+
+
+      return normalized;
+    }
+
+
+
+    return data;
   }
 
   /**
@@ -600,10 +657,13 @@ export class ClientService {
     clientId: string,
     data: LogCommunicationRequest
   ): Promise<CommunicationCreateResponse> {
-    const response = await apiClient.post<CommunicationCreateResponse>(
-      `${this.getBaseUrl(workspaceId)}/${clientId}/communications`,
-      data
-    );
+    const url = `${this.getBaseUrl(workspaceId)}/${clientId}/communications`;
+
+
+
+    const response = await apiClient.post<CommunicationCreateResponse>(url, data);
+
+
 
     if (response.error) {
       throw new Error(response.error.message || 'Failed to log communication');
@@ -982,7 +1042,8 @@ export class ClientService {
     params: AnalyticsParams = {}
   ): Promise<ClientAnalyticsResponse> {
     const query = buildQueryString(params);
-    const response = await apiClient.get<ClientAnalyticsResponse>(
+    // Cast to any because backend returns WorkspaceAnalyticsSummary which differs from ClientAnalyticsResponse
+    const response = await apiClient.get<any>(
       `${this.getBaseUrl(workspaceId)}/analytics${query}`
     );
 
@@ -990,7 +1051,31 @@ export class ClientService {
       throw new Error(response.error.message || 'Failed to fetch analytics');
     }
 
-    return response.data!;
+    const rawData = response.data;
+
+    // Adapt backend response (WorkspaceAnalyticsSummary) to frontend expected structure (ClientAnalyticsResponse)
+    return {
+      summary: {
+        total_clients: rawData.total_clients || 0,
+        active_clients: rawData.active_clients || 0,
+        inactive_clients: rawData.inactive_count || 0,
+        new_clients_period: rawData.new_clients || 0,
+        growth_rate_percent: 0, // Not calculated by backend yet
+        clients_with_galleries: 0, // Not available in current backend response
+        recently_active: rawData.active_count || 0
+      },
+      clients_by_status: {
+        active: rawData.active_count || 0,
+        at_risk: rawData.at_risk_count || 0,
+        inactive: rawData.inactive_count || 0
+      },
+      monthly_trend: [], // Time series not correctly returned by backend yet
+      period: {
+        start: rawData.time_range?.start_date,
+        end: rawData.time_range?.end_date,
+        days: params.days
+      }
+    };
   }
 
   /**

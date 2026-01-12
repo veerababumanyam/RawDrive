@@ -47,6 +47,22 @@ export default defineConfig({
               },
             },
           },
+          // Network-first for public gallery API - enables offline viewing
+          {
+            urlPattern: /\/api\/v1\/public\/galleries\/.*/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'rawdrive-public-gallery-api',
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24, // 24 hours
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
           // Network-first for auth/user data
           {
             urlPattern: /\/api\/v1\/(auth|users|workspaces\/[^/]+$)/,
@@ -63,6 +79,9 @@ export default defineConfig({
         ],
         // Don't precache - just runtime cache
         globPatterns: [],
+        // Offline fallback for navigation requests
+        navigateFallback: '/offline.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/webhooks\//],
       },
       manifest: {
         name: 'RawDrive',
@@ -73,14 +92,22 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: '/icons/icon-192.png',
+            src: '/android-chrome-192x192.png',
             sizes: '192x192',
             type: 'image/png',
+            purpose: 'any',
           },
           {
-            src: '/icons/icon-512.png',
+            src: '/android-chrome-512x512.png',
             sizes: '512x512',
             type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/apple-touch-icon.png',
+            sizes: '180x180',
+            type: 'image/png',
+            purpose: 'any',
           },
         ],
       },
@@ -90,6 +117,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    // Ensure React is properly deduplicated and available to all dependencies
+    dedupe: ['react', 'react-dom'],
   },
   server: {
     port: 5173,
@@ -125,11 +154,13 @@ export default defineConfig({
          */
         manualChunks(id) {
           // Core React vendor libraries - rarely change, cache well
+          // Include lucide-react here since it depends on React and needs React.forwardRef
           if (id.includes('node_modules/react/') ||
               id.includes('node_modules/react-dom/') ||
               id.includes('node_modules/react-router-dom/') ||
               id.includes('node_modules/react-router/') ||
-              id.includes('node_modules/@remix-run/')) {
+              id.includes('node_modules/@remix-run/') ||
+              id.includes('node_modules/lucide-react/')) {
             return 'react-vendor';
           }
 
@@ -147,11 +178,6 @@ export default defineConfig({
           if (id.includes('node_modules/@radix-ui/') ||
               id.includes('node_modules/@headlessui/')) {
             return 'ui-vendor';
-          }
-
-          // Icons - Lucide icons can be large
-          if (id.includes('node_modules/lucide-react/')) {
-            return 'icons-vendor';
           }
 
           // Internationalization
@@ -279,6 +305,12 @@ export default defineConfig({
     exclude: [
       'face-api.js',
     ],
+    // Ensure React is available to lucide-react during pre-bundling
+    esbuildOptions: {
+      define: {
+        global: 'globalThis',
+      },
+    },
   },
   test: {
     globals: true,

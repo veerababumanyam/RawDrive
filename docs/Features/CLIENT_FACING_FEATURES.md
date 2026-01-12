@@ -18,7 +18,7 @@ The client-facing features serve to:
 - **Secure Access**: Protect galleries with passwords, access codes, and expiration dates
 - **Seamless Sharing**: Provide multiple sharing methods (links, QR codes, social media)
 - **Print Integration**: Allow clients to view and approve print album designs
-- **Monetization**: Enable downloads and print purchases directly from galleries
+- **Progressive Web Apps**: Enable galleries to be installed as PWA on client devices
 - **FindMe**: Face Identifications to sort photos
 - **WACG 2.1 AA Standards**: Support standards for visibility, Dark/Light them (Auto Adopt to client theme), Keyboard Navigations 
 
@@ -1254,9 +1254,59 @@ Optimized for touch devices.
 
 ---
 
-## 16. User Flows
+## 16. Progressive Web App (PWA)
 
-### 16.1 First-Time Client Flow
+Deliver a native app-like experience directly from the browser without requiring app store downloads.
+
+### 16.1 Installability
+
+Seamless installation process allowing clients to "keep" their gallery.
+
+**Features:**
+- **Add to Home Screen**: Prompts user to install the app with custom install prompts
+- **Standalone Mode**: Runs in its own window without browser chrome (URL bar, navigation keys)
+- **Custom Icons**: High-quality branding (Studio Logo) on user's home screen
+- **Splash Screen**: Branded launch experience with studio logo and colors
+- **Cross-Platform**: Works on iOS, Android, Windows, and macOS
+
+### 16.2 Offline Capabilities
+
+Robust offline support ensures access even with poor or no internet.
+
+**Features:**
+- **Service Worker Caching**: Smart caching of app shell, fonts, and visited low-res photos
+- **Offline Browsing**: View previously loaded galleries without connection
+- **Background Sync**: Queues user actions (favorites, comments) to sync automatically when online returns
+- **Network Resilience**: Graceful degradation on slow networks (2G/3G)
+
+### 16.3 App-Like Experience
+
+Optimized interaction design that mimics native applications.
+
+**Features:**
+- **Smooth Animations**: Native-feeling transitions between views (Shared Element Transitions)
+- **Gestures**: Swipe to navigate, pinch to zoom, pull to refresh
+- **Haptic Feedback**: Subtle vibration on interactions (favorites, selection) where supported
+- **Deep Linking**: Direct access to specific photos or sub-galleries via URL
+- **Share Target**: Ability to receive shared content from other apps (optional)
+- **Wake Lock**: Prevents screen from sleeping during slideshows
+
+### 16.4 Push Notifications
+
+Re-engage clients with timely updates directly to their device.
+
+**Capabilities:**
+- **Gallery Updates**: "New photos added to your gallery"
+- **Status Changes**: "Your high-res download is ready"
+- **Social Interactions**: "Photographer replied to your comment"
+- **Marketing**: "Your gallery expires in 3 days"
+- **Selection Reminders**: "Don't forget to submit your album picks"
+
+---
+
+## 17. User Flows
+
+### 17.1 First-Time Client Flow
 
 1. Client receives email with gallery link
 2. Clicks "View your photos"
@@ -1269,7 +1319,7 @@ Optimized for touch devices.
 9. Shares gallery link on WhatsApp
 10. Downloads digital files (if enabled)
 
-### 16.2 Mobile Client Flow
+### 17.2 Mobile Client Flow
 
 1. Client taps link in WhatsApp
 2. Gallery opens in mobile browser
@@ -1282,7 +1332,7 @@ Optimized for touch devices.
 
 ---
 
-## 17. Success Metrics
+## 18. Success Metrics
 
 Clients will be satisfied when:
 
@@ -1299,28 +1349,30 @@ Clients will be satisfied when:
 
 ---
 
-## 18. Feature Comparison Matrix
+## 19. Feature Comparison Matrix
 
 | Feature | Status | Priority |
 |---------|--------|----------|
 | Photo Grid | ✅ Implemented | Critical |
-| Lightbox/Fullscreen View | ❌ Missing | Critical |
+| Lightbox/Fullscreen View | ✅ Implemented | Critical |
 | Favorites System | ✅ Implemented | Critical |
 | Selections/Picks | ✅ Implemented | Critical |
-| Collections/Folders | ❌ Missing | Critical |
-| Download (Single) | ❌ Missing | Critical |
-| Download (Bulk/ZIP) | ❌ Missing | Critical |
-| Social Sharing | ⚠️ Partial | Critical |
-| Mobile Swipe Navigation | ❌ Missing | Critical |
+| Collections/Folders | ✅ Implemented | Critical |
+| Download (Single) | ✅ Implemented | Critical |
+| Download (Bulk/ZIP) | ✅ Implemented | Critical |
+| Social Sharing | ✅ Implemented | Critical |
+| Mobile Swipe Navigation | ✅ Implemented | Critical |
 | Dark Theme | ✅ Implemented | Critical |
 | Password Protection | ✅ Implemented | Critical |
-| FindMe (Face Identification) | ❌ Missing | Critical |
+| FindMe (Face Identification) | ✅ Implemented | Critical |
 | Email Registration | ✅ Implemented | High |
 | Access Codes | ✅ Implemented | High |
 | Watermarking | ✅ Implemented | High |
-| QR Code | ❌ Missing | High |
-| Comments/Feedback | ❌ Missing | High |
-| Photo Captions | ❌ Missing | High |
+| QR Code | ✅ Implemented | High |
+| PWA / Installable | ✅ Implemented | Critical |
+| Offline Support | ✅ Implemented | High |
+| Comments/Feedback | ⚠️ Partial | High |
+| Photo Captions | ✅ Implemented | High |
 | Ratings (Star System) | ✅ Implemented | High |
 | Slideshow | ✅ Implemented | High |
 | Video Playback | ✅ Implemented | High |
@@ -1329,13 +1381,15 @@ Clients will be satisfied when:
 | Album Customization | ⚠️ Partial | High |
 | Activity Tracking | ✅ Implemented | Medium |
 | Notifications | ✅ Implemented | Medium |
-| WCAG 2.1 AA Compliance | ⚠️ Partial | Medium |
+| WCAG 2.1 AA Compliance | ✅ Implemented | Medium |
 | Multi-Language Support | ⚠️ Partial | Medium |
 | Deep Zoom | ✅ Implemented | Medium |
 | Virtual Scrolling | ✅ Implemented | Medium |
 | Image Optimization | ✅ Implemented | Medium |
 | Responsive Design | ✅ Implemented | Medium |
-| Touch Interactions | ⚠️ Partial | Medium |
+| Touch Interactions | ✅ Implemented | Medium |
+| Emotion-Based Filtering | ✅ Implemented | Medium |
+| Keyboard Shortcuts | ✅ Implemented | Medium |
 
 ---
 

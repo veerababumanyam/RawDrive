@@ -167,7 +167,18 @@ async def create_client(
             },
         )
 
-        return ClientResponse(**client)
+        # Fetch full client with computed fields to match get_client response structure
+        full_client = await service.get_client(str(workspace_id), str(client["client_id"]))
+        if not full_client:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=ErrorResponse(
+                    error="CLIENT_FETCH_FAILED",
+                    message="Failed to fetch created client",
+                ).model_dump(),
+            )
+
+        return ClientResponse(**full_client)
 
     except ValueError as e:
         raise HTTPException(
@@ -178,18 +189,22 @@ async def create_client(
             ).model_dump(),
         )
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
         logger.error(
             "Client creation failed",
             extra={
                 "workspace_id": str(workspace_id),
                 "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": error_trace,
             },
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=ErrorResponse(
                 error="CLIENT_CREATION_FAILED",
-                message="Failed to create client",
+                message=f"Failed to create client: {str(e)}",
             ).model_dump(),
         )
 
@@ -318,7 +333,18 @@ async def update_client(
             },
         )
 
-        return ClientResponse(**client)
+        # Fetch full client with computed fields to match get_client response structure
+        full_client = await service.get_client(str(workspace_id), str(client_id))
+        if not full_client:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=ErrorResponse(
+                    error="CLIENT_FETCH_FAILED",
+                    message="Failed to fetch updated client",
+                ).model_dump(),
+            )
+
+        return ClientResponse(**full_client)
 
     except ValueError as e:
         raise HTTPException(
@@ -329,19 +355,23 @@ async def update_client(
             ).model_dump(),
         )
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
         logger.error(
             "Client update failed",
             extra={
                 "client_id": str(client_id),
                 "workspace_id": str(workspace_id),
                 "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": error_trace,
             },
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=ErrorResponse(
                 error="CLIENT_UPDATE_FAILED",
-                message="Failed to update client",
+                message=f"Failed to update client: {str(e)}",
             ).model_dump(),
         )
 

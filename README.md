@@ -171,7 +171,7 @@ graph TB
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| **Frontend** | React 19 + TypeScript + Vite + Tailwind CSS | Modern web application with design system |
+| **Frontend** | React 18.3 + TypeScript + Vite + Tailwind CSS | Modern web application with design system |
 | **Backend** | Python FastAPI + SQLAlchemy + Alembic | Core business logic and multi-tenant API |
 | **Microservices** | Python FastAPI | Specialized services (Gallery, Billing, Upload, etc.) |
 | **API Gateway** | Traefik v3 | Cloud-native routing, SSL, and rate limiting |

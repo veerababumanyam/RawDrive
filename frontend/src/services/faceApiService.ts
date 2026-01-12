@@ -185,7 +185,7 @@ class FaceApiService {
         if (options?.page) params.set('page', String(options.page));
 
         const response = await apiClient.get<{ data: FaceGroupWithGalleryStats[]; meta: { total: number } }>(
-            `${this.baseUrl}/galleries/${galleryId}/face-groups?${params}`,
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/gallery/${galleryId}?${params}`,
             { headers: { 'X-Workspace-ID': workspaceId } }
         );
         const result = extractData(response);
@@ -577,9 +577,9 @@ class FaceApiService {
     async scanGalleryFaces(
         workspaceId: string,
         galleryId: string
-    ): Promise<{ 
-        jobs_queued: number; 
-        already_processed: number; 
+    ): Promise<{
+        jobs_queued: number;
+        already_processed: number;
         pending?: number;
         total_photos?: number;
         message: string;

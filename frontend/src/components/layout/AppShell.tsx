@@ -274,7 +274,7 @@ export const AppShellSidebar: React.FC<AppShellSidebarProps> = ({
           transition-all duration-300 ease-spring
 
           /* Mobile: Fixed overlay starting below header */
-          fixed ${position === 'left' ? 'left-0' : 'right-0'} bottom-0 z-50
+          fixed ${position === 'left' ? 'left-0' : 'right-0'} bottom-0 top-16 z-50
           ${mobileMenuOpen ? 'translate-x-0 shadow-2xl' : position === 'left' ? '-translate-x-full' : 'translate-x-full'}
 
           /* Desktop: Static in flex layout, starts from top */

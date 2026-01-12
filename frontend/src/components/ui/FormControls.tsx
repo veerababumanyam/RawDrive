@@ -1,5 +1,5 @@
 import React, { forwardRef, useId, useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Check, X } from 'lucide-react';
 
 /* =============================================================================
    Checkbox Component
@@ -245,16 +245,17 @@ export interface ToggleProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
 }
 
 const toggleSizeStyles = {
-  sm: { track: 'w-8 h-4', thumb: 'w-3 h-3', translate: 'translate-x-4' },
-  md: { track: 'w-11 h-6', thumb: 'w-5 h-5', translate: 'translate-x-5' },
-  lg: { track: 'w-14 h-7', thumb: 'w-6 h-6', translate: 'translate-x-7' },
+  sm: { track: 'w-8 h-4', thumb: 'w-3 h-3', translateChecked: 'translate-x-4', translateUnchecked: 'translate-x-0', iconSize: 10 },
+  md: { track: 'w-11 h-6', thumb: 'w-5 h-5', translateChecked: 'translate-x-5', translateUnchecked: 'translate-x-0', iconSize: 12 },
+  lg: { track: 'w-14 h-7', thumb: 'w-6 h-6', translateChecked: 'translate-x-7', translateUnchecked: 'translate-x-0', iconSize: 14 },
 };
 
 export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
-  ({ label, description, size = 'md', labelPosition = 'right', className = '', id, disabled, ...props }, ref) => {
+  ({ label, description, size = 'md', labelPosition = 'right', className = '', id, disabled, checked, ...props }, ref) => {
     const generatedId = useId();
     const inputId = id || generatedId;
     const styles = toggleSizeStyles[size];
+    const isChecked = checked ?? false;
 
     // The toggle switch wrapped in a label so clicking anywhere on it triggers the input
     const toggle = (
@@ -267,6 +268,7 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
           type="checkbox"
           id={inputId}
           disabled={disabled}
+          checked={checked}
           className="peer sr-only"
           role="switch"
           {...props}
@@ -274,10 +276,10 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
         <span
           className={`
             ${styles.track}
-            bg-neutral-300 dark:bg-neutral-600
+            bg-border
             rounded-full
             pointer-events-none
-            transition-colors duration-200 ease-out
+            transition-colors duration-200 ease-in-out
             peer-checked:bg-primary
             peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2
             peer-disabled:opacity-50
@@ -289,12 +291,30 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
             absolute top-0.5 left-0.5
             bg-white
             rounded-full
-            shadow-sm
+            shadow
             pointer-events-none
-            transition-transform duration-200 ease-out
-            peer-checked:${styles.translate}
+            transition-transform duration-200 ease-in-out
+            ${isChecked ? styles.translateChecked : styles.translateUnchecked}
+            flex items-center justify-center
           `}
-        />
+        >
+          <span
+            className={`
+              absolute inset-0 flex items-center justify-center transition-opacity duration-200
+              ${isChecked ? 'opacity-0' : 'opacity-100'}
+            `}
+          >
+            <X size={styles.iconSize} className="text-text-tertiary" />
+          </span>
+          <span
+            className={`
+              absolute inset-0 flex items-center justify-center transition-opacity duration-200
+              ${isChecked ? 'opacity-100' : 'opacity-0'}
+            `}
+          >
+            <Check size={styles.iconSize} className="text-primary" />
+          </span>
+        </span>
       </label>
     );
 

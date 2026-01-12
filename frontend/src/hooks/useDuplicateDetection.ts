@@ -172,18 +172,19 @@ export function useDuplicateDetection(workspaceId: string) {
   });
 
   // -------------------------------------------------------------------------
-  // Get Duplicate Groups
+  // Get Duplicate Groups Query Options
+  // Returns query options to be used with useQuery at component level
   // -------------------------------------------------------------------------
 
-  const useDuplicateGroups = useCallback((
+  const getDuplicateGroupsQueryOptions = useCallback((
     entityType?: 'photo' | 'client',
     status?: 'pending' | 'confirmed' | 'dismissed',
     page: number = 1,
     limit: number = 20
   ) => {
-    return useQuery<DuplicateGroupListResponse, Error>({
-      queryKey: ['duplicateGroups', workspaceId, entityType, status, page, limit],
-      queryFn: async () => {
+    return {
+      queryKey: ['duplicateGroups', workspaceId, entityType, status, page, limit] as const,
+      queryFn: async (): Promise<DuplicateGroupListResponse> => {
         const params = new URLSearchParams();
         if (entityType) params.append('entity_type', entityType);
         if (status) params.append('status', status);
@@ -198,7 +199,7 @@ export function useDuplicateDetection(workspaceId: string) {
         }
         return response.data!;
       },
-    });
+    };
   }, [workspaceId]);
 
   // -------------------------------------------------------------------------
@@ -266,8 +267,8 @@ export function useDuplicateDetection(workspaceId: string) {
     clientDuplicatesError: detectClientDuplicates.error,
     clientDuplicatesData: detectClientDuplicates.data,
 
-    // Duplicate groups
-    useDuplicateGroups,
+    // Duplicate groups query options (use with useQuery)
+    getDuplicateGroupsQueryOptions,
 
     // Group actions
     confirmGroup: confirmDuplicateGroup.mutate,

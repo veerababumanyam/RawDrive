@@ -175,12 +175,13 @@ async def list_face_groups(
 
 
 @router.get(
-    "/galleries/{gallery_id}/face-groups",
+    "/workspaces/{workspace_id}/face-groups/gallery/{gallery_id}",
     response_model=FaceGroupGalleryStatsListResponse,
     summary="List face groups in a gallery",
     description="Returns face groups that appear in a specific gallery, with gallery-specific statistics.",
 )
 async def list_gallery_face_groups(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
@@ -190,7 +191,6 @@ async def list_gallery_face_groups(
     search: Annotated[Optional[str], Query(description="Search by person name")] = None,
 ):
     """List face groups for a gallery."""
-    workspace_id = workspace_access[1]
     offset = (page - 1) * limit
 
     # 1. Get groups with stats

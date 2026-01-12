@@ -11,8 +11,9 @@ from app.api.v1.health import router as health_router
 from app.api.v1.roles import router as roles_router
 from app.api.v1.admin import router as admin_router
 from app.api.v1.tasks import router as tasks_router
+from app.api.v1.config import router as config_router
 # from app.api.v1.galleries import router as galleries_router  # Moved to gallery-service
-# from app.api.v1.gallery_assets import router as gallery_assets_router  # Moved to gallery-service
+from app.api.v1.gallery_assets import router as gallery_assets_router  # Re-enabled for asset operations
 from app.api.v1.media import router as media_router
 from app.api.v1.uploads import router as uploads_router
 from app.api.v1.websocket import router as websocket_router
@@ -29,7 +30,7 @@ from app.api.v1.company_profile import public_router as public_profile_router
 from app.api.v1.personal_profile import router as personal_profile_router
 from app.api.v1.personal_profile import public_router as public_personal_profile_router
 from app.api.v1.personal_profile_ai import router as personal_profile_ai_router
-# from app.api.v1.public_galleries import router as public_galleries_router  # Moved to gallery-service
+from app.api.v1.public_galleries import router as public_galleries_router  # Re-enabled for public access
 from app.api.v1.profile_editor import router as profile_editor_router
 from app.api.v1.profile_editor import public_router as themes_router
 from app.api.v1.faces import router as faces_router
@@ -53,12 +54,14 @@ from app.api.v1.favorites_analytics import router as favorites_analytics_router
 from app.api.v1.i18n import router as i18n_router
 from app.api.v1.invitations import router as invitations_router
 # Temporarily commented out until all invitation types are generated
-from app.api.v1.digital_invitations import router as digital_invitations_router
-from app.api.v1.public_invitations import router as public_invitations_router
+# Moved to invitations-service microservice:
+# from app.api.v1.digital_invitations import router as digital_invitations_router
+# from app.api.v1.public_invitations import router as public_invitations_router
 
 router = APIRouter()
 router.include_router(auth_router)
 router.include_router(version_router)
+router.include_router(config_router)  # Central config service for microservices
 router.include_router(users_router)
 router.include_router(workspaces_router)
 router.include_router(billing_router)
@@ -71,11 +74,12 @@ router.include_router(tasks_router)
 #     prefix="/api/v1/workspaces/{workspace_id}/galleries",
 #     tags=["galleries"],
 # )
-# router.include_router(
-#     gallery_assets_router,
-#     prefix="/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/assets",
-#     tags=["gallery-assets"],
-# )
+# Re-enabled gallery_assets_router for workspace-scoped asset operations
+router.include_router(
+    gallery_assets_router,
+    prefix="/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/assets",
+    tags=["gallery-assets"],
+)
 # Media router is intentionally mounted at two prefixes (route aliasing):
 # 1. /api/v1/media - Public media streaming (thumbnails, previews)
 # 2. /api/v1/workspaces/{workspace_id}/assets - Workspace-scoped asset operations
@@ -158,11 +162,12 @@ router.include_router(
     prefix="/api/v1/workspaces/{workspace_id}/personal-profiles",
     tags=["personal-profile-ai"],
 )
-# router.include_router(  # Moved to gallery-service
-#     public_galleries_router,
-#     prefix="/api/v1/public/galleries",
-#     tags=["public-galleries"],
-# )
+# Re-enabled public_galleries_router for password/PIN verification and public access
+router.include_router(
+    public_galleries_router,
+    prefix="/api/v1/public/galleries",
+    tags=["public-galleries"],
+)
 router.include_router(
     profile_editor_router,
     prefix="/api/v1/workspaces/{workspace_id}/profile-editor",
@@ -284,11 +289,12 @@ router.include_router(i18n_router)
 # Includes: GET /invitations/{token} (preview), POST /invitations/accept (accept)
 router.include_router(invitations_router)
 
-# Public Invitations routes (016-save-the-date)
+# Public Invitations routes - MOVED TO invitations-service microservice
 # Public endpoints for guest access to invitations and RSVP submission
-# Temporarily commented out until all invitation types are generated
+from app.api.v1.public_invitations_proxy import router as public_invitations_proxy_router
+
 router.include_router(
-    public_invitations_router,
+    public_invitations_proxy_router,
     prefix="/api/v1/public/invitations",
     tags=["public-invitations"],
 )
@@ -345,53 +351,22 @@ from app.api.v1.event_analytics_views import router as event_analytics_views_rou
 #     tags=["event-analytics-views"],  # Temporarily disabled
 # )  # Temporarily disabled
 
-# Invitation Templates routes (016-save-the-date)
-# CRUD endpoints for managing invitation templates
-# from app.api.v1.invitation_templates import router as invitation_templates_router  # Temporarily disabled
-# router.include_router(  # Temporarily disabled
-#     invitation_templates_router,  # Temporarily disabled
-#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",  # Temporarily disabled
-#     tags=["invitation-templates"],  # Temporarily disabled
-# )  # Temporarily disabled
+# Invitations Microservice Proxy Routes
+# ALL invitation-related routes are now proxied to the invitations-service microservice
+# This includes: CRUD, templates, drafts, exports, media, fonts, sub-events, AI integrations
+from app.api.v1.invitations_proxy_router import router as invitations_proxy_router
 
-# Invitations Microservice Proxy Routes (018-invitations-production-readiness)
-# Proxies requests to the dedicated invitations microservice for production-ready features:
-# - Guest management with rate limiting
-# - RSVP with HMAC-signed edit tokens
-# - Analytics with Redis caching
-# - Bulk invite with Celery workers
-from app.api.v1.invitations_microservice_proxy import router as invitations_microservice_proxy_router
-# router.include_router(  # Temporarily disabled
-#     invitations_microservice_proxy_router,  # Temporarily disabled
-#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/{invitation_id}/microservice",  # Temporarily disabled
-#     tags=["invitations-microservice"],  # Temporarily disabled
-# )  # Temporarily disabled
-# Also add public RSVP proxy routes
-# router.include_router(  # Temporarily disabled
-#     invitations_microservice_proxy_router,  # Temporarily disabled
-#     prefix="/api/v1/invitations-microservice",  # Temporarily disabled
-#     tags=["invitations-microservice-public"],  # Temporarily disabled
-# )  # Temporarily disabled
-
-# Invitation Custom Fonts routes (019-invitation-indian-languages)
-# Endpoints for uploading and managing custom fonts for invitations
-# from app.api.v1.invitation_fonts import router as invitation_fonts_router  # Temporarily disabled
-# router.include_router(  # Temporarily disabled
-#     invitation_fonts_router,  # Temporarily disabled
-#     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations/fonts",  # Temporarily disabled
-#     tags=["invitation-fonts"],  # Temporarily disabled
-# )  # Temporarily disabled
-
-# Digital Invitations routes (016-save-the-date)
-# Host endpoints for managing digital event invitations
-# NOTE: Using /digital-invitations to avoid conflict with workspace member invitations
-# in workspaces.py which uses /{workspace_id}/invitations
-# Temporarily commented out until all invitation types are generated
 router.include_router(
-    digital_invitations_router,
+    invitations_proxy_router,
     prefix="/api/v1/workspaces/{workspace_id}/digital-invitations",
-    tags=["digital-invitations"],
+    tags=["digital-invitations", "invitation-templates", "invitation-exports", "invitation-media", "invitation-fonts", "invitation-sub-events", "invitation-ai"],
 )
+
+# NOTE: The following routes have been moved to invitations-service microservice:
+# - digital_invitations_router (invitation CRUD)
+# - invitation_templates_router (template management)
+# - invitation_exports, invitation_media, invitation_fonts, invitation_sub_events, invitation_ai
+# All requests are now proxied via invitations_proxy_router above
 
 # Engagement Scoring routes (Automated Engagement Scoring System)
 # Tracks client interaction patterns and provides predictive scoring
@@ -535,5 +510,21 @@ router.include_router(
     search_console_router,
     prefix="/api/v1/workspaces/{workspace_id}",
     tags=["seo"],
+)
+
+# Album Proofing routes (026-album-proofing)
+# Album management, versioning, comments, and export rendering
+from app.api.v1.albums import router as albums_router
+from app.api.v1.public_albums import router as public_albums_router
+router.include_router(
+    albums_router,
+    prefix="/api/v1/workspaces/{workspace_id}/albums",
+    tags=["albums"],
+)
+# Public album proofing endpoints for client review and approval
+router.include_router(
+    public_albums_router,
+    prefix="/api/v1/public/albums",
+    tags=["public-albums"],
 )
 

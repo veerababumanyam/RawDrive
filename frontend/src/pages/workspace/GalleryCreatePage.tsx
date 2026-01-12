@@ -29,15 +29,9 @@ const GalleryCreatePage: React.FC = () => {
       throw new Error('Workspace not found. Please ensure you are logged in and have access to a workspace.');
     }
 
-    try {
-      const newGallery = await createGallery(data);
-      // Navigate to gallery detail page on success
-      navigate(`/workspace/galleries/${newGallery.gallery_id}`);
-    } catch (error) {
-      // Error is handled by GalleryCreateForm component
-      // Form data is preserved because we're not resetting state
-      throw error; // Re-throw so form can display error
-    }
+    const newGallery = await createGallery(data);
+    // Navigate to gallery detail page on success
+    navigate(`/workspace/galleries/${newGallery.gallery_id}`);
   };
 
   const handleCancel = () => {

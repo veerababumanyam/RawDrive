@@ -1556,8 +1556,8 @@ class ClientService:
                 )
 
                 return {
-                    "communication_id": str(record["communication_id"]),
-                    "created_at": record["created_at"].isoformat(),
+                    "communication_id": record["communication_id"],
+                    "created_at": record["created_at"],
                 }
 
     async def get_communications(

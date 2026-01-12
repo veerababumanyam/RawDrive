@@ -618,7 +618,7 @@ export class GalleryService {
     }
   }
   /**
-   * Register visitor
+   * Register visitor with optional UTM tracking parameters
    */
   async registerVisitor(
     galleryId: string,
@@ -629,6 +629,13 @@ export class GalleryService {
       phone?: string;
       address?: string;
       metadata?: Record<string, any>;
+      // UTM tracking parameters for marketing attribution
+      utm_source?: string;
+      utm_medium?: string;
+      utm_campaign?: string;
+      utm_content?: string;
+      utm_term?: string;
+      referrer?: string;
     }
   ): Promise<{ visitor_id: string; email: string }> {
     const endpoint = `/api/v1/public/galleries/${galleryId}/register`;
@@ -661,6 +668,33 @@ export class GalleryService {
       throw new Error(response.error.message || 'Failed to verify password');
     }
     return response.data!.valid;
+  }
+
+  /**
+   * Request gallery password reset (US9)
+   */
+  async requestPasswordReset(galleryId: string, email: string): Promise<{ message: string }> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}/password/forgot`;
+    const response = await apiClient.post<{ message: string }>(endpoint, { email });
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to request password reset');
+    }
+    return response.data!;
+  }
+
+  /**
+   * Reset gallery password with token (US9)
+   */
+  async resetPassword(galleryId: string, token: string, newPassword: string): Promise<{ message: string }> {
+    const endpoint = `/api/v1/public/galleries/${galleryId}/password/reset`;
+    const response = await apiClient.post<{ message: string }>(endpoint, {
+      token,
+      new_password: newPassword,
+    });
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to reset password');
+    }
+    return response.data!;
   }
 
   async addAssetsToGallery(
@@ -757,15 +791,24 @@ export class GalleryService {
   /**
    * Get public gallery assets with optional filtering
    * Supports workflow tabs: All, Favorites, Selections
+   * Also supports emotion-based filtering
    */
   async getPublicGalleryAssetsFiltered(
     galleryId: string,
     filterType?: 'favorites' | 'selections' | null,
-    subGalleryId?: string
+    subGalleryId?: string,
+    options?: {
+      emotion?: string | null;
+      minEmotionConfidence?: number;
+    }
   ): Promise<PublicGalleryAsset[]> {
     const params = new URLSearchParams();
     if (filterType) params.append('filter_type', filterType);
     if (subGalleryId) params.append('sub_gallery_id', subGalleryId);
+    if (options?.emotion) params.append('emotion', options.emotion);
+    if (options?.minEmotionConfidence !== undefined) {
+      params.append('min_emotion_confidence', options.minEmotionConfidence.toString());
+    }
 
     const query = params.toString();
     const endpoint = `/api/v1/public/galleries/${galleryId}/assets/filtered${query ? `?${query}` : ''}`;
@@ -805,7 +848,7 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string
   ): Promise<Record<string, unknown>> {
-    const endpoint = `/api/v1/galleries/${galleryId}/favorites/analytics/summary`;
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/summary`;
     const response = await apiClient.get<Record<string, unknown>>(endpoint, {
       headers: { 'X-Workspace-ID': workspaceId }
     });
@@ -844,7 +887,7 @@ export class GalleryService {
     if (options?.limit) params.append('limit', String(options.limit));
 
     const query = params.toString();
-    const endpoint = `/api/v1/galleries/${galleryId}/favorites/analytics${query ? `?${query}` : ''}`;
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics${query ? `?${query}` : ''}`;
     const response = await apiClient.get<{
       data: Array<Record<string, unknown>>;
       meta: {
@@ -903,7 +946,7 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string
   ): Promise<void> {
-    const endpoint = `/api/v1/galleries/${galleryId}/favorites/analytics/refresh`;
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/refresh`;
     const response = await apiClient.post(endpoint, undefined, {
       headers: { 'X-Workspace-ID': workspaceId }
     });
@@ -919,7 +962,7 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string
   ): Promise<string> {
-    const endpoint = `/api/v1/galleries/${galleryId}/favorites/analytics/export`;
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/analytics/export`;
     const response = await apiClient.get<string>(endpoint, {
       headers: { 'X-Workspace-ID': workspaceId }
     });
@@ -941,7 +984,7 @@ export class GalleryService {
     workspaceId: string,
     galleryId: string
   ): Promise<Record<string, unknown>> {
-    const endpoint = `/api/v1/galleries/${galleryId}/favorites/settings`;
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/settings`;
     const response = await apiClient.get<Record<string, unknown>>(endpoint, {
       headers: { 'X-Workspace-ID': workspaceId }
     });
@@ -960,7 +1003,7 @@ export class GalleryService {
     galleryId: string,
     settings: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const endpoint = `/api/v1/galleries/${galleryId}/favorites/settings`;
+    const endpoint = `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/favorites/settings`;
     const response = await apiClient.patch<Record<string, unknown>>(endpoint, settings, {
       headers: { 'X-Workspace-ID': workspaceId }
     });

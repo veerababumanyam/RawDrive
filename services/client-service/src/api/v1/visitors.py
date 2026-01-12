@@ -46,7 +46,7 @@ router = APIRouter(
 async def convert_visitor_to_client(
     request: VisitorConversionRequest = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: VisitorsService = Depends(get_visitors_service),
+    service: VisitorConversionService = Depends(get_visitor_conversion_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> VisitorConversionResult:
     """
@@ -132,7 +132,7 @@ async def convert_visitor_to_client(
 async def auto_match_visitor(
     request: AutoMatchRequest = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: VisitorsService = Depends(get_visitors_service),
+    service: VisitorConversionService = Depends(get_visitor_conversion_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> AutoMatchResult:
     """
@@ -209,7 +209,7 @@ async def auto_match_visitor(
 async def bulk_convert_visitors(
     request: BulkConversionRequest = Body(...),
     workspace_id: UUID = Depends(verify_workspace_access),
-    service: VisitorsService = Depends(get_visitors_service),
+    service: VisitorConversionService = Depends(get_visitor_conversion_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> BulkConversionResult:
     """

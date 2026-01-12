@@ -5,6 +5,8 @@ CRUD endpoints for managing invitation templates.
 Feature: 016-save-the-date
 """
 
+import json
+import traceback
 from typing import Any, Optional
 from uuid import UUID
 
@@ -148,6 +150,15 @@ async def list_templates(
     Returns both system templates and workspace-specific templates.
     Supports filtering by category, language, tags, and premium status.
     """
+    # #region agent log
+    try:
+        with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+            json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "A", "location": "invitation_templates.py:144", "message": "list_templates entry", "data": {"workspace_id": str(workspace_id), "include_system": include_system, "include_system_type": type(include_system).__name__, "include_premium": include_premium, "include_premium_type": type(include_premium).__name__, "is_premium": is_premium, "is_premium_type": type(is_premium).__name__}, "timestamp": __import__("time").time() * 1000}, f, ensure_ascii=False)
+            f.write("\n")
+    except Exception:
+        pass
+    # #endregion
+    
     # Parse tags if provided
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
@@ -161,44 +172,94 @@ async def list_templates(
             effective_is_premium = False
         # include_premium=True means show all, so leave as None
 
-    result = await template_service.list_templates(
-        workspace_id=workspace_id if not include_system else None,
-        category=category,
-        subcategory=subcategory,
-        language=language,
-        tags=tag_list,
-        is_premium=effective_is_premium,
-        search=search,
-        page=page,
-        limit=limit,
-    )
+    # #region agent log
+    effective_workspace_id = workspace_id if not include_system else None
+    try:
+        with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+            json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "invitation_templates.py:162", "message": "workspace_id logic", "data": {"include_system": include_system, "original_workspace_id": str(workspace_id), "effective_workspace_id": str(effective_workspace_id) if effective_workspace_id else None, "effective_is_premium": effective_is_premium, "tag_list": tag_list}, "timestamp": __import__("time").time() * 1000}, f, ensure_ascii=False)
+            f.write("\n")
+    except Exception:
+        pass
+    # #endregion
+
+    try:
+        result = await template_service.list_templates(
+            workspace_id=effective_workspace_id,
+            category=category,
+            subcategory=subcategory,
+            language=language,
+            tags=tag_list,
+            is_premium=effective_is_premium,
+            search=search,
+            page=page,
+            limit=limit,
+        )
+    except Exception as e:
+        # #region agent log
+        try:
+            with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "invitation_templates.py:174", "message": "service.list_templates exception", "data": {"error": str(e), "error_type": type(e).__name__, "traceback": traceback.format_exc()}, "timestamp": __import__("time").time() * 1000}, f, ensure_ascii=False)
+                f.write("\n")
+        except Exception:
+            pass
+        # #endregion
+        raise
 
     templates_data, total = result
     
+    # #region agent log
+    try:
+        with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+            json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "B", "location": "invitation_templates.py:179", "message": "service.list_templates success", "data": {"templates_count": len(templates_data), "total": total, "first_template_keys": list(templates_data[0].keys()) if templates_data else []}, "timestamp": __import__("time").time() * 1000}, f, ensure_ascii=False)
+            f.write("\n")
+    except Exception:
+        pass
+    # #endregion
+    
     # Format response
-    templates = [
-        TemplateResponse(
-            template_id=str(t["template_id"]),
-            workspace_id=str(t["workspace_id"]) if t.get("workspace_id") else None,
-            name=t["name"],
-            slug=t.get("slug", ""),
-            description=t.get("description"),
-            category=t["category"],
-            subcategory=t.get("subcategory"),
-            tags=t.get("tags", []),
-            layout=t.get("layout", {}),
-            content_i18n=t.get("content_i18n", {}),
-            supported_languages=t.get("supported_languages", []),
-            is_system=t.get("workspace_id") is None,
-            is_premium=t.get("is_premium", False),
-            is_active=t.get("is_active", True),
-            thumbnail_url=t.get("thumbnail_url"),
-            preview_url=t.get("preview_image_url"), # Note: repo uses preview_image_url
-            created_at=t["created_at"].isoformat() if t.get("created_at") else None,
-            updated_at=t["updated_at"].isoformat() if t.get("updated_at") else None,
-        )
-        for t in templates_data
-    ]
+    templates = []
+    for idx, t in enumerate(templates_data):
+        try:
+            # #region agent log
+            if idx == 0:
+                try:
+                    with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                        json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "invitation_templates.py:188", "message": "before TemplateResponse construction", "data": {"template_id": str(t.get("template_id")), "template_id_type": type(t.get("template_id")).__name__, "created_at": str(t.get("created_at")), "created_at_type": type(t.get("created_at")).__name__}, "timestamp": __import__("time").time() * 1000}, f, ensure_ascii=False)
+                        f.write("\n")
+                except Exception:
+                    pass
+            # #endregion
+            template = TemplateResponse(
+                template_id=str(t["template_id"]),
+                workspace_id=str(t["workspace_id"]) if t.get("workspace_id") else None,
+                name=t["name"],
+                slug=t.get("slug", ""),
+                description=t.get("description"),
+                category=t["category"],
+                subcategory=t.get("subcategory"),
+                tags=t.get("tags", []),
+                layout=t.get("layout", {}),
+                content_i18n=t.get("content_i18n", {}),
+                supported_languages=t.get("supported_languages", []),
+                is_system=t.get("workspace_id") is None,
+                is_premium=t.get("is_premium", False),
+                is_active=t.get("is_active", True),
+                thumbnail_url=t.get("thumbnail_url"),
+                preview_url=t.get("preview_image_url"), # Note: repo uses preview_image_url
+                created_at=t["created_at"].isoformat() if t.get("created_at") else None,
+                updated_at=t["updated_at"].isoformat() if t.get("updated_at") else None,
+            )
+            templates.append(template)
+        except Exception as e:
+            # #region agent log
+            try:
+                with open(r"c:\Users\admin\Desktop\RawDrive\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    json.dump({"sessionId": "debug-session", "runId": "run1", "hypothesisId": "C", "location": "invitation_templates.py:212", "message": "TemplateResponse construction failed", "data": {"error": str(e), "error_type": type(e).__name__, "template_index": idx, "traceback": traceback.format_exc(), "template_keys": list(t.keys())}, "timestamp": __import__("time").time() * 1000}, f, ensure_ascii=False)
+                    f.write("\n")
+            except Exception:
+                pass
+            # #endregion
+            raise
 
     return TemplateListResponse(
         data=templates,

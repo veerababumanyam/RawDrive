@@ -60,5 +60,11 @@ To save time, the settings include a "Apply Studio Defaults" feature. This works
 2. Mapping those global values to the specific Gallery settings.
 3. Ensuring that every new gallery created starts with a consistent professional look without manual entry.
 
+**IMPORTANT: Gallery settings are NOT automatically synced with Google OAuth.**
+- Google OAuth is used ONLY for authentication (login/signup).
+- Gallery settings remain independent and are managed separately.
+- Studio defaults (CompanyProfile) can be applied manually via the UI, but there is no automatic syncing.
+- This ensures user privacy and prevents unintended data synchronization.
+
 ### Technical Implementation
 Unlike a monolithic JSON object, these settings are stored as individual columns in the `galleries` table (e.g., `layout_style`, `theme`, `download_policy`, `branding_profile_id`). This allows for efficient querying and indexing. When the application renders a gallery, it fetches these fields and helps the frontend constructing a `GallerySettingsContext` that drives the UI adaptability.

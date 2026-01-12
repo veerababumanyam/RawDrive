@@ -1,0 +1,242 @@
+{
+  "viewer": {
+    "title": "Album Preview",
+    "loading": "Loading album...",
+    "error": "Failed to load album",
+    "expired": "This share link has expired",
+    "albumProofViewer": "Album proof viewer",
+    "spreadViewer": "Spread viewer with zoom and pan",
+    "skipLinks": "Skip navigation",
+    "skipToViewer": "Skip to spread viewer",
+    "skipToThumbnails": "Skip to thumbnail navigation",
+    "skipToComments": "Skip to comments sidebar",
+    "currentSpread": "Viewing spread {{current}} of {{total}}",
+    "zoomLevel": "Zoom level {{level}} percent",
+    "previous": "Previous spread",
+    "next": "Next spread",
+    "spreadView": "Single spread view",
+    "flipbookView": "Flipbook view",
+    "fullscreen": "Enter fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "arrowKeys": "Navigate spreads",
+    "fullscreenKey": "Toggle fullscreen",
+    "escapeKey": "Exit fullscreen",
+    "thumbnailNavigation": "Spread thumbnail navigation",
+    "goToPage": "Go to page {{page}}",
+    "spreads": "spreads",
+    "navigation": {
+      "previous": "Previous spread",
+      "next": "Next spread",
+      "firstSpread": "Go to first spread",
+      "lastSpread": "Go to last spread",
+      "spreadNumber": "Spread {{current}} of {{total}}",
+      "jumpTo": "Jump to spread"
+    },
+    "viewMode": {
+      "single": "Single spread view",
+      "flipbook": "Flipbook view",
+      "fullscreen": "Fullscreen",
+      "exitFullscreen": "Exit fullscreen"
+    },
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "reset": "Reset view",
+    "page": "Page",
+    "spreadAlt": "Album spread page {{page}}",
+    "zoom": {
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fitToScreen": "Fit to screen",
+      "actualSize": "Actual size",
+      "zoomLevel": "{{level}}% zoom"
+    },
+    "keyboard": {
+      "hint": "Use arrow keys to navigate, Escape to exit fullscreen"
+    }
+  },
+  "comments": {
+    "title": "Comments",
+    "sidebar": "Comments and feedback",
+    "toggle": "Toggle comments panel",
+    "addComment": "Add comment",
+    "clickToPlace": "Click on the spread to place a comment",
+    "placeholder": "Write your feedback...",
+    "submitComment": "Submit comment",
+    "cancel": "Cancel",
+    "reply": "Reply",
+    "replyPlaceholder": "Write a reply...",
+    "resolve": "Mark as resolved",
+    "reopen": "Reopen",
+    "delete": "Delete comment",
+    "deleteConfirm": "Are you sure you want to delete this comment?",
+    "confirmDelete": "Are you sure you want to delete this comment?",
+    "actions": "Comment actions",
+    "yourName": "Your name",
+    "replies": "{{count}} replies",
+    "pagePosition": "Page {{page}}",
+    "pinLabel": "Comment {{id}}",
+    "count": "{{count}} comments",
+    "filter": {
+      "all": "All comments",
+      "unresolved": "Unresolved only",
+      "resolved": "Resolved"
+    },
+    "status": {
+      "open": "Open",
+      "in_progress": "In progress",
+      "resolved": "Resolved"
+    },
+    "count": {
+      "none": "No comments",
+      "one": "1 comment",
+      "other": "{{count}} comments",
+      "unresolved": "{{count}} unresolved"
+    },
+    "empty": {
+      "title": "No comments yet",
+      "description": "Click anywhere on the spread to leave feedback"
+    },
+    "author": {
+      "nameLabel": "Your name",
+      "namePlaceholder": "Enter your name",
+      "emailLabel": "Email (optional)",
+      "emailPlaceholder": "your@email.com"
+    },
+    "realtime": {
+      "newComment": "New comment added",
+      "commentResolved": "Comment resolved"
+    }
+  },
+  "approval": {
+    "title": "Approve Album",
+    "button": "Approve to Print",
+    "alreadyApproved": "Already approved",
+    "confirmTitle": "Confirm Approval",
+    "confirmMessage": "By clicking approve, you confirm that you have reviewed the album design and approve it for printing.",
+    "unresolvedWarning": "There are {{count}} unresolved comments. Are you sure you want to approve?",
+    "acknowledgeUnresolved": "I acknowledge there are unresolved comments and wish to proceed",
+    "nameLabel": "Your name",
+    "namePlaceholder": "Enter your full name",
+    "emailLabel": "Your email",
+    "emailPlaceholder": "your@email.com",
+    "approve": "Approve for Print",
+    "cancel": "Cancel",
+    "success": {
+      "title": "Album Approved",
+      "message": "Your album has been approved for printing. The photographer will be notified."
+    },
+    "badge": {
+      "pending": "Pending Approval",
+      "approved": "Approved by {{name}} on {{date}}"
+    }
+  },
+  "versions": {
+    "title": "Version History",
+    "currentVersion": "Current version",
+    "current": "Current",
+    "createSnapshot": "Create Snapshot",
+    "createNew": "Create new version",
+    "labelPlaceholder": "Version label (e.g., After round 1)",
+    "snapshotLabel": "Version label",
+    "snapshotLabelPlaceholder": "e.g., After client round 1",
+    "snapshotCreated": "Version snapshot created",
+    "compare": "Compare",
+    "compareVersions": "Compare versions",
+    "compareSelectSecond": "Select another version to compare",
+    "cancelCompare": "Cancel comparison",
+    "preview": "Preview",
+    "rollback": "Rollback",
+    "rollbackTo": "Rollback to this version",
+    "rollbackConfirm": "Are you sure you want to rollback? This will replace the current album design.",
+    "rollbackConfirmFull": "Are you sure you want to rollback to version {{version}}? This will replace the current album design.",
+    "createBackup": "Create backup of current version before rollback",
+    "rollbackSuccess": "Album rolled back to version {{version}}",
+    "create": "Create",
+    "cancel": "Cancel",
+    "untitled": "Untitled version",
+    "empty": "No versions yet",
+    "comparison": {
+      "title": "Version Comparison",
+      "versionA": "Version {{number}}",
+      "versionB": "Version {{number}}",
+      "differences": "{{count}} differences found",
+      "noDifferences": "No differences found",
+      "diffTypes": {
+        "spread_added": "Spread added",
+        "spread_removed": "Spread removed",
+        "spread_modified": "Spread modified",
+        "element_added": "Element added",
+        "element_removed": "Element removed",
+        "element_modified": "Element modified"
+      }
+    },
+    "empty": {
+      "title": "No versions yet",
+      "description": "Create a snapshot to save the current state of your album"
+    }
+  },
+  "download": {
+    "title": "Download Preview",
+    "button": "Download PDF",
+    "checking": "Checking...",
+    "generating": "Generating PDF...",
+    "generatingHint": "This may take a few minutes for large albums",
+    "generatingDescription": "This may take a few minutes for large albums",
+    "downloading": "Downloading...",
+    "ready": "Download ready",
+    "download": "Download",
+    "retry": "Retry",
+    "failed": "Download failed",
+    "timeout": "Download timed out. Please try again.",
+    "error": "Failed to generate PDF",
+    "ariaLabel": "Download album preview PDF",
+    "watermarkNote": "Preview PDF includes watermarks",
+    "estimatedTime": "Estimated time: {{seconds}} seconds"
+  },
+  "status": {
+    "draft": "Draft",
+    "proof_sent": "Proof Sent",
+    "changes_requested": "Changes Requested",
+    "approved": "Approved",
+    "exported": "Exported"
+  },
+  "send": {
+    "title": "Send Proof",
+    "button": "Send to Client",
+    "clientEmail": "Client email",
+    "clientEmailPlaceholder": "client@example.com",
+    "clientName": "Client name",
+    "clientNamePlaceholder": "John Smith",
+    "message": "Personal message",
+    "messagePlaceholder": "Please review your album design...",
+    "expiresIn": "Link expires in",
+    "days": "{{count}} days",
+    "allowDownload": "Allow PDF download",
+    "send": "Send Proof",
+    "success": {
+      "title": "Proof Sent",
+      "message": "A link has been sent to {{email}}"
+    }
+  },
+  "errors": {
+    "loadFailed": "Failed to load album",
+    "saveFailed": "Failed to save changes",
+    "commentFailed": "Failed to add comment",
+    "approveFailed": "Failed to approve album",
+    "downloadFailed": "Failed to generate download",
+    "expired": "This link has expired",
+    "notFound": "Album not found",
+    "unauthorized": "You don't have permission to view this album",
+    "networkError": "Network error. Please check your connection."
+  },
+  "accessibility": {
+    "spreadImage": "Album spread {{number}} of {{total}}",
+    "thumbnailStrip": "Spread thumbnails navigation",
+    "thumbnail": "Go to spread {{number}}",
+    "commentPin": "Comment {{number}} by {{author}}: {{preview}}",
+    "closeDialog": "Close dialog",
+    "skipToSpreads": "Skip to spreads",
+    "skipToComments": "Skip to comments",
+    "zoomControls": "Zoom controls"
+  }
+}

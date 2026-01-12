@@ -183,10 +183,10 @@ http:
       priority: 145
 
     # -------------------------------------------------------------------------
-    # Client CRM Microservice
+    # Client CRM Microservice - Fix: Use PathRegexp for correct variable matching
     # -------------------------------------------------------------------------
     client-service-router-local:
-      rule: "Host(`localhost`) && PathPrefix(`/api/v1/workspaces/{workspace_id:[0-9a-f-]+}/clients`)"
+      rule: "Host(`localhost`) && PathRegexp(`^/api/v1/workspaces/[0-9a-f-]+/clients`)"
       entryPoints:
         - web
       service: client-service
@@ -194,7 +194,7 @@ http:
         - rate-limit-api
         - security-headers-dev
         - cors-headers-dev
-      priority: 138
+      priority: 160
 
     # -------------------------------------------------------------------------
     # Notifications Microservice - Webhooks (SendGrid callbacks)
@@ -289,11 +289,12 @@ http:
       rule: "Host(`localhost`) && PathPrefix(`/api/v1/ai`)"
       entryPoints:
         - web
-      service: backend-service
+      service: ai-service
       middlewares:
         - rate-limit-ai
         - security-headers-dev
       priority: 130
+
 
     # -------------------------------------------------------------------------
     # Smart Tagging Routes - AI-powered content analysis

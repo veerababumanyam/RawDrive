@@ -83,19 +83,19 @@ export const ClientMergeDialog: React.FC<ClientMergeDialogProps> = ({
       name: primaryClient.full_name,
       organization: primaryClient.organization || secondaryClient.organization,
       contacts: [
-        ...primaryClient.contacts,
-        ...secondaryClient.contacts.filter(
+        ...(primaryClient.contacts || []),
+        ...(secondaryClient.contacts || []).filter(
           (c) =>
-            !primaryClient.contacts.some(
+            !(primaryClient.contacts || []).some(
               (pc) => pc.value === c.value && pc.contact_type === c.contact_type
             )
         ),
       ],
       addresses: [
-        ...primaryClient.addresses,
-        ...secondaryClient.addresses.filter(
+        ...(primaryClient.addresses || []),
+        ...(secondaryClient.addresses || []).filter(
           (a) =>
-            !primaryClient.addresses.some(
+            !(primaryClient.addresses || []).some(
               (pa) =>
                 pa.address_line1 === a.address_line1 &&
                 pa.city === a.city
@@ -103,16 +103,16 @@ export const ClientMergeDialog: React.FC<ClientMergeDialogProps> = ({
         ),
       ],
       tags: [
-        ...primaryClient.tags,
-        ...secondaryClient.tags.filter(
-          (t) => !primaryClient.tags.some((pt) => pt.tag_id === t.tag_id)
+        ...(primaryClient.tags || []),
+        ...(secondaryClient.tags || []).filter(
+          (t) => !(primaryClient.tags || []).some((pt) => pt.tag_id === t.tag_id)
         ),
       ],
       galleries: [
-        ...primaryClient.linked_galleries,
-        ...secondaryClient.linked_galleries.filter(
+        ...(primaryClient.linked_galleries || []),
+        ...(secondaryClient.linked_galleries || []).filter(
           (g) =>
-            !primaryClient.linked_galleries.some(
+            !(primaryClient.linked_galleries || []).some(
               (pg) => pg.gallery_id === g.gallery_id
             )
         ),
@@ -360,20 +360,18 @@ const ClientSelectionCard: React.FC<ClientSelectionCardProps> = ({
   return (
     <button
       onClick={onSelect}
-      className={`w-full p-4 rounded-xl text-left transition-all ${
-        isSelected
-          ? 'bg-primary/10 border-2 border-primary'
-          : 'bg-surface-hover/50 border-2 border-transparent hover:border-border'
-      }`}
+      className={`w-full p-4 rounded-xl text-left transition-all ${isSelected
+        ? 'bg-primary/10 border-2 border-primary'
+        : 'bg-surface-hover/50 border-2 border-transparent hover:border-border'
+        }`}
     >
       <div className="flex items-start gap-3">
         {/* Selection Indicator */}
         <div
-          className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-            isSelected
-              ? 'border-primary bg-primary text-white'
-              : 'border-text-tertiary'
-          }`}
+          className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected
+            ? 'border-primary bg-primary text-white'
+            : 'border-text-tertiary'
+            }`}
         >
           {isSelected && <Check size={12} />}
         </div>
@@ -423,9 +421,9 @@ const ClientSelectionCard: React.FC<ClientSelectionCardProps> = ({
 
           {/* Stats */}
           <div className="flex items-center gap-3 mt-2 text-xs text-text-tertiary">
-            <span>{client.contacts.length} contacts</span>
-            <span>{client.linked_galleries.length} galleries</span>
-            <span>{client.tags.length} tags</span>
+            <span>{(client.contacts || []).length} contacts</span>
+            <span>{(client.linked_galleries || []).length} galleries</span>
+            <span>{(client.tags || []).length} tags</span>
           </div>
         </div>
       </div>

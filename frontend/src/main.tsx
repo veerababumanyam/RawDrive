@@ -7,6 +7,33 @@ import './styles/landing.css';
 // Initialize i18n before rendering
 import './i18n/config';
 
+// PWA Service Worker registration
+import { registerSW } from 'virtual:pwa-register';
+
+// Register service worker with update callback
+const updateSW = registerSW({
+  onNeedRefresh() {
+    // Dispatch custom event for PWA update notification component
+    window.dispatchEvent(new CustomEvent('pwa-update-available', {
+      detail: { updateSW }
+    }));
+  },
+  onOfflineReady() {
+    console.log('RawDrive is ready to work offline');
+  },
+  onRegistered(registration) {
+    // Check for updates every hour
+    if (registration) {
+      setInterval(() => {
+        registration.update();
+      }, 60 * 60 * 1000);
+    }
+  },
+  onRegisterError(error) {
+    console.error('Service worker registration failed:', error);
+  },
+});
+
 /* =============================================================================
    Application Entry Point
 

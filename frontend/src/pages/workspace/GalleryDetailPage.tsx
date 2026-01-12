@@ -98,7 +98,7 @@ const GalleryDetailPage: React.FC = () => {
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [showSmartCurationModal, setShowSmartCurationModal] = useState(false);
   const [showSaveFilteredGalleryModal, setShowSaveFilteredGalleryModal] = useState(false);
-  
+
   // Private photo unlock state (admin also needs PIN to see private photos)
   const [showPinModal, setShowPinModal] = useState(false);
   const [isPrivateUnlocked, setIsPrivateUnlocked] = useState(false);
@@ -328,7 +328,7 @@ const GalleryDetailPage: React.FC = () => {
 
   // Handle asset selection
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
-  
+
   // Handle asset selection
   const handleAssetSelect = useCallback((assetId: string) => {
     // Note: GalleryCanvas now implements local logic for Shift/Ctrl clicks
@@ -336,42 +336,42 @@ const GalleryDetailPage: React.FC = () => {
     // However, for Shift-click to work, we need to store the `lastSelectedId`.
     // In standard React flow, the child (GalleryCanvas) computes the new set,
     // passes it here via onSelectionChange.
-    
+
     // BUT we also need to know which one was just clicked to update `lastSelectedId`.
     // Since `onSelectionChange` only gives the set, we might need to intercept the click?
     // GalleryCanvas calls `onAssetSelect` PROP if we look at my previous change plan?
     // Wait, I modified GalleryCanvas internal `handleAssetSelect`. 
     // It calls `onSelectionChange(newSet)`.
-    
+
     // It does NOT update `lastSelectedId` state in the parent.
     // So the next time I click, `lastSelectedId` prop passed to Canvas will be stale/null.
-    
+
     // I need to update `lastSelectedId` whenever selection changes via user interaction.
     // `GalleryCanvas` could accept `onAssetClick` (which it does).
-    
+
     // Actually `GalleryCanvas` has `onAssetClick` (for lightbox).
     // And `onSelectionChange` (for selection state).
-    
+
     // I need to update `lastSelectedId` when selection happens.
     // I will add a new callback `onLastSelectedIdChange` or similar?
     // OR just update it in `handleAssetSelect` if I change the signature?
     // But `handleAssetSelect` here is just a helper, it's not the one receiving the event?
-    
+
     // Let's modify `setSelectedAssetIds` to also update `lastSelectedId`? No, that's just a setter.
-    
+
     // I will modify `GalleryCanvas` to accept `onLastSelectedIdChange`.
     // For now, let's keep it simple. I will just rely on single select updating it?
     // No, range select needs it.
-    
+
     // Let's just update `lastSelectedId` manually here for now using a wrapper?
     // No, `GalleryCanvas` determines WHICH ID was clicked.
-    
+
     // I will assume `GalleryCanvas` handles the logic locally for now using the prop I added?
     // Wait, I added `lastSelectedId` to PROPS in `GalleryCanvas`.
     // But I didn't add a way for `GalleryCanvas` to UPDATE it.
-    
+
     setLastSelectedId(assetId); // Naive update
-    
+
     setSelectedAssetIds((prev) => {
       const next = new Set(prev);
       if (next.has(assetId)) {
@@ -560,32 +560,12 @@ const GalleryDetailPage: React.FC = () => {
       const asset = assets.find(a => a.asset_id === assetId);
       if (!asset) return;
 
-      const { isRawAsset, getRawDownloadVariant } = await import('../../utils/fileUtils');
-
-      let variant: 'original' | 'preview' | null = null;
-      const downloadPolicy = gallery?.download_policy || 'view_only';
-
-      if (isRawAsset(asset.asset.filename, asset.asset.mime_type)) {
-        variant = getRawDownloadVariant(downloadPolicy);
-        if (!variant) {
-          addToast({ message: 'Downloads not allowed for this gallery', variant: 'error' });
-          return;
-        }
-      } else {
-        variant = downloadPolicy === 'original_allowed' ? 'original' : 'preview';
-        if (downloadPolicy === 'view_only') {
-          addToast({ message: 'Downloads not allowed for this gallery', variant: 'error' });
-          return;
-        }
-      }
+      // Admin/User always has access to original download
+      const variant = 'original';
 
       const signedUrl = await galleryService.getSignedUrl(workspace.workspace_id, assetId, variant, true);
 
-      let filename = asset.asset.filename || 'download';
-      if (isRawAsset(asset.asset.filename, asset.asset.mime_type) && variant === 'preview') {
-        const baseName = filename.replace(/\.[^.]+$/, '');
-        filename = `${baseName}.jpg`;
-      }
+      const filename = asset.asset.filename || 'download';
 
       const link = document.createElement('a');
       link.href = signedUrl;
@@ -599,7 +579,7 @@ const GalleryDetailPage: React.FC = () => {
       console.error('Download error:', error);
       addToast({ message: 'Failed to download', variant: 'error' });
     }
-  }, [workspace?.workspace_id, galleryId, gallery?.download_policy, assets, addToast]);
+  }, [workspace?.workspace_id, galleryId, assets, addToast]);
 
   // Handle individual upload complete (for per-file feedback)
   const handleUploadComplete = useCallback(
@@ -855,584 +835,584 @@ const GalleryDetailPage: React.FC = () => {
 
   return (
     <SignedUrlProvider>
-    <div className="gallery-detail-page w-full max-w-full overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 min-h-screen">
-      {/* Main Content Container - Responsive padding */}
-      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-5">
+      <div className="gallery-detail-page w-full max-w-full overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 min-h-screen">
+        {/* Main Content Container - Responsive padding */}
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-5">
 
-        {/* Row 1: Header with Title, Metadata, Status */}
-        <GalleryHeader
-          gallery={gallery}
-          onTitleUpdate={async (newTitle: string) => {
-            if (!workspace?.workspace_id || !galleryId) return;
-            await galleryService.updateGallery(workspace.workspace_id, galleryId, { title: newTitle });
-            await refetchGallery();
-            addToast({ message: 'Gallery title updated', variant: 'success' });
-          }}
-          onMetadataUpdate={async (updates) => {
-            if (!workspace?.workspace_id || !galleryId) return;
-            await galleryService.updateGallery(workspace.workspace_id, galleryId, updates);
-            
-            // Auto-publish when client is assigned (if not already published)
-            if (updates.client_id && gallery.status !== 'published') {
-              try {
-                await galleryService.publishGallery(workspace.workspace_id, galleryId);
-                addToast({ message: 'Gallery published automatically', variant: 'success' });
-              } catch (publishError) {
-                console.error('Failed to auto-publish gallery:', publishError);
-                // Don't fail the update if publish fails
-              }
-            }
-            
-            await refetchGallery();
-            addToast({ message: 'Gallery details updated', variant: 'success' });
-          }}
-        />
-
-        {/* Row 2: Sub-Gallery Tabs */}
-        <SubGalleryTabs
-          subGalleries={gallery.sub_galleries || []}
-          activeSubGalleryId={activeSubGalleryId}
-          onTabSelect={handleSubGalleryChange}
-          onCreateSubGallery={() => setShowCreateSubGallery(true)}
-          onSortOrderChange={async (subGalleryIds) => {
-            if (!workspace?.workspace_id || !galleryId) return;
-            try {
-              await galleryService.updateSubGalleriesSortOrder(
-                workspace.workspace_id,
-                galleryId,
-                subGalleryIds
-              );
+          {/* Row 1: Header with Title, Metadata, Status */}
+          <GalleryHeader
+            gallery={gallery}
+            onTitleUpdate={async (newTitle: string) => {
+              if (!workspace?.workspace_id || !galleryId) return;
+              await galleryService.updateGallery(workspace.workspace_id, galleryId, { title: newTitle });
               await refetchGallery();
-              addToast({ message: 'Tab order updated', variant: 'success' });
-            } catch (error) {
-              addToast({ message: 'Failed to update tab order', variant: 'error' });
-            }
-          }}
-          onRename={(subGalleryId, currentName) => {
-            setRenameSubGallery({ id: subGalleryId, name: currentName });
-          }}
-          onDelete={handleDeleteSubGallery}
-          onToggleVisibility={handleToggleVisibility}
-          droppable={true}
-          sortable={true}
-        />
-
-        {/* Row 3: Stats (left) + Action Bar (right) */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Stats - Left */}
-          <GalleryStats gallery={gallery} filteredStats={filteredStats} />
-
-          {/* Action Bar - Right (wraps on mobile) */}
-          <GalleryActionBar
-            onViewAsClient={handleViewAsClient}
-            onFindPeople={() => setShowPeoplePanel(true)}
-            onAITools={undefined}
-            aiToolsOpen={false}
-            onShare={() => setShowShareDialog(true)}
-            onSettings={() => setShowSettings(true)}
-            onUpload={() => setShowUpload(!showUpload)}
-            onDelete={() => setShowDeleteDialog(true)}
-            uploadOpen={showUpload}
-          />
-        </div>
-
-        {/* Unified AI Panel (includes AI Filters) */}
-        {workspace?.workspace_id && galleryId && (
-          <UnifiedAIPanel
-            workspaceId={workspace.workspace_id}
-            galleryId={galleryId}
-            galleryName={gallery.title}
-            totalPhotos={gallery.stats?.total_photos ?? filteredStats.totalItems}
-            selectedAssetIds={Array.from(selectedAssetIds)}
-            onQualityAnalysisComplete={() => {
-              addToast({ message: 'Quality analysis complete', variant: 'success' });
-              refetchAssets();
+              addToast({ message: 'Gallery title updated', variant: 'success' });
             }}
-            onCurationComplete={(assetIds) => {
-              setSelectedAssetIds(new Set(assetIds));
-              addToast({
-                message: `Selected ${assetIds.length} photos from AI curation`,
-                variant: 'success',
-              });
-            }}
-            filters={filters}
-            onFiltersChange={updateFilter}
-            onFiltersApply={handleApplyAIFilters}
-            onFiltersReset={handleResetAIFilters}
-            filtersMatchCount={matchCount}
-            filtersCountLoading={countLoading}
-            filtersApplyLoading={applyLoading}
-          />
-        )}
+            onMetadataUpdate={async (updates) => {
+              if (!workspace?.workspace_id || !galleryId) return;
+              await galleryService.updateGallery(workspace.workspace_id, galleryId, updates);
 
-        {/* Row 4: Toolbar (view toggle, filters, search) */}
-        <GalleryToolbar
-          viewMode={viewMode}
-          filter={filter}
-          searchQuery={searchQuery}
-          selectedCount={selectedAssetIds.size}
-          onViewModeChange={handleViewModeChange}
-          onFilterChange={setFilter}
-          onSearchChange={setSearchQuery}
-          activeFilters={activeFilters}
-          onFiltersChange={setActiveFilters}
-          selectAll={selectedAssetIds.size === visibleAssets.length && visibleAssets.length > 0}
-          onSelectAllChange={(selected) => {
-            if (selected) {
-              setSelectedAssetIds(new Set(visibleAssets.map((a) => a.asset_id)));
-            } else {
-              setSelectedAssetIds(new Set());
-            }
-          }}
-          aiMatchCount={matchCount}
-          aiFiltersApplied={!!appliedFilters}
-          onClearAIFilters={handleResetAIFilters}
-          onSaveAsGallery={() => setShowSaveFilteredGalleryModal(true)}
-        />
-
-        {/* Unlock Private Photos Button - show when private photos exist and not unlocked */}
-        {!isPrivateUnlocked && filteredStats.privateCount > 0 && (
-          <div className="flex justify-end">
-            <AppButton
-              variant="outline"
-              leftIcon={<LockIcon size={16} />}
-              size="sm"
-              onClick={() => {
-                if (gallery.pin_protected) {
-                  setShowPinModal(true);
-                } else {
-                  // No PIN protection - auto-unlock for admin (session only)
-                  setIsPrivateUnlocked(true);
-                  addToast({ message: 'Private photos unlocked', variant: 'success' });
+              // Auto-publish when client is assigned (if not already published)
+              if (updates.client_id && gallery.status !== 'published') {
+                try {
+                  await galleryService.publishGallery(workspace.workspace_id, galleryId);
+                  addToast({ message: 'Gallery published automatically', variant: 'success' });
+                } catch (publishError) {
+                  console.error('Failed to auto-publish gallery:', publishError);
+                  // Don't fail the update if publish fails
                 }
-              }}
-              aria-label="Unlock private photos"
-            >
-              Unlock {filteredStats.privateCount} Private Photo{filteredStats.privateCount !== 1 ? 's' : ''}
-            </AppButton>
+              }
+
+              await refetchGallery();
+              addToast({ message: 'Gallery details updated', variant: 'success' });
+            }}
+          />
+
+          {/* Row 2: Sub-Gallery Tabs */}
+          <SubGalleryTabs
+            subGalleries={gallery.sub_galleries || []}
+            activeSubGalleryId={activeSubGalleryId}
+            onTabSelect={handleSubGalleryChange}
+            onCreateSubGallery={() => setShowCreateSubGallery(true)}
+            onSortOrderChange={async (subGalleryIds) => {
+              if (!workspace?.workspace_id || !galleryId) return;
+              try {
+                await galleryService.updateSubGalleriesSortOrder(
+                  workspace.workspace_id,
+                  galleryId,
+                  subGalleryIds
+                );
+                await refetchGallery();
+                addToast({ message: 'Tab order updated', variant: 'success' });
+              } catch (error) {
+                addToast({ message: 'Failed to update tab order', variant: 'error' });
+              }
+            }}
+            onRename={(subGalleryId, currentName) => {
+              setRenameSubGallery({ id: subGalleryId, name: currentName });
+            }}
+            onDelete={handleDeleteSubGallery}
+            onToggleVisibility={handleToggleVisibility}
+            droppable={true}
+            sortable={true}
+          />
+
+          {/* Row 3: Stats (left) + Action Bar (right) */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            {/* Stats - Left */}
+            <GalleryStats gallery={gallery} filteredStats={filteredStats} />
+
+            {/* Action Bar - Right (wraps on mobile) */}
+            <GalleryActionBar
+              onViewAsClient={handleViewAsClient}
+              onFindPeople={() => setShowPeoplePanel(true)}
+              onAITools={undefined}
+              aiToolsOpen={false}
+              onShare={() => setShowShareDialog(true)}
+              onSettings={() => setShowSettings(true)}
+              onUpload={() => setShowUpload(!showUpload)}
+              onDelete={() => setShowDeleteDialog(true)}
+              uploadOpen={showUpload}
+            />
           </div>
-        )}
 
-        {/* Upload Modal - opens above content when triggered from action bar */}
-        <GalleryUploadModal
-          isOpen={showUpload}
-          onClose={() => setShowUpload(false)}
-          galleryId={gallery.gallery_id}
-          subGalleryId={activeSubGalleryId}
-          onUploadComplete={handleUploadComplete}
-          onUploadError={handleUploadError}
-          onBatchComplete={handleBatchComplete}
-        />
-
-        {/* Bulk Action Bar - Shows when items selected */}
-          {selectedAssetIds.size > 0 && (
-          <BulkActionBar
-            selectedAssetIds={selectedAssetIds}
-              assets={visibleAssets}
-            onClearSelection={() => setSelectedAssetIds(new Set())}
-            subGalleries={gallery?.sub_galleries || []}
-            onBulkMove={async (assetIds, subGalleryId) => {
-              if (!workspace?.workspace_id || !galleryId) return;
-              try {
-                await galleryService.moveAssets(workspace.workspace_id, galleryId, assetIds, subGalleryId);
-                setSelectedAssetIds(new Set());
-                await refetchAssets();
+          {/* Unified AI Panel (includes AI Filters) */}
+          {workspace?.workspace_id && galleryId && (
+            <UnifiedAIPanel
+              workspaceId={workspace.workspace_id}
+              galleryId={galleryId}
+              galleryName={gallery.title}
+              totalPhotos={gallery.stats?.total_photos ?? filteredStats.totalItems}
+              selectedAssetIds={Array.from(selectedAssetIds)}
+              onQualityAnalysisComplete={() => {
+                addToast({ message: 'Quality analysis complete', variant: 'success' });
+                refetchAssets();
+              }}
+              onCurationComplete={(assetIds) => {
+                setSelectedAssetIds(new Set(assetIds));
                 addToast({
-                  message: `Moved ${assetIds.length} ${assetIds.length === 1 ? 'photo' : 'photos'} successfully`,
+                  message: `Selected ${assetIds.length} photos from AI curation`,
                   variant: 'success',
                 });
-              } catch (error) {
-                addToast({ message: 'Failed to move photos', variant: 'error' });
-              }
-            }}
-            onBulkDelete={async (assetIds) => {
-              if (!workspace?.workspace_id || !galleryId) return;
-              try {
-                await galleryService.deleteAssets(workspace.workspace_id, galleryId, assetIds);
+              }}
+              filters={filters}
+              onFiltersChange={updateFilter}
+              onFiltersApply={handleApplyAIFilters}
+              onFiltersReset={handleResetAIFilters}
+              filtersMatchCount={matchCount}
+              filtersCountLoading={countLoading}
+              filtersApplyLoading={applyLoading}
+            />
+          )}
+
+          {/* Row 4: Toolbar (view toggle, filters, search) */}
+          <GalleryToolbar
+            viewMode={viewMode}
+            filter={filter}
+            searchQuery={searchQuery}
+            selectedCount={selectedAssetIds.size}
+            onViewModeChange={handleViewModeChange}
+            onFilterChange={setFilter}
+            onSearchChange={setSearchQuery}
+            activeFilters={activeFilters}
+            onFiltersChange={setActiveFilters}
+            selectAll={selectedAssetIds.size === visibleAssets.length && visibleAssets.length > 0}
+            onSelectAllChange={(selected) => {
+              if (selected) {
+                setSelectedAssetIds(new Set(visibleAssets.map((a) => a.asset_id)));
+              } else {
                 setSelectedAssetIds(new Set());
-                addToast({
-                  message: `Deleted ${assetIds.length} ${assetIds.length === 1 ? 'photo' : 'photos'}`,
-                  variant: 'success',
-                  duration: 8000,
-                  action: {
-                    label: 'Undo',
-                    onClick: async () => {
-                      try {
-                        await galleryService.restoreAssets(workspace.workspace_id, galleryId, assetIds);
-                        await refetchAssets();
-                        addToast({ message: 'Photos restored', variant: 'success' });
-                      } catch (error) {
-                        addToast({ message: 'Failed to restore photos', variant: 'error' });
-                      }
-                    },
-                  },
-                });
-                await refetchAssets();
-              } catch (error) {
-                addToast({ message: 'Failed to delete photos', variant: 'error' });
               }
             }}
-            onBulkDownload={async (assetIds) => {
-              addToast({ message: `Download ${assetIds.length} photos - Coming soon`, variant: 'info' });
-            }}
+            aiMatchCount={matchCount}
+            aiFiltersApplied={!!appliedFilters}
+            onClearAIFilters={handleResetAIFilters}
+            onSaveAsGallery={() => setShowSaveFilteredGalleryModal(true)}
           />
-        )}
 
-        {/* Photo Section */}
-        <div className="space-y-4">
-          {/* Photo Grid or List */}
-          {assetsError ? (
-            <div className="glass-card glass-card-hover rounded-2xl p-8 text-center">
-              <div className="empty-state-icon mx-auto mb-4 icon-container-error">
-                <ArrowLeft className="w-6 h-6" />
-              </div>
-              <p className="text-error mb-4 font-medium">{assetsError.message}</p>
-              <AppButton variant="outline" onClick={() => refetchAssets()}>
-                Try Again
-              </AppButton>
-            </div>
-          ) : viewMode === 'grid' || viewMode === 'masonry' ? (
-            <GalleryCanvas
-              assets={visibleAssets}
-              viewMode={viewMode === 'masonry' ? 'masonry' : 'grid'}
-              selectedAssetIds={selectedAssetIds}
-              lastSelectedId={lastSelectedId}
-              managementSelectable={true}
-              showCustomerSelection={true}
-              coverAssetId={
-                activeSubGalleryId
-                  ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === activeSubGalleryId)?.cover_asset_id
-                  : gallery?.cover_asset_id
-              }
-              onSelectionChange={setSelectedAssetIds}
-              onCustomerSelectionToggle={handleCustomerSelection}
-              onAssetClick={handleAssetClick}
-              onAssetFavorite={handleAssetFavorite}
-              onAssetDownload={handleAssetDownload}
-              onAssetShare={handleAssetShare}
-              onAssetLock={handleAssetLock}
-              onAssetDelete={handleDeleteAsset}
-              onAssetUpdate={handleAssetUpdate}
-              onSetCover={async (assetId) => {
-                if (!workspace?.workspace_id || !galleryId) return;
-                try {
-                  if (activeSubGalleryId) {
-                    await galleryService.updateSubGallery(
-                      workspace.workspace_id,
-                      galleryId,
-                      activeSubGalleryId,
-                      { cover_asset_id: assetId }
-                    );
-                    addToast({ variant: 'success', message: 'Sub-gallery cover updated' });
+          {/* Unlock Private Photos Button - show when private photos exist and not unlocked */}
+          {!isPrivateUnlocked && filteredStats.privateCount > 0 && (
+            <div className="flex justify-end">
+              <AppButton
+                variant="outline"
+                leftIcon={<LockIcon size={16} />}
+                size="sm"
+                onClick={() => {
+                  if (gallery.pin_protected) {
+                    setShowPinModal(true);
                   } else {
-                    await galleryService.updateGallery(workspace.workspace_id, galleryId, {
-                      cover_asset_id: assetId
-                    });
-                    addToast({ variant: 'success', message: 'Gallery cover updated' });
+                    // No PIN protection - auto-unlock for admin (session only)
+                    setIsPrivateUnlocked(true);
+                    addToast({ message: 'Private photos unlocked', variant: 'success' });
                   }
-                  await refetchGallery();
-                } catch (error) {
-                  addToast({ variant: 'error', message: 'Failed to update cover' });
-                }
-              }}
-              onSortOrderChange={async (assetIds) => {
-                if (!workspace?.workspace_id || !galleryId) return;
-                try {
-                  await galleryService.updateSortOrder(workspace.workspace_id, galleryId, assetIds);
-                  await refetchAssets();
-                  addToast({ message: 'Photo order updated', variant: 'success' });
-                } catch (error) {
-                  addToast({ message: 'Failed to update photo order', variant: 'error' });
-                }
-              }}
-              onMoveToSubGallery={async (assetId, subGalleryId) => {
-                if (!workspace?.workspace_id || !galleryId) return;
-                try {
-                  await galleryService.moveAssets(workspace.workspace_id, galleryId, [assetId], subGalleryId);
-                  await refetchAssets();
-                  const subGalleryName = subGalleryId
-                    ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === subGalleryId)?.name || 'sub-gallery'
-                    : 'Root Gallery';
-                  addToast({ message: `Photo moved to ${subGalleryName}`, variant: 'success' });
-                } catch (error) {
-                  addToast({ message: 'Failed to move photo', variant: 'error' });
-                }
-              }}
-              sortable={true}
-              isLoading={assetsLoading}
-              isPrivateUnlocked={isPrivateUnlocked}
-              onUnlockPrivate={() => {
-                if (gallery.pin_protected) {
-                  setShowPinModal(true);
-                } else {
-                  // No PIN protection - auto-unlock for admin (session only)
-                  setIsPrivateUnlocked(true);
-                  addToast({ message: 'Private photos unlocked', variant: 'success' });
-                }
-              }}
-            />
-          ) : (
-            <PhotoListView
-              assets={visibleAssets}
-              selectedAssetIds={selectedAssetIds}
-              onAssetSelect={handleAssetSelect}
-              onAssetClick={handleAssetClick}
-              onAssetFavorite={handleAssetFavorite}
-              onAssetDownload={handleAssetDownload}
-              onAssetDelete={handleDeleteAsset}
-              isLoading={assetsLoading}
-              isPrivateUnlocked={isPrivateUnlocked}
-            />
-          )}
-
-          {/* Load More */}
-          {hasMore && !assetsLoading && (
-            <div className="flex justify-center pt-4">
-              <AppButton variant="outline" onClick={loadMore}>
-                Load More
+                }}
+                aria-label="Unlock private photos"
+              >
+                Unlock {filteredStats.privateCount} Private Photo{filteredStats.privateCount !== 1 ? 's' : ''}
               </AppButton>
             </div>
           )}
-        </div>
 
-        {/* Lightbox */}
-        {lightboxOpen && visibleAssets[lightboxIndex] && (
-          <Lightbox
-            isOpen={lightboxOpen}
-            onClose={handleLightboxClose}
-            currentAsset={visibleAssets[lightboxIndex]}
-            assets={visibleAssets}
-            currentIndex={lightboxIndex}
-            onNavigate={handleLightboxNavigate}
-            onFavorite={handleAssetFavorite}
-            onSelect={handleAssetSelect}
-            onDownload={handleAssetDownload}
-            onDelete={handleDeleteAsset}
-            exifVisible={gallery.exif_visible}
-            downloadPolicy={gallery.download_policy}
+          {/* Upload Modal - opens above content when triggered from action bar */}
+          <GalleryUploadModal
+            isOpen={showUpload}
+            onClose={() => setShowUpload(false)}
             galleryId={gallery.gallery_id}
-            onSetCover={handleSetGalleryCover}
+            subGalleryId={activeSubGalleryId}
+            onUploadComplete={handleUploadComplete}
+            onUploadError={handleUploadError}
+            onBatchComplete={handleBatchComplete}
           />
-        )}
 
-        {/* Settings Panel */}
-        <GallerySettingsPanel
-          isOpen={showSettings}
-          onClose={() => setShowSettings(false)}
-          gallery={gallery}
-          onSave={async (updates: Parameters<typeof galleryService.updateGallery>[2]) => {
-            if (!workspace?.workspace_id || !galleryId) return;
-            await galleryService.updateGallery(workspace.workspace_id, galleryId, updates);
-            await refetchGallery();
-          }}
-        />
+          {/* Bulk Action Bar - Shows when items selected */}
+          {selectedAssetIds.size > 0 && (
+            <BulkActionBar
+              selectedAssetIds={selectedAssetIds}
+              assets={visibleAssets}
+              onClearSelection={() => setSelectedAssetIds(new Set())}
+              subGalleries={gallery?.sub_galleries || []}
+              onBulkMove={async (assetIds, subGalleryId) => {
+                if (!workspace?.workspace_id || !galleryId) return;
+                try {
+                  await galleryService.moveAssets(workspace.workspace_id, galleryId, assetIds, subGalleryId);
+                  setSelectedAssetIds(new Set());
+                  await refetchAssets();
+                  addToast({
+                    message: `Moved ${assetIds.length} ${assetIds.length === 1 ? 'photo' : 'photos'} successfully`,
+                    variant: 'success',
+                  });
+                } catch (error) {
+                  addToast({ message: 'Failed to move photos', variant: 'error' });
+                }
+              }}
+              onBulkDelete={async (assetIds) => {
+                if (!workspace?.workspace_id || !galleryId) return;
+                try {
+                  await galleryService.deleteAssets(workspace.workspace_id, galleryId, assetIds);
+                  setSelectedAssetIds(new Set());
+                  addToast({
+                    message: `Deleted ${assetIds.length} ${assetIds.length === 1 ? 'photo' : 'photos'}`,
+                    variant: 'success',
+                    duration: 8000,
+                    action: {
+                      label: 'Undo',
+                      onClick: async () => {
+                        try {
+                          await galleryService.restoreAssets(workspace.workspace_id, galleryId, assetIds);
+                          await refetchAssets();
+                          addToast({ message: 'Photos restored', variant: 'success' });
+                        } catch (error) {
+                          addToast({ message: 'Failed to restore photos', variant: 'error' });
+                        }
+                      },
+                    },
+                  });
+                  await refetchAssets();
+                } catch (error) {
+                  addToast({ message: 'Failed to delete photos', variant: 'error' });
+                }
+              }}
+              onBulkDownload={async (assetIds) => {
+                addToast({ message: `Download ${assetIds.length} photos - Coming soon`, variant: 'info' });
+              }}
+            />
+          )}
 
-        {/* Create Sub-Gallery Dialog */}
-        <Modal
-          isOpen={showCreateSubGallery}
-          onClose={() => {
-            setShowCreateSubGallery(false);
-            setNewSubGalleryName('');
-          }}
-          title="Create New Sub-Gallery"
-          size="sm"
-        >
-          <ModalBody padding="lg">
-            <div className="space-y-4">
-              <AppInput
-                label="Sub-Gallery Name"
-                value={newSubGalleryName}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSubGalleryName(e.target.value)}
-                placeholder="e.g., Ceremony, Reception, Getting Ready"
-                isRequired
-                autoFocus
-                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                  if (e.key === 'Enter' && newSubGalleryName.trim()) {
-                    handleCreateSubGallery();
+          {/* Photo Section */}
+          <div className="space-y-4">
+            {/* Photo Grid or List */}
+            {assetsError ? (
+              <div className="glass-card glass-card-hover rounded-2xl p-8 text-center">
+                <div className="empty-state-icon mx-auto mb-4 icon-container-error">
+                  <ArrowLeft className="w-6 h-6" />
+                </div>
+                <p className="text-error mb-4 font-medium">{assetsError.message}</p>
+                <AppButton variant="outline" onClick={() => refetchAssets()}>
+                  Try Again
+                </AppButton>
+              </div>
+            ) : viewMode === 'grid' || viewMode === 'masonry' ? (
+              <GalleryCanvas
+                assets={visibleAssets}
+                viewMode={viewMode === 'masonry' ? 'masonry' : 'grid'}
+                selectedAssetIds={selectedAssetIds}
+                lastSelectedId={lastSelectedId}
+                managementSelectable={true}
+                showCustomerSelection={true}
+                coverAssetId={
+                  activeSubGalleryId
+                    ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === activeSubGalleryId)?.cover_asset_id
+                    : gallery?.cover_asset_id
+                }
+                onSelectionChange={setSelectedAssetIds}
+                onCustomerSelectionToggle={handleCustomerSelection}
+                onAssetClick={handleAssetClick}
+                onAssetFavorite={handleAssetFavorite}
+                onAssetDownload={handleAssetDownload}
+                onAssetShare={handleAssetShare}
+                onAssetLock={handleAssetLock}
+                onAssetDelete={handleDeleteAsset}
+                onAssetUpdate={handleAssetUpdate}
+                onSetCover={async (assetId) => {
+                  if (!workspace?.workspace_id || !galleryId) return;
+                  try {
+                    if (activeSubGalleryId) {
+                      await galleryService.updateSubGallery(
+                        workspace.workspace_id,
+                        galleryId,
+                        activeSubGalleryId,
+                        { cover_asset_id: assetId }
+                      );
+                      addToast({ variant: 'success', message: 'Sub-gallery cover updated' });
+                    } else {
+                      await galleryService.updateGallery(workspace.workspace_id, galleryId, {
+                        cover_asset_id: assetId
+                      });
+                      addToast({ variant: 'success', message: 'Gallery cover updated' });
+                    }
+                    await refetchGallery();
+                  } catch (error) {
+                    addToast({ variant: 'error', message: 'Failed to update cover' });
+                  }
+                }}
+                onSortOrderChange={async (assetIds) => {
+                  if (!workspace?.workspace_id || !galleryId) return;
+                  try {
+                    await galleryService.updateSortOrder(workspace.workspace_id, galleryId, assetIds);
+                    await refetchAssets();
+                    addToast({ message: 'Photo order updated', variant: 'success' });
+                  } catch (error) {
+                    addToast({ message: 'Failed to update photo order', variant: 'error' });
+                  }
+                }}
+                onMoveToSubGallery={async (assetId, subGalleryId) => {
+                  if (!workspace?.workspace_id || !galleryId) return;
+                  try {
+                    await galleryService.moveAssets(workspace.workspace_id, galleryId, [assetId], subGalleryId);
+                    await refetchAssets();
+                    const subGalleryName = subGalleryId
+                      ? gallery?.sub_galleries.find((sg) => sg.sub_gallery_id === subGalleryId)?.name || 'sub-gallery'
+                      : 'Root Gallery';
+                    addToast({ message: `Photo moved to ${subGalleryName}`, variant: 'success' });
+                  } catch (error) {
+                    addToast({ message: 'Failed to move photo', variant: 'error' });
+                  }
+                }}
+                sortable={true}
+                isLoading={assetsLoading}
+                isPrivateUnlocked={isPrivateUnlocked}
+                onUnlockPrivate={() => {
+                  if (gallery.pin_protected) {
+                    setShowPinModal(true);
+                  } else {
+                    // No PIN protection - auto-unlock for admin (session only)
+                    setIsPrivateUnlocked(true);
+                    addToast({ message: 'Private photos unlocked', variant: 'success' });
                   }
                 }}
               />
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <AppButton
-              variant="outline"
-              onClick={() => {
-                setShowCreateSubGallery(false);
-                setNewSubGalleryName('');
-              }}
-            >
-              Cancel
-            </AppButton>
-            <AppButton
-              variant="primary"
-              onClick={handleCreateSubGallery}
-              disabled={!newSubGalleryName.trim()}
-            >
-              Create
-            </AppButton>
-          </ModalFooter>
-        </Modal>
+            ) : (
+              <PhotoListView
+                assets={visibleAssets}
+                selectedAssetIds={selectedAssetIds}
+                onAssetSelect={handleAssetSelect}
+                onAssetClick={handleAssetClick}
+                onAssetFavorite={handleAssetFavorite}
+                onAssetDownload={handleAssetDownload}
+                onAssetDelete={handleDeleteAsset}
+                isLoading={assetsLoading}
+                isPrivateUnlocked={isPrivateUnlocked}
+              />
+            )}
 
-        {/* Rename Sub-Gallery Dialog */}
-        <Modal
-          isOpen={!!renameSubGallery}
-          onClose={() => setRenameSubGallery(null)}
-          title="Rename Sub-Gallery"
-          size="sm"
-        >
-          <ModalBody padding="lg">
-            <div className="space-y-4">
-              <AppInput
-                label="Sub-Gallery Name"
-                value={renameSubGallery?.name || ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  if (renameSubGallery) {
-                    setRenameSubGallery({ ...renameSubGallery, name: e.target.value });
-                  }
+            {/* Load More */}
+            {hasMore && !assetsLoading && (
+              <div className="flex justify-center pt-4">
+                <AppButton variant="outline" onClick={loadMore}>
+                  Load More
+                </AppButton>
+              </div>
+            )}
+          </div>
+
+          {/* Lightbox */}
+          {lightboxOpen && visibleAssets[lightboxIndex] && (
+            <Lightbox
+              isOpen={lightboxOpen}
+              onClose={handleLightboxClose}
+              currentAsset={visibleAssets[lightboxIndex]}
+              assets={visibleAssets}
+              currentIndex={lightboxIndex}
+              onNavigate={handleLightboxNavigate}
+              onFavorite={handleAssetFavorite}
+              onSelect={handleAssetSelect}
+              onDownload={handleAssetDownload}
+              onDelete={handleDeleteAsset}
+              exifVisible={gallery.exif_visible}
+              downloadPolicy={gallery.download_policy}
+              galleryId={gallery.gallery_id}
+              onSetCover={handleSetGalleryCover}
+            />
+          )}
+
+          {/* Settings Panel */}
+          <GallerySettingsPanel
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            gallery={gallery}
+            onSave={async (updates: Parameters<typeof galleryService.updateGallery>[2]) => {
+              if (!workspace?.workspace_id || !galleryId) return;
+              await galleryService.updateGallery(workspace.workspace_id, galleryId, updates);
+              await refetchGallery();
+            }}
+          />
+
+          {/* Create Sub-Gallery Dialog */}
+          <Modal
+            isOpen={showCreateSubGallery}
+            onClose={() => {
+              setShowCreateSubGallery(false);
+              setNewSubGalleryName('');
+            }}
+            title="Create New Sub-Gallery"
+            size="sm"
+          >
+            <ModalBody padding="lg">
+              <div className="space-y-4">
+                <AppInput
+                  label="Sub-Gallery Name"
+                  value={newSubGalleryName}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSubGalleryName(e.target.value)}
+                  placeholder="e.g., Ceremony, Reception, Getting Ready"
+                  isRequired
+                  autoFocus
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter' && newSubGalleryName.trim()) {
+                      handleCreateSubGallery();
+                    }
+                  }}
+                />
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <AppButton
+                variant="outline"
+                onClick={() => {
+                  setShowCreateSubGallery(false);
+                  setNewSubGalleryName('');
                 }}
-                placeholder="e.g., Ceremony, Reception, Getting Ready"
-                isRequired
-                autoFocus
-                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                  if (e.key === 'Enter' && renameSubGallery?.name.trim() && renameSubGallery?.id) {
+              >
+                Cancel
+              </AppButton>
+              <AppButton
+                variant="primary"
+                onClick={handleCreateSubGallery}
+                disabled={!newSubGalleryName.trim()}
+              >
+                Create
+              </AppButton>
+            </ModalFooter>
+          </Modal>
+
+          {/* Rename Sub-Gallery Dialog */}
+          <Modal
+            isOpen={!!renameSubGallery}
+            onClose={() => setRenameSubGallery(null)}
+            title="Rename Sub-Gallery"
+            size="sm"
+          >
+            <ModalBody padding="lg">
+              <div className="space-y-4">
+                <AppInput
+                  label="Sub-Gallery Name"
+                  value={renameSubGallery?.name || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    if (renameSubGallery) {
+                      setRenameSubGallery({ ...renameSubGallery, name: e.target.value });
+                    }
+                  }}
+                  placeholder="e.g., Ceremony, Reception, Getting Ready"
+                  isRequired
+                  autoFocus
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter' && renameSubGallery?.name.trim() && renameSubGallery?.id) {
+                      handleRenameSubGallery(renameSubGallery.id, renameSubGallery.name);
+                    }
+                  }}
+                />
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <AppButton
+                variant="outline"
+                onClick={() => setRenameSubGallery(null)}
+              >
+                Cancel
+              </AppButton>
+              <AppButton
+                variant="primary"
+                onClick={() => {
+                  if (renameSubGallery?.id && renameSubGallery?.name.trim()) {
                     handleRenameSubGallery(renameSubGallery.id, renameSubGallery.name);
                   }
                 }}
+                disabled={!renameSubGallery?.name.trim()}
+              >
+                Save
+              </AppButton>
+            </ModalFooter>
+          </Modal>
+
+          {/* Delete Gallery Confirmation Dialog */}
+          <DeleteConfirmationDialog
+            isOpen={showDeleteDialog}
+            onClose={() => setShowDeleteDialog(false)}
+            onConfirm={handleDeleteGallery}
+            deleteType="soft"
+            entityType="gallery"
+            entityName={gallery.title}
+            photoCount={gallery.stats.total_photos}
+            retentionDays={30}
+            isLoading={isDeleting}
+          />
+
+          {/* AI Story Modal */}
+          <Modal
+            isOpen={showStoryModal}
+            onClose={() => setShowStoryModal(false)}
+            title="AI Story Generator"
+            size="lg"
+          >
+            <ModalBody>
+              <StoryGenerator
+                workspaceId={workspace?.workspace_id || ''}
+                galleryId={gallery.gallery_id}
+                galleryName={gallery.title}
+                photoCount={gallery.stats?.total_photos ?? filteredStats.totalItems}
               />
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <AppButton
-              variant="outline"
-              onClick={() => setRenameSubGallery(null)}
-            >
-              Cancel
-            </AppButton>
-            <AppButton
-              variant="primary"
-              onClick={() => {
-                if (renameSubGallery?.id && renameSubGallery?.name.trim()) {
-                  handleRenameSubGallery(renameSubGallery.id, renameSubGallery.name);
-                }
-              }}
-              disabled={!renameSubGallery?.name.trim()}
-            >
-              Save
-            </AppButton>
-          </ModalFooter>
-        </Modal>
+            </ModalBody>
+          </Modal>
 
-        {/* Delete Gallery Confirmation Dialog */}
-        <DeleteConfirmationDialog
-          isOpen={showDeleteDialog}
-          onClose={() => setShowDeleteDialog(false)}
-          onConfirm={handleDeleteGallery}
-          deleteType="soft"
-          entityType="gallery"
-          entityName={gallery.title}
-          photoCount={gallery.stats.total_photos}
-          retentionDays={30}
-          isLoading={isDeleting}
-        />
-
-        {/* AI Story Modal */}
-        <Modal
-          isOpen={showStoryModal}
-          onClose={() => setShowStoryModal(false)}
-          title="AI Story Generator"
-          size="lg"
-        >
-          <ModalBody>
-            <StoryGenerator
-              workspaceId={workspace?.workspace_id || ''}
-              galleryId={gallery.gallery_id}
-              galleryName={gallery.title}
-              photoCount={gallery.stats?.total_photos ?? filteredStats.totalItems}
-            />
-          </ModalBody>
-        </Modal>
-
-        {/* Smart Curation Modal */}
-        <Modal
-          isOpen={showSmartCurationModal}
-          onClose={() => setShowSmartCurationModal(false)}
-          title="Smart Curate"
-          size="lg"
-        >
-          <ModalBody>
-            <SmartCurationPanel
-              workspaceId={workspace?.workspace_id || ''}
-              galleryId={gallery.gallery_id}
-              galleryName={gallery.title}
-              totalPhotos={gallery.stats?.total_photos ?? filteredStats.totalItems}
-              onCurationComplete={(result) => {
-                setSelectedAssetIds(new Set(result.selected_assets.map((asset) => asset.asset_id)));
-                addToast({
-                  message: `Selected ${result.selected_assets.length} best photos`,
-                  variant: 'success',
-                });
-              }}
-              onSelectionChange={(selectedIds) => setSelectedAssetIds(new Set(selectedIds))}
-              className="max-h-[70vh] overflow-y-auto"
-            />
-          </ModalBody>
-        </Modal>
+          {/* Smart Curation Modal */}
+          <Modal
+            isOpen={showSmartCurationModal}
+            onClose={() => setShowSmartCurationModal(false)}
+            title="Smart Curate"
+            size="lg"
+          >
+            <ModalBody>
+              <SmartCurationPanel
+                workspaceId={workspace?.workspace_id || ''}
+                galleryId={gallery.gallery_id}
+                galleryName={gallery.title}
+                totalPhotos={gallery.stats?.total_photos ?? filteredStats.totalItems}
+                onCurationComplete={(result) => {
+                  setSelectedAssetIds(new Set(result.selected_assets.map((asset) => asset.asset_id)));
+                  addToast({
+                    message: `Selected ${result.selected_assets.length} best photos`,
+                    variant: 'success',
+                  });
+                }}
+                onSelectionChange={(selectedIds) => setSelectedAssetIds(new Set(selectedIds))}
+                className="max-h-[70vh] overflow-y-auto"
+              />
+            </ModalBody>
+          </Modal>
 
 
-        {/* People Panel */}
-        <PeoplePanel
-          galleryId={gallery.gallery_id}
-          isOpen={showPeoplePanel}
-          onClose={() => setShowPeoplePanel(false)}
-          onFilterByPerson={(groupId) => {
-            if (groupId) {
-              addToast({ message: `Filtering by person - Coming soon`, variant: 'info' });
-            }
-          }}
-        />
+          {/* People Panel */}
+          <PeoplePanel
+            galleryId={gallery.gallery_id}
+            isOpen={showPeoplePanel}
+            onClose={() => setShowPeoplePanel(false)}
+            onFilterByPerson={(groupId) => {
+              if (groupId) {
+                addToast({ message: `Filtering by person - Coming soon`, variant: 'info' });
+              }
+            }}
+          />
 
-        {/* Share Dialog */}
-        <ShareDialog
-          isOpen={showShareDialog}
-          onClose={() => setShowShareDialog(false)}
-          workspaceId={workspace?.workspace_id || ''}
-          galleryId={gallery.gallery_id}
-          galleryTitle={gallery.title}
-          isPublished={gallery.status === 'published'}
-          onPublished={async () => {
-            await refetchGallery();
-            addToast({ message: 'Gallery published automatically', variant: 'success' });
-          }}
-        />
+          {/* Share Dialog */}
+          <ShareDialog
+            isOpen={showShareDialog}
+            onClose={() => setShowShareDialog(false)}
+            workspaceId={workspace?.workspace_id || ''}
+            galleryId={gallery.gallery_id}
+            galleryTitle={gallery.title}
+            isPublished={gallery.status === 'published'}
+            onPublished={async () => {
+              await refetchGallery();
+              addToast({ message: 'Gallery published automatically', variant: 'success' });
+            }}
+          />
 
-        {/* PIN Verification Modal for unlocking private photos */}
-        <PinVerificationModal
-          isOpen={showPinModal}
-          onVerify={handlePrivatePhotoUnlock}
-          onCancel={() => setShowPinModal(false)}
-          galleryTitle={gallery.title}
-        />
+          {/* PIN Verification Modal for unlocking private photos */}
+          <PinVerificationModal
+            isOpen={showPinModal}
+            onVerify={handlePrivatePhotoUnlock}
+            onCancel={() => setShowPinModal(false)}
+            galleryTitle={gallery.title}
+          />
 
-        {/* Save Filtered Gallery Modal (AI filter results to sub-gallery) */}
-        <SaveFilteredGalleryModal
-          isOpen={showSaveFilteredGalleryModal}
-          onClose={() => setShowSaveFilteredGalleryModal(false)}
-          workspaceId={workspace?.workspace_id || ''}
-          parentGalleryId={gallery.gallery_id}
-          parentGalleryName={gallery.title}
-          assetIds={visibleAssets.map((a) => a.asset_id)}
-          filterDescription={appliedFilters?.qualityTier && appliedFilters.qualityTier !== 'all' ? `${appliedFilters.qualityTier} quality` : undefined}
-          onSuccess={(newGalleryId, newGalleryName) => {
-            addToast({
-              message: `Created sub-gallery "${newGalleryName}" with ${visibleAssets.length} photos`,
-              variant: 'success',
-            });
-            refetchGallery(); // Refresh to show new sub-gallery in tabs
-          }}
-        />
+          {/* Save Filtered Gallery Modal (AI filter results to sub-gallery) */}
+          <SaveFilteredGalleryModal
+            isOpen={showSaveFilteredGalleryModal}
+            onClose={() => setShowSaveFilteredGalleryModal(false)}
+            workspaceId={workspace?.workspace_id || ''}
+            parentGalleryId={gallery.gallery_id}
+            parentGalleryName={gallery.title}
+            assetIds={visibleAssets.map((a) => a.asset_id)}
+            filterDescription={appliedFilters?.qualityTier && appliedFilters.qualityTier !== 'all' ? `${appliedFilters.qualityTier} quality` : undefined}
+            onSuccess={(newGalleryId, newGalleryName) => {
+              addToast({
+                message: `Created sub-gallery "${newGalleryName}" with ${visibleAssets.length} photos`,
+                variant: 'success',
+              });
+              refetchGallery(); // Refresh to show new sub-gallery in tabs
+            }}
+          />
+        </div>
       </div>
-    </div>
     </SignedUrlProvider>
   );
 };

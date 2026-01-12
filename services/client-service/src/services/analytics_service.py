@@ -248,7 +248,7 @@ class AnalyticsService:
         }
 
         # Cache for 5 minutes
-        await self.redis_client.set_json(cache_key, result, ttl=300)
+        await self.redis_client.set_json(cache_key, result, ex=300)
 
         logger.info(
             "Workspace analytics generated",
