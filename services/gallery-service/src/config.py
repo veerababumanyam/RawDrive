@@ -64,7 +64,8 @@ class Settings(BaseSettings):
 
     # JWT Authentication
     JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
-    JWT_ALGORITHM: str = "HS256"
+    JWT_PUBLIC_KEY_PATH: str = os.getenv("JWT_PUBLIC_KEY_PATH", "")
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "EdDSA")
 
     # Encryption
     ENCRYPTION_MASTER_KEY: str = os.getenv("ENCRYPTION_MASTER_KEY", "0000000000000000000000000000000000000000000000000000000000000000")

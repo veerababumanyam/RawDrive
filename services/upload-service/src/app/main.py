@@ -87,47 +87,54 @@ async def lifespan(app: FastAPI):
     await init_redis()
 
     # Register service in A2A registry (Phase 4: A2A Integration)
-    import os
-    import uuid
-    import sys
-    sys.path.insert(0, '/app/backend/src')
-    from app.services.service_registry import (
-        get_service_registry,
-        ServiceRegistration,
-        ServiceCapability,
-    )
+    # This is optional - service will work without it
+    registry = None
+    service_id = None
+    heartbeat_task = None
+    try:
+        import os
+        import uuid
+        import sys
+        sys.path.insert(0, '/app/backend/src')
+        from app.services.service_registry import (
+            get_service_registry,
+            ServiceRegistration,
+            ServiceCapability,
+        )
 
-    registry = get_service_registry()
-    service_id = os.getenv("SERVICE_ID", str(uuid.uuid4()))
-    registration = ServiceRegistration(
-        service_name="upload-service",
-        service_id=service_id,
-        base_url=os.getenv("SERVICE_BASE_URL", "http://upload-service:8008"),
-        capabilities=[
-            ServiceCapability(name="upload:create", version="1.0", endpoint="/api/v1/uploads"),
-            ServiceCapability(name="upload:resume", version="1.0", endpoint="/api/v1/uploads/{upload_id}"),
-            ServiceCapability(name="upload:complete", version="1.0", endpoint="/api/v1/uploads/{upload_id}/complete"),
-            ServiceCapability(name="upload:tus", version="1.0", endpoint="/api/v1/uploads"),
-        ],
-        health_check_endpoint="/health",
-    )
+        registry = get_service_registry()
+        service_id = os.getenv("SERVICE_ID", str(uuid.uuid4()))
+        registration = ServiceRegistration(
+            service_name="upload-service",
+            service_id=service_id,
+            base_url=os.getenv("SERVICE_BASE_URL", "http://upload-service:8008"),
+            capabilities=[
+                ServiceCapability(name="upload:create", version="1.0", endpoint="/api/v1/uploads"),
+                ServiceCapability(name="upload:resume", version="1.0", endpoint="/api/v1/uploads/{upload_id}"),
+                ServiceCapability(name="upload:complete", version="1.0", endpoint="/api/v1/uploads/{upload_id}/complete"),
+                ServiceCapability(name="upload:tus", version="1.0", endpoint="/api/v1/uploads"),
+            ],
+            health_check_endpoint="/health",
+        )
 
-    await registry.register(registration)
-    logger.info(f"Upload service registered in A2A registry: {service_id}")
+        await registry.register(registration)
+        logger.info(f"Upload service registered in A2A registry: {service_id}")
 
-    # Start heartbeat loop
-    async def heartbeat_loop():
-        """Send heartbeat every 15 seconds."""
-        while True:
-            try:
-                await asyncio.sleep(15)
-                await registry.heartbeat("upload-service", service_id)
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Heartbeat failed: {e}")
+        # Start heartbeat loop
+        async def heartbeat_loop():
+            """Send heartbeat every 15 seconds."""
+            while True:
+                try:
+                    await asyncio.sleep(15)
+                    await registry.heartbeat("upload-service", service_id)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Heartbeat failed: {e}")
 
-    heartbeat_task = asyncio.create_task(heartbeat_loop())
+        heartbeat_task = asyncio.create_task(heartbeat_loop())
+    except (ImportError, ModuleNotFoundError) as e:
+        logger.warning(f"A2A service registry not available - skipping registration: {e}")
 
     logger.info(
         "Upload service started",
@@ -141,14 +148,19 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        # Unregister from A2A registry
-        heartbeat_task.cancel()
-        try:
-            await heartbeat_task
-        except asyncio.CancelledError:
-            pass
-        await registry.unregister("upload-service", service_id)
-        logger.info("Upload service unregistered from A2A registry")
+        # Unregister from A2A registry (if registered)
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+        if registry is not None and service_id is not None:
+            try:
+                await registry.unregister("upload-service", service_id)
+                logger.info("Upload service unregistered from A2A registry")
+            except Exception as e:
+                logger.warning(f"Failed to unregister from A2A registry: {e}")
         # Shutdown - drain in-progress uploads gracefully
         await drain_in_progress_uploads()
 

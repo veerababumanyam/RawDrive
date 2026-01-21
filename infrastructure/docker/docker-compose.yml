@@ -249,7 +249,7 @@ services:
     volumes:
       - ../../backend:/app
       - ../../backend/secrets/jwtEd25519.key:/run/secrets/jwt_private_key:ro
-      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+      - ../../backend/secrets/ed25519_public_key.pem:/run/secrets/jwt_public_key:ro
   face-worker:
     build:
       context: ../../backend
@@ -621,9 +621,10 @@ services:
       REDIS_URL: redis://redis:${PORT_REDIS}/0
       REDIS_MAX_CONNECTIONS: ${GALLERY_REDIS_MAX_CONNECTIONS:-50}
 
-      # JWT (must match backend)
+      # JWT (must match backend - EdDSA with public key)
       JWT_SECRET: ${JWT_SECRET:-}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public_key
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-EdDSA}
 
       # CORS
       CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
@@ -673,6 +674,8 @@ services:
 
     volumes:
       - ../../services/gallery-service:/app
+      # Mount JWT public key for token verification (EdDSA)
+      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
 
     depends_on:
       postgres:
@@ -892,7 +895,7 @@ services:
 
     volumes:
       # Mount JWT public key for token verification
-      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+      - ../../backend/secrets/ed25519_public_key.pem:/run/secrets/jwt_public_key:ro
 
     depends_on:
       postgres:
@@ -1028,7 +1031,7 @@ services:
 
     volumes:
       # Mount JWT public key for token verification (EdDSA)
-      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+      - ../../backend/secrets/ed25519_public_key.pem:/run/secrets/jwt_public_key:ro
 
     deploy:
       resources:
@@ -1224,7 +1227,7 @@ services:
         condition: service_healthy
     volumes:
       - ../../services/upload-service:/app
-      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+      - ../../backend/secrets/ed25519_public_key.pem:/run/secrets/jwt_public_key:ro
 
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:${PORT_UPLOAD}/health" ]
@@ -1329,7 +1332,7 @@ services:
 
     volumes:
       # Mount JWT public key for token verification
-      - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
+      - ../../backend/secrets/ed25519_public_key.pem:/run/secrets/jwt_public_key:ro
 
     depends_on:
       postgres:

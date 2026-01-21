@@ -42,36 +42,9 @@ metrics = get_metrics()
 router = APIRouter()
 
 
-# =============================================================================
-# Dependencies
-# =============================================================================
-
-
-async def get_current_user(
-    authorization: str = Header(..., description="Bearer token"),
-    x_workspace_id: str = Header(..., alias="X-Workspace-ID"),
-) -> dict:
-    """Extract and validate JWT token.
-
-    In production, this would decode and validate the JWT.
-    For now, we extract user info from headers set by the API gateway.
-    """
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization header")
-
-    # In production, decode JWT here
-    # For now, trust headers from gateway
-    return {
-        "user_id": "user-from-jwt",
-        "workspace_id": x_workspace_id,
-    }
-
-
-async def get_workspace_id(
-    x_workspace_id: str = Header(..., alias="X-Workspace-ID"),
-) -> str:
-    """Extract workspace ID from header."""
-    return x_workspace_id
+# Dependencies are imported from src.middleware.auth:
+# - get_current_user: Decodes and validates JWT tokens
+# - get_workspace_id: Extracts workspace ID from header or path
 
 
 # =============================================================================
@@ -136,9 +109,14 @@ async def create_gallery(
             raise HTTPException(status_code=400, detail="Invalid shoot_date format")
 
     try:
+        # Extract user_id from JWT payload - should always be present after auth
+        user_id_str = current_user.get("user_id")
+        if not user_id_str:
+            raise HTTPException(status_code=401, detail="User ID not found in token")
+
         result = await gallery_service.create_gallery(
             workspace_id=UUID(workspace_id),
-            user_id=UUID(current_user["user_id"]) if current_user.get("user_id") != "user-from-jwt" else UUID("00000000-0000-0000-0000-000000000000"), # Fallback for dev/mock
+            user_id=UUID(user_id_str),
             title=request.title,
             description=request.description,
             client_name=request.client_name,
