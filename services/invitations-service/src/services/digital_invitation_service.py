@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+
+logger = logging.getLogger(__name__)
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -46,8 +48,6 @@ except ImportError:
         raise NotImplementedError("R2StorageService needs to be implemented for photo/media storage")
 from src.services.audit_service import AuditService, AuditEventType
 
-
-logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------

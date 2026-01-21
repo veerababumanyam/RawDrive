@@ -7,7 +7,8 @@ All data modifications are recorded with actor, timestamp, and context.
 
 import json
 from datetime import datetime
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Optional, Union
 from uuid import UUID
 
 from src.database import get_pool
@@ -15,6 +16,23 @@ from src.logging import get_logger
 from src.schemas.audit import AuditEvent, AuditLogResponse, AuditQueryParams
 
 logger = get_logger(__name__)
+
+
+class AuditEventType(str, Enum):
+    """Types of audit events."""
+    GUEST_CREATE = "guest.create"
+    GUEST_UPDATE = "guest.update"
+    GUEST_DELETE = "guest.delete"
+    GUEST_BULK_IMPORT = "guest.bulk_import"
+    GUEST_BULK_INVITE = "guest.bulk_invite"
+    RSVP_SUBMIT = "rsvp.submit"
+    RSVP_UPDATE = "rsvp.update"
+    RSVP_EXPORTED = "rsvp.exported"
+    INVITATION_CREATE = "invitation.create"
+    INVITATION_UPDATE = "invitation.update"
+    INVITATION_DELETE = "invitation.delete"
+    INVITATION_PUBLISH = "invitation.publish"
+    INVITATION_VIEW = "invitation.view"
 
 
 class AuditService:
@@ -29,7 +47,7 @@ class AuditService:
         self,
         workspace_id: str,
         actor_id: str,
-        action: str,
+        action: Union[AuditEventType, str],
         resource_type: str,
         resource_id: str,
         changes: Optional[dict] = None,

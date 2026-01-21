@@ -69,6 +69,59 @@ RATE_LIMIT_HITS = Counter(
 )
 
 # =============================================================================
+# Security Event Metrics (SOC2 Monitoring)
+# =============================================================================
+
+RATE_LIMIT_BLOCKED = Counter(
+    f"{settings.METRICS_CUSTOM_PREFIX}_security_rate_limit_blocked_total",
+    "Requests blocked by rate limiting",
+    ["endpoint", "client_type"],  # client_type: authenticated, anonymous
+    registry=metrics_registry,
+)
+
+AUTH_FAILED = Counter(
+    f"{settings.METRICS_CUSTOM_PREFIX}_security_auth_failed_total",
+    "Authentication failures",
+    ["error_type"],  # expired, invalid_signature, malformed, missing
+    registry=metrics_registry,
+)
+
+PERMISSION_DENIED = Counter(
+    f"{settings.METRICS_CUSTOM_PREFIX}_security_permission_denied_total",
+    "Permission denied by RBAC",
+    ["role", "required_permission"],
+    registry=metrics_registry,
+)
+
+TIMEOUT_EXCEEDED = Counter(
+    f"{settings.METRICS_CUSTOM_PREFIX}_security_timeout_exceeded_total",
+    "Requests terminated due to timeout",
+    ["method", "endpoint"],
+    registry=metrics_registry,
+)
+
+AUDIT_LOG_CREATED = Counter(
+    f"{settings.METRICS_CUSTOM_PREFIX}_security_audit_logs_total",
+    "Audit log entries created",
+    ["action", "entity_type"],  # action: create, update, delete, export, access
+    registry=metrics_registry,
+)
+
+AUDIT_LOG_FAILURES = Counter(
+    f"{settings.METRICS_CUSTOM_PREFIX}_security_audit_failures_total",
+    "Audit logging failures (best-effort mode)",
+    ["error_type"],
+    registry=metrics_registry,
+)
+
+PII_ACCESS_LOGGED = Counter(
+    f"{settings.METRICS_CUSTOM_PREFIX}_security_pii_access_total",
+    "PII field access events logged",
+    ["entity_type"],  # client, contact, address
+    registry=metrics_registry,
+)
+
+# =============================================================================
 # Cache Metrics
 # =============================================================================
 

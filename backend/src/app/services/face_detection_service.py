@@ -30,6 +30,11 @@ from app.services.face_configuration_service import (
     FaceConfigurationService,
     get_face_configuration_service,
 )
+from app.services.biometric_consent_service import (
+    BiometricConsentService,
+    get_biometric_consent_service,
+    ConsentNotGrantedError,
+)
 from app.services.face_exceptions import (
     FaceNotFoundError,
     FaceDetectionError,
@@ -79,17 +84,20 @@ class FaceDetectionService:
         face_repository: Optional[FaceRepository] = None,
         cluster_service: Optional[FaceClusterService] = None,
         configuration_service: Optional[FaceConfigurationService] = None,
+        consent_service: Optional[BiometricConsentService] = None,
     ):
         """Initialize the detection service with dependencies.
-        
+
         Args:
             face_repository: Repository for face CRUD operations
             cluster_service: Service for face clustering
             configuration_service: Service for configuration settings
+            consent_service: Service for biometric consent checks
         """
         self._face_repo = face_repository
         self._cluster_service = cluster_service
         self._config_service = configuration_service
+        self._consent_service = consent_service
         self._provider_manager = None  # Lazy initialized
     
     @property
@@ -112,7 +120,14 @@ class FaceDetectionService:
         if self._config_service is None:
             self._config_service = get_face_configuration_service()
         return self._config_service
-    
+
+    @property
+    def consent_service(self) -> BiometricConsentService:
+        """Lazy load biometric consent service."""
+        if self._consent_service is None:
+            self._consent_service = get_biometric_consent_service()
+        return self._consent_service
+
     async def _get_provider_manager(self):
         """Lazy load provider manager."""
         if self._provider_manager is None:
@@ -692,26 +707,52 @@ class FaceDetectionService:
     # =========================================================================
     
     async def _is_detection_enabled(self, workspace_id: UUID) -> bool:
-        """Check if face detection is enabled for a workspace."""
+        """Check if face detection is enabled for a workspace.
+
+        COM-001: Biometric consent must be checked FIRST. Face detection
+        is blocked until explicit consent is granted in workspace settings.
+
+        Check order:
+        1. Biometric consent (GDPR Article 9 compliance) - MUST be granted
+        2. Workspace-level feature toggle
+        3. Global feature toggle
+        """
         try:
+            # COM-001: Check biometric consent FIRST (GDPR Article 9)
+            # This takes precedence over all other settings
+            consent_allowed = await self.consent_service.is_face_detection_allowed(
+                workspace_id
+            )
+            if not consent_allowed:
+                logger.debug(
+                    "Face detection blocked: biometric consent not granted",
+                    extra={"workspace_id": str(workspace_id)},
+                )
+                return False
+
             # Check workspace-level setting
             value = await self.config_service.get_face_detection_setting(
                 f"workspace_{workspace_id}_enabled"
             )
             if value is not None:
                 return value.lower() == "true"
-            
+
             # Fall back to global setting
             global_value = await self.config_service.get_face_detection_setting(
                 "enabled"
             )
             if global_value is not None:
                 return global_value.lower() == "true"
-            
-            # Default to enabled
+
+            # Default to enabled (if consent was granted above)
             return True
-        except Exception:
-            return True
+        except Exception as e:
+            logger.warning(
+                "Error checking detection enabled status",
+                extra={"workspace_id": str(workspace_id), "error": str(e)},
+            )
+            # Fail-closed: if we can't verify consent, block detection
+            return False
     
     async def _get_min_confidence(self) -> float:
         """Get minimum confidence threshold for storing faces."""

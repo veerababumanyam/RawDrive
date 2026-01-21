@@ -1,0 +1,355 @@
+openapi: 3.1.0
+info:
+  title: RawDrive Face Data Retention API
+  description: API endpoints for managing face embedding retention policy (COM-002)
+  version: 1.0.0
+
+paths:
+  /api/v1/workspaces/{workspace_id}/face-retention:
+    get:
+      summary: Get face data retention settings
+      description: Retrieve current retention policy for face embeddings
+      operationId: getFaceRetentionPolicy
+      tags:
+        - Retention Policy
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Retention policy retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicyResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - bearerAuth: []
+        - workspaceAccess: [settings:read]
+
+    patch:
+      summary: Update face data retention policy
+      description: Update retention period for face embeddings (admin only)
+      operationId: updateFaceRetentionPolicy
+      tags:
+        - Retention Policy
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetentionPolicyUpdate'
+      responses:
+        '200':
+          description: Retention policy updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - bearerAuth: []
+        - workspaceAccess: [admin:write]
+
+  /api/v1/workspaces/{workspace_id}/face-retention/stats:
+    get:
+      summary: Get retention statistics
+      description: Get statistics about face embeddings and retention status
+      operationId: getFaceRetentionStats
+      tags:
+        - Retention Policy
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionStatsResponse'
+      security:
+        - bearerAuth: []
+        - workspaceAccess: [settings:read]
+
+  /api/v1/workspaces/{workspace_id}/face-retention/jobs:
+    get:
+      summary: Get retention cleanup job history
+      description: List recent retention cleanup job executions
+      operationId: getFaceRetentionJobs
+      tags:
+        - Retention Jobs
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, completed, failed]
+      responses:
+        '200':
+          description: Job history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionJobListResponse'
+      security:
+        - bearerAuth: []
+        - workspaceAccess: [settings:read]
+
+  /api/v1/admin/face-retention/cleanup:
+    post:
+      summary: Trigger manual retention cleanup
+      description: Manually trigger retention cleanup (platform admin only)
+      operationId: triggerRetentionCleanup
+      tags:
+        - Retention Jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerCleanupRequest'
+      responses:
+        '202':
+          description: Cleanup job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionJobResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - bearerAuth: []
+        - platformAdmin: []
+
+components:
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    RetentionPolicyResponse:
+      type: object
+      required:
+        - workspace_id
+        - face_embedding_retention_days
+        - retention_policy_version
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        face_embedding_retention_days:
+          type: integer
+          minimum: 30
+          maximum: 2555
+          default: 2555
+          description: Days to retain face embeddings (30-2555)
+        retention_policy_version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+          default: "1.0.0"
+        last_cleanup_at:
+          type: string
+          format: date-time
+          nullable: true
+        embeddings_deleted_count:
+          type: integer
+          default: 0
+          description: Total embeddings deleted by retention policy
+        updated_at:
+          type: string
+          format: date-time
+
+    RetentionPolicyUpdate:
+      type: object
+      properties:
+        face_embedding_retention_days:
+          type: integer
+          minimum: 30
+          maximum: 2555
+          description: New retention period in days
+        retention_policy_version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+          description: Policy version (must be higher than current)
+
+    RetentionStatsResponse:
+      type: object
+      required:
+        - workspace_id
+        - total_faces
+        - total_embeddings
+        - embeddings_by_age
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        total_faces:
+          type: integer
+          description: Total faces in workspace
+        total_embeddings:
+          type: integer
+          description: Total embeddings stored
+        embeddings_by_age:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgeDistribution'
+        oldest_embedding_date:
+          type: string
+          format: date-time
+          nullable: true
+        embeddings_expiring_soon:
+          type: integer
+          description: Embeddings expiring in next 30 days
+        estimated_storage_bytes:
+          type: integer
+          description: Approximate storage used by embeddings
+
+    AgeDistribution:
+      type: object
+      required:
+        - age_range
+        - count
+      properties:
+        age_range:
+          type: string
+          description: Age range label
+          enum: ["0-30 days", "31-90 days", "91-365 days", "1-2 years", "2-5 years", "5+ years"]
+        count:
+          type: integer
+        percentage:
+          type: number
+          format: float
+
+    RetentionJobListResponse:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetentionJobResponse'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    RetentionJobResponse:
+      type: object
+      required:
+        - job_id
+        - status
+        - created_at
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null for global cleanup
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        faces_scanned:
+          type: integer
+        faces_deleted:
+          type: integer
+        embeddings_deleted:
+          type: integer
+        bytes_freed:
+          type: integer
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    TriggerCleanupRequest:
+      type: object
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Specific workspace or null for all workspaces
+        dry_run:
+          type: boolean
+          default: false
+          description: If true, report what would be deleted without deleting
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlation_id:
+              type: string
+              format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    workspaceAccess:
+      type: apiKey
+      in: header
+      name: X-Workspace-Id
+    platformAdmin:
+      type: apiKey
+      in: header
+      name: X-Admin-Token

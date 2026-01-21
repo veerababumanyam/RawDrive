@@ -22,7 +22,8 @@
     "src/cleanup.ts",
     "src/compliance.ts",
     "src/export.ts",
-    "src/permissions.ts"
+    "src/permissions.ts",
+    "src/livesync.ts"
   ],
   "exclude": [
     "node_modules",

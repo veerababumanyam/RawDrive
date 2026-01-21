@@ -52,23 +52,28 @@ class ContactCreate(BaseModel):
         contact_type = info.data.get("contact_type")
 
         if contact_type == "email":
-            # Validate email format
+            # Validate email format (skip deliverability check for flexibility)
             from email_validator import validate_email
             try:
-                validate_email(v)
+                validate_email(v, check_deliverability=False)
             except Exception:
                 raise ValueError("Invalid email address format")
 
         elif contact_type == "phone":
-            # Validate phone number format (international or local)
+            # Validate phone number format - be lenient to allow various formats
+            # Just check that we have enough digits (at least 7 for local, 10+ for full)
+            digits_only = ''.join(c for c in v if c.isdigit())
+            if len(digits_only) < 7:
+                raise ValueError("Phone number must have at least 7 digits")
+            # Optional: try to parse for better validation but don't fail
             try:
-                # Try to parse as international number
                 parsed = phonenumbers.parse(v, None)
-                if not phonenumbers.is_valid_number(parsed):
-                    raise ValueError("Invalid phone number")
+                # Only reject if we can parse it AND it's definitely invalid
+                # (has wrong number of digits for the country)
+                if not phonenumbers.is_possible_number(parsed):
+                    raise ValueError("Invalid phone number format")
             except phonenumbers.NumberParseException:
-                # If parsing fails, allow the value but warn
-                # Some users may enter non-standard formats
+                # If parsing fails, allow the value - user may be using a non-standard format
                 pass
 
         return v.strip()
@@ -100,7 +105,7 @@ class ContactUpdate(BaseModel):
         if contact_type == "email":
             from email_validator import validate_email
             try:
-                validate_email(v)
+                validate_email(v, check_deliverability=False)
             except Exception:
                 raise ValueError("Invalid email address format")
 
@@ -132,7 +137,7 @@ class ContactResponse(BaseModel):
     is_primary: bool = Field(..., description="Whether this is the primary contact")
     is_verified: bool = Field(False, description="Whether this contact has been verified")
     created_at: datetime = Field(..., description="Creation timestamp")
-    updated_at: datetime = Field(..., description="Last update timestamp")
+    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
 
     model_config = {
         "from_attributes": True,

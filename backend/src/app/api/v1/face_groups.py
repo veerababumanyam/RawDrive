@@ -343,7 +343,7 @@ async def get_face_group(
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Face group {group_id} not found",
+            detail="Face group not found"  # SEC-002: Generic message to prevent ID enumeration,
         )
     
     # Get sample faces from this group
@@ -410,7 +410,7 @@ async def update_face_group(
     if not updated_group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Face group {group_id} not found",
+            detail="Face group not found"  # SEC-002: Generic message to prevent ID enumeration,
         )
     
     return FaceGroupResponse(**updated_group)
@@ -474,10 +474,11 @@ async def name_face_group(
             person_id=request.person_id,
             person_name=request.person_name,
         )
-    except FaceGroupNotFoundError as e:
+    except FaceGroupNotFoundError:
+        # SEC-002: Generic message to prevent ID enumeration
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Face group not found",
         )
     except ValueError as e:
         raise HTTPException(
@@ -514,10 +515,11 @@ async def unname_face_group(
             group_id=group_id,
             workspace_id=workspace_id,
         )
-    except FaceGroupNotFoundError as e:
+    except FaceGroupNotFoundError:
+        # SEC-002: Generic message to prevent ID enumeration
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Face group not found",
         )
 
     return None
@@ -544,7 +546,7 @@ async def delete_face_group(
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Face group {group_id} not found",
+            detail="Face group not found"  # SEC-002: Generic message to prevent ID enumeration,
         )
     
     logger.info(
@@ -581,17 +583,19 @@ async def merge_face_groups(
             target_group_id=request.target_group_id,
             workspace_id=workspace_id,
         )
-    except FaceGroupNotFoundError as e:
+    except FaceGroupNotFoundError:
+        # SEC-002: Generic message to prevent ID enumeration
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Face group not found",
         )
-    except InvalidMergeOperationError as e:
+    except InvalidMergeOperationError:
+        # SEC-002: Generic message without IDs
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Cannot merge these face groups",
         )
-    
+
     return FaceGroupResponse(**merged_group)
 
 
@@ -619,15 +623,17 @@ async def split_face_group(
             workspace_id=workspace_id,
             new_group_name=request.new_group_name,
         )
-    except FaceGroupNotFoundError as e:
+    except FaceGroupNotFoundError:
+        # SEC-002: Generic message to prevent ID enumeration
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Face group not found",
         )
-    except InvalidSplitOperationError as e:
+    except InvalidSplitOperationError:
+        # SEC-002: Generic message without IDs
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Cannot split these faces from the group",
         )
 
     return FaceGroupResponse(**new_group)
@@ -666,15 +672,17 @@ async def multi_merge_face_groups(
             representative_face_id=request.representative_face_id,
             name=request.name,
         )
-    except FaceGroupNotFoundError as e:
+    except FaceGroupNotFoundError:
+        # SEC-002: Generic message to prevent ID enumeration
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Face group not found",
         )
-    except InvalidMergeOperationError as e:
+    except InvalidMergeOperationError:
+        # SEC-002: Generic message without IDs
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Cannot merge these face groups",
         )
 
     # Generate signed thumbnail URL for merged group
@@ -762,20 +770,23 @@ async def set_representative_face(
             face_id=request.face_id,
             recalculate_centroid=request.recalculate_centroid,
         )
-    except FaceGroupNotFoundError as e:
+    except FaceGroupNotFoundError:
+        # SEC-002: Generic message to prevent ID enumeration
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Face group not found",
         )
-    except FaceNotFoundError as e:
+    except FaceNotFoundError:
+        # SEC-002: Generic message to prevent ID enumeration
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Face not found",
         )
-    except InvalidMergeOperationError as e:
+    except InvalidMergeOperationError:
+        # SEC-002: Generic message without IDs
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Cannot set this face as representative",
         )
 
     # Generate signed thumbnail URL
@@ -913,10 +924,11 @@ async def get_similar_groups(
             threshold=threshold,
             limit=limit,
         )
-    except FaceGroupNotFoundError as e:
+    except FaceGroupNotFoundError:
+        # SEC-002: Generic message to prevent ID enumeration
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Face group not found",
         )
 
     # Build response with signed thumbnail URLs
@@ -1001,7 +1013,7 @@ async def get_faces_in_group(
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Face group {group_id} not found",
+            detail="Face group not found"  # SEC-002: Generic message to prevent ID enumeration,
         )
 
     representative_face_id = group.get("representative_face_id")
@@ -1075,7 +1087,7 @@ async def get_photos_by_face_group(
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Face group {group_id} not found",
+            detail="Face group not found"  # SEC-002: Generic message to prevent ID enumeration,
         )
 
     photo_ids = await face_repo.find_photo_ids_by_group_id(
@@ -1121,7 +1133,7 @@ async def list_group_faces(
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Face group {group_id} not found",
+            detail="Face group not found"  # SEC-002: Generic message to prevent ID enumeration,
         )
     
     faces = await face_repo.find_by_group_id(

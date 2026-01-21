@@ -3,6 +3,11 @@ Rate limiting middleware using Redis sliding window algorithm.
 
 Protects endpoints from abuse and ensures fair resource allocation.
 Different limits for different endpoint patterns.
+
+SECURITY:
+- User identification comes ONLY from validated JWT (request.state.user_id)
+  or actual client IP (request.client.host). NEVER trust headers.
+- Fails CLOSED when Redis is unavailable (returns 503, not allow-all).
 """
 
 import time
@@ -13,6 +18,9 @@ from starlette.responses import Response, JSONResponse
 
 from src.config import settings
 from src.cache.redis_client import redis_client
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
 
 
 # Rate limit configuration per endpoint pattern
@@ -107,10 +115,11 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     """
     Rate limiting middleware using Redis sliding window.
 
-    Limits requests per client based on:
-    1. Authenticated user ID (X-User-ID header)
-    2. IP address (X-Forwarded-For or client.host)
+    SECURITY: Identifies clients ONLY by:
+    1. Authenticated user_id from validated JWT (request.state.user_id)
+    2. Actual client IP address (request.client.host)
 
+    NEVER trusts spoofable headers like X-User-ID, X-Visitor-ID, or X-Forwarded-For.
     Uses Redis for distributed rate limiting across multiple instances.
     """
 
@@ -123,7 +132,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             call_next: Next middleware/endpoint handler
 
         Returns:
-            Response (429 if rate limited, or actual response)
+            Response (429 if rate limited, 503 if Redis unavailable, or actual response)
         """
         # Skip if rate limiting disabled
         if not settings.RATE_LIMIT_ENABLED:
@@ -133,22 +142,20 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         if request.url.path in ["/health", "/health/live", "/health/ready", "/metrics"]:
             return await call_next(request)
 
-        # Identify client (user ID > visitor ID > IP)
-        client_id = (
-            request.headers.get("X-User-ID")
-            or request.headers.get("X-Visitor-ID")
-            or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-            or request.client.host
-            if request.client
-            else "unknown"
-        )
+        # SECURITY: Identify client using ONLY trusted sources
+        # - For authenticated users: user_id from validated JWT (set by auth middleware)
+        # - For anonymous users: actual client IP from request.client.host (set by Traefik)
+        # NEVER use spoofable headers (X-User-ID, X-Visitor-ID, X-Forwarded-For)
+        client_id = self._get_secure_client_id(request)
+        identifier_type = "user" if hasattr(request.state, "user_id") and request.state.user_id else "ip"
 
         # Get rate limit for this endpoint
         limit_str = match_rate_limit_pattern(request.url.path)
         max_requests, window_seconds = parse_rate_limit(limit_str)
 
         # Redis key for this client and endpoint
-        redis_key = f"ratelimit:client:{client_id}:{request.url.path}:{int(time.time() // window_seconds)}"
+        # Format: ratelimit:{identifier_type}:{client_id}:{path}:{window}
+        redis_key = f"ratelimit:{identifier_type}:{client_id}:{request.url.path}:{int(time.time() // window_seconds)}"
 
         # Check rate limit
         try:
@@ -161,6 +168,19 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
             # Check if exceeded
             if request_count > max_requests:
+                # Log rate limit event with identity for security monitoring
+                logger.warning(
+                    "Rate limit exceeded",
+                    extra={
+                        "client_id": client_id,
+                        "identifier_type": identifier_type,
+                        "path": request.url.path,
+                        "method": request.method,
+                        "request_count": request_count,
+                        "max_requests": max_requests,
+                        "window_seconds": window_seconds,
+                    },
+                )
                 return JSONResponse(
                     status_code=429,
                     content={
@@ -186,6 +206,47 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
             return response
 
-        except Exception:
-            # If Redis fails, allow request (graceful degradation)
-            return await call_next(request)
+        except Exception as e:
+            # SECURITY: Fail CLOSED when Redis is unavailable
+            # This prevents attackers from bypassing rate limits by disrupting Redis
+            logger.error(
+                "Redis unavailable for rate limiting - failing closed",
+                extra={
+                    "error": str(e),
+                    "client_id": client_id,
+                    "path": request.url.path,
+                },
+            )
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": "SERVICE_UNAVAILABLE",
+                    "message": "Service temporarily unavailable. Please try again shortly.",
+                },
+            )
+
+    def _get_secure_client_id(self, request: Request) -> str:
+        """
+        Get client identifier from TRUSTED sources only.
+
+        SECURITY: This method NEVER uses spoofable headers.
+
+        Args:
+            request: The incoming request
+
+        Returns:
+            str: Client identifier (user_id from JWT or IP address)
+        """
+        # Priority 1: Authenticated user_id from validated JWT
+        # This is set by auth middleware AFTER JWT validation
+        if hasattr(request.state, "user_id") and request.state.user_id:
+            return str(request.state.user_id)
+
+        # Priority 2: Actual client IP from request.client.host
+        # This is set by the ASGI server (uvicorn) from the TCP connection
+        # Traefik sets the real client IP via PROXY protocol or trusted X-Real-IP
+        if request.client and request.client.host:
+            return request.client.host
+
+        # Fallback for edge cases (should rarely happen)
+        return "anonymous"

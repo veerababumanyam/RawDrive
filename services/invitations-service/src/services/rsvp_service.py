@@ -587,3 +587,20 @@ class RSVPService:
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
+
+
+class RSVPNotFoundError(Exception):
+    """Exception raised when an RSVP is not found."""
+    pass
+
+
+# Singleton instance
+_rsvp_service: RSVPService | None = None
+
+
+def get_rsvp_service() -> RSVPService:
+    """Get singleton instance of RSVPService."""
+    global _rsvp_service
+    if _rsvp_service is None:
+        _rsvp_service = RSVPService()
+    return _rsvp_service

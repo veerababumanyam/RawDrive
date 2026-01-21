@@ -176,9 +176,9 @@ async def get_face(
     if not face:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Face {face_id} not found",
+            detail="Face not found",  # SEC-002: Generic message to prevent ID enumeration
         )
-    
+
     return FaceDetailResponse(**face, id=face["id"])
 
 
@@ -203,9 +203,9 @@ async def identify_face(
     if not face:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Face {face_id} not found",
+            detail="Face not found",  # SEC-002: Generic message to prevent ID enumeration
         )
-    
+
     # Assign to group
     success = await face_repo.assign_to_group(
         face_id=face_id,

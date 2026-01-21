@@ -110,3 +110,7 @@ async def fetchval(query: str, *args):
     """Execute a query and return a single value."""
     async with get_connection() as conn:
         return await conn.fetchval(query, *args)
+
+
+# Alias for backward compatibility
+get_postgres_pool = get_pool

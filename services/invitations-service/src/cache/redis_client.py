@@ -360,3 +360,8 @@ async def invalidate_invitation_cache(invitation_id: str):
 async def invalidate_guest_cache(invitation_id: str):
     """Invalidate guest-related caches."""
     await redis_client.delete_pattern(f"guests:{invitation_id}:*")
+
+
+def get_redis_client() -> RedisClient:
+    """Get the singleton Redis client instance."""
+    return redis_client

@@ -280,10 +280,9 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         rounded-card overflow-hidden
         cursor-pointer
         bg-surface-hover
-        transition-all duration-200 ease-out
+        photo-card-glass
         ${isManagementSelected ? 'ring-3 ring-primary ring-offset-2 shadow-lg shadow-primary/20' : ''}
         ${asset.is_selected ? 'ring-3 ring-success ring-offset-2 shadow-lg shadow-success/20' : ''}
-        hover:shadow-card-hover
         select-none
         ${selectionClasses}
         ${className}

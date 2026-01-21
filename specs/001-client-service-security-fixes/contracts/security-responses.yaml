@@ -1,0 +1,314 @@
+# Security Response Contracts
+# OpenAPI 3.0 specification for security-related API responses
+# Feature: 001-client-service-security-fixes
+
+openapi: 3.0.3
+info:
+  title: Client Service Security Responses
+  description: |
+    Contract definitions for security-related HTTP responses in the client-service.
+    These responses are standardized to prevent information disclosure while
+    providing actionable feedback to legitimate users.
+  version: 1.0.0
+
+components:
+  schemas:
+    # ============================================
+    # Authentication Errors (401)
+    # ============================================
+    AuthenticationError:
+      type: object
+      description: |
+        Generic authentication error. All JWT validation failures return
+        this identical response to prevent information disclosure.
+
+        SECURITY: Do NOT add additional error codes or details that could
+        distinguish between different failure modes.
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          enum: [AUTHENTICATION_REQUIRED]
+          description: Fixed error code for all auth failures
+          example: AUTHENTICATION_REQUIRED
+        message:
+          type: string
+          enum: [Invalid authentication token]
+          description: Fixed generic message for all auth failures
+          example: Invalid authentication token
+      example:
+        error: AUTHENTICATION_REQUIRED
+        message: Invalid authentication token
+
+    # ============================================
+    # Authorization Errors (403)
+    # ============================================
+    PermissionDeniedError:
+      type: object
+      description: |
+        Permission denied error when user lacks required permissions.
+        Returns the missing permission to help users understand what access they need.
+      required:
+        - error
+        - message
+        - required_permission
+      properties:
+        error:
+          type: string
+          enum: [INSUFFICIENT_PERMISSIONS]
+          example: INSUFFICIENT_PERMISSIONS
+        message:
+          type: string
+          description: Human-readable explanation
+          example: Insufficient permissions to perform this action
+        required_permission:
+          type: string
+          description: The permission that was required
+          example: clients:bulk_delete
+      example:
+        error: INSUFFICIENT_PERMISSIONS
+        message: Insufficient permissions to perform this action
+        required_permission: clients:bulk_delete
+
+    # ============================================
+    # Rate Limiting Errors (429)
+    # ============================================
+    RateLimitError:
+      type: object
+      description: Rate limit exceeded response with retry information
+      required:
+        - error
+        - message
+        - retry_after
+      properties:
+        error:
+          type: string
+          enum: [RATE_LIMIT_EXCEEDED]
+          example: RATE_LIMIT_EXCEEDED
+        message:
+          type: string
+          description: Human-readable rate limit message
+          example: "Rate limit exceeded. Max 100 requests per 60s."
+        retry_after:
+          type: integer
+          description: Seconds until rate limit resets
+          example: 45
+      example:
+        error: RATE_LIMIT_EXCEEDED
+        message: "Rate limit exceeded. Max 100 requests per 60s."
+        retry_after: 45
+
+    # ============================================
+    # Service Unavailable (503)
+    # ============================================
+    ServiceUnavailableError:
+      type: object
+      description: |
+        Returned when rate limiting cannot be enforced (Redis unavailable).
+        This is a fail-closed response to prevent security bypass.
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          enum: [SERVICE_UNAVAILABLE]
+          example: SERVICE_UNAVAILABLE
+        message:
+          type: string
+          enum: [Service temporarily unavailable. Please try again shortly.]
+          description: Fixed user-friendly message
+          example: Service temporarily unavailable. Please try again shortly.
+      example:
+        error: SERVICE_UNAVAILABLE
+        message: Service temporarily unavailable. Please try again shortly.
+
+    # ============================================
+    # Request Timeout (504)
+    # ============================================
+    TimeoutError:
+      type: object
+      description: Request exceeded allowed processing time
+      required:
+        - error
+        - message
+        - timeout_seconds
+      properties:
+        error:
+          type: string
+          enum: [REQUEST_TIMEOUT]
+          example: REQUEST_TIMEOUT
+        message:
+          type: string
+          description: Human-readable timeout message
+          example: Request timed out. Please try again with a smaller request or contact support if this persists.
+        timeout_seconds:
+          type: number
+          description: The timeout limit that was exceeded
+          example: 30
+      example:
+        error: REQUEST_TIMEOUT
+        message: Request timed out. Please try again with a smaller request or contact support if this persists.
+        timeout_seconds: 30
+
+  # ============================================
+  # Response Headers
+  # ============================================
+  headers:
+    X-RateLimit-Limit:
+      description: Maximum requests allowed in the current window
+      schema:
+        type: integer
+      example: 100
+
+    X-RateLimit-Remaining:
+      description: Requests remaining in current window
+      schema:
+        type: integer
+      example: 75
+
+    X-RateLimit-Reset:
+      description: Unix timestamp when rate limit resets
+      schema:
+        type: integer
+      example: 1705845660
+
+    Retry-After:
+      description: Seconds until request can be retried (on 429)
+      schema:
+        type: integer
+      example: 45
+
+    X-Timeout-Limit:
+      description: Maximum allowed processing time in seconds
+      schema:
+        type: integer
+      example: 30
+
+    X-Timeout-Remaining:
+      description: Processing time remaining (or 0 if timed out)
+      schema:
+        type: integer
+      example: 28
+
+    WWW-Authenticate:
+      description: Authentication scheme required
+      schema:
+        type: string
+        enum: [Bearer]
+      example: Bearer
+
+  # ============================================
+  # Common Response Definitions
+  # ============================================
+  responses:
+    401Unauthorized:
+      description: Authentication failed - token missing, invalid, or expired
+      headers:
+        WWW-Authenticate:
+          $ref: '#/components/headers/WWW-Authenticate'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthenticationError'
+
+    403Forbidden:
+      description: User lacks required permission for this operation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PermissionDeniedError'
+
+    429TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          $ref: '#/components/headers/X-RateLimit-Limit'
+        X-RateLimit-Remaining:
+          $ref: '#/components/headers/X-RateLimit-Remaining'
+        X-RateLimit-Reset:
+          $ref: '#/components/headers/X-RateLimit-Reset'
+        Retry-After:
+          $ref: '#/components/headers/Retry-After'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RateLimitError'
+
+    503ServiceUnavailable:
+      description: Service temporarily unavailable (rate limiting fail-closed)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ServiceUnavailableError'
+
+    504GatewayTimeout:
+      description: Request processing exceeded timeout
+      headers:
+        X-Timeout-Limit:
+          $ref: '#/components/headers/X-Timeout-Limit'
+        X-Timeout-Remaining:
+          $ref: '#/components/headers/X-Timeout-Remaining'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TimeoutError'
+
+# ============================================
+# Example Path with Security Responses
+# ============================================
+paths:
+  /api/v1/workspaces/{workspace_id}/clients:
+    get:
+      summary: List clients (example showing security responses)
+      description: |
+        Demonstrates the security response contract for a typical endpoint.
+        All client-service endpoints should reference these common responses.
+      parameters:
+        - name: workspace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/X-RateLimit-Limit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/X-RateLimit-Remaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/X-RateLimit-Reset'
+            X-Timeout-Limit:
+              $ref: '#/components/headers/X-Timeout-Limit'
+            X-Timeout-Remaining:
+              $ref: '#/components/headers/X-Timeout-Remaining'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '429':
+          $ref: '#/components/responses/429TooManyRequests'
+        '503':
+          $ref: '#/components/responses/503ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/504GatewayTimeout'
+
+    delete:
+      summary: Bulk delete clients (admin only - example)
+      description: |
+        Demonstrates permission-restricted endpoint.
+        Requires clients:bulk_delete permission (admin role only).
+      responses:
+        '200':
+          description: Clients deleted successfully
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+        '429':
+          $ref: '#/components/responses/429TooManyRequests'

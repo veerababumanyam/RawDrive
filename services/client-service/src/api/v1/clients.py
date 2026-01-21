@@ -22,6 +22,8 @@ from src.schemas.client import (
 from src.schemas.common import ErrorResponse, ErrorDetail
 from src.middleware.auth import get_current_user, JWTPayload
 from src.middleware.workspace_auth import verify_workspace_access
+from src.middleware.rbac import require_permission
+from src.constants.permissions import Permission
 from src.observability.metrics import CLIENT_OPERATIONS
 from src.log_config import get_logger
 
@@ -120,6 +122,7 @@ async def create_client(
     service: ClientService = Depends(get_client_service),
     current_user: JWTPayload = Depends(get_current_user),
     audit_service: AuditService = Depends(get_audit_service),
+    _: None = Depends(require_permission(Permission.CLIENTS_WRITE)),
 ) -> ClientResponse:
     """
     Create a new client.
@@ -216,19 +219,23 @@ async def create_client(
 
 @router.get("/{client_id}", response_model=ClientResponse)
 async def get_client(
+    request: Request,
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
     service: ClientService = Depends(get_client_service),
     current_user: JWTPayload = Depends(get_current_user),
+    audit_service: AuditService = Depends(get_audit_service),
 ) -> ClientResponse:
     """
     Get client by ID.
 
     Args:
+        request: FastAPI request for IP tracking
         client_id: Client ID
         workspace_id: Workspace ID
         service: ClientService instance
         current_user: Current user from JWT
+        audit_service: Audit service for PII logging
 
     Returns:
         ClientResponse: Client details
@@ -246,6 +253,17 @@ async def get_client(
                 message=f"Client {client_id} not found",
             ).model_dump(),
         )
+
+    # SOC2 CC6.3: Log PII field access (best-effort, won't fail operation)
+    client_ip = request.client.host if request.client else None
+    await audit_service.log_pii_access(
+        workspace_id=str(workspace_id),
+        user_id=str(current_user.user_id),
+        entity_type="client",
+        entity_id=str(client_id),
+        fields_accessed=list(client.keys()),  # All returned fields
+        ip_address=client_ip,
+    )
 
     logger.debug(
         "Client retrieved",
@@ -272,6 +290,7 @@ async def update_client(
     service: ClientService = Depends(get_client_service),
     current_user: JWTPayload = Depends(get_current_user),
     audit_service: AuditService = Depends(get_audit_service),
+    _: None = Depends(require_permission(Permission.CLIENTS_WRITE)),
 ) -> ClientResponse:
     """
     Update client.
@@ -389,6 +408,7 @@ async def delete_client(
     service: ClientService = Depends(get_client_service),
     current_user: JWTPayload = Depends(get_current_user),
     audit_service: AuditService = Depends(get_audit_service),
+    _: None = Depends(require_permission(Permission.CLIENTS_DELETE)),
 ) -> None:
     """
     Delete client (soft delete with GDPR retention).

@@ -1,0 +1,400 @@
+openapi: 3.1.0
+info:
+  title: RawDrive Biometric Consent API
+  description: API endpoints for managing biometric processing consent (COM-001)
+  version: 1.0.0
+
+paths:
+  /api/v1/workspaces/{workspace_id}/biometric-settings:
+    get:
+      summary: Get workspace biometric settings
+      description: Retrieve current biometric processing settings for a workspace
+      operationId: getBiometricSettings
+      tags:
+        - Biometric Settings
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Biometric settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BiometricSettingsResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - bearerAuth: []
+        - workspaceAccess: [settings:read]
+
+    patch:
+      summary: Update workspace biometric settings
+      description: Update biometric processing settings (workspace owner only)
+      operationId: updateBiometricSettings
+      tags:
+        - Biometric Settings
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BiometricSettingsUpdate'
+      responses:
+        '200':
+          description: Settings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BiometricSettingsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - bearerAuth: []
+        - workspaceAccess: [settings:write]
+
+  /api/v1/workspaces/{workspace_id}/biometric-consent:
+    get:
+      summary: Get current user's biometric consent status
+      description: Check if the authenticated user has active biometric consent
+      operationId: getBiometricConsentStatus
+      tags:
+        - Biometric Consent
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Consent status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentStatusResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - bearerAuth: []
+
+    post:
+      summary: Grant biometric consent
+      description: User grants consent for biometric processing in this workspace
+      operationId: grantBiometricConsent
+      tags:
+        - Biometric Consent
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantConsentRequest'
+      responses:
+        '201':
+          description: Consent granted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Active consent already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+    delete:
+      summary: Withdraw biometric consent
+      description: User withdraws consent for biometric processing
+      operationId: withdrawBiometricConsent
+      tags:
+        - Biometric Consent
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawConsentRequest'
+      responses:
+        '200':
+          description: Consent withdrawn successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawConsentResponse'
+        '404':
+          description: No active consent found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /api/v1/workspaces/{workspace_id}/biometric-consent/history:
+    get:
+      summary: Get consent history
+      description: Retrieve consent grant/withdraw history for the user
+      operationId: getBiometricConsentHistory
+      tags:
+        - Biometric Consent
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Consent history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentHistoryResponse'
+      security:
+        - bearerAuth: []
+
+components:
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    BiometricSettingsResponse:
+      type: object
+      required:
+        - workspace_id
+        - face_detection_enabled
+        - consent_required
+        - consent_version
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        face_detection_enabled:
+          type: boolean
+          description: Whether face detection is enabled for this workspace
+        consent_required:
+          type: boolean
+          description: Whether explicit consent is required before processing
+        consent_version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+          description: Current consent document version
+        consent_document_url:
+          type: string
+          format: uri
+          nullable: true
+        auto_detect_on_upload:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+
+    BiometricSettingsUpdate:
+      type: object
+      properties:
+        face_detection_enabled:
+          type: boolean
+        consent_required:
+          type: boolean
+        consent_version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        consent_document_url:
+          type: string
+          format: uri
+        auto_detect_on_upload:
+          type: boolean
+
+    ConsentStatusResponse:
+      type: object
+      required:
+        - has_active_consent
+        - consent_required
+      properties:
+        has_active_consent:
+          type: boolean
+        consent_required:
+          type: boolean
+        consent:
+          $ref: '#/components/schemas/ConsentResponse'
+          nullable: true
+        required_version:
+          type: string
+          description: Version user needs to consent to (if consent_required)
+
+    GrantConsentRequest:
+      type: object
+      required:
+        - consent_type
+        - document_version
+        - capture_method
+      properties:
+        consent_type:
+          type: string
+          enum: [biometric_processing, face_detection, face_recognition]
+        document_version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        document_hash:
+          type: string
+          maxLength: 64
+          description: SHA-256 hash of document user consented to
+        capture_method:
+          type: string
+          enum: [checkbox, button, toggle, api]
+
+    ConsentResponse:
+      type: object
+      required:
+        - consent_id
+        - workspace_id
+        - user_id
+        - consent_type
+        - status
+        - document_version
+        - created_at
+      properties:
+        consent_id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        consent_type:
+          type: string
+        status:
+          type: string
+          enum: [active, withdrawn, expired, superseded]
+        document_version:
+          type: string
+        country_code:
+          type: string
+          maxLength: 2
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        withdrawn_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    WithdrawConsentRequest:
+      type: object
+      properties:
+        withdrawal_reason:
+          type: string
+          maxLength: 500
+
+    WithdrawConsentResponse:
+      type: object
+      required:
+        - consent_id
+        - status
+        - withdrawn_at
+        - embeddings_scheduled_for_deletion
+      properties:
+        consent_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [withdrawn]
+        withdrawn_at:
+          type: string
+          format: date-time
+        embeddings_scheduled_for_deletion:
+          type: integer
+          description: Number of face embeddings scheduled for deletion
+
+    ConsentHistoryResponse:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsentResponse'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlation_id:
+              type: string
+              format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    workspaceAccess:
+      type: apiKey
+      in: header
+      name: X-Workspace-Id

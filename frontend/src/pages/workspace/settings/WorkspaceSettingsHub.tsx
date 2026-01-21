@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Building2, Sparkles, Shield, Bell, Webhook, CreditCard } from 'lucide-react';
+import { Building2, Sparkles, Shield, Bell, Webhook, CreditCard, ScanFace } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { CompanyProfileForm, type ProfileFormChangeData } from '../../../components/features/settings/CompanyProfileForm';
 import { CompanyProfilePreview } from '../../../components/features/settings/CompanyProfilePreview';
@@ -11,6 +11,7 @@ import { WorkspaceAISettingsPanel } from '../../../components/workspace/settings
 import { WorkspaceSecuritySettingsPanel } from '../../../components/workspace/settings/WorkspaceSecuritySettingsPanel';
 import { WorkspaceNotificationSettingsPanel } from '../../../components/workspace/settings/WorkspaceNotificationSettingsPanel';
 import { WebhooksSettingsPanel } from '../../../components/workspace/settings/WebhooksSettingsPanel';
+import { BiometricSettingsPanel } from '../../../components/workspace/settings/BiometricSettingsPanel';
 
 import { WorkspaceSubscriptionTabContent } from '../../../components/workspace/settings/WorkspaceSubscriptionTabContent';
 
@@ -20,7 +21,7 @@ interface PreviewProfile extends Partial<CompanyProfile> {
     _themeCustomization?: Partial<ThemeCustomization> | null;
 }
 
-type TabId = 'profile' | 'subscription' | 'ai' | 'security' | 'notifications' | 'webhooks';
+type TabId = 'profile' | 'subscription' | 'ai' | 'security' | 'biometrics' | 'notifications' | 'webhooks';
 
 const WorkspaceSettingsHub: React.FC = () => {
     const { t } = useTranslation('settings');
@@ -33,7 +34,7 @@ const WorkspaceSettingsHub: React.FC = () => {
     // Redirect 'account' tab to 'security' since deletion was moved there
     const urlTab = tabId || searchParams.get('tab');
     const normalizedTab = urlTab === 'account' ? 'security' : urlTab;
-    const initialTab: TabId = (normalizedTab && ['profile', 'subscription', 'ai', 'security', 'notifications', 'webhooks'].includes(normalizedTab))
+    const initialTab: TabId = (normalizedTab && ['profile', 'subscription', 'ai', 'security', 'biometrics', 'notifications', 'webhooks'].includes(normalizedTab))
         ? (normalizedTab as TabId)
         : 'profile';
     const [activeTab, setActiveTabState] = useState<TabId>(initialTab);
@@ -70,7 +71,7 @@ const WorkspaceSettingsHub: React.FC = () => {
         }
 
         const currentTab = (urlTab as TabId);
-        const validTabs: TabId[] = ['profile', 'subscription', 'ai', 'security', 'notifications', 'webhooks'];
+        const validTabs: TabId[] = ['profile', 'subscription', 'ai', 'security', 'biometrics', 'notifications', 'webhooks'];
         
         if (currentTab && validTabs.includes(currentTab) && currentTab !== activeTab) {
             setActiveTabState(currentTab);
@@ -112,6 +113,7 @@ const WorkspaceSettingsHub: React.FC = () => {
         { id: 'subscription' as TabId, label: 'Subscription', icon: CreditCard },
         { id: 'ai' as TabId, label: 'AI & Intelligence', icon: Sparkles },
         { id: 'security' as TabId, label: 'Security & Privacy', icon: Shield },
+        { id: 'biometrics' as TabId, label: 'Biometrics', icon: ScanFace },
         { id: 'notifications' as TabId, label: 'Notifications', icon: Bell },
         { id: 'webhooks' as TabId, label: 'Webhooks', icon: Webhook },
     ];
@@ -171,6 +173,7 @@ const WorkspaceSettingsHub: React.FC = () => {
                             {activeTab === 'subscription' && <WorkspaceSubscriptionTabContent workspaceId={workspaceId} />}
                             {activeTab === 'ai' && <WorkspaceAISettingsPanel workspaceId={workspaceId} />}
                             {activeTab === 'security' && <WorkspaceSecuritySettingsPanel workspaceId={workspaceId} />}
+                            {activeTab === 'biometrics' && <BiometricSettingsPanel workspaceId={workspaceId} />}
                             {activeTab === 'notifications' && <WorkspaceNotificationSettingsPanel workspaceId={workspaceId} />}
                             {activeTab === 'webhooks' && <WebhooksSettingsPanel workspaceId={workspaceId} />}
                         </div>

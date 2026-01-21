@@ -10,13 +10,14 @@ All CRUD operations (create, update, delete, export, restore) are logged with
 before/after states to enable forensic analysis and compliance audits.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, FrozenSet
 from uuid import UUID
 from datetime import datetime, date
 import json
 
 from src.database import execute_query
 from src.log_config import get_logger
+from src.constants.pii_fields import PII_FIELDS, get_pii_fields_for_entity, is_pii_field
 
 logger = get_logger(__name__)
 
@@ -61,7 +62,7 @@ class AuditService:
             Exception: If logging fails
         """
         # Validate action
-        valid_actions = {"create", "update", "delete", "export", "restore"}
+        valid_actions = {"create", "update", "delete", "export", "restore", "access"}
         if action not in valid_actions:
             raise ValueError(f"Invalid action '{action}'. Must be one of: {valid_actions}")
 
@@ -133,6 +134,125 @@ class AuditService:
         )
 
         return dict(result)
+
+    async def log_change_safe(
+        self,
+        workspace_id: str,
+        user_id: Optional[str],
+        entity_type: str,
+        entity_id: str,
+        action: str,
+        before: Optional[Dict[str, Any]] = None,
+        after: Optional[Dict[str, Any]] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Best-effort audit logging wrapper that never fails the caller.
+
+        SECURITY: Audit logging MUST NOT cause operation failures.
+        If audit logging fails, log an ALERT for security monitoring
+        but allow the operation to complete.
+
+        SOC2 CC6.3: Audit failures must be logged separately for review.
+
+        Args:
+            Same as log_change()
+
+        Returns:
+            Dict[str, Any]: Audit log entry if successful
+            None: If logging failed (failure is logged as alert)
+        """
+        try:
+            return await self.log_change(
+                workspace_id=workspace_id,
+                user_id=user_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                action=action,
+                before=before,
+                after=after,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+        except Exception as e:
+            # ALERT: Audit logging failure - must be monitored
+            logger.error(
+                "AUDIT_FAILURE_ALERT: Audit logging failed - requires investigation",
+                extra={
+                    "workspace_id": workspace_id,
+                    "user_id": user_id,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "action": action,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
+            # Return None but do NOT raise - operation must continue
+            return None
+
+    async def log_pii_access(
+        self,
+        workspace_id: str,
+        user_id: Optional[str],
+        entity_type: str,
+        entity_id: str,
+        fields_accessed: List[str],
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Log PII field access for SOC2 CC6.3 compliance.
+
+        Filters the fields_accessed list to only include actual PII fields
+        as defined in src/constants/pii_fields.py, then logs the access.
+
+        SOC2 CC6.3: PII field access must be logged for audit compliance.
+
+        Args:
+            workspace_id: Workspace ID (REQUIRED for multi-tenant isolation)
+            user_id: ID of user who accessed the data
+            entity_type: Type of entity (client, contact, address, etc.)
+            entity_id: ID of the entity that was accessed
+            fields_accessed: List of field names that were accessed
+            ip_address: IP address of the request
+            user_agent: User agent string from request
+
+        Returns:
+            Dict[str, Any]: Created audit log entry if PII was accessed
+            None: If no PII fields were accessed or logging failed
+        """
+        # Filter to only PII fields
+        pii_fields_accessed = [
+            field for field in fields_accessed
+            if is_pii_field(field, entity_type)
+        ]
+
+        # Only log if PII fields were actually accessed
+        if not pii_fields_accessed:
+            logger.debug(
+                "No PII fields in access - skipping audit log",
+                extra={
+                    "workspace_id": workspace_id,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "fields_requested": fields_accessed,
+                },
+            )
+            return None
+
+        # Log PII field access (best-effort)
+        return await self.log_change_safe(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            action="access",
+            after={"pii_fields_accessed": pii_fields_accessed},
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
     async def get_entity_history(
         self,

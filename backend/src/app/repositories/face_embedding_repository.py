@@ -312,6 +312,92 @@ class FaceEmbeddingRepository:
 
         return results
 
+    async def find_similar_in_gallery(
+        self,
+        embedding: list[float],
+        gallery_id: UUID,
+        workspace_id: UUID,
+        threshold: float = 0.6,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Find faces similar to the given embedding within a specific gallery.
+
+        Searches for faces that are in photos belonging to the specified gallery.
+        Used for public gallery face-search functionality.
+
+        Args:
+            embedding: The embedding vector to search for
+            gallery_id: Gallery ID to search within
+            workspace_id: Workspace ID for tenant isolation
+            threshold: Minimum similarity threshold (0.0 to 1.0)
+            limit: Maximum number of results to return
+
+        Returns:
+            List of dicts containing asset_id and similarity score
+
+        Raises:
+            EmbeddingDimensionMismatchError: If dimension is not 512
+            EmbeddingNotNormalizedError: If embedding is not normalized
+        """
+        self._validate_embedding(embedding)
+
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            # Convert threshold to distance (cosine distance = 1 - similarity)
+            max_distance = 1.0 - threshold
+
+            # Query faces within gallery via gallery_assets join
+            # Returns unique asset_ids with their best similarity match
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT ON (f.photo_id)
+                    f.photo_id as asset_id,
+                    1 - (f.embedding <=> $1::vector) as similarity,
+                    f.id as face_id,
+                    f.thumbnail_urls
+                FROM faces f
+                JOIN gallery_assets ga ON f.photo_id = ga.asset_id
+                JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE ga.gallery_id = $2
+                AND ga.workspace_id = $3
+                AND ga.visible = TRUE
+                AND a.deleted = FALSE
+                AND f.embedding IS NOT NULL
+                AND (f.embedding <=> $1::vector) <= $4
+                ORDER BY f.photo_id, f.embedding <=> $1::vector ASC
+                LIMIT $5
+                """,
+                self._embedding_to_pgvector(embedding),
+                gallery_id,
+                workspace_id,
+                max_distance,
+                limit,
+            )
+
+            results = []
+            for row in rows:
+                results.append({
+                    "asset_id": row["asset_id"],
+                    "similarity": float(row["similarity"]),
+                    "face_id": row["face_id"],
+                    "thumbnail_urls": row["thumbnail_urls"],
+                })
+
+            # Sort by similarity descending
+            results.sort(key=lambda x: x["similarity"], reverse=True)
+
+            logger.debug(
+                "Gallery face search completed",
+                extra={
+                    "gallery_id": str(gallery_id),
+                    "workspace_id": str(workspace_id),
+                    "threshold": threshold,
+                    "results_count": len(results),
+                },
+            )
+
+            return results
+
     async def find_similar_with_timeout(
         self,
         embedding: list[float],

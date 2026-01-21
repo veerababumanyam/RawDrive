@@ -1,0 +1,303 @@
+openapi: 3.1.0
+info:
+  title: RawDrive Face Rate Limiting API
+  description: API endpoints for managing face operation rate limits (SEC-001)
+  version: 1.0.0
+
+paths:
+  /api/v1/workspaces/{workspace_id}/face-rate-limits:
+    get:
+      summary: Get workspace face rate limit configuration
+      description: Retrieve current rate limit settings for face operations
+      operationId: getFaceRateLimits
+      tags:
+        - Rate Limits
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Rate limits retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceRateLimitResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - bearerAuth: []
+        - workspaceAccess: [settings:read]
+
+    patch:
+      summary: Update workspace face rate limits
+      description: Update rate limit configuration (admin only)
+      operationId: updateFaceRateLimits
+      tags:
+        - Rate Limits
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaceRateLimitUpdate'
+      responses:
+        '200':
+          description: Rate limits updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceRateLimitResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - bearerAuth: []
+        - workspaceAccess: [admin:write]
+
+  /api/v1/workspaces/{workspace_id}/face-rate-limits/usage:
+    get:
+      summary: Get current rate limit usage
+      description: Check current usage against rate limits
+      operationId: getFaceRateLimitUsage
+      tags:
+        - Rate Limits
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Usage retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceRateLimitUsageResponse'
+      security:
+        - bearerAuth: []
+
+  /api/v1/workspaces/{workspace_id}/face-detection-quota:
+    get:
+      summary: Get daily detection quota status
+      description: Check remaining face detections for today
+      operationId: getFaceDetectionQuota
+      tags:
+        - Quotas
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Quota status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectionQuotaResponse'
+      security:
+        - bearerAuth: []
+
+components:
+  parameters:
+    WorkspaceId:
+      name: workspace_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    FaceRateLimitResponse:
+      type: object
+      required:
+        - workspace_id
+        - search_requests_per_minute
+        - detection_requests_per_day
+        - bulk_operations_per_minute
+        - enabled
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        search_requests_per_minute:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+          description: Max face similarity search requests per minute
+        detection_requests_per_day:
+          type: integer
+          minimum: 1
+          maximum: 10000
+          default: 1000
+          description: Max face detection triggers per day
+        bulk_operations_per_minute:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+          description: Max bulk assign/merge operations per minute
+        enabled:
+          type: boolean
+          default: true
+          description: Whether rate limits are enforced
+        updated_at:
+          type: string
+          format: date-time
+
+    FaceRateLimitUpdate:
+      type: object
+      properties:
+        search_requests_per_minute:
+          type: integer
+          minimum: 1
+          maximum: 100
+        detection_requests_per_day:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        bulk_operations_per_minute:
+          type: integer
+          minimum: 1
+          maximum: 100
+        enabled:
+          type: boolean
+
+    FaceRateLimitUsageResponse:
+      type: object
+      required:
+        - workspace_id
+        - limits
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/RateLimitUsage'
+
+    RateLimitUsage:
+      type: object
+      required:
+        - operation
+        - limit
+        - used
+        - remaining
+        - window
+        - reset_at
+      properties:
+        operation:
+          type: string
+          enum: [face_search, face_detect, bulk_assign, face_merge]
+        limit:
+          type: integer
+          description: Maximum allowed in window
+        used:
+          type: integer
+          description: Currently used in window
+        remaining:
+          type: integer
+          description: Remaining in window
+        window:
+          type: string
+          enum: [minute, hour, day]
+        reset_at:
+          type: string
+          format: date-time
+          description: When the window resets
+
+    DetectionQuotaResponse:
+      type: object
+      required:
+        - workspace_id
+        - daily_limit
+        - used_today
+        - remaining
+        - reset_at
+      properties:
+        workspace_id:
+          type: string
+          format: uuid
+        daily_limit:
+          type: integer
+        used_today:
+          type: integer
+        remaining:
+          type: integer
+        reset_at:
+          type: string
+          format: date-time
+          description: UTC midnight when quota resets
+        percentage_used:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlation_id:
+              type: string
+              format: uuid
+            retry_after:
+              type: integer
+              description: Seconds to wait before retry (for 429 responses)
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Unix timestamp when limit resets
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retry
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    workspaceAccess:
+      type: apiKey
+      in: header
+      name: X-Workspace-Id

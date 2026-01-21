@@ -45,7 +45,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
       - REDIS_URL=redis://redis:${PORT_REDIS}/0
       - JWT_PRIVATE_KEY_PATH=/app/secrets/jwtEd25519.key
-      - JWT_PUBLIC_KEY_PATH=/app/secrets/jwtEd25519.key.pub
+      - JWT_PUBLIC_KEY_PATH=/app/secrets/ed25519_public_key.pem
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}

@@ -53,6 +53,25 @@ os.environ.setdefault("TESTING", "true")
 from app.main import app
 from app.db.redis import init_redis_client, close_redis_client
 from app.db.postgres import init_postgres_pool, close_postgres_pool
+import asyncio
+
+
+# =============================================================================
+# Session-scoped event loop for async fixtures
+# =============================================================================
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create a session-scoped event loop for async fixtures.
+
+    This is required because pytest-asyncio's default event_loop is function-scoped,
+    but we have session-scoped async fixtures (like init_services) that need an
+    event loop to run.
+    """
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    yield loop
+    loop.close()
 
 
 # =============================================================================

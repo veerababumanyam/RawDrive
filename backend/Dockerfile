@@ -17,7 +17,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system deps for asyncpg and LibRaw (RAW image processing)
+# Install system deps for asyncpg, LibRaw (RAW image processing), and OpenCV
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     build-essential \
@@ -29,6 +29,12 @@ RUN apt-get update \
     libraw20 \
     libjpeg-dev \
     liblcms2-dev \
+    # OpenCV dependencies for face detection
+    libxcb1 \
+    libx11-6 \
+    libxext6 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

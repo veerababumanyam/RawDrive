@@ -61,6 +61,11 @@ SPECIFIC_RATE_LIMIT_ROUTES: list[tuple[str, str, RateLimitType]] = [
     # Album proofing endpoints (Feature: 026-album-proofing)
     ("/api/v1/public/albums/", "GET", RateLimitType.ALBUM_VIEW),  # Album proof viewing: 60/min
     ("/api/v1/public/albums/", "POST", RateLimitType.ALBUM_COMMENT),  # Album comments/approval: 10/min
+    # SEC-001: Face detection rate limits (Feature: 002-face-audit-remediation)
+    ("/api/v1/faces/search", "POST", RateLimitType.FACE_SEARCH),  # Face similarity search: 20/min
+    ("/detect-faces", "POST", RateLimitType.FACE_DETECT),  # Face detection trigger: 1000/day
+    ("/api/v1/faces/bulk-assign", "POST", RateLimitType.FACE_BULK),  # Bulk face assignment: 30/min
+    ("/api/v1/face-groups/merge", "POST", RateLimitType.FACE_BULK),  # Face group merge: 30/min
 ]
 
 # AI endpoint patterns - checked separately for more specific matching

@@ -90,12 +90,12 @@ class InvitationExportService:
             # Audit logging for invitation export job creation
             try:
                 await self._audit_service.log_event(
-                    event_type=AuditEventType.RSVP_EXPORTED,  # Using RSVP_EXPORTED as it covers exports
-                    workspace_id=workspace_id,
-                    actor_user_id=user_id,
-                    target_entity_type="invitation_export",
-                    target_entity_id=job_id,
-                    details={
+                    workspace_id=str(workspace_id),
+                    actor_id=str(user_id),
+                    action=AuditEventType.RSVP_EXPORTED,
+                    resource_type="invitation_export",
+                    resource_id=str(job_id),
+                    metadata={
                         "invitation_id": str(invitation_id),
                         "format": export_format.value,
                         "status": "job_created",

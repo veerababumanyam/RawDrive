@@ -13,6 +13,8 @@ from typing import Dict, Any
 
 from src.middleware.workspace_auth import verify_workspace_access
 from src.middleware.auth import get_current_user, JWTPayload
+from src.middleware.rbac import require_permission
+from src.constants.permissions import Permission
 from src.services.gdpr_service import get_gdpr_service, GDPRService
 from src.services.audit_service import get_audit_service, AuditService
 from src.repositories.client_repository import ClientRepository
@@ -60,6 +62,7 @@ async def export_client_data(
     current_user: JWTPayload = Depends(get_current_user),
     gdpr_service: GDPRService = Depends(get_gdpr_service),
     audit_service: AuditService = Depends(get_audit_service),
+    _: None = Depends(require_permission(Permission.CLIENTS_EXPORT)),
 ) -> Dict[str, Any]:
     """
     Export all personal data for a client (GDPR Article 15).
@@ -114,6 +117,24 @@ async def export_client_data(
             ip_address=client_ip,
         )
 
+        # SOC2 CC6.3: Log PII field access for GDPR export (best-effort)
+        # Extract all field names from export data to log PII access
+        fields_accessed = []
+        if isinstance(export_data, dict):
+            fields_accessed = list(export_data.keys())
+            # Also include nested fields from profile, contacts, etc.
+            if "profile" in export_data and isinstance(export_data["profile"], dict):
+                fields_accessed.extend(export_data["profile"].keys())
+
+        await audit_service.log_pii_access(
+            workspace_id=workspace_id,
+            user_id=current_user.user_id,
+            entity_type="client",
+            entity_id=str(client_id),
+            fields_accessed=fields_accessed,
+            ip_address=client_ip,
+        )
+
         return export_data
 
     except HTTPException:
@@ -143,6 +164,7 @@ async def update_consent(
     workspace_id: str = Depends(verify_workspace_access),
     current_user: JWTPayload = Depends(get_current_user),
     audit_service: AuditService = Depends(get_audit_service),
+    _: None = Depends(require_permission(Permission.CLIENTS_WRITE)),
 ) -> ConsentUpdateResponse:
     """
     Update client consent preferences.
@@ -241,6 +263,7 @@ async def delete_client_data(
     workspace_id: str = Depends(verify_workspace_access),
     current_user: JWTPayload = Depends(get_current_user),
     audit_service: AuditService = Depends(get_audit_service),
+    _: None = Depends(require_permission(Permission.CLIENTS_DELETE)),
 ) -> DeletionResponse:
     """
     Soft delete client data (GDPR Article 17).
@@ -328,6 +351,7 @@ async def restore_client_data(
     workspace_id: str = Depends(verify_workspace_access),
     current_user: JWTPayload = Depends(get_current_user),
     audit_service: AuditService = Depends(get_audit_service),
+    _: None = Depends(require_permission(Permission.CLIENTS_WRITE)),
 ) -> RestoreResponse:
     """
     Restore a soft-deleted client.

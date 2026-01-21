@@ -58,8 +58,8 @@ from src.services.digital_invitation_service import (
     InvitationNotPublishedError,
     InvitationAccessDeniedError,
 )
-from src.services.invitation_rsvp_service import (
-    InvitationRSVPService,
+from src.services.rsvp_service import (
+    RSVPService,
     get_rsvp_service,
     RSVPNotFoundError,
 )
@@ -780,6 +780,7 @@ async def list_rsvps(
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: CurrentUser = Depends(get_current_user),
     invitation_service: DigitalInvitationService = Depends(get_digital_invitation_service),
+    rsvp_service: RSVPService = Depends(get_rsvp_service),
 ) -> RSVPListResponse:
     """List RSVPs for an invitation."""
     # Verify invitation exists and belongs to workspace

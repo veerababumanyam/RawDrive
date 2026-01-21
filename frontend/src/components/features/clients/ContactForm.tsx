@@ -99,7 +99,7 @@ const CONTACT_TYPES: ContactTypeOption[] = [
     ],
   },
   {
-    value: 'social',
+    value: 'social_media',
     label: 'Social Media',
     icon: MessageSquare,
     placeholder: '@username',
@@ -108,6 +108,15 @@ const CONTACT_TYPES: ContactTypeOption[] = [
       { value: 'facebook', label: 'Facebook' },
       { value: 'twitter', label: 'Twitter' },
       { value: 'linkedin', label: 'LinkedIn' },
+      { value: 'other', label: 'Other' },
+    ],
+  },
+  {
+    value: 'other',
+    label: 'Other',
+    icon: MessageSquare,
+    placeholder: 'Contact value...',
+    subtypes: [
       { value: 'other', label: 'Other' },
     ],
   },
@@ -130,7 +139,7 @@ export const ContactForm: React.FC<ContactFormProps> = ({
 
   // Form state
   const [contactType, setContactType] = useState<ContactType>('email');
-  const [contactSubtype, setContactSubtype] = useState<ContactSubtype | ''>('');
+  const [contactLabel, setContactLabel] = useState<string>('');
   const [value, setValue] = useState('');
   const [isPrimary, setIsPrimary] = useState(false);
 
@@ -141,13 +150,13 @@ export const ContactForm: React.FC<ContactFormProps> = ({
   useEffect(() => {
     if (isOpen && contact) {
       setContactType(contact.contact_type);
-      setContactSubtype((contact.contact_subtype as ContactSubtype) || '');
+      setContactLabel(contact.label || '');
       setValue(contact.value);
       setIsPrimary(contact.is_primary);
     } else if (isOpen && !contact) {
       // Reset for new contact
       setContactType('email');
-      setContactSubtype('');
+      setContactLabel('');
       setValue('');
       setIsPrimary(false);
     }
@@ -231,8 +240,8 @@ export const ContactForm: React.FC<ContactFormProps> = ({
           is_primary: isPrimary,
         };
 
-        if (contactSubtype) {
-          payload.contact_subtype = contactSubtype as string;
+        if (contactLabel) {
+          payload.label = contactLabel;
         }
 
         await clientService.addContact(workspaceId, clientId, payload);
@@ -275,7 +284,7 @@ export const ContactForm: React.FC<ContactFormProps> = ({
                 value={contactType}
                 onChange={(e) => {
                   setContactType(e.target.value as ContactType);
-                  setContactSubtype(''); // Reset subtype when type changes
+                  setContactLabel(''); // Reset label when type changes
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
@@ -288,19 +297,19 @@ export const ContactForm: React.FC<ContactFormProps> = ({
               </select>
             </div>
 
-            {/* Contact Subtype (conditional) */}
+            {/* Contact Label (conditional) */}
             {currentTypeConfig?.subtypes && currentTypeConfig.subtypes.length > 0 && (
               <div>
-                <label htmlFor="contact-subtype" className="block text-sm font-medium text-gray-700 mb-2">
-                  Category
+                <label htmlFor="contact-label" className="block text-sm font-medium text-gray-700 mb-2">
+                  Label
                 </label>
                 <select
-                  id="contact-subtype"
-                  value={contactSubtype}
-                  onChange={(e) => setContactSubtype(e.target.value as ContactSubtype)}
+                  id="contact-label"
+                  value={contactLabel}
+                  onChange={(e) => setContactLabel(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Select category (optional)</option>
+                  <option value="">Select label (optional)</option>
                   {currentTypeConfig.subtypes.map((subtype) => (
                     <option key={subtype.value} value={subtype.value}>
                       {subtype.label}
@@ -328,7 +337,8 @@ export const ContactForm: React.FC<ContactFormProps> = ({
                 {contactType === 'email' && 'Enter a valid email address'}
                 {contactType === 'phone' && 'Enter phone number with area code'}
                 {contactType === 'website' && 'Include https:// or http://'}
-                {contactType === 'social' && 'Enter username or handle (@ optional)'}
+                {contactType === 'social_media' && 'Enter username or handle (@ optional)'}
+                {contactType === 'other' && 'Enter contact information'}
               </p>
             </div>
 

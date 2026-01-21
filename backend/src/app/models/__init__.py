@@ -261,3 +261,32 @@ from .compliance import (
     IncidentCommunication,
     IncidentRecommendation,
 )
+from .workspace_biometric_settings import (
+    # Biometric Consent Enums
+    BiometricConsentStatus,
+    # Biometric Settings Models
+    WorkspaceBiometricSettings,
+    WorkspaceBiometricSettingsCreate,
+    WorkspaceBiometricSettingsUpdate,
+    WorkspaceBiometricSettingsSummary,
+    BiometricConsentGrant,
+    BiometricConsentWithdraw,
+    # Rate Limit Models
+    FaceRateLimitConfig,
+    FaceRateLimitConfigCreate,
+    FaceRateLimitConfigUpdate,
+    FaceRateLimitConfigSummary,
+    FaceRateLimitUsage,
+)
+from .face_embedding_retention_job import (
+    # Retention Job Enums
+    RetentionJobType,
+    RetentionJobStatus,
+    # Retention Job Models
+    FaceEmbeddingRetentionJob,
+    FaceEmbeddingRetentionJobCreate,
+    FaceEmbeddingRetentionJobUpdate,
+    FaceEmbeddingRetentionJobSummary,
+    RetentionJobProgress,
+    RetentionStats,
+)

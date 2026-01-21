@@ -273,13 +273,15 @@ const ClientDetailPage: React.FC = () => {
             <StatusBadge status={client.status} />
           </div>
           {client.organization && (
-            <p className="text-text-secondary flex items-center gap-2 mt-1">
+            <div className="text-text-secondary flex items-center gap-2 mt-1">
               <div className="w-5 h-5 rounded bg-accent/10 flex items-center justify-center">
                 <Building2 size={12} className="text-accent" />
               </div>
-              {client.organization}
-              {client.job_title && ` - ${client.job_title}`}
-            </p>
+              <span>
+                {client.organization}
+                {client.job_title && ` - ${client.job_title}`}
+              </span>
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2">

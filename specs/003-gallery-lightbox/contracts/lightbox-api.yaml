@@ -1,0 +1,485 @@
+# Gallery Lightbox API Contract
+# NOTE: All endpoints already exist in gallery-service. This documents the
+# contracts used by the lightbox component for reference.
+
+openapi: 3.1.0
+info:
+  title: Gallery Lightbox API
+  version: 1.0.0
+  description: |
+    API endpoints used by the Gallery Lightbox component.
+    All endpoints require portal session authentication.
+
+servers:
+  - url: /api/v1
+    description: Gallery Service API
+
+paths:
+  /portal/{token}/assets:
+    get:
+      operationId: getPortalAssets
+      summary: Get paginated gallery assets with signed URLs
+      tags: [Portal]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: sectionId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Asset list with pagination
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetListResponse'
+
+  /portal/{token}/assets/{assetId}:
+    get:
+      operationId: getPortalAsset
+      summary: Get single asset with full metadata
+      tags: [Portal]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: download
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Asset with signed URLs and metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LightboxAsset'
+
+  /portal/{token}/assets/{assetId}/download:
+    get:
+      operationId: getAssetDownload
+      summary: Get download URL for asset
+      tags: [Portal]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Download URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadResponse'
+        '403':
+          description: Download not permitted
+
+  /portal/{token}/favorites:
+    post:
+      operationId: addFavorite
+      summary: Add asset to favorites
+      tags: [Favorites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FavoriteCreateInput'
+      responses:
+        '201':
+          description: Favorite created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favorite'
+
+  /portal/{token}/favorites/asset/{assetId}:
+    delete:
+      operationId: removeFavorite
+      summary: Remove asset from favorites
+      tags: [Favorites]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Favorite removed
+
+  /portal/{token}/favorites/status:
+    post:
+      operationId: getFavoriteStatus
+      summary: Check favorite status for multiple assets
+      tags: [Favorites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assetIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  maxItems: 100
+      responses:
+        '200':
+          description: Favorite status map
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteStatusResponse'
+
+  /portal/{token}/comments:
+    post:
+      operationId: createComment
+      summary: Add comment to asset
+      tags: [Comments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentCreateInput'
+      responses:
+        '201':
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+
+  /portal/{token}/comments/asset/{assetId}:
+    get:
+      operationId: getAssetComments
+      summary: Get comments for an asset
+      tags: [Comments]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Comment list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentListResponse'
+
+  /portal/{token}/session:
+    get:
+      operationId: getSession
+      summary: Get current session info and permissions
+      tags: [Session]
+      responses:
+        '200':
+          description: Session with permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+
+components:
+  schemas:
+    LightboxAsset:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        galleryId:
+          type: string
+          format: uuid
+        photoId:
+          type: string
+          format: uuid
+        sectionId:
+          type: string
+          format: uuid
+          nullable: true
+        sortOrder:
+          type: integer
+        caption:
+          type: string
+          nullable: true
+        altText:
+          type: string
+          nullable: true
+        thumbnailUrl:
+          type: string
+          format: uri
+          description: Signed URL for 400px thumbnail (LQIP)
+        displayUrl:
+          type: string
+          format: uri
+          description: Signed URL for 2048px display image
+        downloadUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Signed URL for original/watermarked download
+        photo:
+          $ref: '#/components/schemas/PhotoMetadata'
+        viewCount:
+          type: integer
+        favoriteCount:
+          type: integer
+        downloadCount:
+          type: integer
+      required:
+        - id
+        - galleryId
+        - photoId
+        - sortOrder
+        - thumbnailUrl
+        - displayUrl
+
+    PhotoMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+        mimeType:
+          type: string
+        metadata:
+          type: object
+          description: EXIF and processing metadata
+          additionalProperties: true
+
+    AssetListResponse:
+      type: object
+      properties:
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/LightboxAsset'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        hasMore:
+          type: boolean
+
+    DownloadResponse:
+      type: object
+      properties:
+        downloadUrl:
+          type: string
+          format: uri
+        filename:
+          type: string
+
+    FavoriteCreateInput:
+      type: object
+      properties:
+        galleryAssetId:
+          type: string
+          format: uuid
+        listId:
+          type: string
+          format: uuid
+          nullable: true
+        notes:
+          type: string
+          maxLength: 500
+      required:
+        - galleryAssetId
+
+    Favorite:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        galleryAssetId:
+          type: string
+          format: uuid
+        visitorId:
+          type: string
+          format: uuid
+        listId:
+          type: string
+          format: uuid
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    FavoriteStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            status:
+              type: object
+              additionalProperties:
+                type: boolean
+              description: Map of assetId to favorited status
+
+    CommentCreateInput:
+      type: object
+      properties:
+        galleryAssetId:
+          type: string
+          format: uuid
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+        - galleryAssetId
+        - content
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        galleryAssetId:
+          type: string
+          format: uuid
+        visitorId:
+          type: string
+          format: uuid
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        content:
+          type: string
+        isEdited:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CommentListResponse:
+      type: object
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    SessionResponse:
+      type: object
+      properties:
+        session:
+          type: object
+          properties:
+            id:
+              type: string
+            visitorId:
+              type: string
+            shareLinkId:
+              type: string
+            expiresAt:
+              type: string
+              format: date-time
+        permissions:
+          type: object
+          properties:
+            canFavorite:
+              type: boolean
+            canComment:
+              type: boolean
+            canDownload:
+              type: boolean
+            canSelect:
+              type: boolean
+            downloadPolicy:
+              type: string
+              enum: [VIEW_ONLY, WEB_ONLY, WATERMARKED, ORIGINAL]
+
+  securitySchemes:
+    portalSession:
+      type: apiKey
+      in: header
+      name: X-Portal-Session
+
+security:
+  - portalSession: []

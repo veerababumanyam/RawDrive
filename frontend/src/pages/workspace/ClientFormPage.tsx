@@ -81,7 +81,7 @@ const ClientFormPage: React.FC = () => {
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [newContact, setNewContact] = useState<AddContactRequest>({
     contact_type: 'email',
-    contact_subtype: '',
+    label: '',
     value: '',
     is_primary: false,
   });
@@ -299,7 +299,7 @@ const ClientFormPage: React.FC = () => {
     try {
       await clientService.addContact(workspace.workspace_id, clientId, newContact);
       addToast({ variant: 'success', message: 'Contact added successfully' });
-      setNewContact({ contact_type: 'email', contact_subtype: '', value: '', is_primary: false });
+      setNewContact({ contact_type: 'email', label: '', value: '', is_primary: false });
       fetchClient();
     } catch (err) {
       addToast({
@@ -951,7 +951,8 @@ const ContactsSection: React.FC<ContactsSectionProps> = ({
     { value: 'email', label: 'Email', icon: <Mail size={16} /> },
     { value: 'phone', label: 'Phone', icon: <Phone size={16} /> },
     { value: 'website', label: 'Website', icon: <Globe size={16} /> },
-    { value: 'social', label: 'Social', icon: <User size={16} /> },
+    { value: 'social_media', label: 'Social', icon: <User size={16} /> },
+    { value: 'other', label: 'Other', icon: <MessageSquare size={16} /> },
   ];
 
   return (
@@ -967,18 +968,19 @@ const ContactsSection: React.FC<ContactsSectionProps> = ({
               {contact.contact_type === 'email' && <Mail size={18} className="text-primary flex-shrink-0" />}
               {contact.contact_type === 'phone' && <Phone size={18} className="text-success flex-shrink-0" />}
               {contact.contact_type === 'website' && <Globe size={18} className="text-accent flex-shrink-0" />}
-              {contact.contact_type === 'social' && <User size={18} className="text-info flex-shrink-0" />}
+              {contact.contact_type === 'social_media' && <User size={18} className="text-info flex-shrink-0" />}
+              {contact.contact_type === 'other' && <MessageSquare size={18} className="text-text-tertiary flex-shrink-0" />}
               <div className="flex-1 min-w-0">
                 <p className="text-text-primary truncate">{contact.value}</p>
                 <p className="text-sm text-text-tertiary capitalize">
-                  {contact.contact_subtype || contact.contact_type}
+                  {contact.label || contact.contact_type.replace('_', ' ')}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 {contact.is_primary && (
                   <AppBadge variant="primary" size="sm">Primary</AppBadge>
                 )}
-                {contact.verified && (
+                {contact.is_verified && (
                   <AppBadge variant="success" size="sm">Verified</AppBadge>
                 )}
                 {isEditMode && (
@@ -1018,12 +1020,12 @@ const ContactsSection: React.FC<ContactsSectionProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-sm text-text-secondary mb-1.5">Subtype</label>
+              <label className="block text-sm text-text-secondary mb-1.5">Label</label>
               <input
                 type="text"
-                value={newContact.contact_subtype || ''}
+                value={newContact.label || ''}
                 onChange={(e) =>
-                  setNewContact((prev) => ({ ...prev, contact_subtype: e.target.value }))
+                  setNewContact((prev) => ({ ...prev, label: e.target.value }))
                 }
                 placeholder="work, personal..."
                 className="w-full px-3 py-2 rounded-lg border border-border bg-surface"

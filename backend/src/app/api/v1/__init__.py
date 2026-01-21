@@ -35,6 +35,9 @@ from app.api.v1.profile_editor import router as profile_editor_router
 from app.api.v1.profile_editor import public_router as themes_router
 from app.api.v1.faces import router as faces_router
 from app.api.v1.face_groups import router as face_groups_router
+from app.api.v1.biometric_consent import router as biometric_consent_router
+from app.api.v1.face_retention import router as face_retention_router
+from app.api.v1.face_rate_limits import router as face_rate_limits_router
 from app.api.v1.magic_links import router as magic_links_router
 from app.api.v1.magic_links import public_router as public_magic_links_router
 from app.api.v1.shared import router as shared_router
@@ -188,6 +191,17 @@ router.include_router(
     prefix="/api/v1",
     tags=["face-groups"],
 )
+# Biometric Consent routes (002-face-audit-remediation COM-001)
+# GDPR Article 9 compliant biometric consent management
+router.include_router(biometric_consent_router, tags=["biometric-consent"])
+
+# Face Retention routes (002-face-audit-remediation COM-002)
+# Face data retention policy enforcement and job management
+router.include_router(face_retention_router, tags=["face-retention"])
+
+# Face Rate Limits routes (002-face-audit-remediation SEC-001)
+# Configurable per-workspace rate limits for face operations
+router.include_router(face_rate_limits_router, tags=["face-rate-limits"])
 
 from app.api.v1.admin_ai_providers import router as admin_ai_providers_router
 router.include_router(admin_ai_providers_router)

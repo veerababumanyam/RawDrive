@@ -83,30 +83,34 @@ async def lifespan(app: FastAPI):
     logger.info("Service started successfully")
 
     # Register service in A2A registry (Phase 4: A2A Integration)
-    import sys
-    sys.path.insert(0, '/app/backend/src')
-    from app.services.service_registry import (
-        get_service_registry,
-        ServiceRegistration,
-        ServiceCapability,
-    )
+    # This is optional - the service works independently of the registry
+    try:
+        import sys
+        sys.path.insert(0, '/app/backend/src')
+        from app.services.service_registry import (
+            get_service_registry,
+            ServiceRegistration,
+            ServiceCapability,
+        )
 
-    registry = get_service_registry()
-    service_id = os.getenv("SERVICE_ID", str(uuid.uuid4()))
-    registration = ServiceRegistration(
-        service_name="invitations-service",
-        service_id=service_id,
-        base_url=os.getenv("SERVICE_BASE_URL", "http://invitations-api:8007"),
-        capabilities=[
-            ServiceCapability(name="invitations:create", version="1.0", endpoint="/api/v1/invitations"),
-            ServiceCapability(name="invitations:rsvp", version="1.0", endpoint="/api/v1/invitations/rsvp"),
-            ServiceCapability(name="invitations:bulk", version="1.0", endpoint="/api/v1/invitations/bulk"),
-        ],
-        health_check_endpoint="/health",
-    )
+        registry = get_service_registry()
+        service_id = os.getenv("SERVICE_ID", str(uuid.uuid4()))
+        registration = ServiceRegistration(
+            service_name="invitations-service",
+            service_id=service_id,
+            base_url=os.getenv("SERVICE_BASE_URL", "http://invitations-api:8007"),
+            capabilities=[
+                ServiceCapability(name="invitations:create", version="1.0", endpoint="/api/v1/invitations"),
+                ServiceCapability(name="invitations:rsvp", version="1.0", endpoint="/api/v1/invitations/rsvp"),
+                ServiceCapability(name="invitations:bulk", version="1.0", endpoint="/api/v1/invitations/bulk"),
+            ],
+            health_check_endpoint="/health",
+        )
 
-    await registry.register(registration)
-    logger.info(f"Invitations service registered in A2A registry: {service_id}")
+        await registry.register(registration)
+        logger.info(f"Invitations service registered in A2A registry: {service_id}")
+    except ImportError:
+        logger.info("A2A service registry not available - running in standalone mode")
 
     # Start heartbeat loop
     async def heartbeat_loop():

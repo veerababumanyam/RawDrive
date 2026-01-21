@@ -4,7 +4,9 @@ Bulk operations API endpoints.
 Provides REST API for bulk operations on multiple clients:
 - Bulk tag add/remove
 - Bulk status change
-- Bulk delete
+- Bulk delete (ADMIN ONLY)
+
+SECURITY: Bulk delete requires admin role (clients:bulk_delete permission).
 """
 
 from uuid import UUID
@@ -24,6 +26,8 @@ from src.schemas.bulk_ops import (
 from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
 from src.middleware.workspace_auth import verify_workspace_access
+from src.middleware.rbac import require_permission
+from src.constants.permissions import Permission
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
@@ -231,6 +235,7 @@ async def bulk_delete(
     workspace_id: UUID = Depends(verify_workspace_access),
     service: BulkOperationsService = Depends(get_bulk_operations_service),
     current_user: JWTPayload = Depends(get_current_user),
+    _: None = Depends(require_permission(Permission.CLIENTS_BULK_DELETE)),
 ) -> BulkOperationResult:
     """
     Delete multiple clients in bulk.

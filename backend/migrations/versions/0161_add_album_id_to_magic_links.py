@@ -11,6 +11,7 @@ Create Date: 2026-01-10
 """
 
 from alembic import op
+from sqlalchemy import text
 
 revision = "0161"
 down_revision = "0160"
@@ -23,11 +24,18 @@ def upgrade() -> None:
 
     # =========================================================================
     # 1. Add 'album' to magic_link_target_type enum
+    # PostgreSQL requires enum values to be committed before use,
+    # so we use AUTOCOMMIT isolation level for this operation.
     # =========================================================================
-    op.execute(
-        """
-        ALTER TYPE magic_link_target_type ADD VALUE IF NOT EXISTS 'album';
-        """
+    connection = op.get_bind()
+    connection.execute(
+        text("COMMIT")
+    )
+    connection.execute(
+        text("ALTER TYPE magic_link_target_type ADD VALUE IF NOT EXISTS 'album'")
+    )
+    connection.execute(
+        text("BEGIN")
     )
 
     # =========================================================================

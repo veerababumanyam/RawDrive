@@ -426,6 +426,60 @@ http:
       tls:
         certResolver: letsencrypt
 
+    # -------------------------------------------------------------------------
+    # SEC-001: Face Detection Endpoints - Dedicated rate limiting
+    # -------------------------------------------------------------------------
+    face-search-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/faces/search`)"
+      entryPoints:
+        - websecure
+      service: backend-service
+      middlewares:
+        - rate-limit-face-search
+        - security-headers
+        - cors-headers
+      priority: 175
+      tls:
+        certResolver: letsencrypt
+
+    face-detect-router:
+      rule: "Host(`api.rawdrive.ai`) && PathRegexp(`^/api/v1/photos/[0-9a-f-]+/detect-faces`)"
+      entryPoints:
+        - websecure
+      service: backend-service
+      middlewares:
+        - rate-limit-face-detect
+        - security-headers
+        - cors-headers
+      priority: 175
+      tls:
+        certResolver: letsencrypt
+
+    face-bulk-assign-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/faces/bulk-assign`)"
+      entryPoints:
+        - websecure
+      service: backend-service
+      middlewares:
+        - rate-limit-face-bulk
+        - security-headers
+        - cors-headers
+      priority: 175
+      tls:
+        certResolver: letsencrypt
+
+    face-groups-merge-router:
+      rule: "Host(`api.rawdrive.ai`) && PathPrefix(`/api/v1/face-groups/merge`)"
+      entryPoints:
+        - websecure
+      service: backend-service
+      middlewares:
+        - rate-limit-face-bulk
+        - security-headers
+        - cors-headers
+      priority: 175
+      tls:
+        certResolver: letsencrypt
 
     # -------------------------------------------------------------------------
     # Smart Tagging Routes - AI-powered content analysis
@@ -695,6 +749,36 @@ http:
       rateLimit:
         average: 20
         burst: 40
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # -------------------------------------------------------------------------
+    # SEC-001: Face Detection Rate Limiting
+    # -------------------------------------------------------------------------
+    rate-limit-face-search:
+      rateLimit:
+        average: 20  # 20 requests per minute per IP (face similarity search)
+        burst: 40
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-face-detect:
+      rateLimit:
+        average: 1000  # 1000 requests per day per IP (face detection triggers)
+        burst: 2000
+        period: 1440m  # 24 hours
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-face-bulk:
+      rateLimit:
+        average: 30  # 30 requests per minute per IP (bulk face operations)
+        burst: 60
         period: 1m
         sourceCriterion:
           ipStrategy:

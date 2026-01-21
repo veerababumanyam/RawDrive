@@ -18,9 +18,11 @@ from app.api.schemas import (
     FaceSearchResponse,
     FaceSearchMatch,
 )
-from app.services.gallery_service import get_gallery_service, GalleryNotFoundError
+# Note: GalleryNotFoundError kept for potential future use
+# Gallery service calls now use HTTP via httpx to gallery-service microservice
 from app.services.visitor_service import get_visitor_service
 from app.api.exceptions import AppError, NotFoundError, InternalError
+from app.repositories.face_embedding_repository import get_face_embedding_repository
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +41,25 @@ async def register_visitor(
     request: VisitorRegisterRequest = Body(...),
 ):
     """Register visitor to access gallery."""
-    # 1. Get gallery to verify existence and workspace
-    gallery_service = get_gallery_service()
+    # 1. Get gallery to verify existence and workspace via gallery-service
     try:
-        gallery = await gallery_service.get_public_gallery(gallery_id)
-        workspace_id = UUID(gallery["workspace_id"])
-    except GalleryNotFoundError:
-         raise NotFoundError("Gallery", str(gallery_id))
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{GALLERY_SERVICE_URL}/api/v1/public/galleries/{gallery_id}",
+                timeout=10.0,
+            )
+
+            if response.status_code == 404:
+                raise NotFoundError("Gallery", str(gallery_id))
+            elif response.status_code >= 400:
+                logger.error(f"Gallery service error: {response.status_code} - {response.text}")
+                raise InternalError("Failed to verify gallery")
+
+            gallery = response.json()
+            workspace_id = UUID(gallery["workspace_id"])
+    except httpx.RequestError as e:
+        logger.exception(f"Failed to connect to gallery service: {e}")
+        raise InternalError("Gallery service unavailable")
 
     # 2. Register visitor with UTM tracking
     visitor_service = get_visitor_service()
@@ -386,12 +400,30 @@ async def search_gallery_by_face(
     """
     start_time = time.time()
 
-    # Verify gallery exists and is public
-    gallery_service = get_gallery_service()
+    # Verify gallery exists and is public via gallery-service
     try:
-        gallery = await gallery_service.get_public_gallery(gallery_id)
-    except GalleryNotFoundError:
-        raise NotFoundError("Gallery", str(gallery_id))
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{GALLERY_SERVICE_URL}/api/v1/public/galleries/{gallery_id}",
+                timeout=10.0,
+            )
+
+            if response.status_code == 404:
+                raise NotFoundError("Gallery", str(gallery_id))
+            elif response.status_code == 403:
+                raise AppError(
+                    message="Gallery is not publicly accessible",
+                    code="GALLERY_NOT_PUBLIC",
+                    status_code=403,
+                )
+            elif response.status_code >= 400:
+                logger.error(f"Gallery service error: {response.status_code} - {response.text}")
+                raise InternalError("Failed to verify gallery")
+
+            gallery = response.json()
+    except httpx.RequestError as e:
+        logger.exception(f"Failed to connect to gallery service: {e}")
+        raise InternalError("Gallery service unavailable")
 
     # Check if face search is enabled for this gallery
     if not gallery.get("face_search_enabled", True):
@@ -401,11 +433,16 @@ async def search_gallery_by_face(
             status_code=503,
         )
 
+    # Get workspace_id from gallery for face search
+    workspace_id = UUID(gallery["workspace_id"])
+
     try:
-        # Perform vector similarity search
-        matches = await gallery_service.search_faces_in_gallery(
-            gallery_id=gallery_id,
+        # Perform vector similarity search using face embedding repository
+        face_embedding_repo = get_face_embedding_repository()
+        matches = await face_embedding_repo.find_similar_in_gallery(
             embedding=request.embedding,
+            gallery_id=gallery_id,
+            workspace_id=workspace_id,
             threshold=request.threshold,
             limit=request.limit,
         )

@@ -28,6 +28,7 @@ from src.config import settings
 from src.api.v1 import router as api_v1_router
 from src.middleware.correlation import CorrelationMiddleware
 from src.middleware.rate_limiter import RateLimiterMiddleware
+from src.middleware.timeout import TimeoutMiddleware, TimeoutConfig
 from src.cache.redis_client import redis_client
 from src.database import get_pool, close_pool
 from src.log_config import configure_logging, get_logger
@@ -155,7 +156,21 @@ app.add_middleware(
 # 2. Correlation ID tracking (for distributed tracing)
 app.add_middleware(CorrelationMiddleware)
 
-# 3. Rate limiting (Redis-based sliding window)
+# 3. Request timeout enforcement (prevents resource exhaustion)
+# SECURITY: Enforces 30s read / 60s write timeouts to prevent slow loris attacks
+app.add_middleware(
+    TimeoutMiddleware,
+    config=TimeoutConfig(
+        read_timeout=30.0,
+        write_timeout=60.0,
+        route_overrides={
+            "/api/v1/workspaces/": 120.0,  # Extended for import/export
+        },
+    ),
+)
+
+# 4. Rate limiting (Redis-based sliding window)
+# SECURITY: Uses JWT user_id only (no header spoofing), fails closed
 if settings.RATE_LIMIT_ENABLED:
     app.add_middleware(RateLimiterMiddleware)
 

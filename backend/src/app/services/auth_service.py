@@ -557,7 +557,7 @@ class AuthService:
             if workspace_id_str:
                 workspace_id = uuid.UUID(workspace_id_str)
             else:
-                pool = await get_db_pool()
+                pool = await get_postgres_pool()
                 workspace_id = await _get_default_workspace(pool, user_id)
 
             if workspace_id is None:

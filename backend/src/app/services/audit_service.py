@@ -290,6 +290,24 @@ class AuditEventType(str, Enum):
     AI_FILTER_APPLIED = "ai.filter_applied"
     AI_SUBGALLERY_CREATED = "ai.subgallery_created"
 
+    # Biometric Consent Events (002-face-audit-remediation, COM-001)
+    BIOMETRIC_CONSENT_GRANTED = "biometric.consent_granted"
+    BIOMETRIC_CONSENT_WITHDRAWN = "biometric.consent_withdrawn"
+    BIOMETRIC_CONSENT_CHECK_FAILED = "biometric.consent_check_failed"
+    BIOMETRIC_SETTINGS_UPDATED = "biometric.settings_updated"
+
+    # Face Rate Limit Events (002-face-audit-remediation, SEC-001)
+    FACE_RATE_LIMIT_EXCEEDED = "face.rate_limit_exceeded"
+    FACE_RATE_LIMIT_CONFIG_UPDATED = "face.rate_limit_config_updated"
+    FACE_QUOTA_EXHAUSTED = "face.quota_exhausted"
+
+    # Face Retention Events (002-face-audit-remediation, COM-002)
+    FACE_RETENTION_CLEANUP_STARTED = "face.retention_cleanup_started"
+    FACE_RETENTION_CLEANUP_COMPLETED = "face.retention_cleanup_completed"
+    FACE_RETENTION_CLEANUP_FAILED = "face.retention_cleanup_failed"
+    FACE_RETENTION_POLICY_UPDATED = "face.retention_policy_updated"
+    FACE_EMBEDDING_DELETED = "face.embedding_deleted"
+
 
 @dataclass
 class AuditEvent:
@@ -566,3 +584,22 @@ async def log_workspace_event(
         ip_address=ip_address,
         details=details,
     )
+
+
+# ---------------------------------------------------------------------------
+# Singleton Instance
+# ---------------------------------------------------------------------------
+
+_audit_service: AuditService | None = None
+
+
+def get_audit_service() -> AuditService:
+    """Get singleton audit service instance.
+
+    Returns:
+        AuditService instance
+    """
+    global _audit_service
+    if _audit_service is None:
+        _audit_service = AuditService()
+    return _audit_service

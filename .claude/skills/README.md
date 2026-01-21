@@ -97,7 +97,7 @@ For comprehensive best practices and product requirements, always consult:
 
 | Layer | Technology | Best Practice Reference |
 |-------|------------|------------------------|
-| Frontend | React 19 + TypeScript + Vite + TailwindCSS | [React Frontend](../reference/react-frontend-best-practices.md) |
+| Frontend | React 18.3 + TypeScript + Vite + TailwindCSS | [React Frontend](../reference/react-frontend-best-practices.md) |
 | Backend | Python 3.11 + FastAPI + SQLAlchemy 2.0 | [FastAPI](../reference/fastapi-best-practices.md) |
 | Database | PostgreSQL 16 + pgvector + pgvectorscale | [PostgreSQL](../reference/postgresql-best-practices.md) |
 | Cache | Redis 7 | [Redis](../reference/redis-best-practices.md) |
@@ -108,7 +108,7 @@ For comprehensive best practices and product requirements, always consult:
 
 ## RawDrive Architecture
 
-### Microservices (8 Services)
+### Microservices (13 Services)
 
 | Service | Port | Purpose | Skill | Best Practice |
 |---------|------|---------|-------|---------------|
@@ -120,6 +120,11 @@ For comprehensive best practices and product requirements, always consult:
 | Notifications Service | 8010 | Multi-channel notifications | `saas-practices` | [Notifications](../reference/notifications-email-best-practices.md) |
 | Onboarding Service | 8006 | User registration & workspace setup | `saas-practices` | [Microservices](../reference/microservices-patterns.md) |
 | Invitations Service | 8007 | Digital wedding invitations | `saas-practices` | [Microservices](../reference/microservices-patterns.md) |
+| Client Service | 8009 | Client/contact management | `saas-practices` | [Microservices](../reference/microservices-patterns.md) |
+| AI Service | 8011 | AI orchestration & inference | `ai-mcp-integration` | [AI/ML](../reference/ai-ml-best-practices.md) |
+| AI Processing Service | 8012 | Heavy AI workloads (embeddings, CLIP) | `ai-mcp-integration` | [AI/ML](../reference/ai-ml-best-practices.md) |
+| LiveSync Service | 8013 | Real-time file synchronization | `performance` | [Microservices](../reference/microservices-patterns.md) |
+| LLM Service | 8014 | LLM integration & chat | `ai-mcp-integration` | [AI Agents](../reference/ai-agents-best-practices.md) |
 
 **For complete architecture, see**: [PRD Section 7](../PRD.md#7-architecture--tech-stack)
 
@@ -226,6 +231,6 @@ Command: test.run (to verify implementation)
 
 ---
 
-**Maintained by**: RawDrive Development Team  
-**Last Updated**: 2026-01-09  
-**Total Skills**: 19 active skills
+**Maintained by**: RawDrive Development Team
+**Last Updated**: 2026-01-21
+**Total Skills**: 20 active skills

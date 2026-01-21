@@ -2,10 +2,16 @@
  * Lightbox Component
  * Full-screen photo viewer with navigation, zoom, and keyboard shortcuts
  * Property 17: Lightbox Keyboard Navigation
+ *
+ * Enhanced with:
+ * - LQIP blur-up loading effect
+ * - Image preloading for faster navigation
+ * - Virtualized filmstrip navigation
+ * - Extracted hooks for reusability
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Heart, CheckSquare, Info, Trash2, Image } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Heart, CheckSquare, Info, Trash2, Image, Film, Play, Pause, Columns } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -14,6 +20,14 @@ import type { GalleryAssetItem } from '../../../types/gallery';
 import { TagInput } from './TagInput';
 import { CommentSection } from './CommentSection';
 import { FaceOverlay } from './FaceOverlay';
+import { LightboxImage, type LightboxImageRef } from './LightboxImage';
+import { LightboxFilmstrip } from './LightboxFilmstrip';
+import { LightboxSlideshow } from './LightboxSlideshow';
+import { LightboxCompare } from './LightboxCompare';
+import { useLightboxZoom } from '../../../hooks/lightbox/useLightboxZoom';
+import { useLightboxNavigation } from '../../../hooks/lightbox/useLightboxNavigation';
+import { useImagePreloader } from '../../../hooks/lightbox/useImagePreloader';
+import { useLightboxSlideshow, type SlideshowSettings } from '../../../hooks/lightbox/useLightboxSlideshow';
 import { peopleService, type FaceDetection, type Person } from '../../../services/metadataService';
 import { Users, Sparkles } from 'lucide-react';
 import { faceDetectionService } from '../../../services/faceDetectionService';
@@ -53,6 +67,16 @@ export interface LightboxProps {
   };
   /** ID of the gallery the assets belong to */
   galleryId: string;
+  /** Whether to show the filmstrip (default: true) */
+  showFilmstrip?: boolean;
+  /** Whether to enable LQIP blur-up effect (default: true) */
+  enableLqip?: boolean;
+  /** Whether to preload adjacent images (default: true) */
+  enablePreloading?: boolean;
+  /** Initial slideshow settings */
+  slideshowSettings?: Partial<SlideshowSettings>;
+  /** Callback when slideshow completes (non-looping) */
+  onSlideshowComplete?: () => void;
 }
 
 export const Lightbox: React.FC<LightboxProps> = ({
@@ -70,20 +94,202 @@ export const Lightbox: React.FC<LightboxProps> = ({
   exifVisible = false,
   downloadPolicy = 'view_only',
   galleryId,
+  showFilmstrip: initialShowFilmstrip = true,
+  enableLqip = true,
+  enablePreloading = true,
+  slideshowSettings: initialSlideshowSettings,
+  onSlideshowComplete,
 }) => {
   const { workspace } = useAuth();
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  // Slideshow mode state
+  const [isSlideshowMode, setIsSlideshowMode] = useState(false);
+
+  // Compare mode state
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [compareIndex, setCompareIndex] = useState<number | null>(null);
+
+  // UI state
   const [showMetadata, setShowMetadata] = useState(false);
+  const [showFilmstrip, setShowFilmstrip] = useState(initialShowFilmstrip);
   const [activeTab, setActiveTab] = useState<'info' | 'tags' | 'comments' | 'people'>('info');
-  const [rotation, setRotation] = useState(0);
   const [faces, setFaces] = useState<FaceDetection[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
 
-  const imageRef = useRef<HTMLImageElement>(null);
+  // Refs
+  const lightboxImageRef = useRef<LightboxImageRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Legacy ref for backward compatibility with face detection
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  // Update imageRef when lightboxImageRef changes
+  useEffect(() => {
+    if (lightboxImageRef.current?.imageElement) {
+      (imageRef as React.MutableRefObject<HTMLImageElement | null>).current = lightboxImageRef.current.imageElement;
+    }
+  }, [lightboxImageRef.current?.imageElement]);
+
+  // Use extracted zoom hook
+  const {
+    zoom,
+    pan,
+    rotation,
+    isPanning,
+    zoomIn: handleZoomIn,
+    zoomOut: handleZoomOut,
+    resetZoom,
+    rotate,
+    handleWheel,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    reset: resetZoomState,
+  } = useLightboxZoom();
+
+  // Use extracted navigation hook
+  const {
+    goToPrevious: handlePrevious,
+    goToNext: handleNext,
+    goToIndex,
+    canGoPrevious,
+    canGoNext,
+    positionLabel,
+  } = useLightboxNavigation({
+    currentIndex,
+    totalAssets: assets.length,
+    isOpen,
+    onNavigate,
+    onClose,
+    onZoomIn: handleZoomIn,
+    onZoomOut: handleZoomOut,
+    onResetZoom: resetZoom,
+    onToggleMetadata: () => setShowMetadata((prev) => !prev),
+    onRotate: () => rotate(90),
+  });
+
+  // Image preloader for faster navigation
+  useImagePreloader({
+    assets,
+    currentIndex,
+    enabled: enablePreloading && isOpen,
+    preloadCount: 2,
+  });
+
+  // Slideshow hook
+  const slideshow = useLightboxSlideshow({
+    enabled: isSlideshowMode && isOpen,
+    currentIndex,
+    totalAssets: assets.length,
+    onNavigate,
+    settings: initialSlideshowSettings,
+    onComplete: () => {
+      setIsSlideshowMode(false);
+      onSlideshowComplete?.();
+    },
+  });
+
+  // Handle slideshow mode toggle
+  const toggleSlideshow = useCallback(() => {
+    if (isSlideshowMode) {
+      slideshow.stop();
+      setIsSlideshowMode(false);
+    } else {
+      setIsSlideshowMode(true);
+      slideshow.play();
+    }
+  }, [isSlideshowMode, slideshow]);
+
+  // Exit slideshow mode when lightbox closes
+  useEffect(() => {
+    if (!isOpen && isSlideshowMode) {
+      slideshow.stop();
+      setIsSlideshowMode(false);
+    }
+  }, [isOpen, isSlideshowMode, slideshow]);
+
+  // Keyboard shortcut for slideshow toggle (S key)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        toggleSlideshow();
+      }
+
+      // Space bar to toggle play/pause when in slideshow mode
+      if (isSlideshowMode && e.key === ' ') {
+        e.preventDefault();
+        slideshow.toggle();
+      }
+
+      // Escape to exit slideshow mode (but not close lightbox)
+      if (isSlideshowMode && e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        slideshow.stop();
+        setIsSlideshowMode(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSlideshowMode, slideshow, toggleSlideshow]);
+
+  // Compare mode toggle
+  const toggleCompareMode = useCallback(() => {
+    if (isCompareMode) {
+      setIsCompareMode(false);
+      setCompareIndex(null);
+    } else {
+      // When entering compare mode, set the secondary image to the next one
+      const nextIndex = currentIndex < assets.length - 1 ? currentIndex + 1 : 0;
+      setCompareIndex(nextIndex);
+      setIsCompareMode(true);
+      // Exit slideshow if active
+      if (isSlideshowMode) {
+        slideshow.stop();
+        setIsSlideshowMode(false);
+      }
+    }
+  }, [isCompareMode, currentIndex, assets.length, isSlideshowMode, slideshow]);
+
+  // Keyboard shortcut for compare mode (C key)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        toggleCompareMode();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, toggleCompareMode]);
+
+  // Exit compare mode when lightbox closes
+  useEffect(() => {
+    if (!isOpen && isCompareMode) {
+      setIsCompareMode(false);
+      setCompareIndex(null);
+    }
+  }, [isOpen, isCompareMode]);
 
   // Image loading fallback logic
   const [activeVariant, setActiveVariant] = useState<'preview' | 'original' | 'thumbnail'>('preview');
@@ -125,11 +331,9 @@ export const Lightbox: React.FC<LightboxProps> = ({
   // Reset zoom and pan when asset changes
   useEffect(() => {
     if (isOpen && currentAsset) {
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
-      setRotation(0);
+      resetZoomState();
     }
-  }, [isOpen, currentAsset?.asset_id]);
+  }, [isOpen, currentAsset?.asset_id, resetZoomState]);
 
   // Fetch faces when People tab is active
   useEffect(() => {
@@ -279,166 +483,8 @@ export const Lightbox: React.FC<LightboxProps> = ({
   };
 
 
-  // Keyboard navigation
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent default browser behavior for these keys
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Escape', '+', '-', '0'].includes(e.key)) {
-        e.preventDefault();
-      }
-
-      switch (e.key) {
-        case 'Escape':
-          onClose();
-          break;
-        case 'ArrowLeft':
-          if (currentIndex > 0) {
-            onNavigate(currentIndex - 1);
-          }
-          break;
-        case 'ArrowRight':
-          if (currentIndex < assets.length - 1) {
-            onNavigate(currentIndex + 1);
-          }
-          break;
-        case 'Home':
-          if (assets.length > 0) {
-            onNavigate(0);
-          }
-          break;
-        case 'End':
-          if (assets.length > 0) {
-            onNavigate(assets.length - 1);
-          }
-          break;
-        case '+':
-        case '=':
-          handleZoomIn();
-          break;
-        case '-':
-          handleZoomOut();
-          break;
-        case '0':
-          resetZoom();
-          break;
-        case 'm':
-        case 'M':
-          setShowMetadata((prev) => !prev);
-          break;
-        case 'r':
-        case 'R':
-          setRotation((prev) => (prev + 90) % 360);
-          break;
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentIndex, assets.length, onClose, onNavigate]);
-
-  // Prevent body scroll when lightbox is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isOpen]);
-
-  // Mouse wheel zoom
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom((prev) => Math.max(0.5, Math.min(5, prev + delta)));
-    }
-  }, []);
-
-  // Pan handling
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (zoom > 1 && !isDrawingMode) {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-    }
-  }, [zoom, pan, isDrawingMode]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (isPanning && zoom > 1) {
-      setPan({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
-      });
-    }
-  }, [isPanning, zoom, panStart]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsPanning(false);
-  }, []);
-
-  // Touch gestures for mobile
-  const touchStartRef = useRef<{ x: number; y: number; distance: number } | null>(null);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
-      touchStartRef.current = { x: (touch1.clientX + touch2.clientX) / 2, y: (touch1.clientY + touch2.clientY) / 2, distance };
-    }
-  }, []);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2 && touchStartRef.current) {
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
-      const scale = distance / touchStartRef.current.distance;
-      setZoom((prev) => Math.max(0.5, Math.min(5, prev * scale)));
-      touchStartRef.current.distance = distance;
-    }
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    touchStartRef.current = null;
-  }, []);
-
-  // Zoom functions
-  const handleZoomIn = useCallback(() => {
-    setZoom((prev) => Math.min(5, prev + 0.25));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setZoom((prev) => {
-      const newZoom = Math.max(0.5, prev - 0.25);
-      if (newZoom <= 1) {
-        setPan({ x: 0, y: 0 });
-      }
-      return newZoom;
-    });
-  }, []);
-
-  const resetZoom = useCallback(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  }, []);
-
-  // Navigation
-  const handlePrevious = useCallback(() => {
-    if (currentIndex > 0) {
-      onNavigate(currentIndex - 1);
-    }
-  }, [currentIndex, onNavigate]);
-
-  const handleNext = useCallback(() => {
-    if (currentIndex < assets.length - 1) {
-      onNavigate(currentIndex + 1);
-    }
-  }, [currentIndex, assets.length, onNavigate]);
+  // Note: Keyboard navigation, body scroll prevention, zoom/pan/touch handlers
+  // are now handled by useLightboxZoom and useLightboxNavigation hooks
 
   // Format date
   const formatDate = (dateString?: string): string => {
@@ -489,8 +535,8 @@ export const Lightbox: React.FC<LightboxProps> = ({
         <X size={24} />
       </AppButton>
 
-      {/* Navigation Arrows */}
-      {currentIndex > 0 && (
+      {/* Navigation Arrows - Hidden during slideshow */}
+      {!isSlideshowMode && canGoPrevious && (
         <button
           onClick={handlePrevious}
           className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full border border-white/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -500,7 +546,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
         </button>
       )}
 
-      {currentIndex < assets.length - 1 && (
+      {!isSlideshowMode && canGoNext && (
         <button
           onClick={handleNext}
           className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full border border-white/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -510,10 +556,11 @@ export const Lightbox: React.FC<LightboxProps> = ({
         </button>
       )}
 
-      {/* Image Container */}
+      {/* Image Container - Hidden during slideshow (slideshow renders its own) */}
+      {!isSlideshowMode && (
       <div
         ref={containerRef}
-        className="absolute inset-0 flex items-center justify-center p-4 overflow-hidden"
+        className={`absolute inset-0 flex items-center justify-center p-4 overflow-hidden ${showFilmstrip ? 'pb-24' : ''}`}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -523,12 +570,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {urlLoading ? (
-          <div className="flex flex-col items-center gap-4 text-white">
-            <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-            <p>Loading image...</p>
-          </div>
-        ) : urlError || !previewUrl ? (
+        {urlError && !previewUrl ? (
           <div className="flex flex-col items-center gap-4 text-white">
             <p>Failed to load image</p>
             <AppButton variant="outline" onClick={refreshUrl} className="text-white border-white/20">
@@ -547,34 +589,21 @@ export const Lightbox: React.FC<LightboxProps> = ({
               maxHeight: '100%',
             }}
           >
-            <img
-              ref={imageRef}
-              src={previewUrl}
+            {/* LightboxImage with LQIP blur-up effect */}
+            <LightboxImage
+              ref={lightboxImageRef}
+              src={previewUrl || ''}
+              lqip={enableLqip ? currentAsset.asset.lqip : undefined}
               alt={currentAsset.asset.filename || `Photo ${currentIndex + 1}`}
+              isLoading={urlLoading}
+              hasError={!!urlError}
+              onError={refreshUrl}
               className="block select-none"
-              style={{
-                width: 'auto',
-                height: 'auto',
-                maxWidth: '100%',
-                maxHeight: '100%',
-              }}
-              draggable={false}
-              id="lightbox-image"
             />
             {activeTab === 'people' && (
               <FaceOverlay
                 faces={faces.map(face => {
-                  // Map absolute coordinates back to rendered coordinates if needed
-                  // If FaceOverlay and Img are both children of the transformed div, they share the coordinate system
-                  // BUT the image might be displayed smaller than natural size due to max-width/height.
-                  // Img tag handles this reflow. The Overlay `inset-0` matches the Img element size.
-                  // BUT `face.bbox` is in original pixels (assumed).
-                  // We need to scale the face boxes down to match the rendered image size.
-                  // OR we can rely on FaceBox to do scaling if we pass dimensions.
-
-                  // Let's compute scale here and pass scaled faces to overlay?
-                  // Or pass scale factor to Overlay.
-                  // Simpler: Map here.
+                  // Map absolute coordinates back to rendered coordinates
                   const img = imageRef.current;
                   if (!img) return face;
 
@@ -603,8 +632,62 @@ export const Lightbox: React.FC<LightboxProps> = ({
           </div>
         )}
       </div>
+      )}
 
-      {/* Controls Bar */}
+      {/* Slideshow Mode Overlay */}
+      {isSlideshowMode && currentAsset && (
+        <LightboxSlideshow
+          assets={assets}
+          currentIndex={currentIndex}
+          onNavigate={onNavigate}
+          onExit={() => {
+            slideshow.stop();
+            setIsSlideshowMode(false);
+          }}
+          getPreviewUrl={(assetId) => {
+            // Find the asset and return its preview URL
+            const asset = assets.find((a) => a.asset_id === assetId);
+            return asset?.asset?.preview_url || asset?.asset?.thumbnail_url;
+          }}
+          settings={initialSlideshowSettings}
+          prefersReducedMotion={window.matchMedia?.('(prefers-reduced-motion: reduce)').matches}
+        />
+      )}
+
+      {/* Compare Mode Overlay */}
+      {isCompareMode && currentAsset && compareIndex !== null && (
+        <LightboxCompare
+          assets={assets}
+          primaryIndex={currentIndex}
+          secondaryIndex={compareIndex}
+          onPrimaryChange={onNavigate}
+          onSecondaryChange={setCompareIndex}
+          onExit={() => {
+            setIsCompareMode(false);
+            setCompareIndex(null);
+          }}
+          getPreviewUrl={(assetId) => {
+            // Find the asset and return its preview URL
+            const asset = assets.find((a) => a.asset_id === assetId);
+            return asset?.asset?.preview_url || asset?.asset?.thumbnail_url;
+          }}
+        />
+      )}
+
+      {/* Filmstrip Navigation */}
+      {showFilmstrip && !isSlideshowMode && !isCompareMode && (
+        <div className="absolute bottom-16 left-0 right-0 z-40">
+          <LightboxFilmstrip
+            assets={assets}
+            currentIndex={currentIndex}
+            onSelect={goToIndex}
+            visible={showFilmstrip}
+          />
+        </div>
+      )}
+
+      {/* Controls Bar - Hidden during slideshow and compare modes */}
+      {!isSlideshowMode && !isCompareMode && (
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent p-4">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
           {/* Left: Asset Info */}
@@ -613,7 +696,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
               {currentAsset.asset.filename || `Photo ${currentIndex + 1}`}
             </span>
             <span className="text-white/60">
-              {currentIndex + 1} / {assets.length}
+              {positionLabel}
             </span>
             {currentAsset.asset.width && currentAsset.asset.height && (
               <span className="text-white/60">
@@ -659,11 +742,44 @@ export const Lightbox: React.FC<LightboxProps> = ({
             <AppButton
               variant="ghost"
               size="icon"
-              onClick={() => setRotation((prev) => (prev + 90) % 360)}
+              onClick={() => rotate(90)}
               className="text-white hover:bg-white/20 border-white/20"
               aria-label="Rotate"
             >
               <RotateCw size={20} />
+            </AppButton>
+            {/* Filmstrip toggle */}
+            <AppButton
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowFilmstrip((prev) => !prev)}
+              className={`text-white hover:bg-white/20 border-white/20 ${showFilmstrip ? 'bg-white/20' : ''}`}
+              aria-label={showFilmstrip ? 'Hide filmstrip' : 'Show filmstrip'}
+            >
+              <Film size={20} />
+            </AppButton>
+            {/* Slideshow toggle */}
+            <AppButton
+              variant="ghost"
+              size="icon"
+              onClick={toggleSlideshow}
+              className={`text-white hover:bg-white/20 border-white/20 ${isSlideshowMode ? 'bg-primary/80 hover:bg-primary' : ''}`}
+              aria-label={isSlideshowMode ? 'Stop slideshow' : 'Start slideshow'}
+              title={isSlideshowMode ? 'Stop slideshow (S)' : 'Start slideshow (S)'}
+            >
+              {isSlideshowMode ? <Pause size={20} /> : <Play size={20} />}
+            </AppButton>
+            {/* Compare mode toggle */}
+            <AppButton
+              variant="ghost"
+              size="icon"
+              onClick={toggleCompareMode}
+              className={`text-white hover:bg-white/20 border-white/20 ${isCompareMode ? 'bg-primary/80 hover:bg-primary' : ''}`}
+              aria-label={isCompareMode ? 'Exit compare mode' : 'Enter compare mode'}
+              title={isCompareMode ? 'Exit compare mode (C)' : 'Compare images (C)'}
+              disabled={assets.length < 2}
+            >
+              <Columns size={20} />
             </AppButton>
           </div>
 
@@ -755,6 +871,7 @@ export const Lightbox: React.FC<LightboxProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* Metadata Panel */}
       {

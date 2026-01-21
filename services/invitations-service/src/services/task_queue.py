@@ -291,7 +291,7 @@ class TaskQueueService:
     async def _complete_task(self, task: Task, result: Any = None) -> None:
         """Mark task as completed."""
         if redis_client._client is None:
-        await redis_client.connect()
+            await redis_client.connect()
 
         task.status = TaskStatus.COMPLETED
         task.completed_at = datetime.now(timezone.utc)
@@ -321,7 +321,7 @@ class TaskQueueService:
         Property 22: Background Task Retry
         """
         if redis_client._client is None:
-        await redis_client.connect()
+            await redis_client.connect()
 
         task.retries += 1
         task.error = error
@@ -427,7 +427,7 @@ class TaskQueueService:
     async def get_queue_stats(self) -> dict[str, int]:
         """Get queue statistics."""
         if redis_client._client is None:
-        await redis_client.connect()
+            await redis_client.connect()
 
         pending = await redis_client.zcard(QUEUE_KEY)
         processing = await redis_client.scard(PROCESSING_SET)
@@ -442,7 +442,7 @@ class TaskQueueService:
     async def retry_failed_task(self, task_id: str) -> bool:
         """Manually retry a failed task."""
         if redis_client._client is None:
-        await redis_client.connect()
+            await redis_client.connect()
 
         task = await self.get_task(task_id)
         if not task or task.status != TaskStatus.FAILED:

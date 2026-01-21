@@ -3,6 +3,11 @@ JWT authentication middleware and dependencies.
 
 Validates JWT tokens (EdDSA) and extracts user/workspace context for authorization.
 Uses Ed25519 public key for token verification (same as backend).
+
+SECURITY:
+- All JWT validation errors return IDENTICAL generic messages
+- Detailed errors are logged internally at DEBUG level
+- No information disclosure about token structure or validation logic
 """
 
 import jwt
@@ -14,6 +19,13 @@ from pydantic import BaseModel
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 from src.config import settings
+from src.log_config import get_logger
+
+logger = get_logger(__name__)
+
+# SECURITY: Generic error message for ALL authentication failures
+# This MUST be used for every JWT validation error to prevent information disclosure
+GENERIC_AUTH_ERROR = "Invalid authentication token"
 
 
 @lru_cache(maxsize=None)
@@ -57,6 +69,9 @@ def decode_jwt(token: str) -> Dict[str, Any]:
     """
     Decode and validate JWT token using EdDSA public key.
 
+    SECURITY: All validation errors return IDENTICAL generic messages.
+    Detailed errors are logged internally at DEBUG level for troubleshooting.
+
     Args:
         token: JWT token string
 
@@ -64,12 +79,16 @@ def decode_jwt(token: str) -> Dict[str, Any]:
         Dict[str, Any]: Decoded token payload
 
     Raises:
-        HTTPException: If token is invalid or expired
+        HTTPException: If token is invalid or expired (generic message)
     """
+    # Extract token prefix for logging (first 10 chars for debugging)
+    token_prefix = token[:10] if token else "<empty>"
+
     try:
         # Remove "Bearer " prefix if present
         if token.startswith("Bearer "):
             token = token[7:]
+            token_prefix = token[:10] if token else "<empty>"
 
         # Load public key for verification
         public_key = _load_public_key()
@@ -84,21 +103,62 @@ def decode_jwt(token: str) -> Dict[str, Any]:
         return payload
 
     except jwt.ExpiredSignatureError:
+        # SECURITY: Log details internally, return generic message
+        logger.debug(
+            "JWT validation failed: token expired",
+            extra={"token_prefix": token_prefix, "error_type": "expired"},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
+            detail=GENERIC_AUTH_ERROR,
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    except jwt.InvalidSignatureError:
+        # SECURITY: Log details internally, return generic message
+        logger.debug(
+            "JWT validation failed: invalid signature",
+            extra={"token_prefix": token_prefix, "error_type": "invalid_signature"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=GENERIC_AUTH_ERROR,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    except jwt.DecodeError as e:
+        # SECURITY: Log details internally, return generic message
+        logger.debug(
+            "JWT validation failed: decode error",
+            extra={"token_prefix": token_prefix, "error_type": "decode", "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=GENERIC_AUTH_ERROR,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     except jwt.InvalidTokenError as e:
+        # SECURITY: Catch-all for any other JWT errors - return generic message
+        logger.debug(
+            "JWT validation failed: invalid token",
+            extra={"token_prefix": token_prefix, "error_type": "invalid", "error": str(e)},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {str(e)}",
+            detail=GENERIC_AUTH_ERROR,
             headers={"WWW-Authenticate": "Bearer"},
         )
+
     except FileNotFoundError as e:
+        # Server configuration error - log as error, return 500
+        logger.error(
+            "JWT public key not found",
+            extra={"error": str(e)},
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"JWT configuration error: {str(e)}",
+            detail="Authentication service unavailable",
         )
 
 
@@ -107,6 +167,8 @@ async def get_current_user(
 ) -> JWTPayload:
     """
     FastAPI dependency to get current authenticated user from JWT.
+
+    SECURITY: All errors return IDENTICAL generic messages.
 
     Usage:
         @router.get("/clients")
@@ -121,22 +183,30 @@ async def get_current_user(
         JWTPayload: Decoded JWT payload with user info
 
     Raises:
-        HTTPException: If token is missing or invalid
+        HTTPException: If token is missing or invalid (generic message)
     """
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authorization header",
+            detail=GENERIC_AUTH_ERROR,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     try:
         payload = decode_jwt(authorization)
-        return JWTPayload(**payload)
+        return JWTPayload.model_validate(payload)
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is (already have generic message from decode_jwt)
+        raise
     except Exception as e:
+        # SECURITY: Catch any unexpected errors, return generic message
+        logger.debug(
+            "Unexpected error in get_current_user",
+            extra={"error": str(e), "error_type": type(e).__name__},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
+            detail=GENERIC_AUTH_ERROR,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -147,8 +217,9 @@ async def get_workspace_id(
     """
     FastAPI dependency to extract workspace ID from JWT.
 
-    SECURITY: Workspace ID is ONLY extracted from JWT to prevent
-    cross-tenant access via X-Workspace-ID header manipulation.
+    SECURITY:
+    - Workspace ID is ONLY extracted from JWT (never headers)
+    - All errors return IDENTICAL generic messages
 
     Usage:
         @router.get("/clients")
@@ -163,12 +234,12 @@ async def get_workspace_id(
         str: Workspace ID from JWT token
 
     Raises:
-        HTTPException: If JWT is invalid or missing workspace_id claim
+        HTTPException: If JWT is invalid or missing workspace_id claim (generic message)
     """
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authorization header",
+            detail=GENERIC_AUTH_ERROR,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -176,17 +247,29 @@ async def get_workspace_id(
         payload = decode_jwt(authorization)
         workspace_id = payload.get("workspace_id")
         if not workspace_id:
+            # SECURITY: Don't reveal which claim is missing
+            logger.debug(
+                "JWT missing workspace_id claim",
+                extra={"payload_keys": list(payload.keys())},
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="JWT token missing workspace_id claim",
+                detail=GENERIC_AUTH_ERROR,
+                headers={"WWW-Authenticate": "Bearer"},
             )
         return workspace_id
     except HTTPException:
+        # Re-raise HTTPExceptions as-is
         raise
     except Exception as e:
+        # SECURITY: Catch any unexpected errors, return generic message
+        logger.debug(
+            "Unexpected error in get_workspace_id",
+            extra={"error": str(e), "error_type": type(e).__name__},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {str(e)}",
+            detail=GENERIC_AUTH_ERROR,
             headers={"WWW-Authenticate": "Bearer"},
         )
 

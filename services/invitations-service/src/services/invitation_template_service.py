@@ -713,3 +713,7 @@ class InvitationTemplateService:
 def get_invitation_template_service() -> InvitationTemplateService:
     """Get an InvitationTemplateService instance."""
     return InvitationTemplateService()
+
+
+# Alias for backward compatibility
+get_template_service = get_invitation_template_service

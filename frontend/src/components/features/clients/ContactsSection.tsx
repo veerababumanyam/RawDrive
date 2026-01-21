@@ -54,8 +54,8 @@ interface ContactsSectionProps {
    Contact Icon & Label Mapping
    ============================================================================= */
 
-const getContactIcon = (type: ContactType, subtype?: string): React.ElementType => {
-  if (type === 'social') {
+const getContactIcon = (type: ContactType, label?: string): React.ElementType => {
+  if (type === 'social_media') {
     const socialIconMap: Record<string, React.ElementType> = {
       instagram: Instagram,
       facebook: Facebook,
@@ -63,36 +63,38 @@ const getContactIcon = (type: ContactType, subtype?: string): React.ElementType 
       linkedin: Linkedin,
       whatsapp: MessageSquare,
     };
-    return socialIconMap[subtype || ''] || MessageSquare;
+    return socialIconMap[label?.toLowerCase() || ''] || MessageSquare;
   }
 
   const iconMap: Record<ContactType, React.ElementType> = {
     email: Mail,
     phone: Phone,
     website: Globe,
-    social: MessageSquare,
+    social_media: MessageSquare,
+    other: MessageSquare,
   };
 
   return iconMap[type];
 };
 
-const getContactTypeLabel = (type: ContactType, subtype?: string): string => {
-  if (type === 'social' && subtype) {
-    return subtype.charAt(0).toUpperCase() + subtype.slice(1);
+const getContactTypeLabel = (type: ContactType, label?: string): string => {
+  if (type === 'social_media' && label) {
+    return label.charAt(0).toUpperCase() + label.slice(1);
   }
 
   const labelMap: Record<ContactType, string> = {
     email: 'Email',
     phone: 'Phone',
     website: 'Website',
-    social: 'Social',
+    social_media: 'Social',
+    other: 'Other',
   };
 
   return labelMap[type];
 };
 
-const getContactColor = (type: ContactType, subtype?: string): string => {
-  if (type === 'social') {
+const getContactColor = (type: ContactType, label?: string): string => {
+  if (type === 'social_media') {
     const colorMap: Record<string, string> = {
       instagram: 'text-pink-600 bg-pink-100',
       facebook: 'text-blue-600 bg-blue-100',
@@ -100,14 +102,15 @@ const getContactColor = (type: ContactType, subtype?: string): string => {
       linkedin: 'text-indigo-600 bg-indigo-100',
       whatsapp: 'text-green-600 bg-green-100',
     };
-    return colorMap[subtype || ''] || 'text-gray-600 bg-gray-100';
+    return colorMap[label?.toLowerCase() || ''] || 'text-gray-600 bg-gray-100';
   }
 
   const colorMap: Record<ContactType, string> = {
     email: 'text-purple-600 bg-purple-100',
     phone: 'text-green-600 bg-green-100',
     website: 'text-blue-600 bg-blue-100',
-    social: 'text-gray-600 bg-gray-100',
+    social_media: 'text-gray-600 bg-gray-100',
+    other: 'text-gray-600 bg-gray-100',
   };
 
   return colorMap[type];
@@ -190,7 +193,7 @@ export const ContactsSection: React.FC<ContactsSectionProps> = ({
       return value;
     }
 
-    if (type === 'social') {
+    if (type === 'social_media') {
       // Remove @ if present
       return value.startsWith('@') ? value.slice(1) : value;
     }
@@ -212,7 +215,7 @@ export const ContactsSection: React.FC<ContactsSectionProps> = ({
       return contact.value.startsWith('http') ? contact.value : `https://${contact.value}`;
     }
 
-    if (contact.contact_type === 'social') {
+    if (contact.contact_type === 'social_media') {
       const socialLinks: Record<string, string> = {
         instagram: `https://instagram.com/${contact.value.replace('@', '')}`,
         facebook: `https://facebook.com/${contact.value.replace('@', '')}`,
@@ -220,7 +223,7 @@ export const ContactsSection: React.FC<ContactsSectionProps> = ({
         linkedin: `https://linkedin.com/in/${contact.value.replace('@', '')}`,
       };
 
-      return socialLinks[contact.contact_subtype || ''] || null;
+      return socialLinks[contact.label?.toLowerCase() || ''] || null;
     }
 
     return null;
@@ -252,9 +255,9 @@ export const ContactsSection: React.FC<ContactsSectionProps> = ({
       ) : (
         <div className="space-y-2">
           {contacts.map((contact) => {
-            const Icon = getContactIcon(contact.contact_type, contact.contact_subtype);
-            const colorClasses = getContactColor(contact.contact_type, contact.contact_subtype);
-            const typeLabel = getContactTypeLabel(contact.contact_type, contact.contact_subtype);
+            const Icon = getContactIcon(contact.contact_type, contact.label);
+            const colorClasses = getContactColor(contact.contact_type, contact.label);
+            const typeLabel = getContactTypeLabel(contact.contact_type, contact.label);
             const formattedValue = formatContactValue(contact.contact_type, contact.value);
             const link = getContactLink(contact);
             const isCopied = copiedValue === contact.value;
@@ -282,7 +285,7 @@ export const ContactsSection: React.FC<ContactsSectionProps> = ({
                           Primary
                         </AppBadge>
                       )}
-                      {contact.verified && (
+                      {contact.is_verified && (
                         <span title="Verified">
                           <CheckCircle className="h-4 w-4 text-green-600" />
                         </span>
@@ -292,7 +295,7 @@ export const ContactsSection: React.FC<ContactsSectionProps> = ({
                     {link ? (
                       <a
                         href={link}
-                        target={contact.contact_type === 'website' || contact.contact_type === 'social' ? '_blank' : undefined}
+                        target={contact.contact_type === 'website' || contact.contact_type === 'social_media' ? '_blank' : undefined}
                         rel="noopener noreferrer"
                         className="text-sm text-blue-600 hover:text-blue-700 hover:underline truncate block"
                       >
@@ -302,9 +305,9 @@ export const ContactsSection: React.FC<ContactsSectionProps> = ({
                       <p className="text-sm text-gray-900 truncate">{formattedValue}</p>
                     )}
 
-                    {contact.contact_subtype && contact.contact_type !== 'social' && (
+                    {contact.label && contact.contact_type !== 'social_media' && (
                       <p className="text-xs text-gray-400 capitalize">
-                        {contact.contact_subtype}
+                        {contact.label}
                       </p>
                     )}
                   </div>

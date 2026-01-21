@@ -35,6 +35,10 @@ class RateLimitType(str, Enum):
     ANALYTICS = "analytics"  # Analytics endpoints (authenticated)
     ALBUM_VIEW = "album_view"  # Public album proof viewing (Feature: 026-album-proofing)
     ALBUM_COMMENT = "album_comment"  # Public album comment submission (Feature: 026-album-proofing)
+    # SEC-001: Face detection rate limits (Feature: 002-face-audit-remediation)
+    FACE_SEARCH = "face_search"  # Face similarity search (per workspace)
+    FACE_DETECT = "face_detect"  # Face detection triggers (per workspace, daily)
+    FACE_BULK = "face_bulk"  # Bulk face operations (per workspace)
 
 
 @dataclass
@@ -59,6 +63,10 @@ DEFAULT_LIMITS: dict[RateLimitType, RateLimitConfig] = {
     RateLimitType.ANALYTICS: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min (analytics)
     RateLimitType.ALBUM_VIEW: RateLimitConfig(requests=60, window_seconds=60),  # 60 req / min (album proof viewing)
     RateLimitType.ALBUM_COMMENT: RateLimitConfig(requests=10, window_seconds=60),  # 10 req / min (album comments)
+    # SEC-001: Face detection rate limits
+    RateLimitType.FACE_SEARCH: RateLimitConfig(requests=20, window_seconds=60),  # 20 req / min (face similarity search)
+    RateLimitType.FACE_DETECT: RateLimitConfig(requests=1000, window_seconds=86400),  # 1000 req / day (face detection)
+    RateLimitType.FACE_BULK: RateLimitConfig(requests=30, window_seconds=60),  # 30 req / min (bulk face ops)
 }
 
 # Development rate limits (more lenient)
@@ -75,6 +83,10 @@ DEV_LIMITS: dict[RateLimitType, RateLimitConfig] = {
     RateLimitType.ANALYTICS: RateLimitConfig(requests=1000, window_seconds=60),  # 1000 req / min (dev analytics)
     RateLimitType.ALBUM_VIEW: RateLimitConfig(requests=300, window_seconds=60),  # 300 req / min (dev album viewing)
     RateLimitType.ALBUM_COMMENT: RateLimitConfig(requests=100, window_seconds=60),  # 100 req / min (dev album comments)
+    # SEC-001: Face detection rate limits (dev - more lenient)
+    RateLimitType.FACE_SEARCH: RateLimitConfig(requests=200, window_seconds=60),  # 200 req / min (dev face search)
+    RateLimitType.FACE_DETECT: RateLimitConfig(requests=10000, window_seconds=86400),  # 10000 req / day (dev face detection)
+    RateLimitType.FACE_BULK: RateLimitConfig(requests=300, window_seconds=60),  # 300 req / min (dev bulk face ops)
 }
 
 
@@ -265,3 +277,39 @@ async def check_upload_rate_limit(user_id: str) -> RateLimitResult:
     """Check rate limit for upload endpoints."""
     service = RateLimitService()
     return await service.check_rate_limit(user_id, RateLimitType.UPLOAD)
+
+
+# SEC-001: Face detection rate limit convenience functions
+
+
+async def check_face_search_rate_limit(workspace_id: str) -> RateLimitResult:
+    """Check rate limit for face similarity search (per workspace).
+
+    SEC-001: 20 requests/minute per workspace in production.
+    """
+    service = RateLimitService()
+    return await service.check_rate_limit(
+        f"workspace:{workspace_id}", RateLimitType.FACE_SEARCH
+    )
+
+
+async def check_face_detect_rate_limit(workspace_id: str) -> RateLimitResult:
+    """Check rate limit for face detection triggers (per workspace, daily quota).
+
+    SEC-001: 1000 detections/day per workspace in production.
+    """
+    service = RateLimitService()
+    return await service.check_rate_limit(
+        f"workspace:{workspace_id}", RateLimitType.FACE_DETECT
+    )
+
+
+async def check_face_bulk_rate_limit(workspace_id: str) -> RateLimitResult:
+    """Check rate limit for bulk face operations (per workspace).
+
+    SEC-001: 30 requests/minute per workspace in production.
+    """
+    service = RateLimitService()
+    return await service.check_rate_limit(
+        f"workspace:{workspace_id}", RateLimitType.FACE_BULK
+    )

@@ -22,6 +22,8 @@ from src.schemas.import_export import ImportResult
 from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
 from src.middleware.workspace_auth import verify_workspace_access
+from src.middleware.rbac import require_permission
+from src.constants.permissions import Permission
 from src.log_config import get_logger
 
 logger = get_logger(__name__)
@@ -46,6 +48,7 @@ async def import_clients(
     workspace_id: UUID = Depends(verify_workspace_access),
     service: ImportExportService = Depends(get_import_export_service),
     current_user: JWTPayload = Depends(get_current_user),
+    _: None = Depends(require_permission(Permission.CLIENTS_IMPORT)),
 ) -> ImportResult:
     """
     Import clients from CSV file.
@@ -207,6 +210,7 @@ async def export_clients(
     include_tags: bool = Query(True, description="Include tags"),
     service: ImportExportService = Depends(get_import_export_service),
     current_user: JWTPayload = Depends(get_current_user),
+    _: None = Depends(require_permission(Permission.CLIENTS_EXPORT)),
 ) -> StreamingResponse:
     """
     Export clients to CSV file.

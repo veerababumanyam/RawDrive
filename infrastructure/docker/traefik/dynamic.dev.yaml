@@ -183,6 +183,22 @@ http:
       priority: 145
 
     # -------------------------------------------------------------------------
+    # Client Avatar Endpoints - Route to main backend (has full avatar service)
+    # Higher priority than client-service to intercept avatar requests
+    # -------------------------------------------------------------------------
+    client-avatar-router-local:
+      rule: "Host(`localhost`) && PathRegexp(`^/api/v1/workspaces/[0-9a-f-]+/clients/[0-9a-f-]+/avatar`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-uploads
+        - security-headers-dev
+        - cors-headers-dev
+        - large-body-size
+      priority: 170
+
+    # -------------------------------------------------------------------------
     # Client CRM Microservice - Fix: Use PathRegexp for correct variable matching
     # -------------------------------------------------------------------------
     client-service-router-local:
@@ -281,6 +297,53 @@ http:
         - rate-limit-api
         - security-headers-dev
       priority: 147
+
+    # -------------------------------------------------------------------------
+    # SEC-001: Face Detection Endpoints - Dedicated rate limiting
+    # -------------------------------------------------------------------------
+    face-search-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/faces/search`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-face-search
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 175
+
+    face-detect-router-local:
+      rule: "Host(`localhost`) && PathRegexp(`^/api/v1/photos/[0-9a-f-]+/detect-faces`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-face-detect
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 175
+
+    face-bulk-assign-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/faces/bulk-assign`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-face-bulk
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 175
+
+    face-groups-merge-router-local:
+      rule: "Host(`localhost`) && PathPrefix(`/api/v1/face-groups/merge`)"
+      entryPoints:
+        - web
+      service: backend-service
+      middlewares:
+        - rate-limit-face-bulk
+        - security-headers-dev
+        - cors-headers-dev
+      priority: 175
 
     # -------------------------------------------------------------------------
     # AI Service - Stricter rate limiting
@@ -525,6 +588,36 @@ http:
         average: 50
         burst: 100
         period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # -------------------------------------------------------------------------
+    # SEC-001: Face Detection Rate Limiting (Relaxed for local dev)
+    # -------------------------------------------------------------------------
+    rate-limit-face-search:
+      rateLimit:
+        average: 200  # 200/min in dev (20/min in prod)
+        burst: 400
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-face-detect:
+      rateLimit:
+        average: 10000  # 10000/day in dev (1000/day in prod)
+        burst: 20000
+        period: 1440m  # 24 hours
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    rate-limit-face-bulk:
+      rateLimit:
+        average: 300  # 300/min in dev (30/min in prod)
+        burst: 600
+        period: 1m
         sourceCriterion:
           ipStrategy:
             depth: 1

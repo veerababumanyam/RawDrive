@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 export type ClientStatus = 'active' | 'inactive';
-export type ContactType = 'email' | 'phone' | 'website' | 'social';
+export type ContactType = 'email' | 'phone' | 'website' | 'social_media' | 'other';
 export type ContactSubtype = 'work' | 'personal' | 'instagram' | 'whatsapp' | 'facebook' | 'twitter' | 'linkedin' | 'other';
 export type AddressType = 'home' | 'work' | 'billing' | 'shipping';
 export type GalleryRole = 'primary' | 'secondary' | 'guest';
@@ -55,7 +55,7 @@ export interface UpdateClientRequest {
 
 export interface AddContactRequest {
   contact_type: ContactType;
-  contact_subtype?: string;
+  label?: string;
   value: string;
   is_primary?: boolean;
 }
@@ -153,11 +153,12 @@ export interface SelectGalleryPhotoRequest {
 export interface ClientContact {
   contact_id: string;
   contact_type: ContactType;
-  contact_subtype?: string;
+  label?: string;
   value: string;
   is_primary: boolean;
-  verified: boolean;
+  is_verified: boolean;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ClientAddress {

@@ -18,6 +18,10 @@ from src.repositories.invitation_media_repository import (
     InvitationMediaRepository,
     get_invitation_media_repository,
 )
+
+# Initialize logger early since it's used in try/except below
+logger = logging.getLogger(__name__)
+
 # R2 Storage Service: For photo/media storage
 from src.services.r2_storage_service import R2StorageService, get_r2_storage_service, StorageError
 
@@ -35,8 +39,6 @@ except ImportError:
 
 # Task Queue: For background jobs
 from src.services.task_queue import enqueue_task
-
-logger = logging.getLogger(__name__)
 
 
 class InvitationMediaService:

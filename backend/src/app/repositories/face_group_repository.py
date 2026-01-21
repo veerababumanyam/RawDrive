@@ -23,6 +23,7 @@ from app.services.face_exceptions import (
     EmbeddingDimensionMismatchError,
     EmbeddingNotNormalizedError,
 )
+from app.services.cache_service import CacheService, CacheLayer
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,124 @@ logger = logging.getLogger(__name__)
 # Expected embedding dimension for centroids
 EMBEDDING_DIMENSION = 512
 NORM_TOLERANCE = 0.001
+
+# Cache configuration (PERF-001)
+FACE_GROUP_CACHE_TTL = 120  # 2 minutes
+FACE_GROUP_CACHE_PREFIX = "face_groups"
+
+
+# ---------------------------------------------------------------------------
+# Face Group Cache Helper
+# ---------------------------------------------------------------------------
+
+
+class FaceGroupCache:
+    """Cache helper for face group queries (PERF-001).
+
+    Uses Redis with 2-minute TTL for face group queries.
+    Provides cache invalidation on mutations.
+    """
+
+    def __init__(self):
+        self._cache = CacheService(CacheLayer.API)
+
+    def _build_gallery_key(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        offset: int,
+        limit: int,
+    ) -> tuple:
+        """Build cache key parts for gallery query."""
+        return (
+            FACE_GROUP_CACHE_PREFIX,
+            "gallery",
+            str(workspace_id),
+            str(gallery_id),
+            str(offset),
+            str(limit),
+        )
+
+    def _build_count_key(self, workspace_id: UUID, gallery_id: UUID) -> tuple:
+        """Build cache key parts for count query."""
+        return (
+            FACE_GROUP_CACHE_PREFIX,
+            "count",
+            str(workspace_id),
+            str(gallery_id),
+        )
+
+    async def get_gallery_groups(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        offset: int,
+        limit: int,
+    ) -> Optional[list[dict[str, Any]]]:
+        """Get cached gallery face groups."""
+        key_parts = self._build_gallery_key(workspace_id, gallery_id, offset, limit)
+        return await self._cache.get(*key_parts)
+
+    async def set_gallery_groups(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        offset: int,
+        limit: int,
+        data: list[dict[str, Any]],
+    ) -> bool:
+        """Cache gallery face groups."""
+        key_parts = self._build_gallery_key(workspace_id, gallery_id, offset, limit)
+        return await self._cache.set(*key_parts, value=data, ttl=FACE_GROUP_CACHE_TTL)
+
+    async def get_gallery_count(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+    ) -> Optional[int]:
+        """Get cached gallery face group count."""
+        key_parts = self._build_count_key(workspace_id, gallery_id)
+        return await self._cache.get(*key_parts)
+
+    async def set_gallery_count(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        count: int,
+    ) -> bool:
+        """Cache gallery face group count."""
+        key_parts = self._build_count_key(workspace_id, gallery_id)
+        return await self._cache.set(*key_parts, value=count, ttl=FACE_GROUP_CACHE_TTL)
+
+    async def invalidate_workspace(self, workspace_id: UUID) -> int:
+        """Invalidate all face group caches for a workspace."""
+        return await self._cache.invalidate_pattern(
+            FACE_GROUP_CACHE_PREFIX, "*", str(workspace_id)
+        )
+
+    async def invalidate_gallery(self, workspace_id: UUID, gallery_id: UUID) -> int:
+        """Invalidate face group caches for a specific gallery."""
+        # Invalidate gallery queries
+        deleted = await self._cache.invalidate_pattern(
+            FACE_GROUP_CACHE_PREFIX, "gallery", str(workspace_id), str(gallery_id)
+        )
+        # Invalidate count
+        count_key = self._build_count_key(workspace_id, gallery_id)
+        if await self._cache.delete(*count_key):
+            deleted += 1
+        return deleted
+
+
+# Singleton cache instance
+_face_group_cache: Optional[FaceGroupCache] = None
+
+
+def get_face_group_cache() -> FaceGroupCache:
+    """Get the face group cache singleton."""
+    global _face_group_cache
+    if _face_group_cache is None:
+        _face_group_cache = FaceGroupCache()
+    return _face_group_cache
 
 
 class FaceGroupRepository:
@@ -127,7 +246,11 @@ class FaceGroupRepository:
             )
             
             result = self._row_to_dict(row)
-            
+
+            # PERF-001: Invalidate cache on create
+            cache = get_face_group_cache()
+            await cache.invalidate_workspace(workspace_id)
+
             logger.info(
                 "Face group created",
                 extra={
@@ -136,9 +259,9 @@ class FaceGroupRepository:
                     "group_name": name,
                 },
             )
-            
+
             return result
-    
+
     # =========================================================================
     # READ OPERATIONS
     # =========================================================================
@@ -392,17 +515,33 @@ class FaceGroupRepository:
         Returns:
             List of face group dicts with added 'gallery_photo_count', 'gallery_face_count',
             representative face thumbnail info, person_id and person_name
+
+        Note:
+            PERF-001: Results are cached for 2 minutes when search is None.
+            Cache is invalidated on face group mutations.
         """
+        # PERF-001: Check cache first (only for non-search queries)
+        if search is None:
+            cache = get_face_group_cache()
+            cached = await cache.get_gallery_groups(
+                workspace_id, gallery_id, offset, limit
+            )
+            if cached is not None:
+                logger.debug(
+                    f"Cache HIT: face_groups gallery={gallery_id} offset={offset}"
+                )
+                return cached
+
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             # Build search condition
             search_condition = ""
             params = [gallery_id, workspace_id]
-            
+
             if search:
                 search_condition = "AND (p.display_name ILIKE $5 OR p.name ILIKE $5)"
                 params.append(f"%{search}%")
-            
+
             params.extend([limit, offset])
 
             rows = await conn.fetch(
@@ -441,6 +580,16 @@ class FaceGroupRepository:
                 group_dict["person_name"] = row.get("person_name")
                 result.append(group_dict)
 
+            # PERF-001: Cache result (only for non-search queries)
+            if search is None:
+                cache = get_face_group_cache()
+                await cache.set_gallery_groups(
+                    workspace_id, gallery_id, offset, limit, result
+                )
+                logger.debug(
+                    f"Cache SET: face_groups gallery={gallery_id} offset={offset}"
+                )
+
             return result
 
     async def count_by_gallery_id(
@@ -448,10 +597,22 @@ class FaceGroupRepository:
         workspace_id: UUID,
         gallery_id: UUID,
     ) -> int:
-        """Count unique face groups appearing in a gallery."""
+        """Count unique face groups appearing in a gallery.
+
+        Note:
+            PERF-001: Count is cached for 2 minutes.
+            Cache is invalidated on face group mutations.
+        """
+        # PERF-001: Check cache first
+        cache = get_face_group_cache()
+        cached = await cache.get_gallery_count(workspace_id, gallery_id)
+        if cached is not None:
+            logger.debug(f"Cache HIT: face_groups count gallery={gallery_id}")
+            return cached
+
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            return await conn.fetchval(
+            count = await conn.fetchval(
                 """
                 SELECT COUNT(DISTINCT fg.id)
                 FROM face_groups fg
@@ -465,6 +626,12 @@ class FaceGroupRepository:
                 gallery_id,
                 workspace_id,
             )
+
+            # PERF-001: Cache the count
+            await cache.set_gallery_count(workspace_id, gallery_id, count)
+            logger.debug(f"Cache SET: face_groups count gallery={gallery_id}")
+
+            return count
     
     # =========================================================================
     # UPDATE OPERATIONS
@@ -520,8 +687,12 @@ class FaceGroupRepository:
             """
             
             row = await conn.fetchrow(query, *params)
-            
+
             if row:
+                # PERF-001: Invalidate cache on update
+                cache = get_face_group_cache()
+                await cache.invalidate_workspace(workspace_id)
+
                 logger.debug(
                     "Face group updated",
                     extra={
@@ -529,9 +700,9 @@ class FaceGroupRepository:
                         "updated_fields": list(updates.keys()),
                     },
                 )
-            
+
             return self._row_to_dict(row) if row else None
-    
+
     async def update_centroid(
         self,
         group_id: UUID,
@@ -681,13 +852,17 @@ class FaceGroupRepository:
             deleted = result and int(result.split()[-1]) > 0
             
             if deleted:
+                # PERF-001: Invalidate cache on delete
+                cache = get_face_group_cache()
+                await cache.invalidate_workspace(workspace_id)
+
                 logger.info(
                     "Face group deleted",
                     extra={"group_id": str(group_id)},
                 )
-            
+
             return deleted
-    
+
     async def delete_by_workspace_id(
         self,
         workspace_id: UUID,
@@ -711,7 +886,12 @@ class FaceGroupRepository:
             )
             
             count = int(result.split()[-1]) if result else 0
-            
+
+            if count > 0:
+                # PERF-001: Invalidate cache on delete
+                cache = get_face_group_cache()
+                await cache.invalidate_workspace(workspace_id)
+
             logger.info(
                 "All face groups deleted for workspace",
                 extra={
@@ -719,9 +899,9 @@ class FaceGroupRepository:
                     "deleted_count": count,
                 },
             )
-            
+
             return count
-    
+
     async def delete_empty_groups(
         self,
         workspace_id: UUID,
@@ -745,8 +925,12 @@ class FaceGroupRepository:
             )
             
             count = int(result.split()[-1]) if result else 0
-            
+
             if count > 0:
+                # PERF-001: Invalidate cache on delete
+                cache = get_face_group_cache()
+                await cache.invalidate_workspace(workspace_id)
+
                 logger.info(
                     "Empty face groups deleted",
                     extra={
@@ -754,9 +938,9 @@ class FaceGroupRepository:
                         "deleted_count": count,
                     },
                 )
-            
+
             return count
-    
+
     # =========================================================================
     # MERGE SUGGESTIONS (Similar Group Discovery)
     # =========================================================================

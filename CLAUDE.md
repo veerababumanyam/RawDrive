@@ -1,8 +1,8 @@
-# CLAUDE.md - RawDrive AI Context
+﻿# CLAUDE.md - RawDrive AI Context
 
 **RawDrive** is an enterprise SaaS professional photography platform with microservices architecture.
 
-**Version**: 0.3.3 | **Status**: Production | **Updated**: 2026-01-12
+**Version**: 0.3.3 | **Status**: Production | **Updated**: 2026-01-21
 
 ---
 
@@ -12,12 +12,12 @@ For detailed best practices, architecture patterns, and product requirements, re
 
 ### **Primary References**
 - **[Product Requirements Document (PRD)](.claude/PRD.md)** - Complete product vision, architecture, features, and tech stack
-- **[Best Practices Directory](.claude/reference/)** - 23 comprehensive guides covering all technical domains
+- **[Best Practices Directory](.claude/reference/)** - 24 comprehensive guides covering all technical domains
 
 ### **Claude Code Configuration**
 - **[Commands](.claude/commands/)** - Development workflow commands (health checks, testing, deployment, etc.)
 - **[Skills](.claude/skills/)** - 20 auto-loaded context-aware development skills
-- **[Agents](.claude/agents/)** - 5 specialized AI agents for code review, security, UI design, etc.
+- **[Agents](.claude/agents/)** - 10 specialized AI agents for debugging, deployment, security, UI design, etc.
 
 ---
 
@@ -60,7 +60,7 @@ curl http://localhost:8004/health/live   # Gallery service
 
 ## 🏗️ Architecture Overview
 
-### Microservices (8 Services)
+### Microservices (13 Services)
 
 | Service | Port | Purpose | Reference |
 |---------|------|---------|-----------|
@@ -72,6 +72,11 @@ curl http://localhost:8004/health/live   # Gallery service
 | **Notifications Service** | 8010 | Multi-channel notifications | [Notifications Best Practices](.claude/reference/notifications-email-best-practices.md) |
 | **Onboarding Service** | 8006 | User registration & workspace setup | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
 | **Invitations Service** | 8007 | Digital wedding invitations | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
+| **Client Service** | 8009 | Client/contact management | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
+| **AI Service** | 8011 | AI orchestration & inference | [AI/ML Best Practices](.claude/reference/ai-ml-best-practices.md) |
+| **AI Processing Service** | 8012 | Heavy AI workloads (embeddings, CLIP) | [AI/ML Best Practices](.claude/reference/ai-ml-best-practices.md) |
+| **LiveSync Service** | 8013 | Real-time file synchronization | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
+| **LLM Service** | 8014 | LLM integration & chat | [AI Agents Best Practices](.claude/reference/ai-agents-best-practices.md) |
 
 **📖 For architecture details, see**: [PRD Section 7](.claude/PRD.md#7-architecture--tech-stack)
 
@@ -288,10 +293,15 @@ pnpm test:packages       # Test shared packages
 
 ### Agents (Specialized AI assistants)
 
-5 agents available in `.claude/agents/`:
+10 agents available in `.claude/agents/`:
 
 | Agent | Purpose |
 |-------|---------|
+| `project-planner` | Task breakdown, feature planning, architecture decisions |
+| `database-architect` | Schema design, query optimization, migrations |
+| `debugger` | Root cause analysis, systematic debugging |
+| `devops-engineer` | Deployment, CI/CD, infrastructure management |
+| `performance-optimizer` | Performance analysis and optimization |
 | `coding-standards-enforcer` | Review code for adherence to standards |
 | `security-code-reviewer` | Comprehensive security-focused code review |
 | `ui-component-designer` | Design modern, accessible UI components |
@@ -299,6 +309,18 @@ pnpm test:packages       # Test shared packages
 | `skills-architect` | Create and maintain project skills |
 
 **📖 For agent details, see**: [`.claude/agents/`](.claude/agents/)
+
+### IDE Agents (Antigravity Kit)
+
+RawDrive also includes **Antigravity Kit** - an extensive IDE agent toolkit in `.agent/`:
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| **Agents** | 19 | `backend-specialist`, `frontend-specialist`, `database-architect`, `devops-engineer`, `security-auditor` |
+| **Skills** | 36 | `api-patterns`, `database-design`, `frontend-design`, `testing-patterns`, `deployment-procedures` |
+| **Workflows** | 11 | `/brainstorm`, `/create`, `/debug`, `/deploy`, `/orchestrate` |
+
+**📖 For IDE agent details, see**: [`.agent/ARCHITECTURE.md`](.agent/ARCHITECTURE.md)
 
 ---
 
@@ -348,7 +370,7 @@ RAZORPAY_KEY_SECRET=<razorpay-secret>
 
 ### Core Documentation
 - **[PRD](.claude/PRD.md)** - Complete product requirements and architecture
-- **[Best Practices](.claude/reference/)** - 23 comprehensive technical guides
+- **[Best Practices](.claude/reference/)** - 24 comprehensive technical guides
 - **[Architecture](docs/ARCHITECTURE_QUICK_REFERENCE.md)** - Quick architecture reference
 - **[Test Users](docs/TEST_USERS.md)** - Test user credentials and configurations
 
@@ -387,7 +409,17 @@ RAZORPAY_KEY_SECRET=<razorpay-secret>
 
 ## 📝 Version History
 
-### Current: v0.3.2 (2026-01-09)
+### Current: v0.3.3 (2026-01-21)
+
+**Major Features:**
+- JWT authentication fixes for gallery and upload services
+- Magic link service improvements with Redis caching
+- Download policy defaults updated to watermarked only
+- Gallery branding data on public endpoints
+- Album proofing and notification templates
+- Client service security enhancements
+
+### v0.3.2 (2026-01-09)
 
 **Major Features:**
 - Personal Profile Digital Visiting Card (`/u/{slug}`)
@@ -417,14 +449,16 @@ RAZORPAY_KEY_SECRET=<razorpay-secret>
 
 ---
 
-**Maintained by**: RawDrive Development Team  
-**Last Updated**: 2026-01-10  
+**Maintained by**: RawDrive Development Team
+**Last Updated**: 2026-01-21
 **Status**: Production Ready ✅
 
 ## Active Technologies
 - Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, passlib (bcrypt) (027-gallery-feature-completion)
 - PostgreSQL 16 (galleries, magic_links), Redis 7 (quotas, rate-limiting) (027-gallery-feature-completion)
 - Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, reportlab (PDF) (026-album-proofing)
+- Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI 0.115+, SQLAlchemy 2.0, Redis 7.x, Celery 5.x, Pydantic V2 (002-face-audit-remediation)
+- PostgreSQL 16 (with pgvector), Redis 7.x (caching/rate limiting) (002-face-audit-remediation)
 
 ## Recent Changes
 - 027-gallery-feature-completion: Added passlib (bcrypt) for access code hashing, Redis quota tracking, WCAG 2.1 AAA CSS variables
