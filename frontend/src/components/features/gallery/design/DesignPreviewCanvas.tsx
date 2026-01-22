@@ -127,33 +127,33 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
       }}
     >
       {/* Preview Header with Collaboration Info */}
-      <div className="mb-6 bg-black/30 backdrop-blur-xl border border-white/10 rounded-2xl p-5 transition-opacity duration-200">
+      <div className="mb-6 bg-gray-100 dark:bg-black/30 backdrop-blur-xl border border-gray-300 dark:border-white/10 rounded-2xl p-5 transition-opacity duration-200">
         <div className="flex items-center justify-between mb-2">
-          <h3 className={`text-white/90 font-bold uppercase tracking-[0.2em] ${textClasses.body}`}>
+          <h3 className={`text-gray-900 dark:text-white/90 font-bold uppercase tracking-[0.2em] ${textClasses.body}`}>
             {coverStyle?.name || 'Unknown Style'}
           </h3>
 
           {/* Viewer Count Badge */}
           {viewerCount > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/10 transition-transform duration-200 hover:scale-105">
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-200 dark:bg-white/5 rounded-full border border-gray-400 dark:border-white/10 transition-transform duration-200 hover:scale-105">
               <EyeIcon className="h-3 w-3 text-cyan-400" />
-              <span className="text-[10px] font-bold text-white/90 leading-none">{viewerCount}</span>
+              <span className="text-[10px] font-bold text-gray-900 dark:text-white/90 leading-none">{viewerCount}</span>
             </div>
           )}
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="space-y-1">
-            <div className={`text-[9px] text-white/40 font-semibold tracking-wide uppercase ${textClasses.body}`}>
+            <div className={`text-[9px] text-gray-600 dark:text-white/40 font-semibold tracking-wide uppercase ${textClasses.body}`}>
               Viewport · Theme · Font
             </div>
-            <p className={`text-white/70 font-medium ${textClasses.body}`}>
-              <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10 mr-2">{getViewportLabel()}</span>
-              <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10 mr-2">{config.theme.id}</span>
-              <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10">{config.typography.pairingId}</span>
+            <p className={`text-gray-700 dark:text-white/70 font-medium ${textClasses.body}`}>
+              <span className="inline-block px-2 py-1 bg-gray-200 dark:bg-white/5 rounded border border-gray-400 dark:border-white/10 mr-2">{getViewportLabel()}</span>
+              <span className="inline-block px-2 py-1 bg-gray-200 dark:bg-white/5 rounded border border-gray-400 dark:border-white/10 mr-2">{config.theme.id}</span>
+              <span className="inline-block px-2 py-1 bg-gray-200 dark:bg-white/5 rounded border border-gray-400 dark:border-white/10">{config.typography.pairingId}</span>
             </p>
             {!containerQueriesSupported && (
-              <p className="text-[9px] text-amber-400/80" title="Container queries not supported, using viewport queries">
+              <p className="text-[9px] text-amber-600 dark:text-amber-400/80" title="Container queries not supported, using viewport queries">
                 ⓘ Responsive fallback mode active
               </p>
             )}
@@ -191,7 +191,7 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
 
       {/* Gallery Grid Preview - Container Query Responsive (T048, T049) */}
       <div className="mt-12 group/grid">
-        <h4 className={`text-white/50 font-semibold tracking-wide mb-4 group-hover/grid:text-white/70 transition-colors ${textClasses.body}`}>
+        <h4 className={`text-gray-600 dark:text-white/50 font-semibold tracking-wide mb-4 group-hover/grid:text-gray-700 dark:group-hover/grid:text-white/70 transition-colors ${textClasses.body}`}>
           Secondary gallery section
         </h4>
         <div
@@ -205,38 +205,38 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="aspect-square rounded-2xl bg-white/[0.03] border border-white/[0.05] flex items-center justify-center transition-all duration-500 hover:bg-white/[0.08] hover:border-white/20 hover:scale-[1.02] hover:shadow-xl group/item"
+              className="aspect-square rounded-2xl bg-gray-200 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.05] flex items-center justify-center transition-all duration-500 hover:bg-gray-300 dark:hover:bg-white/[0.08] hover:border-gray-400 dark:hover:border-white/20 hover:scale-[1.02] hover:shadow-xl group/item"
             >
-              <div className="w-8 h-px bg-white/10 group-hover/item:bg-cyan-400 group-hover/item:w-12 transition-all duration-500" />
+              <div className="w-8 h-px bg-gray-400 dark:bg-white/10 group-hover/item:bg-cyan-400 group-hover/item:w-12 transition-all duration-500" />
             </div>
           ))}
         </div>
-        <div className={`mt-4 text-white/50 text-[9px] font-semibold tracking-wide uppercase ${textClasses.body}`}>
+        <div className={`mt-4 text-gray-600 dark:text-white/50 text-[9px] font-semibold tracking-wide uppercase ${textClasses.body}`}>
           Layout settings
         </div>
         <div className={`mt-2 flex gap-3 flex-wrap`}>
-          <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10 text-white/60 text-[10px]">
-            Layout: <span className="text-white/80 font-semibold">{config.grid.style}</span>
+          <span className="inline-block px-2 py-1 bg-gray-200 dark:bg-white/5 rounded border border-gray-400 dark:border-white/10 text-gray-700 dark:text-white/60 text-[10px]">
+            Layout: <span className="text-gray-900 dark:text-white/80 font-semibold">{config.grid.style}</span>
           </span>
-          <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10 text-white/60 text-[10px]">
-            Size: <span className="text-white/80 font-semibold">{config.grid.size}</span>
+          <span className="inline-block px-2 py-1 bg-gray-200 dark:bg-white/5 rounded border border-gray-400 dark:border-white/10 text-gray-700 dark:text-white/60 text-[10px]">
+            Size: <span className="text-gray-900 dark:text-white/80 font-semibold">{config.grid.size}</span>
           </span>
         </div>
       </div>
 
       {/* Cover Info Section - Balanced & Centered */}
-      <div className="mt-12 p-8 bg-black/40 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 flex flex-wrap justify-center gap-x-12 gap-y-6 transition-all duration-300">
+      <div className="mt-12 p-8 bg-gray-100 dark:bg-black/40 backdrop-blur-3xl rounded-[2.5rem] border border-gray-300 dark:border-white/10 flex flex-wrap justify-center gap-x-12 gap-y-6 transition-all duration-300">
         <div className="text-center group/info">
-          <span className="text-white/50 font-semibold tracking-wide text-[10px] group-hover/info:text-cyan-400/70 transition-colors">Style atmosphere</span>
-          <div className="text-white/80 font-semibold text-xs mt-1">{coverStyle?.name}{coverStyle?.premium && ' ✨'}</div>
+          <span className="text-gray-600 dark:text-white/50 font-semibold tracking-wide text-[10px] group-hover/info:text-cyan-600 dark:group-hover/info:text-cyan-400/70 transition-colors">Style atmosphere</span>
+          <div className="text-gray-900 dark:text-white/80 font-semibold text-xs mt-1">{coverStyle?.name}{coverStyle?.premium && ' ✨'}</div>
         </div>
         <div className="text-center group/info">
-          <span className="text-white/50 font-semibold tracking-wide text-[10px] group-hover/info:text-cyan-400/70 transition-colors">Visual identity</span>
-          <div className="text-white/80 font-semibold text-xs mt-1">{config.theme.id} • {config.theme.mode}</div>
+          <span className="text-gray-600 dark:text-white/50 font-semibold tracking-wide text-[10px] group-hover/info:text-cyan-600 dark:group-hover/info:text-cyan-400/70 transition-colors">Visual identity</span>
+          <div className="text-gray-900 dark:text-white/80 font-semibold text-xs mt-1">{config.theme.id} • {config.theme.mode}</div>
         </div>
         <div className="text-center group/info">
-          <span className="text-white/50 font-semibold tracking-wide text-[10px] group-hover/info:text-cyan-400/70 transition-colors">Type curation</span>
-          <div className="text-white/80 font-semibold text-xs mt-1">{config.typography.pairingId}</div>
+          <span className="text-gray-600 dark:text-white/50 font-semibold tracking-wide text-[10px] group-hover/info:text-cyan-600 dark:group-hover/info:text-cyan-400/70 transition-colors">Type curation</span>
+          <div className="text-gray-900 dark:text-white/80 font-semibold text-xs mt-1">{config.typography.pairingId}</div>
         </div>
       </div>
     </div>

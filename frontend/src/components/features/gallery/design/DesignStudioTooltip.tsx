@@ -62,15 +62,16 @@ export const DesignStudioTooltip: React.FC<DesignStudioTooltipProps> = ({
     };
 
     const getArrowClasses = () => {
+        // Arrow direction based on tooltip position
         switch (position) {
             case 'bottom':
-                return 'bottom-full left-1/2 -translate-x-1/2 border-l-transparent border-r-transparent border-t-transparent border-b-[#1e293b]/80';
+                return 'bottom-full left-1/2 -translate-x-1/2 border-l-transparent border-r-transparent border-t-transparent border-b-gray-700 dark:border-b-[#1e293b]/80';
             case 'left':
-                return 'left-full top-1/2 -translate-y-1/2 border-t-transparent border-b-transparent border-r-transparent border-l-[#1e293b]/80';
+                return 'left-full top-1/2 -translate-y-1/2 border-t-transparent border-b-transparent border-r-transparent border-l-gray-700 dark:border-l-[#1e293b]/80';
             case 'right':
-                return 'right-full top-1/2 -translate-y-1/2 border-t-transparent border-b-transparent border-l-transparent border-r-[#1e293b]/80';
+                return 'right-full top-1/2 -translate-y-1/2 border-t-transparent border-b-transparent border-l-transparent border-r-gray-700 dark:border-r-[#1e293b]/80';
             default: // top
-                return 'top-full left-1/2 -translate-x-1/2 border-l-transparent border-r-transparent border-b-transparent border-t-[#1e293b]/80';
+                return 'top-full left-1/2 -translate-x-1/2 border-l-transparent border-r-transparent border-b-transparent border-t-gray-700 dark:border-t-[#1e293b]/80';
         }
     };
 
@@ -88,8 +89,8 @@ export const DesignStudioTooltip: React.FC<DesignStudioTooltipProps> = ({
                     role="tooltip"
                     className={`
             absolute z-[100] px-3 py-1.5
-            rounded-full glass-liquid-dark
-            text-[10px] font-semibold text-white uppercase tracking-wider
+            rounded-full bg-gray-900 dark:glass-liquid-dark border border-gray-700 dark:border-transparent
+            text-[10px] font-semibold text-gray-100 dark:text-white uppercase tracking-wider
             animate-in fade-in zoom-in-95 slide-in-from-bottom-1 duration-200
             ${getPositionClasses()}
           `}
