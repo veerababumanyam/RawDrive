@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <pattern id="oakTexture" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
+      <rect width="80" height="80" fill="#78552D"/>
+      <line x1="0" y1="0" x2="80" y2="80" stroke="#5A3D23" stroke-width="1" opacity="0.3"/>
+      <path d="M 10,40 Q 40,35 70,45" stroke="#654321" stroke-width="1" fill="none" opacity="0.4"/>
+    </pattern>
+    <linearGradient id="photoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A0826D;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6B5447;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect class="background" width="400" height="300" fill="url(#oakTexture)"/>
+  <rect class="photo-area" x="30" y="30" width="340" height="180" fill="url(#photoGrad)" rx="3"/>
+  <rect class="overlay" x="30" y="30" width="340" height="180" fill="#000000" opacity="0.15" rx="3"/>
+  <text class="title" x="200" y="245" font-size="14" font-weight="600" text-anchor="middle" fill="#F5DEB3" font-family="system-ui">Oakwood</text>
+</svg>

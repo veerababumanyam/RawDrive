@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1F2937;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#111827;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect class="background" width="400" height="300" fill="url(#bgGrad)"/>
+  <polygon class="chevron1" points="50,80 90,100 50,120" fill="#60A5FA" opacity="0.7"/>
+  <polygon class="chevron2" points="120,70 160,90 120,110" fill="#60A5FA" opacity="0.6"/>
+  <polygon class="chevron3" points="190,60 230,80 190,100" fill="#60A5FA" opacity="0.5"/>
+  <line x1="40" y1="140" x2="360" y2="140" stroke="#60A5FA" stroke-width="2" opacity="0.4"/>
+  <line x1="40" y1="160" x2="360" y2="160" stroke="#60A5FA" stroke-width="2" opacity="0.3"/>
+  <text class="title" x="200" y="230" font-size="14" font-weight="600" text-anchor="middle" fill="#E0E7FF" font-family="system-ui">Aero</text>
+</svg>

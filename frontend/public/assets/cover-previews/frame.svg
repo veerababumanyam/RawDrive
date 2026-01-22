@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect class="background" width="400" height="300" fill="#F5F5DC"/>
+  <rect class="outer-frame" x="30" y="30" width="340" height="240" fill="none" stroke="#8B7355" stroke-width="8"/>
+  <rect class="inner-frame" x="40" y="40" width="320" height="220" fill="none" stroke="#D4AF37" stroke-width="2"/>
+  <rect class="photo-area" x="50" y="50" width="300" height="150" fill="#E8DCC8" opacity="0.4" rx="1"/>
+  <text class="title" x="200" y="230" font-size="14" font-weight="600" text-anchor="middle" fill="#8B7355" font-family="Georgia">Gallery Title</text>
+</svg>

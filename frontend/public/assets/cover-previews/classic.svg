@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="photoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1F2937;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#111827;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="overlayGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#000000;stop-opacity:0" />
+      <stop offset="100%" style="stop-color:#000000;stop-opacity:0.4" />
+    </linearGradient>
+  </defs>
+  <rect class="photo-area" width="400" height="300" fill="url(#photoGrad)"/>
+  <rect class="overlay" width="400" height="300" fill="url(#overlayGrad)"/>
+  <text class="title" x="200" y="150" font-size="18" font-weight="700" text-anchor="middle" fill="#FFFFFF" font-family="system-ui">Gallery</text>
+  <text class="subtitle" x="200" y="175" font-size="12" text-anchor="middle" fill="#E5E7EB" font-family="system-ui">Premium Layout</text>
+</svg>

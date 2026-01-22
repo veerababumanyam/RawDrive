@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E0F2FE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#BAE6FD;stop-opacity:1" />
+    </linearGradient>
+    <filter id="blur">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5"/>
+    </filter>
+  </defs>
+  <rect class="background" width="400" height="300" fill="url(#bgGrad)"/>
+  <ellipse class="cloud1" cx="80" cy="50" rx="35" ry="20" fill="#FFFFFF" opacity="0.6" filter="url(#blur)"/>
+  <ellipse class="cloud2" cx="300" cy="80" rx="45" ry="25" fill="#FFFFFF" opacity="0.5" filter="url(#blur)"/>
+  <ellipse class="cloud3" cx="150" cy="200" rx="40" ry="22" fill="#FFFFFF" opacity="0.4" filter="url(#blur)"/>
+  <rect class="photo-area" x="80" y="100" width="240" height="80" fill="#B3E5FC" opacity="0.3" rx="2"/>
+  <text class="title" x="200" y="245" font-size="14" font-weight="600" text-anchor="middle" fill="#0369A1" font-family="system-ui">Breeze</text>
+</svg>

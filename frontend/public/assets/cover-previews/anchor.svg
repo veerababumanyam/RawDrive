@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0C4A6E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#164E63;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect class="background" width="400" height="300" fill="url(#bgGrad)"/>
+  <circle class="compass" cx="200" cy="100" r="45" fill="none" stroke="#F59E0B" stroke-width="2" opacity="0.6"/>
+  <path class="anchor" d="M 200,60 L 180,120 Q 200,130 220,120 Z" fill="#DC2626" opacity="0.7"/>
+  <line x1="140" y1="100" x2="260" y2="100" stroke="#F59E0B" stroke-width="1" opacity="0.5"/>
+  <line x1="200" y1="55" x2="200" y2="145" stroke="#F59E0B" stroke-width="1" opacity="0.5"/>
+  <rect class="photo-area" x="20" y="170" width="360" height="100" fill="#0EA5E9" opacity="0.3" rx="2"/>
+  <text class="title" x="200" y="270" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF" font-family="system-ui">Anchor</text>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#EC4899;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#EAB308;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect class="background" width="400" height="300" fill="url(#bgGrad)"/>
+  <circle cx="80" cy="80" r="15" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="140" cy="60" r="12" fill="#FFFFFF" opacity="0.7"/>
+  <circle cx="200" cy="50" r="18" fill="#FFFFFF" opacity="0.85"/>
+  <circle cx="280" cy="70" r="14" fill="#FFFFFF" opacity="0.75"/>
+  <circle cx="340" cy="90" r="11" fill="#FFFFFF" opacity="0.7"/>
+  <polygon class="star1" points="100,150 110,170 130,175 115,190 120,210 100,200 80,210 85,190 70,175 90,170" fill="#FFFFFF" opacity="0.7"/>
+  <polygon class="star2" points="280,180 288,198 308,202 293,215 298,235 280,225 262,235 267,215 252,202 272,198" fill="#FFFFFF" opacity="0.6"/>
+  <text class="title" x="200" y="280" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF" font-family="system-ui" font-weight="700">Joy</text>
+</svg>

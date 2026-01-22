@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1E1B4B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3730A3;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="photoGrad" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#A78BFA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6D28D9;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect class="background" width="400" height="300" fill="url(#bgGrad)"/>
+  <polygon class="edge1" points="20,20 140,20 80,140 0,140" fill="url(#photoGrad)"/>
+  <polygon class="edge2" points="160,60 260,30 200,160 100,160" fill="#7C3AED" opacity="0.6"/>
+  <polygon class="edge3" points="280,80 380,60 320,200 220,220" fill="#A78BFA" opacity="0.5"/>
+  <text class="title" x="200" y="270" font-size="14" font-weight="600" text-anchor="middle" fill="#E9D5FF" font-family="system-ui">Edge</text>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#92400E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5A3E1F;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect class="background" width="400" height="300" fill="url(#bgGrad)"/>
+  <rect class="photo-area" x="40" y="40" width="320" height="160" fill="#6B4423" opacity="0.5" rx="2"/>
+  <polygon class="diamond1" points="40,220 65,240 40,260 15,240" fill="#DC2626" opacity="0.5"/>
+  <polygon class="diamond2" points="120,215 145,235 120,255 95,235" fill="#DC2626" opacity="0.4"/>
+  <polygon class="diamond3" points="280,220 305,240 280,260 255,240" fill="#DC2626" opacity="0.4"/>
+  <text class="title" x="200" y="280" font-size="14" font-weight="600" text-anchor="middle" fill="#F5DEB3" font-family="system-ui">West</text>
+</svg>

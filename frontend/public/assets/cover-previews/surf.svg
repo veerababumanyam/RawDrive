@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#164E63;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#06B6D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#CCFBF1;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect class="background" width="400" height="300" fill="url(#bgGrad)"/>
+  <path class="wave1" d="M 0,140 Q 50,120 100,140 T 200,140 T 300,140 T 400,140 L 400,160 Q 350,180 300,160 T 200,160 T 100,160 T 0,160 Z" fill="#FFFFFF" opacity="0.3"/>
+  <path class="wave2" d="M 0,170 Q 60,150 120,170 T 240,170 T 360,170 T 400,170 L 400,190 Q 340,210 280,190 T 160,190 T 40,190 T 0,190 Z" fill="#FFFFFF" opacity="0.2"/>
+  <text class="title" x="200" y="240" font-size="14" font-weight="600" text-anchor="middle" fill="#FFFFFF" font-family="system-ui">Surf</text>
+</svg>
