@@ -17,12 +17,13 @@
  * - Implement GridLayoutSection with layout options
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { GalleryDesignConfig, DesignDraftStatus, FontPairingId, CoverStyleId } from '../../../../types/gallery-design';
 import { FONT_PAIRINGS } from '../../../../constants/fontPairings';
 import { LockableControlSection } from './ControlLockIndicator';
 import { ThemeSelector } from './ThemeSelector';
 import { CoverStyleGrid } from './CoverStyleGrid';
+import { useSubscription } from '../../../../hooks/useSubscription';
 
 type DesignSection = 'cover' | 'typography' | 'theme' | 'grid';
 
@@ -45,6 +46,24 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<DesignSection>('cover');
   const [coverCategory, setCoverCategory] = useState<'all' | 'basic' | 'text' | 'advanced' | 'premium'>('all');
+  const [upgradePrompt, setUpgradePrompt] = useState<{ show: boolean; styleName: string } | null>(null);
+
+  // Get subscription status to check if user is premium
+  const { isPaid, createCheckout, isCheckingOut } = useSubscription();
+
+  // Handle premium style blocked
+  const handlePremiumStyleBlocked = useCallback((styleId: string, styleName: string) => {
+    setUpgradePrompt({ show: true, styleName });
+  }, []);
+
+  // Handle upgrade click
+  const handleUpgradeClick = useCallback(async () => {
+    try {
+      await createCheckout({ plan_code: 'professional', success_url: window.location.href, cancel_url: window.location.href });
+    } catch (e) {
+      console.error('Checkout failed:', e);
+    }
+  }, [createCheckout]);
 
   // Handle keyboard navigation for tabs (Arrow keys, Home, End)
   const handleTabKeyDown = (e: React.KeyboardEvent, currentTab: DesignSection) => {
@@ -146,6 +165,8 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
                 onSelectStyle={(styleId) => onChange({ cover: { ...config.cover, style: styleId as CoverStyleId } })}
                 category={coverCategory}
                 onCategoryChange={setCoverCategory}
+                isPremiumUser={isPaid}
+                onPremiumStyleBlocked={handlePremiumStyleBlocked}
               />
             </div>
           </LockableControlSection>
@@ -217,6 +238,37 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
       {error && (
         <div className="px-4 py-2 m-2 text-xs text-red-700 bg-red-50 rounded border border-red-200">
           {error}
+        </div>
+      )}
+
+      {/* Premium Upgrade Prompt */}
+      {upgradePrompt?.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-xl max-w-sm w-full p-6 shadow-2xl">
+            <div className="text-center mb-4">
+              <div className="text-4xl mb-2">✨</div>
+              <h3 className="text-lg font-semibold text-text-primary">Premium Feature</h3>
+            </div>
+            <p className="text-sm text-text-secondary text-center mb-4">
+              <strong>{upgradePrompt.styleName}</strong> is a premium cover style.
+              Upgrade to unlock all {12} premium styles and enhance your galleries.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setUpgradePrompt(null)}
+                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg border border-border-default text-text-secondary hover:bg-bg-secondary transition-colors"
+              >
+                Maybe Later
+              </button>
+              <button
+                onClick={handleUpgradeClick}
+                disabled={isCheckingOut}
+                className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-accent-primary text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {isCheckingOut ? 'Loading...' : 'Upgrade Now'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

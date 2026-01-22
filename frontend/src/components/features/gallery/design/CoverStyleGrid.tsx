@@ -23,6 +23,8 @@ interface CoverStyleGridProps {
   category?: 'all' | 'basic' | 'text' | 'advanced' | 'premium';
   onCategoryChange?: (category: 'all' | 'basic' | 'text' | 'advanced' | 'premium') => void;
   aiRecommendedStyles?: string[]; // Style IDs that are AI-recommended
+  isPremiumUser?: boolean; // Whether user has premium subscription
+  onPremiumStyleBlocked?: (styleId: string, styleName: string) => void; // Called when non-premium user clicks premium style
 }
 
 export const CoverStyleGrid: React.FC<CoverStyleGridProps> = ({
@@ -31,6 +33,8 @@ export const CoverStyleGrid: React.FC<CoverStyleGridProps> = ({
   category = 'all',
   onCategoryChange,
   aiRecommendedStyles = [],
+  isPremiumUser = false,
+  onPremiumStyleBlocked,
 }) => {
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 12 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,6 +68,17 @@ export const CoverStyleGrid: React.FC<CoverStyleGridProps> = ({
   }, [filteredStyles.length]);
 
   const visibleStyles = filteredStyles.slice(visibleRange.start, visibleRange.end);
+
+  // Handle style selection with premium check
+  const handleStyleSelect = useCallback((style: typeof filteredStyles[0]) => {
+    if (style.premium && !isPremiumUser) {
+      // Block premium style for non-premium users
+      onPremiumStyleBlocked?.(style.id, style.name);
+    } else {
+      // Allow selection
+      onSelectStyle(style.id);
+    }
+  }, [isPremiumUser, onPremiumStyleBlocked, onSelectStyle]);
 
   return (
     <div className="space-y-4">
@@ -101,8 +116,9 @@ export const CoverStyleGrid: React.FC<CoverStyleGridProps> = ({
             key={style.id}
             style={style}
             isSelected={selectedStyle === style.id}
-            onSelect={() => onSelectStyle(style.id)}
+            onSelect={() => handleStyleSelect(style)}
             isAIRecommended={aiRecommendedStyles.includes(style.id)}
+            isLocked={style.premium && !isPremiumUser}
           />
         ))}
       </div>
@@ -142,6 +158,7 @@ interface CoverStyleGridItemProps {
   isSelected: boolean;
   onSelect: () => void;
   isAIRecommended?: boolean;
+  isLocked?: boolean;
 }
 
 const CoverStyleGridItem: React.FC<CoverStyleGridItemProps> = ({
@@ -149,16 +166,19 @@ const CoverStyleGridItem: React.FC<CoverStyleGridItemProps> = ({
   isSelected,
   onSelect,
   isAIRecommended,
+  isLocked = false,
 }) => {
   return (
     <button
       onClick={onSelect}
-      className={`group p-2 rounded-lg border-2 transition-all ${
+      className={`group relative p-2 rounded-lg border-2 transition-all ${
         isSelected
           ? 'border-accent-primary bg-accent-primary/5 shadow-md'
-          : 'border-border-default hover:border-accent-primary hover:shadow-md'
+          : isLocked
+            ? 'border-border-default hover:border-amber-400 hover:shadow-md cursor-pointer'
+            : 'border-border-default hover:border-accent-primary hover:shadow-md'
       }`}
-      title={style.description}
+      title={isLocked ? `${style.name} - Premium style (Upgrade to unlock)` : style.description}
     >
       {/* Thumbnail */}
       <div className="relative aspect-square mb-2 rounded overflow-hidden bg-gradient-to-br from-bg-secondary via-bg-primary to-bg-tertiary">
@@ -207,10 +227,12 @@ const CoverStyleGridItem: React.FC<CoverStyleGridItemProps> = ({
         <p className="text-xs text-text-tertiary capitalize truncate">{style.category}</p>
       </div>
 
-      {/* Premium Badge */}
+      {/* Premium Badge / Lock Indicator */}
       {style.premium && (
-        <div className="absolute top-0 right-0 px-1.5 py-0.5 bg-accent-primary text-white text-xs rounded-bl font-medium">
-          ✨
+        <div className={`absolute top-0 right-0 px-1.5 py-0.5 text-white text-xs rounded-bl font-medium ${
+          isLocked ? 'bg-amber-500' : 'bg-accent-primary'
+        }`}>
+          {isLocked ? '🔒' : '✨'}
         </div>
       )}
     </button>
