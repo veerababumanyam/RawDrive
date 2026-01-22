@@ -11,6 +11,7 @@ import {
   Users,
   Sparkles,
   Share2,
+  Palette,
   Settings,
   Upload,
   Trash2,
@@ -27,6 +28,8 @@ export interface GalleryActionBarProps {
   aiToolsOpen?: boolean;
   /** Callback for Share action */
   onShare?: () => void;
+  /** Callback for Design Studio action - navigate to gallery design customization */
+  onDesignStudio?: () => void;
   /** Callback for Settings action */
   onSettings?: () => void;
   /** Callback for Upload action */
@@ -45,6 +48,7 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
   onAITools,
   aiToolsOpen = false,
   onShare,
+  onDesignStudio,
   onSettings,
   onUpload,
   onDelete,
@@ -112,6 +116,20 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             >
               <Share2 size={16} className="flex-shrink-0" />
               <span className="hidden sm:inline">Share</span>
+            </button>
+          )}
+
+          {/* Design Studio - Purple */}
+          {onDesignStudio && (
+            <button
+              onClick={onDesignStudio}
+              className="btn-gallery-action btn-action-purple min-h-[36px] sm:min-h-[38px]"
+              aria-label="Open Design Studio to customize this gallery's appearance"
+              title="Customize gallery design, cover, and theme"
+            >
+              <Palette size={16} className="flex-shrink-0" />
+              <span className="hidden sm:inline">Design Studio</span>
+              <span className="sm:hidden">Design</span>
             </button>
           )}
 

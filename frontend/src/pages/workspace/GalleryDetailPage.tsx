@@ -288,6 +288,15 @@ const GalleryDetailPage: React.FC = () => {
     window.open(`/workspace/galleries/${galleryId}/preview`, '_blank', 'noopener,noreferrer');
   }, [galleryId]);
 
+  /**
+   * Navigate to Gallery Design Studio
+   * Opens the design customization interface for cover, theme, typography, and layout
+   */
+  const handleDesignStudio = useCallback(() => {
+    if (!galleryId) return;
+    navigate(`/workspace/galleries/${galleryId}/design`);
+  }, [galleryId, navigate]);
+
   const handleApplyAIFilters = useCallback(() => {
     setAppliedFilters(filters);
     addToast({ message: 'Filters applied', variant: 'success' });
@@ -909,6 +918,7 @@ const GalleryDetailPage: React.FC = () => {
               onAITools={undefined}
               aiToolsOpen={false}
               onShare={() => setShowShareDialog(true)}
+              onDesignStudio={handleDesignStudio}
               onSettings={() => setShowSettings(true)}
               onUpload={() => setShowUpload(!showUpload)}
               onDelete={() => setShowDeleteDialog(true)}
