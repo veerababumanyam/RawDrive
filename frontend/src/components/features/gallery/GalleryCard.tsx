@@ -4,7 +4,7 @@
  * Property 1: Gallery List Data Completeness
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Edit, Share2, Image, Clock, Check, Trash2, Pin } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
 import { GalleryStatusBadge } from './GalleryStatusBadge';
@@ -45,6 +45,7 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(gallery.cover_image_url || null);
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const fetchAttemptedRef = useRef(false);
 
   // Fetch tagging health data
   const { health: taggingHealth, loading: healthLoading, error: healthError, refreshStats: refreshHealth } = useGalleryTaggingHealth({
@@ -55,31 +56,27 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({
 
   // Fetch signed URL for cover image if we have cover_asset_id
   useEffect(() => {
-    console.log('[GalleryCard] Cover image effect:', {
-      galleryId: gallery.gallery_id,
-      cover_asset_id: gallery.cover_asset_id,
-      workspace_id: workspace?.workspace_id,
-      coverImageUrl,
-      imageError,
-    });
+    // Skip if we already attempted to fetch
+    if (fetchAttemptedRef.current) return;
 
-    if (gallery.cover_asset_id && workspace?.workspace_id && !coverImageUrl && !imageError) {
-      console.log('[GalleryCard] Fetching signed URL for cover:', gallery.cover_asset_id);
+    // Prioritize cover_asset_id if available
+    if (gallery.cover_asset_id && workspace?.workspace_id) {
+      fetchAttemptedRef.current = true;
       galleryService
         .getSignedUrl(workspace.workspace_id, gallery.cover_asset_id, 'thumbnail')
         .then((url) => {
-          console.log('[GalleryCard] Got signed URL:', url?.substring(0, 80) + '...');
           setCoverImageUrl(url);
         })
         .catch((error) => {
           console.error('[GalleryCard] Failed to fetch cover image URL:', error);
           setImageError(true);
         });
-    } else if (gallery.cover_image_url && !coverImageUrl) {
+    } else if (gallery.cover_image_url) {
       // Fallback to legacy cover_image_url if available
+      fetchAttemptedRef.current = true;
       setCoverImageUrl(gallery.cover_image_url);
     }
-  }, [gallery.cover_asset_id, gallery.cover_image_url, workspace?.workspace_id, coverImageUrl, imageError]);
+  }, [gallery.cover_asset_id, gallery.cover_image_url, workspace?.workspace_id]);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
