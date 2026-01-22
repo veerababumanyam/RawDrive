@@ -14,7 +14,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   COVER_STYLES,
   getCoverStylesByCategory,
-  getCoverStyleStats,
 } from '../../../../constants/coverStyleCatalog';
 import { DesignStudioTooltip } from './DesignStudioTooltip';
 import {
@@ -50,7 +49,6 @@ export const CoverStyleGrid: React.FC<CoverStyleGridProps> = ({
 
   // Get filtered styles
   const filteredStyles = category === 'all' ? COVER_STYLES : getCoverStylesByCategory(category);
-  const stats = getCoverStyleStats();
 
   // Intersection Observer for lazy loading
   useEffect(() => {
@@ -90,22 +88,22 @@ export const CoverStyleGrid: React.FC<CoverStyleGridProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Category Tabs - Glass Segmented Control */}
-      <div className="flex flex-wrap bg-gray-100 dark:bg-black/20 backdrop-blur-md rounded-2xl p-1.5 border border-gray-200 dark:border-white/5 gap-1">
+      {/* Category Tabs - Responsive Glass Segmented Control */}
+      <div className="flex flex-wrap sm:flex-nowrap bg-gray-100 dark:bg-black/20 backdrop-blur-md rounded-2xl p-1 sm:p-1.5 border border-gray-200 dark:border-white/5 gap-0.5 sm:gap-1">
         {[
-          { id: 'all' as const, label: 'All', count: stats.total },
-          { id: 'basic' as const, label: 'Basic', count: stats.byCategory.basic },
-          { id: 'text' as const, label: 'Text', count: stats.byCategory.text },
-          { id: 'advanced' as const, label: 'Special', count: stats.byCategory.advanced },
-          { id: 'premium' as const, label: 'Premium', count: stats.byCategory.premium },
-        ].map(({ id, label, count }) => (
+          { id: 'all' as const, label: 'All' },
+          { id: 'basic' as const, label: 'Basic' },
+          { id: 'text' as const, label: 'Text' },
+          { id: 'advanced' as const, label: 'Special' },
+          { id: 'premium' as const, label: 'Premium' },
+        ].map(({ id, label }) => (
           <button
             key={id}
             onClick={() => {
               setVisibleRange({ start: 0, end: 12 });
               onCategoryChange?.(id);
             }}
-            className={`flex-1 px-3 py-1.5 text-[10px] font-semibold tracking-wide rounded-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-black ${category === id
+            className={`flex-1 px-2 sm:px-3 py-1.5 text-[8px] sm:text-[10px] font-semibold tracking-wide rounded-lg sm:rounded-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-black whitespace-nowrap ${category === id
               ? 'bg-white text-[#0a1628] shadow-lg scale-[1.02]'
               : 'text-gray-600 dark:text-white/40 hover:text-gray-900 dark:hover:text-white/70 hover:bg-gray-200 dark:hover:bg-white/5 hover:scale-[1.01]'
               }`}
@@ -193,8 +191,22 @@ const CoverStyleGridItem: React.FC<CoverStyleGridItemProps> = ({
       >
         {/* Thumbnail */}
         <div className="relative aspect-square mb-3 rounded-xl overflow-hidden bg-gray-200 dark:bg-white/5 border border-gray-300 dark:border-white/10 shadow-inner group-hover:border-gray-400 dark:group-hover:border-white/20 transition-colors">
-          {/* Placeholder/Icon representation */}
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-4 group-hover:scale-110 transition-transform duration-500">
+          {/* SVG Thumbnail Image with Fallback Icon */}
+          {style.thumbnail ? (
+            <img
+              src={style.thumbnail}
+              alt={`${style.name} style preview`}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              loading="lazy"
+              onError={(e) => {
+                // Fallback to placeholder icon if image fails to load
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          ) : null}
+
+          {/* Placeholder/Icon representation (fallback if thumbnail missing) */}
+          <div className="w-full h-full absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 group-hover:scale-110 transition-transform duration-500 bg-gray-100 dark:bg-white/[0.02]" id={`fallback-${style.id}`}>
             <div className="text-gray-500 dark:text-white opacity-40">
               {style.category === 'basic' ? <Layout className="w-8 h-8" /> :
                 style.category === 'text' ? <Type className="w-8 h-8" /> :
