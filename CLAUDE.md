@@ -2,7 +2,7 @@
 
 **RawDrive** is an enterprise SaaS professional photography platform with microservices architecture.
 
-**Version**: 0.3.3 | **Status**: Production | **Updated**: 2026-01-21
+**Version**: 0.3.6 | **Status**: Production | **Updated**: 2026-01-22
 
 ---
 
@@ -409,7 +409,19 @@ RAZORPAY_KEY_SECRET=<razorpay-secret>
 
 ## 📝 Version History
 
-### Current: v0.3.3 (2026-01-21)
+### Current: v0.3.6 (2026-01-22)
+
+**Major Features:**
+- Gallery Design Studio enhancements with real-time preview
+- Cover template system with 28+ SVG thumbnail previews
+- Premium cover styles (Cosmos, Reef, Bondi, West, Cliff, Cedar)
+- CoverStyleGrid virtualization for performance
+- AI cover recommendations hooks
+- Light/dark theme support in Design Studio
+- Session handling and auth service improvements
+- Collaboration service for gallery-service
+
+### v0.3.3 (2026-01-21)
 
 **Major Features:**
 - JWT authentication fixes for gallery and upload services

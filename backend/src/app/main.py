@@ -159,7 +159,7 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.3.0",
+    version="0.3.6",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
