@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, status, Form
 from pydantic import BaseModel
 
 from src.api.dependencies.auth import CurrentUserDep
-from src.db.postgres import get_postgres_pool
+from src.database import get_pool as get_postgres_pool
 from src.services.storage_service import get_storage_service
 
 router = APIRouter(prefix="/fonts", tags=["invitation-fonts"])

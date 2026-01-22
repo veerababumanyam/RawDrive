@@ -1,0 +1,83 @@
+# Permanent fixes for docker-compose - MERGE INTO docker-compose.yml
+# This file contains improvements to ensure reliable restarts
+
+# Apply these settings to the postgres service:
+# postgres:
+#   healthcheck:
+#     test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-rawdrive}", "-d", "${POSTGRES_DB:-rawdrive}"]
+#     interval: 5s
+#     timeout: 5s
+#     retries: 10  # Increased from 5
+#     start_period: 30s  # Increased from default
+
+# Apply these to ALL backend services (backend, gallery-service, billing-service, etc.):
+# <service>:
+#   restart: unless-stopped
+#   depends_on:
+#     postgres:
+#       condition: service_healthy
+#     redis:
+#       condition: service_healthy
+#   env_file:
+#     - .env.database  # ADD THIS - consistent database config
+#   healthcheck:
+#     test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+#     interval: 15s
+#     timeout: 5s
+#     retries: 3
+#     start_period: 30s  # Increased from 10s
+
+# For services like billing-service that have issues:
+# billing-service:
+#   build: ../../services/billing-service
+#   container_name: rawdrive-billing-service
+#   restart: unless-stopped
+#   depends_on:
+#     postgres:
+#       condition: service_healthy
+#     redis:
+#       condition: service_healthy
+#   env_file:
+#     - .env.database
+#   environment:
+#     DB_POOL_MIN_SIZE: 5
+#     DB_POOL_MAX_SIZE: 15  # Lower than backend to avoid exhaustion
+#   volumes:
+#     - ../../services/billing-service:/app
+#   healthcheck:
+#     test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+#     interval: 15s
+#     timeout: 5s
+#     retries: 3
+#     start_period: 40s  # Longer start period
+
+# PostgreSQL optimized settings:
+# postgres:
+#   environment:
+#     # Increase max connections
+#     POSTGRES_INIT_ARGS: "-c max_connections=300 -c shared_buffers=256MB"
+#   command:
+#     - "postgres"
+#     - "-c"
+#     - "max_connections=300"
+#     - "-c"
+#     - "shared_buffers=256MB"
+#     - "-c"
+#     - "maintenance_work_mem=64MB"
+
+# Volumes - ensure proper cleanup on restart
+# volumes:
+#   pg_data:
+#     driver: local
+#     driver_opts:
+#       # Don't delete on container removal
+#       o: type=none,o=bind,o=ro
+#       device: /var/lib/postgresql/data
+
+# Global network settings
+# networks:
+#   default:
+#     name: rawdrive-network
+#     driver: bridge
+#     driver_opts:
+#       com.docker.network.bridge.name: br_rawdrive

@@ -90,8 +90,20 @@ export const useSubscription = ({
       const data = await subscriptionService.getStatus(workspaceId);
       setSubscription(data);
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch subscription'));
-      setSubscription(null);
+      // Check if this is a 403 permission error (pattern from useAdminAccess.ts)
+      const isPermissionError =
+        (err && typeof err === 'object' && 'status' in err && err.status === 403) ||
+        (err instanceof Error && (err.message?.includes('403') || err.message?.toLowerCase().includes('forbidden')));
+
+      if (isPermissionError) {
+        // Permission error - not a real error, user just doesn't have billing:read
+        setSubscription(null);
+        setError(null); // No error state for graceful degradation
+      } else {
+        // Real error - network issue, server error, etc.
+        setError(err instanceof Error ? err : new Error('Failed to fetch subscription'));
+        setSubscription(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -345,9 +357,22 @@ export const useInvoices = ({
       setInvoices(data.items);
       setPagination(data.pagination);
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch invoices'));
-      setInvoices([]);
-      setPagination(null);
+      // Check if this is a 403 permission error
+      const isPermissionError =
+        (err && typeof err === 'object' && 'status' in err && err.status === 403) ||
+        (err instanceof Error && (err.message?.includes('403') || err.message?.toLowerCase().includes('forbidden')));
+
+      if (isPermissionError) {
+        // Permission error - gracefully degrade
+        setInvoices([]);
+        setPagination(null);
+        setError(null);
+      } else {
+        // Real error
+        setError(err instanceof Error ? err : new Error('Failed to fetch invoices'));
+        setInvoices([]);
+        setPagination(null);
+      }
     } finally {
       setLoading(false);
     }

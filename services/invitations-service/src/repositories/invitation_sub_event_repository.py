@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from src.database import get_postgres_pool
+from src.database import get_pool as get_postgres_pool
 
 logger = logging.getLogger(__name__)
 

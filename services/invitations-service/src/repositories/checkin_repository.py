@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
-from src.database import get_postgres_pool
+from src.database import get_pool
 
 
 logger = logging.getLogger(__name__)

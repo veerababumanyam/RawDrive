@@ -24,7 +24,7 @@ export interface User {
   avatarUrl?: string;
   emailVerified: boolean;
   createdAt: string;
-  // workspace_id removed - use workspace.workspace_id instead
+  workspace_id?: string;
 }
 
 export interface Workspace {

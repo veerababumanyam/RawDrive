@@ -3,8 +3,8 @@
 # 1. Setup & Criteria
 
 **Feature Context**:
-*   **Target Feature**: `001-client-service-security-fixes` Client Service Security Fixes
-*   **Branch**: `git checkout 001-client-service-security-fixes`
+*   **Target Feature**: `028-tailwind-v4-design-studio` Tailwind V4 Design Studio
+*   **Branch**: `git checkout 028-tailwind-v4-design-studio`
 *   **Note**: Use appropriate skills and claude agents where necessary.
 *   **Context**: Context7 MCP
 
@@ -27,9 +27,9 @@ The workflow is complete ONLY when:
 
 ### Phase 1: Discovery & Planning
 **Goal**: Define the work and phases.
-*   Read 'specs\001-client-service-security-fixes\tasks.md'
+*   Read 'specs\028-tailwind-v4-design-studio\tasks.md'
 *   Identify constraints and unchecked tasks.
-*   Read for naming conventions'docs\naming-conventions.md'
+*   Follow naming conventions and proper filestructure
 
 *   **Plan**: Break task into clear phases if complex (e.g., Logic -> UI -> Refinement).
 
@@ -77,7 +77,7 @@ The workflow is complete ONLY when:
     4.  Write missing tests for edge cases.
 
 **[5] PROJECT MANAGER (Verification)**
-*   **Task**: Verify acceptance criteria against `specs/001-client-service-security-fixes/spec.md`.
+*   **Task**: Verify acceptance criteria against `specs/028-tailwind-v4-design-studio/spec.md`.
 *   **Action**: Document implementation gaps and trigger fixes.
 
 **[6] BUSINESS ANALYST (User Flow)**

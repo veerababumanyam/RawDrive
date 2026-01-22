@@ -26,6 +26,9 @@ from src.api.v1.gdpr import router as gdpr_router
 router = APIRouter()
 
 # Include all endpoint routers (will be uncommented as they are implemented)
+# NOTE: Analytics router must come before clients_router to avoid route matching conflicts
+# The clients_router has /{client_id} which would catch /analytics paths otherwise
+router.include_router(analytics_router)
 router.include_router(clients_router)
 router.include_router(contacts_router)
 router.include_router(addresses_router)
@@ -38,7 +41,6 @@ router.include_router(import_export_router)
 router.include_router(bulk_ops_router, prefix="/workspaces/{workspace_id}/clients/bulk", tags=["bulk-operations"])
 router.include_router(duplicates_router)
 router.include_router(visitors_router)
-router.include_router(analytics_router)
 router.include_router(gdpr_router)
 
 

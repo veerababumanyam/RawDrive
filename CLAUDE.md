@@ -454,6 +454,8 @@ RAZORPAY_KEY_SECRET=<razorpay-secret>
 **Status**: Production Ready ✅
 
 ## Active Technologies
+- Python 3.11 (backend), TypeScript 5.3+ (frontend), Rust 1.75+ (desktop) + FastAPI, SQLAlchemy 2.0, React 18.3, Tauri 2.x, lxml (029-pro-review-xmp-sync)
+- PostgreSQL 16 (ratings, flags, sync_api_keys, sync_audit_log), Redis 7 (sync queue), react-hotkeys-hook, @tanstack/virtual (029-pro-review-xmp-sync)
 - Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, passlib (bcrypt) (027-gallery-feature-completion)
 - PostgreSQL 16 (galleries, magic_links), Redis 7 (quotas, rate-limiting) (027-gallery-feature-completion)
 - Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, reportlab (PDF) (026-album-proofing)
@@ -461,5 +463,6 @@ RAZORPAY_KEY_SECRET=<razorpay-secret>
 - PostgreSQL 16 (with pgvector), Redis 7.x (caching/rate limiting) (002-face-audit-remediation)
 
 ## Recent Changes
+- 029-pro-review-xmp-sync: Pro Review Mode (Lightroom-style 3-pane UI), XMP sidecar sync, Tauri desktop apps for folder-to-gallery live sync
 - 027-gallery-feature-completion: Added passlib (bcrypt) for access code hashing, Redis quota tracking, WCAG 2.1 AAA CSS variables
 - 026-album-proofing: Added Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, reportlab (PDF)

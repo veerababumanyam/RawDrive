@@ -712,6 +712,42 @@ export function useCollaboration(): CollaborationContextValue {
   return context;
 }
 
+/**
+ * Optional version of useCollaboration that returns null if not within a provider.
+ * Useful for components that should work with or without collaboration.
+ */
+export function useOptionalCollaboration(): CollaborationContextValue | null {
+  return useContext(CollaborationContext);
+}
+
+/**
+ * Default collaboration state for when collaboration is not available.
+ * Provides safe no-op implementations of all collaboration actions.
+ */
+export const DEFAULT_COLLABORATION_STATE: CollaborationContextValue = {
+  // State
+  session: null,
+  isInSession: false,
+  isConnecting: false,
+  collaborators: [],
+  myColor: '#888888',
+  version: 0,
+  locks: [],
+  conflicts: [],
+  connectionStatus: 'disconnected',
+  error: null,
+
+  // Actions (no-ops)
+  joinSession: async () => {},
+  leaveSession: async () => {},
+  updateCursor: () => {},
+  updateSelection: () => {},
+  recordAction: async () => ({ success: false, newVersion: 0 }),
+  acquireLock: async () => ({ success: false, error: 'Collaboration not available' }),
+  releaseLock: async () => false,
+  resolveConflict: async () => false,
+};
+
 // ---------------------------------------------------------------------------
 // Utility Hook for Action Listeners
 // ---------------------------------------------------------------------------

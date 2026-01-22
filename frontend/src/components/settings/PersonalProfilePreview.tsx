@@ -1,34 +1,23 @@
 /**
  * PersonalProfilePreview Component
  *
- * Real-time preview of the personal profile as it will appear publicly.
- * Shows a device-framed preview with responsive mobile/desktop modes.
+ * Real-time preview of the personal profile using the NEW Bento Grid components.
+ * Matches PublicPersonalProfilePage.tsx exactly for WYSIWYG.
  */
 
 import { useState } from 'react';
-import {
-  Smartphone,
-  Monitor,
-  Mail,
-  Phone,
-  Globe,
-  MapPin,
-  ExternalLink,
-  Calendar,
-  Download,
-  QrCode,
-  Share2,
-  CheckCircle,
-  Instagram,
-  Facebook,
-  Twitter,
-  Linkedin,
-  Youtube,
-  Music,
-  Palette,
-  Image,
-} from 'lucide-react';
-import { AppButton } from '../ui/AppButton';
+import { Smartphone, Monitor, CheckCircle } from 'lucide-react';
+import { getTheme } from '../../components/features/profile/ProfileThemeEngine';
+import { ProfileContainer } from '../../components/features/profile/ProfileContainer';
+import { ProfileHeader } from '../../components/features/profile/ProfileHeader';
+import { ProfileBio } from '../../components/features/profile/ProfileBio';
+import { ProfileContactGrid } from '../../components/features/profile/ProfileContactGrid';
+import { ProfileSocials } from '../../components/features/profile/ProfileSocials';
+import { ProfileGalleryPreview } from '../../components/features/profile/ProfileGalleryPreview';
+import { ProfileMediaEmbed } from '../../components/features/profile/ProfileMediaEmbed';
+// ProfileActions is optional in preview as they are fixed position, maybe we mock them or render them absolute
+import { ProfileActions } from '../../components/features/profile/ProfileActions';
+
 import type {
   CustomLink,
   SecondaryContact,
@@ -36,30 +25,6 @@ import type {
   PersonalVisibilityConfig,
   BackgroundTheme,
 } from '../../types/personalProfile';
-
-// Social platform icons mapping
-const SOCIAL_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  instagram: Instagram,
-  facebook: Facebook,
-  twitter: Twitter,
-  linkedin: Linkedin,
-  youtube: Youtube,
-  tiktok: Music,
-  pinterest: Image,
-  behance: Palette,
-  dribbble: Palette,
-  spotify: Music,
-  whatsapp: Phone,
-};
-
-// Theme styles
-const THEME_STYLES: Record<BackgroundTheme, { bg: string; text: string; accent: string }> = {
-  dark: { bg: 'bg-gray-900', text: 'text-white', accent: 'text-gray-300' },
-  pastel: { bg: 'bg-pink-50', text: 'text-gray-800', accent: 'text-gray-600' },
-  bold: { bg: 'bg-gradient-to-br from-purple-600 to-pink-500', text: 'text-white', accent: 'text-white/80' },
-  cinematic: { bg: 'bg-gradient-to-b from-gray-800 to-gray-900', text: 'text-white', accent: 'text-gray-400' },
-  minimal: { bg: 'bg-white', text: 'text-gray-900', accent: 'text-gray-600' },
-};
 
 interface PreviewData {
   display_name?: string;
@@ -85,6 +50,7 @@ interface PreviewData {
   secondary_phones?: SecondaryContact[];
   is_verified?: boolean;
   badges?: string[];
+  featured_gallery?: any; // Add this if available in preview data
 }
 
 interface PersonalProfilePreviewProps {
@@ -94,36 +60,31 @@ interface PersonalProfilePreviewProps {
 export function PersonalProfilePreview({ data }: PersonalProfilePreviewProps) {
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
 
-  const theme = THEME_STYLES[data.background_theme || 'minimal'];
+  const theme = getTheme(data.background_theme);
   const brandColor = data.brand_color || '#3B82F6';
 
-  // Filter visible socials
-  const visibleSocials = Object.entries(data.socials || {}).filter(([, url]) => url);
-
   return (
-    <div className="bg-surface border border-border rounded-xl overflow-hidden">
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden flex flex-col h-[calc(100vh-100px)]">
       {/* Preview Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h3 className="text-sm font-medium text-text-primary">Preview</h3>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+        <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Live Preview</h3>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setViewMode('mobile')}
-            className={`p-2 rounded-lg transition-colors ${
-              viewMode === 'mobile'
-                ? 'bg-primary/10 text-primary'
-                : 'text-text-tertiary hover:text-text-secondary'
-            }`}
+            className={`p-2 rounded-lg transition-colors ${viewMode === 'mobile'
+                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+              }`}
             title="Mobile view"
           >
             <Smartphone className="w-4 h-4" />
           </button>
           <button
             onClick={() => setViewMode('desktop')}
-            className={`p-2 rounded-lg transition-colors ${
-              viewMode === 'desktop'
-                ? 'bg-primary/10 text-primary'
-                : 'text-text-tertiary hover:text-text-secondary'
-            }`}
+            className={`p-2 rounded-lg transition-colors ${viewMode === 'desktop'
+                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+              }`}
             title="Desktop view"
           >
             <Monitor className="w-4 h-4" />
@@ -131,230 +92,97 @@ export function PersonalProfilePreview({ data }: PersonalProfilePreviewProps) {
         </div>
       </div>
 
-      {/* Preview Container */}
-      <div className="p-4 bg-surface-hover flex justify-center">
+      {/* Preview Viewport */}
+      <div className="flex-1 bg-zinc-100 dark:bg-zinc-950 p-4 md:p-8 overflow-hidden flex justify-center items-start">
         <div
-          className={`transition-all duration-300 overflow-hidden rounded-2xl shadow-lg ${
-            viewMode === 'mobile' ? 'w-[320px]' : 'w-full max-w-[600px]'
-          }`}
+          className={`transition-all duration-300 shadow-2xl overflow-hidden bg-white ${viewMode === 'mobile'
+              ? 'w-[375px] h-full rounded-[3rem] border-8 border-zinc-900'
+              : 'w-full h-full rounded-lg border border-zinc-200 dark:border-zinc-800'
+            }`}
         >
-          {/* Device Frame */}
-          <div className={`${theme.bg} min-h-[500px] overflow-y-auto`}>
-            {/* Profile Content */}
-            <div className="p-6">
-              {/* Avatar & Name */}
-              <div className="text-center mb-6">
-                {data.avatar_url ? (
-                  <img
-                    src={data.avatar_url}
-                    alt={data.display_name || 'Avatar'}
-                    className="w-24 h-24 rounded-full mx-auto mb-4 object-cover ring-4 ring-white/20"
-                  />
-                ) : (
-                  <div
-                    className="w-24 h-24 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold text-white"
-                    style={{ backgroundColor: brandColor }}
-                  >
-                    {data.display_name?.charAt(0)?.toUpperCase() || 'U'}
-                  </div>
-                )}
+          {/* Scrollable Content Area */}
+          <div className="h-full w-full overflow-y-auto custom-scrollbar">
+            <ProfileContainer
+              theme={theme}
+              brandColor={brandColor}
+              className="!min-h-full" // Override min-h-screen for preview
+            >
+              <ProfileHeader
+                theme={theme}
+                displayName={data.display_name || 'Your Name'}
+                profileTitle={data.profile_title}
+                avatarUrl={data.avatar_url}
+                location={data.location}
+                isVerified={data.is_verified}
+                badges={data.badges}
+                brandColor={brandColor}
+              />
 
-                <div className="flex items-center justify-center gap-2">
-                  <h1 className={`text-xl font-bold ${theme.text}`}>
-                    {data.display_name || 'Your Name'}
-                  </h1>
-                  {data.is_verified && (
-                    <CheckCircle
-                      className="w-5 h-5"
-                      style={{ color: brandColor }}
-                    />
-                  )}
-                </div>
+              {data.bio && <ProfileBio theme={theme} bio={data.bio} />}
 
-                {data.profile_title && (
-                  <p className={`mt-1 ${theme.accent}`}>{data.profile_title}</p>
-                )}
+              {data.socials && <ProfileSocials theme={theme} socials={data.socials} />}
 
-                {data.location && (
-                  <p className={`mt-2 text-sm ${theme.accent} flex items-center justify-center gap-1`}>
-                    <MapPin className="w-4 h-4" />
-                    {data.location}
-                  </p>
-                )}
+              <ProfileContactGrid
+                theme={theme}
+                email={data.email}
+                phone={data.phone}
+                website={data.website}
+                bookingUrl={data.booking_calendar_url}
+                customLinks={data.custom_links}
+                brandColor={brandColor}
+              />
+
+              {data.embedded_media && (
+                <ProfileMediaEmbed theme={theme} media={data.embedded_media} />
+              )}
+
+              {/* Featured Gallery Preview (Mock if missing) */}
+              {data.featured_gallery && (
+                <ProfileGalleryPreview theme={theme} gallery={data.featured_gallery} />
+              )}
+
+              {/* Watermark */}
+              <div className={`text-center text-xs opacity-40 mt-8 pb-12 ${theme.colors.text}`}>
+                <p>Powered by RawDrive</p>
               </div>
 
-              {/* Bio */}
-              {data.bio && (
-                <p className={`text-center mb-6 ${theme.accent} text-sm leading-relaxed`}>
-                  {data.bio}
-                </p>
-              )}
-
-              {/* Categories */}
-              {data.categories && data.categories.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-2 mb-6">
-                  {data.categories.slice(0, 5).map((category) => (
-                    <span
-                      key={category}
-                      className="px-3 py-1 text-xs font-medium rounded-full"
-                      style={{
-                        backgroundColor: `${brandColor}20`,
-                        color: brandColor,
-                      }}
-                    >
-                      {category}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Contact Buttons */}
-              <div className="space-y-3 mb-6">
-                {data.email && (
-                  <a
-                    href={`mailto:${data.email}`}
-                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-medium transition-transform hover:scale-[1.02]"
-                    style={{ backgroundColor: brandColor }}
-                  >
-                    <Mail className="w-5 h-5" />
-                    Email Me
-                  </a>
-                )}
-
-                {data.phone && (
-                  <a
-                    href={`tel:${data.phone}`}
-                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border font-medium transition-colors"
-                    style={{
-                      borderColor: brandColor,
-                      color: brandColor,
-                    }}
-                  >
-                    <Phone className="w-5 h-5" />
-                    Call Me
-                  </a>
-                )}
-
-                {data.booking_calendar_url && (
-                  <a
-                    href={data.booking_calendar_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border font-medium transition-colors"
-                    style={{
-                      borderColor: brandColor,
-                      color: brandColor,
-                    }}
-                  >
-                    <Calendar className="w-5 h-5" />
-                    Book a Session
-                  </a>
-                )}
+              {/* Note: ProfileActions usually fixed, might be weird in preview container. 
+                   We can render them but maybe absolute within the container. 
+               */}
+              <div className="relative h-16 pointer-events-none">
+                {/* Spacer for floating actions visually */}
               </div>
 
-              {/* Social Links */}
-              {visibleSocials.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-3 mb-6">
-                  {visibleSocials.map(([platform, url]) => {
-                    const Icon = SOCIAL_ICONS[platform] || Globe;
-                    return (
-                      <a
-                        key={platform}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`p-3 rounded-full transition-transform hover:scale-110 ${
-                          data.background_theme === 'minimal' || data.background_theme === 'pastel'
-                            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            : 'bg-white/10 text-white hover:bg-white/20'
-                        }`}
-                        title={platform}
-                      >
-                        <Icon className="w-5 h-5" />
-                      </a>
-                    );
-                  })}
-                </div>
-              )}
+            </ProfileContainer>
 
-              {/* Custom Links */}
-              {data.custom_links && data.custom_links.length > 0 && (
-                <div className="space-y-2 mb-6">
-                  {data.custom_links.filter((l) => l.label && l.url).map((link, index) => (
-                    <a
-                      key={index}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`flex items-center justify-between w-full px-4 py-3 rounded-xl transition-colors ${
-                        data.background_theme === 'minimal' || data.background_theme === 'pastel'
-                          ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          : 'bg-white/10 text-white hover:bg-white/20'
-                      }`}
-                    >
-                      <span className="font-medium">{link.label}</span>
-                      <ExternalLink className="w-4 h-4 opacity-50" />
-                    </a>
-                  ))}
-                </div>
-              )}
-
-              {/* Website */}
-              {data.website && (
-                <a
-                  href={data.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl mb-6 ${
-                    data.background_theme === 'minimal' || data.background_theme === 'pastel'
-                      ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      : 'bg-white/10 text-white hover:bg-white/20'
-                  }`}
-                >
-                  <Globe className="w-5 h-5" />
-                  Visit Website
-                </a>
-              )}
-
-              {/* Quick Actions */}
-              <div className="flex justify-center gap-4 pt-4 border-t border-white/10">
-                <button
-                  className={`flex flex-col items-center gap-1 ${theme.accent} hover:opacity-80`}
-                  title="Download vCard"
-                >
-                  <Download className="w-5 h-5" />
-                  <span className="text-xs">vCard</span>
-                </button>
-                <button
-                  className={`flex flex-col items-center gap-1 ${theme.accent} hover:opacity-80`}
-                  title="QR Code"
-                >
-                  <QrCode className="w-5 h-5" />
-                  <span className="text-xs">QR</span>
-                </button>
-                <button
-                  className={`flex flex-col items-center gap-1 ${theme.accent} hover:opacity-80`}
-                  title="Share"
-                >
-                  <Share2 className="w-5 h-5" />
-                  <span className="text-xs">Share</span>
-                </button>
+            {/* Render Actions absolute to the container so they look 'fixed' inside the phone/desktop frame */}
+            <div className="sticky bottom-6 flex justify-center w-full pointer-events-none">
+              <div className="pointer-events-auto">
+                <ProfileActions
+                  theme={theme}
+                  slug={data.slug || 'preview'}
+                  showVCard={true}
+                  showQrCode={true}
+                  onShare={() => { }}
+                  onDownloadVCard={() => { }}
+                  onDownloadQr={() => { }}
+                />
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Preview Footer */}
-      <div className="px-4 py-3 border-t border-border bg-surface">
-        <p className="text-xs text-text-tertiary text-center">
+      {/* Footer Info */}
+      <div className="px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-center">
+        <p className="text-xs text-zinc-500">
           {data.is_public ? (
-            <span className="text-success flex items-center justify-center gap-1">
+            <span className="text-green-600 flex items-center justify-center gap-1">
               <CheckCircle className="w-3 h-3" />
-              Profile is public
+              Publicly visible
             </span>
           ) : (
-            'Profile is private - enable "Public Profile" to share'
+            'Private - visible only to you'
           )}
         </p>
       </div>

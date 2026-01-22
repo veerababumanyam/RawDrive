@@ -62,6 +62,14 @@ class CollaborativeActionType(str, Enum):
     CURSOR_MOVE = "cursor:move"
     SELECTION_CHANGE = "selection:change"
 
+    # Design Studio actions (Gallery Design Feature)
+    DESIGN_UPDATE = "design:update"
+    DESIGN_COVER_UPDATE = "design:cover_update"
+    DESIGN_THEME_UPDATE = "design:theme_update"
+    DESIGN_TYPOGRAPHY_UPDATE = "design:typography_update"
+    DESIGN_GRID_UPDATE = "design:grid_update"
+    DESIGN_PUBLISH = "design:publish"
+
 
 class LockType(str, Enum):
     EXCLUSIVE = "exclusive"
@@ -1070,6 +1078,113 @@ class CollaborationService:
             },
         )
         await self.db.commit()
+
+    # -------------------------------------------------------------------------
+    # Design Studio Broadcasting
+    # -------------------------------------------------------------------------
+
+    async def broadcast_design_update(
+        self,
+        session_id: UUID,
+        user_id: UUID,
+        design_config: dict[str, Any],
+        section: str | None = None,
+    ) -> None:
+        """Broadcast design configuration update to all session participants.
+
+        Args:
+            session_id: Collaboration session ID
+            user_id: User making the update
+            design_config: Updated design configuration
+            section: Optional specific section updated (cover, theme, typography, grid)
+        """
+        redis = await get_redis_client()
+        message = {
+            "type": "design:update",
+            "session_id": str(session_id),
+            "user_id": str(user_id),
+            "config": design_config,
+            "section": section,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        await redis.publish(
+            f"{COLLAB_CHANNEL_PREFIX}{session_id}",
+            json.dumps(message),
+        )
+
+    async def broadcast_design_publish(
+        self,
+        gallery_id: UUID,
+        workspace_id: UUID,
+        design_config: dict[str, Any],
+        published_by_user_id: UUID,
+    ) -> None:
+        """Broadcast published design to gallery viewing channel.
+
+        Args:
+            gallery_id: Gallery UUID
+            workspace_id: Workspace UUID
+            design_config: Final published design configuration
+            published_by_user_id: User who published the design
+        """
+        redis = await get_redis_client()
+        message = {
+            "type": "design:published",
+            "gallery_id": str(gallery_id),
+            "workspace_id": str(workspace_id),
+            "design_config": design_config,
+            "published_by_user_id": str(published_by_user_id),
+            "published_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await redis.publish(
+            f"gallery:{gallery_id}:proofing",
+            json.dumps(message),
+        )
+
+    async def track_gallery_viewer(
+        self,
+        gallery_id: UUID,
+        viewer_session_id: str,
+        action: str = "join",  # "join" or "leave"
+    ) -> int:
+        """Track gallery viewers for real-time viewer count.
+
+        Args:
+            gallery_id: Gallery UUID
+            viewer_session_id: Unique session ID for the viewer
+            action: "join" to add viewer, "leave" to remove
+
+        Returns:
+            Current viewer count
+        """
+        redis = await get_redis_client()
+        viewer_set_key = f"gallery:{gallery_id}:viewers:active"
+
+        if action == "join":
+            # Add viewer to set (auto-expires in 30 minutes if no heartbeat)
+            await redis.sadd(viewer_set_key, viewer_session_id)
+            await redis.expire(viewer_set_key, 1800)  # 30 minute TTL
+        elif action == "leave":
+            # Remove viewer from set
+            await redis.srem(viewer_set_key, viewer_session_id)
+
+        # Get current count
+        count = await redis.scard(viewer_set_key)
+        return count
+
+    async def get_gallery_viewer_count(self, gallery_id: UUID) -> int:
+        """Get active viewer count for a gallery.
+
+        Args:
+            gallery_id: Gallery UUID
+
+        Returns:
+            Number of active viewers
+        """
+        redis = await get_redis_client()
+        viewer_set_key = f"gallery:{gallery_id}:viewers:active"
+        count = await redis.scard(viewer_set_key)
+        return count
 
 
 # ---------------------------------------------------------------------------

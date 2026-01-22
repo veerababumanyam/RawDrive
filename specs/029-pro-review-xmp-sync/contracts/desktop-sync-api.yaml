@@ -1,0 +1,907 @@
+openapi: 3.1.0
+info:
+  title: RawDrive Desktop Sync API
+  description: |
+    API for the RawDrive Desktop Sync Application.
+    Enables folder-to-gallery live synchronization similar to Google Drive/OneDrive.
+  version: 1.0.0
+  contact:
+    name: RawDrive Development Team
+
+servers:
+  - url: /api/v1
+    description: Gallery Service API
+
+tags:
+  - name: Authentication
+    description: Desktop app authentication and API key validation
+  - name: File Sync
+    description: File upload, download, and metadata sync
+  - name: Folder Mapping
+    description: Folder-to-gallery mapping management
+  - name: Sync Status
+    description: Sync status and progress reporting
+
+paths:
+  # ===========================================
+  # Authentication
+  # ===========================================
+
+  /sync/auth/validate:
+    post:
+      summary: Validate sync API key
+      description: |
+        Validate an API key and return associated gallery information.
+        Used by desktop app on startup and when adding new folder mappings.
+      tags: [Authentication]
+      operationId: validateSyncApiKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [api_key]
+              properties:
+                api_key:
+                  type: string
+                  description: The sync API key
+      responses:
+        '200':
+          description: Valid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyValidation'
+        '401':
+          description: Invalid or expired API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sync/auth/refresh:
+    post:
+      summary: Refresh authentication
+      description: Check if API key is still valid and get updated permissions
+      tags: [Authentication]
+      operationId: refreshSyncAuth
+      security:
+        - syncApiKey: []
+      responses:
+        '200':
+          description: Key still valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyValidation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ===========================================
+  # File Sync Operations
+  # ===========================================
+
+  /sync/galleries/{gallery_id}/files:
+    get:
+      summary: List gallery files
+      description: |
+        Get a list of all files in the gallery with their metadata.
+        Used for initial sync and conflict detection.
+      tags: [File Sync]
+      operationId: listGalleryFiles
+      security:
+        - syncApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: since
+          in: query
+          description: Only return files modified since this timestamp
+          schema:
+            type: string
+            format: date-time
+        - name: include_deleted
+          in: query
+          description: Include soft-deleted files for sync reconciliation
+          schema:
+            type: boolean
+            default: false
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+      responses:
+        '200':
+          description: List of files
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sync/galleries/{gallery_id}/files/check:
+    post:
+      summary: Check file existence
+      description: Check if files exist and get their current state for conflict detection
+      tags: [File Sync]
+      operationId: checkFiles
+      security:
+        - syncApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [filename]
+                    properties:
+                      filename:
+                        type: string
+                      local_hash:
+                        type: string
+                        description: MD5 or SHA-256 hash of local file
+                      local_modified_at:
+                        type: string
+                        format: date-time
+      responses:
+        '200':
+          description: File check results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileCheckResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /sync/galleries/{gallery_id}/upload:
+    post:
+      summary: Upload file to gallery
+      description: |
+        Upload a single file to the gallery.
+        For large files, use TUS resumable upload endpoint instead.
+      tags: [File Sync]
+      operationId: uploadFile
+      security:
+        - syncApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                filename:
+                  type: string
+                  description: Original filename (overrides Content-Disposition)
+                relative_path:
+                  type: string
+                  description: Relative path within folder mapping (for subfolder support)
+                local_modified_at:
+                  type: string
+                  format: date-time
+                  description: File modification time from local filesystem
+                local_hash:
+                  type: string
+                  description: File hash for deduplication
+                metadata:
+                  type: string
+                  description: JSON-encoded metadata (rating, flag, color_label)
+      responses:
+        '201':
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: File already exists with different content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictResponse'
+        '413':
+          description: File too large (use TUS endpoint)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sync/galleries/{gallery_id}/upload/tus:
+    post:
+      summary: Initialize TUS resumable upload
+      description: |
+        Initialize a resumable upload using TUS protocol.
+        Returns upload URL for large files.
+      tags: [File Sync]
+      operationId: initTusUpload
+      security:
+        - syncApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, file_size]
+              properties:
+                filename:
+                  type: string
+                file_size:
+                  type: integer
+                  description: File size in bytes
+                relative_path:
+                  type: string
+                local_modified_at:
+                  type: string
+                  format: date-time
+                local_hash:
+                  type: string
+                content_type:
+                  type: string
+      responses:
+        '201':
+          description: TUS upload initialized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TusInitResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /sync/galleries/{gallery_id}/files/{asset_id}:
+    patch:
+      summary: Update file metadata
+      description: Update file metadata (rating, flag, color label) without re-uploading
+      tags: [File Sync]
+      operationId: updateFileMetadata
+      security:
+        - syncApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileMetadataUpdate'
+      responses:
+        '200':
+          description: Metadata updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileSyncInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete file from gallery
+      description: |
+        Mark file as deleted in gallery.
+        Requires delete permission on API key.
+      tags: [File Sync]
+      operationId: deleteFile
+      security:
+        - syncApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deleted_at:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Delete permission not granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sync/galleries/{gallery_id}/files/{asset_id}/rename:
+    post:
+      summary: Rename file
+      description: Update the filename of an existing asset
+      tags: [File Sync]
+      operationId: renameFile
+      security:
+        - syncApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_filename]
+              properties:
+                new_filename:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+      responses:
+        '200':
+          description: File renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileSyncInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Target filename already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ===========================================
+  # Sync Status
+  # ===========================================
+
+  /sync/galleries/{gallery_id}/status:
+    get:
+      summary: Get gallery sync status
+      description: Get current sync status and statistics for the gallery
+      tags: [Sync Status]
+      operationId: getGallerySyncStatus
+      security:
+        - syncApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      responses:
+        '200':
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GallerySyncStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sync/galleries/{gallery_id}/changes:
+    get:
+      summary: Get recent changes
+      description: |
+        Get a feed of recent changes for incremental sync.
+        Returns changes since the specified cursor or timestamp.
+      tags: [Sync Status]
+      operationId: getChanges
+      security:
+        - syncApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: cursor
+          in: query
+          description: Cursor from previous response for pagination
+          schema:
+            type: string
+        - name: since
+          in: query
+          description: Get changes since this timestamp (alternative to cursor)
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+      responses:
+        '200':
+          description: Change feed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangesFeedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /sync/heartbeat:
+    post:
+      summary: Send heartbeat
+      description: |
+        Desktop app sends periodic heartbeat to indicate active sync.
+        Used for monitoring and displaying sync status in web UI.
+      tags: [Sync Status]
+      operationId: sendHeartbeat
+      security:
+        - syncApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gallery_id, status]
+              properties:
+                gallery_id:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                  enum: [idle, syncing, error, paused]
+                pending_uploads:
+                  type: integer
+                pending_downloads:
+                  type: integer
+                last_sync_at:
+                  type: string
+                  format: date-time
+                client_version:
+                  type: string
+                platform:
+                  type: string
+                  enum: [windows, macos]
+      responses:
+        '200':
+          description: Heartbeat received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  server_time:
+                    type: string
+                    format: date-time
+                  force_resync:
+                    type: boolean
+                    description: Server requests full resync
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ===========================================
+  # App Updates
+  # ===========================================
+
+  /sync/app/version:
+    get:
+      summary: Check for updates
+      description: Check if a newer version of the desktop app is available
+      tags: [Sync Status]
+      operationId: checkAppVersion
+      parameters:
+        - name: current_version
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: platform
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [windows, macos]
+        - name: arch
+          in: query
+          schema:
+            type: string
+            enum: [x64, arm64]
+      responses:
+        '200':
+          description: Version check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppVersionCheck'
+
+components:
+  securitySchemes:
+    syncApiKey:
+      type: apiKey
+      in: header
+      name: X-Sync-Api-Key
+
+  parameters:
+    GalleryId:
+      name: gallery_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AssetId:
+      name: asset_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    # Authentication
+    ApiKeyValidation:
+      type: object
+      required: [valid, gallery_id, gallery_name, workspace_name, permissions]
+      properties:
+        valid:
+          type: boolean
+        gallery_id:
+          type: string
+          format: uuid
+        gallery_name:
+          type: string
+        workspace_id:
+          type: string
+          format: uuid
+        workspace_name:
+          type: string
+        permissions:
+          type: object
+          properties:
+            read:
+              type: boolean
+            write:
+              type: boolean
+            delete:
+              type: boolean
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        key_name:
+          type: string
+
+    # File Sync
+    FileSyncInfo:
+      type: object
+      required: [id, filename, size, content_type, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        relative_path:
+          type: string
+          nullable: true
+        size:
+          type: integer
+        content_type:
+          type: string
+        file_hash:
+          type: string
+          description: Server-side hash for comparison
+        rating:
+          type: integer
+          minimum: 0
+          maximum: 5
+          nullable: true
+        flag:
+          type: string
+          enum: [pick, unflagged, reject]
+          nullable: true
+        color_label:
+          type: string
+          enum: [none, red, yellow, green, blue, purple]
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    FileListResponse:
+      type: object
+      required: [files, total, page, per_page, has_more]
+      properties:
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileSyncInfo'
+        total:
+          type: integer
+        page:
+          type: integer
+        per_page:
+          type: integer
+        has_more:
+          type: boolean
+        server_time:
+          type: string
+          format: date-time
+
+    FileCheckResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            required: [filename, exists]
+            properties:
+              filename:
+                type: string
+              exists:
+                type: boolean
+              asset_id:
+                type: string
+                format: uuid
+                nullable: true
+              server_hash:
+                type: string
+                nullable: true
+              server_modified_at:
+                type: string
+                format: date-time
+                nullable: true
+              conflict:
+                type: boolean
+                description: True if both local and server have changes
+
+    FileMetadataUpdate:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 0
+          maximum: 5
+          nullable: true
+        flag:
+          type: string
+          enum: [pick, unflagged, reject]
+          nullable: true
+        color_label:
+          type: string
+          enum: [none, red, yellow, green, blue, purple]
+          nullable: true
+
+    UploadResponse:
+      type: object
+      required: [asset_id, filename, size, uploaded_at]
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        size:
+          type: integer
+        file_hash:
+          type: string
+        uploaded_at:
+          type: string
+          format: date-time
+        duplicate_of:
+          type: string
+          format: uuid
+          nullable: true
+          description: If file was deduplicated, ID of existing asset
+
+    TusInitResponse:
+      type: object
+      required: [upload_id, upload_url, expires_at]
+      properties:
+        upload_id:
+          type: string
+        upload_url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+
+    ConflictResponse:
+      type: object
+      required: [conflict, local_info, server_info]
+      properties:
+        conflict:
+          type: boolean
+          const: true
+        message:
+          type: string
+        local_info:
+          type: object
+          properties:
+            filename:
+              type: string
+            hash:
+              type: string
+            modified_at:
+              type: string
+              format: date-time
+        server_info:
+          $ref: '#/components/schemas/FileSyncInfo'
+
+    # Sync Status
+    GallerySyncStatus:
+      type: object
+      required: [gallery_id, total_files, total_size]
+      properties:
+        gallery_id:
+          type: string
+          format: uuid
+        total_files:
+          type: integer
+        total_size:
+          type: integer
+          description: Total size in bytes
+        last_modified_at:
+          type: string
+          format: date-time
+        active_sync_clients:
+          type: integer
+          description: Number of desktop apps currently connected
+        last_sync_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ChangesFeedResponse:
+      type: object
+      required: [changes, has_more]
+      properties:
+        changes:
+          type: array
+          items:
+            type: object
+            required: [id, type, asset_id, timestamp]
+            properties:
+              id:
+                type: string
+                description: Change ID for cursor
+              type:
+                type: string
+                enum: [created, updated, deleted, renamed, metadata_changed]
+              asset_id:
+                type: string
+                format: uuid
+              filename:
+                type: string
+              old_filename:
+                type: string
+                nullable: true
+                description: For rename events
+              timestamp:
+                type: string
+                format: date-time
+              file_info:
+                $ref: '#/components/schemas/FileSyncInfo'
+        has_more:
+          type: boolean
+        next_cursor:
+          type: string
+          nullable: true
+        server_time:
+          type: string
+          format: date-time
+
+    # App Updates
+    AppVersionCheck:
+      type: object
+      required: [update_available, latest_version]
+      properties:
+        update_available:
+          type: boolean
+        latest_version:
+          type: string
+        current_version:
+          type: string
+        release_notes:
+          type: string
+          nullable: true
+        download_url:
+          type: string
+          format: uri
+          nullable: true
+        mandatory:
+          type: boolean
+          description: If true, app should force update
+
+    # Error
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Invalid or missing API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: API key lacks required permission
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+security:
+  - syncApiKey: []

@@ -1,177 +1,186 @@
-#!/usr/bin/env python3
-"""
-Diagnostic script to check user permissions and role assignments.
+"""Diagnose test user workspace setup and identify mismatches.
 
-Run with: python scripts/diagnose_permissions.py <workspace_id>
-"""
+This script checks the database state of test users and compares it against
+the expected configuration in test_constants.py to identify any mismatches.
 
+Usage:
+    docker exec rawdrive-backend python scripts/diagnose_permissions.py
+"""
 import asyncio
-import sys
 import os
-
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
+import sys
+from pathlib import Path
 from uuid import UUID
 
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-async def diagnose_workspace(workspace_id: str):
-    """Diagnose permission issues for a workspace."""
-    from app.db.postgres import get_postgres_pool
-    
-    pool = await get_postgres_pool()
-    
-    workspace_uuid = UUID(workspace_id)
-    
-    print(f"\n{'='*60}")
-    print(f"PERMISSION DIAGNOSTIC FOR WORKSPACE: {workspace_id}")
-    print(f"{'='*60}")
-    
-    # 1. Check workspace exists
-    workspace = await pool.fetchrow(
-        "SELECT * FROM workspaces WHERE workspace_id = $1",
-        workspace_uuid
-    )
-    
-    if not workspace:
-        print("\n❌ ERROR: Workspace not found!")
+import asyncpg
+from app.config.test_constants import TierUsers, AdminUsers, WorkspaceUsers
+
+
+class Colors:
+    """ANSI color codes for terminal output."""
+    RESET = '\033[0m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    BOLD = '\033[1m'
+
+
+def status_icon(exists: bool) -> str:
+    """Return a status icon and color."""
+    return f"{Colors.GREEN}✓{Colors.RESET}" if exists else f"{Colors.RED}✗{Colors.RESET}"
+
+
+async def diagnose():
+    """Run comprehensive diagnosis of test user setup."""
+    database_url = os.getenv("DATABASE_URL", "postgresql://rawdrive:rawdrive@localhost:5432/rawdrive")
+    database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    try:
+        conn = await asyncpg.connect(database_url)
+    except Exception as e:
+        print(f"{Colors.RED}Error connecting to database: {e}{Colors.RESET}")
         return
-    
-    print(f"\n✅ Workspace: {workspace['name']} (status: {workspace['status']})")
-    
-    # 2. Get all roles in workspace
-    print(f"\n{'='*60}")
-    print("ROLES IN WORKSPACE:")
-    print(f"{'='*60}")
-    
-    roles = await pool.fetch(
-        """
-        SELECT role_id, name, permissions, is_system, created_at
-        FROM roles WHERE workspace_id = $1
-        ORDER BY is_system DESC, name
-        """,
-        workspace_uuid
-    )
-    
-    if not roles:
-        print("\n⚠️  WARNING: No roles found in workspace!")
-    else:
-        for role in roles:
-            print(f"\n  Role: {role['name']} {'(system)' if role['is_system'] else '(custom)'}")
-            print(f"  Role ID: {role['role_id']}")
-            print(f"  Permissions: {role['permissions']}")
-            
-            # Check if billing permissions are present
-            has_billing = any('billing' in p for p in role['permissions'])
-            if has_billing:
-                print(f"  ✅ Has billing-related permissions")
+
+    try:
+        print(f"\n{Colors.BOLD}{'='*80}{Colors.RESET}")
+        print(f"{Colors.BOLD}TEST USER WORKSPACE DIAGNOSIS{Colors.RESET}")
+        print(f"{Colors.BOLD}{'='*80}{Colors.RESET}\n")
+
+        all_test_users = TierUsers.all() + AdminUsers.all() + WorkspaceUsers.all()
+        total_users = len(all_test_users)
+        healthy_users = 0
+
+        for test_user in all_test_users:
+            print(f"{Colors.BLUE}{Colors.BOLD}User: {test_user.email}{Colors.RESET}")
+            print(f"  Expected User ID: {test_user.user_id}")
+            print(f"  Expected Workspace ID: {test_user.workspace_id}")
+
+            # Check user exists
+            user_row = await conn.fetchrow(
+                "SELECT user_id, email FROM users WHERE user_id = $1",
+                test_user.user_id
+            )
+            user_exists = user_row is not None
+            print(f"  {status_icon(user_exists)} User exists in database")
+
+            if not user_exists:
+                print(f"    {Colors.RED}User record not found!{Colors.RESET}\n")
+                continue
+
+            # Check workspace exists
+            workspace_row = await conn.fetchrow(
+                "SELECT workspace_id, name FROM workspaces WHERE workspace_id = $1",
+                test_user.workspace_id
+            )
+            workspace_exists = workspace_row is not None
+            print(f"  {status_icon(workspace_exists)} Workspace exists with expected ID")
+
+            if not workspace_exists:
+                print(f"    {Colors.RED}Expected workspace not found!{Colors.RESET}")
+
+            # Check membership
+            membership_row = await conn.fetchrow(
+                """
+                SELECT membership_id, status FROM workspace_memberships
+                WHERE user_id = $1 AND workspace_id = $2
+                """,
+                test_user.user_id,
+                test_user.workspace_id,
+            )
+            membership_exists = membership_row is not None
+            membership_active = membership_row and membership_row['status'] == 'active'
+
+            print(f"  {status_icon(membership_exists)} Membership exists")
+            if membership_exists:
+                status_color = Colors.GREEN if membership_active else Colors.YELLOW
+                print(f"    Status: {status_color}{membership_row['status']}{Colors.RESET}")
+
+            if not membership_active:
+                print(f"    {Colors.YELLOW}Warning: Membership is not active!{Colors.RESET}")
+
+            # Check subscription
+            subscription_row = await conn.fetchrow(
+                """
+                SELECT subscription_id, status FROM workspace_subscriptions
+                WHERE workspace_id = $1
+                """,
+                test_user.workspace_id,
+            )
+            subscription_exists = subscription_row is not None
+            print(f"  {status_icon(subscription_exists)} Subscription exists")
+
+            if subscription_exists:
+                sub_status_color = Colors.GREEN if subscription_row['status'] in ['active', 'trialing'] else Colors.YELLOW
+                print(f"    Status: {sub_status_color}{subscription_row['status']}{Colors.RESET}")
+
+            # Check roles
+            role_rows = await conn.fetch(
+                """
+                SELECT DISTINCT r.name FROM member_roles mr
+                JOIN roles r ON mr.role_id = r.role_id
+                WHERE mr.membership_id = (
+                    SELECT membership_id FROM workspace_memberships
+                    WHERE user_id = $1 AND workspace_id = $2
+                )
+                """,
+                test_user.user_id,
+                test_user.workspace_id,
+            )
+            roles_assigned = len(role_rows) > 0
+            print(f"  {status_icon(roles_assigned)} Roles assigned")
+
+            if roles_assigned:
+                role_names = ', '.join([r['name'] for r in role_rows])
+                print(f"    Roles: {role_names}")
             else:
-                print(f"  ⚠️  No billing permissions")
-    
-    # 3. Get all members and their roles
-    print(f"\n{'='*60}")
-    print("WORKSPACE MEMBERS AND THEIR ROLES:")
-    print(f"{'='*60}")
-    
-    members = await pool.fetch(
-        """
-        SELECT 
-            wm.membership_id, wm.user_id, wm.status,
-            u.email, u.display_name
-        FROM workspace_memberships wm
-        JOIN users u ON u.user_id = wm.user_id
-        WHERE wm.workspace_id = $1
-        """,
-        workspace_uuid
-    )
-    
-    for member in members:
-        print(f"\n  User: {member['display_name']} ({member['email']})")
-        print(f"  User ID: {member['user_id']}")
-        print(f"  Membership ID: {member['membership_id']}")
-        print(f"  Status: {member['status']}")
-        
-        # Get roles for this member
-        member_roles = await pool.fetch(
-            """
-            SELECT r.role_id, r.name, r.permissions
-            FROM member_roles mr
-            JOIN roles r ON r.role_id = mr.role_id
-            WHERE mr.membership_id = $1
-            """,
-            member['membership_id']
-        )
-        
-        if not member_roles:
-            print(f"  ❌ NO ROLES ASSIGNED!")
+                print(f"    {Colors.YELLOW}Warning: No roles assigned!{Colors.RESET}")
+
+            # Determine health status
+            is_healthy = (
+                user_exists and
+                workspace_exists and
+                membership_active and
+                subscription_exists and
+                roles_assigned
+            )
+
+            if is_healthy:
+                print(f"  {Colors.GREEN}{Colors.BOLD}✓ HEALTHY{Colors.RESET}")
+                healthy_users += 1
+            else:
+                print(f"  {Colors.RED}{Colors.BOLD}✗ NEEDS REPAIR{Colors.RESET}")
+
+            print()
+
+        # Summary
+        print(f"{Colors.BOLD}{'='*80}{Colors.RESET}")
+        print(f"{Colors.BOLD}SUMMARY{Colors.RESET}")
+        print(f"{Colors.BOLD}{'='*80}{Colors.RESET}\n")
+
+        health_percentage = (healthy_users / total_users * 100) if total_users > 0 else 0
+        health_color = Colors.GREEN if healthy_users == total_users else Colors.YELLOW
+
+        print(f"Total Test Users: {total_users}")
+        print(f"Healthy Users: {health_color}{healthy_users}/{total_users}{Colors.RESET} ({health_percentage:.0f}%)")
+
+        if healthy_users == total_users:
+            print(f"\n{Colors.GREEN}{Colors.BOLD}✓ All test users are properly configured!{Colors.RESET}\n")
         else:
-            for role in member_roles:
-                print(f"  Assigned Role: {role['name']}")
-                print(f"    Permissions: {role['permissions']}")
-                
-                # Check for billing:read specifically
-                has_billing_read = 'billing:read' in role['permissions'] or 'billing:*' in role['permissions']
-                if has_billing_read:
-                    print(f"    ✅ Has billing:read (or billing:*)")
-                else:
-                    print(f"    ⚠️  Missing billing:read")
-    
-    # 4. Check subscription
-    print(f"\n{'='*60}")
-    print("SUBSCRIPTION STATUS:")
-    print(f"{'='*60}")
-    
-    subscription = await pool.fetchrow(
-        """
-        SELECT ws.*, p.code as plan_code, p.name as plan_name
-        FROM workspace_subscriptions ws
-        JOIN plans p ON p.plan_id = ws.plan_id
-        WHERE ws.workspace_id = $1
-        """,
-        workspace_uuid
-    )
-    
-    if subscription:
-        print(f"\n  Plan: {subscription['plan_name']} ({subscription['plan_code']})")
-        print(f"  Status: {subscription['status']}")
-        print(f"  Trial expires: {subscription['trial_expires_at']}")
-    else:
-        print("\n  ⚠️  No subscription found!")
-    
-    # 5. Check WORKSPACE_PERMISSIONS list
-    print(f"\n{'='*60}")
-    print("PERMISSION VALIDATION:")
-    print(f"{'='*60}")
-    
-    from app.services.rbac_service import WORKSPACE_PERMISSIONS
-    
-    print(f"\n  Valid WORKSPACE_PERMISSIONS:")
-    for p in WORKSPACE_PERMISSIONS:
-        print(f"    - {p}")
-    
-    # Check if roles use valid permissions
-    print(f"\n  Checking roles for invalid permissions:")
-    for role in roles:
-        for perm in role['permissions']:
-            # Skip wildcards
-            if perm.endswith(':*'):
-                prefix = perm[:-2]
-                valid_base = any(p.startswith(prefix) for p in WORKSPACE_PERMISSIONS)
-                if not valid_base:
-                    print(f"    ⚠️  Role '{role['name']}' has wildcard '{perm}' but no matching permissions in WORKSPACE_PERMISSIONS")
-            elif perm not in WORKSPACE_PERMISSIONS:
-                print(f"    ⚠️  Role '{role['name']}' has permission '{perm}' not in WORKSPACE_PERMISSIONS")
-    
-    print(f"\n{'='*60}")
-    print("DIAGNOSIS COMPLETE")
-    print(f"{'='*60}")
+            print(f"\n{Colors.YELLOW}{Colors.BOLD}⚠ Some test users need repair.{Colors.RESET}")
+            print(f"{Colors.YELLOW}Run 'python scripts/fix_test_user_workspaces.py' to fix them.{Colors.RESET}\n")
+
+    except Exception as e:
+        print(f"{Colors.RED}Error during diagnosis: {e}{Colors.RESET}")
+        import traceback
+        traceback.print_exc()
+
+    finally:
+        await conn.close()
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python diagnose_permissions.py <workspace_id>")
-        print("Example: python diagnose_permissions.py 34c96892-1c3b-50c5-9156-87dc4b0eba8a")
-        sys.exit(1)
-    
-    workspace_id = sys.argv[1]
-    asyncio.run(diagnose_workspace(workspace_id))
+    asyncio.run(diagnose())

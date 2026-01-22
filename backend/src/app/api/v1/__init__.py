@@ -542,3 +542,12 @@ router.include_router(
     tags=["public-albums"],
 )
 
+# Gallery Design Template routes (Enhancement 3 - Custom Templates)
+# Template management for reusable Gallery Design Studio configurations
+# Supports system templates and workspace-specific custom templates
+from app.api.v1.gallery_design_templates import router as gallery_design_templates_router
+router.include_router(
+    gallery_design_templates_router,
+    tags=["gallery-design-templates"],
+)
+

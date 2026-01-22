@@ -26,6 +26,7 @@ from src.schemas.common import ErrorResponse
 from src.middleware.auth import get_current_user, JWTPayload
 from src.middleware.workspace_auth import verify_workspace_access
 from src.log_config import get_logger
+from src.utils.date_validation import parse_date_range
 
 logger = get_logger(__name__)
 
@@ -43,8 +44,16 @@ router = APIRouter(
 @router.get("/", response_model=WorkspaceAnalyticsSummary)
 async def get_workspace_analytics(
     workspace_id: UUID = Depends(verify_workspace_access),
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    start_date: Optional[str] = Query(
+        None,
+        description="Start date in YYYY-MM-DD format",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$"
+    ),
+    end_date: Optional[str] = Query(
+        None,
+        description="End date in YYYY-MM-DD format",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$"
+    ),
     include_time_series: bool = Query(False, description="Include time series data"),
     include_top_clients: bool = Query(True, description="Include top engaged clients"),
     include_tag_analytics: bool = Query(True, description="Include tag analytics"),
@@ -81,8 +90,8 @@ async def get_workspace_analytics(
 
     Args:
         workspace_id: Workspace ID
-        start_date: Start date (defaults to 30 days ago)
-        end_date: End date (defaults to today)
+        start_date: Start date in YYYY-MM-DD format (defaults to 30 days ago)
+        end_date: End date in YYYY-MM-DD format (defaults to today)
         include_time_series: Include time series data
         include_top_clients: Include top engaged clients
         include_tag_analytics: Include tag analytics
@@ -95,23 +104,21 @@ async def get_workspace_analytics(
         WorkspaceAnalyticsSummary: Comprehensive analytics summary
 
     Raises:
-        HTTPException: 400 if invalid date range
+        HTTPException: 422 if date format is invalid or date range is invalid
     """
-    # Validate date range
-    if start_date and end_date and start_date > end_date:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorResponse(
-                error="INVALID_DATE_RANGE",
-                message="Start date must be before or equal to end date",
-            ).model_dump(),
-        )
+    # Parse and validate date range
+    start_date_obj, end_date_obj = parse_date_range(
+        start_date,
+        end_date,
+        default_days=30,
+        max_range_days=730  # 2 years max
+    )
 
     try:
         result = await service.get_workspace_analytics(
             workspace_id=str(workspace_id),
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_date_obj,
+            end_date=end_date_obj,
             include_time_series=include_time_series,
             include_top_clients=include_top_clients,
             include_tag_analytics=include_tag_analytics,
@@ -151,8 +158,16 @@ async def get_workspace_analytics(
 async def get_client_engagement(
     client_id: UUID = Path(..., description="Client ID"),
     workspace_id: UUID = Depends(verify_workspace_access),
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    start_date: Optional[str] = Query(
+        None,
+        description="Start date in YYYY-MM-DD format",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$"
+    ),
+    end_date: Optional[str] = Query(
+        None,
+        description="End date in YYYY-MM-DD format",
+        pattern="^\\d{4}-\\d{2}-\\d{2}$"
+    ),
     service: AnalyticsService = Depends(get_analytics_service),
     current_user: JWTPayload = Depends(get_current_user),
 ) -> ClientEngagementMetrics:
@@ -186,8 +201,8 @@ async def get_client_engagement(
     Args:
         client_id: Client ID
         workspace_id: Workspace ID
-        start_date: Start date (defaults to 30 days ago)
-        end_date: End date (defaults to today)
+        start_date: Start date in YYYY-MM-DD format (defaults to 30 days ago)
+        end_date: End date in YYYY-MM-DD format (defaults to today)
         service: AnalyticsService instance
         current_user: Current user from JWT
 
@@ -196,24 +211,22 @@ async def get_client_engagement(
 
     Raises:
         HTTPException: 404 if client not found
-        HTTPException: 400 if invalid date range
+        HTTPException: 422 if date format is invalid or date range is invalid
     """
-    # Validate date range
-    if start_date and end_date and start_date > end_date:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ErrorResponse(
-                error="INVALID_DATE_RANGE",
-                message="Start date must be before or equal to end date",
-            ).model_dump(),
-        )
+    # Parse and validate date range
+    start_date_obj, end_date_obj = parse_date_range(
+        start_date,
+        end_date,
+        default_days=30,
+        max_range_days=730  # 2 years max
+    )
 
     try:
         result = await service.get_client_engagement_metrics(
             workspace_id=str(workspace_id),
             client_id=str(client_id),
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_date_obj,
+            end_date=end_date_obj,
         )
 
         logger.info(

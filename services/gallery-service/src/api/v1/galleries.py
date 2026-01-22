@@ -15,6 +15,7 @@ from src.services.gallery_service import (
     SubGalleryNotFoundError,
 )
 from src.services.cache_warming_service import get_cache_warming_service
+from src.services.collaboration_service import get_collaboration_service
 from src.schemas.gallery import (
     GalleryResponse,
     GalleryListResponse,
@@ -31,6 +32,11 @@ from src.schemas.gallery import (
     DownloadLimitRequest,
     DownloadLimitResponse,
     DownloadUsageResponse,
+)
+from src.schemas.gallery_design import (
+    GalleryDesignResponse,
+    GalleryDesignUpdateRequest,
+    GalleryDesignConfig,
 )
 from src.middleware.auth import get_workspace_id, get_current_user
 from src.log_config import get_logger
@@ -632,3 +638,98 @@ async def get_download_limit(
         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
     except GalleryError as e:
         raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+
+
+# =============================================================================
+# Design Configuration Endpoints (Gallery Design Studio)
+# =============================================================================
+
+
+@router.get("/{gallery_id}/design", response_model=GalleryDesignResponse)
+async def get_design_config(
+    gallery_id: str,
+    workspace_id: str = Depends(get_workspace_id),
+):
+    """
+    Get current gallery design configuration.
+
+    Returns the complete design configuration including cover styles, typography,
+    themes, and grid layout settings along with metadata (last_published_at).
+    """
+    gallery_service = get_gallery_service()
+
+    try:
+        result = await gallery_service.get_design_config(
+            workspace_id=UUID(workspace_id),
+            gallery_id=UUID(gallery_id),
+        )
+        return result
+    except GalleryNotFoundError:
+        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryError as e:
+        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+
+
+@router.patch("/{gallery_id}/design", response_model=GalleryDesignResponse)
+async def update_design_config(
+    gallery_id: str,
+    request: GalleryDesignUpdateRequest,
+    workspace_id: str = Depends(get_workspace_id),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Update gallery design configuration.
+
+    Validates the design configuration against Pydantic schemas and updates
+    the design_config JSONB column. Supports partial updates - only include
+    the sections you want to modify.
+
+    Changes are immediately published to the live gallery and broadcasted
+    to public viewing channels for real-time updates.
+    """
+    gallery_service = get_gallery_service()
+    user_id = UUID(current_user["user_id"])
+
+    try:
+        # Validate design config using Pydantic schemas
+        try:
+            validated_config = GalleryDesignConfig(**request.design_config)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "INVALID_DESIGN_CONFIG",
+                    "message": f"Invalid design configuration: {str(e)}"
+                }
+            )
+
+        result = await gallery_service.update_design_config(
+            workspace_id=UUID(workspace_id),
+            gallery_id=UUID(gallery_id),
+            design_config=validated_config.model_dump(),
+        )
+
+        # Broadcast published design to public viewing channel
+        try:
+            collaboration_service = get_collaboration_service()
+            await collaboration_service.broadcast_design_publish(
+                gallery_id=UUID(gallery_id),
+                workspace_id=UUID(workspace_id),
+                design_config=validated_config.model_dump(),
+                published_by_user_id=user_id,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to broadcast design publish event: {e}",
+                extra={"gallery_id": gallery_id, "workspace_id": workspace_id}
+            )
+            # Don't fail the request if broadcasting fails
+
+        return result
+    except GalleryNotFoundError:
+        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryError as e:
+        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+    except Exception as e:
+        logger.error(f"Design config update failed: {e}", extra={"gallery_id": gallery_id, "workspace_id": workspace_id})
+        raise HTTPException(status_code=500, detail={"error": "INTERNAL_ERROR", "message": "Failed to update design configuration"})

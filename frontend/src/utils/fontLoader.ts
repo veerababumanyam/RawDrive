@@ -234,3 +234,139 @@ export function preloadLanguageFonts(langCode: string): void {
     }
   }
 }
+
+// ============================================================================
+// Gallery Design Studio Font Loading (for cover photo typography)
+// ============================================================================
+
+import type { FontPairingId } from '../types/gallery-design';
+
+const galleryFontsLoaded = new Set<string>();
+
+/**
+ * Add preconnect links for Google Fonts CDN
+ * Initiates DNS/TLS connection early for better performance
+ */
+export function addGoogleFontsPreconnect(): void {
+  if (galleryFontsLoaded.has('preconnect-added')) return;
+
+  const link1 = document.createElement('link');
+  link1.rel = 'preconnect';
+  link1.href = 'https://fonts.googleapis.com';
+  document.head.appendChild(link1);
+
+  const link2 = document.createElement('link');
+  link2.rel = 'preconnect';
+  link2.href = 'https://fonts.gstatic.com';
+  link2.crossOrigin = 'anonymous';
+  document.head.appendChild(link2);
+
+  galleryFontsLoaded.add('preconnect-added');
+}
+
+/**
+ * Load a gallery design font pairing
+ *
+ * @param pairingId - Font pairing identifier (from fontPairings.ts)
+ * @returns Promise that resolves when fonts are loaded
+ */
+export async function loadGalleryFontPairing(pairingId: FontPairingId): Promise<void> {
+  try {
+    const { FONT_PAIRINGS } = await import('../constants/fontPairings');
+    const pairing = FONT_PAIRINGS[pairingId];
+
+    if (!pairing) {
+      console.warn(`Font pairing "${pairingId}" not found`);
+      return;
+    }
+
+    // System fonts load instantly
+    if (pairing.heading.source === 'system' && pairing.body.source === 'system') {
+      applyGalleryFontVariables(pairing);
+      return;
+    }
+
+    // For Google Fonts
+    addGoogleFontsPreconnect();
+
+    const urls = new Set<string>();
+    if (pairing.heading.source === 'google' && pairing.heading.googleFontUrl) {
+      urls.add(pairing.heading.googleFontUrl);
+    }
+    if (pairing.body.source === 'google' && pairing.body.googleFontUrl) {
+      urls.add(pairing.body.googleFontUrl);
+    }
+
+    if (urls.size === 0) {
+      applyGalleryFontVariables(pairing);
+      return;
+    }
+
+    // Load all URLs
+    await Promise.all(Array.from(urls).map((url) => loadGoogleFontStylesheet(url)));
+    galleryFontsLoaded.add(pairingId);
+    applyGalleryFontVariables(pairing);
+  } catch (e) {
+    console.error(`Failed to load gallery font pairing "${pairingId}":`, e);
+  }
+}
+
+/**
+ * Load a Google Fonts stylesheet with font-display: swap
+ */
+async function loadGoogleFontStylesheet(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+
+    // Ensure font-display: swap is set
+    let finalUrl = url;
+    if (!finalUrl.includes('display=')) {
+      const separator = finalUrl.includes('?') ? '&' : '?';
+      finalUrl += `${separator}display=swap`;
+    }
+
+    link.href = finalUrl;
+
+    const timeout = setTimeout(() => {
+      reject(new Error('Font loading timeout'));
+    }, 10000);
+
+    link.onload = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+
+    link.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error('Failed to load font stylesheet'));
+    };
+
+    document.head.appendChild(link);
+  });
+}
+
+/**
+ * Apply gallery font CSS variables
+ */
+export function applyGalleryFontVariables(pairing: any, element: HTMLElement = document.documentElement): void {
+  element.style.setProperty('--font-heading', pairing.heading.family);
+  element.style.setProperty('--font-body', pairing.body.family);
+  element.style.setProperty('--heading-letter-spacing', pairing.typography.headingTracking);
+  element.style.setProperty('--body-letter-spacing', pairing.typography.bodyTracking);
+  element.style.setProperty('--heading-line-height', String(pairing.typography.headingLineHeight));
+  element.style.setProperty('--body-line-height', String(pairing.typography.bodyLineHeight));
+  element.setAttribute('data-font-pairing', pairing.id);
+}
+
+/**
+ * Initialize gallery fonts with default pairing
+ */
+export async function initializeGalleryFonts(defaultPairingId: FontPairingId = 'modern'): Promise<void> {
+  addGoogleFontsPreconnect();
+  try {
+    await loadGalleryFontPairing(defaultPairingId);
+  } catch (e) {
+    console.error(`Failed to initialize gallery fonts:`, e);
+  }
+}

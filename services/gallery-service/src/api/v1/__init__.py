@@ -8,6 +8,7 @@ from src.api.v1.websocket import router as websocket_router
 from src.api.v1.agents import router as agents_router
 from src.api.v1.websocket_agents import router as websocket_agents_router
 from src.api.v1.batch import router as batch_router
+from src.api.v1.gallery_design_recommendations import router as gallery_design_recommendations_router
 
 router = APIRouter()
 
@@ -58,6 +59,13 @@ router.include_router(
     batch_router,
     prefix="/batch",
     tags=["batch"],
+)
+
+# Gallery design AI recommendations endpoints (authenticated)
+router.include_router(
+    gallery_design_recommendations_router,
+    prefix="/design",
+    tags=["design", "ai-recommendations"],
 )
 
 __all__ = ["router"]

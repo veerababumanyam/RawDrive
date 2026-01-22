@@ -178,7 +178,7 @@ export const BiometricSettingsPanel: React.FC<BiometricSettingsPanelProps> = ({
         {/* Consent Status Card */}
         <ConsentStatusCard
           status={settings?.consent_status || 'not_granted'}
-          consentedAt={settings?.consent_granted_at}
+          consentedAt={settings?.consent_granted_at ?? null}
           onGrantClick={() => setShowConsentModal(true)}
           onWithdrawClick={() => setShowWithdrawModal(true)}
           disabled={updating || pendingDeletion}

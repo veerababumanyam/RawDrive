@@ -1597,6 +1597,88 @@ class GalleryService:
         await invalidate_gallery_cache(str(gallery_id))
         return await self.get_gallery(str(workspace_id), str(gallery_id))
 
+    async def get_design_config(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+    ) -> dict:
+        """Get current gallery design configuration.
+
+        Returns the design_config JSONB from the gallery along with metadata
+        (gallery_id, last_published_at).
+        """
+        with metrics.track_db_query("get_design_config"):
+            async with get_connection(read_only=True) as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT
+                        gallery_id,
+                        design_config,
+                        published_at
+                    FROM galleries
+                    WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+                    """,
+                    workspace_id,
+                    gallery_id,
+                )
+
+                if not row:
+                    raise GalleryNotFoundError(str(gallery_id))
+
+                return {
+                    "gallery_id": str(row["gallery_id"]),
+                    "design_config": row.get("design_config") or {},
+                    "last_published_at": row["published_at"].isoformat() if row.get("published_at") else None,
+                }
+
+    async def update_design_config(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        design_config: dict,
+    ) -> dict:
+        """Update gallery design configuration.
+
+        Updates the design_config JSONB column with new design settings.
+        Invalidates cache to ensure frontend gets updated config.
+
+        Args:
+            workspace_id: Workspace UUID
+            gallery_id: Gallery UUID
+            design_config: Complete design configuration dict
+
+        Returns:
+            GalleryDesignResponse with updated config
+        """
+        with metrics.track_db_query("update_design_config"):
+            async with get_connection() as conn:
+                # Check gallery exists
+                exists = await conn.fetchval(
+                    "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
+                    workspace_id,
+                    gallery_id,
+                )
+                if not exists:
+                    raise GalleryNotFoundError(str(gallery_id))
+
+                # Update design_config as JSONB
+                await conn.execute(
+                    """
+                    UPDATE galleries
+                    SET design_config = $1, updated_at = NOW()
+                    WHERE workspace_id = $2 AND gallery_id = $3
+                    """,
+                    design_config,
+                    workspace_id,
+                    gallery_id,
+                )
+
+        # Invalidate cache so frontend gets fresh data
+        await invalidate_gallery_cache(str(gallery_id))
+
+        # Return updated config
+        return await self.get_design_config(workspace_id, gallery_id)
+
     async def get_breadcrumbs(
         self,
         gallery_id: str,

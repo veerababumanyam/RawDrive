@@ -1,0 +1,880 @@
+openapi: 3.1.0
+info:
+  title: RawDrive XMP Sync API
+  description: |
+    API for XMP sidecar import/export and Review Mode metadata management.
+    Supports Lightroom Classic integration via XMP files.
+  version: 1.0.0
+  contact:
+    name: RawDrive Development Team
+
+servers:
+  - url: /api/v1
+    description: Gallery Service API
+
+tags:
+  - name: Review Mode
+    description: Rating, flag, and color label management
+  - name: XMP Sync
+    description: XMP sidecar file import and export
+  - name: API Keys
+    description: Sync API key management
+
+paths:
+  # ===========================================
+  # Review Mode - Asset Metadata
+  # ===========================================
+
+  /galleries/{gallery_id}/assets/{asset_id}/metadata:
+    patch:
+      summary: Update asset review metadata
+      description: Update rating, flag, or color label for a single asset
+      tags: [Review Mode]
+      operationId: updateAssetMetadata
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetMetadataUpdate'
+      responses:
+        '200':
+          description: Metadata updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetMetadataResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /galleries/{gallery_id}/assets/metadata/batch:
+    patch:
+      summary: Batch update asset metadata
+      description: Update rating, flag, or color label for multiple assets at once
+      tags: [Review Mode]
+      operationId: batchUpdateAssetMetadata
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchMetadataUpdate'
+      responses:
+        '200':
+          description: Batch update successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchMetadataResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /galleries/{gallery_id}/assets/filter:
+    get:
+      summary: Filter assets by review metadata
+      description: Get assets filtered by rating, flag, or color label
+      tags: [Review Mode]
+      operationId: filterAssets
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: rating
+          in: query
+          description: Filter by rating (0-5)
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 0
+              maximum: 5
+        - name: flag
+          in: query
+          description: Filter by flag status
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/FlagStatus'
+        - name: color_label
+          in: query
+          description: Filter by color label
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/ColorLabel'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: Filtered assets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilteredAssetsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ===========================================
+  # XMP Sync - Export
+  # ===========================================
+
+  /galleries/{gallery_id}/xmp/export:
+    post:
+      summary: Export XMP sidecars
+      description: |
+        Generate XMP sidecar files for specified assets or all assets with metadata.
+        Returns a ZIP archive containing .xmp files named to match original filenames.
+      tags: [XMP Sync]
+      operationId: exportXmp
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/XmpExportRequest'
+      responses:
+        '200':
+          description: XMP archive generated
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: 'attachment; filename="gallery_metadata_2026-01-22.zip"'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - bearerAuth: []
+        - syncApiKey: []
+
+  /galleries/{gallery_id}/xmp/export/preview:
+    post:
+      summary: Preview XMP export
+      description: Get a preview of what will be exported without generating files
+      tags: [XMP Sync]
+      operationId: previewXmpExport
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/XmpExportRequest'
+      responses:
+        '200':
+          description: Export preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/XmpExportPreview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ===========================================
+  # XMP Sync - Import
+  # ===========================================
+
+  /galleries/{gallery_id}/xmp/import:
+    post:
+      summary: Import XMP sidecars
+      description: |
+        Import metadata from XMP sidecar files. Matches files by filename.
+        Supports single .xmp file or ZIP archive containing multiple .xmp files.
+      tags: [XMP Sync]
+      operationId: importXmp
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Single .xmp file or .zip archive
+                conflict_resolution:
+                  type: string
+                  enum: [overwrite, skip, merge]
+                  default: overwrite
+                  description: How to handle conflicts with existing metadata
+      responses:
+        '200':
+          description: Import completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/XmpImportResult'
+        '400':
+          description: Invalid XMP file or format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/XmpImportError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - bearerAuth: []
+        - syncApiKey: []
+
+  /galleries/{gallery_id}/xmp/import/validate:
+    post:
+      summary: Validate XMP import
+      description: Validate XMP files without applying changes
+      tags: [XMP Sync]
+      operationId: validateXmpImport
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/XmpValidationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ===========================================
+  # API Key Management
+  # ===========================================
+
+  /galleries/{gallery_id}/sync-keys:
+    get:
+      summary: List sync API keys
+      description: List all sync API keys for a gallery
+      tags: [API Keys]
+      operationId: listSyncKeys
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: include_inactive
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SyncApiKeyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      summary: Create sync API key
+      description: |
+        Create a new sync API key for the gallery.
+        The full API key is only returned once in the response.
+      tags: [API Keys]
+      operationId: createSyncKey
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncApiKeyCreate'
+      responses:
+        '201':
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncApiKeyCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Key limit reached (max 10 per gallery)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /galleries/{gallery_id}/sync-keys/{key_id}:
+    get:
+      summary: Get sync API key details
+      description: Get details of a specific sync API key
+      tags: [API Keys]
+      operationId: getSyncKey
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/KeyId'
+      responses:
+        '200':
+          description: API key details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncApiKeyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Revoke sync API key
+      description: Revoke (deactivate) a sync API key
+      tags: [API Keys]
+      operationId: revokeSyncKey
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - $ref: '#/components/parameters/KeyId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Key revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncApiKeyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ===========================================
+  # Audit Log
+  # ===========================================
+
+  /galleries/{gallery_id}/sync-audit:
+    get:
+      summary: Get sync audit log
+      description: Get audit log of sync operations for compliance
+      tags: [XMP Sync]
+      operationId: getSyncAuditLog
+      parameters:
+        - $ref: '#/components/parameters/GalleryId'
+        - name: action
+          in: query
+          description: Filter by action type
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [xmp_export, xmp_import, file_upload, file_delete, rating_update, flag_update, api_key_created, api_key_revoked]
+        - name: source
+          in: query
+          description: Filter by source
+          schema:
+            type: string
+            enum: [web, desktop_app, api]
+        - name: from
+          in: query
+          description: Start date (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End date (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    syncApiKey:
+      type: apiKey
+      in: header
+      name: X-Sync-Api-Key
+
+  parameters:
+    GalleryId:
+      name: gallery_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AssetId:
+      name: asset_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    KeyId:
+      name: key_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    # Enums
+    FlagStatus:
+      type: string
+      enum: [pick, unflagged, reject]
+
+    ColorLabel:
+      type: string
+      enum: [none, red, yellow, green, blue, purple]
+
+    # Review Mode Schemas
+    AssetMetadataUpdate:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 0
+          maximum: 5
+          nullable: true
+        flag:
+          $ref: '#/components/schemas/FlagStatus'
+        color_label:
+          $ref: '#/components/schemas/ColorLabel'
+
+    AssetMetadataResponse:
+      type: object
+      required: [id, filename, rating, flag, color_label, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        rating:
+          type: integer
+          minimum: 0
+          maximum: 5
+          nullable: true
+        flag:
+          $ref: '#/components/schemas/FlagStatus'
+        color_label:
+          $ref: '#/components/schemas/ColorLabel'
+        updated_at:
+          type: string
+          format: date-time
+
+    BatchMetadataUpdate:
+      type: object
+      required: [asset_ids, updates]
+      properties:
+        asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 500
+        updates:
+          $ref: '#/components/schemas/AssetMetadataUpdate'
+
+    BatchMetadataResponse:
+      type: object
+      required: [updated_count, assets]
+      properties:
+        updated_count:
+          type: integer
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetMetadataResponse'
+
+    FilteredAssetsResponse:
+      type: object
+      required: [assets, total, page, per_page]
+      properties:
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetMetadataResponse'
+        total:
+          type: integer
+        page:
+          type: integer
+        per_page:
+          type: integer
+
+    # XMP Schemas
+    XmpExportRequest:
+      type: object
+      properties:
+        asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Specific assets to export (empty = all with metadata)
+        include_unrated:
+          type: boolean
+          default: false
+          description: Include assets with no rating/flag set
+
+    XmpExportPreview:
+      type: object
+      required: [total_files, total_size_estimate, files]
+      properties:
+        total_files:
+          type: integer
+        total_size_estimate:
+          type: integer
+          description: Estimated ZIP size in bytes
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              filename:
+                type: string
+              xmp_filename:
+                type: string
+              rating:
+                type: integer
+              flag:
+                $ref: '#/components/schemas/FlagStatus'
+              color_label:
+                $ref: '#/components/schemas/ColorLabel'
+
+    XmpImportResult:
+      type: object
+      required: [total_files, matched, updated, skipped, errors]
+      properties:
+        total_files:
+          type: integer
+          description: Number of XMP files processed
+        matched:
+          type: integer
+          description: Files matched to assets
+        updated:
+          type: integer
+          description: Assets updated
+        skipped:
+          type: integer
+          description: Files skipped (no match or conflict)
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              filename:
+                type: string
+              error:
+                type: string
+
+    XmpImportError:
+      type: object
+      required: [error, details]
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+        line:
+          type: integer
+          description: Line number if XML parse error
+
+    XmpValidationResult:
+      type: object
+      required: [valid, total_files, matchable, warnings]
+      properties:
+        valid:
+          type: boolean
+        total_files:
+          type: integer
+        matchable:
+          type: integer
+          description: Files that match existing assets
+        unmatched:
+          type: array
+          items:
+            type: string
+          description: Filenames with no matching asset
+        warnings:
+          type: array
+          items:
+            type: string
+
+    # API Key Schemas
+    SyncApiKeyCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        permissions:
+          type: object
+          properties:
+            read:
+              type: boolean
+              default: true
+            write:
+              type: boolean
+              default: true
+            delete:
+              type: boolean
+              default: false
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    SyncApiKeyResponse:
+      type: object
+      required: [id, gallery_id, key_prefix, name, permissions, is_active, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        gallery_id:
+          type: string
+          format: uuid
+        key_prefix:
+          type: string
+          description: First 20 characters of key for identification
+        name:
+          type: string
+        permissions:
+          type: object
+          properties:
+            read:
+              type: boolean
+            write:
+              type: boolean
+            delete:
+              type: boolean
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    SyncApiKeyCreated:
+      allOf:
+        - $ref: '#/components/schemas/SyncApiKeyResponse'
+        - type: object
+          required: [api_key]
+          properties:
+            api_key:
+              type: string
+              description: Full API key (shown only once)
+
+    # Audit Log Schemas
+    AuditLogEntry:
+      type: object
+      required: [id, action, action_source, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        action_source:
+          type: string
+          enum: [web, desktop_app, api]
+        api_key_id:
+          type: string
+          format: uuid
+          nullable: true
+        api_key_name:
+          type: string
+          nullable: true
+        asset_count:
+          type: integer
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+        success:
+          type: boolean
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    AuditLogResponse:
+      type: object
+      required: [entries, total, page, per_page]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEntry'
+        total:
+          type: integer
+        page:
+          type: integer
+        per_page:
+          type: integer
+
+    # Error Schema
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Not authorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+security:
+  - bearerAuth: []

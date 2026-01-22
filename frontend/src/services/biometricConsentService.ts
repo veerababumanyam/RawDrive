@@ -30,6 +30,7 @@ export const biometricConsentService = {
     const response = await apiClient.get<BiometricSettingsResponse>(
       `${BASE_PATH}/${workspaceId}/biometric/settings`
     );
+    if (!response.data) throw new Error('Failed to get biometric settings');
     return response.data;
   },
 
@@ -45,6 +46,7 @@ export const biometricConsentService = {
       `${BASE_PATH}/${workspaceId}/biometric/consent/grant`,
       data
     );
+    if (!response.data) throw new Error('Failed to grant biometric consent');
     return response.data;
   },
 
@@ -58,11 +60,12 @@ export const biometricConsentService = {
     data: BiometricConsentWithdrawRequest,
     cascadeDelete: boolean = false
   ): Promise<ConsentWithdrawResponse> {
+    const params = new URLSearchParams({ cascade_delete: String(cascadeDelete) });
     const response = await apiClient.post<ConsentWithdrawResponse>(
-      `${BASE_PATH}/${workspaceId}/biometric/consent/withdraw`,
-      data,
-      { params: { cascade_delete: cascadeDelete } }
+      `${BASE_PATH}/${workspaceId}/biometric/consent/withdraw?${params}`,
+      data
     );
+    if (!response.data) throw new Error('Failed to withdraw biometric consent');
     return response.data;
   },
 
@@ -78,6 +81,7 @@ export const biometricConsentService = {
       `${BASE_PATH}/${workspaceId}/biometric/settings`,
       data
     );
+    if (!response.data) throw new Error('Failed to update biometric settings');
     return response.data;
   },
 
@@ -89,10 +93,11 @@ export const biometricConsentService = {
     page: number = 1,
     pageSize: number = 20
   ): Promise<ConsentHistoryResponse> {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
     const response = await apiClient.get<ConsentHistoryResponse>(
-      `${BASE_PATH}/${workspaceId}/biometric/consent/history`,
-      { params: { page, page_size: pageSize } }
+      `${BASE_PATH}/${workspaceId}/biometric/consent/history?${params}`
     );
+    if (!response.data) throw new Error('Failed to get consent history');
     return response.data;
   },
 };

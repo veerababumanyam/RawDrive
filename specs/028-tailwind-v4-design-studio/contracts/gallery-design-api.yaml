@@ -1,0 +1,374 @@
+# Gallery Design API Contract
+# OpenAPI 3.0 Specification
+#
+# Note: These endpoints already exist in gallery-service.
+# This contract documents the existing API used by Design Studio.
+
+openapi: 3.0.3
+info:
+  title: Gallery Design API
+  version: 1.0.0
+  description: |
+    API endpoints for Gallery Design Studio functionality.
+    These endpoints are provided by gallery-service (port 8004).
+
+servers:
+  - url: /api/v1
+    description: Gallery Service API
+
+paths:
+  /galleries/{gallery_id}/design:
+    get:
+      operationId: getGalleryDesign
+      summary: Get gallery design configuration
+      description: Retrieves the current design configuration for a gallery
+      tags:
+        - Gallery Design
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Gallery UUID
+      responses:
+        '200':
+          description: Design configuration retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryDesignResponse'
+        '404':
+          description: Gallery not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - BearerAuth: []
+
+    put:
+      operationId: updateGalleryDesign
+      summary: Update gallery design configuration
+      description: Updates the design configuration for a gallery (saves draft)
+      tags:
+        - Gallery Design
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Gallery UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GalleryDesignUpdateRequest'
+      responses:
+        '200':
+          description: Design configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryDesignResponse'
+        '400':
+          description: Invalid design configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not authorized to edit this gallery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Gallery not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - BearerAuth: []
+
+  /galleries/{gallery_id}/design/publish:
+    post:
+      operationId: publishGalleryDesign
+      summary: Publish gallery design
+      description: Publishes the current design configuration, making it visible to clients
+      tags:
+        - Gallery Design
+      parameters:
+        - name: gallery_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Gallery UUID
+      responses:
+        '200':
+          description: Design published successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishResponse'
+        '403':
+          description: Not authorized to publish this gallery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Gallery not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    GalleryDesignResponse:
+      type: object
+      required:
+        - gallery_id
+        - design_config
+      properties:
+        gallery_id:
+          type: string
+          format: uuid
+        design_config:
+          $ref: '#/components/schemas/GalleryDesignConfig'
+        last_published_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    GalleryDesignUpdateRequest:
+      type: object
+      required:
+        - design_config
+      properties:
+        design_config:
+          $ref: '#/components/schemas/GalleryDesignConfig'
+
+    GalleryDesignConfig:
+      type: object
+      required:
+        - cover
+        - typography
+        - theme
+        - grid
+      properties:
+        cover:
+          $ref: '#/components/schemas/CoverConfig'
+        typography:
+          $ref: '#/components/schemas/TypographyConfig'
+        theme:
+          $ref: '#/components/schemas/ThemeConfig'
+        grid:
+          $ref: '#/components/schemas/GridConfig'
+
+    CoverConfig:
+      type: object
+      required:
+        - style
+        - focalPoint
+        - titleVisible
+        - overlayOpacity
+      properties:
+        style:
+          $ref: '#/components/schemas/CoverStyleId'
+        focalPoint:
+          $ref: '#/components/schemas/FocalPoint'
+        titleVisible:
+          type: boolean
+        overlayOpacity:
+          type: number
+          minimum: 0
+          maximum: 1
+        assetId:
+          type: string
+          format: uuid
+          nullable: true
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    FocalPoint:
+      type: object
+      required:
+        - x
+        - y
+      properties:
+        x:
+          type: number
+          minimum: 0
+          maximum: 100
+        y:
+          type: number
+          minimum: 0
+          maximum: 100
+
+    TypographyConfig:
+      type: object
+      required:
+        - pairingId
+      properties:
+        pairingId:
+          $ref: '#/components/schemas/FontPairingId'
+        customHeadingsFont:
+          type: string
+          nullable: true
+
+    ThemeConfig:
+      type: object
+      required:
+        - id
+        - mode
+      properties:
+        id:
+          $ref: '#/components/schemas/ThemeId'
+        mode:
+          $ref: '#/components/schemas/ThemeMode'
+        accentColorOverride:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          nullable: true
+
+    GridConfig:
+      type: object
+      required:
+        - style
+        - size
+        - spacing
+      properties:
+        style:
+          $ref: '#/components/schemas/GridStyle'
+        size:
+          $ref: '#/components/schemas/GridSize'
+        spacing:
+          $ref: '#/components/schemas/GridSpacing'
+
+    CoverStyleId:
+      type: string
+      enum:
+        # Basic (3)
+        - center
+        - left
+        - none
+        # Text (8)
+        - vintage
+        - novel
+        - frame
+        - stripe
+        - divider
+        - journal
+        - stamp
+        - outline
+        # Advanced (5)
+        - classic
+        - split
+        - label
+        - border
+        - album
+        # Premium (12)
+        - cliff
+        - cedar
+        - breeze
+        - aero
+        - surf
+        - cosmos
+        - reef
+        - bondi
+        - west
+        - oakwood
+        - edge
+        - anchor
+        - joy
+
+    FontPairingId:
+      type: string
+      enum:
+        - sans
+        - serif
+        - modern
+        - timeless
+        - bold
+        - subtle
+
+    ThemeId:
+      type: string
+      enum:
+        - brand
+        - gold
+        - neutral
+        - cyan
+        - midnight
+        - rose
+        - terracotta
+        - olive
+        - sea
+
+    ThemeMode:
+      type: string
+      enum:
+        - light
+        - dark
+        - system
+
+    GridStyle:
+      type: string
+      enum:
+        - vertical
+        - horizontal
+
+    GridSize:
+      type: string
+      enum:
+        - sm
+        - md
+        - lg
+
+    GridSpacing:
+      type: string
+      enum:
+        - sm
+        - md
+        - lg
+
+    PublishResponse:
+      type: object
+      required:
+        - success
+        - published_at
+      properties:
+        success:
+          type: boolean
+        published_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+        code:
+          type: string

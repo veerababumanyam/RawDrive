@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import {
   Sidebar,
+  SidebarHeader,
   SidebarContent,
   SidebarFooter,
   SidebarSection,
@@ -39,11 +40,6 @@ import { AppButton } from '../ui/AppButton';
 
 /* =============================================================================
    WorkspaceSidebar Component
-
-   Main navigation sidebar for the workspace application.
-
-   IMPORTANT: Sidebar includes its own header with logo and collapse toggle.
-   This follows standard practice where the sidebar is self-contained.
    ============================================================================= */
 
 interface WorkspaceSidebarProps {
@@ -82,7 +78,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   }, []);
 
   const mainNavItems = React.useMemo(() => [
-    { id: 'dashboard', label: t('nav.dashboard'), icon: <Home size={20} />, path: '/workspace' },
+    // { id: 'dashboard', label: t('nav.dashboard'), icon: <Home size={20} />, path: '/workspace' },
     { id: 'galleries', label: t('nav.galleries'), icon: <LayoutGrid size={20} />, path: '/workspace/galleries' },
     { id: 'invitations', label: t('nav.invitations', 'Invitations'), icon: <Mail size={20} />, path: '/workspace/invitations' },
     // Terminology Note: "People" feature is now referred to as "FaceIDs" in the UI to avoid user confusion
@@ -139,40 +135,43 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 
   return (
     <Sidebar collapsed={sidebarCollapsed} activeItem={currentPath} className="h-full">
+      {/* Sidebar Header with Dashboard Link and Collapse Toggle */}
+      <SidebarHeader className="bg-gradient-to-r from-primary/5 to-transparent border-b border-border/40">
+        <div className={`flex items-center w-full ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+          {!sidebarCollapsed && (
+            <div
+              className="flex items-center gap-3 cursor-pointer group"
+              onClick={() => handleNavigation('/workspace')}
+              role="button"
+            >
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all duration-200">
+                <LayoutGrid size={20} className="transform group-hover:scale-110 transition-transform duration-200" />
+              </div>
+              <span className="font-bold text-lg text-text-primary tracking-tight group-hover:text-primary transition-colors duration-200">
+                {t('nav.dashboard', 'Dashboard')}
+              </span>
+            </div>
+          )}
+
+          <button
+            onClick={toggleCollapse}
+            className={`
+              p-2 rounded-lg 
+              hover:bg-surface-hover hover:text-primary 
+              text-text-tertiary transition-all duration-200 
+              ${sidebarCollapsed ? 'w-10 h-10 flex items-center justify-center' : ''}
+            `}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
+          </button>
+        </div>
+      </SidebarHeader>
+
       {/* Main Navigation */}
       <SidebarContent className="pt-2">
-        {/* Collapse Toggle & Workspace Info */}
-        <div className={`px-3 mb-3 ${sidebarCollapsed ? 'flex justify-center' : ''}`}>
-          {/* Collapse Toggle Button */}
-          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} mb-3`}>
-            {!sidebarCollapsed && (
-              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-hover/50 backdrop-blur-sm border border-border/30 flex-1 mr-2 transition-all duration-200 hover:shadow-sm">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-md shadow-primary/20">
-                  <span className="text-white font-bold text-sm">
-                    {workspaceName.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-text-primary truncate text-sm">
-                    {workspaceName}
-                  </div>
-                  <div className="text-xs text-text-tertiary flex items-center gap-1">
-                    {plan !== 'free' && <Crown size={12} className="text-gold" />}
-                    {plan.charAt(0).toUpperCase() + plan.slice(1)} Plan
-                  </div>
-                </div>
-              </div>
-            )}
-            <button
-              onClick={toggleCollapse}
-              className="sidebar-collapse-btn p-2.5 rounded-xl hover:bg-surface-hover/80 hover:backdrop-blur-sm text-text-secondary hover:text-text-primary hover:shadow-sm transition-all duration-200 min-w-[42px] min-h-[42px] flex items-center justify-center flex-shrink-0 border border-transparent hover:border-border/50"
-              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {sidebarCollapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
-            </button>
-          </div>
-        </div>
+
 
         {/* Main Nav */}
         <SidebarSection title={sidebarCollapsed ? undefined : 'Main'}>

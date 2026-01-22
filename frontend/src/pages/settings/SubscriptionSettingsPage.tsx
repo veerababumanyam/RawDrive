@@ -292,13 +292,54 @@ const SubscriptionSettingsPage: React.FC = () => {
     );
   }
 
-  // No subscription data
+  // No subscription data - show upgrade banner instead of error
   if (!subscription) {
     return (
-      <ErrorState
-        message="No subscription information available."
-        onRetry={() => refetch()}
-      />
+      <div className="space-y-6">
+        <div className="glass-card rounded-2xl p-6 sm:p-8 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+              <CreditCard className="w-8 h-8 text-primary" />
+            </div>
+          </div>
+          <h3 className="text-lg font-semibold text-text-primary mb-2">
+            Upgrade to Access Billing Features
+          </h3>
+          <p className="text-text-secondary mb-6">
+            Billing management requires a paid plan. Upgrade to access invoices, usage tracking, and subscription management.
+          </p>
+          <AppButton
+            variant="primary"
+            onClick={handleUpgrade}
+          >
+            View Plans & Upgrade
+          </AppButton>
+        </div>
+
+        <div className="glass-card rounded-2xl p-6">
+          <h3 className="text-lg font-semibold text-text-primary mb-4">
+            What you'll get with a paid plan
+          </h3>
+          <ul className="space-y-3">
+            <li className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+              <span className="text-text-secondary">Full billing and invoice management</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+              <span className="text-text-secondary">Detailed usage tracking and analytics</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+              <span className="text-text-secondary">Increased storage and feature limits</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+              <span className="text-text-secondary">Priority support and advanced features</span>
+            </li>
+          </ul>
+        </div>
+      </div>
     );
   }
 

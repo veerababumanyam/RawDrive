@@ -310,6 +310,17 @@ export interface UpdatePersonalProfileRequest
  * Public personal profile response with SEO schema.
  * Only includes fields that are marked visible in visibility configuration.
  */
+
+/**
+ * Featured gallery info for public display.
+ */
+export interface FeaturedGalleryInfo {
+  gallery_id: string;
+  name: string;
+  cover_image_url?: string;
+  asset_count?: number;
+}
+
 export interface PublicPersonalProfile {
   // Identity (always included if profile is public)
   display_name?: string;
@@ -341,12 +352,7 @@ export interface PublicPersonalProfile {
 
   // Featured gallery (based on visibility)
   featured_gallery_id?: string | null;
-  featured_gallery?: {
-    gallery_id: string;
-    name: string;
-    cover_image_url?: string;
-    asset_count?: number;
-  } | null;
+  featured_gallery?: FeaturedGalleryInfo | null;
 
   // Categories (based on visibility)
   categories: string[];

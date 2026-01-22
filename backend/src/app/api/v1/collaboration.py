@@ -380,6 +380,128 @@ async def release_lock(
 
 
 # ---------------------------------------------------------------------------
+# Design Studio Collaboration Endpoints
+# ---------------------------------------------------------------------------
+
+class DesignUpdateRequest(BaseModel):
+    """Request to broadcast design update."""
+    design_config: dict[str, Any] = Field(..., description="Updated design configuration")
+    section: str | None = Field(None, description="Specific section updated: cover, theme, typography, grid")
+
+
+@router.post(
+    "/sessions/{session_id}/design/update",
+    summary="Broadcast design update to collaborators",
+)
+async def broadcast_design_update(
+    session_id: UUID,
+    request: DesignUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Broadcast a design configuration update to all session participants.
+
+    This is used for real-time design studio updates, allowing multiple users
+    to see changes to cover style, theme, typography, etc. instantly.
+    """
+    user_id = UUID(current_user["user_id"])
+
+    service = get_collaboration_service(db)
+    await service.broadcast_design_update(
+        session_id=session_id,
+        user_id=user_id,
+        design_config=request.design_config,
+        section=request.section,
+    )
+
+    return {"message": "Design update broadcasted"}
+
+
+class LockControlRequest(BaseModel):
+    """Request to lock a design control section."""
+    section: str = Field(..., description="Section to lock: cover, theme, typography, grid")
+    duration_seconds: int = Field(default=300, description="Lock duration")
+
+
+@router.post(
+    "/sessions/{session_id}/design/lock-control",
+    response_model=LockResponse,
+    summary="Lock design control section",
+)
+async def lock_design_control(
+    session_id: UUID,
+    request: LockControlRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LockResponse:
+    """Acquire exclusive lock on a design control section.
+
+    Prevents concurrent editing of the same design section.
+    Valid sections: cover, theme, typography, grid.
+    """
+    user_id = UUID(current_user["user_id"])
+    workspace_id = UUID(current_user["workspace_id"])
+
+    # Get gallery_id from session
+    service = get_collaboration_service(db)
+    session_data = await service._get_session_data(session_id)
+    gallery_id = UUID(session_data["gallery_id"])
+
+    # Acquire lock on design section resource
+    resource_type = f"design_{request.section}"
+    result = await service.acquire_lock(
+        workspace_id=workspace_id,
+        session_id=session_id,
+        user_id=user_id,
+        resource_type=resource_type,
+        resource_id=gallery_id,
+        lock_type="exclusive",
+        duration_seconds=request.duration_seconds,
+        reason=f"Editing {request.section} in design studio",
+    )
+
+    return LockResponse(
+        success=result["success"],
+        lock=result.get("lock"),
+        error=result.get("error"),
+        holder=result.get("holder"),
+    )
+
+
+class ViewerCountResponse(BaseModel):
+    """Response with gallery viewer count."""
+    gallery_id: str
+    viewer_count: int
+    timestamp: str
+
+
+@router.get(
+    "/galleries/{gallery_id}/viewer-count",
+    response_model=ViewerCountResponse,
+    summary="Get active gallery viewer count",
+)
+async def get_gallery_viewer_count(
+    gallery_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ViewerCountResponse:
+    """Get the number of active viewers currently viewing a gallery.
+
+    This allows designers to see real-time engagement while viewing their gallery.
+    """
+    from datetime import datetime, timezone
+
+    service = get_collaboration_service(db)
+    viewer_count = await service.get_gallery_viewer_count(gallery_id)
+
+    return ViewerCountResponse(
+        gallery_id=str(gallery_id),
+        viewer_count=viewer_count,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+# ---------------------------------------------------------------------------
 # WebSocket Endpoint
 # ---------------------------------------------------------------------------
 

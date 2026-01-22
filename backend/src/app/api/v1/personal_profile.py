@@ -50,12 +50,16 @@ public_router = APIRouter()
 )
 async def get_public_personal_profile(
     slug: Annotated[str, Path(..., description="Profile slug")],
+    response: Response,
 ):
     """Get public personal profile by slug.
 
     Returns filtered profile data based on visibility settings.
     Only accessible if the profile has is_public=true.
     """
+    # Set cache control for 60 seconds to reduce DB load
+    response.headers["Cache-Control"] = "public, max-age=60"
+    
     service = get_personal_profile_service()
     try:
         data = await service.get_public_profile(slug)
