@@ -119,17 +119,17 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
             </button>
           )}
 
-          {/* Design Studio - Purple */}
+          {/* CoverDesign - Green */}
           {onDesignStudio && (
             <button
               onClick={onDesignStudio}
-              className="btn-gallery-action btn-action-purple min-h-[36px] sm:min-h-[38px]"
-              aria-label="Open Design Studio to customize this gallery's appearance"
-              title="Customize gallery design, cover, and theme"
+              className="btn-gallery-action btn-action-green min-h-[36px] sm:min-h-[38px]"
+              aria-label="Open Cover Design to customize this gallery's cover, theme, and typography"
+              title="Customize gallery cover design, theme, and typography"
             >
               <Palette size={16} className="flex-shrink-0" />
-              <span className="hidden sm:inline">Design Studio</span>
-              <span className="sm:hidden">Design</span>
+              <span className="hidden sm:inline">CoverDesign</span>
+              <span className="sm:hidden">Cover</span>
             </button>
           )}
 
