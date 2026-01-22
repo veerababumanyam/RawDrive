@@ -3,8 +3,8 @@
 # 1. Setup & Criteria
 
 **Feature Context**:
-*   **Target Feature**: `028-tailwind-v4-design-studio` Tailwind V4 Design Studio
-*   **Branch**: `git checkout 028-tailwind-v4-design-studio`
+*   **Target Feature**: `029-pro-review-xmp-sync` Pro Review XMP Sync
+*   **Branch**: `git checkout 029-pro-review-xmp-sync`
 *   **Note**: Use appropriate skills and claude agents where necessary.
 *   **Context**: Context7 MCP
 
@@ -27,7 +27,7 @@ The workflow is complete ONLY when:
 
 ### Phase 1: Discovery & Planning
 **Goal**: Define the work and phases.
-*   Read 'specs\028-tailwind-v4-design-studio\tasks.md'
+*   Read 'specs/029-pro-review-xmp-sync/tasks.md'
 *   Identify constraints and unchecked tasks.
 *   Follow naming conventions and proper filestructure
 
@@ -77,7 +77,7 @@ The workflow is complete ONLY when:
     4.  Write missing tests for edge cases.
 
 **[5] PROJECT MANAGER (Verification)**
-*   **Task**: Verify acceptance criteria against `specs/028-tailwind-v4-design-studio/spec.md`.
+*   **Task**: Verify acceptance criteria against `specs/029-pro-review-xmp-sync/spec.md`.
 *   **Action**: Document implementation gaps and trigger fixes.
 
 **[6] BUSINESS ANALYST (User Flow)**

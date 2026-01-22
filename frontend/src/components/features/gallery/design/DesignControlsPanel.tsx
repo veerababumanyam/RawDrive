@@ -59,7 +59,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
   // Handle upgrade click
   const handleUpgradeClick = useCallback(async () => {
     try {
-      await createCheckout({ plan_code: 'professional', success_url: window.location.href, cancel_url: window.location.href });
+      await createCheckout({ plan_id: 'professional', success_url: window.location.href, cancel_url: window.location.href });
     } catch (e) {
       console.error('Checkout failed:', e);
     }
