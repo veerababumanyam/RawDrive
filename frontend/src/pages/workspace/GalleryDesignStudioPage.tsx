@@ -266,32 +266,32 @@ export const GalleryDesignStudioPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#0a1628] text-white overflow-hidden font-sans">
+    <div className="flex flex-col h-screen bg-white dark:bg-[#0a1628] text-gray-900 dark:text-white overflow-hidden font-sans">
       {/* Top Bar - Floating Glass */}
       <div className="relative z-40 px-6 py-4 flex items-center justify-between pointer-events-none">
-        <div className="flex items-center gap-4 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl px-5 py-2.5 shadow-2xl pointer-events-auto">
+        <div className="flex items-center gap-4 bg-gray-100 dark:bg-white/10 backdrop-blur-xl border border-gray-200 dark:border-white/20 rounded-2xl px-5 py-2.5 shadow-2xl pointer-events-auto">
           <div className="flex flex-col">
-            <h1 className="text-sm font-bold tracking-tight text-white uppercase opacity-90">Design Studio</h1>
+            <h1 className="text-sm font-bold tracking-tight text-gray-900 dark:text-white uppercase opacity-90">Design Studio</h1>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs font-medium text-white/60">Live Preview</span>
+              <span className="text-xs font-medium text-gray-600 dark:text-white/60">Live Preview</span>
               {isDirty && <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" title="Unsaved changes" />}
             </div>
           </div>
           {saveStatus === 'saved' && (
             <div className="ml-2 px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/30 rounded-md">
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Synced</span>
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Synced</span>
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-4 pointer-events-auto">
           {/* Undo/Redo - Glass Capsule */}
-          <div className="flex items-center bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-1 shadow-2xl">
+          <div className="flex items-center bg-gray-100 dark:bg-white/10 backdrop-blur-xl border border-gray-200 dark:border-white/20 rounded-2xl p-1 shadow-2xl">
             <DesignStudioTooltip content="Undo (Ctrl+Z)">
               <button
                 onClick={undo}
                 disabled={!canUndo}
-                className="p-2 rounded-xl text-white opacity-80 hover:opacity-100 hover:bg-white/10 disabled:opacity-20 transition-all active:scale-95 flex items-center justify-center"
+                className="p-2 rounded-xl text-gray-700 dark:text-white opacity-80 hover:opacity-100 hover:bg-gray-200 dark:hover:bg-white/10 disabled:opacity-20 transition-all active:scale-95 flex items-center justify-center"
               >
                 <Undo2 className="w-5 h-5" />
               </button>
@@ -300,7 +300,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
               <button
                 onClick={redo}
                 disabled={!canRedo}
-                className="p-2 rounded-xl text-white opacity-80 hover:opacity-100 hover:bg-white/10 disabled:opacity-20 transition-all active:scale-95 flex items-center justify-center"
+                className="p-2 rounded-xl text-gray-700 dark:text-white opacity-80 hover:opacity-100 hover:bg-gray-200 dark:hover:bg-white/10 disabled:opacity-20 transition-all active:scale-95 flex items-center justify-center"
               >
                 <Redo2 className="w-5 h-5" />
               </button>
@@ -308,11 +308,11 @@ export const GalleryDesignStudioPage: React.FC = () => {
           </div>
 
           {/* Viewport Mode - Segmented Control */}
-          <div className="flex bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-1 shadow-2xl">
+          <div className="flex bg-gray-100 dark:bg-white/10 backdrop-blur-xl border border-gray-200 dark:border-white/20 rounded-2xl p-1 shadow-2xl">
             <DesignStudioTooltip content="Mobile View">
               <button
                 onClick={() => setViewportMode({ type: 'mobile', width: 375 })}
-                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${viewportMode.type === 'mobile' ? 'bg-white text-[#0a1628] shadow-lg scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${viewportMode.type === 'mobile' ? 'bg-white dark:bg-white text-[#0a1628] shadow-lg scale-105' : 'text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5'
                   }`}
               >
                 <Smartphone className="w-5 h-5" />
@@ -321,7 +321,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
             <DesignStudioTooltip content="Tablet View">
               <button
                 onClick={() => setViewportMode({ type: 'tablet', width: 768 })}
-                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${viewportMode.type === 'tablet' ? 'bg-white text-[#0a1628] shadow-lg scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${viewportMode.type === 'tablet' ? 'bg-white dark:bg-white text-[#0a1628] shadow-lg scale-105' : 'text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5'
                   }`}
               >
                 <Tablet className="w-5 h-5" />
@@ -330,7 +330,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
             <DesignStudioTooltip content="Desktop View">
               <button
                 onClick={() => setViewportMode({ type: 'desktop' })}
-                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${viewportMode.type === 'desktop' ? 'bg-white text-[#0a1628] shadow-lg scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${viewportMode.type === 'desktop' ? 'bg-white dark:bg-white text-[#0a1628] shadow-lg scale-105' : 'text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5'
                   }`}
               >
                 <Monitor className="w-5 h-5" />
@@ -339,11 +339,11 @@ export const GalleryDesignStudioPage: React.FC = () => {
           </div>
 
           {/* Template Actions */}
-          <div className="flex bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-1 shadow-2xl">
+          <div className="flex bg-gray-100 dark:bg-white/10 backdrop-blur-xl border border-gray-200 dark:border-white/20 rounded-2xl p-1 shadow-2xl">
             <DesignStudioTooltip content="Load Template">
               <button
                 onClick={() => setShowTemplateLibrary(true)}
-                className="p-2.5 rounded-xl text-white opacity-80 hover:opacity-100 hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center"
+                className="p-2.5 rounded-xl text-gray-700 dark:text-white opacity-80 hover:opacity-100 hover:bg-gray-200 dark:hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center"
               >
                 <Library className="w-5 h-5" />
               </button>
@@ -351,7 +351,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
             <DesignStudioTooltip content="Save as Template">
               <button
                 onClick={() => setShowSaveTemplateModal(true)}
-                className="p-2.5 rounded-xl text-white opacity-80 hover:opacity-100 hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center"
+                className="p-2.5 rounded-xl text-gray-700 dark:text-white opacity-80 hover:opacity-100 hover:bg-gray-200 dark:hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center"
               >
                 <Save className="w-5 h-5" />
               </button>
@@ -375,10 +375,10 @@ export const GalleryDesignStudioPage: React.FC = () => {
       </div>
 
       {/* Main Content - Split Layout */}
-      <div ref={mainContainerRef} className="flex-1 relative flex overflow-hidden gap-0">
+      <div ref={mainContainerRef} className="flex-1 relative flex overflow-hidden gap-0 bg-white dark:bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">
         {/* Left Panel - Controls (Floating Glass Sidebar) */}
         <div
-          className="relative z-20 h-full flex items-center pr-3 pointer-events-none flex-shrink-0"
+          className="relative z-20 h-full flex items-center pr-3 ml-6 pointer-events-none flex-shrink-0"
           style={{ width: `${controlsWidth}px` }}
         >
           <div className="w-full h-[90%] bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden pointer-events-auto flex flex-col">
@@ -411,14 +411,14 @@ export const GalleryDesignStudioPage: React.FC = () => {
         </div>
 
         {/* Right Panel - Preview Canvas Environment */}
-        <div className="flex-1 relative z-10 overflow-auto bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">
+        <div className="flex-1 relative z-10 overflow-auto bg-gray-50 dark:bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">
           {/* Minimum width warning */}
           {previewWidth < MIN_PREVIEW_WIDTH && previewWidth > 0 ? (
             <div className="flex items-center justify-center h-full p-8 transition-opacity duration-200">
-              <div className="text-center space-y-4 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-2xl">
-                <Ruler className="w-16 h-16 text-white/40 animate-bounce mx-auto" />
-                <h3 className="text-xl font-bold text-white">Canvas Too Compressed</h3>
-                <p className="text-white/60 text-sm max-w-[200px] mx-auto">
+              <div className="text-center space-y-4 bg-gray-100 dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-3xl p-10 shadow-2xl">
+                <Ruler className="w-16 h-16 text-gray-400 dark:text-white/40 animate-bounce mx-auto" />
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Canvas Too Compressed</h3>
+                <p className="text-gray-600 dark:text-white/60 text-sm max-w-[200px] mx-auto">
                   Expand the workspace to reveal the design preview
                 </p>
               </div>
@@ -485,13 +485,13 @@ export const GalleryDesignStudioPage: React.FC = () => {
 
       {/* Error Toast */}
       {error && (
-        <div className="fixed bottom-4 left-4 p-4 bg-red-100 text-red-700 rounded border border-red-300">
+        <div className="fixed bottom-4 left-4 p-4 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-200 rounded border border-red-300 dark:border-red-700">
           {error}
         </div>
       )}
 
       {publishError && (
-        <div className="fixed bottom-4 left-4 p-4 bg-red-100 text-red-700 rounded border border-red-300">
+        <div className="fixed bottom-4 left-4 p-4 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-200 rounded border border-red-300 dark:border-red-700">
           Publish failed: {publishError}
         </div>
       )}
