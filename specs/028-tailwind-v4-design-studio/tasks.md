@@ -154,13 +154,13 @@
 
 ### Implementation for User Story 5
 
-- [ ] T057 [P] [US5] Create `frontend/src/components/features/gallery/design/ThemeSelector.tsx` component with bento-grid layout
-- [ ] T058 [US5] Implement theme swatch rendering in ThemeSelector showing color previews for all 9 themes
-- [ ] T059 [US5] Add selected state visual feedback (ring, checkmark, or similar) to ThemeSelector
-- [ ] T060 [US5] Add keyboard navigation to ThemeSelector: arrow keys to navigate, Enter to select
-- [ ] T061 [US5] Add hover/focus states to ThemeSelector showing theme name and description
-- [ ] T062 [US5] Integrate ThemeSelector into DesignControlsPanel Theme section
-- [ ] T063 [US5] Update `frontend/src/components/features/gallery/design/CoverStyleGrid.tsx` to show premium indicators on premium styles
+- [x] T057 [P] [US5] Create `frontend/src/components/features/gallery/design/ThemeSelector.tsx` component with bento-grid layout (created with 3-column grid, color swatch previews)
+- [x] T058 [US5] Implement theme swatch rendering in ThemeSelector showing color previews for all 9 themes (ThemeSwatch component with background/accent bars)
+- [x] T059 [US5] Add selected state visual feedback (ring, checkmark, or similar) to ThemeSelector (ring-2 + checkmark overlay)
+- [x] T060 [US5] Add keyboard navigation to ThemeSelector: arrow keys to navigate, Enter to select (arrow keys, Home, End, Enter, Space)
+- [x] T061 [US5] Add hover/focus states to ThemeSelector showing theme name and description (group-hover/focus opacity transition)
+- [x] T062 [US5] Integrate ThemeSelector into DesignControlsPanel Theme section (integrated with onThemeChange/onModeChange)
+- [x] T063 [US5] Update `frontend/src/components/features/gallery/design/CoverStyleGrid.tsx` to show premium indicators on premium styles (already had PREMIUM badge + sparkle emoji)
 - [ ] T064 [US5] Implement upgrade prompt when non-premium user selects a premium cover style
 - [ ] T065 [US5] Wire CoverStyleGrid selection to update preview via DesignPreviewCanvas
 - [ ] T066 [US5] Test focal point integration: verify focal point picker updates cover image positioning in preview
