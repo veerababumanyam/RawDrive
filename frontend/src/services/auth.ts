@@ -24,7 +24,7 @@ export interface User {
   avatarUrl?: string;
   emailVerified: boolean;
   createdAt: string;
-  workspace_id?: string; // Workspace ID from backend
+  // workspace_id removed - use workspace.workspace_id instead
 }
 
 export interface Workspace {
@@ -107,7 +107,7 @@ export function setStoredWorkspace(workspace: Workspace): void {
   localStorage.setItem(WORKSPACE_KEY, JSON.stringify(workspace));
 }
 
-function normalizeUserPayload(raw: any): User {
+function normalizeUserPayload(raw: any): User & { workspace_id?: string } {
   const payload = raw?.user ?? raw ?? {};
 
   const id = payload.user_id ?? payload.id ?? payload.sub ?? '';
@@ -116,7 +116,7 @@ function normalizeUserPayload(raw: any): User {
   const avatarUrl = payload.avatar_url ?? payload.avatarUrl ?? undefined;
   const emailVerified = payload.email_verified ?? payload.emailVerified ?? payload.verified ?? false;
   const createdAt = payload.created_at ?? payload.createdAt ?? new Date().toISOString();
-  const workspaceId = payload.workspace_id ?? payload.workspaceId ?? undefined;
+  const workspaceId = payload.workspace_id ?? undefined;
 
   return {
     id,
@@ -215,14 +215,21 @@ export async function login(credentials: LoginCredentials): Promise<{
 
     // Fetch workspace if not in response but workspace_id is available
     let workspace = responseWorkspace;
-    try {
-      if (!workspace && normalizedUser.workspace_id) {
-        console.log('[Login] Fetching workspace for workspace_id:', normalizedUser.workspace_id);
-        workspace = await getWorkspace(normalizedUser.workspace_id) || undefined;
+    if (!workspace) {
+      // Get workspace_id from EITHER normalized user OR raw response
+      const workspaceId = normalizedUser.workspace_id || (user as any).workspace_id;
+
+      if (workspaceId) {
+        try {
+          console.log('[Login] Fetching workspace for workspace_id:', workspaceId);
+          workspace = await getWorkspace(workspaceId) || undefined;
+        } catch (error) {
+          console.error('[Login] Error fetching workspace:', error);
+          // Continue without workspace - don't fail login
+        }
+      } else {
+        console.warn('[Login] No workspace_id in response');
       }
-    } catch (error) {
-      console.error('[Login] Error fetching workspace:', error);
-      // Continue without workspace - don't fail login
     }
 
     if (workspace) {
@@ -278,14 +285,21 @@ export async function signup(data: SignupData): Promise<{
 
     // Fetch workspace if not in response but workspace_id is available
     let workspace = responseWorkspace;
-    try {
-      if (!workspace && normalizedUser.workspace_id) {
-        console.log('[Signup] Fetching workspace for workspace_id:', normalizedUser.workspace_id);
-        workspace = await getWorkspace(normalizedUser.workspace_id) || undefined;
+    if (!workspace) {
+      // Get workspace_id from EITHER normalized user OR raw response
+      const workspaceId = normalizedUser.workspace_id || (user as any).workspace_id;
+
+      if (workspaceId) {
+        try {
+          console.log('[Signup] Fetching workspace for workspace_id:', workspaceId);
+          workspace = await getWorkspace(workspaceId) || undefined;
+        } catch (error) {
+          console.error('[Signup] Error fetching workspace:', error);
+          // Continue without workspace - don't fail signup
+        }
+      } else {
+        console.warn('[Signup] No workspace_id in response');
       }
-    } catch (error) {
-      console.error('[Signup] Error fetching workspace:', error);
-      // Continue without workspace - don't fail signup
     }
 
     if (workspace) {
