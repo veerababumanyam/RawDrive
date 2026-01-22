@@ -53,6 +53,14 @@ services:
     image: timescale/timescaledb-ha:pg16
     container_name: rawdrive-postgres
     restart: unless-stopped
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=300"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-rawdrive}
       POSTGRES_USER: ${POSTGRES_USER:-rawdrive}
@@ -62,12 +70,14 @@ services:
       - "127.0.0.1:${PORT_POSTGRES}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ./init/enable_pgvector.sql:/docker-entrypoint-initdb.d/enable_pgvector.sql:ro
+      - ./init/enable_pgvector.sql:/docker-entrypoint-initdb.d/01-enable_pgvector.sql:ro
+      - ./init/02-create-databases.sql:/docker-entrypoint-initdb.d/02-create-databases.sql:ro
     healthcheck:
-      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER:-rawdrive}" ]
-      interval: 10s
+      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER:-rawdrive}", "-d", "${POSTGRES_DB:-rawdrive}" ]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
@@ -111,11 +121,11 @@ services:
         condition: service_healthy
     healthcheck:
       # Check if pgbouncer is accepting connections
-      test: [ "CMD-SHELL", "pg_isready -h localhost -p 6432 -U ${POSTGRES_USER:-rawdrive}" ]
+      test: [ "CMD-SHELL", "nc -z localhost 6432 || exit 1" ]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 30s
 
   loki:
     image: grafana/loki:2.9.0
@@ -246,6 +256,12 @@ services:
         condition: service_healthy
       loki:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_BACKEND}/health/live" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     volumes:
       - ../../backend:/app
       - ../../backend/secrets/jwtEd25519.key:/run/secrets/jwt_private_key:ro
@@ -279,6 +295,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_FACE_WORKER}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     volumes:
       - ../../backend:/app
       # Mount Google Cloud credentials from path defined in .env (GOOGLE_APPLICATION_CREDENTIALS_FILE)
@@ -319,6 +341,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_CONTENT_WORKER}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     volumes:
       - ../../backend:/app
       # Mount Google Cloud credentials from path defined in .env
@@ -363,7 +391,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -449,7 +477,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
 
   invitations-worker:
     build:
@@ -485,7 +513,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -574,7 +602,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
     networks:
       - default
     deploy:
@@ -688,7 +716,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
 
     deploy:
       resources:
@@ -795,7 +823,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
 
     deploy:
       resources:
@@ -908,7 +936,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
 
     deploy:
       resources:
@@ -1027,7 +1055,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
 
     volumes:
       # Mount JWT public key for token verification (EdDSA)
@@ -1130,7 +1158,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
 
     deploy:
       resources:
@@ -1234,7 +1262,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
 
     deploy:
       resources:
