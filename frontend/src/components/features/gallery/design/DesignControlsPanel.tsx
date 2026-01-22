@@ -17,11 +17,9 @@
  * - Implement GridLayoutSection with layout options
  */
 
-import React, { useState, useCallback } from 'react';
-import { GalleryDesignConfig, DesignDraftStatus, ThemeId, FontPairingId, ThemeMode, CoverStyleId } from '../../../../types/gallery-design';
-import { GALLERY_THEMES } from '../../../../constants/galleryThemes';
+import React, { useState } from 'react';
+import { GalleryDesignConfig, DesignDraftStatus, FontPairingId, CoverStyleId } from '../../../../types/gallery-design';
 import { FONT_PAIRINGS } from '../../../../constants/fontPairings';
-import { getCoverStyle } from '../../../../constants/coverStyleCatalog';
 import { LockableControlSection } from './ControlLockIndicator';
 import { ThemeSelector } from './ThemeSelector';
 import { CoverStyleGrid } from './CoverStyleGrid';
@@ -46,6 +44,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
   lockedSections = new Map(),
 }) => {
   const [activeTab, setActiveTab] = useState<DesignSection>('cover');
+  const [coverCategory, setCoverCategory] = useState<'all' | 'basic' | 'text' | 'advanced' | 'premium'>('all');
 
   // Handle keyboard navigation for tabs (Arrow keys, Home, End)
   const handleTabKeyDown = (e: React.KeyboardEvent, currentTab: DesignSection) => {
@@ -141,10 +140,13 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
             section="cover"
           >
             <div className="space-y-4">
-              <div>
-                <h3 className="font-medium text-sm text-text-primary mb-2">Cover Styles</h3>
-                <p className="text-xs text-text-secondary">Cover style selection will be implemented in Phase 2.</p>
-              </div>
+              <h3 className="font-medium text-sm text-text-primary mb-2">Cover Styles</h3>
+              <CoverStyleGrid
+                selectedStyle={config.cover?.style || 'classic'}
+                onSelectStyle={(styleId) => onChange({ cover: { ...config.cover, style: styleId as CoverStyleId } })}
+                category={coverCategory}
+                onCategoryChange={setCoverCategory}
+              />
             </div>
           </LockableControlSection>
         )}
