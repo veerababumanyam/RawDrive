@@ -198,3 +198,7 @@ async def get_pool_stats() -> dict:
         }
 
     return stats
+
+
+# Compatibility alias for backward compatibility with xmp_sync endpoints
+get_database = get_connection

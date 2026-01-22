@@ -48,7 +48,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
   config,
   onChange,
   saveStatus,
-  lastSavedAt,
+  lastSavedAt: _lastSavedAt,
   error,
   lockedSections = new Map(),
 }) => {
@@ -80,17 +80,19 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
 
     switch (e.key) {
       case 'ArrowLeft':
-      case 'ArrowUp':
+      case 'ArrowUp': {
         e.preventDefault();
         const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
         setActiveTab(tabs[prevIndex]);
         break;
+      }
       case 'ArrowRight':
-      case 'ArrowDown':
+      case 'ArrowDown': {
         e.preventDefault();
         const nextIndex = (currentIndex + 1) % tabs.length;
         setActiveTab(tabs[nextIndex]);
         break;
+      }
       case 'Home':
         e.preventDefault();
         setActiveTab(tabs[0]);
@@ -126,18 +128,18 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
         <p className="text-[11px] text-gray-600 dark:text-white/50 font-semibold tracking-wide bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-md inline-block">Visual Identity Engine</p>
       </div>
 
-      {/* Tab Navigation - Capsule Segmented Control */}
-      <div className="px-6 py-4">
+      {/* Tab Navigation - Responsive Capsule Segmented Control */}
+      <div className="px-4 sm:px-6 py-3 sm:py-4">
         <div
           role="tablist"
           aria-label="Design control sections"
-          className="flex bg-gray-100 dark:bg-black/20 backdrop-blur-md rounded-[1.25rem] p-1.5 border border-gray-200 dark:border-white/5"
+          className="flex bg-gray-100 dark:bg-black/20 backdrop-blur-md rounded-[1.25rem] p-1 sm:p-1.5 border border-gray-200 dark:border-white/5 gap-0.5 sm:gap-0"
         >
           {[
-            { tab: 'cover' as DesignSection, label: 'Cover', icon: <ImageIcon className="w-4 h-4" /> },
-            { tab: 'typography' as DesignSection, label: 'Type', icon: <TypeIcon className="w-4 h-4" /> },
-            { tab: 'theme' as DesignSection, label: 'Theme', icon: <Palette className="w-4 h-4" /> },
-            { tab: 'grid' as DesignSection, label: 'Grid', icon: <LayoutGrid className="w-4 h-4" /> },
+            { tab: 'cover' as DesignSection, label: 'Cover', icon: <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" /> },
+            { tab: 'typography' as DesignSection, label: 'Type', icon: <TypeIcon className="w-4 h-4 sm:w-5 sm:h-5" /> },
+            { tab: 'theme' as DesignSection, label: 'Theme', icon: <Palette className="w-4 h-4 sm:w-5 sm:h-5" /> },
+            { tab: 'grid' as DesignSection, label: 'Grid', icon: <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" /> },
           ].map(({ tab, label, icon }) => (
             <DesignStudioTooltip key={tab} content={label} position="bottom">
               <button
@@ -147,13 +149,18 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
                 aria-controls={`panel-${tab}`}
                 onClick={() => setActiveTab(tab)}
                 onKeyDown={(e) => handleTabKeyDown(e, tab)}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl transition-all duration-300 relative min-w-0 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-black ${activeTab === tab
+                className={`flex-1 flex flex-col items-center justify-center py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-lg sm:rounded-xl transition-all duration-300 relative min-w-0 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-black ${activeTab === tab
                   ? 'bg-white text-[#0a1628] shadow-lg scale-[1.02]'
                   : 'text-gray-600 dark:text-white/40 hover:text-gray-900 dark:hover:text-white/70 hover:bg-gray-200 dark:hover:bg-white/5 hover:scale-[1.01]'
                   }`}
               >
-                {icon}
-                <span className="text-[9px] font-semibold tracking-wide truncate w-full text-center px-1">{label}</span>
+                <div className="flex items-center justify-center h-5 sm:h-6 mb-0.5 sm:mb-1">
+                  {icon}
+                </div>
+                {/* Label hidden on mobile, visible on small screens and up */}
+                <span className="hidden sm:inline text-[8px] sm:text-[9px] font-semibold tracking-wide truncate w-full text-center leading-tight">{label}</span>
+                {/* Short label visible only on mobile (icon-only fallback handled by tooltip) */}
+                <span className="sm:hidden text-[7px] font-semibold tracking-widest truncate w-full text-center leading-tight opacity-0 h-0" aria-hidden="true">{label.substring(0, 1)}</span>
                 {activeTab === tab && (
                   <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
                 )}

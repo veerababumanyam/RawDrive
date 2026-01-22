@@ -24,15 +24,15 @@
 
 **Purpose**: Project initialization and database migrations
 
-- [ ] T001 Create database migration for asset rating/flag columns in backend/migrations/versions/0169_add_asset_rating_flag.py
-- [ ] T002 Create database migration for sync_api_keys table in backend/migrations/versions/0170_add_sync_api_keys.py
-- [ ] T003 Create database migration for sync_audit_log table in backend/migrations/versions/0171_add_sync_audit_log.py
-- [ ] T004 Run migrations: `docker exec rawdrive-backend alembic upgrade head`
-- [ ] T005 [P] Update Asset model with rating, flag, color_label columns in backend/src/app/models/asset.py
-- [ ] T006 [P] Create SyncApiKey model in services/gallery-service/src/models/sync_api_key.py
-- [ ] T007 [P] Create SyncAuditLog model in services/gallery-service/src/models/sync_audit_log.py
-- [ ] T008 [P] Create audit action/source enums in services/gallery-service/src/schemas/sync_audit.py
-- [ ] T009 Install frontend dependencies: `cd frontend && pnpm add react-hotkeys-hook @tanstack/virtual`
+- [x] T001 Create database migration for asset rating/flag columns in backend/migrations/versions/0169_add_asset_rating_flag.py
+- [x] T002 Create database migration for sync_api_keys table in backend/migrations/versions/0170_add_sync_api_keys.py
+- [x] T003 Create database migration for sync_audit_log table in backend/migrations/versions/0171_add_sync_audit_log.py
+- [x] T004 Run migrations: `docker exec rawdrive-backend alembic upgrade head`
+- [x] T005 [P] Update Asset model with rating, flag, color_label columns in backend/src/app/models/asset.py
+- [x] T006 [P] Create SyncApiKey model in services/gallery-service/src/models/sync_api_key.py
+- [x] T007 [P] Create SyncAuditLog model in services/gallery-service/src/models/sync_audit_log.py
+- [x] T008 [P] Create audit action/source enums in services/gallery-service/src/schemas/sync_audit.py
+- [x] T009 Install frontend dependencies: `cd frontend && pnpm add react-hotkeys-hook @tanstack/virtual`
 
 ---
 
@@ -42,13 +42,13 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T010 Create Pydantic schemas for asset metadata (rating, flag, color_label) in services/gallery-service/src/schemas/asset_metadata.py
-- [ ] T011 [P] Create SyncApiKey Pydantic schemas in services/gallery-service/src/schemas/sync_api_key.py
-- [ ] T012 [P] Create SyncApiKey repository in services/gallery-service/src/repositories/sync_key_repository.py
-- [ ] T013 Create SyncApiKey service (create, validate, revoke) in services/gallery-service/src/services/sync_key_service.py
-- [ ] T014 Create sync API key authentication middleware in services/gallery-service/src/middleware/sync_auth.py
-- [ ] T015 [P] Create audit logging service in services/gallery-service/src/services/audit_service.py
-- [ ] T016 Register new models in services/gallery-service/src/models/__init__.py
+- [x] T010 Create Pydantic schemas for asset metadata (rating, flag, color_label) in services/gallery-service/src/schemas/asset_metadata.py
+- [x] T011 [P] Create SyncApiKey Pydantic schemas in services/gallery-service/src/schemas/sync_api_key.py
+- [x] T012 [P] Create SyncApiKey repository in services/gallery-service/src/repositories/sync_key_repository.py
+- [x] T013 Create SyncApiKey service (create, validate, revoke) in services/gallery-service/src/services/sync_key_service.py
+- [x] T014 Create sync API key authentication middleware in services/gallery-service/src/middleware/sync_auth.py
+- [x] T015 [P] Create audit logging service in services/gallery-service/src/services/audit_service.py
+- [x] T016 Register new models in services/gallery-service/src/models/__init__.py
 
 **Checkpoint**: Foundation ready - user story implementation can now begin
 
@@ -62,25 +62,25 @@
 
 ### Backend for User Story 1
 
-- [ ] T017 [P] [US1] Create asset metadata update endpoint PATCH /galleries/{id}/assets/{id}/metadata in services/gallery-service/src/api/v1/assets.py
-- [ ] T018 [P] [US1] Create batch metadata update endpoint PATCH /galleries/{id}/assets/metadata/batch in services/gallery-service/src/api/v1/assets.py
-- [ ] T019 [P] [US1] Create asset filter endpoint GET /galleries/{id}/assets/filter in services/gallery-service/src/api/v1/assets.py
-- [ ] T020 [US1] Add rating/flag/color_label to existing gallery asset responses in services/gallery-service/src/schemas/asset.py
+- [x] T017 [P] [US1] Create asset metadata update endpoint PATCH /galleries/{id}/assets/{id}/metadata in services/gallery-service/src/api/v1/assets.py
+- [x] T018 [P] [US1] Create batch metadata update endpoint PATCH /galleries/{id}/assets/metadata/batch in services/gallery-service/src/api/v1/assets.py
+- [x] T019 [P] [US1] Create asset filter endpoint GET /galleries/{id}/assets/filter in services/gallery-service/src/api/v1/assets.py
+- [x] T020 [US1] Add rating/flag/color_label to existing gallery asset responses in services/gallery-service/src/schemas/asset.py
 
 ### Frontend for User Story 1
 
-- [ ] T021 [P] [US1] Create useKeyboardShortcuts hook (0-5, P/U/X, arrows) in frontend/src/hooks/useKeyboardShortcuts.ts
-- [ ] T022 [P] [US1] Create useReviewMode hook (state, navigation, auto-advance) in frontend/src/hooks/useReviewMode.ts
-- [ ] T023 [P] [US1] Create RatingStars component in frontend/src/components/features/gallery/review/RatingStars.tsx
-- [ ] T024 [P] [US1] Create FlagIndicator component (pick/unflagged/reject) in frontend/src/components/features/gallery/review/FlagIndicator.tsx
-- [ ] T025 [US1] Create ReviewFilmstrip component (virtualized thumbnail strip) in frontend/src/components/features/gallery/review/ReviewFilmstrip.tsx
-- [ ] T026 [US1] Create ReviewCanvas component (main image display with overlays) in frontend/src/components/features/gallery/review/ReviewCanvas.tsx
-- [ ] T027 [US1] Create ReviewMetadataPanel component (right sidebar) in frontend/src/components/features/gallery/review/ReviewMetadataPanel.tsx
-- [ ] T028 [US1] Create KeyboardShortcutHelp component (? key overlay) in frontend/src/components/features/gallery/review/KeyboardShortcutHelp.tsx
-- [ ] T029 [US1] Create ReviewWorkbench component (3-pane layout) in frontend/src/components/features/gallery/review/ReviewWorkbench.tsx
-- [ ] T030 [US1] Add "Review Mode" button to gallery toolbar in frontend/src/components/features/gallery/GalleryToolbar.tsx
-- [ ] T031 [US1] Create Review Mode route/page entry point in frontend/src/pages/gallery/ReviewModePage.tsx
-- [ ] T032 [US1] Integrate keyboard handlers with API calls for persistence
+- [x] T021 [P] [US1] Create useKeyboardShortcuts hook (0-5, P/U/X, arrows) in frontend/src/hooks/useKeyboardShortcuts.ts
+- [x] T022 [P] [US1] Create useReviewMode hook (state, navigation, auto-advance) in frontend/src/hooks/useReviewMode.ts
+- [x] T023 [P] [US1] Create RatingStars component in frontend/src/components/features/gallery/review/RatingStars.tsx
+- [x] T024 [P] [US1] Create FlagIndicator component (pick/unflagged/reject) in frontend/src/components/features/gallery/review/FlagIndicator.tsx
+- [x] T025 [US1] Create ReviewFilmstrip component (virtualized thumbnail strip) in frontend/src/components/features/gallery/review/ReviewFilmstrip.tsx
+- [x] T026 [US1] Create ReviewCanvas component (main image display with overlays) in frontend/src/components/features/gallery/review/ReviewCanvas.tsx
+- [x] T027 [US1] Create ReviewMetadataPanel component (right sidebar) in frontend/src/components/features/gallery/review/ReviewMetadataPanel.tsx
+- [x] T028 [US1] Create KeyboardShortcutHelp component (? key overlay) in frontend/src/components/features/gallery/review/KeyboardShortcutHelp.tsx
+- [x] T029 [US1] Create ReviewWorkbench component (3-pane layout) in frontend/src/components/features/gallery/review/ReviewWorkbench.tsx
+- [x] T030 [US1] Add "Review Mode" button to gallery toolbar in frontend/src/components/features/gallery/GalleryToolbar.tsx
+- [x] T031 [US1] Create Review Mode route/page entry point in frontend/src/pages/workspace/ReviewModePage.tsx
+- [x] T032 [US1] Integrate keyboard handlers with API calls for persistence
 
 **Checkpoint**: User Story 1 is fully functional - keyboard-driven culling workflow works
 
@@ -94,19 +94,19 @@
 
 ### Backend for User Story 2
 
-- [ ] T033 [P] [US2] Create XMP generation service (lxml-based) in services/gallery-service/src/services/xmp_service.py
-- [ ] T034 [P] [US2] Create XMP Pydantic schemas in services/gallery-service/src/schemas/xmp_sync.py
-- [ ] T035 [US2] Create XMP export preview endpoint POST /galleries/{id}/xmp/export/preview in services/gallery-service/src/api/v1/xmp_sync.py
-- [ ] T036 [US2] Create XMP export endpoint POST /galleries/{id}/xmp/export (returns ZIP) in services/gallery-service/src/api/v1/xmp_sync.py
-- [ ] T037 [US2] Add XMP golden master test fixtures in services/gallery-service/tests/fixtures/xmp/
-- [ ] T038 [US2] Add audit logging for XMP export operations
+- [x] T033 [P] [US2] Create XMP generation service (lxml-based) in services/gallery-service/src/services/xmp_service.py
+- [x] T034 [P] [US2] Create XMP Pydantic schemas in services/gallery-service/src/schemas/xmp_sync.py
+- [x] T035 [US2] Create XMP export preview endpoint POST /galleries/{id}/xmp/export/preview in services/gallery-service/src/api/v1/xmp_sync.py
+- [x] T036 [US2] Create XMP export endpoint POST /galleries/{id}/xmp/export (returns ZIP) in services/gallery-service/src/api/v1/xmp_sync.py
+- [x] T037 [US2] Add XMP golden master test fixtures in services/gallery-service/tests/fixtures/xmp/
+- [x] T038 [US2] Add audit logging for XMP export operations
 
 ### Frontend for User Story 2
 
-- [ ] T039 [P] [US2] Create xmpSyncService API client in frontend/src/services/xmpSyncService.ts
-- [ ] T040 [P] [US2] Create useXmpSync hook for export operations in frontend/src/hooks/useXmpSync.ts
-- [ ] T041 [US2] Add "Export XMP" action to gallery Actions menu in frontend/src/components/features/gallery/GalleryActionsMenu.tsx
-- [ ] T042 [US2] Create XMP export dialog with progress in frontend/src/components/features/gallery/XmpExportDialog.tsx
+- [x] T039 [P] [US2] Create xmpSyncService API client in frontend/src/services/xmpSyncService.ts
+- [x] T040 [P] [US2] Create useXmpSync hook for export operations in frontend/src/hooks/useXmpSync.ts
+- [x] T041 [US2] Add "Export XMP" action to gallery Actions menu in frontend/src/components/features/gallery/GalleryActionBar.tsx
+- [x] T042 [US2] Create XMP export dialog with progress in frontend/src/components/features/gallery/XmpExportDialog.tsx
 
 **Checkpoint**: User Story 2 is fully functional - XMP export works with Lightroom
 
@@ -120,17 +120,17 @@
 
 ### Backend for User Story 3
 
-- [ ] T043 [P] [US3] Add XMP parsing to xmp_service.py (read xmp:Rating, xmp:Label, photoshop:Urgency)
-- [ ] T044 [US3] Create XMP import validation endpoint POST /galleries/{id}/xmp/import/validate in services/gallery-service/src/api/v1/xmp_sync.py
-- [ ] T045 [US3] Create XMP import endpoint POST /galleries/{id}/xmp/import (multipart) in services/gallery-service/src/api/v1/xmp_sync.py
-- [ ] T046 [US3] Implement filename matching logic for XMP-to-asset mapping
-- [ ] T047 [US3] Add audit logging for XMP import operations
+- [x] T043 [P] [US3] Add XMP parsing to xmp_service.py (read xmp:Rating, xmp:Label, photoshop:Urgency)
+- [x] T044 [US3] Create XMP import validation endpoint POST /galleries/{id}/xmp/import/validate in services/gallery-service/src/api/v1/xmp_sync.py
+- [x] T045 [US3] Create XMP import endpoint POST /galleries/{id}/xmp/import (multipart) in services/gallery-service/src/api/v1/xmp_sync.py
+- [x] T046 [US3] Implement filename matching logic for XMP-to-asset mapping
+- [x] T047 [US3] Add audit logging for XMP import operations
 
 ### Frontend for User Story 3
 
-- [ ] T048 [P] [US3] Extend useXmpSync hook with import operations in frontend/src/hooks/useXmpSync.ts
-- [ ] T049 [US3] Add "Import XMP" action to gallery Actions menu in frontend/src/components/features/gallery/GalleryActionsMenu.tsx
-- [ ] T050 [US3] Create XMP import dialog (file upload, validation, results) in frontend/src/components/features/gallery/XmpImportDialog.tsx
+- [x] T048 [P] [US3] Extend useXmpSync hook with import operations in frontend/src/hooks/useXmpSync.ts
+- [x] T049 [US3] Add "Import XMP" action to gallery Actions menu in frontend/src/components/features/gallery/GalleryActionBar.tsx
+- [x] T050 [US3] Create XMP import dialog (file upload, validation, results) in frontend/src/components/features/gallery/XmpImportDialog.tsx
 
 **Checkpoint**: User Story 3 is fully functional - bidirectional XMP sync works
 
@@ -144,10 +144,10 @@
 
 ### Frontend for User Story 4
 
-- [ ] T051 [P] [US4] Create CompareView component (2-up layout) in frontend/src/components/features/gallery/review/CompareView.tsx
-- [ ] T052 [US4] Extend useReviewMode hook with compare state (active image tracking)
-- [ ] T053 [US4] Add Compare toggle to ReviewWorkbench toolbar
-- [ ] T054 [US4] Handle keyboard focus switching between compared images
+- [x] T051 [P] [US4] Create CompareView component (2-up layout) in frontend/src/components/features/gallery/review/CompareView.tsx
+- [x] T052 [US4] Extend useReviewMode hook with compare state (active image tracking)
+- [x] T053 [US4] Add Compare toggle to ReviewWorkbench toolbar
+- [x] T054 [US4] Handle keyboard focus switching between compared images
 
 **Checkpoint**: User Story 4 is fully functional - compare view works
 
@@ -161,9 +161,9 @@
 
 ### Frontend for User Story 5
 
-- [ ] T055 [P] [US5] Create HistogramDisplay component in frontend/src/components/features/gallery/review/HistogramDisplay.tsx
-- [ ] T056 [US5] Integrate histogram into ReviewMetadataPanel
-- [ ] T057 [US5] Add histogram data fetching to useReviewMode hook
+- [x] T055 [P] [US5] Create HistogramDisplay component in frontend/src/components/features/gallery/review/HistogramDisplay.tsx
+- [x] T056 [US5] Integrate histogram into ReviewMetadataPanel
+- [x] T057 [US5] Add histogram data fetching to useReviewMode hook
 
 **Checkpoint**: User Story 5 is fully functional - histogram displays correctly
 

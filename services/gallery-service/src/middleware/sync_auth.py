@@ -339,3 +339,14 @@ def require_import_permission():
             SyncKeyPermission.IMPORT, request, api_key_header_value, bearer_token
         )
     return dependency
+
+
+# =============================================================================
+# Compatibility Aliases
+# =============================================================================
+
+# Type alias for sync key payload (for backwards compatibility)
+SyncKeyPayload = Dict[str, Any]
+
+# Alias for get_sync_context (for backwards compatibility)
+verify_sync_api_key = get_sync_context

@@ -60,8 +60,8 @@ describe('FAQ Section Components', () => {
         it('expands/collapses FAQ items on click (Requirement 12.1)', async () => {
             render(<FAQSection />);
 
-            // Find the first FAQ button
-            const firstFaqButton = screen.getByText('How do I get started with RawDrive?').closest('button');
+            // Find the first FAQ button (actual first FAQ in GUIDE_FAQS)
+            const firstFaqButton = screen.getByText('What is the best photo gallery software for wedding photographers?').closest('button');
             expect(firstFaqButton).toBeInTheDocument();
 
             // Initially the first FAQ should be open (openIndex = 0)
@@ -79,7 +79,7 @@ describe('FAQ Section Components', () => {
         it('supports keyboard navigation - Enter key (Requirement 13.2)', () => {
             render(<FAQSection />);
 
-            const firstFaqButton = screen.getByText('How do I get started with RawDrive?').closest('button');
+            const firstFaqButton = screen.getByText('What is the best photo gallery software for wedding photographers?').closest('button');
             expect(firstFaqButton).toHaveAttribute('aria-expanded', 'true');
 
             // Press Enter to close

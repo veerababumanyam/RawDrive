@@ -75,7 +75,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
 
   // Setup design collaboration
   const {
-    isCollaborating,
+    isCollaborating: _isCollaborating,
     lockedSections,
     viewerCount,
     collaborators,
@@ -84,11 +84,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
     enabled: true,
   });
 
-  // Handle missing gallery ID after all hooks are called
-  if (!galleryId) {
-    return <div className="p-4">Error: Gallery ID not found</div>;
-  }
-
+  // All hooks must be called before any early returns
   const [viewportMode, setViewportMode] = useState<ViewportMode>({
     type: 'desktop',
   });
@@ -97,8 +93,15 @@ export const GalleryDesignStudioPage: React.FC = () => {
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
 
-  // Resizable divider state
-  const [controlsWidth, setControlsWidth] = useState(360);
+  // Resizable divider state - responsive initial width
+  const [controlsWidth, setControlsWidth] = useState(() => {
+    // On mobile (< 640px), use 200px; on tablet (< 1024px), use 280px; on desktop, use 360px
+    if (typeof window === 'undefined') return 360;
+    const width = window.innerWidth;
+    if (width < 640) return 200;
+    if (width < 1024) return 280;
+    return 360;
+  });
   const [isResizing, setIsResizing] = useState(false);
   const [previewWidth, setPreviewWidth] = useState(0);
 
@@ -108,7 +111,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
 
   // Track preview container width
   useEffect(() => {
-    if (!mainContainerRef.current) return;
+    if (!galleryId || !mainContainerRef.current) return;
 
     const updatePreviewWidth = () => {
       if (mainContainerRef.current) {
@@ -123,7 +126,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
     resizeObserver.observe(mainContainerRef.current);
 
     return () => resizeObserver.disconnect();
-  }, [controlsWidth]);
+  }, [controlsWidth, galleryId]);
 
   // Handle divider drag for resizing (mouse)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -131,41 +134,57 @@ export const GalleryDesignStudioPage: React.FC = () => {
     setIsResizing(true);
   }, []);
 
+  // Get responsive min/max constraints based on screen width
+  const getResizeConstraints = useCallback(() => {
+    const screenW = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    if (screenW < 640) {
+      // Mobile: 160-280px
+      return { min: 160, max: 280 };
+    } else if (screenW < 1024) {
+      // Tablet: 200-400px
+      return { min: 200, max: 400 };
+    }
+    // Desktop: 280-500px
+    return { min: 280, max: 500 };
+  }, []);
+
   // Handle divider keyboard resizing
   const handleDividerKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const { min, max } = getResizeConstraints();
     const step = e.shiftKey ? 50 : 10; // Shift for larger increments
 
     switch (e.key) {
       case 'ArrowLeft':
         e.preventDefault();
-        setControlsWidth(prev => Math.max(280, prev - step));
+        setControlsWidth(prev => Math.max(min, prev - step));
         break;
       case 'ArrowRight':
         e.preventDefault();
-        setControlsWidth(prev => Math.min(500, prev + step));
+        setControlsWidth(prev => Math.min(max, prev + step));
         break;
       case 'Home':
         e.preventDefault();
-        setControlsWidth(280);
+        setControlsWidth(min);
         break;
       case 'End':
         e.preventDefault();
-        setControlsWidth(500);
+        setControlsWidth(max);
         break;
     }
-  }, []);
+  }, [getResizeConstraints]);
 
   useEffect(() => {
-    if (!isResizing) return;
+    if (!galleryId || !isResizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!mainContainerRef.current) return;
 
+      const { min, max } = getResizeConstraints();
       const containerRect = mainContainerRef.current.getBoundingClientRect();
       const newWidth = e.clientX - containerRect.left;
 
-      // Clamp controls width between 280px and 500px
-      const clampedWidth = Math.max(280, Math.min(500, newWidth));
+      // Clamp controls width between responsive min and max
+      const clampedWidth = Math.max(min, Math.min(max, newWidth));
       setControlsWidth(clampedWidth);
     };
 
@@ -180,13 +199,13 @@ export const GalleryDesignStudioPage: React.FC = () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
+  }, [isResizing, galleryId, getResizeConstraints]);
 
   /**
    * Apply theme and font to preview container
    */
   useEffect(() => {
-    if (!previewContainerRef.current) return;
+    if (!galleryId || !previewContainerRef.current) return;
 
     // Apply theme tokens
     const cleanup = setupThemeWithSystemPreference(
@@ -206,7 +225,12 @@ export const GalleryDesignStudioPage: React.FC = () => {
     return () => {
       cleanup();
     };
-  }, [config.theme.id, config.theme.mode, config.theme.accentColorOverride, config.typography.pairingId]);
+  }, [galleryId, config.theme.id, config.theme.mode, config.theme.accentColorOverride, config.typography.pairingId]);
+
+  // Handle missing gallery ID after all hooks are called
+  if (!galleryId) {
+    return <div className="p-4">Error: Gallery ID not found</div>;
+  }
 
   const handlePublish = async () => {
     try {
@@ -376,12 +400,12 @@ export const GalleryDesignStudioPage: React.FC = () => {
 
       {/* Main Content - Split Layout */}
       <div ref={mainContainerRef} className="flex-1 relative flex overflow-hidden gap-0 bg-white dark:bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">
-        {/* Left Panel - Controls (Floating Glass Sidebar) */}
+        {/* Left Panel - Controls (Floating Glass Sidebar) - Responsive */}
         <div
-          className="relative z-20 h-full flex items-center pr-3 ml-6 pointer-events-none flex-shrink-0"
+          className="relative z-20 h-full flex items-center pr-1 sm:pr-2 md:pr-3 ml-2 sm:ml-3 md:ml-6 pointer-events-none flex-shrink-0"
           style={{ width: `${controlsWidth}px` }}
         >
-          <div className="w-full h-[90%] bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden pointer-events-auto flex flex-col">
+          <div className="w-full h-[90%] bg-white/5 backdrop-blur-3xl border border-white/10 rounded-xl sm:rounded-2xl md:rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden pointer-events-auto flex flex-col">
             <DesignControlsPanel
               config={config}
               onChange={updateConfig}
@@ -394,21 +418,26 @@ export const GalleryDesignStudioPage: React.FC = () => {
         </div>
 
         {/* Resizable Divider (Invisible handle, visible glow) */}
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize controls panel"
-          aria-valuenow={controlsWidth}
-          aria-valuemin={280}
-          aria-valuemax={500}
-          tabIndex={0}
-          className={`relative z-30 w-2 cursor-col-resize group flex-shrink-0 transition-opacity duration-300 ${isResizing ? 'opacity-100' : 'opacity-0 hover:opacity-100'
-            }`}
-          onMouseDown={handleMouseDown}
-          onKeyDown={handleDividerKeyDown}
-        >
-          <div className="absolute inset-y-[20%] left-1/2 -translate-x-1/2 w-0.5 bg-gradient-to-b from-transparent via-cyan-400 to-transparent shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
-        </div>
+        {(() => {
+          const { min, max } = getResizeConstraints();
+          return (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize controls panel"
+              aria-valuenow={controlsWidth}
+              aria-valuemin={min}
+              aria-valuemax={max}
+              tabIndex={0}
+              className={`relative z-30 w-2 cursor-col-resize group flex-shrink-0 transition-opacity duration-300 ${isResizing ? 'opacity-100' : 'opacity-0 hover:opacity-100'
+                }`}
+              onMouseDown={handleMouseDown}
+              onKeyDown={handleDividerKeyDown}
+            >
+              <div className="absolute inset-y-[20%] left-1/2 -translate-x-1/2 w-0.5 bg-gradient-to-b from-transparent via-cyan-400 to-transparent shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
+            </div>
+          );
+        })()}
 
         {/* Right Panel - Preview Canvas Environment */}
         <div className="flex-1 relative z-10 overflow-auto bg-gray-50 dark:bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">

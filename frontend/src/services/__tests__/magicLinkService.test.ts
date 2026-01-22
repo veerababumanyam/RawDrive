@@ -20,6 +20,7 @@ vi.mock('../api', () => ({
     post: vi.fn(),
     delete: vi.fn(),
   },
+  getApiBaseUrl: vi.fn(() => 'http://localhost:8000'),
 }));
 
 // Import the mocked apiClient
@@ -181,9 +182,9 @@ describe('MagicLinkService', () => {
       const result = await service.getQRCode('ws-123', 'gallery-456', 'link-123');
 
       expect(result).toBeInstanceOf(Blob);
-      // getQRCode uses fetch directly without format param unless provided
+      // getQRCode uses fetch with full URL including base URL from getApiBaseUrl()
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/v1/workspaces/ws-123/galleries/gallery-456/magic-links/link-123/qr',
+        'http://localhost:8000/api/v1/workspaces/ws-123/galleries/gallery-456/magic-links/link-123/qr',
         expect.objectContaining({
           method: 'GET',
           credentials: 'include',

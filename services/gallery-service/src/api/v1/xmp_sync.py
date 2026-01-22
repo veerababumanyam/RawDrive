@@ -25,9 +25,9 @@ from src.schemas.xmp_sync import (
 )
 from src.services.xmp_service import get_xmp_service
 from src.services.gallery_service import get_gallery_service
-from src.services.audit_service import get_audit_service, AuditAction
+from src.services.audit_service import get_audit_service, SyncAuditAction
 from src.middleware.sync_auth import verify_sync_api_key, SyncKeyPayload
-from src.middleware.auth import get_current_user, verify_jwt_token, JWTPayload
+from src.middleware.auth import get_current_user, get_workspace_id, JWTPayload
 from src.config import get_settings
 from src.database import get_database
 
@@ -120,7 +120,7 @@ async def get_gallery_assets_for_export(
 async def preview_xmp_export(
     gallery_id: UUID,
     request: XmpExportRequest = None,
-    current_user: JWTPayload = Depends(verify_jwt_token),
+    current_user: JWTPayload = Depends(get_current_user),
 ):
     """
     Preview XMP export operation.
@@ -135,7 +135,7 @@ async def preview_xmp_export(
         assets = await get_gallery_assets_for_export(
             db,
             str(gallery_id),
-            str(current_user.workspace_id),
+            str(current_user["workspace_id"]),
             request,
         )
 
@@ -170,7 +170,7 @@ async def preview_xmp_export(
 async def export_xmp(
     gallery_id: UUID,
     request: XmpExportRequest = None,
-    current_user: JWTPayload = Depends(verify_jwt_token),
+    current_user: JWTPayload = Depends(get_current_user),
 ):
     """
     Export XMP sidecar files for gallery assets.
@@ -188,7 +188,7 @@ async def export_xmp(
         assets = await get_gallery_assets_for_export(
             db,
             str(gallery_id),
-            str(current_user.workspace_id),
+            str(current_user["workspace_id"]),
             request,
         )
 
@@ -208,9 +208,9 @@ async def export_xmp(
         # Log audit event (T038)
         await audit_service.log_action(
             db=db,
-            workspace_id=str(current_user.workspace_id),
-            user_id=str(current_user.user_id),
-            action=AuditAction.XMP_EXPORT,
+            workspace_id=str(current_user["workspace_id"]),
+            user_id=str(current_user["user_id"]),
+            action=SyncAuditAction.XMP_EXPORT,
             resource_type="gallery",
             resource_id=str(gallery_id),
             details={
@@ -240,7 +240,7 @@ async def export_xmp(
 )
 async def get_xmp_sync_status(
     gallery_id: UUID,
-    current_user: JWTPayload = Depends(verify_jwt_token),
+    current_user: JWTPayload = Depends(get_current_user),
 ):
     """
     Get XMP sync status for a gallery.
@@ -260,7 +260,7 @@ async def get_xmp_sync_status(
         total_count = await db.fetchval(
             total_query,
             str(gallery_id),
-            str(current_user.workspace_id),
+            str(current_user["workspace_id"]),
         )
 
         if total_count is None:
@@ -279,7 +279,7 @@ async def get_xmp_sync_status(
         """
         last_export_row = await db.fetchrow(
             last_export_query,
-            str(current_user.workspace_id),
+            str(current_user["workspace_id"]),
             str(gallery_id),
         )
 
@@ -295,7 +295,7 @@ async def get_xmp_sync_status(
         """
         last_import_row = await db.fetchrow(
             last_import_query,
-            str(current_user.workspace_id),
+            str(current_user["workspace_id"]),
             str(gallery_id),
         )
 
@@ -312,7 +312,7 @@ async def get_xmp_sync_status(
         with_xmp_count = await db.fetchval(
             with_xmp_query,
             str(gallery_id),
-            str(current_user.workspace_id),
+            str(current_user["workspace_id"]),
         )
 
         # Count pending changes (assets modified since last export)
@@ -330,7 +330,7 @@ async def get_xmp_sync_status(
             pending_changes = await db.fetchval(
                 pending_query,
                 str(gallery_id),
-                str(current_user.workspace_id),
+                str(current_user["workspace_id"]),
                 last_export_row["created_at"],
             )
 
@@ -404,7 +404,7 @@ async def sync_export_xmp(
             db=db,
             workspace_id=str(sync_key.workspace_id),
             user_id=str(sync_key.user_id),
-            action=AuditAction.XMP_EXPORT,
+            action=SyncAuditAction.XMP_EXPORT,
             resource_type="gallery",
             resource_id=str(gallery_id),
             details={
@@ -548,7 +548,7 @@ async def preview_xmp_import(
     gallery_id: UUID,
     file: UploadFile = File(..., description="ZIP file containing XMP files"),
     match_by_rawdrive_id: bool = Query(True, description="Match using RawDrive asset IDs"),
-    current_user: JWTPayload = Depends(verify_jwt_token),
+    current_user: JWTPayload = Depends(get_current_user),
 ):
     """
     Preview XMP import operation (T044).
@@ -616,7 +616,7 @@ async def preview_xmp_import(
         assets = await get_gallery_assets_for_import(
             db,
             str(gallery_id),
-            str(current_user.workspace_id),
+            str(current_user["workspace_id"]),
         )
 
         if not assets:
@@ -663,7 +663,7 @@ async def import_xmp(
     file: UploadFile = File(..., description="ZIP file containing XMP files"),
     match_by_rawdrive_id: bool = Query(True, description="Match using RawDrive asset IDs"),
     overwrite_existing: bool = Query(True, description="Overwrite existing metadata"),
-    current_user: JWTPayload = Depends(verify_jwt_token),
+    current_user: JWTPayload = Depends(get_current_user),
 ):
     """
     Import XMP metadata to gallery assets (T045).
@@ -726,7 +726,7 @@ async def import_xmp(
         assets = await get_gallery_assets_for_import(
             db,
             str(gallery_id),
-            str(current_user.workspace_id),
+            str(current_user["workspace_id"]),
         )
 
         if not assets:
@@ -808,9 +808,9 @@ async def import_xmp(
         # Log audit event (T047)
         await audit_service.log_action(
             db=db,
-            workspace_id=str(current_user.workspace_id),
-            user_id=str(current_user.user_id),
-            action=AuditAction.XMP_IMPORT,
+            workspace_id=str(current_user["workspace_id"]),
+            user_id=str(current_user["user_id"]),
+            action=SyncAuditAction.XMP_IMPORT,
             resource_type="gallery",
             resource_id=str(gallery_id),
             details={
@@ -996,7 +996,7 @@ async def sync_import_xmp(
             db=db,
             workspace_id=str(sync_key.workspace_id),
             user_id=str(sync_key.user_id),
-            action=AuditAction.XMP_IMPORT,
+            action=SyncAuditAction.XMP_IMPORT,
             resource_type="gallery",
             resource_id=str(gallery_id),
             details={

@@ -155,16 +155,18 @@ export class XmpSyncService {
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let received = 0;
+    let done = false;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    while (!done) {
+      const result = await reader.read();
+      done = result.done;
+      if (result.value) {
+        chunks.push(result.value);
+        received += result.value.length;
 
-      chunks.push(value);
-      received += value.length;
-
-      if (onProgress && total > 0) {
-        onProgress((received / total) * 100);
+        if (onProgress && total > 0) {
+          onProgress((received / total) * 100);
+        }
       }
     }
 

@@ -31,7 +31,7 @@ describe('StructuredData Component', () => {
             expect(productSchema.name).toBe('RawDrive');
             expect(productSchema.applicationCategory).toBe('BusinessApplication'); // Req 7.3
             expect(productSchema.featureList).toContain('AI Face Recognition'); // Req 7.5
-            expect(productSchema.audience.audienceType).toBe('Professional Photographers, Studios, Agencies'); // Req 7.6
+            expect(productSchema.audience.audienceType).toBe('Professional Photographers, Wedding Photographers, Portrait Studios, Photography Agencies'); // Req 7.6
             expect(productSchema.aggregateRating.ratingValue).toBe(4.9); // Req 7.7
             expect(productSchema.offers[0].priceCurrency).toBe('INR'); // Req 7.4
         });

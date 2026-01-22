@@ -15,6 +15,9 @@ from src.log_config import get_logger
 logger = get_logger(__name__)
 security = HTTPBearer(auto_error=False)
 
+# Type alias for JWT payload (backwards compatibility)
+JWTPayload = Dict[str, Any]
+
 # Load JWT public key for EdDSA verification
 _jwt_public_key: Optional[str] = None
 

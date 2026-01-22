@@ -217,8 +217,7 @@ describe('ThemeSelector', () => {
       }));
     });
 
-    // Skip: This test has timing issues in JSDOM environment
-    it.skip('should highlight selected theme', async () => {
+    it('should highlight selected theme', async () => {
       render(
         <ThemeSelector
           selectedThemeId="theme-clean-slate"
@@ -226,13 +225,23 @@ describe('ThemeSelector', () => {
         />
       );
 
+      // Wait for themes to render - use getAllByText since selected theme name appears in multiple places
+      // (theme card title and selection summary)
       await waitFor(() => {
-        expect(screen.getByText('Clean Slate')).toBeInTheDocument();
+        const themeTexts = screen.getAllByText('Clean Slate');
+        expect(themeTexts.length).toBeGreaterThan(0);
       });
 
-      // The selected theme card should have selected indicator
-      const themeCard = screen.getByText('Clean Slate').closest('button');
-      expect(themeCard).toHaveClass('ring-2');
+      // Find the theme card button - it's the first one with the theme name in an h3
+      const themeTexts = screen.getAllByText('Clean Slate');
+      // The theme card has the name in an h3, find the button containing it
+      const themeCard = themeTexts[0].closest('button');
+
+      // Verify the card has aria-pressed="true" for selection state
+      expect(themeCard).toHaveAttribute('aria-pressed', 'true');
+
+      // Additionally verify the card has the selected class (ring-2)
+      expect(themeCard?.className).toContain('ring-2');
     });
   });
 
@@ -275,8 +284,9 @@ describe('ThemeSelector', () => {
   });
 
   describe('Disabled State', () => {
-    // Skip: This test has timing issues in JSDOM environment
-    it.skip('should disable all interactions when disabled prop is true', async () => {
+    it('should disable all interactions when disabled prop is true', async () => {
+      const user = userEvent.setup();
+
       render(
         <ThemeSelector
           selectedThemeId={undefined}
@@ -285,14 +295,18 @@ describe('ThemeSelector', () => {
         />
       );
 
-      // Wait longer for themes to render
+      // Wait for themes to render
       await waitFor(() => {
         expect(screen.getByText('Clean Slate')).toBeInTheDocument();
-      }, { timeout: 5000 });
+      });
 
-      // Theme cards should be disabled - check for disabled styling
+      // Theme cards should be disabled - use toBeDisabled() matcher
       const themeCard = screen.getByText('Clean Slate').closest('button');
-      expect(themeCard).toHaveAttribute('disabled');
+      expect(themeCard).toBeDisabled();
+
+      // Verify clicking doesn't trigger onSelect when disabled
+      await user.click(themeCard!);
+      expect(mockOnSelect).not.toHaveBeenCalled();
     });
   });
 

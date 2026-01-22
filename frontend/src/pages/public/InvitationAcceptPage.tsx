@@ -123,8 +123,9 @@ const InvitationAcceptPage: React.FC = () => {
   } | null>(null);
 
   // Determine if there's an email mismatch
+  // Use optional chaining to prevent TypeError when user/invitation email is undefined
   const emailMismatch = useMemo(() => {
-    if (!user || !invitation) return false;
+    if (!user?.email || !invitation?.email) return false;
     return user.email.toLowerCase() !== invitation.email.toLowerCase();
   }, [user, invitation]);
 

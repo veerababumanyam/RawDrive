@@ -135,24 +135,26 @@ const TeamPage: React.FC = () => {
   const roleNameMap = useMemo(() => createRoleNameMap(roles), [roles]);
 
   // Filter members by search query
+  // Use optional chaining to handle undefined/null values safely
   const filteredMembers = useMemo(() => {
     if (!searchQuery.trim()) return members;
 
     const query = searchQuery.toLowerCase();
     return members.filter(
       (member) =>
-        member.user_display_name.toLowerCase().includes(query) ||
-        member.user_email.toLowerCase().includes(query)
+        member.user_display_name?.toLowerCase().includes(query) ||
+        member.user_email?.toLowerCase().includes(query)
     );
   }, [members, searchQuery]);
 
   // Filter invitations by search query
+  // Use optional chaining to handle undefined/null values safely
   const filteredInvitations = useMemo(() => {
     if (!searchQuery.trim()) return pendingInvitations;
 
     const query = searchQuery.toLowerCase();
     return pendingInvitations.filter((invitation) =>
-      invitation.email.toLowerCase().includes(query)
+      invitation.email?.toLowerCase().includes(query)
     );
   }, [pendingInvitations, searchQuery]);
 

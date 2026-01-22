@@ -54,11 +54,8 @@ export function DownloadQuotaIndicator({
 }: DownloadQuotaIndicatorProps) {
   const { t } = useTranslation('gallery');
 
-  // Don't show anything if there's no limit
-  if (quota.dailyLimit === null || quota.dailyLimit <= 0) {
-    return null;
-  }
-
+  // Calculate derived state before early return (hooks must be called unconditionally)
+  const hasLimit = quota.dailyLimit !== null && quota.dailyLimit > 0;
   const isLow = quota.remaining !== null && quota.remaining <= 3 && quota.remaining > 0;
   const isBlocked = quota.isBlocked || (quota.remaining !== null && quota.remaining <= 0);
 
@@ -73,6 +70,11 @@ export function DownloadQuotaIndicator({
     if (isLow) return 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800';
     return 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700';
   }, [isBlocked, isLow]);
+
+  // Don't show anything if there's no limit
+  if (!hasLimit) {
+    return null;
+  }
 
   if (compact) {
     return (

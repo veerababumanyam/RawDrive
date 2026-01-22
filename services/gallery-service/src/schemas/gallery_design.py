@@ -183,7 +183,7 @@ class ThemeConfig(BaseModel):
     )
     accentColorOverride: Optional[str] = Field(
         default=None,
-        regex=r"^#[0-9A-Fa-f]{6}$",
+        pattern=r"^#[0-9A-Fa-f]{6}$",
         description="Optional accent color override from theme's predefined palette (hex format)",
     )
 

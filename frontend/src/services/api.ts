@@ -177,7 +177,15 @@ export async function refreshAccessToken(): Promise<string | null> {
     });
 
     if (!response.ok) {
-      // Refresh failed, clear tokens
+      // Refresh failed - log the error details for debugging
+      let errorDetails = '';
+      try {
+        const errorData = await response.json();
+        errorDetails = JSON.stringify(errorData);
+      } catch {
+        errorDetails = `Status: ${response.status} ${response.statusText}`;
+      }
+      console.warn('[Auth] Token refresh failed:', errorDetails);
       clearStoredTokens();
       return null;
     }

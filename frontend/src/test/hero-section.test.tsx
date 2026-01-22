@@ -42,7 +42,7 @@ describe('HeroSection Component', () => {
     });
 
     it('renders hidden text for AI agents', () => {
-        // We use a custom query or getByText with exact: false and selector options if needed, 
+        // We use a custom query or getByText with exact: false and selector options if needed,
         // but since it has class sr-only, it might be hidden from normal user interactions but present in DOM
         const { container } = render(
             <MemoryRouter>
@@ -50,8 +50,8 @@ describe('HeroSection Component', () => {
             </MemoryRouter>
         );
 
-        // Check if text exists in the container
-        expect(container).toHaveTextContent(/RawDrive Key Features: AI Culling/i);
-        expect(container).toHaveTextContent(/Target Audience: Professional Wedding/i);
+        // Check if text exists in the container (updated to match actual sr-only content)
+        expect(container).toHaveTextContent(/Key features include: AI-powered photo tagging and culling/i);
+        expect(container).toHaveTextContent(/designed for wedding photographers, portrait photographers/i);
     });
 });

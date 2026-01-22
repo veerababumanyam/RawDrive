@@ -17,6 +17,8 @@ export interface CoverStyleMetadata {
   category: 'basic' | 'text' | 'advanced' | 'premium';
   thumbnail: string;
   premium: boolean;
+  isNew?: boolean;          // Phase 2: New badge indicator
+  isTrending?: boolean;     // Phase 2: Trending badge indicator
 }
 
 /**
@@ -208,6 +210,7 @@ const BREEZE_STYLE: CoverStyleMetadata = {
   category: 'premium',
   thumbnail: '/assets/cover-previews/breeze.svg',
   premium: true,
+  isNew: true,
 };
 
 const AERO_STYLE: CoverStyleMetadata = {
@@ -217,6 +220,7 @@ const AERO_STYLE: CoverStyleMetadata = {
   category: 'premium',
   thumbnail: '/assets/cover-previews/aero.svg',
   premium: true,
+  isNew: true,
 };
 
 const SURF_STYLE: CoverStyleMetadata = {
@@ -226,6 +230,7 @@ const SURF_STYLE: CoverStyleMetadata = {
   category: 'premium',
   thumbnail: '/assets/cover-previews/surf.svg',
   premium: true,
+  isNew: true,
 };
 
 const COSMOS_STYLE: CoverStyleMetadata = {
@@ -235,6 +240,7 @@ const COSMOS_STYLE: CoverStyleMetadata = {
   category: 'premium',
   thumbnail: '/assets/cover-previews/cosmos.svg',
   premium: true,
+  isTrending: true,
 };
 
 const REEF_STYLE: CoverStyleMetadata = {

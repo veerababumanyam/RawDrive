@@ -12,7 +12,6 @@ Correctness Properties enforced:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import secrets
 import uuid
@@ -25,6 +24,7 @@ import asyncpg
 from app.config.settings import AppSettings, get_settings
 from app.db.postgres import get_postgres_pool
 from app.db.redis import get_redis_client
+from app.utils.crypto import hash_token as _hash_refresh_token
 from app.utils.security import (
     create_access_token,
     create_refresh_token,
@@ -145,11 +145,6 @@ class AuthUser:
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
-
-
-def _hash_refresh_token(token: str) -> str:
-    """SHA-256 hash of refresh token for storage."""
-    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _generate_token_bytes(length: int = 32) -> str:
@@ -372,17 +367,9 @@ class AuthService:
                     trial_end,
                 )
 
-        # Create session for tracking and token refresh
-        session_id = await self._create_session(
-            user_id,
-            workspace_id,
-            device_info=None,
-            device_fingerprint=None,
-            ip_address=None,
-            user_agent=None,
-        )
+        # Build tokens with pre-generated session ID
+        session_id = uuid.uuid4()
 
-        # Build tokens
         permissions = await _get_user_permissions(pool, user_id, workspace_id)
         if not permissions:
             permissions = ["workspace:*"]
@@ -391,11 +378,21 @@ class AuthService:
             user_id,
             workspace_id,
             permissions,
-            session_id=session_id,  # CRITICAL: Include session_id for token refresh
+            session_id=session_id,
         )
 
-        # Store refresh token hash for rotation/revocation
-        await self._store_refresh_token(session_id, token_pair.refresh_token)
+        # Create session with real refresh token (atomic operation)
+        await self._create_session_with_id(
+            session_id=session_id,
+            user_id=user_id,
+            workspace_id=workspace_id,
+            refresh_token=token_pair.refresh_token,
+            device_info=None,
+            device_fingerprint=None,
+            ip_address=None,
+            user_agent=None,
+            remember_me=False,
+        )
 
         auth_user = AuthUser(
             user_id=user_id,
@@ -490,17 +487,10 @@ class AuthService:
         if not permissions:
             permissions = ["workspace:read"]
 
-        # Create session with device tracking
-        session_id = await self._create_session(
-            user_id,
-            workspace_id,
-            device_info=device_info,
-            device_fingerprint=device_fingerprint,
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
+        # Step 1: Pre-generate session ID
+        session_id = uuid.uuid4()
 
-        # Issue tokens with appropriate TTL based on remember_me
+        # Step 2: Issue tokens with appropriate TTL based on remember_me
         token_pair = self._issue_tokens(
             user_id,
             workspace_id,
@@ -509,8 +499,18 @@ class AuthService:
             remember_me=remember_me,
         )
 
-        # Store refresh token hash in Redis for rotation/revocation
-        await self._store_refresh_token(session_id, token_pair.refresh_token, remember_me=remember_me)
+        # Step 3: Create session with real refresh token (atomic operation)
+        await self._create_session_with_id(
+            session_id=session_id,
+            user_id=user_id,
+            workspace_id=workspace_id,
+            refresh_token=token_pair.refresh_token,
+            device_info=device_info,
+            device_fingerprint=device_fingerprint,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            remember_me=remember_me,
+        )
 
         auth_user = AuthUser(
             user_id=user_id,
@@ -532,10 +532,16 @@ class AuthService:
 
         Property 4 (Token Refresh Rotation): Old token is invalidated,
         new token issued.
+
+        Uses SessionService as single source of truth for session data and refresh token hash.
         """
         try:
             payload = decode_token(refresh_token, settings=self._settings)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Token refresh failed: JWT decode error",
+                extra={"error_type": type(e).__name__, "error_message": str(e)},
+            )
             raise TokenInvalidError()
 
         if payload.get("token_type") != "refresh":
@@ -546,38 +552,36 @@ class AuthService:
         session_id_str = payload.get("session_id")
 
         if not session_id_str:
-            # Backward compatibility: Create session for tokens without session_id (legacy signup tokens)
+            raise TokenInvalidError("Refresh token missing session_id claim")
+
+        session_id = uuid.UUID(session_id_str)
+
+        # Fetch session from SessionService (single source of truth)
+        from app.services.session_service import SessionService
+
+        session_service = SessionService(settings=self._settings)
+        session = await session_service.get_session(session_id)
+
+        if session is None:
             logger.warning(
-                "Token refresh for legacy token without session_id, creating new session",
-                extra={"user_id": str(user_id)}
+                "Token refresh failed: session not found or expired",
+                extra={"session_id": str(session_id), "user_id": str(user_id)},
             )
-
-            # Resolve workspace
-            workspace_id: Optional[uuid.UUID] = None
-            if workspace_id_str:
-                workspace_id = uuid.UUID(workspace_id_str)
-            else:
-                pool = await get_postgres_pool()
-                workspace_id = await _get_default_workspace(pool, user_id)
-
-            if workspace_id is None:
-                raise AuthError("No active workspace", "AUTH_NO_WORKSPACE", 403)
-
-            # Create new session for legacy token
-            session_id = await self._create_session(user_id, workspace_id)
-        else:
-            session_id = uuid.UUID(session_id_str)
-
-        # Verify session not revoked
-        redis = await get_redis_client()
-        stored_hash = await redis.get(f"session:{session_id}:refresh_hash")
-        if stored_hash is None:
             raise SessionRevokedError()
 
+        # Validate refresh token hash
         current_hash = _hash_refresh_token(refresh_token)
-        if stored_hash.decode() != current_hash:
-            # Possible token reuse attack - revoke session
-            await self._revoke_session(session_id)
+        if session.refresh_token_hash != current_hash:
+            logger.warning(
+                "Token refresh failed: token hash mismatch (possible reuse attack)",
+                extra={
+                    "session_id": str(session_id),
+                    "user_id": str(user_id),
+                    "expected_hash_prefix": session.refresh_token_hash[:16],
+                    "provided_hash_prefix": current_hash[:16],
+                },
+            )
+            await session_service.invalidate_session(session_id)
             raise SessionRevokedError()
 
         pool = await get_postgres_pool()
@@ -601,10 +605,17 @@ class AuthService:
             user_id, workspace_id, permissions, session_id=session_id
         )
 
-        # Rotate: store new refresh token hash, old one becomes invalid
-        await self._store_refresh_token(session_id, new_pair.refresh_token)
+        # Rotate: update session with new refresh token hash
+        await session_service.update_session_token(session_id, new_pair.refresh_token)
 
-        logger.info("Token refreshed", extra={"user_id": str(user_id), "session_id": str(session_id)})
+        logger.info(
+            "Token refreshed successfully",
+            extra={
+                "user_id": str(user_id),
+                "session_id": str(session_id),
+                "workspace_id": str(workspace_id),
+            }
+        )
         return new_pair
 
     # -----------------------------------------------------------------------
@@ -677,70 +688,69 @@ class AuthService:
             expires_in=self._settings.access_token_ttl_minutes * 60,
         )
 
-    async def _create_session(
+    async def _create_session_with_id(
         self,
+        session_id: uuid.UUID,
         user_id: uuid.UUID,
-        workspace_id: uuid.UUID,
+        workspace_id: Optional[uuid.UUID],
+        refresh_token: str,
         device_info: Optional[dict[str, Any]] = None,
         device_fingerprint: Optional[str] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
+        remember_me: bool = False,
     ) -> uuid.UUID:
-        """Create session record in DB and Redis using SessionService."""
+        """Create session with pre-generated ID and real refresh token.
+
+        This is the new atomic way to create sessions - session_id is pre-generated
+        before token generation, and the real refresh token is stored immediately.
+        This eliminates the race condition from the old placeholder pattern.
+
+        Args:
+            session_id: Pre-generated session ID from caller
+            user_id: User ID
+            workspace_id: Optional workspace ID
+            refresh_token: Real refresh token (not placeholder)
+            device_info: Device metadata
+            device_fingerprint: Device fingerprint
+            ip_address: IP address
+            user_agent: User agent
+            remember_me: Whether to use extended TTL
+
+        Returns:
+            Session ID
+        """
         from app.services.session_service import SessionService
 
         session_service = SessionService(settings=self._settings)
-        # Create session with placeholder token (will be updated after token generation)
-        placeholder_token = "placeholder_" + str(uuid.uuid4())
-        session = await session_service.create_session(
+
+        # Calculate TTL based on remember_me
+        ttl_seconds = (
+            self._settings.extended_refresh_token_ttl_days * 86400
+            if remember_me
+            else self._settings.refresh_token_ttl_days * 86400
+        )
+
+        session = await session_service.create_session_with_id(
+            session_id=session_id,
             user_id=user_id,
             workspace_id=workspace_id,
-            refresh_token=placeholder_token,
+            refresh_token=refresh_token,
             device_info=device_info,
             device_fingerprint=device_fingerprint,
             ip_address=ip_address,
             user_agent=user_agent,
+            ttl_seconds=ttl_seconds,
         )
         return session.session_id
 
-    async def _store_refresh_token(
-        self,
-        session_id: uuid.UUID,
-        refresh_token: str,
-        remember_me: bool = False
-    ) -> None:
-        """Store refresh token hash in Redis for validation/rotation."""
-        redis = await get_redis_client()
-        token_hash = _hash_refresh_token(refresh_token)
-
-        # Match TTL to refresh token expiry (7 days default, 30 days for remember_me)
-        ttl_days = (
-            self._settings.extended_refresh_token_ttl_days
-            if remember_me
-            else self._settings.refresh_token_ttl_days
-        )
-        ttl = ttl_days * 86400
-
-        await redis.setex(f"session:{session_id}:refresh_hash", ttl, token_hash)
-
-        # Also update DB hash
-        pool = await get_postgres_pool()
-        await pool.execute(
-            "UPDATE sessions SET refresh_token_hash = $1, last_used_at = NOW() WHERE session_id = $2",
-            token_hash,
-            session_id,
-        )
-
     async def _revoke_session(self, session_id: uuid.UUID) -> None:
-        """Revoke session in both Redis and DB."""
-        redis = await get_redis_client()
-        await redis.delete(f"session:{session_id}:refresh_hash")
+        """Revoke session using SessionService."""
+        from app.services.session_service import SessionService
 
-        pool = await get_postgres_pool()
-        await pool.execute(
-            "UPDATE sessions SET revoked_at = NOW() WHERE session_id = $1",
-            session_id,
-        )
+        session_service = SessionService(settings=self._settings)
+        await session_service.invalidate_session(session_id)
+        logger.info("Session revoked", extra={"session_id": str(session_id)})
 
     # -----------------------------------------------------------------------
     # Email Change

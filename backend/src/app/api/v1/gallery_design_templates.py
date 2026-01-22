@@ -12,26 +12,25 @@ Features:
 Feature: Enhancement 3 - Custom Templates
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Any, Optional
 from uuid import UUID
 
-from src.middleware.auth import get_workspace_id, get_current_user
-from src.log_config import get_logger
-from src.observability.metrics import get_metrics
-from src.services.gallery_design_template_service import (
+from app.api.dependencies.auth import get_current_user, get_workspace_id
+from app.services.gallery_design_template_service import (
     GalleryDesignTemplateService,
     TemplateError,
     TemplateNotFoundError,
     TemplateAlreadyExistsError,
     InvalidDesignConfigError,
 )
-from src.repositories.gallery_design_template_repository import (
+from app.repositories.gallery_design_template_repository import (
     get_gallery_design_template_repository,
 )
 
-logger = get_logger(__name__)
-metrics = get_metrics()
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -132,12 +131,6 @@ async def create_template(
                 "category": category,
             },
         )
-
-        # Track metrics
-        metrics.counter("gallery.templates.created", 1, {
-            "workspace_id": workspace_id,
-            "category": category,
-        })
 
         return template
 
@@ -330,11 +323,6 @@ async def update_template(
             },
         )
 
-        # Track metrics
-        metrics.counter("gallery.templates.updated", 1, {
-            "workspace_id": workspace_id,
-        })
-
         return updated_template
 
     except TemplateAlreadyExistsError as e:
@@ -435,11 +423,6 @@ async def delete_template(
             },
         )
 
-        # Track metrics
-        metrics.counter("gallery.templates.deleted", 1, {
-            "workspace_id": workspace_id,
-        })
-
         return {
             "message": "Template deleted successfully",
             "template_id": str(template_id),
@@ -535,12 +518,6 @@ async def list_templates(
                 "page": page,
             },
         )
-
-        # Track metrics
-        metrics.counter("gallery.templates.listed", 1, {
-            "workspace_id": workspace_id,
-            "category": category or "all",
-        })
 
         return result
 
@@ -686,11 +663,6 @@ async def apply_template(
                 "preserve_cover_asset": preserve_cover_asset,
             },
         )
-
-        # Track metrics
-        metrics.counter("gallery.templates.applied", 1, {
-            "workspace_id": workspace_id,
-        })
 
         return {
             "merged_config": merged_config,
