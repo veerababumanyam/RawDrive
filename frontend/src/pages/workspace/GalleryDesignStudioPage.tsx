@@ -24,7 +24,19 @@ import { DesignControlsPanel } from '../../components/features/gallery/design/De
 import { DesignPreviewCanvas } from '../../components/features/gallery/design/DesignPreviewCanvas';
 import { SaveAsTemplateModal } from '../../components/features/gallery/design/SaveAsTemplateModal';
 import { TemplateLibrary } from '../../components/features/gallery/design/TemplateLibrary';
+import { DesignStudioTooltip } from '../../components/features/gallery/design/DesignStudioTooltip';
 import galleryDesignService from '../../services/galleryDesignService';
+import {
+  Undo2,
+  Redo2,
+  Smartphone,
+  Tablet,
+  Monitor,
+  Library,
+  Save,
+  Send,
+  Ruler
+} from 'lucide-react';
 
 interface ViewportMode {
   type: 'mobile' | 'tablet' | 'desktop';
@@ -254,160 +266,183 @@ export const GalleryDesignStudioPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      {/* Top Bar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border-default bg-surface">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold text-text-primary">Design Studio</h1>
-          {isDirty && <span className="text-xs px-2 py-1 bg-accent-primary/10 text-accent-primary rounded">Unsaved</span>}
-          {saveStatus === 'saved' && <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Saved</span>}
+    <div className="flex flex-col h-screen bg-[#0a1628] text-white overflow-hidden font-sans">
+      {/* Top Bar - Floating Glass */}
+      <div className="relative z-50 px-6 py-4 flex items-center justify-between pointer-events-none">
+        <div className="flex items-center gap-4 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl px-5 py-2.5 shadow-2xl pointer-events-auto">
+          <div className="flex flex-col">
+            <h1 className="text-sm font-bold tracking-tight text-white uppercase opacity-90">Design Studio</h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs font-medium text-white/60">Live Preview</span>
+              {isDirty && <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" title="Unsaved changes" />}
+            </div>
+          </div>
+          {saveStatus === 'saved' && (
+            <div className="ml-2 px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/30 rounded-md">
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Synced</span>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Undo/Redo */}
-          <div className="flex gap-1">
-            <button
-              onClick={undo}
-              disabled={!canUndo}
-              aria-label="Undo (Ctrl+Z)"
-              className="p-2 text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bg-secondary"
-            >
-              <span aria-hidden="true">↶</span>
-            </button>
-            <button
-              onClick={redo}
-              disabled={!canRedo}
-              aria-label="Redo (Ctrl+Y)"
-              className="p-2 text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-bg-secondary"
-            >
-              <span aria-hidden="true">↷</span>
-            </button>
+        <div className="flex items-center gap-4 pointer-events-auto">
+          {/* Undo/Redo - Glass Capsule */}
+          <div className="flex items-center bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-1 shadow-2xl">
+            <DesignStudioTooltip content="Undo (Ctrl+Z)">
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                className="p-2 rounded-xl text-white opacity-80 hover:opacity-100 hover:bg-white/10 disabled:opacity-20 transition-all active:scale-95 flex items-center justify-center"
+              >
+                <Undo2 className="w-5 h-5" />
+              </button>
+            </DesignStudioTooltip>
+            <DesignStudioTooltip content="Redo (Ctrl+Y)">
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                className="p-2 rounded-xl text-white opacity-80 hover:opacity-100 hover:bg-white/10 disabled:opacity-20 transition-all active:scale-95 flex items-center justify-center"
+              >
+                <Redo2 className="w-5 h-5" />
+              </button>
+            </DesignStudioTooltip>
           </div>
 
-          {/* Viewport Mode */}
-          <div className="flex gap-1 px-2 py-1 bg-bg-secondary rounded">
-            <button
-              onClick={() => setViewportMode({ type: 'mobile', width: 375 })}
-              className={`px-2 py-1 text-sm rounded transition-colors ${
-                viewportMode.type === 'mobile' ? 'bg-accent-primary text-white' : 'text-text-secondary hover:bg-bg-tertiary'
-              }`}
-              title="Mobile (375px)"
-            >
-              📱
-            </button>
-            <button
-              onClick={() => setViewportMode({ type: 'tablet', width: 768 })}
-              className={`px-2 py-1 text-sm rounded transition-colors ${
-                viewportMode.type === 'tablet' ? 'bg-accent-primary text-white' : 'text-text-secondary hover:bg-bg-tertiary'
-              }`}
-              title="Tablet (768px)"
-            >
-              📋
-            </button>
-            <button
-              onClick={() => setViewportMode({ type: 'desktop' })}
-              className={`px-2 py-1 text-sm rounded transition-colors ${
-                viewportMode.type === 'desktop' ? 'bg-accent-primary text-white' : 'text-text-secondary hover:bg-bg-tertiary'
-              }`}
-              title="Desktop (Full width)"
-            >
-              🖥️
-            </button>
+          {/* Viewport Mode - Segmented Control */}
+          <div className="flex bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-1 shadow-2xl">
+            <DesignStudioTooltip content="Mobile View">
+              <button
+                onClick={() => setViewportMode({ type: 'mobile', width: 375 })}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${viewportMode.type === 'mobile' ? 'bg-white text-[#0a1628] shadow-lg scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                <Smartphone className="w-5 h-5" />
+              </button>
+            </DesignStudioTooltip>
+            <DesignStudioTooltip content="Tablet View">
+              <button
+                onClick={() => setViewportMode({ type: 'tablet', width: 768 })}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${viewportMode.type === 'tablet' ? 'bg-white text-[#0a1628] shadow-lg scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                <Tablet className="w-5 h-5" />
+              </button>
+            </DesignStudioTooltip>
+            <DesignStudioTooltip content="Desktop View">
+              <button
+                onClick={() => setViewportMode({ type: 'desktop' })}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 ${viewportMode.type === 'desktop' ? 'bg-white text-[#0a1628] shadow-lg scale-105' : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                <Monitor className="w-5 h-5" />
+              </button>
+            </DesignStudioTooltip>
           </div>
 
           {/* Template Actions */}
-          <div className="flex gap-2 border-l border-border-default pl-3">
-            <button
-              onClick={() => setShowTemplateLibrary(true)}
-              className="px-3 py-2 text-sm rounded bg-bg-secondary text-text-primary hover:bg-bg-tertiary transition-colors"
-              title="Load a design template"
-            >
-              📚 Templates
-            </button>
-            <button
-              onClick={() => setShowSaveTemplateModal(true)}
-              className="px-3 py-2 text-sm rounded bg-bg-secondary text-text-primary hover:bg-bg-tertiary transition-colors"
-              title="Save current design as a template"
-            >
-              💾 Save as Template
-            </button>
+          <div className="flex bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-1 shadow-2xl">
+            <DesignStudioTooltip content="Load Template">
+              <button
+                onClick={() => setShowTemplateLibrary(true)}
+                className="p-2.5 rounded-xl text-white opacity-80 hover:opacity-100 hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center"
+              >
+                <Library className="w-5 h-5" />
+              </button>
+            </DesignStudioTooltip>
+            <DesignStudioTooltip content="Save as Template">
+              <button
+                onClick={() => setShowSaveTemplateModal(true)}
+                className="p-2.5 rounded-xl text-white opacity-80 hover:opacity-100 hover:bg-white/10 transition-all active:scale-95 flex items-center justify-center"
+              >
+                <Save className="w-5 h-5" />
+              </button>
+            </DesignStudioTooltip>
           </div>
 
-          {/* Publish Button */}
+          {/* Publish Button - High Fidelity */}
           <button
             onClick={handlePublish}
             disabled={!isDirty || publishStatus === 'publishing'}
-            className="px-4 py-2 rounded bg-accent-primary text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+            className="group relative px-6 py-3 rounded-2xl overflow-hidden shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-500 active:scale-95 flex items-center gap-2"
           >
-            {publishStatus === 'publishing' ? 'Publishing...' : 'Publish'}
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-400 to-blue-600 group-hover:scale-110 transition-transform duration-500" />
+            <div className="absolute inset-x-0 top-0 h-px bg-white/30" />
+            <Send className="relative z-10 w-4 h-4 text-white" />
+            <span className="relative z-10 text-sm font-bold uppercase tracking-wider text-white drop-shadow-md">
+              {publishStatus === 'publishing' ? 'Sending...' : 'Publish'}
+            </span>
           </button>
         </div>
       </div>
 
-      {/* Main Content - Split Screen */}
-      <div ref={mainContainerRef} className="flex flex-1 overflow-hidden">
-        {/* Left Panel - Controls (Resizable) */}
+      {/* Main Content - Full Screen Split */}
+      <div ref={mainContainerRef} className="absolute inset-0 flex overflow-hidden">
+        {/* Left Panel - Controls (Floating Glass Sidebar) */}
         <div
-          className="border-r border-border-default bg-surface overflow-y-auto shadow-sm flex-shrink-0"
-          style={{ width: `${controlsWidth}px` }}
+          className="relative z-20 h-full flex items-center pl-6 pointer-events-none"
+          style={{ width: `${controlsWidth + 24}px` }}
         >
-          <DesignControlsPanel
-            config={config}
-            onChange={updateConfig}
-            saveStatus={saveStatus}
-            lastSavedAt={lastSavedAt}
-            error={error}
-            lockedSections={lockedSections}
-          />
+          <div className="w-full h-[90%] bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden pointer-events-auto flex flex-col">
+            <DesignControlsPanel
+              config={config}
+              onChange={updateConfig}
+              saveStatus={saveStatus}
+              lastSavedAt={lastSavedAt}
+              error={error}
+              lockedSections={lockedSections}
+            />
+          </div>
         </div>
 
-        {/* Resizable Divider */}
+        {/* Resizable Divider (Invisible handle, visible glow) */}
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize controls panel (Drag or use arrow keys)"
+          aria-label="Resize controls panel"
           aria-valuenow={controlsWidth}
           aria-valuemin={280}
           aria-valuemax={500}
           tabIndex={0}
-          className={`w-1 cursor-col-resize flex-shrink-0 transition-colors ${
-            isResizing ? 'bg-accent-primary' : 'bg-border-default hover:bg-accent-primary/50'
-          }`}
+          className={`relative z-30 w-2 cursor-col-resize group flex-shrink-0 transition-opacity duration-300 ${isResizing ? 'opacity-100' : 'opacity-0 hover:opacity-100'
+            }`}
           onMouseDown={handleMouseDown}
           onKeyDown={handleDividerKeyDown}
-        />
+        >
+          <div className="absolute inset-y-[20%] left-1/2 -translate-x-1/2 w-0.5 bg-gradient-to-b from-transparent via-cyan-400 to-transparent shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
+        </div>
 
-        {/* Right Panel - Preview (Flexible with Container Queries) */}
-        <div className="flex-1 overflow-auto bg-bg-primary">
+        {/* Right Panel - Preview Canvas Environment */}
+        <div className="flex-1 relative z-10 overflow-auto bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">
           {/* Minimum width warning */}
           {previewWidth < MIN_PREVIEW_WIDTH && previewWidth > 0 ? (
             <div className="flex items-center justify-center h-full p-8 transition-opacity duration-200">
-              <div className="text-center space-y-2">
-                <div className="text-4xl">📐</div>
-                <p className="text-text-secondary font-medium">Preview too small</p>
-                <p className="text-text-tertiary text-sm">
-                  Drag the divider left to expand the preview area
+              <div className="text-center space-y-4 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 shadow-2xl">
+                <Ruler className="w-16 h-16 text-white/40 animate-bounce mx-auto" />
+                <h3 className="text-xl font-bold text-white">Canvas Too Compressed</h3>
+                <p className="text-white/60 text-sm max-w-[200px] mx-auto">
+                  Expand the workspace to reveal the design preview
                 </p>
               </div>
             </div>
           ) : (
             <div
               ref={previewContainerRef}
-              className={`flex items-start justify-center p-8 min-h-full transition-all duration-300 ease-in-out ${
-                viewportMode.type !== 'desktop' ? 'bg-bg-secondary' : ''
-              }`}
+              className="flex items-center justify-center p-20 min-h-full transition-all duration-700 ease-[cubic-bezier(0.34, 1.56, 0.64, 1)]"
               style={{
-                // Container type for container queries (T048)
                 containerType: 'inline-size',
               }}
             >
-              <DesignPreviewCanvas
-                config={config}
-                galleryId={galleryId}
-                viewportMode={viewportMode}
-                viewerCount={viewerCount}
-                collaborators={collaborators}
-              />
+              <div className="relative group">
+                {/* Decorative Atmosphere Glow */}
+                <div className="absolute -inset-20 bg-cyan-500/10 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+
+                <DesignPreviewCanvas
+                  config={config}
+                  galleryId={galleryId}
+                  viewportMode={viewportMode}
+                  viewerCount={viewerCount}
+                  collaborators={collaborators}
+                />
+              </div>
             </div>
           )}
         </div>

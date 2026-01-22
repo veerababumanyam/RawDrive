@@ -103,11 +103,11 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
   const getViewportLabel = () => {
     switch (viewportMode.type) {
       case 'mobile':
-        return '📱 Mobile';
+        return 'Mobile';
       case 'tablet':
-        return '📋 Tablet';
+        return 'Tablet';
       default:
-        return '🖥️ Desktop';
+        return 'Desktop';
     }
   };
 
@@ -127,42 +127,42 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
       }}
     >
       {/* Preview Header with Collaboration Info */}
-      <div className="mb-4 transition-opacity duration-200">
+      <div className="mb-6 bg-black/30 backdrop-blur-xl border border-white/10 rounded-2xl p-5 transition-opacity duration-200">
         <div className="flex items-center justify-between mb-2">
-          <h3 className={`font-semibold text-text-primary ${textClasses.body}`}>
+          <h3 className={`text-white/90 font-bold uppercase tracking-[0.2em] ${textClasses.body}`}>
             {coverStyle?.name || 'Unknown Style'}
           </h3>
 
           {/* Viewer Count Badge */}
           {viewerCount > 0 && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full border border-blue-200 transition-transform duration-200 hover:scale-105">
-              <EyeIcon className="h-3.5 w-3.5 text-blue-600" />
-              <span className="text-xs font-medium text-blue-600">{viewerCount}</span>
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/10 transition-transform duration-200 hover:scale-105">
+              <EyeIcon className="h-3 w-3 text-cyan-400" />
+              <span className="text-[10px] font-bold text-white/90 leading-none">{viewerCount}</span>
             </div>
           )}
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <p className={`text-text-secondary ${textClasses.body}`}>
-            {getViewportLabel()} Preview •{' '}
-            {config.theme.id} Theme • {config.typography.pairingId} Fonts
+          <p className={`text-white/40 font-medium ${textClasses.body}`}>
+            {getViewportLabel()} Mode •{' '}
+            <span className="text-white/60">{config.theme.id}</span> • <span className="text-white/60">{config.typography.pairingId}</span>
             {!containerQueriesSupported && (
-              <span className="ml-2 text-amber-600" title="Container queries not supported, using viewport queries">
-                (viewport fallback)
+              <span className="ml-2 text-amber-500/80" title="Container queries not supported, using viewport queries">
+                (fallback)
               </span>
             )}
           </p>
 
           {/* Collaborators */}
           {collaborators.length > 0 && (
-            <CollaboratorPresence collaborators={collaborators} maxVisible={3} className="ml-2" />
+            <CollaboratorPresence collaborators={collaborators} maxVisible={3} className="ml-2 scale-90" />
           )}
         </div>
       </div>
 
       {/* Cover Preview Container - with smooth transitions (T052) */}
       <div
-        className="rounded-lg shadow-2xl overflow-hidden bg-white border border-border-default transition-all duration-300 ease-in-out"
+        className="rounded-3xl shadow-[0_50px_100px_-20px_rgba(0,0,0,0.6)] overflow-hidden bg-black border border-white/20 transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
         style={{
           aspectRatio:
             viewportMode.type === 'mobile'
@@ -184,9 +184,9 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
       </div>
 
       {/* Gallery Grid Preview - Container Query Responsive (T048, T049) */}
-      <div className="mt-6">
-        <h4 className={`font-semibold text-text-primary mb-3 ${textClasses.body}`}>
-          Gallery Grid Preview
+      <div className="mt-12 group/grid">
+        <h4 className={`text-white/30 font-bold uppercase tracking-[0.2em] mb-4 group-hover/grid:text-white/50 transition-colors ${textClasses.body}`}>
+          Secondary Gallery Section
         </h4>
         <div
           className={`grid gap-2 transition-all duration-300 ${gridClasses}`}
@@ -199,34 +199,30 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="aspect-square rounded-lg bg-gradient-to-br from-bg-secondary to-bg-tertiary border border-border-default flex items-center justify-center transition-all duration-200 hover:scale-[1.02] hover:shadow-md"
+              className="aspect-square rounded-2xl bg-white/[0.03] border border-white/[0.05] flex items-center justify-center transition-all duration-500 hover:bg-white/[0.08] hover:border-white/20 hover:scale-[1.02] hover:shadow-xl group/item"
             >
-              <span className="text-text-tertiary text-xs font-medium">Photo {i}</span>
+              <div className="w-8 h-px bg-white/10 group-hover/item:bg-cyan-400 group-hover/item:w-12 transition-all duration-500" />
             </div>
           ))}
         </div>
-        <p className={`mt-2 text-text-tertiary ${textClasses.body}`}>
-          Grid: {config.grid.style} • {config.grid.size} • {config.grid.spacing}
+        <p className={`mt-4 text-white/20 font-medium ${textClasses.body}`}>
+          Grid Style: <span className="text-white/40">{config.grid.style}</span> • <span className="text-white/40">{config.grid.size}</span>
         </p>
       </div>
 
-      {/* Cover Info - Container Query Responsive Text (T050) */}
-      <div className="mt-4 p-3 bg-bg-secondary rounded space-y-1 transition-all duration-200">
-        <div className={textClasses.body}>
-          <span className="text-text-primary font-medium">Style:</span>{' '}
-          <span className="text-text-secondary">{coverStyle?.name}{coverStyle?.premium && ' ✨'}</span>
+      {/* Cover Info Section - Balanced & Centered */}
+      <div className="mt-12 p-8 bg-black/40 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 flex flex-wrap justify-center gap-x-12 gap-y-6 transition-all duration-300">
+        <div className="text-center group/info">
+          <span className="text-white/20 font-black uppercase tracking-[0.3em] text-[8px] group-hover/info:text-cyan-400/50 transition-colors">Style Atmosphere</span>
+          <div className="text-white/80 font-bold text-xs mt-1">{coverStyle?.name}{coverStyle?.premium && ' ✨'}</div>
         </div>
-        <div className={textClasses.body}>
-          <span className="text-text-primary font-medium">Theme:</span>{' '}
-          <span className="text-text-secondary">{config.theme.id} ({config.theme.mode})</span>
+        <div className="text-center group/info">
+          <span className="text-white/20 font-black uppercase tracking-[0.3em] text-[8px] group-hover/info:text-cyan-400/50 transition-colors">Visual Identity</span>
+          <div className="text-white/80 font-bold text-xs mt-1">{config.theme.id} • {config.theme.mode}</div>
         </div>
-        <div className={textClasses.body}>
-          <span className="text-text-primary font-medium">Typography:</span>{' '}
-          <span className="text-text-secondary">{config.typography.pairingId}</span>
-        </div>
-        <div className={textClasses.body}>
-          <span className="text-text-primary font-medium">Grid:</span>{' '}
-          <span className="text-text-secondary">{config.grid.style} • {config.grid.size} • {config.grid.spacing}</span>
+        <div className="text-center group/info">
+          <span className="text-white/20 font-black uppercase tracking-[0.3em] text-[8px] group-hover/info:text-cyan-400/50 transition-colors">Type Curation</span>
+          <div className="text-white/80 font-bold text-xs mt-1">{config.typography.pairingId}</div>
         </div>
       </div>
     </div>

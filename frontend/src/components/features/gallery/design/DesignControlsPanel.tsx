@@ -24,6 +24,14 @@ import { LockableControlSection } from './ControlLockIndicator';
 import { ThemeSelector } from './ThemeSelector';
 import { CoverStyleGrid } from './CoverStyleGrid';
 import { useSubscription } from '../../../../hooks/useSubscription';
+import { DesignStudioTooltip } from './DesignStudioTooltip';
+import {
+  Image as ImageIcon,
+  Type as TypeIcon,
+  Palette,
+  LayoutGrid,
+  Construction
+} from 'lucide-react';
 
 type DesignSection = 'cover' | 'typography' | 'theme' | 'grid';
 
@@ -95,79 +103,86 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-surface">
-      {/* Status Bar */}
-      <div className="px-4 py-3 border-b border-border-default">
+    <div className="h-full flex flex-col bg-transparent text-white font-sans">
+      {/* Header Section - Enhanced Contrast */}
+      <div className="px-6 py-8 border-b border-white/10 bg-black/40 backdrop-blur-3xl rounded-t-[2.5rem]">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="font-semibold text-sm text-text-primary">Controls</h2>
+          <h2 className="text-xl font-black tracking-tight text-white drop-shadow-lg uppercase">Appearance</h2>
           <div className="flex items-center gap-2">
             {saveStatus === 'saving' && (
-              <div className="text-xs text-accent-primary flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-accent-primary rounded-full animate-pulse" />
-                Saving...
+              <div className="flex items-center gap-2 px-3 py-1 bg-cyan-400/20 rounded-full border border-cyan-400/30 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+                <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
+                <span className="text-[9px] font-black text-cyan-400 uppercase tracking-[0.2em]">Syncing</span>
               </div>
             )}
-            {saveStatus === 'saved' && (
-              <div className="text-xs text-green-600">✓ Saved</div>
-            )}
             {error && (
-              <div className="text-xs text-red-600">⚠ Error</div>
+              <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 rounded-full border border-red-500/30">
+                <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+                <span className="text-[9px] font-black text-red-500 uppercase tracking-[0.2em]">Error</span>
+              </div>
             )}
           </div>
         </div>
-        {lastSavedAt && (
-          <div className="text-xs text-text-tertiary">
-            {lastSavedAt.toLocaleTimeString()}
-          </div>
-        )}
+        <p className="text-[11px] text-white/50 font-bold uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded-md inline-block">Visual Identity Engine</p>
       </div>
 
-      {/* Tab Navigation */}
-      <div role="tablist" aria-label="Design control sections" className="flex gap-0 px-2 pt-2 border-b border-border-default">
-        {[
-          { tab: 'cover' as DesignSection, label: 'Cover', icon: '🖼️' },
-          { tab: 'typography' as DesignSection, label: 'Typography', icon: '✍️' },
-          { tab: 'theme' as DesignSection, label: 'Theme', icon: '🎨' },
-          { tab: 'grid' as DesignSection, label: 'Grid', icon: '⊞' },
-        ].map(({ tab, label, icon }) => (
-          <button
-            key={tab}
-            role="tab"
-            id={`tab-${tab}`}
-            aria-selected={activeTab === tab}
-            aria-controls={`panel-${tab}`}
-            onClick={() => setActiveTab(tab)}
-            onKeyDown={(e) => handleTabKeyDown(e, tab)}
-            className={`flex-1 px-3 py-2 text-xs font-medium rounded-t border-b-2 transition-colors ${
-              activeTab === tab
-                ? 'border-accent-primary text-accent-primary'
-                : 'border-transparent text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            <span aria-hidden="true">{icon}</span>
-            <div className="text-xs mt-0.5">{label}</div>
-          </button>
-        ))}
+      {/* Tab Navigation - Capsule Segmented Control */}
+      <div className="px-6 py-4">
+        <div
+          role="tablist"
+          aria-label="Design control sections"
+          className="flex bg-black/20 backdrop-blur-md rounded-[1.25rem] p-1.5 border border-white/5"
+        >
+          {[
+            { tab: 'cover' as DesignSection, label: 'Cover', icon: <ImageIcon className="w-4 h-4" /> },
+            { tab: 'typography' as DesignSection, label: 'Type', icon: <TypeIcon className="w-4 h-4" /> },
+            { tab: 'theme' as DesignSection, label: 'Theme', icon: <Palette className="w-4 h-4" /> },
+            { tab: 'grid' as DesignSection, label: 'Grid', icon: <LayoutGrid className="w-4 h-4" /> },
+          ].map(({ tab, label, icon }) => (
+            <DesignStudioTooltip key={tab} content={label} position="bottom">
+              <button
+                role="tab"
+                id={`tab-${tab}`}
+                aria-selected={activeTab === tab}
+                aria-controls={`panel-${tab}`}
+                onClick={() => setActiveTab(tab)}
+                onKeyDown={(e) => handleTabKeyDown(e, tab)}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl transition-all duration-300 relative min-w-0 ${activeTab === tab
+                  ? 'bg-white text-[#0a1628] shadow-lg scale-[1.02]'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                  }`}
+              >
+                {icon}
+                <span className="text-[9px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{label}</span>
+                {activeTab === tab && (
+                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                )}
+              </button>
+            </DesignStudioTooltip>
+          ))}
+        </div>
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto px-6 py-2 scrollbar-thin scrollbar-white/10">
         {activeTab === 'cover' && (
           <LockableControlSection
             isLocked={lockedSections.has('cover')}
             lockedByUser={lockedSections.get('cover')?.locked_by_user_name}
             section="cover"
           >
-            <div className="space-y-4">
-              <h3 className="font-medium text-sm text-text-primary mb-2">Cover Styles</h3>
-              <CoverStyleGrid
-                selectedStyle={config.cover?.style || 'classic'}
-                onSelectStyle={(styleId) => onChange({ cover: { ...config.cover, style: styleId as CoverStyleId } })}
-                category={coverCategory}
-                onCategoryChange={setCoverCategory}
-                isPremiumUser={isPaid}
-                onPremiumStyleBlocked={handlePremiumStyleBlocked}
-              />
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Gallery Cover Mode</h3>
+                <CoverStyleGrid
+                  selectedStyle={config.cover?.style || 'classic'}
+                  onSelectStyle={(styleId) => onChange({ cover: { ...config.cover, style: styleId as CoverStyleId } })}
+                  category={coverCategory}
+                  onCategoryChange={setCoverCategory}
+                  isPremiumUser={isPaid}
+                  onPremiumStyleBlocked={handlePremiumStyleBlocked}
+                />
+              </div>
             </div>
           </LockableControlSection>
         )}
@@ -178,22 +193,23 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
             lockedByUser={lockedSections.get('typography')?.locked_by_user_name}
             section="typography"
           >
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
-                <h3 className="font-medium text-sm text-text-primary mb-3">Font Pairing</h3>
-                <div className="space-y-2">
+                <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Font Curation</h3>
+                <div className="space-y-3">
                   {Object.values(FONT_PAIRINGS).map((pairing) => (
                     <button
                       key={pairing.id}
                       onClick={() => onChange({ typography: { pairingId: pairing.id as FontPairingId } })}
-                      className={`w-full text-left px-3 py-2 rounded border text-xs transition-colors ${
-                        config.typography.pairingId === pairing.id
-                          ? 'border-accent-primary bg-accent-primary/10 text-accent-primary font-medium'
-                          : 'border-border-default hover:border-accent-primary/50'
-                      }`}
+                      className={`group w-full text-left px-5 py-4 rounded-2xl border transition-all duration-300 ${config.typography.pairingId === pairing.id
+                        ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_20px_rgba(34,211,238,0.15)]'
+                        : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10'
+                        }`}
                     >
-                      <div className="font-medium">{pairing.name}</div>
-                      <div className="text-text-secondary text-xs">{pairing.description}</div>
+                      <div className={`text-sm font-bold transition-colors ${config.typography.pairingId === pairing.id ? 'text-cyan-400' : 'text-white/80 group-hover:text-white'}`}>
+                        {pairing.name}
+                      </div>
+                      <div className="text-[11px] text-white/40 mt-1 leading-relaxed">{pairing.description}</div>
                     </button>
                   ))}
                 </div>
@@ -208,13 +224,15 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
             lockedByUser={lockedSections.get('theme')?.locked_by_user_name}
             section="theme"
           >
-            <ThemeSelector
-              selectedTheme={config.theme.id}
-              selectedMode={config.theme.mode}
-              onThemeChange={(themeId) => onChange({ theme: { ...config.theme, id: themeId } })}
-              onModeChange={(mode) => onChange({ theme: { ...config.theme, mode } })}
-              disabled={lockedSections.has('theme')}
-            />
+            <div className="py-2">
+              <ThemeSelector
+                selectedTheme={config.theme.id}
+                selectedMode={config.theme.mode}
+                onThemeChange={(themeId) => onChange({ theme: { ...config.theme, id: themeId } })}
+                onModeChange={(mode) => onChange({ theme: { ...config.theme, mode } })}
+                disabled={lockedSections.has('theme')}
+              />
+            </div>
           </LockableControlSection>
         )}
 
@@ -224,11 +242,10 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
             lockedByUser={lockedSections.get('grid')?.locked_by_user_name}
             section="grid"
           >
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-medium text-sm text-text-primary mb-2">Grid Layout</h3>
-                <p className="text-xs text-text-secondary">Grid layout options will be implemented in Phase 2.</p>
-              </div>
+            <div className="py-8 flex flex-col items-center justify-center text-center opacity-40">
+              <Construction className="w-10 h-10 text-white/40 mb-4" />
+              <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-2">Grid Engine</h3>
+              <p className="text-xs text-white/60">Layout orchestration arriving in Phase 2.</p>
             </div>
           </LockableControlSection>
         )}

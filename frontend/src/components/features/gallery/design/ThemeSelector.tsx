@@ -14,6 +14,8 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { ThemeId, ThemeMode } from '../../../../types/gallery-design';
 import { GALLERY_THEMES } from '../../../../constants/galleryThemes';
+import { DesignStudioTooltip } from './DesignStudioTooltip';
+import { Check } from 'lucide-react';
 
 interface ThemeSelectorProps {
   selectedTheme: ThemeId;
@@ -93,16 +95,16 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       {/* Theme Grid - Bento Layout */}
       <div>
-        <h3 className="font-medium text-sm text-text-primary mb-3">Theme</h3>
+        <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Color Atmosphere</h3>
         <div
           ref={gridRef}
           role="listbox"
           aria-label="Select gallery theme"
           aria-activedescendant={focusedIndex >= 0 ? `theme-${THEME_LIST[focusedIndex]?.id}` : undefined}
-          className="grid grid-cols-3 gap-2"
+          className="grid grid-cols-3 gap-3"
           onKeyDown={handleKeyDown}
         >
           {THEME_LIST.map((theme, index) => (
@@ -121,9 +123,9 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
       </div>
 
       {/* Mode Toggle */}
-      <div className="border-t border-border-default pt-3">
-        <h4 className="text-xs font-medium text-text-primary mb-2">Mode</h4>
-        <div className="flex gap-1 p-1 bg-bg-secondary rounded-lg" role="radiogroup" aria-label="Theme mode">
+      <div className="pt-4 border-t border-white/5">
+        <h4 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Luminance Mode</h4>
+        <div className="flex bg-black/30 backdrop-blur-md rounded-2xl p-1.5 border border-white/5" role="radiogroup" aria-label="Theme mode">
           {(['light', 'dark', 'system'] as ThemeMode[]).map((mode) => (
             <button
               key={mode}
@@ -131,16 +133,12 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
               aria-checked={selectedMode === mode}
               onClick={() => onModeChange(mode)}
               disabled={disabled}
-              className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                selectedMode === mode
-                  ? 'bg-accent-primary text-white shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-              } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-300 ${selectedMode === mode
+                ? 'bg-white text-[#0a1628] shadow-lg scale-[1.02]'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                } ${disabled ? 'opacity-20 cursor-not-allowed' : ''}`}
             >
-              {mode === 'light' && '☀️ '}
-              {mode === 'dark' && '🌙 '}
-              {mode === 'system' && '💻 '}
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              {mode}
             </button>
           ))}
         </div>
@@ -174,84 +172,86 @@ const ThemeSwatch: React.FC<ThemeSwatchProps> = ({
   const tokens = theme[mode];
 
   return (
-    <button
-      id={`theme-${theme.id}`}
-      role="option"
-      aria-selected={isSelected}
-      aria-label={`${theme.name}: ${theme.description}`}
-      onClick={onSelect}
-      onFocus={onFocus}
-      disabled={disabled}
-      className={`group relative flex flex-col p-2 rounded-lg border-2 transition-all ${
-        isSelected
-          ? 'border-accent-primary ring-2 ring-accent-primary/30 shadow-md'
+    <DesignStudioTooltip content={theme.description} position="right">
+      <button
+        id={`theme-${theme.id}`}
+        role="option"
+        aria-selected={isSelected}
+        aria-label={`${theme.name}: ${theme.description}`}
+        onClick={onSelect}
+        onFocus={onFocus}
+        disabled={disabled}
+        className={`group relative flex flex-col p-2.5 rounded-2xl border transition-all duration-300 ${isSelected
+          ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_20px_rgba(34,211,238,0.15)] scale-[1.02]'
           : isFocused
-            ? 'border-accent-primary/50 shadow-sm'
-            : 'border-border-default hover:border-accent-primary/50 hover:shadow-sm'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-      title={theme.description}
-    >
-      {/* Color Swatch Preview */}
-      <div
-        className="relative aspect-[4/3] rounded overflow-hidden mb-2"
-        style={{ backgroundColor: tokens.bgPrimary }}
+            ? 'border-white/20 bg-white/5 shadow-xl'
+            : 'border-white/5 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05]'
+          } ${disabled ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
       >
-        {/* Color bars showing theme colors */}
-        <div className="absolute inset-0 flex flex-col">
-          {/* Primary background */}
-          <div
-            className="flex-1"
-            style={{ backgroundColor: tokens.bgPrimary }}
-          />
-          {/* Secondary background bar */}
-          <div
-            className="h-2"
-            style={{ backgroundColor: tokens.bgSecondary }}
-          />
-          {/* Accent color bar */}
-          <div
-            className="h-2"
-            style={{ backgroundColor: tokens.accentPrimary }}
-          />
-        </div>
-
-        {/* Text color sample */}
+        {/* Color Swatch Preview */}
         <div
-          className="absolute top-1 left-1.5 text-xs font-semibold"
-          style={{ color: tokens.textPrimary }}
+          className="relative aspect-square rounded-xl overflow-hidden mb-3 shadow-inner"
+          style={{ backgroundColor: tokens.bgPrimary }}
         >
-          Aa
-        </div>
-
-        {/* Accent swatch dots */}
-        <div className="absolute bottom-1 right-1 flex gap-0.5">
-          {theme.accentSwatches.slice(0, 3).map((swatch, i) => (
+          {/* Color bars showing theme colors */}
+          <div className="absolute inset-0 flex flex-col">
+            {/* Primary background */}
             <div
-              key={i}
-              className="w-2 h-2 rounded-full border border-white/50"
-              style={{ backgroundColor: swatch.hex }}
+              className="flex-1"
+              style={{ backgroundColor: tokens.bgPrimary }}
             />
-          ))}
-        </div>
-
-        {/* Selection Checkmark */}
-        {isSelected && (
-          <div className="absolute inset-0 flex items-center justify-center bg-accent-primary/20">
-            <div className="w-5 h-5 rounded-full bg-accent-primary flex items-center justify-center text-white text-xs shadow-md">
-              ✓
-            </div>
+            {/* Secondary background bar */}
+            <div
+              className="h-2"
+              style={{ backgroundColor: tokens.bgSecondary }}
+            />
+            {/* Accent color bar */}
+            <div
+              className="h-2"
+              style={{ backgroundColor: tokens.accentPrimary }}
+            />
           </div>
-        )}
-      </div>
 
-      {/* Theme Name */}
-      <div className="text-left">
-        <div className="font-medium text-xs text-text-primary truncate">{theme.name}</div>
-        <div className="text-xs text-text-tertiary truncate opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity">
-          {theme.description.length > 25 ? theme.description.slice(0, 25) + '...' : theme.description}
+          {/* Text color sample */}
+          <div
+            className="absolute top-1 left-1.5 text-xs font-semibold"
+            style={{ color: tokens.textPrimary }}
+          >
+            Aa
+          </div>
+
+          {/* Accent swatch dots */}
+          <div className="absolute bottom-1 right-1 flex gap-0.5">
+            {theme.accentSwatches.slice(0, 3).map((swatch, i) => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full border border-white/50"
+                style={{ backgroundColor: swatch.hex }}
+              />
+            ))}
+          </div>
+
+          {/* Selection Checkmark */}
+          {isSelected && (
+            <div className="absolute inset-0 flex items-center justify-center bg-accent-primary/20">
+              <div className="w-5 h-5 rounded-full bg-accent-primary flex items-center justify-center shadow-md">
+                <Check className="w-3 h-3 text-white" />
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    </button>
+
+        {/* Theme Name - Centered Alignment */}
+        <div className="flex flex-col items-center px-1">
+          <div className={`text-[10px] font-bold uppercase tracking-widest text-center transition-colors ${isSelected ? 'text-cyan-400' : 'text-white/80 group-hover:text-white'}`}>
+            {theme.name}
+          </div>
+          <div className="text-[9px] text-white/30 font-medium truncate mt-0.5 text-center group-hover:text-white/50 transition-colors">
+            {theme.description}
+          </div>
+        </div>
+      </button>
+    </DesignStudioTooltip >
   );
 };
 
