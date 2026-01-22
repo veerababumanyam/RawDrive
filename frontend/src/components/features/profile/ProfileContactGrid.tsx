@@ -2,7 +2,8 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Phone, Calendar, Globe, ExternalLink, LucideIcon } from 'lucide-react';
 import { ProfileTheme } from './ProfileThemeEngine';
-import { ProfileBentoGrid, ProfileBentoItem } from './ProfileBentoGrid';
+import { ProfileBentoGrid } from './ProfileBentoGrid';
+import { ProfileGridItem } from './ProfileGridItem';
 import { CustomLink } from '../../../types/personalProfile';
 
 interface ProfileContactGridProps {
@@ -104,7 +105,7 @@ export const ProfileContactGrid: React.FC<ProfileContactGridProps> = ({
             <ProfileBentoGrid>
                 {/* Booking - Primary CTA (Large) */}
                 {bookingUrl && (
-                    <ProfileBentoItem colSpan={4} rowSpan={1}>
+                    <ProfileGridItem theme={theme} colSpan={4} rowSpan={1}>
                         <ContactCard
                             theme={theme}
                             icon={Calendar}
@@ -115,12 +116,12 @@ export const ProfileContactGrid: React.FC<ProfileContactGridProps> = ({
                             brandColor={brandColor}
                             delay={0.1}
                         />
-                    </ProfileBentoItem>
+                    </ProfileGridItem>
                 )}
 
                 {/* Email */}
                 {email && (
-                    <ProfileBentoItem colSpan={bookingUrl ? 2 : 3} rowSpan={1}>
+                    <ProfileGridItem theme={theme} colSpan={bookingUrl ? 2 : 3} rowSpan={1}>
                         <ContactCard
                             theme={theme}
                             icon={Mail}
@@ -129,12 +130,12 @@ export const ProfileContactGrid: React.FC<ProfileContactGridProps> = ({
                             href={`mailto:${email}`}
                             delay={0.2}
                         />
-                    </ProfileBentoItem>
+                    </ProfileGridItem>
                 )}
 
                 {/* Website */}
                 {website && (
-                    <ProfileBentoItem colSpan={phone ? 3 : bookingUrl ? 2 : 3} rowSpan={1}>
+                    <ProfileGridItem theme={theme} colSpan={phone ? 3 : bookingUrl ? 2 : 3} rowSpan={1}>
                         <ContactCard
                             theme={theme}
                             icon={Globe}
@@ -143,12 +144,12 @@ export const ProfileContactGrid: React.FC<ProfileContactGridProps> = ({
                             href={website}
                             delay={0.3}
                         />
-                    </ProfileBentoItem>
+                    </ProfileGridItem>
                 )}
 
                 {/* Phone */}
                 {phone && (
-                    <ProfileBentoItem colSpan={3} rowSpan={1}>
+                    <ProfileGridItem theme={theme} colSpan={3} rowSpan={1}>
                         <ContactCard
                             theme={theme}
                             icon={Phone}
@@ -157,12 +158,12 @@ export const ProfileContactGrid: React.FC<ProfileContactGridProps> = ({
                             href={`tel:${phone}`}
                             delay={0.4}
                         />
-                    </ProfileBentoItem>
+                    </ProfileGridItem>
                 )}
 
                 {/* Custom Links */}
                 {customLinks.map((link, index) => (
-                    <ProfileBentoItem key={index} colSpan={6} rowSpan={1}>
+                    <ProfileGridItem theme={theme} key={index} colSpan={4} rowSpan={1}>
                         <motion.a
                             href={link.url}
                             target="_blank"
@@ -182,7 +183,7 @@ export const ProfileContactGrid: React.FC<ProfileContactGridProps> = ({
                             <span className="font-medium">{link.label}</span>
                             <ExternalLink className={`w-4 h-4 ${theme.colors.textSecondary}`} />
                         </motion.a>
-                    </ProfileBentoItem>
+                    </ProfileGridItem>
                 ))}
             </ProfileBentoGrid>
         </div>

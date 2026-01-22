@@ -13,6 +13,7 @@ import {
   CreditCard,
   Package,
   Star,
+  Globe,
 } from 'lucide-react';
 import {
   Modal,
@@ -128,6 +129,7 @@ export const AddressForm: React.FC<AddressFormProps> = ({
   const [state, setState] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [country, setCountry] = useState('United States');
+  const [googleMapLink, setGoogleMapLink] = useState('');
   const [isPrimary, setIsPrimary] = useState(false);
 
   // UI state
@@ -143,6 +145,7 @@ export const AddressForm: React.FC<AddressFormProps> = ({
       setState(address.state || '');
       setPostalCode(address.postal_code || '');
       setCountry(address.country || 'United States');
+      setGoogleMapLink(address.google_map_link || '');
       setIsPrimary(address.is_primary);
     } else if (isOpen && !address) {
       // Reset for new address
@@ -153,6 +156,7 @@ export const AddressForm: React.FC<AddressFormProps> = ({
       setState('');
       setPostalCode('');
       setCountry('United States');
+      setGoogleMapLink('');
       setIsPrimary(false);
     }
   }, [isOpen, address]);
@@ -192,6 +196,7 @@ export const AddressForm: React.FC<AddressFormProps> = ({
         state: state.trim(),
         postal_code: postalCode.trim(),
         country: country.trim(),
+        google_map_link: googleMapLink.trim() || undefined,
         is_primary: isPrimary,
       };
 
@@ -340,6 +345,18 @@ export const AddressForm: React.FC<AddressFormProps> = ({
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Google Map Link */}
+            <div>
+              <AppInput
+                type="url"
+                label="Google Maps Link (Optional)"
+                value={googleMapLink}
+                onChange={(e) => setGoogleMapLink(e.target.value)}
+                placeholder="https://maps.google.com/..."
+                leftIcon={<Globe className="h-4 w-4" />}
+              />
             </div>
 
             {/* Primary Toggle */}

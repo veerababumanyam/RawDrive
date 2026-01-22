@@ -215,7 +215,8 @@ class ContactService:
         client_id: UUID,
         contact_type: str,
         value: str,
-        contact_subtype: Optional[str] = None,
+        label: Optional[str] = None,
+        country_code: Optional[str] = None,
         is_primary: bool = False,
     ) -> dict:
         """Add a contact method to a client.
@@ -225,7 +226,7 @@ class ContactService:
             client_id: Client to add contact to
             contact_type: Type of contact (email, phone, website, social)
             value: Contact value (email address, phone number, etc.)
-            contact_subtype: Subtype (work, personal, instagram, etc.)
+            label: Subtype (work, personal, instagram, etc.)
             is_primary: Whether this is the primary contact of this type
 
         Returns:
@@ -245,10 +246,10 @@ class ContactService:
             )
 
         # Validate and normalize value
-        normalized_value = validate_contact_value(contact_type, value, contact_subtype)
+        normalized_value = validate_contact_value(contact_type, value, label)
 
         # Validate subtype
-        validated_subtype = validate_subtype(contact_type, contact_subtype)
+        validated_subtype = validate_subtype(contact_type, label)
 
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
@@ -279,12 +280,13 @@ class ContactService:
                     """
                     SELECT 1 FROM client_contacts
                     WHERE workspace_id = $1 AND client_id = $2
-                    AND contact_type = $3 AND value = $4
+                    AND contact_type = $3 AND value = $4 AND (country_code = $5 OR country_code IS NULL)
                     """,
                     workspace_id,
                     client_id,
                     contact_type,
                     normalized_value,
+                    country_code,
                 )
 
             if duplicate:
@@ -309,10 +311,10 @@ class ContactService:
                 row = await conn.fetchrow(
                     """
                     INSERT INTO client_contacts (
-                        workspace_id, client_id, contact_type, contact_subtype,
-                        value, is_primary, verified
+                        workspace_id, client_id, contact_type, label,
+                        value, country_code, is_primary, is_verified
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, FALSE)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE)
                     RETURNING contact_id, created_at
                     """,
                     workspace_id,
@@ -320,6 +322,7 @@ class ContactService:
                     contact_type,
                     validated_subtype,
                     normalized_value,
+                    country_code,
                     is_primary,
                 )
 
@@ -336,10 +339,11 @@ class ContactService:
                 return {
                     "contact_id": str(row["contact_id"]),
                     "contact_type": contact_type,
-                    "contact_subtype": validated_subtype,
+                    "label": validated_subtype,
                     "value": normalized_value,
+                    "country_code": country_code,
                     "is_primary": is_primary,
-                    "verified": False,
+                    "is_verified": False,
                     "created_at": row["created_at"].isoformat(),
                 }
 
@@ -349,7 +353,8 @@ class ContactService:
         client_id: UUID,
         contact_id: UUID,
         value: Optional[str] = None,
-        contact_subtype: Optional[str] = None,
+        label: Optional[str] = None,
+        country_code: Optional[str] = None,
         is_primary: Optional[bool] = None,
     ) -> dict:
         """Update a contact method.
@@ -359,7 +364,7 @@ class ContactService:
             client_id: Client owning the contact
             contact_id: Contact to update
             value: New contact value (optional)
-            contact_subtype: New subtype (optional)
+            label: New subtype (optional)
             is_primary: Set as primary (optional)
 
         Returns:
@@ -375,7 +380,7 @@ class ContactService:
             # Get existing contact
             contact = await conn.fetchrow(
                 """
-                SELECT contact_id, contact_type, contact_subtype, value, is_primary, verified, created_at
+                SELECT contact_id, contact_type, label, value, country_code, is_primary, is_verified, created_at
                 FROM client_contacts
                 WHERE workspace_id = $1 AND client_id = $2 AND contact_id = $3
                 """,
@@ -388,12 +393,13 @@ class ContactService:
 
             contact_type = contact["contact_type"]
             new_value = contact["value"]
-            new_subtype = contact["contact_subtype"]
+            new_subtype = contact["label"]
+            new_country_code = contact["country_code"]
             new_is_primary = contact["is_primary"]
 
             # Validate and update value if provided
             if value is not None:
-                new_value = validate_contact_value(contact_type, value, contact_subtype or new_subtype)
+                new_value = validate_contact_value(contact_type, value, label or new_subtype)
 
                 # Check for duplicate with new value
                 if new_value.lower() != contact["value"].lower():
@@ -414,12 +420,15 @@ class ContactService:
                         raise ContactDuplicateError(contact_type, new_value)
 
             # Validate and update subtype if provided
-            if contact_subtype is not None:
-                new_subtype = validate_subtype(contact_type, contact_subtype)
+            if label is not None:
+                new_subtype = validate_subtype(contact_type, label)
 
             # Update primary status if provided
             if is_primary is not None:
                 new_is_primary = is_primary
+
+            if country_code is not None:
+                new_country_code = country_code
 
             async with conn.transaction():
                 # If setting as primary, unset existing primary
@@ -442,11 +451,12 @@ class ContactService:
                 await conn.execute(
                     """
                     UPDATE client_contacts
-                    SET value = $1, contact_subtype = $2, is_primary = $3
-                    WHERE workspace_id = $4 AND contact_id = $5
+                    SET value = $1, label = $2, country_code = $3, is_primary = $4
+                    WHERE workspace_id = $5 AND contact_id = $6
                     """,
                     new_value,
                     new_subtype,
+                    new_country_code,
                     new_is_primary,
                     workspace_id,
                     contact_id,
@@ -464,10 +474,11 @@ class ContactService:
                 return {
                     "contact_id": str(contact_id),
                     "contact_type": contact_type,
-                    "contact_subtype": new_subtype,
+                    "label": new_subtype,
                     "value": new_value,
+                    "country_code": new_country_code,
                     "is_primary": new_is_primary,
-                    "verified": contact["verified"],
+                    "is_verified": contact["is_verified"],
                     "created_at": contact["created_at"].isoformat(),
                 }
 
@@ -587,7 +598,7 @@ class ContactService:
             # Get contact
             contact = await conn.fetchrow(
                 """
-                SELECT contact_id, contact_type, contact_subtype, value, is_primary, verified, created_at
+                SELECT contact_id, contact_type, label, value, country_code, is_primary, is_verified, created_at
                 FROM client_contacts
                 WHERE workspace_id = $1 AND client_id = $2 AND contact_id = $3
                 """,
@@ -603,10 +614,11 @@ class ContactService:
                 return {
                     "contact_id": str(contact_id),
                     "contact_type": contact["contact_type"],
-                    "contact_subtype": contact["contact_subtype"],
+                    "label": contact["label"],
                     "value": contact["value"],
+                    "country_code": contact["country_code"],
                     "is_primary": True,
-                    "verified": contact["verified"],
+                    "is_verified": contact["is_verified"],
                     "created_at": contact["created_at"].isoformat(),
                 }
 
@@ -648,10 +660,11 @@ class ContactService:
                 return {
                     "contact_id": str(contact_id),
                     "contact_type": contact["contact_type"],
-                    "contact_subtype": contact["contact_subtype"],
+                    "label": contact["label"],
                     "value": contact["value"],
+                    "country_code": contact["country_code"],
                     "is_primary": True,
-                    "verified": contact["verified"],
+                    "is_verified": contact["is_verified"],
                     "created_at": contact["created_at"].isoformat(),
                 }
 
@@ -676,8 +689,8 @@ class ContactService:
             if contact_type:
                 contacts = await conn.fetch(
                     """
-                    SELECT contact_id, contact_type, contact_subtype, value,
-                           is_primary, verified, created_at
+                    SELECT contact_id, contact_type, label, value, country_code,
+                           is_primary, is_verified, created_at
                     FROM client_contacts
                     WHERE workspace_id = $1 AND client_id = $2 AND contact_type = $3
                     ORDER BY is_primary DESC, created_at ASC
@@ -689,8 +702,8 @@ class ContactService:
             else:
                 contacts = await conn.fetch(
                     """
-                    SELECT contact_id, contact_type, contact_subtype, value,
-                           is_primary, verified, created_at
+                    SELECT contact_id, contact_type, label, value, country_code,
+                           is_primary, is_verified, created_at
                     FROM client_contacts
                     WHERE workspace_id = $1 AND client_id = $2
                     ORDER BY contact_type, is_primary DESC, created_at ASC
@@ -703,10 +716,11 @@ class ContactService:
                 {
                     "contact_id": str(c["contact_id"]),
                     "contact_type": c["contact_type"],
-                    "contact_subtype": c["contact_subtype"],
+                    "label": c["label"],
                     "value": c["value"],
+                    "country_code": c["country_code"],
                     "is_primary": c["is_primary"],
-                    "verified": c["verified"],
+                    "is_verified": c["is_verified"],
                     "created_at": c["created_at"].isoformat(),
                 }
                 for c in contacts
@@ -760,7 +774,7 @@ class ContactService:
         workspace_id: UUID,
         contact_id: UUID,
     ) -> dict:
-        """Mark a contact as verified.
+        """Mark a contact as is_verified.
 
         Args:
             workspace_id: Workspace for tenant isolation
@@ -774,10 +788,10 @@ class ContactService:
             contact = await conn.fetchrow(
                 """
                 UPDATE client_contacts
-                SET verified = TRUE
+                SET is_verified = TRUE
                 WHERE workspace_id = $1 AND contact_id = $2
-                RETURNING contact_id, contact_type, contact_subtype, value,
-                          is_primary, verified, created_at
+                RETURNING contact_id, contact_type, label, value, country_code,
+                          is_primary, is_verified, created_at
                 """,
                 workspace_id,
                 contact_id,
@@ -788,10 +802,11 @@ class ContactService:
             return {
                 "contact_id": str(contact["contact_id"]),
                 "contact_type": contact["contact_type"],
-                "contact_subtype": contact["contact_subtype"],
+                "label": contact["label"],
                 "value": contact["value"],
+                "country_code": contact["country_code"],
                 "is_primary": contact["is_primary"],
-                "verified": True,
+                "is_verified": True,
                 "created_at": contact["created_at"].isoformat(),
             }
 

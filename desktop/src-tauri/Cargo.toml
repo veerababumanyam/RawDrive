@@ -1,0 +1,72 @@
+[package]
+name = "rawdrive-sync"
+version = "0.1.0"
+description = "RawDrive Desktop Sync Application"
+authors = ["RawDrive Team"]
+license = "MIT"
+repository = "https://github.com/rawdrive/rawdrive-desktop"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-notification = "2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
+tokio = { version = "1", features = ["full"] }
+
+# File watching
+notify = "6"
+notify-debouncer-mini = "0.4"
+
+# Credential storage
+keyring = "2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# File hashing
+sha2 = "0.10"
+
+# XMP parsing/generation
+quick-xml = "0.31"
+
+# Config persistence
+directories = "5"
+
+# Async channels
+async-channel = "2"
+
+# Directory walking
+walkdir = "2"
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT remove this
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+lto = true
+opt-level = "s"
+strip = true

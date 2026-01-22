@@ -53,7 +53,7 @@ export const ActionBarTooltip: React.FC<ActionBarTooltipProps> = ({
   };
 
   return (
-    <div className="relative inline-flex">
+    <div className="relative inline-flex group">
       {React.cloneElement(children, {
         onMouseEnter: handleMouseEnter,
         onMouseLeave: handleMouseLeave,
@@ -65,11 +65,35 @@ export const ActionBarTooltip: React.FC<ActionBarTooltipProps> = ({
       {isOpen && (
         <div
           role="tooltip"
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 max-w-xs w-max rounded-md bg-gray-900 dark:bg-gray-950 text-white px-3 py-2 text-sm shadow-lg"
+          className="
+            absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 z-[100]
+            max-w-[280px] w-max px-3.5 py-2.5
+            rounded-xl shadow-2xl
+            text-xs font-medium leading-relaxed tracking-tight
+            animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-200
+          "
+          style={{
+            background: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(12px) saturate(160%)',
+            WebkitBackdropFilter: 'blur(12px) saturate(160%)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            color: 'white',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+          }}
         >
-          {content}
+          <div className="relative z-10 text-center">
+            {content}
+          </div>
+
           {/* Arrow pointing down */}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-4 border-transparent border-t-gray-900 dark:border-t-gray-950" />
+          <div
+            className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0"
+            style={{
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderTop: '6px solid rgba(15, 23, 42, 0.85)',
+            }}
+          />
         </div>
       )}
     </div>

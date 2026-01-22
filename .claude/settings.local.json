@@ -222,7 +222,8 @@
       "Bash(powershell.exe -Command \"docker network ls | Select-String ''rawdrive''\")",
       "Bash(powershell.exe -Command \"docker run -d --name rawdrive-gallery-service --network docker_default -p 127.0.0.1:8004:8004 --env-file .env -e DATABASE_URL=''postgresql://rawdrive:rawdrive@postgres:5432/rawdrive'' -e REDIS_URL=''redis://redis:6379/0'' rawdrive-gallery-service:latest 2>&1\")",
       "Bash(powershell.exe -Command \"docker run -d --name rawdrive-gallery-service --network rawdrive_default -p 127.0.0.1:8004:8004 --env-file .env -e DATABASE_URL=''postgresql://rawdrive:rawdrive@postgres:5432/rawdrive'' -e REDIS_URL=''redis://redis:6379/0'' rawdrive-gallery-service:latest 2>&1\")",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "mcp__plugin_playwright_playwright__browser_click"
     ]
   }
 }

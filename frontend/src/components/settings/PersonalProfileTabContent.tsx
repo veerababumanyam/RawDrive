@@ -42,6 +42,7 @@ import { AppInput, AppTextarea } from '../ui/AppInput';
 import { AvatarUploader } from './AvatarUploader';
 import { PersonalProfilePreview } from './PersonalProfilePreview';
 import { PersonalProfileAIAssistant } from './PersonalProfileAIAssistant';
+import { VisibilityToggle } from './VisibilityToggle';
 import { ProfileCompletenessIndicator } from './ProfileCompletenessIndicator';
 import { personalProfileService } from '../../services/personalProfileService';
 import type { OptimizeSEOResponse } from '../../services/personalProfileAIService';
@@ -141,7 +142,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
   const [categories, setCategories] = useState<string[]>([]);
   const [serviceAreas, setServiceAreas] = useState<string[]>([]);
   const [brandColor, setBrandColor] = useState('#3B82F6');
-  const [backgroundTheme, setBackgroundTheme] = useState<BackgroundTheme>('minimal');
+  const [backgroundTheme, setBackgroundTheme] = useState<BackgroundTheme>('dark');
   const [isPublic, setIsPublic] = useState(false);
   const [embeddedMedia, setEmbeddedMedia] = useState<EmbeddedMedia>({});
   const [bookingCalendarUrl, setBookingCalendarUrl] = useState('');
@@ -228,7 +229,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
     setCategories(data.categories || []);
     setServiceAreas(data.service_areas || []);
     setBrandColor(data.brand_color || '#3B82F6');
-    setBackgroundTheme(data.background_theme || 'minimal');
+    setBackgroundTheme(data.background_theme || 'dark');
     setIsPublic(data.is_public || false);
     setEmbeddedMedia(data.embedded_media || {});
     setBookingCalendarUrl(data.booking_calendar_url || '');
@@ -447,6 +448,14 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
     toast.success(`${suggested.length} category suggestions added`);
   }, [categories, toast]);
 
+  // Handle visibility toggle
+  const handleVisibilityToggle = (key: keyof PersonalVisibilityConfig, value: boolean) => {
+    setVisibilityConfig((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
   // Get preview data
   const previewData = useMemo(
     () => ({
@@ -525,7 +534,13 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
       <div className="space-y-6">
         {/* Avatar Section */}
         <section className="bg-surface border border-border rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-text-primary mb-4">Profile Photo</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-text-primary">Profile Photo</h2>
+            <VisibilityToggle
+              isVisible={visibilityConfig.avatar_url ?? true}
+              onChange={(v) => handleVisibilityToggle('avatar_url', v)}
+            />
+          </div>
           <AvatarUploader
             currentAvatarUrl={avatarUrl}
             displayName={displayName || 'User'}
@@ -539,23 +554,45 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
         <section className="bg-surface border border-border rounded-xl p-6">
           <h2 className="text-lg font-semibold text-text-primary mb-6">Basic Information</h2>
           <div className="space-y-4">
-            <AppInput
-              label="Display Name"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Your name"
-              error={fieldErrors.displayName}
-              isRequired
-              leftIcon={<User className="w-5 h-5" />}
-            />
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-text-primary">
+                  Display Name <span className="text-error">*</span>
+                </label>
+                <VisibilityToggle
+                  isVisible={visibilityConfig.display_name ?? true}
+                  onChange={(v) => handleVisibilityToggle('display_name', v)}
+                  className="scale-90"
+                />
+              </div>
+              <AppInput
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name"
+                error={fieldErrors.displayName}
+                isRequired
+                leftIcon={<User className="w-5 h-5" />}
+              />
+            </div>
 
-            <AppInput
-              label="Professional Title"
-              value={profileTitle}
-              onChange={(e) => setProfileTitle(e.target.value)}
-              placeholder="e.g., Wedding Photographer & Filmmaker"
-              leftIcon={<FileText className="w-5 h-5" />}
-            />
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-text-primary">
+                  Professional Title
+                </label>
+                <VisibilityToggle
+                  isVisible={visibilityConfig.profile_title ?? true}
+                  onChange={(v) => handleVisibilityToggle('profile_title', v)}
+                  className="scale-90"
+                />
+              </div>
+              <AppInput
+                value={profileTitle}
+                onChange={(e) => setProfileTitle(e.target.value)}
+                placeholder="e.g., Wedding Photographer & Filmmaker"
+                leftIcon={<FileText className="w-5 h-5" />}
+              />
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5">
@@ -585,23 +622,45 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
               </div>
             </div>
 
-            <AppTextarea
-              label="Bio"
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Tell visitors about yourself and your photography style..."
-              rows={4}
-              error={fieldErrors.bio}
-              helperText={`${bio.length}/${CONSTRAINTS.bio.max} characters`}
-            />
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-text-primary">
+                  Bio
+                </label>
+                <VisibilityToggle
+                  isVisible={visibilityConfig.bio ?? true}
+                  onChange={(v) => handleVisibilityToggle('bio', v)}
+                  className="scale-90"
+                />
+              </div>
+              <AppTextarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Tell visitors about yourself and your photography style..."
+                rows={4}
+                error={fieldErrors.bio}
+                helperText={`${bio.length}/${CONSTRAINTS.bio.max} characters`}
+              />
+            </div>
 
-            <AppInput
-              label="Location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Based in Berlin - Available Worldwide"
-              leftIcon={<MapPin className="w-5 h-5" />}
-            />
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-text-primary">
+                  Location
+                </label>
+                <VisibilityToggle
+                  isVisible={visibilityConfig.location ?? true}
+                  onChange={(v) => handleVisibilityToggle('location', v)}
+                  className="scale-90"
+                />
+              </div>
+              <AppInput
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Based in Berlin - Available Worldwide"
+                leftIcon={<MapPin className="w-5 h-5" />}
+              />
+            </div>
           </div>
         </section>
 
@@ -609,43 +668,87 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
         <section className="bg-surface border border-border rounded-xl p-6">
           <h2 className="text-lg font-semibold text-text-primary mb-6">Contact Information</h2>
           <div className="space-y-4">
-            <AppInput
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              error={fieldErrors.email}
-              isRequired
-              leftIcon={<Mail className="w-5 h-5" />}
-            />
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-text-primary">
+                  Email <span className="text-error">*</span>
+                </label>
+                <VisibilityToggle
+                  isVisible={visibilityConfig.email ?? true}
+                  onChange={(v) => handleVisibilityToggle('email', v)}
+                  className="scale-90"
+                />
+              </div>
+              <AppInput
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                error={fieldErrors.email}
+                isRequired
+                leftIcon={<Mail className="w-5 h-5" />}
+              />
+            </div>
 
-            <AppInput
-              label="Phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1 (555) 123-4567"
-              leftIcon={<Phone className="w-5 h-5" />}
-            />
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-text-primary">
+                  Phone
+                </label>
+                <VisibilityToggle
+                  isVisible={visibilityConfig.phone ?? true}
+                  onChange={(v) => handleVisibilityToggle('phone', v)}
+                  className="scale-90"
+                />
+              </div>
+              <AppInput
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+1 (555) 123-4567"
+                leftIcon={<Phone className="w-5 h-5" />}
+              />
+            </div>
 
-            <AppInput
-              label="Website"
-              type="url"
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="https://your-website.com"
-              leftIcon={<Globe className="w-5 h-5" />}
-            />
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-text-primary">
+                  Website
+                </label>
+                <VisibilityToggle
+                  isVisible={visibilityConfig.website ?? true}
+                  onChange={(v) => handleVisibilityToggle('website', v)}
+                  className="scale-90"
+                />
+              </div>
+              <AppInput
+                type="url"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="https://your-website.com"
+                leftIcon={<Globe className="w-5 h-5" />}
+              />
+            </div>
 
-            <AppInput
-              label="Booking Calendar"
-              type="url"
-              value={bookingCalendarUrl}
-              onChange={(e) => setBookingCalendarUrl(e.target.value)}
-              placeholder="https://calendly.com/your-name"
-              leftIcon={<Calendar className="w-5 h-5" />}
-            />
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-text-primary">
+                  Booking Calendar
+                </label>
+                <VisibilityToggle
+                  isVisible={visibilityConfig.booking_calendar ?? true}
+                  onChange={(v) => handleVisibilityToggle('booking_calendar', v)}
+                  className="scale-90"
+                />
+              </div>
+              <AppInput
+                type="url"
+                value={bookingCalendarUrl}
+                onChange={(e) => setBookingCalendarUrl(e.target.value)}
+                placeholder="https://calendly.com/your-name"
+                leftIcon={<Calendar className="w-5 h-5" />}
+              />
+            </div>
           </div>
         </section>
 
@@ -655,20 +758,32 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
           <div className="space-y-4">
             {SOCIAL_PLATFORMS.map((platform) => {
               const Icon = platform.icon;
+              const visibilityKey = `socials_${platform.key}` as keyof PersonalVisibilityConfig;
+
               return (
-                <AppInput
-                  key={platform.key}
-                  label={platform.label}
-                  value={socials[platform.key] || ''}
-                  onChange={(e) =>
-                    setSocials((prev) => ({
-                      ...prev,
-                      [platform.key]: e.target.value,
-                    }))
-                  }
-                  placeholder={platform.placeholder}
-                  leftIcon={<Icon className="w-5 h-5" />}
-                />
+                <div key={platform.key}>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-sm font-medium text-text-primary">
+                      {platform.label}
+                    </label>
+                    <VisibilityToggle
+                      isVisible={visibilityConfig[visibilityKey] ?? true}
+                      onChange={(v) => handleVisibilityToggle(visibilityKey, v)}
+                      className="scale-90"
+                    />
+                  </div>
+                  <AppInput
+                    value={socials[platform.key] || ''}
+                    onChange={(e) =>
+                      setSocials((prev) => ({
+                        ...prev,
+                        [platform.key]: e.target.value,
+                      }))
+                    }
+                    placeholder={platform.placeholder}
+                    leftIcon={<Icon className="w-5 h-5" />}
+                  />
+                </div>
               );
             })}
           </div>
@@ -676,21 +791,28 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
 
         {/* Categories */}
         <section className="bg-surface border border-border rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-text-primary mb-4">Categories</h2>
-          <p className="text-text-secondary text-sm mb-4">
-            Select up to 10 categories that describe your services.
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-text-primary">Categories</h2>
+              <p className="text-text-secondary text-sm">
+                Select up to 10 categories that describe your services.
+              </p>
+            </div>
+            <VisibilityToggle
+              isVisible={visibilityConfig.categories ?? true}
+              onChange={(v) => handleVisibilityToggle('categories', v)}
+            />
+          </div>
           <div className="flex flex-wrap gap-2">
             {CATEGORY_OPTIONS.map((category) => (
               <button
                 key={category}
                 type="button"
                 onClick={() => toggleCategory(category)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  categories.includes(category)
-                    ? 'bg-primary text-white'
-                    : 'bg-surface-hover text-text-secondary hover:text-text-primary'
-                }`}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${categories.includes(category)
+                  ? 'bg-primary text-white'
+                  : 'bg-surface-hover text-text-secondary hover:text-text-primary'
+                  }`}
               >
                 {category}
               </button>
@@ -702,16 +824,22 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
         <section className="bg-surface border border-border rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-text-primary">Custom Links</h2>
-            <AppButton
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addCustomLink}
-              disabled={customLinks.length >= 10}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Add Link
-            </AppButton>
+            <div className="flex items-center gap-2">
+              <VisibilityToggle
+                isVisible={visibilityConfig.custom_links ?? true}
+                onChange={(v) => handleVisibilityToggle('custom_links', v)}
+              />
+              <AppButton
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addCustomLink}
+                disabled={customLinks.length >= 10}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Add Link
+              </AppButton>
+            </div>
           </div>
           <div className="space-y-4">
             {customLinks.map((link, index) => (
@@ -780,11 +908,10 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                     key={theme.value}
                     type="button"
                     onClick={() => setBackgroundTheme(theme.value)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      backgroundTheme === theme.value
-                        ? 'bg-primary text-white'
-                        : 'bg-surface-hover text-text-secondary hover:text-text-primary'
-                    }`}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${backgroundTheme === theme.value
+                      ? 'bg-primary text-white'
+                      : 'bg-surface-hover text-text-secondary hover:text-text-primary'
+                      }`}
                   >
                     {theme.label}
                   </button>
@@ -806,14 +933,12 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
             <button
               type="button"
               onClick={() => setIsPublic(!isPublic)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                isPublic ? 'bg-primary' : 'bg-surface-hover'
-              }`}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isPublic ? 'bg-primary' : 'bg-surface-hover'
+                }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  isPublic ? 'translate-x-6' : 'translate-x-1'
-                }`}
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'
+                  }`}
               />
             </button>
           </div>

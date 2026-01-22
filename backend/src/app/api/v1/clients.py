@@ -223,6 +223,8 @@ async def create_client(
             anniversary_date=request.anniversary_date,
             internal_notes=request.internal_notes,
             referred_by_client_id=request.referred_by_client_id,
+            avatar_asset_id=request.avatar_asset_id,
+            avatar_crop_data=request.avatar_crop_data,
         )
         return ClientCreateResponse(**result)
     except ClientDuplicateEmailError as e:
@@ -598,7 +600,8 @@ async def add_contact(
             client_id=client_id,
             contact_type=request.contact_type,
             value=request.value,
-            contact_subtype=request.contact_subtype,
+            label=request.label,
+            country_code=request.country_code,
             is_primary=request.is_primary,
         )
         return ContactCreateResponse(**result)
@@ -1463,6 +1466,7 @@ async def add_address(
             state=request.state,
             country=request.country,
             postal_code=request.postal_code,
+            google_map_link=request.google_map_link,
             is_primary=request.is_primary,
         )
         return AddressCreateResponse(**result)

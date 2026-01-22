@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Grid, List, Sparkles, Heart, CheckSquare, Search, X, LayoutDashboard, FolderPlus } from 'lucide-react';
+import { Grid, List, Sparkles, Heart, CheckSquare, Search, X, LayoutDashboard, FolderPlus, SlidersHorizontal } from 'lucide-react';
 import { Checkbox } from '../../ui/FormControls';
 import { ViewMode, FilterType } from '../../../types/gallery';
 import { GallerySearchBar } from './GallerySearchBar';
@@ -43,6 +43,10 @@ export interface GalleryToolbarProps {
   onClearAIFilters?: () => void;
   /** Callback to save filtered results as a sub-gallery */
   onSaveAsGallery?: () => void;
+  /** Callback to enter Pro Review Mode */
+  onReviewModeClick?: () => void;
+  /** Whether review mode is available (requires authentication) */
+  reviewModeEnabled?: boolean;
 }
 
 // Filter pill button styles
@@ -93,6 +97,8 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
   aiFiltersApplied = false,
   onClearAIFilters,
   onSaveAsGallery,
+  onReviewModeClick,
+  reviewModeEnabled = false,
 }) => {
   const handleFilterToggle = (filterKey: 'picks' | 'favorites' | 'selections') => {
     if (onFiltersChange) {
@@ -152,6 +158,23 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               <List size={18} />
             </button>
           </div>
+
+          {/* Review Mode Button */}
+          {reviewModeEnabled && onReviewModeClick && (
+            <button
+              onClick={onReviewModeClick}
+              className="
+                p-2 rounded-md transition-all duration-200
+                bg-primary/10 text-primary
+                hover:bg-primary hover:text-white
+                border border-primary/30 hover:border-primary
+              "
+              aria-label="Enter Pro Review Mode"
+              title="Pro Review Mode (Lightroom-style culling)"
+            >
+              <SlidersHorizontal size={18} />
+            </button>
+          )}
         </div>
 
         {/* Separator - visible on larger screens */}

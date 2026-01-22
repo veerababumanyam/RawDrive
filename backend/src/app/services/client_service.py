@@ -195,6 +195,8 @@ class ClientService:
         anniversary_date: Optional[date] = None,
         internal_notes: Optional[str] = None,
         referred_by_client_id: Optional[UUID] = None,
+        avatar_asset_id: Optional[UUID] = None,
+        avatar_crop_data: Optional[dict] = None,
     ) -> dict:
         """Create a new client profile.
 
@@ -282,9 +284,10 @@ class ClientService:
                     job_title, organization, language, timezone,
                     date_of_birth, anniversary_date, internal_notes,
                     referred_by_client_id, status, portal_access_enabled,
+                    avatar_asset_id, avatar_crop_data,
                     created_by_user_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active', FALSE, $14)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active', FALSE, $15, $16, $14)
                 RETURNING client_id
                 """,
                 workspace_id,
@@ -301,6 +304,8 @@ class ClientService:
                 internal_notes,
                 referred_by_client_id,
                 user_id,
+                avatar_asset_id,
+                avatar_crop_data,
             )
 
             logger.info(
@@ -390,7 +395,7 @@ class ClientService:
             if include_contacts:
                 contacts = await conn.fetch(
                     """
-                    SELECT contact_id, contact_type, contact_subtype, value, is_primary, verified, created_at
+                    SELECT contact_id, contact_type, label, value, country_code, is_primary, is_verified, created_at
                     FROM client_contacts
                     WHERE workspace_id = $1 AND client_id = $2
                     ORDER BY is_primary DESC, created_at ASC
@@ -402,10 +407,11 @@ class ClientService:
                     {
                         "contact_id": str(c["contact_id"]),
                         "contact_type": c["contact_type"],
-                        "contact_subtype": c["contact_subtype"],
+                        "label": c["label"],
                         "value": c["value"],
+                        "country_code": c["country_code"],
                         "is_primary": c["is_primary"],
-                        "verified": c["verified"],
+                        "is_verified": c["is_verified"],
                         "created_at": c["created_at"],
                     }
                     for c in contacts
@@ -426,7 +432,7 @@ class ClientService:
                 addresses = await conn.fetch(
                     """
                     SELECT address_id, address_type, address_line1, address_line2,
-                           city, state, country, postal_code, is_primary, created_at
+                           city, state, country, postal_code, google_map_link, is_primary, created_at
                     FROM client_addresses
                     WHERE workspace_id = $1 AND client_id = $2
                     ORDER BY is_primary DESC, created_at ASC
@@ -444,6 +450,7 @@ class ClientService:
                         "state": a["state"],
                         "country": a["country"],
                         "postal_code": a["postal_code"],
+                        "google_map_link": a["google_map_link"],
                         "is_primary": a["is_primary"],
                         "created_at": a["created_at"],
                     }
@@ -649,6 +656,13 @@ class ClientService:
                         AND contact_type = 'email' AND is_primary = TRUE
                         LIMIT 1
                     ) as primary_email,
+                    -- Primary country code
+                    (
+                        SELECT country_code FROM client_contacts
+                        WHERE client_id = c.client_id AND workspace_id = c.workspace_id
+                        AND contact_type = 'phone' AND is_primary = TRUE
+                        LIMIT 1
+                    ) as primary_country_code,
                     -- Primary phone
                     (
                         SELECT value FROM client_contacts
@@ -679,6 +693,7 @@ class ClientService:
             for row in clients:
                 client_data = _format_client_row(dict(row))
                 client_data["primary_email"] = row["primary_email"]
+                client_data["primary_country_code"] = row.get("primary_country_code")
                 client_data["primary_phone"] = row["primary_phone"]
                 client_data["linked_galleries_count"] = row["linked_galleries_count"] or 0
                 client_list.append(client_data)
@@ -1026,6 +1041,7 @@ class ClientService:
         contact_type: str,
         value: str,
         contact_subtype: Optional[str] = None,
+        country_code: Optional[str] = None,
         is_primary: bool = False,
     ) -> dict:
         """Add a contact method to a client."""
@@ -1050,12 +1066,13 @@ class ClientService:
                 """
                 SELECT 1 FROM client_contacts
                 WHERE workspace_id = $1 AND client_id = $2
-                AND contact_type = $3 AND value = $4
+                AND contact_type = $3 AND value = $4 AND (country_code = $5 OR country_code IS NULL)
                 """,
                 workspace_id,
                 client_id,
                 contact_type,
-                value,
+                normalized_value if 'normalized_value' in locals() else value,
+                country_code,
             )
             if duplicate:
                 raise ContactDuplicateError(contact_type, value)
@@ -1080,9 +1097,9 @@ class ClientService:
                     """
                     INSERT INTO client_contacts (
                         workspace_id, client_id, contact_type, contact_subtype,
-                        value, is_primary
+                        value, country_code, is_primary
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
                     RETURNING contact_id
                     """,
                     workspace_id,
@@ -1090,6 +1107,7 @@ class ClientService:
                     contact_type,
                     contact_subtype,
                     value,
+                    country_code,
                     is_primary,
                 )
 
@@ -1098,6 +1116,7 @@ class ClientService:
                     "contact_type": contact_type,
                     "contact_subtype": contact_subtype,
                     "value": value,
+                    "country_code": country_code,
                     "is_primary": is_primary,
                 }
 

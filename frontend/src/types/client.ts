@@ -36,6 +36,8 @@ export interface CreateClientRequest {
   anniversary_date?: string;
   internal_notes?: string;
   referred_by_client_id?: string;
+  avatar_asset_id?: string;
+  avatar_crop_data?: Record<string, unknown>;
 }
 
 export interface UpdateClientRequest {
@@ -51,17 +53,21 @@ export interface UpdateClientRequest {
   date_of_birth?: string;
   anniversary_date?: string;
   internal_notes?: string;
+  avatar_asset_id?: string;
+  avatar_crop_data?: Record<string, unknown>;
 }
 
 export interface AddContactRequest {
   contact_type: ContactType;
   label?: string;
   value: string;
+  country_code?: string;
   is_primary?: boolean;
 }
 
 export interface UpdateContactRequest {
   value?: string;
+  country_code?: string;
   is_primary?: boolean;
 }
 
@@ -73,6 +79,7 @@ export interface AddAddressRequest {
   state?: string;
   country?: string;
   postal_code?: string;
+  google_map_link?: string;
   is_primary?: boolean;
 }
 
@@ -84,6 +91,7 @@ export interface UpdateAddressRequest {
   state?: string;
   country?: string;
   postal_code?: string;
+  google_map_link?: string;
   is_primary?: boolean;
 }
 
@@ -155,6 +163,7 @@ export interface ClientContact {
   contact_type: ContactType;
   label?: string;
   value: string;
+  country_code?: string;
   is_primary: boolean;
   is_verified: boolean;
   created_at: string;
@@ -170,6 +179,7 @@ export interface ClientAddress {
   state?: string;
   country?: string;
   postal_code?: string;
+  google_map_link?: string;
   is_primary: boolean;
   created_at: string;
 }
@@ -220,6 +230,7 @@ export interface ClientDetail {
   referred_by_client_id?: string;
   portal_access_enabled: boolean;
   primary_email?: string;
+  primary_country_code?: string;
   primary_phone?: string;
   created_by_user_id: string;
   created_at: string;
@@ -241,6 +252,7 @@ export interface ClientListItem {
   organization?: string;
   status: ClientStatus;
   primary_email?: string;
+  primary_country_code?: string;
   primary_phone?: string;
   linked_galleries_count: number;
   tags?: ClientTag[]; // Optional - API may not always include tags in list responses
@@ -299,6 +311,7 @@ export interface ContactCreateResponse {
   contact_id: string;
   contact_type: ContactType;
   value: string;
+  country_code?: string;
   is_primary: boolean;
 }
 
@@ -309,6 +322,7 @@ export interface ContactCreateResponse {
 export interface AddressCreateResponse {
   address_id: string;
   address_type: AddressType;
+  google_map_link?: string;
   is_primary: boolean;
   inferred_timezone?: string;
 }

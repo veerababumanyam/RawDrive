@@ -253,7 +253,7 @@ const ClientFormPage: React.FC = () => {
         }
 
         console.log('Updating client with payload:', updatePayload);
-        await clientService.updateClient(workspace.workspace_id, clientId, updatePayload);
+        await clientService.updateClient(workspace!.workspace_id, clientId, updatePayload);
         addToast({ variant: 'success', message: 'Client updated successfully' });
       } else {
         // Build CreateClientRequest - sanitize empty strings
@@ -274,8 +274,22 @@ const ClientFormPage: React.FC = () => {
         if (formData.referred_by_client_id?.trim()) createPayload.referred_by_client_id = formData.referred_by_client_id;
 
         console.log('Creating client with payload:', createPayload);
-        const response = await clientService.createClient(workspace.workspace_id, createPayload as unknown as CreateClientRequest);
+        const response = await clientService.createClient(workspace!.workspace_id, createPayload as unknown as CreateClientRequest);
         addToast({ variant: 'success', message: 'Client created successfully' });
+
+        // If there's a pending avatar, upload it now
+        if (avatarPreview && (window as any).pendingAvatarBlob) {
+          try {
+            const blob = (window as any).pendingAvatarBlob;
+            const cropData = (window as any).pendingCropData;
+            const croppedFile = new File([blob], 'avatar.webp', { type: 'image/webp' });
+            await clientService.uploadAvatar(workspace!.workspace_id, response.client_id, croppedFile, cropData);
+          } catch (avatarErr) {
+            console.error('Failed to upload avatar for new client:', avatarErr);
+            addToast({ variant: 'warning', message: 'Client created, but photo upload failed' });
+          }
+        }
+
         navigate(`/workspace/clients/${response.client_id}`);
         return;
       }
@@ -297,7 +311,7 @@ const ClientFormPage: React.FC = () => {
     if (!workspace?.workspace_id || !clientId || !newContact.value.trim()) return;
 
     try {
-      await clientService.addContact(workspace.workspace_id, clientId, newContact);
+      await clientService.addContact(workspace!.workspace_id, clientId, newContact);
       addToast({ variant: 'success', message: 'Contact added successfully' });
       setNewContact({ contact_type: 'email', label: '', value: '', is_primary: false });
       fetchClient();
@@ -313,7 +327,7 @@ const ClientFormPage: React.FC = () => {
     if (!workspace?.workspace_id || !clientId) return;
 
     try {
-      await clientService.deleteContact(workspace.workspace_id, clientId, contactId);
+      await clientService.deleteContact(workspace!.workspace_id, clientId, contactId);
       addToast({ variant: 'success', message: 'Contact removed' });
       setContacts((prev) => prev.filter((c) => c.contact_id !== contactId));
     } catch (err) {
@@ -334,7 +348,7 @@ const ClientFormPage: React.FC = () => {
     }
 
     try {
-      await clientService.addAddress(workspace.workspace_id, clientId, newAddress);
+      await clientService.addAddress(workspace!.workspace_id, clientId, newAddress);
       addToast({ variant: 'success', message: 'Address added successfully' });
       setNewAddress({
         address_type: 'home',
@@ -359,7 +373,7 @@ const ClientFormPage: React.FC = () => {
     if (!workspace?.workspace_id || !clientId) return;
 
     try {
-      await clientService.deleteAddress(workspace.workspace_id, clientId, addressId);
+      await clientService.deleteAddress(workspace!.workspace_id, clientId, addressId);
       addToast({ variant: 'success', message: 'Address removed' });
       setAddresses((prev) => prev.filter((a) => a.address_id !== addressId));
     } catch (err) {
@@ -375,7 +389,7 @@ const ClientFormPage: React.FC = () => {
     if (!workspace?.workspace_id || !clientId) return;
 
     try {
-      await clientService.addTags(workspace.workspace_id, clientId, { tag_ids: [tagId] });
+      await clientService.addTags(workspace!.workspace_id, clientId, { tag_ids: [tagId] });
       const tag = availableTags.find((t) => t.tag_id === tagId);
       if (tag) {
         setClientTags((prev) => [...prev, tag]);
@@ -393,7 +407,7 @@ const ClientFormPage: React.FC = () => {
     if (!workspace?.workspace_id || !clientId) return;
 
     try {
-      await clientService.removeTag(workspace.workspace_id, clientId, tagId);
+      await clientService.removeTag(workspace!.workspace_id, clientId, tagId);
       setClientTags((prev) => prev.filter((t) => t.tag_id !== tagId));
       addToast({ variant: 'success', message: 'Tag removed' });
     } catch (err) {
@@ -439,8 +453,22 @@ const ClientFormPage: React.FC = () => {
   // Handle crop completion
   const handleCropComplete = async (croppedBlob: Blob, cropData: CropData) => {
     if (!isEditMode || !workspace?.workspace_id || !clientId) {
+      setAvatarPreview(null);
       setShowCropModal(false);
-      return;
+
+      if (!isEditMode) {
+        // Just store the blob/data for uploading after client creation
+        (window as any).pendingAvatarBlob = croppedBlob;
+        (window as any).pendingCropData = cropData;
+
+        // Show local preview
+        const reader = new FileReader();
+        reader.onload = (e) => setAvatarPreview(e.target?.result as string);
+        reader.readAsDataURL(croppedBlob);
+
+        addToast({ variant: 'info', message: 'Photo ready to be saved with client' });
+        return;
+      }
     }
 
     setIsUploadingAvatar(true);
@@ -449,7 +477,7 @@ const ClientFormPage: React.FC = () => {
       const croppedFile = new File([croppedBlob], 'avatar.webp', { type: 'image/webp' });
 
       await clientService.uploadAvatar(
-        workspace.workspace_id,
+        workspace!.workspace_id,
         clientId,
         croppedFile,
         cropData
@@ -480,7 +508,7 @@ const ClientFormPage: React.FC = () => {
   const handleRemoveAvatar = async () => {
     if (isEditMode && workspace?.workspace_id && clientId) {
       try {
-        await clientService.deleteAvatar(workspace.workspace_id, clientId);
+        await clientService.deleteAvatar(workspace!.workspace_id, clientId);
         // We don't need to manually revoke blob URL, the hook handles it when we trigger refresh or update state
         // But since we modified server state, we should refresh the avatar (which will clear it since URL is gone)
 
@@ -570,9 +598,9 @@ const ClientFormPage: React.FC = () => {
               <div className="relative group">
                 {/* Avatar Display */}
                 <div className="w-28 h-28 rounded-2xl overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center border-2 border-border">
-                  {avatarBlobUrl ? (
+                  {avatarBlobUrl || avatarPreview ? (
                     <img
-                      src={avatarBlobUrl}
+                      src={avatarBlobUrl || avatarPreview!}
                       alt={formData.first_name || 'Client'}
                       className="w-full h-full object-cover"
                     />
@@ -604,44 +632,39 @@ const ClientFormPage: React.FC = () => {
               <div className="flex-1">
                 <h3 className="font-medium text-text-primary mb-2">Client Photo</h3>
                 <p className="text-sm text-text-tertiary mb-3">
-                  {isEditMode
-                    ? 'Upload a photo for this client. JPEG, PNG, or WebP up to 5MB.'
-                    : 'Photo can be added after creating the client.'
-                  }
+                  Upload a photo for this client. JPEG, PNG, or WebP up to 5MB.
                 </p>
-                {isEditMode && (
-                  <div className="flex gap-2">
-                    <input
-                      ref={avatarInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={handleAvatarSelect}
-                      className="hidden"
-                      id="avatar-upload"
-                      aria-label="Upload client photo"
-                    />
+                <div className="flex gap-2">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleAvatarSelect}
+                    className="hidden"
+                    id="avatar-upload"
+                    aria-label="Upload client photo"
+                  />
+                  <AppButton
+                    variant="outline"
+                    size="sm"
+                    onClick={() => avatarInputRef.current?.click()}
+                    leftIcon={<Upload size={16} />}
+                    disabled={isUploadingAvatar}
+                  >
+                    {avatarBlobUrl || avatarPreview ? 'Change Photo' : 'Upload Photo'}
+                  </AppButton>
+                  {(avatarBlobUrl || avatarPreview) && (
                     <AppButton
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      onClick={() => avatarInputRef.current?.click()}
-                      leftIcon={<Upload size={16} />}
+                      onClick={handleRemoveAvatar}
+                      className="text-error hover:bg-error/10"
                       disabled={isUploadingAvatar}
                     >
-                      {avatarBlobUrl ? 'Change Photo' : 'Upload Photo'}
+                      Remove
                     </AppButton>
-                    {avatarBlobUrl && (
-                      <AppButton
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleRemoveAvatar}
-                        className="text-error hover:bg-error/10"
-                        disabled={isUploadingAvatar}
-                      >
-                        Remove
-                      </AppButton>
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
                 {!isEditMode && (
                   <div className="flex items-center gap-2 text-text-tertiary">
                     <Camera size={16} />

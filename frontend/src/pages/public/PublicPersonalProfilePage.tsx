@@ -23,6 +23,8 @@ import { ProfileSocials } from '../../components/features/profile/ProfileSocials
 import { ProfileGalleryPreview } from '../../components/features/profile/ProfileGalleryPreview';
 import { ProfileMediaEmbed } from '../../components/features/profile/ProfileMediaEmbed';
 import { ProfileActions } from '../../components/features/profile/ProfileActions';
+import { ProfileBentoGrid } from '../../components/features/profile/ProfileBentoGrid';
+import { ProfileGridItem } from '../../components/features/profile/ProfileGridItem';
 
 export function PublicPersonalProfilePage() {
   const { slug } = useParams<{ slug: string }>();
@@ -120,7 +122,7 @@ export function PublicPersonalProfilePage() {
     );
   }
 
-  // Get full theme object
+  // ... (keeping imports and state logic same until the return)
   const theme = getTheme(profile.background_theme);
   const brandColor = profile.brand_color || '#3B82F6';
 
@@ -164,61 +166,78 @@ export function PublicPersonalProfilePage() {
 
       <ProfileContainer theme={theme} brandColor={brandColor}>
 
-        {/* Header Section */}
-        <ProfileHeader
-          theme={theme}
-          displayName={profile.display_name || 'Photographer'}
-          profileTitle={profile.profile_title}
-          avatarUrl={profile.avatar_url}
-          location={profile.location}
-          isVerified={profile.is_verified}
-          badges={profile.badges}
-          brandColor={brandColor}
-        />
+        {/* Bento Grid Layout */}
+        <ProfileBentoGrid>
+          {/* Header: Full Width */}
+          <ProfileGridItem theme={theme} colSpan="full" className="p-0 bg-transparent shadow-none border-none">
+            <ProfileHeader
+              theme={theme}
+              displayName={profile.display_name || 'Photographer'}
+              profileTitle={profile.profile_title}
+              avatarUrl={profile.avatar_url}
+              location={profile.location}
+              isVerified={profile.is_verified}
+              badges={profile.badges}
+              brandColor={brandColor}
+            />
+          </ProfileGridItem>
 
-        {/* Bio Section */}
-        {profile.bio && (
-          <ProfileBio theme={theme} bio={profile.bio} />
-        )}
+          {/* Main Content Row: Bio + Socials */}
+          {profile.bio && (
+            <ProfileGridItem theme={theme} colSpan={2} rowSpan={1} className="p-6 flex flex-col justify-center">
+              <ProfileBio theme={theme} bio={profile.bio} />
+            </ProfileGridItem>
+          )}
 
-        {/* Socials (Top placement for visibility) */}
-        {profile.socials && (
-          <ProfileSocials theme={theme} socials={profile.socials} />
-        )}
+          {profile.socials && Object.keys(profile.socials).length > 0 && (
+            <ProfileGridItem theme={theme} colSpan={2} className="p-6 flex items-center justify-center">
+              <ProfileSocials theme={theme} socials={profile.socials} />
+            </ProfileGridItem>
+          )}
 
-        {/* Contact Bento Grid */}
-        <ProfileContactGrid
-          theme={theme}
-          email={profile.email}
-          phone={profile.phone}
-          website={profile.website}
-          bookingUrl={profile.booking_calendar_url}
-          customLinks={profile.custom_links}
-          brandColor={brandColor}
-        />
+          {/* Featured Section: Gallery (Prominent) */}
+          {profile.featured_gallery && (
+            <ProfileGridItem theme={theme} colSpan={2} rowSpan={2} className="p-0 overflow-hidden relative group cursor-pointer">
+              <ProfileGalleryPreview theme={theme} gallery={profile.featured_gallery} />
+            </ProfileGridItem>
+          )}
 
-        {/* Embedded Media */}
-        {profile.embedded_media && (
-          <ProfileMediaEmbed theme={theme} media={profile.embedded_media} />
-        )}
+          {/* Embedded Media (TikTok/Spotify) */}
+          {profile.embedded_media && (
+            <ProfileGridItem theme={theme} colSpan={2} rowSpan={1} className="p-0 overflow-hidden">
+              <ProfileMediaEmbed theme={theme} media={profile.embedded_media} />
+            </ProfileGridItem>
+          )}
 
-        {/* Featured Gallery */}
-        {profile.featured_gallery && (
-          <ProfileGalleryPreview theme={theme} gallery={profile.featured_gallery} />
-        )}
+          {/* Contact & Links Grid - Spanning remaining space */}
+          <ProfileGridItem theme={theme} colSpan={2} className="p-6">
+            <ProfileContactGrid
+              theme={theme}
+              email={profile.email}
+              phone={profile.phone}
+              website={profile.website}
+              bookingUrl={profile.booking_calendar_url}
+              customLinks={profile.custom_links}
+              brandColor={brandColor}
+            />
+          </ProfileGridItem>
+
+        </ProfileBentoGrid>
 
         {/* Footer actions / Floating actions */}
-        <ProfileActions
-          theme={theme}
-          slug={profile.slug}
-          showVCard={profile.show_vcard}
-          showQrCode={profile.show_qr_code}
-          onShare={handleShare}
-          onDownloadVCard={handleDownloadVCard}
-          onDownloadQr={handleDownloadQr}
-        />
+        <div className="mt-8 mb-24 flex justify-center w-full">
+          <ProfileActions
+            theme={theme}
+            slug={profile.slug}
+            showVCard={profile.show_vcard}
+            showQrCode={profile.show_qr_code}
+            onShare={handleShare}
+            onDownloadVCard={handleDownloadVCard}
+            onDownloadQr={handleDownloadQr}
+          />
+        </div>
 
-        <div className={`text-center text-xs opacity-40 mt-12 pb-24 ${theme.colors.text}`}>
+        <div className={`text-center text-xs opacity-40 pb-12 ${theme.colors.text}`}>
           <p>Powered by RawDrive</p>
         </div>
 

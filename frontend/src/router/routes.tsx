@@ -104,6 +104,7 @@ const RecentPage = lazy(() => import('../pages/workspace/RecentPage'));
 const GalleryCreatePage = lazy(() => import('../pages/workspace/GalleryCreatePage'));
 const GalleryDetailPage = lazy(() => import('../pages/workspace/GalleryDetailPage'));
 const GalleryDesignStudioPage = lazy(() => import('../pages/workspace/GalleryDesignStudioPage'));
+const ReviewModePage = lazy(() => import('../pages/workspace/ReviewModePage'));
 const RecycleBinPage = lazy(() => import('../pages/workspace/RecycleBinPage'));
 const SharedDashboardPage = lazy(() => import('../pages/workspace/SharedDashboardPage'));
 
@@ -366,6 +367,10 @@ export const workspaceRoutes: RouteObject[] = [
       {
         path: 'galleries/:id/design',
         element: <CriticalLazyPage component={GalleryDesignStudioPage} />,
+      },
+      {
+        path: 'galleries/:id/review',
+        element: <CriticalLazyPage component={ReviewModePage} />,
       },
       {
         path: 'people',

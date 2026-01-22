@@ -107,7 +107,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
       {/* Header Section - Enhanced Contrast */}
       <div className="px-6 py-8 border-b border-white/10 bg-black/40 backdrop-blur-3xl rounded-t-[2.5rem]">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-black tracking-tight text-white drop-shadow-lg uppercase">Appearance</h2>
+          <h2 className="text-xl font-bold tracking-tight text-white drop-shadow-lg">Appearance</h2>
           <div className="flex items-center gap-2">
             {saveStatus === 'saving' && (
               <div className="flex items-center gap-2 px-3 py-1 bg-cyan-400/20 rounded-full border border-cyan-400/30 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
@@ -123,7 +123,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
             )}
           </div>
         </div>
-        <p className="text-[11px] text-white/50 font-bold uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded-md inline-block">Visual Identity Engine</p>
+        <p className="text-[11px] text-white/50 font-semibold tracking-wide bg-white/5 px-2 py-0.5 rounded-md inline-block">Visual Identity Engine</p>
       </div>
 
       {/* Tab Navigation - Capsule Segmented Control */}
@@ -147,13 +147,13 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
                 aria-controls={`panel-${tab}`}
                 onClick={() => setActiveTab(tab)}
                 onKeyDown={(e) => handleTabKeyDown(e, tab)}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl transition-all duration-300 relative min-w-0 ${activeTab === tab
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl transition-all duration-300 relative min-w-0 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-black ${activeTab === tab
                   ? 'bg-white text-[#0a1628] shadow-lg scale-[1.02]'
-                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/5 hover:scale-[1.01]'
                   }`}
               >
                 {icon}
-                <span className="text-[9px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{label}</span>
+                <span className="text-[9px] font-semibold tracking-wide truncate w-full text-center px-1">{label}</span>
                 {activeTab === tab && (
                   <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
                 )}
@@ -173,7 +173,12 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
           >
             <div className="space-y-6">
               <div>
-                <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Gallery Cover Mode</h3>
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="text-[10px] font-semibold text-white/60 tracking-wide">Gallery cover mode</h3>
+                  <DesignStudioTooltip content="Choose how your gallery cover looks - the first impression visitors see">
+                    <span className="text-[9px] text-white/40 cursor-help">ⓘ</span>
+                  </DesignStudioTooltip>
+                </div>
                 <CoverStyleGrid
                   selectedStyle={config.cover?.style || 'classic'}
                   onSelectStyle={(styleId) => onChange({ cover: { ...config.cover, style: styleId as CoverStyleId } })}
@@ -195,7 +200,12 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
           >
             <div className="space-y-6">
               <div>
-                <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Font Curation</h3>
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="text-[10px] font-semibold text-white/60 tracking-wide">Font curation</h3>
+                  <DesignStudioTooltip content="Select typography that reflects your visual identity">
+                    <span className="text-[9px] text-white/40 cursor-help">ⓘ</span>
+                  </DesignStudioTooltip>
+                </div>
                 <div className="space-y-3">
                   {Object.values(FONT_PAIRINGS).map((pairing) => (
                     <button
@@ -244,7 +254,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
           >
             <div className="py-8 flex flex-col items-center justify-center text-center opacity-40">
               <Construction className="w-10 h-10 text-white/40 mb-4" />
-              <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-2">Grid Engine</h3>
+              <h3 className="text-sm font-semibold text-white mb-2">Grid engine</h3>
               <p className="text-xs text-white/60">Layout orchestration arriving in Phase 2.</p>
             </div>
           </LockableControlSection>

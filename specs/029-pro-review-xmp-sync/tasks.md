@@ -177,25 +177,25 @@
 
 ### Backend API for Desktop App
 
-- [ ] T058 [P] [US6] Create sync API key endpoints in services/gallery-service/src/api/v1/sync_keys.py
-- [ ] T059 [P] [US6] Create sync auth validation endpoint POST /sync/auth/validate in services/gallery-service/src/api/v1/desktop_sync.py
-- [ ] T060 [US6] Create gallery list endpoint for authenticated sync keys
+- [x] T058 [P] [US6] Create sync API key endpoints in services/gallery-service/src/api/v1/sync_keys.py
+- [x] T059 [P] [US6] Create sync auth validation endpoint POST /sync/auth/validate in services/gallery-service/src/api/v1/desktop_sync.py
+- [x] T060 [US6] Create gallery list endpoint for authenticated sync keys
 
 ### Desktop App Setup
 
-- [ ] T061 [US6] Initialize Tauri project in desktop/ directory: `cd desktop && pnpm create tauri-app . --template react-ts`
-- [ ] T062 [P] [US6] Configure tauri.conf.json with app metadata and permissions
-- [ ] T063 [P] [US6] Add Rust dependencies to desktop/src-tauri/Cargo.toml (notify, keyring, reqwest, serde)
-- [ ] T064 [US6] Create Rust keyring wrapper for credential storage in desktop/src-tauri/src/storage/keyring.rs
-- [ ] T065 [US6] Create Rust config storage module in desktop/src-tauri/src/storage/config.rs
-- [ ] T066 [US6] Create Rust API client for RawDrive in desktop/src-tauri/src/services/api_client.rs
-- [ ] T067 [US6] Create auth Tauri commands (login, validate, logout) in desktop/src-tauri/src/commands/auth.rs
-- [ ] T068 [US6] Create config Tauri commands (folder mappings) in desktop/src-tauri/src/commands/config.rs
-- [ ] T069 [P] [US6] Create Tauri API wrapper in desktop/src/services/tauriApi.ts
-- [ ] T070 [US6] Create SetupWizard component (credentials entry) in desktop/src/components/SetupWizard.tsx
-- [ ] T071 [US6] Create FolderMappingList component in desktop/src/components/FolderMappingList.tsx
-- [ ] T072 [US6] Create Settings component in desktop/src/components/Settings.tsx
-- [ ] T073 [US6] Create desktop App.tsx with routing
+- [x] T061 [US6] Initialize Tauri project in desktop/ directory: `cd desktop && pnpm create tauri-app . --template react-ts`
+- [x] T062 [P] [US6] Configure tauri.conf.json with app metadata and permissions
+- [x] T063 [P] [US6] Add Rust dependencies to desktop/src-tauri/Cargo.toml (notify, keyring, reqwest, serde)
+- [x] T064 [US6] Create Rust keyring wrapper for credential storage in desktop/src-tauri/src/storage/keyring.rs
+- [x] T065 [US6] Create Rust config storage module in desktop/src-tauri/src/storage/config.rs
+- [x] T066 [US6] Create Rust API client for RawDrive in desktop/src-tauri/src/services/api_client.rs
+- [x] T067 [US6] Create auth Tauri commands (login, validate, logout) in desktop/src-tauri/src/commands/auth.rs
+- [x] T068 [US6] Create config Tauri commands (folder mappings) in desktop/src-tauri/src/commands/config.rs
+- [x] T069 [P] [US6] Create Tauri API wrapper in desktop/src/services/tauriApi.ts
+- [x] T070 [US6] Create SetupWizard component (credentials entry) in desktop/src/components/SetupWizard.tsx
+- [x] T071 [US6] Create FolderMappingList component in desktop/src/components/FolderMappingList.tsx
+- [x] T072 [US6] Create Settings component in desktop/src/components/Settings.tsx
+- [x] T073 [US6] Create desktop App.tsx with routing
 
 **Checkpoint**: User Story 6 is fully functional - desktop app installs and configures
 

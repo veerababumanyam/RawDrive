@@ -98,7 +98,10 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
     <div className="space-y-8">
       {/* Theme Grid - Bento Layout */}
       <div>
-        <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Color Atmosphere</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-[10px] font-semibold text-white/60 tracking-wide">Color atmosphere</h3>
+          <span className="text-[9px] text-white/40 cursor-help" title="Choose the color palette that sets the mood for your gallery">ⓘ</span>
+        </div>
         <div
           ref={gridRef}
           role="listbox"
@@ -124,7 +127,10 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
 
       {/* Mode Toggle */}
       <div className="pt-4 border-t border-white/5">
-        <h4 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Luminance Mode</h4>
+        <div className="flex items-center gap-2 mb-4">
+          <h4 className="text-[10px] font-semibold text-white/60 tracking-wide">Luminance mode</h4>
+          <span className="text-[9px] text-white/40 cursor-help" title="Choose light or dark theme for your gallery">ⓘ</span>
+        </div>
         <div className="flex bg-black/30 backdrop-blur-md rounded-2xl p-1.5 border border-white/5" role="radiogroup" aria-label="Theme mode">
           {(['light', 'dark', 'system'] as ThemeMode[]).map((mode) => (
             <button
@@ -133,9 +139,9 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
               aria-checked={selectedMode === mode}
               onClick={() => onModeChange(mode)}
               disabled={disabled}
-              className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-300 ${selectedMode === mode
+              className={`flex-1 py-2 rounded-xl text-[10px] font-semibold tracking-wide transition-all duration-300 capitalize focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-black ${selectedMode === mode
                 ? 'bg-white text-[#0a1628] shadow-lg scale-[1.02]'
-                : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/5 hover:scale-[1.01]'
                 } ${disabled ? 'opacity-20 cursor-not-allowed' : ''}`}
             >
               {mode}
@@ -181,11 +187,11 @@ const ThemeSwatch: React.FC<ThemeSwatchProps> = ({
         onClick={onSelect}
         onFocus={onFocus}
         disabled={disabled}
-        className={`group relative flex flex-col p-2.5 rounded-2xl border transition-all duration-300 ${isSelected
+        className={`group relative flex flex-col p-2.5 rounded-2xl border transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-black ${isSelected
           ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_20px_rgba(34,211,238,0.15)] scale-[1.02]'
           : isFocused
-            ? 'border-white/20 bg-white/5 shadow-xl'
-            : 'border-white/5 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05]'
+            ? 'border-white/20 bg-white/5 shadow-xl scale-[1.01]'
+            : 'border-white/5 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05] hover:scale-[1.01]'
           } ${disabled ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
       >
         {/* Color Swatch Preview */}
@@ -243,10 +249,10 @@ const ThemeSwatch: React.FC<ThemeSwatchProps> = ({
 
         {/* Theme Name - Centered Alignment */}
         <div className="flex flex-col items-center px-1">
-          <div className={`text-[10px] font-bold uppercase tracking-widest text-center transition-colors ${isSelected ? 'text-cyan-400' : 'text-white/80 group-hover:text-white'}`}>
+          <div className={`text-[10px] font-semibold tracking-wide text-center transition-colors ${isSelected ? 'text-cyan-400' : 'text-white/80 group-hover:text-white'}`}>
             {theme.name}
           </div>
-          <div className="text-[9px] text-white/30 font-medium truncate mt-0.5 text-center group-hover:text-white/50 transition-colors">
+          <div className="text-[9px] text-white/50 font-medium truncate mt-0.5 text-center group-hover:text-white/70 transition-colors">
             {theme.description}
           </div>
         </div>

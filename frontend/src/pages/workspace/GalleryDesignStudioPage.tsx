@@ -268,7 +268,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-[#0a1628] text-white overflow-hidden font-sans">
       {/* Top Bar - Floating Glass */}
-      <div className="relative z-50 px-6 py-4 flex items-center justify-between pointer-events-none">
+      <div className="relative z-40 px-6 py-4 flex items-center justify-between pointer-events-none">
         <div className="flex items-center gap-4 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl px-5 py-2.5 shadow-2xl pointer-events-auto">
           <div className="flex flex-col">
             <h1 className="text-sm font-bold tracking-tight text-white uppercase opacity-90">Design Studio</h1>
@@ -374,12 +374,12 @@ export const GalleryDesignStudioPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content - Full Screen Split */}
-      <div ref={mainContainerRef} className="absolute inset-0 flex overflow-hidden">
+      {/* Main Content - Split Layout */}
+      <div ref={mainContainerRef} className="flex-1 relative flex overflow-hidden gap-0">
         {/* Left Panel - Controls (Floating Glass Sidebar) */}
         <div
-          className="relative z-20 h-full flex items-center pl-6 pointer-events-none"
-          style={{ width: `${controlsWidth + 24}px` }}
+          className="relative z-20 h-full flex items-center pr-3 pointer-events-none flex-shrink-0"
+          style={{ width: `${controlsWidth}px` }}
         >
           <div className="w-full h-[90%] bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden pointer-events-auto flex flex-col">
             <DesignControlsPanel

@@ -117,11 +117,11 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
   return (
     <div
       ref={previewRef}
-      className={`${containerClass} max-w-4xl`}
+      className={`${containerClass} max-w-full`}
       style={{
         // Smooth transition for width changes (T052)
         transition: 'width 300ms ease-in-out, transform 200ms ease-out',
-        width: containerWidth ? `${containerWidth}px` : undefined,
+        width: containerWidth ? `${containerWidth}px` : '100%',
         // Set container type for container queries (T053)
         containerType: containerQueriesSupported ? 'inline-size' : undefined,
       }}
@@ -142,20 +142,26 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
           )}
         </div>
 
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <p className={`text-white/40 font-medium ${textClasses.body}`}>
-            {getViewportLabel()} Mode •{' '}
-            <span className="text-white/60">{config.theme.id}</span> • <span className="text-white/60">{config.typography.pairingId}</span>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <div className={`text-[9px] text-white/40 font-semibold tracking-wide uppercase ${textClasses.body}`}>
+              Viewport · Theme · Font
+            </div>
+            <p className={`text-white/70 font-medium ${textClasses.body}`}>
+              <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10 mr-2">{getViewportLabel()}</span>
+              <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10 mr-2">{config.theme.id}</span>
+              <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10">{config.typography.pairingId}</span>
+            </p>
             {!containerQueriesSupported && (
-              <span className="ml-2 text-amber-500/80" title="Container queries not supported, using viewport queries">
-                (fallback)
-              </span>
+              <p className="text-[9px] text-amber-400/80" title="Container queries not supported, using viewport queries">
+                ⓘ Responsive fallback mode active
+              </p>
             )}
-          </p>
+          </div>
 
           {/* Collaborators */}
           {collaborators.length > 0 && (
-            <CollaboratorPresence collaborators={collaborators} maxVisible={3} className="ml-2 scale-90" />
+            <CollaboratorPresence collaborators={collaborators} maxVisible={3} className="scale-90" />
           )}
         </div>
       </div>
@@ -185,8 +191,8 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
 
       {/* Gallery Grid Preview - Container Query Responsive (T048, T049) */}
       <div className="mt-12 group/grid">
-        <h4 className={`text-white/30 font-bold uppercase tracking-[0.2em] mb-4 group-hover/grid:text-white/50 transition-colors ${textClasses.body}`}>
-          Secondary Gallery Section
+        <h4 className={`text-white/50 font-semibold tracking-wide mb-4 group-hover/grid:text-white/70 transition-colors ${textClasses.body}`}>
+          Secondary gallery section
         </h4>
         <div
           className={`grid gap-2 transition-all duration-300 ${gridClasses}`}
@@ -205,24 +211,32 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
             </div>
           ))}
         </div>
-        <p className={`mt-4 text-white/20 font-medium ${textClasses.body}`}>
-          Grid Style: <span className="text-white/40">{config.grid.style}</span> • <span className="text-white/40">{config.grid.size}</span>
-        </p>
+        <div className={`mt-4 text-white/50 text-[9px] font-semibold tracking-wide uppercase ${textClasses.body}`}>
+          Layout settings
+        </div>
+        <div className={`mt-2 flex gap-3 flex-wrap`}>
+          <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10 text-white/60 text-[10px]">
+            Layout: <span className="text-white/80 font-semibold">{config.grid.style}</span>
+          </span>
+          <span className="inline-block px-2 py-1 bg-white/5 rounded border border-white/10 text-white/60 text-[10px]">
+            Size: <span className="text-white/80 font-semibold">{config.grid.size}</span>
+          </span>
+        </div>
       </div>
 
       {/* Cover Info Section - Balanced & Centered */}
       <div className="mt-12 p-8 bg-black/40 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 flex flex-wrap justify-center gap-x-12 gap-y-6 transition-all duration-300">
         <div className="text-center group/info">
-          <span className="text-white/20 font-black uppercase tracking-[0.3em] text-[8px] group-hover/info:text-cyan-400/50 transition-colors">Style Atmosphere</span>
-          <div className="text-white/80 font-bold text-xs mt-1">{coverStyle?.name}{coverStyle?.premium && ' ✨'}</div>
+          <span className="text-white/50 font-semibold tracking-wide text-[10px] group-hover/info:text-cyan-400/70 transition-colors">Style atmosphere</span>
+          <div className="text-white/80 font-semibold text-xs mt-1">{coverStyle?.name}{coverStyle?.premium && ' ✨'}</div>
         </div>
         <div className="text-center group/info">
-          <span className="text-white/20 font-black uppercase tracking-[0.3em] text-[8px] group-hover/info:text-cyan-400/50 transition-colors">Visual Identity</span>
-          <div className="text-white/80 font-bold text-xs mt-1">{config.theme.id} • {config.theme.mode}</div>
+          <span className="text-white/50 font-semibold tracking-wide text-[10px] group-hover/info:text-cyan-400/70 transition-colors">Visual identity</span>
+          <div className="text-white/80 font-semibold text-xs mt-1">{config.theme.id} • {config.theme.mode}</div>
         </div>
         <div className="text-center group/info">
-          <span className="text-white/20 font-black uppercase tracking-[0.3em] text-[8px] group-hover/info:text-cyan-400/50 transition-colors">Type Curation</span>
-          <div className="text-white/80 font-bold text-xs mt-1">{config.typography.pairingId}</div>
+          <span className="text-white/50 font-semibold tracking-wide text-[10px] group-hover/info:text-cyan-400/70 transition-colors">Type curation</span>
+          <div className="text-white/80 font-semibold text-xs mt-1">{config.typography.pairingId}</div>
         </div>
       </div>
     </div>

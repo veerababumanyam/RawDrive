@@ -1,0 +1,86 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "RawDrive Sync",
+  "version": "0.1.0",
+  "identifier": "in.rawdrive.sync",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "RawDrive Sync",
+        "width": 900,
+        "height": 600,
+        "minWidth": 600,
+        "minHeight": 400,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true,
+        "transparent": false,
+        "skipTaskbar": false,
+        "visible": true
+      }
+    ],
+    "trayIcon": {
+      "iconPath": "icons/32x32.png",
+      "iconAsTemplate": false,
+      "menuOnLeftClick": false,
+      "title": "RawDrive Sync"
+    },
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.png"
+    ],
+    "resources": [],
+    "shortDescription": "RawDrive folder sync application",
+    "longDescription": "Desktop application for syncing local folders with RawDrive galleries. Supports bidirectional XMP sidecar sync for seamless Lightroom integration.",
+    "category": "Photography",
+    "copyright": "Copyright (c) 2026 RawDrive",
+    "externalBin": [],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "startMenuFolder": "RawDrive"
+      },
+      "wix": null
+    },
+    "macOS": {
+      "entitlements": null,
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": null,
+      "providerShortName": null
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": "default",
+      "scope": []
+    },
+    "fs": {
+      "scope": {
+        "allow": ["$HOME/**", "$DOCUMENT/**", "$DESKTOP/**", "$PICTURE/**"]
+      }
+    },
+    "notification": {
+      "all": true
+    }
+  }
+}

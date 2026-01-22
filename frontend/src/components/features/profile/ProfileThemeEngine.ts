@@ -56,28 +56,28 @@ export const PROFILE_THEMES: Record<BackgroundTheme, ProfileTheme> = {
     },
     dark: {
         id: 'dark',
-        name: 'Midnight',
+        name: 'Midnight Pro',
         colors: {
-            background: 'bg-zinc-950',
+            background: 'bg-black',
             text: 'text-white',
             textSecondary: 'text-zinc-400',
-            accent: 'text-white',
-            surface: 'bg-zinc-900',
-            border: 'border-zinc-800',
+            accent: 'text-blue-500', // iOS System Blue-ish
+            surface: 'bg-zinc-900/80', // Translucent surface
+            border: 'border-white/10',
             primaryButton: 'bg-white',
-            primaryButtonText: 'text-zinc-950',
-            secondaryButton: 'bg-zinc-900',
+            primaryButtonText: 'text-black',
+            secondaryButton: 'bg-zinc-800/80',
             secondaryButtonText: 'text-white',
         },
         typography: {
-            headingFont: 'font-sans',
+            headingFont: 'font-sans tracking-tight font-semibold',
             bodyFont: 'font-sans',
         },
         effects: {
-            glassmorphism: false,
-            blur: 'none',
-            shadow: 'shadow-none',
-            radius: 'rounded-xl',
+            glassmorphism: true,
+            blur: 'backdrop-blur-xl',
+            shadow: 'shadow-2xl shadow-black/50',
+            radius: 'rounded-[2rem]', // More rounded like iOS widgets
         },
     },
     pastel: {

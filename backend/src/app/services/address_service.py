@@ -315,6 +315,7 @@ class AddressService:
         state: Optional[str] = None,
         country: Optional[str] = None,
         postal_code: Optional[str] = None,
+        google_map_link: Optional[str] = None,
         is_primary: bool = False,
     ) -> dict:
         """Add an address to a client.
@@ -382,9 +383,9 @@ class AddressService:
                     INSERT INTO client_addresses (
                         workspace_id, client_id, address_type,
                         address_line1, address_line2, city, state, country, postal_code,
-                        is_primary
+                        google_map_link, is_primary
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                     RETURNING address_id, created_at
                     """,
                     workspace_id,
@@ -396,6 +397,7 @@ class AddressService:
                     state.strip() if state else None,
                     normalized_country,
                     postal_code.strip() if postal_code else None,
+                    google_map_link.strip() if google_map_link else None,
                     is_primary,
                 )
 
@@ -432,6 +434,7 @@ class AddressService:
                     "state": state.strip() if state else None,
                     "country": normalized_country,
                     "postal_code": postal_code.strip() if postal_code else None,
+                    "google_map_link": google_map_link.strip() if google_map_link else None,
                     "is_primary": is_primary,
                     "inferred_timezone": inferred_timezone,
                     "created_at": row["created_at"].isoformat(),
@@ -449,6 +452,7 @@ class AddressService:
         state: Optional[str] = None,
         country: Optional[str] = None,
         postal_code: Optional[str] = None,
+        google_map_link: Optional[str] = None,
         is_primary: Optional[bool] = None,
     ) -> dict:
         """Update an address.
@@ -481,7 +485,7 @@ class AddressService:
             address = await conn.fetchrow(
                 """
                 SELECT address_id, address_type, address_line1, address_line2,
-                       city, state, country, postal_code, is_primary, created_at
+                       city, state, country, postal_code, google_map_link, is_primary, created_at
                 FROM client_addresses
                 WHERE workspace_id = $1 AND client_id = $2 AND address_id = $3
                 """,
@@ -500,6 +504,7 @@ class AddressService:
             new_state = address["state"]
             new_country = address["country"]
             new_postal = address["postal_code"]
+            new_map_link = address["google_map_link"]
             new_primary = address["is_primary"]
 
             if address_type is not None:
@@ -525,6 +530,9 @@ class AddressService:
 
             if is_primary is not None:
                 new_primary = is_primary
+
+            if google_map_link is not None:
+                new_map_link = google_map_link
 
             # Validate updated address has minimum fields
             validate_address_fields(new_line1, new_city, new_country)
@@ -560,8 +568,8 @@ class AddressService:
                     UPDATE client_addresses
                     SET address_type = $1, address_line1 = $2, address_line2 = $3,
                         city = $4, state = $5, country = $6, postal_code = $7,
-                        is_primary = $8
-                    WHERE workspace_id = $9 AND address_id = $10
+                        google_map_link = $8, is_primary = $9
+                    WHERE workspace_id = $10 AND address_id = $11
                     """,
                     new_type,
                     new_line1,
@@ -570,6 +578,7 @@ class AddressService:
                     new_state,
                     new_country,
                     new_postal,
+                    new_map_link,
                     new_primary,
                     workspace_id,
                     address_id,
@@ -607,6 +616,7 @@ class AddressService:
                     "state": new_state,
                     "country": new_country,
                     "postal_code": new_postal,
+                    "google_map_link": new_map_link,
                     "is_primary": new_primary,
                     "inferred_timezone": inferred_timezone,
                     "created_at": address["created_at"].isoformat(),
@@ -636,7 +646,7 @@ class AddressService:
             # Verify address exists
             address = await conn.fetchrow(
                 """
-                SELECT address_id, address_type, is_primary
+                SELECT address_id, address_type, google_map_link, is_primary
                 FROM client_addresses
                 WHERE workspace_id = $1 AND client_id = $2 AND address_id = $3
                 """,
@@ -706,7 +716,7 @@ class AddressService:
                 addresses = await conn.fetch(
                     """
                     SELECT address_id, address_type, address_line1, address_line2,
-                           city, state, country, postal_code, is_primary, created_at
+                           city, state, country, postal_code, google_map_link, is_primary, created_at
                     FROM client_addresses
                     WHERE workspace_id = $1 AND client_id = $2 AND address_type = $3
                     ORDER BY is_primary DESC, created_at ASC
@@ -719,7 +729,7 @@ class AddressService:
                 addresses = await conn.fetch(
                     """
                     SELECT address_id, address_type, address_line1, address_line2,
-                           city, state, country, postal_code, is_primary, created_at
+                           city, state, country, postal_code, google_map_link, is_primary, created_at
                     FROM client_addresses
                     WHERE workspace_id = $1 AND client_id = $2
                     ORDER BY is_primary DESC, created_at ASC
@@ -738,6 +748,7 @@ class AddressService:
                     "state": a["state"],
                     "country": a["country"],
                     "postal_code": a["postal_code"],
+                    "google_map_link": a["google_map_link"],
                     "is_primary": a["is_primary"],
                     "created_at": a["created_at"].isoformat(),
                 }
@@ -763,7 +774,7 @@ class AddressService:
             address = await conn.fetchrow(
                 """
                 SELECT address_id, address_type, address_line1, address_line2,
-                       city, state, country, postal_code, is_primary, created_at
+                       city, state, country, postal_code, google_map_link, is_primary, created_at
                 FROM client_addresses
                 WHERE workspace_id = $1 AND client_id = $2 AND is_primary = TRUE
                 LIMIT 1
@@ -783,6 +794,7 @@ class AddressService:
                 "state": address["state"],
                 "country": address["country"],
                 "postal_code": address["postal_code"],
+                "google_map_link": address["google_map_link"],
                 "is_primary": True,
                 "created_at": address["created_at"].isoformat(),
             }

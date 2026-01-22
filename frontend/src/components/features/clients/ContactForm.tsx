@@ -24,6 +24,7 @@ import { AppButton } from '../../ui/AppButton';
 import { AppInput } from '../../ui/AppInput';
 import { useToast } from '../../ui/Toast';
 import { clientService } from '../../../services/clientService';
+import CountryCodeSelector from '../../common/CountryCodeSelector';
 import type {
   ClientContact,
   ContactType,
@@ -141,6 +142,7 @@ export const ContactForm: React.FC<ContactFormProps> = ({
   const [contactType, setContactType] = useState<ContactType>('email');
   const [contactLabel, setContactLabel] = useState<string>('');
   const [value, setValue] = useState('');
+  const [countryCode, setCountryCode] = useState<string>('');
   const [isPrimary, setIsPrimary] = useState(false);
 
   // UI state
@@ -152,12 +154,14 @@ export const ContactForm: React.FC<ContactFormProps> = ({
       setContactType(contact.contact_type);
       setContactLabel(contact.label || '');
       setValue(contact.value);
+      setCountryCode(contact.country_code || '');
       setIsPrimary(contact.is_primary);
     } else if (isOpen && !contact) {
       // Reset for new contact
       setContactType('email');
       setContactLabel('');
       setValue('');
+      setCountryCode('');
       setIsPrimary(false);
     }
   }, [isOpen, contact]);
@@ -218,6 +222,7 @@ export const ContactForm: React.FC<ContactFormProps> = ({
         // Update existing contact - only value and is_primary can be updated
         const payload: UpdateContactRequest = {
           value: value.trim(),
+          country_code: contactType === 'phone' ? countryCode : undefined,
           is_primary: isPrimary,
         };
 
@@ -237,6 +242,7 @@ export const ContactForm: React.FC<ContactFormProps> = ({
         const payload: AddContactRequest = {
           contact_type: contactType,
           value: value.trim(),
+          country_code: contactType === 'phone' ? countryCode : undefined,
           is_primary: isPrimary,
         };
 
@@ -321,16 +327,25 @@ export const ContactForm: React.FC<ContactFormProps> = ({
 
             {/* Value */}
             <div>
-              <AppInput
-                type={contactType === 'email' ? 'email' : 'text'}
-                label={currentTypeConfig?.label || 'Value'}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder={currentTypeConfig?.placeholder}
-                leftIcon={<Icon className="h-4 w-4" />}
-                required
-                error={!validation.valid && value ? validation.error : undefined}
-              />
+              <div className="flex space-x-2">
+                {contactType === 'phone' && (
+                  <CountryCodeSelector
+                    value={countryCode}
+                    onChange={setCountryCode}
+                  />
+                )}
+                <AppInput
+                  className="flex-1"
+                  type={contactType === 'email' ? 'email' : 'text'}
+                  label={currentTypeConfig?.label || 'Value'}
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder={currentTypeConfig?.placeholder}
+                  leftIcon={<Icon className="h-4 w-4" />}
+                  required
+                  error={!validation.valid && value ? validation.error : undefined}
+                />
+              </div>
 
               {/* Helper text */}
               <p className="text-xs text-gray-500 mt-1">

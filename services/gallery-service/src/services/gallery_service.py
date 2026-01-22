@@ -1773,6 +1773,537 @@ class GalleryService:
             "items": items,
         }
 
+    # =============================================================================
+    # Pro Review Mode Methods
+    # =============================================================================
+
+    async def get_asset_metadata(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        asset_id: UUID,
+    ) -> dict:
+        """Get current rating, flag, and color label for an asset."""
+        with metrics.track_db_query("get_asset_metadata"):
+            async with get_connection(read_only=True) as conn:
+                # Verify gallery and get asset metadata
+                row = await conn.fetchrow(
+                    """
+                    SELECT
+                        ga.asset_id,
+                        ga.rating,
+                        ga.flag,
+                        ga.color_label,
+                        ga.rating_updated_at,
+                        a.filename
+                    FROM gallery_assets ga
+                    JOIN assets a ON ga.asset_id = a.asset_id
+                    JOIN galleries g ON ga.gallery_id = g.gallery_id
+                    WHERE ga.workspace_id = $1
+                      AND ga.gallery_id = $2
+                      AND ga.asset_id = $3
+                      AND g.deleted = FALSE
+                      AND a.deleted = FALSE
+                    """,
+                    UUID(str(workspace_id)),
+                    UUID(str(gallery_id)),
+                    UUID(str(asset_id)),
+                )
+
+                if not row:
+                    raise GalleryNotFoundError(f"Asset {asset_id} not found in gallery {gallery_id}")
+
+                return {
+                    "asset_id": str(row["asset_id"]),
+                    "gallery_id": str(gallery_id),
+                    "rating": row["rating"],
+                    "flag": row["flag"] or "unflagged",
+                    "color_label": row["color_label"] or "none",
+                    "rating_updated_at": row["rating_updated_at"].isoformat() if row["rating_updated_at"] else None,
+                    "filename": row["filename"],
+                }
+
+    async def update_asset_metadata(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        asset_id: UUID,
+        rating: Optional[int] = None,
+        flag: Optional[str] = None,
+        color_label: Optional[str] = None,
+    ) -> dict:
+        """Update rating, flag, or color label for a single gallery asset."""
+        # Convert enum values to strings if needed
+        if hasattr(flag, 'value'):
+            flag = flag.value
+        if hasattr(color_label, 'value'):
+            color_label = color_label.value
+
+        with metrics.track_db_query("update_asset_metadata"):
+            async with get_connection() as conn:
+                # Verify gallery exists and asset belongs to it
+                exists = await conn.fetchval(
+                    """
+                    SELECT 1 FROM gallery_assets ga
+                    JOIN galleries g ON ga.gallery_id = g.gallery_id
+                    WHERE ga.workspace_id = $1
+                      AND ga.gallery_id = $2
+                      AND ga.asset_id = $3
+                      AND g.deleted = FALSE
+                    """,
+                    UUID(str(workspace_id)),
+                    UUID(str(gallery_id)),
+                    UUID(str(asset_id)),
+                )
+
+                if not exists:
+                    raise GalleryNotFoundError(f"Asset {asset_id} not found in gallery {gallery_id}")
+
+                # Build dynamic update
+                updates = []
+                params = []
+                param_idx = 1
+
+                if rating is not None:
+                    updates.append(f"rating = ${param_idx}")
+                    params.append(rating)
+                    param_idx += 1
+
+                if flag is not None:
+                    updates.append(f"flag = ${param_idx}")
+                    params.append(flag)
+                    param_idx += 1
+
+                if color_label is not None:
+                    updates.append(f"color_label = ${param_idx}")
+                    params.append(color_label)
+                    param_idx += 1
+
+                if not updates:
+                    # No updates, return current state
+                    return await self.get_asset_metadata(workspace_id, gallery_id, asset_id)
+
+                # Always update rating_updated_at when metadata changes
+                updates.append("rating_updated_at = NOW()")
+
+                params.extend([
+                    UUID(str(workspace_id)),
+                    UUID(str(gallery_id)),
+                    UUID(str(asset_id)),
+                ])
+
+                await conn.execute(
+                    f"""
+                    UPDATE gallery_assets
+                    SET {', '.join(updates)}
+                    WHERE workspace_id = ${param_idx}
+                      AND gallery_id = ${param_idx + 1}
+                      AND asset_id = ${param_idx + 2}
+                    """,
+                    *params,
+                )
+
+        # Invalidate cache
+        await invalidate_gallery_cache(str(gallery_id))
+
+        # Return updated state
+        return await self.get_asset_metadata(workspace_id, gallery_id, asset_id)
+
+    async def batch_update_asset_metadata(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        items: List,
+    ) -> dict:
+        """Batch update metadata for multiple assets."""
+        success_count = 0
+        failed_count = 0
+        errors = []
+
+        with metrics.track_db_query("batch_update_asset_metadata"):
+            async with get_connection() as conn:
+                # Verify gallery exists
+                gallery = await conn.fetchval(
+                    """
+                    SELECT 1 FROM galleries
+                    WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+                    """,
+                    UUID(str(workspace_id)),
+                    UUID(str(gallery_id)),
+                )
+
+                if not gallery:
+                    raise GalleryNotFoundError(str(gallery_id))
+
+                # Process each item
+                for item in items:
+                    try:
+                        asset_id = item.asset_id if hasattr(item, 'asset_id') else item.get('asset_id')
+                        rating = item.rating if hasattr(item, 'rating') else item.get('rating')
+                        flag = item.flag if hasattr(item, 'flag') else item.get('flag')
+                        color_label = item.color_label if hasattr(item, 'color_label') else item.get('color_label')
+
+                        # Convert enum values
+                        if hasattr(flag, 'value'):
+                            flag = flag.value
+                        if hasattr(color_label, 'value'):
+                            color_label = color_label.value
+
+                        # Build update for this item
+                        updates = []
+                        params = []
+                        param_idx = 1
+
+                        if rating is not None:
+                            updates.append(f"rating = ${param_idx}")
+                            params.append(rating)
+                            param_idx += 1
+
+                        if flag is not None:
+                            updates.append(f"flag = ${param_idx}")
+                            params.append(flag)
+                            param_idx += 1
+
+                        if color_label is not None:
+                            updates.append(f"color_label = ${param_idx}")
+                            params.append(color_label)
+                            param_idx += 1
+
+                        if updates:
+                            updates.append("rating_updated_at = NOW()")
+                            params.extend([
+                                UUID(str(workspace_id)),
+                                UUID(str(gallery_id)),
+                                UUID(str(asset_id)),
+                            ])
+
+                            result = await conn.execute(
+                                f"""
+                                UPDATE gallery_assets
+                                SET {', '.join(updates)}
+                                WHERE workspace_id = ${param_idx}
+                                  AND gallery_id = ${param_idx + 1}
+                                  AND asset_id = ${param_idx + 2}
+                                """,
+                                *params,
+                            )
+
+                            if result == "UPDATE 1":
+                                success_count += 1
+                            else:
+                                failed_count += 1
+                                errors.append({
+                                    "asset_id": str(asset_id),
+                                    "error": "Asset not found in gallery",
+                                })
+                        else:
+                            # No updates for this item, count as success (no-op)
+                            success_count += 1
+
+                    except Exception as e:
+                        failed_count += 1
+                        asset_id = item.asset_id if hasattr(item, 'asset_id') else item.get('asset_id', 'unknown')
+                        errors.append({
+                            "asset_id": str(asset_id),
+                            "error": str(e),
+                        })
+
+        # Invalidate cache
+        await invalidate_gallery_cache(str(gallery_id))
+
+        return {
+            "gallery_id": str(gallery_id),
+            "total_requested": len(items),
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "errors": errors if errors else None,
+        }
+
+    async def filter_assets(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        page: int = 1,
+        limit: int = 50,
+        rating: Optional[int] = None,
+        rating_min: Optional[int] = None,
+        rating_max: Optional[int] = None,
+        flag: Optional[str] = None,
+        color_label: Optional[str] = None,
+        color_labels: Optional[List] = None,
+        unrated: bool = False,
+        has_rating: bool = False,
+        sub_gallery_id: Optional[UUID] = None,
+        sort_by: str = "sort_order",
+        sort_direction: str = "asc",
+    ) -> dict:
+        """Filter gallery assets by Pro Review metadata."""
+        # Convert enum values
+        if hasattr(flag, 'value'):
+            flag = flag.value
+        if hasattr(color_label, 'value'):
+            color_label = color_label.value
+        if color_labels:
+            color_labels = [cl.value if hasattr(cl, 'value') else cl for cl in color_labels]
+
+        # Build WHERE conditions
+        conditions = [
+            "ga.workspace_id = $1",
+            "ga.gallery_id = $2",
+            "g.deleted = FALSE",
+            "a.deleted = FALSE",
+        ]
+        params = [UUID(str(workspace_id)), UUID(str(gallery_id))]
+        param_idx = 3
+
+        if rating is not None:
+            conditions.append(f"ga.rating = ${param_idx}")
+            params.append(rating)
+            param_idx += 1
+
+        if rating_min is not None:
+            conditions.append(f"ga.rating >= ${param_idx}")
+            params.append(rating_min)
+            param_idx += 1
+
+        if rating_max is not None:
+            conditions.append(f"ga.rating <= ${param_idx}")
+            params.append(rating_max)
+            param_idx += 1
+
+        if flag is not None:
+            conditions.append(f"ga.flag = ${param_idx}")
+            params.append(flag)
+            param_idx += 1
+
+        if color_label is not None:
+            conditions.append(f"ga.color_label = ${param_idx}")
+            params.append(color_label)
+            param_idx += 1
+
+        if color_labels:
+            conditions.append(f"ga.color_label = ANY(${param_idx})")
+            params.append(color_labels)
+            param_idx += 1
+
+        if unrated:
+            conditions.append("ga.rating IS NULL")
+
+        if has_rating:
+            conditions.append("ga.rating IS NOT NULL")
+
+        if sub_gallery_id:
+            conditions.append(f"ga.sub_gallery_id = ${param_idx}")
+            params.append(UUID(str(sub_gallery_id)))
+            param_idx += 1
+
+        where_clause = " AND ".join(conditions)
+
+        # Map sort_by to actual column
+        sort_column_map = {
+            "sort_order": "ga.sort_order",
+            "rating": "ga.rating",
+            "filename": "a.filename",
+            "date_taken": "a.date_taken",
+        }
+        sort_column = sort_column_map.get(sort_by, "ga.sort_order")
+        sort_dir = "DESC" if sort_direction.lower() == "desc" else "ASC"
+
+        # Handle NULL ordering for rating
+        null_order = "NULLS LAST" if sort_by == "rating" else ""
+
+        offset = (page - 1) * limit
+
+        with metrics.track_db_query("filter_assets"):
+            async with get_connection(read_only=True) as conn:
+                # Verify gallery exists
+                gallery = await conn.fetchval(
+                    "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
+                    UUID(str(workspace_id)),
+                    UUID(str(gallery_id)),
+                )
+                if not gallery:
+                    raise GalleryNotFoundError(str(gallery_id))
+
+                # Get total count
+                total = await conn.fetchval(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM gallery_assets ga
+                    JOIN galleries g ON ga.gallery_id = g.gallery_id
+                    JOIN assets a ON ga.asset_id = a.asset_id
+                    WHERE {where_clause}
+                    """,
+                    *params,
+                )
+
+                # Get paginated assets
+                rows = await conn.fetch(
+                    f"""
+                    SELECT
+                        ga.gallery_asset_id,
+                        ga.asset_id,
+                        ga.sort_order,
+                        ga.visible,
+                        ga.is_private,
+                        ga.sub_gallery_id,
+                        ga.rating,
+                        ga.flag,
+                        ga.color_label,
+                        ga.rating_updated_at,
+                        a.filename,
+                        a.type as asset_type,
+                        a.status as asset_status,
+                        a.mime_type,
+                        a.width,
+                        a.height,
+                        a.duration_ms,
+                        a.date_taken
+                    FROM gallery_assets ga
+                    JOIN galleries g ON ga.gallery_id = g.gallery_id
+                    JOIN assets a ON ga.asset_id = a.asset_id
+                    WHERE {where_clause}
+                    ORDER BY {sort_column} {sort_dir} {null_order}
+                    LIMIT ${param_idx} OFFSET ${param_idx + 1}
+                    """,
+                    *params,
+                    limit,
+                    offset,
+                )
+
+        # Format response
+        data = []
+        for row in rows:
+            data.append({
+                "gallery_asset_id": str(row["gallery_asset_id"]),
+                "asset_id": str(row["asset_id"]),
+                "sort_order": row["sort_order"],
+                "visible": row["visible"],
+                "is_private": row["is_private"],
+                "sub_gallery_id": str(row["sub_gallery_id"]) if row["sub_gallery_id"] else None,
+                "rating": row["rating"],
+                "flag": row["flag"] or "unflagged",
+                "color_label": row["color_label"] or "none",
+                "rating_updated_at": row["rating_updated_at"].isoformat() if row["rating_updated_at"] else None,
+                "asset": {
+                    "type": row["asset_type"],
+                    "status": row["asset_status"],
+                    "mime_type": row["mime_type"],
+                    "filename": row["filename"],
+                    "width": row["width"],
+                    "height": row["height"],
+                    "duration_ms": row["duration_ms"],
+                    "date_taken": row["date_taken"].isoformat() if row["date_taken"] else None,
+                },
+            })
+
+        return {
+            "data": data,
+            "meta": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "total_pages": (total + limit - 1) // limit if total > 0 else 1,
+            },
+            "filters_applied": {
+                "rating": rating,
+                "rating_min": rating_min,
+                "rating_max": rating_max,
+                "flag": flag,
+                "color_label": color_label,
+                "color_labels": color_labels,
+                "unrated": unrated,
+                "has_rating": has_rating,
+                "sub_gallery_id": str(sub_gallery_id) if sub_gallery_id else None,
+            },
+        }
+
+    async def get_review_stats(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        sub_gallery_id: Optional[UUID] = None,
+    ) -> dict:
+        """Get Review Mode statistics for a gallery."""
+        with metrics.track_db_query("get_review_stats"):
+            async with get_connection(read_only=True) as conn:
+                # Verify gallery exists
+                gallery = await conn.fetchval(
+                    "SELECT 1 FROM galleries WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE",
+                    UUID(str(workspace_id)),
+                    UUID(str(gallery_id)),
+                )
+                if not gallery:
+                    raise GalleryNotFoundError(str(gallery_id))
+
+                # Build sub-gallery filter if needed
+                sub_filter = ""
+                params = [UUID(str(workspace_id)), UUID(str(gallery_id))]
+                if sub_gallery_id:
+                    sub_filter = "AND ga.sub_gallery_id = $3"
+                    params.append(UUID(str(sub_gallery_id)))
+
+                # Get comprehensive stats in a single query
+                stats = await conn.fetchrow(
+                    f"""
+                    SELECT
+                        COUNT(*) as total_assets,
+                        COUNT(*) FILTER (WHERE ga.rating IS NULL) as unrated_count,
+                        COUNT(*) FILTER (WHERE ga.rating = 0) as rating_0_count,
+                        COUNT(*) FILTER (WHERE ga.rating = 1) as rating_1_count,
+                        COUNT(*) FILTER (WHERE ga.rating = 2) as rating_2_count,
+                        COUNT(*) FILTER (WHERE ga.rating = 3) as rating_3_count,
+                        COUNT(*) FILTER (WHERE ga.rating = 4) as rating_4_count,
+                        COUNT(*) FILTER (WHERE ga.rating = 5) as rating_5_count,
+                        COUNT(*) FILTER (WHERE ga.flag = 'pick') as pick_count,
+                        COUNT(*) FILTER (WHERE ga.flag = 'unflagged' OR ga.flag IS NULL) as unflagged_count,
+                        COUNT(*) FILTER (WHERE ga.flag = 'reject') as reject_count,
+                        COUNT(*) FILTER (WHERE ga.color_label = 'red') as red_count,
+                        COUNT(*) FILTER (WHERE ga.color_label = 'yellow') as yellow_count,
+                        COUNT(*) FILTER (WHERE ga.color_label = 'green') as green_count,
+                        COUNT(*) FILTER (WHERE ga.color_label = 'blue') as blue_count,
+                        COUNT(*) FILTER (WHERE ga.color_label = 'purple') as purple_count,
+                        COUNT(*) FILTER (WHERE ga.color_label = 'none' OR ga.color_label IS NULL) as no_label_count
+                    FROM gallery_assets ga
+                    JOIN galleries g ON ga.gallery_id = g.gallery_id
+                    JOIN assets a ON ga.asset_id = a.asset_id
+                    WHERE ga.workspace_id = $1
+                      AND ga.gallery_id = $2
+                      AND g.deleted = FALSE
+                      AND a.deleted = FALSE
+                      {sub_filter}
+                    """,
+                    *params,
+                )
+
+        return {
+            "gallery_id": str(gallery_id),
+            "sub_gallery_id": str(sub_gallery_id) if sub_gallery_id else None,
+            "total_assets": stats["total_assets"],
+            "unrated_count": stats["unrated_count"],
+            "ratings": {
+                "0": stats["rating_0_count"],
+                "1": stats["rating_1_count"],
+                "2": stats["rating_2_count"],
+                "3": stats["rating_3_count"],
+                "4": stats["rating_4_count"],
+                "5": stats["rating_5_count"],
+            },
+            "flags": {
+                "pick": stats["pick_count"],
+                "unflagged": stats["unflagged_count"],
+                "reject": stats["reject_count"],
+            },
+            "color_labels": {
+                "red": stats["red_count"],
+                "yellow": stats["yellow_count"],
+                "green": stats["green_count"],
+                "blue": stats["blue_count"],
+                "purple": stats["purple_count"],
+                "none": stats["no_label_count"],
+            },
+        }
+
 
 # =============================================================================
 # Service Singleton

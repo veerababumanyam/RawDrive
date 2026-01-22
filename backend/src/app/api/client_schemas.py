@@ -29,6 +29,8 @@ class CreateClientRequest(BaseModel):
     anniversary_date: Optional[date] = Field(None, description="Anniversary date")
     internal_notes: Optional[str] = Field(None, max_length=5000, description="Private notes")
     referred_by_client_id: Optional[UUID] = Field(None, description="Referrer client ID")
+    avatar_asset_id: Optional[UUID] = Field(None, description="Initial avatar asset ID")
+    avatar_crop_data: Optional[dict] = Field(None, description="Initial avatar crop data")
 
 
 class UpdateClientRequest(BaseModel):
@@ -46,6 +48,8 @@ class UpdateClientRequest(BaseModel):
     date_of_birth: Optional[date] = None
     anniversary_date: Optional[date] = None
     internal_notes: Optional[str] = Field(None, max_length=5000)
+    avatar_asset_id: Optional[UUID] = None
+    avatar_crop_data: Optional[dict] = None
 
 
 class AddContactRequest(BaseModel):
@@ -54,12 +58,13 @@ class AddContactRequest(BaseModel):
     contact_type: Literal["email", "phone", "website", "social"] = Field(
         ..., description="Contact type"
     )
-    contact_subtype: Optional[str] = Field(
+    label: Optional[str] = Field(
         None,
         max_length=50,
-        description="Subtype (e.g., work, personal, instagram, whatsapp)",
+        description="Label (e.g., work, personal, instagram, whatsapp)",
     )
     value: str = Field(..., min_length=1, max_length=500, description="Contact value")
+    country_code: Optional[str] = Field(None, max_length=10, description="Country code (e.g., +91)")
     is_primary: bool = Field(False, description="Set as primary contact")
 
 
@@ -67,6 +72,7 @@ class UpdateContactRequest(BaseModel):
     """Update contact request."""
 
     value: Optional[str] = Field(None, min_length=1, max_length=500)
+    country_code: Optional[str] = Field(None, max_length=10)
     is_primary: Optional[bool] = None
 
 
@@ -82,6 +88,7 @@ class AddAddressRequest(BaseModel):
     state: Optional[str] = Field(None, max_length=100)
     country: Optional[str] = Field(None, max_length=100, description="ISO country code")
     postal_code: Optional[str] = Field(None, max_length=20)
+    google_map_link: Optional[str] = Field(None, max_length=1000, description="Google Maps URL")
     is_primary: bool = Field(False, description="Set as primary address")
 
 
@@ -95,6 +102,7 @@ class UpdateAddressRequest(BaseModel):
     state: Optional[str] = Field(None, max_length=100)
     country: Optional[str] = Field(None, max_length=100)
     postal_code: Optional[str] = Field(None, max_length=20)
+    google_map_link: Optional[str] = Field(None, max_length=1000)
     is_primary: Optional[bool] = None
 
 
@@ -155,10 +163,11 @@ class ClientContactResponse(BaseModel):
 
     contact_id: UUID
     contact_type: str
-    contact_subtype: Optional[str] = None
+    label: Optional[str] = None
     value: str
+    country_code: Optional[str] = None
     is_primary: bool
-    verified: bool
+    is_verified: bool
     created_at: datetime
 
 
@@ -175,6 +184,7 @@ class ClientAddressResponse(BaseModel):
     state: Optional[str] = None
     country: Optional[str] = None
     postal_code: Optional[str] = None
+    google_map_link: Optional[str] = None
     is_primary: bool
     created_at: datetime
 

@@ -96,3 +96,12 @@ export { FaceDiscovery } from './FaceDiscovery';
 export type { FaceDiscoveryProps } from './FaceDiscovery';
 
 export { PinVerificationModal } from './PinVerificationModal';
+
+export { XmpExportDialog } from './XmpExportDialog';
+export type { XmpExportDialogProps } from './XmpExportDialog';
+
+export { XmpImportDialog } from './XmpImportDialog';
+export type { XmpImportDialogProps } from './XmpImportDialog';
+
+// Pro Review Mode components
+export * from './review';

@@ -14,6 +14,7 @@ from src.schemas.common import (
     SlideshowConfig,
     ActivityTrackingConfig,
 )
+from src.schemas.asset_metadata import AssetFlag, ColorLabel
 
 
 # =============================================================================
@@ -318,6 +319,22 @@ class GalleryAssetResponse(BaseModel):
     caption: Optional[str] = None
     caption_visible: bool = True
     average_rating: Optional[float] = None
+
+    # Pro Review Mode metadata (photographer ratings, not client ratings)
+    rating: Optional[int] = Field(
+        None, ge=0, le=5, description="Photographer star rating 0-5"
+    )
+    flag: AssetFlag = Field(
+        default=AssetFlag.UNFLAGGED,
+        description="Pick/Unflagged/Reject status for culling",
+    )
+    color_label: ColorLabel = Field(
+        default=ColorLabel.NONE,
+        description="Adobe Lightroom compatible color label",
+    )
+    rating_updated_at: Optional[str] = Field(
+        None, description="ISO timestamp of last rating/flag change"
+    )
 
     class Config:
         from_attributes = True

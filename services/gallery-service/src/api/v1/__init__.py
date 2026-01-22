@@ -9,6 +9,10 @@ from src.api.v1.agents import router as agents_router
 from src.api.v1.websocket_agents import router as websocket_agents_router
 from src.api.v1.batch import router as batch_router
 from src.api.v1.gallery_design_recommendations import router as gallery_design_recommendations_router
+from src.api.v1.assets import router as assets_router
+from src.api.v1.xmp_sync import router as xmp_sync_router
+from src.api.v1.sync_keys import router as sync_keys_router
+from src.api.v1.desktop_sync import router as desktop_sync_router
 
 router = APIRouter()
 
@@ -17,6 +21,13 @@ router.include_router(
     galleries_router,
     prefix="/galleries",
     tags=["galleries"],
+)
+
+# Pro Review Mode asset metadata endpoints (authenticated)
+router.include_router(
+    assets_router,
+    prefix="/galleries",
+    tags=["galleries", "review-mode"],
 )
 
 # Magic link management (authenticated)
@@ -66,6 +77,24 @@ router.include_router(
     gallery_design_recommendations_router,
     prefix="/design",
     tags=["design", "ai-recommendations"],
+)
+
+# XMP sync endpoints (authenticated + desktop sync API key)
+router.include_router(
+    xmp_sync_router,
+    tags=["xmp-sync"],
+)
+
+# Sync API key management endpoints (JWT authenticated)
+router.include_router(
+    sync_keys_router,
+    tags=["sync-keys"],
+)
+
+# Desktop sync endpoints (API key authenticated)
+router.include_router(
+    desktop_sync_router,
+    tags=["desktop-sync"],
 )
 
 __all__ = ["router"]

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   format,
   parse,
@@ -64,12 +65,18 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   error,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'days' | 'months' | 'years'>('days');
   const [viewDate, setViewDate] = useState<Date>(() => {
     if (value) {
       const parsed = parse(value, 'yyyy-MM-dd', new Date());
       if (isValid(parsed)) return parsed;
     }
     return new Date();
+  });
+
+  const [yearRangeStart, setYearRangeStart] = useState<number>(() => {
+    const currentYear = viewDate.getFullYear();
+    return Math.floor(currentYear / 12) * 12;
   });
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -140,9 +147,26 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     inputRef.current?.focus();
   };
 
-  // Navigate months
-  const goToPreviousMonth = () => setViewDate(subMonths(viewDate, 1));
-  const goToNextMonth = () => setViewDate(addMonths(viewDate, 1));
+  // Navigate months/years
+  const goToPrevious = () => {
+    if (viewMode === 'days') {
+      setViewDate(subMonths(viewDate, 1));
+    } else if (viewMode === 'months') {
+      setViewDate(parse(`${viewDate.getFullYear() - 1}`, 'yyyy', new Date()));
+    } else {
+      setYearRangeStart(yearRangeStart - 12);
+    }
+  };
+
+  const goToNext = () => {
+    if (viewMode === 'days') {
+      setViewDate(addMonths(viewDate, 1));
+    } else if (viewMode === 'months') {
+      setViewDate(parse(`${viewDate.getFullYear() + 1}`, 'yyyy', new Date()));
+    } else {
+      setYearRangeStart(yearRangeStart + 12);
+    }
+  };
 
   // Format display value
   const displayValue = selectedDate && isValid(selectedDate)
@@ -214,77 +238,187 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           role="dialog"
           aria-modal="true"
           aria-label="Choose date"
-          className="absolute z-50 mt-2 p-4 bg-surface rounded-xl border border-border shadow-lg animate-in fade-in slide-in-from-top-2 duration-200"
+          className="absolute z-50 mt-2 p-4 bg-surface rounded-xl border border-border shadow-lg"
+          style={{ width: '280px' }}
         >
           {/* Calendar Header */}
           <div className="flex items-center justify-between mb-4">
             <button
               type="button"
-              onClick={goToPreviousMonth}
-              aria-label="Previous month"
+              onClick={goToPrevious}
+              aria-label="Previous"
               className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors"
             >
               <ChevronLeft size={18} />
             </button>
-            <div className="font-semibold text-text-primary">
-              {MONTHS[viewDate.getMonth()]} {viewDate.getFullYear()}
+            <div className="flex items-center gap-1 font-semibold text-text-primary">
+              <button
+                type="button"
+                onClick={() => setViewMode(viewMode === 'months' ? 'days' : 'months')}
+                className="hover:text-primary transition-colors px-1 rounded hover:bg-primary/10"
+              >
+                {MONTHS[viewDate.getMonth()]}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (viewMode !== 'years') {
+                    setYearRangeStart(Math.floor(viewDate.getFullYear() / 12) * 12);
+                    setViewMode('years');
+                  } else {
+                    setViewMode('days');
+                  }
+                }}
+                className="hover:text-primary transition-colors px-1 rounded hover:bg-primary/10"
+              >
+                {viewMode === 'years'
+                  ? `${yearRangeStart} - ${yearRangeStart + 11}`
+                  : viewDate.getFullYear()
+                }
+              </button>
             </div>
             <button
               type="button"
-              onClick={goToNextMonth}
-              aria-label="Next month"
+              onClick={goToNext}
+              aria-label="Next"
               className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors"
             >
               <ChevronRight size={18} />
             </button>
           </div>
 
-          {/* Weekday Headers */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {WEEKDAYS.map((day) => (
-              <div
-                key={day}
-                className="text-center text-xs font-medium text-text-tertiary py-1"
-              >
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Calendar Days */}
-          <div className="grid grid-cols-7 gap-1">
-            {days.map((day, index) => {
-              const isCurrentMonth = isSameMonth(day, viewDate);
-              const isSelected = selectedDate && isSameDay(day, selectedDate);
-              const isTodayDate = isToday(day);
-              const isDisabled = isDateDisabled(day);
-
-              return (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => handleDateSelect(day)}
-                  disabled={isDisabled}
-                  aria-label={format(day, 'EEEE, MMMM d, yyyy')}
-                  aria-selected={isSelected || undefined}
-                  className={`
-                    w-9 h-9 rounded-lg text-sm font-medium transition-all
-                    ${!isCurrentMonth ? 'text-text-tertiary/50' : ''}
-                    ${isDisabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}
-                    ${isSelected
-                      ? 'bg-primary text-white'
-                      : isTodayDate
-                        ? 'bg-primary/10 text-primary border border-primary/30'
-                        : isCurrentMonth
-                          ? 'text-text-primary hover:bg-surface-hover'
-                          : 'hover:bg-surface-hover'
-                    }
-                  `}
+          <div className="relative overflow-hidden min-h-[240px]">
+            <AnimatePresence mode="wait">
+              {viewMode === 'days' && (
+                <motion.div
+                  key="days"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  transition={{ duration: 0.2 }}
                 >
-                  {format(day, 'd')}
-                </button>
-              );
-            })}
+                  {/* Weekday Headers */}
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {WEEKDAYS.map((day) => (
+                      <div
+                        key={day}
+                        className="text-center text-xs font-medium text-text-tertiary py-1"
+                      >
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Calendar Days */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {days.map((day, index) => {
+                      const isCurrentMonth = isSameMonth(day, viewDate);
+                      const isSelected = selectedDate && isSameDay(day, selectedDate);
+                      const isTodayDate = isToday(day);
+                      const isDisabled = isDateDisabled(day);
+
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => handleDateSelect(day)}
+                          disabled={isDisabled}
+                          aria-label={format(day, 'EEEE, MMMM d, yyyy')}
+                          aria-selected={isSelected || undefined}
+                          className={`
+                            w-8 h-8 rounded-lg text-sm font-medium transition-all
+                            ${!isCurrentMonth ? 'text-text-tertiary/50' : ''}
+                            ${isDisabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}
+                            ${isSelected
+                              ? 'bg-primary text-white'
+                              : isTodayDate
+                                ? 'bg-primary/10 text-primary border border-primary/30'
+                                : isCurrentMonth
+                                  ? 'text-text-primary hover:bg-surface-hover'
+                                  : 'hover:bg-surface-hover'
+                            }
+                          `}
+                        >
+                          {format(day, 'd')}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+
+              {viewMode === 'months' && (
+                <motion.div
+                  key="months"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.2 }}
+                  className="grid grid-cols-3 gap-2"
+                >
+                  {MONTHS.map((month, index) => {
+                    const isSelected = viewDate.getMonth() === index;
+                    return (
+                      <button
+                        key={month}
+                        type="button"
+                        onClick={() => {
+                          const newDate = new Date(viewDate);
+                          newDate.setMonth(index);
+                          setViewDate(newDate);
+                          setViewMode('days');
+                        }}
+                        className={`
+                          py-4 rounded-xl text-sm font-medium transition-all
+                          ${isSelected
+                            ? 'bg-primary text-white shadow-md'
+                            : 'text-text-primary hover:bg-surface-hover hover:scale-105'
+                          }
+                        `}
+                      >
+                        {month.slice(0, 3)}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              )}
+
+              {viewMode === 'years' && (
+                <motion.div
+                  key="years"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.2 }}
+                  className="grid grid-cols-3 gap-2"
+                >
+                  {Array.from({ length: 12 }, (_, i) => yearRangeStart + i).map((year) => {
+                    const isSelected = viewDate.getFullYear() === year;
+                    return (
+                      <button
+                        key={year}
+                        type="button"
+                        onClick={() => {
+                          const newDate = new Date(viewDate);
+                          newDate.setFullYear(year);
+                          setViewDate(newDate);
+                          setViewMode('months');
+                        }}
+                        className={`
+                          py-4 rounded-xl text-sm font-medium transition-all
+                          ${isSelected
+                            ? 'bg-primary text-white shadow-md'
+                            : 'text-text-primary hover:bg-surface-hover hover:scale-105'
+                          }
+                        `}
+                      >
+                        {year}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Today Button */}
@@ -294,6 +428,8 @@ export const DatePicker: React.FC<DatePickerProps> = ({
               onClick={() => {
                 const today = new Date();
                 setViewDate(today);
+                setYearRangeStart(Math.floor(today.getFullYear() / 12) * 12);
+                setViewMode('days');
                 if (!isDateDisabled(today)) {
                   handleDateSelect(today);
                 }
