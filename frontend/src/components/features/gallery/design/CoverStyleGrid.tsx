@@ -278,7 +278,7 @@ export const CoverStyleGrid: React.FC<CoverStyleGridProps> = ({
       )}
 
       {/* Category Tabs - Responsive Glass Segmented Control with Pre-caching */}
-      <div className="flex flex-wrap sm:flex-nowrap bg-gray-100 dark:bg-black/20 backdrop-blur-md rounded-2xl p-1 sm:p-1.5 border border-gray-200 dark:border-white/5 gap-0.5 sm:gap-1">
+      <div className="flex flex-nowrap overflow-x-auto bg-gray-100 dark:bg-black/20 backdrop-blur-md rounded-2xl p-1.5 border border-gray-200 dark:border-white/5 gap-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/20 scrollbar-track-transparent">
         {[
           { id: 'all' as const, label: 'All' },
           { id: 'basic' as const, label: 'Basic' },
@@ -290,10 +290,11 @@ export const CoverStyleGrid: React.FC<CoverStyleGridProps> = ({
             key={id}
             onClick={() => handleCategoryChange(id)}
             onMouseEnter={() => preCacheThumbnails(id)}
-            className={`flex-1 px-2 sm:px-3 py-1.5 text-[8px] sm:text-[10px] font-semibold tracking-wide rounded-lg sm:rounded-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-black whitespace-nowrap ${category === id
-              ? 'bg-white text-[#0a1628] shadow-lg scale-[1.02]'
-              : 'text-gray-600 dark:text-white/40 hover:text-gray-900 dark:hover:text-white/70 hover:bg-gray-200 dark:hover:bg-white/5 hover:scale-[1.01]'
-              }`}
+            className={`flex-shrink-0 px-3 py-2 text-xs font-semibold tracking-wide rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-black whitespace-nowrap ${
+              category === id
+                ? 'bg-white dark:bg-white/95 text-[#0a1628] shadow-lg'
+                : 'text-gray-600 dark:text-white/40 hover:text-gray-900 dark:hover:text-white/70 hover:bg-gray-200 dark:hover:bg-white/5'
+            }`}
           >
             {label}
           </button>
