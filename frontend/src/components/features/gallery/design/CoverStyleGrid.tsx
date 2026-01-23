@@ -450,8 +450,8 @@ const CoverStyleGridItem: React.FC<CoverStyleGridItemProps> = ({
         } ${isSelected
           ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_20px_rgba(34,211,238,0.15)] scale-[1.02]'
           : isLocked
-            ? 'border-gray-300 dark:border-white/10 bg-gray-200 dark:bg-black/20 opacity-60 hover:opacity-100 hover:border-amber-400/50'
-            : 'border-gray-300 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] hover:border-gray-400 dark:hover:border-white/20 hover:bg-gray-200 dark:hover:bg-white/[0.05] hover:scale-[1.01]'
+            ? 'border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-black/20 opacity-60 hover:opacity-100 hover:border-amber-400/50'
+            : 'border-gray-300 dark:border-white/5 bg-white dark:bg-white/[0.02] hover:border-gray-400 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.05] hover:scale-[1.01]'
           } ${isLocked ? 'cursor-default' : 'cursor-pointer active:scale-95'}`}
         style={{
           animation: `fadeInScale 0.4s ease-out forwards`,
@@ -459,13 +459,13 @@ const CoverStyleGridItem: React.FC<CoverStyleGridItemProps> = ({
         }}
       >
         {/* Thumbnail */}
-        <div className="relative aspect-square mb-3 rounded-xl overflow-hidden bg-gray-200 dark:bg-white/5 border border-gray-300 dark:border-white/10 shadow-inner group-hover:border-gray-400 dark:group-hover:border-white/20 transition-colors">
+        <div className="relative aspect-square mb-3 rounded-xl overflow-hidden bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 shadow-inner group-hover:border-gray-400 dark:group-hover:border-white/20 transition-colors">
           {/* SVG Thumbnail Image with Fallback Icon */}
           {style.thumbnail ? (
             <img
               src={style.thumbnail}
               alt={`${style.name} style preview`}
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 relative z-10"
               loading="lazy"
               onError={(e) => {
                 // Fallback to placeholder icon if image fails to load
@@ -475,7 +475,7 @@ const CoverStyleGridItem: React.FC<CoverStyleGridItemProps> = ({
           ) : null}
 
           {/* Placeholder/Icon representation (fallback if thumbnail missing) */}
-          <div className="w-full h-full absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 group-hover:scale-110 transition-transform duration-500 bg-gray-100 dark:bg-white/[0.02]" id={`fallback-${style.id}`}>
+          <div className="w-full h-full absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 group-hover:scale-110 transition-transform duration-500 bg-white dark:bg-white/[0.02]" id={`fallback-${style.id}`}>
             <div className="text-gray-500 dark:text-white opacity-40">
               {style.category === 'basic' ? <Layout className="w-8 h-8" /> :
                 style.category === 'text' ? <Type className="w-8 h-8" /> :
@@ -528,30 +528,48 @@ const CoverStyleGridItem: React.FC<CoverStyleGridItemProps> = ({
           {isSelected && (
             <div className="w-full flex gap-2">
               {onCompare && (
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={(e) => {
                     e.stopPropagation();
                     onCompare();
                   }}
-                  className="flex-1 px-1.5 py-1 rounded-lg text-[6px] font-bold uppercase tracking-wider bg-gradient-to-r from-cyan-400 to-blue-500 text-white hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center gap-0.5"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onCompare();
+                    }
+                  }}
+                  className="flex-1 px-1.5 py-1 rounded-lg text-[6px] font-bold uppercase tracking-wider bg-gradient-to-r from-cyan-400 to-blue-500 text-white hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center gap-0.5 cursor-pointer"
                   title="Compare with another style"
                 >
                   <ArrowRightLeft className="w-2 h-2" />
                   Compare
-                </button>
+                </div>
               )}
               {onPreview && (
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={(e) => {
                     e.stopPropagation();
                     onPreview();
                   }}
-                  className="flex-1 px-1.5 py-1 rounded-lg text-[6px] font-bold uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-white hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center gap-0.5"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onPreview();
+                    }
+                  }}
+                  className="flex-1 px-1.5 py-1 rounded-lg text-[6px] font-bold uppercase tracking-wider bg-gradient-to-r from-purple-400 to-pink-500 text-white hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center gap-0.5 cursor-pointer"
                   title="Preview full-page"
                 >
                   <Eye className="w-2 h-2" />
                   Preview
-                </button>
+                </div>
               )}
             </div>
           )}

@@ -32,6 +32,7 @@ interface Asset {
 
 interface AssetPickerModalProps {
   galleryId: string;
+  workspaceId: string;
   onSelect: (asset: Asset) => void;
   onClose: () => void;
   selectedAssetId?: string;
@@ -105,6 +106,7 @@ const AssetThumbnail: React.FC<{
 
 export const AssetPickerModal: React.FC<AssetPickerModalProps> = ({
   galleryId,
+  workspaceId,
   onSelect,
   onClose,
   selectedAssetId,
@@ -125,6 +127,7 @@ export const AssetPickerModal: React.FC<AssetPickerModalProps> = ({
       try {
         const response = await galleryDesignService.getGalleryAssets(
           galleryId,
+          workspaceId,
           pageNum,
           24
         );
@@ -144,7 +147,7 @@ export const AssetPickerModal: React.FC<AssetPickerModalProps> = ({
         loadingRef.current = false;
       }
     },
-    [galleryId]
+    [galleryId, workspaceId]
   );
 
   // Initial load

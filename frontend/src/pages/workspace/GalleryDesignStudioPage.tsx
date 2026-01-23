@@ -15,8 +15,10 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { useWorkspace } from '../../hooks/useWorkspace';
 import { useDesignDraft } from '../../hooks/useDesignDraft';
 import { useDesignCollaboration } from '../../hooks/useDesignCollaboration';
+import { useGallery } from '../../hooks/useGallery';
 import { useToast } from '../../components/ui/Toast';
 import { setupThemeWithSystemPreference } from '../../utils/themeUtils';
 import { loadGalleryFontPairing } from '../../utils/fontLoader';
@@ -50,7 +52,7 @@ const MIN_PREVIEW_WIDTH = 200; // Minimum width before showing "too small" messa
  */
 export const GalleryDesignStudioPage: React.FC = () => {
   const { id: galleryId } = useParams<{ id: string }>();
-  const workspaceId = localStorage.getItem('current_workspace_id') || '';
+  const { workspaceId } = useWorkspace();
   const { addToast } = useToast();
 
   const {
@@ -84,6 +86,13 @@ export const GalleryDesignStudioPage: React.FC = () => {
     enabled: true,
   });
 
+  // Fetch gallery data for cover preview
+  const { gallery } = useGallery({
+    workspaceId,
+    galleryId: galleryId || '',
+    autoFetch: true,
+  });
+
   // All hooks must be called before any early returns
   const [viewportMode, setViewportMode] = useState<ViewportMode>({
     type: 'desktop',
@@ -103,30 +112,29 @@ export const GalleryDesignStudioPage: React.FC = () => {
     return 360;
   });
   const [isResizing, setIsResizing] = useState(false);
-  const [previewWidth, setPreviewWidth] = useState(0);
+  const [actualPreviewWidth, setActualPreviewWidth] = useState(0);
 
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const themeCleanupRef = useRef<(() => void) | null>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
 
-  // Track preview container width
+  // Track actual preview panel width with ResizeObserver
   useEffect(() => {
-    if (!galleryId || !mainContainerRef.current) return;
+    if (!galleryId || !previewContainerRef.current) return;
 
-    const updatePreviewWidth = () => {
-      if (mainContainerRef.current) {
-        const containerWidth = mainContainerRef.current.offsetWidth;
-        setPreviewWidth(containerWidth - controlsWidth);
+    const updateActualWidth = () => {
+      if (previewContainerRef.current) {
+        setActualPreviewWidth(previewContainerRef.current.offsetWidth);
       }
     };
 
-    updatePreviewWidth();
+    updateActualWidth(); // Initial measurement
 
-    const resizeObserver = new ResizeObserver(updatePreviewWidth);
-    resizeObserver.observe(mainContainerRef.current);
+    const resizeObserver = new ResizeObserver(updateActualWidth);
+    resizeObserver.observe(previewContainerRef.current);
 
     return () => resizeObserver.disconnect();
-  }, [controlsWidth, galleryId]);
+  }, [galleryId]);
 
   // Handle divider drag for resizing (mouse)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -402,10 +410,10 @@ export const GalleryDesignStudioPage: React.FC = () => {
       <div ref={mainContainerRef} className="flex-1 relative flex overflow-hidden gap-0 bg-white dark:bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">
         {/* Left Panel - Controls (Floating Glass Sidebar) - Responsive */}
         <div
-          className="relative z-20 h-full flex items-center pr-1 sm:pr-2 md:pr-3 ml-2 sm:ml-3 md:ml-6 pointer-events-none flex-shrink-0"
+          className="relative z-20 h-full flex flex-col justify-center pr-1 sm:pr-2 md:pr-3 ml-2 sm:ml-3 md:ml-6 pointer-events-none flex-shrink-0 py-4 sm:py-6 md:py-8"
           style={{ width: `${controlsWidth}px` }}
         >
-          <div className="w-full h-[90%] bg-white/5 backdrop-blur-3xl border border-white/10 rounded-xl sm:rounded-2xl md:rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden pointer-events-auto flex flex-col">
+          <div className="w-full flex-1 min-h-0 max-h-full bg-white dark:bg-white/5 backdrop-blur-3xl border border-gray-200 dark:border-white/10 rounded-xl sm:rounded-2xl md:rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden pointer-events-auto flex flex-col">
             <DesignControlsPanel
               config={config}
               onChange={updateConfig}
@@ -440,9 +448,9 @@ export const GalleryDesignStudioPage: React.FC = () => {
         })()}
 
         {/* Right Panel - Preview Canvas Environment */}
-        <div className="flex-1 relative z-10 overflow-auto bg-gray-50 dark:bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">
+        <div ref={previewContainerRef} className="flex-1 relative z-10 overflow-auto bg-gray-50 dark:bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">
           {/* Minimum width warning */}
-          {previewWidth < MIN_PREVIEW_WIDTH && previewWidth > 0 ? (
+          {actualPreviewWidth < MIN_PREVIEW_WIDTH && actualPreviewWidth > 0 ? (
             <div className="flex items-center justify-center h-full p-8 transition-opacity duration-200">
               <div className="text-center space-y-4 bg-gray-100 dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-3xl p-10 shadow-2xl">
                 <Ruler className="w-16 h-16 text-gray-400 dark:text-white/40 animate-bounce mx-auto" />
@@ -454,22 +462,24 @@ export const GalleryDesignStudioPage: React.FC = () => {
             </div>
           ) : (
             <div
-              ref={previewContainerRef}
-              className="flex items-center justify-center p-20 min-h-full transition-all duration-700 ease-[cubic-bezier(0.34, 1.56, 0.64, 1)]"
+              className={`flex items-center p-8 md:p-12 lg:p-20 min-h-full transition-all duration-700 ease-[cubic-bezier(0.34, 1.56, 0.64, 1)] ${
+                viewportMode.type === 'desktop' ? 'justify-start' : 'justify-center'
+              }`}
               style={{
                 containerType: 'inline-size',
               }}
             >
-              <div className="relative group">
+              <div className={`relative group ${viewportMode.type === 'desktop' ? 'w-full' : ''}`}>
                 {/* Decorative Atmosphere Glow */}
                 <div className="absolute -inset-20 bg-cyan-500/10 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
 
                 <DesignPreviewCanvas
                   config={config}
                   galleryId={galleryId}
+                  workspaceId={workspaceId}
                   viewportMode={viewportMode}
-                  viewerCount={viewerCount}
-                  collaborators={collaborators}
+                  galleryTitle={gallery?.title}
+                  galleryDescription={gallery?.description}
                 />
               </div>
             </div>

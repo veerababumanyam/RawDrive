@@ -200,9 +200,13 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                 logger.error(f"Failed to encrypt variants for asset {asset_id}: {e}")
                 raise
 
-            # Upload variants to R2
+            # Upload variants to R2 and capture object keys for storage
+            thumbnail_object_key = None
+            medium_object_key = None
+            preview_object_key = None
             try:
-                await storage_service.upload_encrypted_file(
+                # Upload thumbnail and capture object key
+                thumbnail_object_key = await storage_service.upload_encrypted_file(
                     workspace_id=workspace_id,
                     gallery_id=gallery_id,
                     asset_id=asset_id,
@@ -212,7 +216,8 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                     content_type="image/webp",
                 )
 
-                await storage_service.upload_encrypted_file(
+                # Upload medium and capture object key
+                medium_object_key = await storage_service.upload_encrypted_file(
                     workspace_id=workspace_id,
                     gallery_id=gallery_id,
                     asset_id=asset_id,
@@ -222,7 +227,8 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                     content_type="image/webp",
                 )
 
-                await storage_service.upload_encrypted_file(
+                # Upload preview and capture object key
+                preview_object_key = await storage_service.upload_encrypted_file(
                     workspace_id=workspace_id,
                     gallery_id=gallery_id,
                     asset_id=asset_id,
@@ -230,6 +236,15 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                     filename=preview_filename,
                     encrypted_data=encrypted_preview,
                     content_type=preview_content_type,
+                )
+
+                logger.info(
+                    f"Uploaded and captured variant keys for asset {asset_id}",
+                    extra={
+                        "thumbnail_key": thumbnail_object_key,
+                        "medium_key": medium_object_key,
+                        "preview_key": preview_object_key,
+                    },
                 )
             except StorageError as e:
                 logger.error(f"Failed to upload variants to R2 for asset {asset_id}: {e}")
@@ -254,28 +269,41 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
                 f"preview={preview_width}x{preview_height}"
             )
 
-        # Update asset status to 'available' and store LQIP
+        # Update asset status to 'available' and store LQIP + variant object keys
         async with pool.acquire() as conn:
             if file_type == "photo" and lqip_data_uri:
                 await conn.execute(
                     """
                     UPDATE assets
-                    SET status = 'available', lqip = $3
+                    SET status = 'available',
+                        lqip = $3,
+                        thumbnail_object_key = $4,
+                        medium_object_key = $5,
+                        preview_object_key = $6
                     WHERE asset_id = $1 AND workspace_id = $2
                     """,
                     asset_id,
                     workspace_id,
                     lqip_data_uri,
+                    thumbnail_object_key,
+                    medium_object_key,
+                    preview_object_key,
                 )
             else:
                 await conn.execute(
                     """
                     UPDATE assets
-                    SET status = 'available'
+                    SET status = 'available',
+                        thumbnail_object_key = $3,
+                        medium_object_key = $4,
+                        preview_object_key = $5
                     WHERE asset_id = $1 AND workspace_id = $2
                     """,
                     asset_id,
                     workspace_id,
+                    thumbnail_object_key,
+                    medium_object_key,
+                    preview_object_key,
                 )
 
         logger.info(f"Asset {asset_id} processing completed successfully")

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Camera, Trash2, Loader2 } from 'lucide-react';
 import { AppButton } from '../ui/AppButton';
-import { AvatarCropModal, CropData } from '../ui/AvatarCropModal';
+import { AvatarCropModal } from '../ui/AvatarCropModal';
+import type { CropData } from '../ui/AvatarCropModal';
 import { useAvatarUrl } from '../../hooks/useAvatarUrl';
 
 /* =============================================================================
@@ -88,12 +89,17 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
     event.target.value = '';
   }, []);
 
-  const handleCropComplete = useCallback(async (_croppedBlob: Blob, cropData: CropData) => {
+  const handleCropComplete = useCallback(async (croppedBlob: Blob, cropData: CropData) => {
     if (!selectedFile) return;
 
     try {
-      // Use the original file with crop data (backend will process)
-      await onUpload(selectedFile, cropData);
+      // Convert the cropped blob to a File (frontend already created perfect crop)
+      const croppedFile = new File([croppedBlob], selectedFile.name, {
+        type: 'image/webp',
+        lastModified: Date.now(),
+      });
+      // Send the cropped file to backend (no re-cropping needed)
+      await onUpload(croppedFile, cropData);
       setCropModalOpen(false);
     } catch (err) {
       // Error handling is done by parent, but we keep modal open
@@ -233,7 +239,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
         JPEG, PNG or WebP. Max 5MB.
       </p>
 
-      {/* Crop Modal */}
+      {/* Avatar Crop Modal */}
       {selectedImageUrl && (
         <AvatarCropModal
           imageSrc={selectedImageUrl}

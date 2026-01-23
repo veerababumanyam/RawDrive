@@ -58,8 +58,15 @@ class R2URLService:
         variant: str,
         filename: str,
         gallery_id: Optional[UUID] = None,
+        mime_type: Optional[str] = None,
     ) -> str:
         """Build R2 object key matching storage service pattern.
+
+        Uses hardcoded filenames for variants (matching upload worker):
+        - thumbnail: thumb.webp
+        - medium: medium.webp
+        - preview: preview.webp (or preview.jpg for RAW files)
+        - original: uses actual filename
 
         Format for gallery assets: workspaces/{workspace_id}/galleries/{gallery_id}/{variant}/{asset_id}/{filename}.enc
         Format for library assets: workspaces/{workspace_id}/library/{variant}/{asset_id}/{filename}.enc
@@ -67,17 +74,30 @@ class R2URLService:
         Args:
             workspace_id: Workspace UUID
             asset_id: Asset UUID
-            variant: Media variant (thumbnail, preview, original)
-            filename: Original filename
+            variant: Media variant (thumbnail, preview, medium, original)
+            filename: Original filename (used only for 'original' variant)
             gallery_id: Gallery UUID (optional, for library assets)
+            mime_type: Optional MIME type for RAW file detection
 
         Returns:
             R2 object key string
         """
+        # Use hardcoded filenames for variants (matching upload worker)
+        if variant == "thumbnail":
+            filename = "thumb"
+        elif variant == "medium":
+            filename = "medium"
+        elif variant == "preview":
+            # RAW files use JPEG previews, others use WebP
+            is_raw = mime_type and ("raw" in mime_type.lower() or
+                                    mime_type in ["image/x-canon-cr2", "image/x-nikon-nef",
+                                                 "image/x-sony-arw", "image/x-adobe-dng"])
+            filename = "preview.jpg" if is_raw else "preview.webp"
+        # For 'original', use actual filename from DB (already working)
+
         # Ensure .enc extension (all files stored encrypted)
         if not filename.endswith(".enc"):
-            base_name = filename.rsplit(".", 1)[0] if "." in filename else filename
-            filename = f"{base_name}.enc"
+            filename = f"{filename}.enc"
 
         if gallery_id:
             return f"workspaces/{workspace_id}/galleries/{gallery_id}/{variant}/{asset_id}/{filename}"
@@ -92,18 +112,27 @@ class R2URLService:
         filename: str,
         gallery_id: Optional[str] = None,
         expires_in: int = None,
+        mime_type: Optional[str] = None,
+        variant_object_key: Optional[str] = None,
     ) -> str:
         """Generate a signed URL for asset access.
 
         URLs are cached in Redis for the expiration duration to avoid
         regenerating identical URLs for repeated requests.
 
+        Supports two modes:
+        - Phase 1: Builds object key using hardcoded variant filenames
+        - Phase 2: Prefers stored variant_object_key from database
+
         Args:
             workspace_id: Workspace UUID
             asset_id: Asset UUID
             variant: Media variant (thumbnail, preview, original)
             filename: Original filename
+            gallery_id: Gallery UUID (optional)
             expires_in: URL expiration in seconds (default from settings: 15 minutes)
+            mime_type: Optional MIME type for RAW file detection
+            variant_object_key: Optional stored R2 object key (Phase 2)
 
         Returns:
             Signed URL string, or empty string on error
@@ -128,16 +157,27 @@ class R2URLService:
 
         metrics.cache_miss("signed_url")
 
-        # Build object key
+        # Build object key (prefer stored key if available)
         try:
             gallery_uuid = UUID(gallery_id) if gallery_id else None
-            object_key = self._build_object_key(
-                UUID(workspace_id),
-                UUID(asset_id),
-                variant,
-                filename,
-                gallery_uuid,
-            )
+
+            # Phase 2: Prefer stored variant object key if available
+            if variant_object_key:
+                object_key = variant_object_key
+                logger.debug(
+                    f"Using stored variant object key for {asset_id}/{variant}",
+                    extra={"object_key": object_key},
+                )
+            else:
+                # Phase 1: Fallback to building the key using hardcoded filenames
+                object_key = self._build_object_key(
+                    UUID(workspace_id),
+                    UUID(asset_id),
+                    variant,
+                    filename,
+                    gallery_uuid,
+                    mime_type,
+                )
             # #region agent log
             import json
             import os
@@ -336,17 +376,23 @@ class R2URLService:
         for asset in assets:
             asset_id = asset["asset_id"]
             filename = asset.get("filename", "")
+            mime_type = asset.get("mime_type")  # NEW: Get MIME type for RAW detection
             is_private = asset.get("is_private", False)
+
+            # Phase 2: Pass stored variant object keys if available
+            thumbnail_key = asset.get("thumbnail_object_key")
+            medium_key = asset.get("medium_object_key")
+            preview_key = asset.get("preview_object_key")
 
             # Generate thumbnail and preview for all assets
             tasks.append(
                 self.generate_signed_url(
-                    workspace_id, asset_id, "thumbnail", filename, gallery_id, expires_in
+                    workspace_id, asset_id, "thumbnail", filename, gallery_id, expires_in, mime_type, thumbnail_key
                 )
             )
             tasks.append(
                 self.generate_signed_url(
-                    workspace_id, asset_id, "preview", filename, gallery_id, expires_in
+                    workspace_id, asset_id, "preview", filename, gallery_id, expires_in, mime_type, preview_key
                 )
             )
 
@@ -354,7 +400,7 @@ class R2URLService:
             if not is_private:
                 tasks.append(
                     self.generate_signed_url(
-                        workspace_id, asset_id, "original", filename, gallery_id, expires_in
+                        workspace_id, asset_id, "original", filename, gallery_id, expires_in, mime_type, None
                     )
                 )
             else:

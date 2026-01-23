@@ -47,6 +47,7 @@ export const galleryDesignService = {
    */
   async getGalleryAssets(
     galleryId: string,
+    workspaceId: string,
     page: number = 1,
     limit: number = 24
   ): Promise<AssetListResponse> {
@@ -56,7 +57,10 @@ export const galleryDesignService = {
     });
 
     const response = await apiClient.get<AssetListResponse>(
-      `${BASE_PATH}/${galleryId}/assets?${params}`
+      `${BASE_PATH}/${galleryId}/assets?${params}`,
+      {
+        headers: { 'X-Workspace-ID': workspaceId }
+      }
     );
 
     if (!response.data) {

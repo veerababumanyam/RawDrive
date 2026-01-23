@@ -21,8 +21,8 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
+from asyncpg import Connection
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import get_current_user
 from app.api.dependencies.db import get_db
@@ -123,7 +123,7 @@ class UndoActionRequest(BaseModel):
 async def create_session(
     request: CreateSessionRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> CreateSessionResponse:
     """Create a new collaborative editing session or join an existing one.
 
@@ -162,7 +162,7 @@ async def create_session(
 async def get_session(
     session_id: UUID,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> dict[str, Any]:
     """Get details of a collaborative editing session."""
     service = get_collaboration_service(db)
@@ -177,7 +177,7 @@ async def get_session(
 async def leave_session(
     session_id: UUID,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> dict[str, str]:
     """Leave a collaborative editing session."""
     user_id = UUID(current_user["user_id"])
@@ -196,7 +196,7 @@ async def update_presence(
     session_id: UUID,
     request: UpdatePresenceRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> dict[str, str]:
     """Update the current user's presence in a session.
 
@@ -226,7 +226,7 @@ async def record_action(
     session_id: UUID,
     request: RecordActionRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> RecordActionResponse:
     """Record a collaborative action in the session.
 
@@ -269,7 +269,7 @@ async def get_action_history(
     from_version: int = Query(0, description="Start version"),
     limit: int = Query(100, description="Max actions to return"),
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> ActionHistoryResponse:
     """Get the history of actions in a session.
 
@@ -299,7 +299,7 @@ async def undo_action(
     session_id: UUID,
     request: UndoActionRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> dict[str, Any]:
     """Undo a previously recorded action."""
     user_id = UUID(current_user["user_id"])
@@ -329,7 +329,7 @@ async def acquire_lock(
     session_id: UUID,
     request: AcquireLockRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> LockResponse:
     """Acquire a lock on a resource for exclusive or shared editing."""
     user_id = UUID(current_user["user_id"])
@@ -362,7 +362,7 @@ async def acquire_lock(
 async def release_lock(
     lock_id: UUID,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> dict[str, Any]:
     """Release a previously acquired lock."""
     user_id = UUID(current_user["user_id"])
@@ -397,7 +397,7 @@ async def broadcast_design_update(
     session_id: UUID,
     request: DesignUpdateRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> dict[str, str]:
     """Broadcast a design configuration update to all session participants.
 
@@ -432,7 +432,7 @@ async def lock_design_control(
     session_id: UUID,
     request: LockControlRequest,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> LockResponse:
     """Acquire exclusive lock on a design control section.
 
@@ -483,7 +483,7 @@ class ViewerCountResponse(BaseModel):
 async def get_gallery_viewer_count(
     gallery_id: UUID,
     current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: Connection = Depends(get_db),
 ) -> ViewerCountResponse:
     """Get the number of active viewers currently viewing a gallery.
 

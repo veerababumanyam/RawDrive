@@ -4,7 +4,7 @@
  * Requirements 13.2, 13.4, 13.5
  */
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import {
   User,
   Workspace,
@@ -354,8 +354,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setOAuthError(null);
   }, []);
 
-  // Context value
-  const value: AuthContextType = {
+  // Context value - memoized to prevent unnecessary re-renders of consumers
+  const value = useMemo<AuthContextType>(() => ({
     user,
     workspace,
     isAuthenticated,
@@ -369,7 +369,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     refreshUser,
     googleOAuthUrl: getGoogleOAuthUrl,
-  };
+  }), [
+    user,
+    workspace,
+    isAuthenticated,
+    isLoading,
+    sessionExpiredRedirect,
+    oauthError,
+    clearSessionExpiredRedirect,
+    clearOAuthError,
+    login,
+    signup,
+    logout,
+    refreshUser,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

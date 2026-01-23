@@ -41,6 +41,7 @@ class TestBatchAssetServiceSignedUrls:
             {
                 "asset_id": UUID("550e8400-e29b-41d4-a716-446655440000"),
                 "filename": "test.jpg",
+                "mime_type": "image/jpeg",
                 "is_private": False,
             }
         ]

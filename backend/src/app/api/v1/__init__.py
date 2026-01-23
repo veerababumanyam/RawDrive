@@ -19,6 +19,7 @@ from app.api.v1.uploads import router as uploads_router
 from app.api.v1.websocket import router as websocket_router
 from app.api.v1.recycle_bin import router as recycle_bin_router
 # from app.api.v1.clients import router as clients_router  # Moved to client-service
+from app.api.v1.client_avatars import router as client_avatars_router  # Avatar endpoints stay in backend
 from app.api.v1.tags import router as tags_router
 from app.api.v1.comments import router as comments_router
 from app.api.v1.people import router as people_router
@@ -114,6 +115,12 @@ router.include_router(
 #     prefix="/api/v1/workspaces/{workspace_id}/clients",
 #     tags=["clients"],
 # )
+# Client avatar endpoints remain in backend (requires asset processing)
+router.include_router(
+    client_avatars_router,
+    prefix="/api/v1/workspaces/{workspace_id}/clients",
+    tags=["client-avatars"],
+)
 router.include_router(
     tags_router,
     prefix="/api/v1/workspaces/{workspace_id}/tags",
@@ -393,9 +400,8 @@ router.include_router(
 
 # Collaborative Editing routes
 # Real-time multi-user gallery editing with presence, actions, and conflict resolution
-# Temporarily commented out - missing dependencies.db module
-# from app.api.v1.collaboration import router as collaboration_router
-# router.include_router(collaboration_router, tags=["collaboration"])
+from app.api.v1.collaboration import router as collaboration_router
+router.include_router(collaboration_router, tags=["collaboration"])
 
 # Calendar & Booking Management routes (Calendar Integrations & Booking Management feature)
 # Booking management for photographers

@@ -107,7 +107,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
   return (
     <div className="h-full flex flex-col bg-transparent text-gray-900 dark:text-white font-sans">
       {/* Header Section - Enhanced Contrast */}
-      <div className="px-6 py-8 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/40 backdrop-blur-3xl rounded-t-[2.5rem]">
+      <div className="px-6 py-6 sm:py-8 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/40 backdrop-blur-3xl flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white drop-shadow-lg">Appearance</h2>
           <div className="flex items-center gap-2">
@@ -129,7 +129,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
       </div>
 
       {/* Tab Navigation - Responsive Capsule Segmented Control */}
-      <div className="px-4 sm:px-6 py-3 sm:py-4">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0">
         <div
           role="tablist"
           aria-label="Design control sections"
@@ -170,8 +170,8 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
         </div>
       </div>
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-2 scrollbar-thin scrollbar-gray-300 dark:scrollbar-white/10">
+      {/* Tab Content - Cross-browser compatible scrolling */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-2" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(156, 163, 175, 0.5) transparent' }}>
         {activeTab === 'cover' && (
           <LockableControlSection
             isLocked={lockedSections.has('cover')}
@@ -270,7 +270,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
 
       {/* Error Message */}
       {error && (
-        <div className="px-4 py-2 m-2 text-xs text-red-700 dark:text-red-200 bg-red-50 dark:bg-red-950 rounded border border-red-200 dark:border-red-700">
+        <div className="px-4 py-2 m-2 text-xs text-red-700 dark:text-red-200 bg-red-50 dark:bg-red-950 rounded border border-red-200 dark:border-red-700 flex-shrink-0">
           {error}
         </div>
       )}

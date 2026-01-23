@@ -26,7 +26,8 @@ import { AppButton } from '../../components/ui/AppButton';
 import { AppBadge } from '../../components/ui/AppBadge';
 import { useToast } from '../../components/ui/Toast';
 import { DatePicker } from '../../components/ui/DatePicker';
-import { AvatarCropModal, CropData } from '../../components/ui/AvatarCropModal';
+import { AvatarCropModal } from '../../components/ui/AvatarCropModal';
+import type { CropData } from '../../components/ui/AvatarCropModal';
 import { clientService } from '../../services/clientService';
 import type {
   CreateClientRequest,
@@ -102,6 +103,11 @@ const ClientFormPage: React.FC = () => {
   // Tags state
   const [clientTags, setClientTags] = useState<ClientTag[]>([]);
   const [availableTags, setAvailableTags] = useState<ClientTag[]>([]);
+
+  // Pending items for create mode (stored locally until client is created)
+  const [pendingContacts, setPendingContacts] = useState<AddContactRequest[]>([]);
+  const [pendingAddresses, setPendingAddresses] = useState<AddAddressRequest[]>([]);
+  const [pendingTagIds, setPendingTagIds] = useState<string[]>([]);
 
   // Avatar state
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -277,20 +283,49 @@ const ClientFormPage: React.FC = () => {
         const response = await clientService.createClient(workspace!.workspace_id, createPayload as unknown as CreateClientRequest);
         addToast({ variant: 'success', message: 'Client created successfully' });
 
+        const newClientId = response.client_id;
+
+        // Save pending contacts
+        for (const contact of pendingContacts) {
+          try {
+            await clientService.addContact(workspace!.workspace_id, newClientId, contact);
+          } catch (contactErr) {
+            console.error('Failed to add contact:', contactErr);
+          }
+        }
+
+        // Save pending addresses
+        for (const address of pendingAddresses) {
+          try {
+            await clientService.addAddress(workspace!.workspace_id, newClientId, address);
+          } catch (addressErr) {
+            console.error('Failed to add address:', addressErr);
+          }
+        }
+
+        // Save pending tags
+        if (pendingTagIds.length > 0) {
+          try {
+            await clientService.addTags(workspace!.workspace_id, newClientId, { tag_ids: pendingTagIds });
+          } catch (tagErr) {
+            console.error('Failed to add tags:', tagErr);
+          }
+        }
+
         // If there's a pending avatar, upload it now
         if (avatarPreview && (window as any).pendingAvatarBlob) {
           try {
             const blob = (window as any).pendingAvatarBlob;
             const cropData = (window as any).pendingCropData;
             const croppedFile = new File([blob], 'avatar.webp', { type: 'image/webp' });
-            await clientService.uploadAvatar(workspace!.workspace_id, response.client_id, croppedFile, cropData);
+            await clientService.uploadAvatar(workspace!.workspace_id, newClientId, croppedFile, cropData);
           } catch (avatarErr) {
             console.error('Failed to upload avatar for new client:', avatarErr);
             addToast({ variant: 'warning', message: 'Client created, but photo upload failed' });
           }
         }
 
-        navigate(`/workspace/clients/${response.client_id}`);
+        navigate(`/workspace/clients/${newClientId}`);
         return;
       }
 
@@ -308,113 +343,165 @@ const ClientFormPage: React.FC = () => {
 
   // Contact handlers
   const handleAddContact = async () => {
-    if (!workspace?.workspace_id || !clientId || !newContact.value.trim()) return;
+    if (!newContact.value.trim()) {
+      addToast({ variant: 'error', message: 'Please enter a contact value' });
+      return;
+    }
 
-    try {
-      await clientService.addContact(workspace!.workspace_id, clientId, newContact);
-      addToast({ variant: 'success', message: 'Contact added successfully' });
+    if (isEditMode) {
+      // Edit mode: Save directly to API
+      if (!workspace?.workspace_id || !clientId) return;
+      try {
+        await clientService.addContact(workspace!.workspace_id, clientId, newContact);
+        addToast({ variant: 'success', message: 'Contact added successfully' });
+        setNewContact({ contact_type: 'email', label: '', value: '', is_primary: false });
+        fetchClient();
+      } catch (err) {
+        addToast({
+          variant: 'error',
+          message: err instanceof Error ? err.message : 'Failed to add contact',
+        });
+      }
+    } else {
+      // Create mode: Store locally
+      setPendingContacts((prev) => [...prev, { ...newContact }]);
       setNewContact({ contact_type: 'email', label: '', value: '', is_primary: false });
-      fetchClient();
-    } catch (err) {
-      addToast({
-        variant: 'error',
-        message: err instanceof Error ? err.message : 'Failed to add contact',
-      });
+      addToast({ variant: 'success', message: 'Contact added (will be saved with client)' });
     }
   };
 
   const handleDeleteContact = async (contactId: string) => {
-    if (!workspace?.workspace_id || !clientId) return;
-
-    try {
-      await clientService.deleteContact(workspace!.workspace_id, clientId, contactId);
+    if (isEditMode) {
+      if (!workspace?.workspace_id || !clientId) return;
+      try {
+        await clientService.deleteContact(workspace!.workspace_id, clientId, contactId);
+        addToast({ variant: 'success', message: 'Contact removed' });
+        setContacts((prev) => prev.filter((c) => c.contact_id !== contactId));
+      } catch (err) {
+        addToast({
+          variant: 'error',
+          message: err instanceof Error ? err.message : 'Failed to delete contact',
+        });
+      }
+    } else {
+      // Create mode: Remove from pending list (contactId is actually index)
+      const index = parseInt(contactId, 10);
+      setPendingContacts((prev) => prev.filter((_, i) => i !== index));
       addToast({ variant: 'success', message: 'Contact removed' });
-      setContacts((prev) => prev.filter((c) => c.contact_id !== contactId));
-    } catch (err) {
-      addToast({
-        variant: 'error',
-        message: err instanceof Error ? err.message : 'Failed to delete contact',
-      });
     }
   };
 
   // Address handlers
   const handleAddAddress = async () => {
-    if (!workspace?.workspace_id || !clientId) return;
-
     if (!newAddress.address_line1?.trim() && !newAddress.city?.trim()) {
       addToast({ variant: 'error', message: 'Please enter address details' });
       return;
     }
 
-    try {
-      await clientService.addAddress(workspace!.workspace_id, clientId, newAddress);
-      addToast({ variant: 'success', message: 'Address added successfully' });
-      setNewAddress({
-        address_type: 'home',
-        address_line1: '',
-        address_line2: '',
-        city: '',
-        state: '',
-        country: '',
-        postal_code: '',
-        is_primary: false,
-      });
-      fetchClient();
-    } catch (err) {
-      addToast({
-        variant: 'error',
-        message: err instanceof Error ? err.message : 'Failed to add address',
-      });
+    const resetAddress = () => setNewAddress({
+      address_type: 'home',
+      address_line1: '',
+      address_line2: '',
+      city: '',
+      state: '',
+      country: '',
+      postal_code: '',
+      is_primary: false,
+    });
+
+    if (isEditMode) {
+      // Edit mode: Save directly to API
+      if (!workspace?.workspace_id || !clientId) return;
+      try {
+        await clientService.addAddress(workspace!.workspace_id, clientId, newAddress);
+        addToast({ variant: 'success', message: 'Address added successfully' });
+        resetAddress();
+        fetchClient();
+      } catch (err) {
+        addToast({
+          variant: 'error',
+          message: err instanceof Error ? err.message : 'Failed to add address',
+        });
+      }
+    } else {
+      // Create mode: Store locally
+      setPendingAddresses((prev) => [...prev, { ...newAddress }]);
+      resetAddress();
+      addToast({ variant: 'success', message: 'Address added (will be saved with client)' });
     }
   };
 
   const handleDeleteAddress = async (addressId: string) => {
-    if (!workspace?.workspace_id || !clientId) return;
-
-    try {
-      await clientService.deleteAddress(workspace!.workspace_id, clientId, addressId);
+    if (isEditMode) {
+      if (!workspace?.workspace_id || !clientId) return;
+      try {
+        await clientService.deleteAddress(workspace!.workspace_id, clientId, addressId);
+        addToast({ variant: 'success', message: 'Address removed' });
+        setAddresses((prev) => prev.filter((a) => a.address_id !== addressId));
+      } catch (err) {
+        addToast({
+          variant: 'error',
+          message: err instanceof Error ? err.message : 'Failed to delete address',
+        });
+      }
+    } else {
+      // Create mode: Remove from pending list (addressId is actually index)
+      const index = parseInt(addressId, 10);
+      setPendingAddresses((prev) => prev.filter((_, i) => i !== index));
       addToast({ variant: 'success', message: 'Address removed' });
-      setAddresses((prev) => prev.filter((a) => a.address_id !== addressId));
-    } catch (err) {
-      addToast({
-        variant: 'error',
-        message: err instanceof Error ? err.message : 'Failed to delete address',
-      });
     }
   };
 
   // Tag handlers
   const handleAddTag = async (tagId: string) => {
-    if (!workspace?.workspace_id || !clientId) return;
-
-    try {
-      await clientService.addTags(workspace!.workspace_id, clientId, { tag_ids: [tagId] });
-      const tag = availableTags.find((t) => t.tag_id === tagId);
-      if (tag) {
-        setClientTags((prev) => [...prev, tag]);
+    if (isEditMode) {
+      // Edit mode: Save directly to API
+      if (!workspace?.workspace_id || !clientId) return;
+      try {
+        await clientService.addTags(workspace!.workspace_id, clientId, { tag_ids: [tagId] });
+        const tag = availableTags.find((t) => t.tag_id === tagId);
+        if (tag) {
+          setClientTags((prev) => [...prev, tag]);
+        }
+        addToast({ variant: 'success', message: 'Tag added' });
+      } catch (err) {
+        addToast({
+          variant: 'error',
+          message: err instanceof Error ? err.message : 'Failed to add tag',
+        });
       }
-      addToast({ variant: 'success', message: 'Tag added' });
-    } catch (err) {
-      addToast({
-        variant: 'error',
-        message: err instanceof Error ? err.message : 'Failed to add tag',
-      });
+    } else {
+      // Create mode: Store locally
+      if (!pendingTagIds.includes(tagId)) {
+        setPendingTagIds((prev) => [...prev, tagId]);
+        const tag = availableTags.find((t) => t.tag_id === tagId);
+        if (tag) {
+          setClientTags((prev) => [...prev, tag]);
+        }
+        addToast({ variant: 'success', message: 'Tag selected (will be saved with client)' });
+      }
     }
   };
 
   const handleRemoveTag = async (tagId: string) => {
-    if (!workspace?.workspace_id || !clientId) return;
-
-    try {
-      await clientService.removeTag(workspace!.workspace_id, clientId, tagId);
+    if (isEditMode) {
+      // Edit mode: Remove via API
+      if (!workspace?.workspace_id || !clientId) return;
+      try {
+        await clientService.removeTag(workspace!.workspace_id, clientId, tagId);
+        setClientTags((prev) => prev.filter((t) => t.tag_id !== tagId));
+        addToast({ variant: 'success', message: 'Tag removed' });
+      } catch (err) {
+        addToast({
+          variant: 'error',
+          message: err instanceof Error ? err.message : 'Failed to remove tag',
+        });
+      }
+    } else {
+      // Create mode: Remove from pending list
+      setPendingTagIds((prev) => prev.filter((id) => id !== tagId));
       setClientTags((prev) => prev.filter((t) => t.tag_id !== tagId));
       addToast({ variant: 'success', message: 'Tag removed' });
-    } catch (err) {
-      addToast({
-        variant: 'error',
-        message: err instanceof Error ? err.message : 'Failed to remove tag',
-      });
     }
   };
 
@@ -665,10 +752,10 @@ const ClientFormPage: React.FC = () => {
                     </AppButton>
                   )}
                 </div>
-                {!isEditMode && (
-                  <div className="flex items-center gap-2 text-text-tertiary">
+                {!isEditMode && !avatarPreview && (
+                  <div className="flex items-center gap-2 text-text-secondary">
                     <Camera size={16} />
-                    <span className="text-sm">Available after saving</span>
+                    <span className="text-sm">Photo will be saved with the client</span>
                   </div>
                 )}
               </div>
@@ -851,17 +938,19 @@ const ClientFormPage: React.FC = () => {
           <div className="flex items-center gap-2 mb-6">
             <Phone size={20} className="text-primary" />
             <h2 className="text-xl font-semibold text-text-primary">Contact Information</h2>
-            {contacts.length > 0 && (
-              <AppBadge variant="default" size="sm">{contacts.length}</AppBadge>
+            {(contacts.length > 0 || pendingContacts.length > 0) && (
+              <AppBadge variant="default" size="sm">{contacts.length + pendingContacts.length}</AppBadge>
             )}
           </div>
 
           <ContactsSection
             contacts={contacts}
+            pendingContacts={pendingContacts}
             newContact={newContact}
             setNewContact={setNewContact}
             onAdd={handleAddContact}
             onDelete={handleDeleteContact}
+            onDeletePending={(index) => setPendingContacts((prev) => prev.filter((_, i) => i !== index))}
             isEditMode={isEditMode}
           />
         </section>
@@ -874,17 +963,19 @@ const ClientFormPage: React.FC = () => {
           <div className="flex items-center gap-2 mb-6">
             <MapPin size={20} className="text-primary" />
             <h2 className="text-xl font-semibold text-text-primary">Addresses</h2>
-            {addresses.length > 0 && (
-              <AppBadge variant="default" size="sm">{addresses.length}</AppBadge>
+            {(addresses.length > 0 || pendingAddresses.length > 0) && (
+              <AppBadge variant="default" size="sm">{addresses.length + pendingAddresses.length}</AppBadge>
             )}
           </div>
 
           <AddressesSection
             addresses={addresses}
+            pendingAddresses={pendingAddresses}
             newAddress={newAddress}
             setNewAddress={setNewAddress}
             onAdd={handleAddAddress}
             onDelete={handleDeleteAddress}
+            onDeletePending={(index) => setPendingAddresses((prev) => prev.filter((_, i) => i !== index))}
             isEditMode={isEditMode}
           />
         </section>
@@ -955,19 +1046,23 @@ const ClientFormPage: React.FC = () => {
 
 interface ContactsSectionProps {
   contacts: ClientContact[];
+  pendingContacts: AddContactRequest[];
   newContact: AddContactRequest;
   setNewContact: React.Dispatch<React.SetStateAction<AddContactRequest>>;
   onAdd: () => void;
   onDelete: (id: string) => void;
+  onDeletePending: (index: number) => void;
   isEditMode: boolean;
 }
 
 const ContactsSection: React.FC<ContactsSectionProps> = ({
   contacts,
+  pendingContacts,
   newContact,
   setNewContact,
   onAdd,
   onDelete,
+  onDeletePending,
   isEditMode,
 }) => {
   const contactTypes: { value: ContactType; label: string; icon: React.ReactNode }[] = [
@@ -1021,10 +1116,46 @@ const ContactsSection: React.FC<ContactsSectionProps> = ({
         </div>
       )}
 
-      {/* Add New Contact */}
-      {isEditMode && (
-        <div className="p-4 rounded-xl border border-dashed border-border bg-surface-hover/20">
-          <h4 className="font-medium text-text-primary mb-4">Add New Contact</h4>
+      {/* Pending Contacts (Create Mode) */}
+      {!isEditMode && pendingContacts.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm text-text-secondary">Pending contacts (will be saved with client):</p>
+          {pendingContacts.map((contact, index) => (
+            <div
+              key={`pending-${index}`}
+              className="flex items-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20"
+            >
+              {contact.contact_type === 'email' && <Mail size={18} className="text-primary flex-shrink-0" />}
+              {contact.contact_type === 'phone' && <Phone size={18} className="text-success flex-shrink-0" />}
+              {contact.contact_type === 'website' && <Globe size={18} className="text-accent flex-shrink-0" />}
+              {contact.contact_type === 'social_media' && <User size={18} className="text-info flex-shrink-0" />}
+              {contact.contact_type === 'other' && <MessageSquare size={18} className="text-text-tertiary flex-shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <p className="text-text-primary truncate">{contact.value}</p>
+                <p className="text-sm text-text-tertiary capitalize">
+                  {contact.label || contact.contact_type.replace('_', ' ')}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {contact.is_primary && (
+                  <AppBadge variant="primary" size="sm">Primary</AppBadge>
+                )}
+                <button
+                  onClick={() => onDeletePending(index)}
+                  className="p-2 rounded-lg hover:bg-error/10 text-text-tertiary hover:text-error transition-colors"
+                  aria-label="Remove pending contact"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add New Contact - Always visible */}
+      <div className="p-4 rounded-xl border border-dashed border-border bg-surface-hover/20">
+        <h4 className="font-medium text-text-primary mb-4">Add New Contact</h4>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm text-text-secondary mb-1.5">Type</label>
@@ -1095,17 +1226,7 @@ const ContactsSection: React.FC<ContactsSectionProps> = ({
               Add Contact
             </AppButton>
           </div>
-        </div>
-      )}
-
-      {!isEditMode && contacts.length === 0 && (
-        <div className="p-8 rounded-xl border border-dashed border-border bg-surface-hover/10 text-center">
-          <Phone size={32} className="mx-auto text-text-tertiary mb-3" />
-          <p className="text-text-tertiary">
-            Contacts can be added after creating the client
-          </p>
-        </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -1116,19 +1237,23 @@ const ContactsSection: React.FC<ContactsSectionProps> = ({
 
 interface AddressesSectionProps {
   addresses: ClientAddress[];
+  pendingAddresses: AddAddressRequest[];
   newAddress: AddAddressRequest;
   setNewAddress: React.Dispatch<React.SetStateAction<AddAddressRequest>>;
   onAdd: () => void;
   onDelete: (id: string) => void;
+  onDeletePending: (index: number) => void;
   isEditMode: boolean;
 }
 
 const AddressesSection: React.FC<AddressesSectionProps> = ({
   addresses,
+  pendingAddresses,
   newAddress,
   setNewAddress,
   onAdd,
   onDelete,
+  onDeletePending,
   isEditMode,
 }) => {
   const addressTypes: AddressType[] = ['home', 'work', 'billing', 'shipping'];
@@ -1177,27 +1302,67 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
         </div>
       )}
 
-      {/* Add New Address */}
-      {isEditMode && (
-        <div className="p-4 rounded-xl border border-dashed border-border bg-surface-hover/20">
-          <h4 className="font-medium text-text-primary mb-4">Add New Address</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-text-secondary mb-1.5">Type</label>
-              <select
-                value={newAddress.address_type}
-                onChange={(e) =>
-                  setNewAddress((prev) => ({ ...prev, address_type: e.target.value as AddressType }))
-                }
-                className="w-full px-3 py-2 rounded-lg border border-border bg-surface capitalize"
-              >
-                {addressTypes.map((type) => (
-                  <option key={type} value={type} className="capitalize">
-                    {type}
-                  </option>
-                ))}
-              </select>
+      {/* Pending Addresses (Create Mode) */}
+      {!isEditMode && pendingAddresses.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm text-text-secondary">Pending addresses (will be saved with client):</p>
+          {pendingAddresses.map((address, index) => (
+            <div
+              key={`pending-${index}`}
+              className="p-4 rounded-xl bg-primary/5 border border-primary/20"
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <MapPin size={18} className="text-accent" />
+                  <AppBadge variant="outline" size="sm" className="capitalize">
+                    {address.address_type}
+                  </AppBadge>
+                  {address.is_primary && (
+                    <AppBadge variant="primary" size="sm">Primary</AppBadge>
+                  )}
+                </div>
+                <button
+                  onClick={() => onDeletePending(index)}
+                  className="p-2 rounded-lg hover:bg-error/10 text-text-tertiary hover:text-error transition-colors"
+                  aria-label="Remove pending address"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              <p className="text-text-primary">
+                {[address.address_line1, address.address_line2].filter(Boolean).join(', ')}
+              </p>
+              <p className="text-text-secondary">
+                {[address.city, address.state, address.postal_code].filter(Boolean).join(', ')}
+              </p>
+              {address.country && (
+                <p className="text-text-tertiary">{address.country}</p>
+              )}
             </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add New Address - Always visible */}
+      <div className="p-4 rounded-xl border border-dashed border-border bg-surface-hover/20">
+        <h4 className="font-medium text-text-primary mb-4">Add New Address</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-text-secondary mb-1.5">Type</label>
+            <select
+              value={newAddress.address_type}
+              onChange={(e) =>
+                setNewAddress((prev) => ({ ...prev, address_type: e.target.value as AddressType }))
+              }
+              className="w-full px-3 py-2 rounded-lg border border-border bg-surface capitalize"
+            >
+              {addressTypes.map((type) => (
+                <option key={type} value={type} className="capitalize">
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
             <div>
               <label className="block text-sm text-text-secondary mb-1.5">Address Line 1</label>
               <input
@@ -1283,26 +1448,16 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
               />
               Set as primary
             </label>
-            <AppButton
-              variant="primary"
-              size="sm"
-              onClick={onAdd}
-              leftIcon={<Plus size={16} />}
-            >
-              Add Address
-            </AppButton>
-          </div>
+          <AppButton
+            variant="primary"
+            size="sm"
+            onClick={onAdd}
+            leftIcon={<Plus size={16} />}
+          >
+            Add Address
+          </AppButton>
         </div>
-      )}
-
-      {!isEditMode && addresses.length === 0 && (
-        <div className="p-8 rounded-xl border border-dashed border-border bg-surface-hover/10 text-center">
-          <MapPin size={32} className="mx-auto text-text-tertiary mb-3" />
-          <p className="text-text-tertiary">
-            Addresses can be added after creating the client
-          </p>
-        </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -1345,7 +1500,7 @@ const TagsSection: React.FC<TagsSectionProps> = ({
               <AppBadge
                 key={tag.tag_id}
                 variant="outline"
-                removable={isEditMode}
+                removable
                 onRemove={() => onRemove(tag.tag_id)}
                 icon={
                   <span
@@ -1361,41 +1516,31 @@ const TagsSection: React.FC<TagsSectionProps> = ({
         )}
       </div>
 
-      {/* Add Tags */}
-      {isEditMode && (
-        <div>
-          <h4 className="font-medium text-text-primary mb-4">Available Tags</h4>
-          {unassignedTags.length === 0 ? (
-            <p className="text-text-tertiary">All tags are assigned</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {unassignedTags.map((tag) => (
-                <button
-                  key={tag.tag_id}
-                  onClick={() => onAdd(tag.tag_id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed border-border text-sm text-text-secondary hover:border-primary hover:text-primary transition-colors"
-                >
-                  <Plus size={14} />
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: tag.color || '#6B7280' }}
-                  />
-                  {tag.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Add Tags - Always visible */}
+      <div>
+        <h4 className="font-medium text-text-primary mb-4">Available Tags</h4>
+        {unassignedTags.length === 0 ? (
+          <p className="text-text-tertiary">{safeTags.length === 0 ? 'No tags defined in workspace' : 'All tags are assigned'}</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {unassignedTags.map((tag) => (
+              <button
+                key={tag.tag_id}
+                onClick={() => onAdd(tag.tag_id)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed border-border text-sm text-text-secondary hover:border-primary hover:text-primary transition-colors"
+              >
+                <Plus size={14} />
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: tag.color || '#6B7280' }}
+                />
+                {tag.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {!isEditMode && clientTags.length === 0 && (
-        <div className="p-8 rounded-xl border border-dashed border-border bg-surface-hover/10 text-center">
-          <Tag size={32} className="mx-auto text-text-tertiary mb-3" />
-          <p className="text-text-tertiary">
-            Tags can be added after creating the client
-          </p>
-        </div>
-      )}
     </div>
   );
 };

@@ -35,10 +35,10 @@ export const useClientAvatars = (
 
     useEffect(() => {
         if (!workspaceId || clients.length === 0) {
-            // If clients list is emptied, we should probably clean up
-            if (Object.keys(avatarBlobUrls).length > 0 && clients.length === 0) {
-                const oldBlobUrls = { ...avatarBlobUrlsRef.current };
-                Object.values(oldBlobUrls).forEach(url => URL.revokeObjectURL(url));
+            // If clients list is emptied, clean up blob URLs using the ref (always current)
+            const currentBlobUrls = avatarBlobUrlsRef.current;
+            if (Object.keys(currentBlobUrls).length > 0 && clients.length === 0) {
+                Object.values(currentBlobUrls).forEach(url => URL.revokeObjectURL(url));
                 setAvatarBlobUrls({});
             }
             return;
@@ -68,6 +68,16 @@ export const useClientAvatars = (
                 (c) => c.avatar_url && !oldBlobUrls[c.client_id]
             );
 
+            // TEMPORARY DEBUG LOGGING
+            console.log('[DEBUG useClientAvatars] Clients with avatars to fetch:',
+                clientsWithAvatars.map(c => ({
+                    full_name: c.full_name,
+                    client_id: c.client_id,
+                    avatar_url: c.avatar_url,
+                }))
+            );
+            console.log('[DEBUG useClientAvatars] Total clients processed:', clients.length);
+
             if (clientsWithAvatars.length === 0) {
                 if (hasChanges) {
                     setAvatarBlobUrls(oldBlobUrls);
@@ -87,11 +97,23 @@ export const useClientAvatars = (
                             client.client_id,
                             size
                         );
+
+                        // TEMPORARY DEBUG LOGGING
+                        console.log(`[DEBUG useClientAvatars] Avatar fetch result for ${client.full_name}:`, {
+                            client_id: client.client_id,
+                            success: blobUrl !== null && blobUrl !== undefined,
+                            blob_url_length: blobUrl?.length,
+                            blob_url_preview: blobUrl?.substring(0, 80)
+                        });
+
                         if (blobUrl) {
                             newBlobUrls[client.client_id] = blobUrl;
                         }
                     } catch (err) {
-                        console.error(`Failed to fetch avatar for client ${client.client_id}:`, err);
+                        console.error(`[DEBUG useClientAvatars] ERROR for ${client.full_name}:`, {
+                            client_id: client.client_id,
+                            error: err instanceof Error ? err.message : String(err)
+                        });
                     }
                 })
             );

@@ -85,9 +85,16 @@ const ClientsPage: React.FC = () => {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
 
+  // Track if a fetch is in progress to prevent duplicate calls
+  const isFetchingRef = React.useRef(false);
+
   // Fetch clients
   const fetchClients = useCallback(async () => {
     if (!workspace?.workspace_id) return;
+
+    // Prevent duplicate fetches
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
 
     setLoading(true);
     setError(null);
@@ -109,6 +116,7 @@ const ClientsPage: React.FC = () => {
       setError(err instanceof Error ? err : new Error('Failed to fetch clients'));
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   }, [workspace?.workspace_id, page, limit, filterStatus, searchQuery, selectedTagIds, sortBy]);
 

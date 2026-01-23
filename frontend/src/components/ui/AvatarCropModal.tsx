@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Cropper, { Area, Point } from 'react-easy-crop';
 import { X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { AppButton } from './AppButton';
@@ -96,6 +96,15 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
+  // Cleanup blob URL on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (imageSrc && imageSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(imageSrc);
+      }
+    };
+  }, [imageSrc]);
+
   const onCropChange = useCallback((crop: Point) => {
     setCrop(crop);
   }, []);
@@ -157,7 +166,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
           <h2 className="text-lg font-semibold text-text-primary">Adjust Photo</h2>
           <button
             onClick={onCancel}
-            className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary transition-colors"
+            className="p-3 rounded-lg hover:bg-surface-hover text-text-secondary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Close"
           >
             <X size={20} />
@@ -185,7 +194,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={handleZoomOut}
-              className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary transition-colors"
+              className="p-3 rounded-lg hover:bg-surface-hover text-text-secondary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Zoom out"
             >
               <ZoomOut size={18} />
@@ -210,7 +219,7 @@ export const AvatarCropModal: React.FC<AvatarCropModalProps> = ({
             />
             <button
               onClick={handleZoomIn}
-              className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary transition-colors"
+              className="p-3 rounded-lg hover:bg-surface-hover text-text-secondary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Zoom in"
             >
               <ZoomIn size={18} />

@@ -119,7 +119,7 @@ export const useDesignCollaboration = (
         const { getStoredTokens } = await import('../services/tokenStorage');
         const tokens = getStoredTokens();
 
-        const response = await fetch(`${API_BASE}/galleries/${galleryId}/viewer-count`, {
+        const response = await fetch(`${API_BASE}/collaboration/galleries/${galleryId}/viewer-count`, {
           headers: {
             Authorization: `Bearer ${tokens?.accessToken}`,
           },

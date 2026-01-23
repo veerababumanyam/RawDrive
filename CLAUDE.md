@@ -1,8 +1,12 @@
-﻿# CLAUDE.md - RawDrive AI Context
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+---
 
 **RawDrive** is an enterprise SaaS professional photography platform with microservices architecture.
 
-**Version**: 0.3.6 | **Status**: Production | **Updated**: 2026-01-22
+**Version**: 0.3.6 | **Status**: Production | **Updated**: 2026-01-23
 
 ---
 
@@ -40,14 +44,23 @@ cd frontend && pnpm dev  # http://localhost:5173
 ### Common Commands
 ```bash
 # Frontend
-cd frontend && pnpm dev          # Start dev server
-cd frontend && pnpm test         # Run tests
-cd frontend && pnpm lint         # Lint code
+cd frontend && pnpm dev                      # Start dev server
+cd frontend && pnpm test                     # Run all tests
+cd frontend && pnpm test src/path/file.test.ts  # Run single test file
+cd frontend && pnpm test --watch             # Watch mode
+cd frontend && pnpm lint                     # Lint code
 
 # Backend (Docker)
-docker exec rawdrive-backend pytest                    # Run tests
-docker exec rawdrive-backend alembic upgrade head      # Run migrations
-docker exec rawdrive-backend alembic revision -m "msg" # Create migration
+docker exec rawdrive-backend pytest                        # Run all tests
+docker exec rawdrive-backend pytest tests/path/test_file.py  # Run single test
+docker exec rawdrive-backend pytest -k "test_name"         # Run by test name
+docker exec rawdrive-backend pytest --cov=src              # With coverage
+docker exec rawdrive-backend alembic upgrade head          # Run migrations
+docker exec rawdrive-backend alembic revision -m "msg"     # Create migration
+
+# Backend (Local development - outside Docker)
+cd backend && uvicorn app.main:app --reload --port 8000
+cd backend && ruff check src && mypy src                   # Lint Python
 
 # Health Checks
 curl http://localhost:8000/health/live   # Backend
@@ -155,9 +168,15 @@ result = await db.execute(
 # NEVER trust client-provided workspace_id - extract from JWT token
 ```
 
+### RBAC Separation (Important)
+- **Workspace RBAC ≠ Platform RBAC** - Keep these permission systems separate
+- Auth: Google OAuth primary; local fallback
+- Client portal & share links: capability-based; respect per-link download policy
+- Download policies: `view_only|web_only|watermarked_only|original_allowed`
+
 ### Never Hardcode
 - ❌ API keys, secrets, credentials
-- ❌ LLM provider names or model identifiers  
+- ❌ LLM provider names or model identifiers
 - ❌ Colors (use design tokens from `@rawdrive/shared-constants`)
 - ❌ User-facing strings (use i18n)
 - ❌ Magic numbers (use named constants)
@@ -255,7 +274,12 @@ pnpm test:packages       # Test shared packages
 3. **Use Shared Packages**: Reuse types, constants, validation
 4. **Write Tests**: Unit tests (80%+ coverage), integration tests, E2E tests
 5. **Create Migration**: Database changes require Alembic migration
-6. **Update Documentation**: Add to `docs/Features/` and update PRD
+6. **Update Documentation**: When changing behavior, update both `docs/Features/*.md` AND matching tech spec in `docs/TechnicalSpecs/*.json` (update `lastUpdated`)
+
+### Documentation Discipline
+- Keep terminology consistent with specs: `workspace_id`, Share Links, download policies
+- Canonical contracts live in `docs/TechnicalSpecs/*.json` (validated by `_schema.json`)
+- Some scaffolding may be incomplete; verify package manifests before assuming scripts exist
 
 **📖 For workflows, see**: [`.claude/commands/`](.claude/commands/)
 
@@ -462,19 +486,5 @@ RAZORPAY_KEY_SECRET=<razorpay-secret>
 ---
 
 **Maintained by**: RawDrive Development Team
-**Last Updated**: 2026-01-21
+**Last Updated**: 2026-01-23
 **Status**: Production Ready ✅
-
-## Active Technologies
-- Python 3.11 (backend), TypeScript 5.3+ (frontend), Rust 1.75+ (desktop) + FastAPI, SQLAlchemy 2.0, React 18.3, Tauri 2.x, lxml (029-pro-review-xmp-sync)
-- PostgreSQL 16 (ratings, flags, sync_api_keys, sync_audit_log), Redis 7 (sync queue), react-hotkeys-hook, @tanstack/virtual (029-pro-review-xmp-sync)
-- Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, passlib (bcrypt) (027-gallery-feature-completion)
-- PostgreSQL 16 (galleries, magic_links), Redis 7 (quotas, rate-limiting) (027-gallery-feature-completion)
-- Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, reportlab (PDF) (026-album-proofing)
-- Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI 0.115+, SQLAlchemy 2.0, Redis 7.x, Celery 5.x, Pydantic V2 (002-face-audit-remediation)
-- PostgreSQL 16 (with pgvector), Redis 7.x (caching/rate limiting) (002-face-audit-remediation)
-
-## Recent Changes
-- 029-pro-review-xmp-sync: Pro Review Mode (Lightroom-style 3-pane UI), XMP sidecar sync, Tauri desktop apps for folder-to-gallery live sync
-- 027-gallery-feature-completion: Added passlib (bcrypt) for access code hashing, Redis quota tracking, WCAG 2.1 AAA CSS variables
-- 026-album-proofing: Added Python 3.11 (backend), TypeScript 5.3+ (frontend) + FastAPI, SQLAlchemy 2.0, React 18.3, reportlab (PDF)

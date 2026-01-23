@@ -153,6 +153,7 @@ class AvatarService:
     ) -> Image.Image:
         """Generate square crop from image.
 
+        If the image is already square (from frontend pre-cropping), returns as-is.
         If crop_data is provided, uses the specified offset and scale.
         Otherwise, creates a centered square crop.
 
@@ -164,6 +165,10 @@ class AvatarService:
             Cropped and squared PIL Image
         """
         width, height = image.size
+
+        # If image is already square (frontend pre-cropped it), skip re-cropping
+        if width == height:
+            return image
 
         if crop_data:
             # Apply custom crop with offset and scale
@@ -278,127 +283,130 @@ class AvatarService:
 
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Verify client exists
-            client = await conn.fetchrow(
-                "SELECT client_id, full_name FROM clients WHERE workspace_id = $1 AND client_id = $2",
-                workspace_id,
-                client_id,
-            )
-            if not client:
-                raise ClientNotFoundError(client_id)
+            # Wrap all database operations in a transaction to ensure atomicity
+            # This prevents database inconsistencies if upload fails mid-process
+            async with conn.transaction():
+                # Verify client exists
+                client = await conn.fetchrow(
+                    "SELECT client_id, full_name FROM clients WHERE workspace_id = $1 AND client_id = $2",
+                    workspace_id,
+                    client_id,
+                )
+                if not client:
+                    raise ClientNotFoundError(client_id)
 
-            try:
-                # Open and validate image
-                image = Image.open(io.BytesIO(file_data))
+                try:
+                    # Open and validate image
+                    image = Image.open(io.BytesIO(file_data))
 
-                # Auto-rotate based on EXIF
-                image = ImageOps.exif_transpose(image)
+                    # Auto-rotate based on EXIF
+                    image = ImageOps.exif_transpose(image)
 
-                # Validate dimensions
-                self._validate_image_dimensions(image)
+                    # Validate dimensions
+                    self._validate_image_dimensions(image)
 
-                # Create square crop
-                squared = self._generate_square_crop(image, crop_data)
+                    # Create square crop
+                    squared = self._generate_square_crop(image, crop_data)
 
-                # Generate thumbnails
-                thumbnails: dict[str, bytes] = {}
-                for size in AVATAR_THUMBNAIL_SIZES:
-                    thumbnails[str(size)] = self._generate_thumbnail(squared, size)
+                    # Generate thumbnails
+                    thumbnails: dict[str, bytes] = {}
+                    for size in AVATAR_THUMBNAIL_SIZES:
+                        thumbnails[str(size)] = self._generate_thumbnail(squared, size)
 
-                # Generate avatar asset ID
-                avatar_asset_id = uuid4()
+                    # Generate avatar asset ID
+                    avatar_asset_id = uuid4()
 
-                # Store thumbnails in avatar_images table
-                await conn.execute(
-                    """
-                    INSERT INTO avatar_images (
-                        avatar_id, workspace_id, client_id,
-                        image_64, image_128, image_256,
-                        content_type
+                    # Store thumbnails in avatar_images table
+                    await conn.execute(
+                        """
+                        INSERT INTO avatar_images (
+                            avatar_id, workspace_id, client_id,
+                            image_64, image_128, image_256,
+                            content_type
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6, 'image/webp')
+                        ON CONFLICT (workspace_id, client_id)
+                        DO UPDATE SET
+                            avatar_id = EXCLUDED.avatar_id,
+                            image_64 = EXCLUDED.image_64,
+                            image_128 = EXCLUDED.image_128,
+                            image_256 = EXCLUDED.image_256,
+                            updated_at = NOW()
+                        """,
+                        avatar_asset_id,
+                        workspace_id,
+                        client_id,
+                        thumbnails.get("64"),
+                        thumbnails.get("128"),
+                        thumbnails.get("256"),
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, 'image/webp')
-                    ON CONFLICT (workspace_id, client_id)
-                    DO UPDATE SET
-                        avatar_id = EXCLUDED.avatar_id,
-                        image_64 = EXCLUDED.image_64,
-                        image_128 = EXCLUDED.image_128,
-                        image_256 = EXCLUDED.image_256,
-                        updated_at = NOW()
-                    """,
-                    avatar_asset_id,
-                    workspace_id,
-                    client_id,
-                    thumbnails.get("64"),
-                    thumbnails.get("128"),
-                    thumbnails.get("256"),
-                )
 
-                # Update client with avatar reference
-                await conn.execute(
-                    """
-                    UPDATE clients
-                    SET avatar_asset_id = $1,
-                        avatar_crop_data = $2,
-                        updated_at = NOW()
-                    WHERE workspace_id = $3 AND client_id = $4
-                    """,
-                    avatar_asset_id,
-                    crop_data if crop_data else None,
-                    workspace_id,
-                    client_id,
-                )
-
-                # Record activity
-                await conn.execute(
-                    """
-                    INSERT INTO client_activities (
-                        workspace_id, client_id, activity_type,
-                        description, created_by_user_id
+                    # Update client with avatar reference
+                    await conn.execute(
+                        """
+                        UPDATE clients
+                        SET avatar_asset_id = $1,
+                            avatar_crop_data = $2,
+                            updated_at = NOW()
+                        WHERE workspace_id = $3 AND client_id = $4
+                        """,
+                        avatar_asset_id,
+                        crop_data if crop_data else None,
+                        workspace_id,
+                        client_id,
                     )
-                    VALUES ($1, $2, 'avatar_updated', 'Avatar image uploaded', $3)
-                    """,
-                    workspace_id,
-                    client_id,
-                    user_id,
-                )
 
-                logger.info(
-                    "Avatar uploaded",
-                    extra={
-                        "workspace_id": str(workspace_id),
-                        "client_id": str(client_id),
-                        "avatar_asset_id": str(avatar_asset_id),
-                        "sizes_generated": list(thumbnails.keys()),
-                    },
-                )
+                    # Record activity
+                    await conn.execute(
+                        """
+                        INSERT INTO client_activities (
+                            workspace_id, client_id, activity_type,
+                            description, created_by_user_id
+                        )
+                        VALUES ($1, $2, 'avatar_updated', 'Avatar image uploaded', $3)
+                        """,
+                        workspace_id,
+                        client_id,
+                        user_id,
+                    )
 
-                # Build placeholder URLs (actual storage integration would generate real URLs)
-                base_url = f"/api/v1/workspaces/{workspace_id}/clients/{client_id}/avatar"
-                return AvatarUploadResult(
-                    avatar_asset_id=str(avatar_asset_id),
-                    avatar_url=f"{base_url}/256",
-                    thumbnails={
-                        size: f"{base_url}/{size}"
-                        for size in thumbnails.keys()
-                    },
-                )
+                    logger.info(
+                        "Avatar uploaded",
+                        extra={
+                            "workspace_id": str(workspace_id),
+                            "client_id": str(client_id),
+                            "avatar_asset_id": str(avatar_asset_id),
+                            "sizes_generated": list(thumbnails.keys()),
+                        },
+                    )
 
-            except AvatarUploadError:
-                raise
-            except AvatarFileTooLargeError:
-                raise
-            except AvatarInvalidFormatError:
-                raise
-            except Exception as e:
-                logger.error(
-                    "Avatar processing failed",
-                    extra={
-                        "workspace_id": str(workspace_id),
-                        "client_id": str(client_id),
-                        "error": str(e),
-                    },
-                )
-                raise AvatarUploadError(f"Image processing failed: {str(e)}") from e
+                    # Build placeholder URLs (actual storage integration would generate real URLs)
+                    base_url = f"/api/v1/workspaces/{workspace_id}/clients/{client_id}/avatar"
+                    return AvatarUploadResult(
+                        avatar_asset_id=str(avatar_asset_id),
+                        avatar_url=f"{base_url}/256",
+                        thumbnails={
+                            size: f"{base_url}/{size}"
+                            for size in thumbnails.keys()
+                        },
+                    )
+
+                except AvatarUploadError:
+                    raise
+                except AvatarFileTooLargeError:
+                    raise
+                except AvatarInvalidFormatError:
+                    raise
+                except Exception as e:
+                    logger.error(
+                        "Avatar processing failed",
+                        extra={
+                            "workspace_id": str(workspace_id),
+                            "client_id": str(client_id),
+                            "error": str(e),
+                        },
+                    )
+                    raise AvatarUploadError(f"Image processing failed: {str(e)}") from e
 
     async def select_gallery_photo(
         self,

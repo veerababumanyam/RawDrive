@@ -21,6 +21,7 @@ import { AppButton } from '../../../ui/AppButton';
 
 interface CoverPhotoUploaderProps {
   galleryId: string;
+  workspaceId: string;
   onUploadStart: () => void;
   onUploadProgress: (progress: number) => void;
   onUploadComplete: (assetId: string, coverUrl: string) => void;
@@ -32,6 +33,7 @@ type UploadTab = 'upload' | 'select';
 
 export const CoverPhotoUploader: React.FC<CoverPhotoUploaderProps> = ({
   galleryId,
+  workspaceId,
   onUploadStart,
   onUploadProgress,
   onUploadComplete,
@@ -262,6 +264,7 @@ export const CoverPhotoUploader: React.FC<CoverPhotoUploaderProps> = ({
       {showAssetPicker && (
         <AssetPickerModal
           galleryId={galleryId}
+          workspaceId={workspaceId}
           onSelect={handleAssetSelect}
           onClose={() => setShowAssetPicker(false)}
         />

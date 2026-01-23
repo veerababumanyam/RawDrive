@@ -57,6 +57,10 @@ class BatchAssetService:
                     SELECT
                         a.asset_id,
                         SUBSTRING(a.original_object_key FROM '[^/]+$') AS filename,
+                        a.mime_type,
+                        a.thumbnail_object_key,
+                        a.medium_object_key,
+                        a.preview_object_key,
                         COALESCE(ga.is_private, FALSE) as is_private
                     FROM assets a
                     LEFT JOIN gallery_assets ga ON a.asset_id = ga.asset_id
@@ -75,6 +79,10 @@ class BatchAssetService:
                 {
                     "asset_id": str(row["asset_id"]),
                     "filename": row["filename"] or "asset",
+                    "mime_type": row["mime_type"],
+                    "thumbnail_object_key": row["thumbnail_object_key"],
+                    "medium_object_key": row["medium_object_key"],
+                    "preview_object_key": row["preview_object_key"],
                     "is_private": row["is_private"],
                 }
                 for row in rows
