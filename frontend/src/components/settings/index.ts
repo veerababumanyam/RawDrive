@@ -16,7 +16,9 @@ export { AccountTabContent } from './AccountTabContent';
 // Personal Profile components
 export { PersonalProfilePreview } from './PersonalProfilePreview';
 export { PersonalProfileAIAssistant } from './PersonalProfileAIAssistant';
-export { ProfileCompletenessIndicator } from './ProfileCompletenessIndicator';
+
+// Profile Completeness (new compact status bar)
+export { ProfileStatusBar, ProfileCompletenessDetails } from '../profile';
 
 // Profile components
 export { AvatarUploader } from './AvatarUploader';

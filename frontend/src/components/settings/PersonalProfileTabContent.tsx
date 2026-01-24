@@ -12,18 +12,12 @@ import {
   Phone,
   Globe,
   MapPin,
-  Link2,
   Image,
   Save,
   Loader2,
-  Eye,
-  EyeOff,
   Plus,
   Trash2,
   ExternalLink,
-  QrCode,
-  Download,
-  Share2,
   Instagram,
   Facebook,
   Twitter,
@@ -32,7 +26,6 @@ import {
   Music,
   Palette,
   Calendar,
-  Tag,
   FileText,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -43,8 +36,11 @@ import { AvatarUploader } from './AvatarUploader';
 import { PersonalProfilePreview } from './PersonalProfilePreview';
 import { PersonalProfileAIAssistant } from './PersonalProfileAIAssistant';
 import { VisibilityToggle } from './VisibilityToggle';
-import { ProfileCompletenessIndicator } from './ProfileCompletenessIndicator';
+import { ThemePreviewCard } from './ThemePreviewCard';
+import { ThemeCustomization } from '../features/settings/ThemeCustomization';
+import { ProfileStatusBar } from '../profile/ProfileStatusBar';
 import { personalProfileService } from '../../services/personalProfileService';
+import { PREBUILT_THEMES } from '../../constants/themes';
 import type { OptimizeSEOResponse } from '../../services/personalProfileAIService';
 import type { TabContentProps } from '../../types/settings';
 import type {
@@ -103,14 +99,6 @@ const CATEGORY_OPTIONS = [
   'Fine Art',
 ];
 
-// Theme options
-const THEME_OPTIONS: { value: BackgroundTheme; label: string }[] = [
-  { value: 'dark', label: 'Dark' },
-  { value: 'pastel', label: 'Pastel' },
-  { value: 'bold', label: 'Bold' },
-  { value: 'cinematic', label: 'Cinematic' },
-  { value: 'minimal', label: 'Minimal' },
-];
 
 export function PersonalProfileTabContent({ className }: TabContentProps) {
   const { workspace, isLoading: isAuthLoading } = useAuth();
@@ -141,8 +129,10 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
   const [customLinks, setCustomLinks] = useState<CustomLink[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [serviceAreas, setServiceAreas] = useState<string[]>([]);
-  const [brandColor, setBrandColor] = useState('#3B82F6');
-  const [backgroundTheme, setBackgroundTheme] = useState<BackgroundTheme>('dark');
+  const [backgroundTheme, setBackgroundTheme] = useState<BackgroundTheme>('theme-clean-slate');
+  const [selectedTheme, setSelectedTheme] = useState(PREBUILT_THEMES.find(t => t.theme_id === 'theme-clean-slate') || null);
+  const [themeCustomization, setThemeCustomization] = useState<Record<string, any> | null>(null);
+  const [showCustomization, setShowCustomization] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [embeddedMedia, setEmbeddedMedia] = useState<EmbeddedMedia>({});
   const [bookingCalendarUrl, setBookingCalendarUrl] = useState('');
@@ -157,11 +147,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [slugError, setSlugError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  // UI state
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showVisibility, setShowVisibility] = useState(false);
-  const [showSEO, setShowSEO] = useState(false);
 
   // Load profile on mount
   useEffect(() => {
@@ -228,8 +213,11 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
     setCustomLinks(data.custom_links || []);
     setCategories(data.categories || []);
     setServiceAreas(data.service_areas || []);
-    setBrandColor(data.brand_color || '#3B82F6');
-    setBackgroundTheme(data.background_theme || 'dark');
+    const themeId = data.background_theme || 'theme-clean-slate';
+    setBackgroundTheme(themeId);
+    // Also update selectedTheme to keep them in sync
+    const theme = PREBUILT_THEMES.find(t => t.theme_id === themeId);
+    setSelectedTheme(theme || null);
     setIsPublic(data.is_public || false);
     setEmbeddedMedia(data.embedded_media || {});
     setBookingCalendarUrl(data.booking_calendar_url || '');
@@ -331,7 +319,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
         custom_links: customLinks.length > 0 ? customLinks : undefined,
         categories: categories.length > 0 ? categories : undefined,
         service_areas: serviceAreas.length > 0 ? serviceAreas : undefined,
-        brand_color: brandColor || undefined,
         background_theme: backgroundTheme || undefined,
         is_public: isPublic,
         embedded_media: Object.keys(embeddedMedia).length > 0 ? embeddedMedia : undefined,
@@ -456,6 +443,28 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
     }));
   };
 
+  // Handle theme selection
+  const handleThemeSelect = useCallback((themeId: string) => {
+    setBackgroundTheme(themeId as BackgroundTheme);
+    const theme = PREBUILT_THEMES.find(t => t.theme_id === themeId);
+    setSelectedTheme(theme || null);
+    // Clear customization when switching themes
+    if (themeCustomization && themeId !== backgroundTheme) {
+      setThemeCustomization(null);
+      setShowCustomization(false);
+    }
+  }, [backgroundTheme, themeCustomization]);
+
+  // Handle theme customization change
+  const handleThemeCustomizationChange = useCallback((customization: Record<string, any>) => {
+    setThemeCustomization(customization);
+  }, []);
+
+  // Handle theme reset
+  const handleThemeReset = useCallback(() => {
+    setThemeCustomization(null);
+  }, []);
+
   // Get preview data
   const previewData = useMemo(
     () => ({
@@ -472,7 +481,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
       custom_links: customLinks,
       categories,
       service_areas: serviceAreas,
-      brand_color: brandColor,
       background_theme: backgroundTheme,
       is_public: isPublic,
       embedded_media: embeddedMedia,
@@ -497,7 +505,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
       customLinks,
       categories,
       serviceAreas,
-      brandColor,
       backgroundTheme,
       isPublic,
       embeddedMedia,
@@ -552,7 +559,13 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
 
         {/* Basic Info */}
         <section className="bg-surface border border-border rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-text-primary mb-6">Basic Information</h2>
+          <div className="flex items-center gap-3 mb-6">
+            <h2 className="text-lg font-semibold text-text-primary">Basic Information</h2>
+            <ProfileStatusBar
+              personalProfile={previewData}
+              section="personal"
+            />
+          </div>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -562,7 +575,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 <VisibilityToggle
                   isVisible={visibilityConfig.display_name ?? true}
                   onChange={(v) => handleVisibilityToggle('display_name', v)}
-                  className="scale-90"
                 />
               </div>
               <AppInput
@@ -583,7 +595,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 <VisibilityToggle
                   isVisible={visibilityConfig.profile_title ?? true}
                   onChange={(v) => handleVisibilityToggle('profile_title', v)}
-                  className="scale-90"
                 />
               </div>
               <AppInput
@@ -630,7 +641,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 <VisibilityToggle
                   isVisible={visibilityConfig.bio ?? true}
                   onChange={(v) => handleVisibilityToggle('bio', v)}
-                  className="scale-90"
                 />
               </div>
               <AppTextarea
@@ -651,7 +661,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 <VisibilityToggle
                   isVisible={visibilityConfig.location ?? true}
                   onChange={(v) => handleVisibilityToggle('location', v)}
-                  className="scale-90"
                 />
               </div>
               <AppInput
@@ -676,7 +685,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 <VisibilityToggle
                   isVisible={visibilityConfig.email ?? true}
                   onChange={(v) => handleVisibilityToggle('email', v)}
-                  className="scale-90"
                 />
               </div>
               <AppInput
@@ -698,7 +706,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 <VisibilityToggle
                   isVisible={visibilityConfig.phone ?? true}
                   onChange={(v) => handleVisibilityToggle('phone', v)}
-                  className="scale-90"
                 />
               </div>
               <AppInput
@@ -718,7 +725,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 <VisibilityToggle
                   isVisible={visibilityConfig.website ?? true}
                   onChange={(v) => handleVisibilityToggle('website', v)}
-                  className="scale-90"
                 />
               </div>
               <AppInput
@@ -738,7 +744,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                 <VisibilityToggle
                   isVisible={visibilityConfig.booking_calendar ?? true}
                   onChange={(v) => handleVisibilityToggle('booking_calendar', v)}
-                  className="scale-90"
                 />
               </div>
               <AppInput
@@ -769,7 +774,6 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
                     <VisibilityToggle
                       isVisible={visibilityConfig[visibilityKey] ?? true}
                       onChange={(v) => handleVisibilityToggle(visibilityKey, v)}
-                      className="scale-90"
                     />
                   </div>
                   <AppInput
@@ -874,49 +878,50 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
           </div>
         </section>
 
-        {/* Branding */}
+        {/* Branding (Simplified to just Background Theme) */}
         <section className="bg-surface border border-border rounded-xl p-6">
           <h2 className="text-lg font-semibold text-text-primary mb-6">Branding</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">
-                Brand Color
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={brandColor}
-                  onChange={(e) => setBrandColor(e.target.value)}
-                  className="w-12 h-12 rounded-lg cursor-pointer border border-border"
-                />
-                <AppInput
-                  value={brandColor}
-                  onChange={(e) => setBrandColor(e.target.value)}
-                  placeholder="#3B82F6"
-                  className="flex-1"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">
+              <label className="block text-sm font-medium text-text-primary mb-3">
                 Background Theme
               </label>
-              <div className="flex flex-wrap gap-2">
-                {THEME_OPTIONS.map((theme) => (
-                  <button
-                    key={theme.value}
-                    type="button"
-                    onClick={() => setBackgroundTheme(theme.value)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${backgroundTheme === theme.value
-                      ? 'bg-primary text-white'
-                      : 'bg-surface-hover text-text-secondary hover:text-text-primary'
-                      }`}
-                  >
-                    {theme.label}
-                  </button>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-max">
+                {PREBUILT_THEMES.map((theme) => (
+                  <ThemePreviewCard
+                    key={theme.theme_id}
+                    theme={theme}
+                    isSelected={backgroundTheme === theme.theme_id}
+                    onSelect={handleThemeSelect}
+                  />
                 ))}
               </div>
+              <p className="text-xs text-text-secondary mt-3">
+                Selected: <span className="font-medium text-text-primary">{PREBUILT_THEMES.find(t => t.theme_id === backgroundTheme)?.name}</span>
+              </p>
+
+              {/* Customize button */}
+              {selectedTheme && (
+                <button
+                  type="button"
+                  onClick={() => setShowCustomization(!showCustomization)}
+                  className="mt-3 text-sm font-medium text-primary hover:underline flex items-center gap-1"
+                >
+                  {showCustomization ? '▼' : '▶'} Customize Theme
+                </button>
+              )}
+
+              {/* Customization panel */}
+              {showCustomization && selectedTheme && (
+                <div className="mt-4 border border-border rounded-xl p-4 bg-surface-hover/30">
+                  <ThemeCustomization
+                    theme={selectedTheme}
+                    customization={themeCustomization}
+                    onChange={handleThemeCustomizationChange}
+                    onReset={handleThemeReset}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -927,18 +932,27 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
             <div>
               <h2 className="text-lg font-semibold text-text-primary">Public Profile</h2>
               <p className="text-text-secondary text-sm mt-1">
-                Make your profile visible at {personalProfileService.getPublicProfileUrl(slug || 'your-slug')}
+                Make your profile visible at {personalProfileService.getPublicProfileUrl(profile?.slug || slug || 'your-slug')}
               </p>
             </div>
             <button
               type="button"
+              role="switch"
+              aria-checked={isPublic}
               onClick={() => setIsPublic(!isPublic)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isPublic ? 'bg-primary' : 'bg-surface-hover'
-                }`}
+              title={isPublic ? 'Enabled' : 'Disabled'}
+              className={`
+                group
+                relative inline-flex h-6 w-11 items-center rounded-full transition-colors 
+                bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-500
+                aria-checked:bg-green-500 aria-checked:hover:bg-green-600
+              `}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                className={`
+                  inline-block h-4 w-4 transform rounded-full bg-white transition-transform 
+                  translate-x-1 group-aria-checked:translate-x-6
+                `}
               />
             </button>
           </div>
@@ -972,10 +986,7 @@ export function PersonalProfileTabContent({ className }: TabContentProps) {
       </div>
 
       {/* Preview Panel */}
-      <div className="lg:sticky lg:top-6 h-fit space-y-4">
-        {/* Profile Completeness Indicator */}
-        <ProfileCompletenessIndicator profileData={previewData} />
-
+      <div className="lg:sticky lg:top-6 h-fit">
         {/* Preview */}
         <PersonalProfilePreview data={previewData} />
       </div>

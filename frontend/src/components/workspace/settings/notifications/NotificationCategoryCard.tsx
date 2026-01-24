@@ -110,7 +110,7 @@ export const NotificationCategoryCard: React.FC<NotificationCategoryCardProps> =
         <div
             className={`
         rounded-lg border transition-all duration-200
-        ${enabled ? 'border-primary/30 bg-primary/5' : 'border-border bg-card'}
+        ${enabled ? 'border-primary/30 bg-primary/5 backdrop-blur-md' : 'glass-card'}
         ${isLoading ? 'opacity-70 pointer-events-none' : ''}
       `}
         >
@@ -184,7 +184,7 @@ export const NotificationCategoryCard: React.FC<NotificationCategoryCardProps> =
                   flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors
                   ${channels.includes('email')
                                         ? 'border-primary bg-primary/10 text-primary'
-                                        : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                                        : 'border-white/10 bg-white/5 text-muted-foreground hover:border-primary/50'
                                     }
                 `}
                             >
@@ -197,7 +197,7 @@ export const NotificationCategoryCard: React.FC<NotificationCategoryCardProps> =
                   flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors
                   ${channels.includes('in_app')
                                         ? 'border-primary bg-primary/10 text-primary'
-                                        : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                                        : 'border-white/10 bg-white/5 text-muted-foreground hover:border-primary/50'
                                     }
                 `}
                             >
@@ -217,7 +217,7 @@ export const NotificationCategoryCard: React.FC<NotificationCategoryCardProps> =
                                 value={frequency}
                                 onChange={handleFrequencyChange}
                                 className="
-                  w-full px-3 py-2 rounded-lg border border-border bg-background
+                  w-full px-3 py-2 rounded-lg border border-border bg-white/5
                   text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50
                 "
                             >

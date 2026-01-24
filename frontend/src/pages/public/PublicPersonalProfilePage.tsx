@@ -124,7 +124,7 @@ export function PublicPersonalProfilePage() {
 
   // ... (keeping imports and state logic same until the return)
   const theme = getTheme(profile.background_theme);
-  const brandColor = profile.brand_color || '#3B82F6';
+  const brandColor = '#3B82F6';
 
   // SEO metadata
   const seoTitle = profile.seo_metadata?.meta_title || profile.display_name || 'Profile';

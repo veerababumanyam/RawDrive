@@ -17,13 +17,27 @@ export const ProfileContainer: React.FC<ProfileContainerProps> = ({
     className = '',
     style,
 }) => {
+    // Build CSS custom properties from theme color values
+    const cssVars = {
+        '--theme-bg': theme.colorValues.background,
+        '--theme-text': theme.colorValues.text,
+        '--theme-text-secondary': theme.colorValues.textSecondary,
+        '--theme-accent': theme.colorValues.accent,
+        '--theme-surface': theme.colorValues.surface,
+        '--theme-border': theme.colorValues.border,
+        '--theme-primary': theme.colorValues.background,
+        '--brand-color': brandColor || '#3B82F6',
+    } as React.CSSProperties;
+
+    const combinedStyle = {
+        ...cssVars,
+        ...style,
+    };
+
     return (
         <div
             className={`min-h-screen w-full transition-colors duration-500 ease-out ${theme.colors.background} ${className}`}
-            style={{
-                ...(brandColor ? { '--brand-color': brandColor } as React.CSSProperties : {}),
-                ...style,
-            }}
+            style={combinedStyle}
         >
             <motion.div
                 initial={{ opacity: 0 }}

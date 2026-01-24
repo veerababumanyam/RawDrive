@@ -56,6 +56,7 @@ const PublicGalleryPage: React.FC = () => {
     const { galleryId: token } = useParams<{ galleryId: string }>();
     const navigate = useNavigate();
     const [gallery, setGallery] = useState<GalleryDetailData | null>(null);
+    const [companyProfile, setCompanyProfile] = useState<any | null>(null);
     const [actualGalleryId, setActualGalleryId] = useState<string | null>(null);
     const [assets, setAssets] = useState<PublicGalleryAsset[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -226,6 +227,9 @@ const PublicGalleryPage: React.FC = () => {
                 };
 
                 setGallery(galleryData);
+                if (validatedLink.company_profile) {
+                    setCompanyProfile(validatedLink.company_profile);
+                }
 
                 // Check registration requirement (use actual gallery_id for storage keys)
                 const isRegistered = localStorage.getItem(`${VISITOR_STORAGE_KEY_PREFIX}${galleryIdFromValidation}`);
@@ -621,11 +625,15 @@ const PublicGalleryPage: React.FC = () => {
         if (gallery?.gradient_config && isValidGradientConfig(gallery.gradient_config)) {
             return gradientToCss(gallery.gradient_config);
         }
+
+        // Use company brand color as primary fallback
+        const primaryColor = companyProfile?.brand_color || gallery?.primary_color;
+
         // Fallback or default gradient if no valid config
-        return gallery?.primary_color
-            ? `linear-gradient(135deg, ${gallery.primary_color} 0%, #000000 100%)`
+        return primaryColor
+            ? `linear-gradient(135deg, ${primaryColor} 0%, #000000 100%)`
             : 'linear-gradient(135deg, #1f2937 0%, #000000 100%)';
-    }, [gallery?.gradient_config, gallery?.primary_color]);
+    }, [gallery?.gradient_config, gallery?.primary_color, companyProfile?.brand_color]);
 
     // Lightbox navigation functions
     const openLightbox = useCallback((asset: PublicGalleryAsset) => {

@@ -148,20 +148,18 @@ async def _check_workspace_admin(
     Raises:
         HTTPException: If user lacks admin access
     """
-    has_access = await rbac_service.check_workspace_membership(user_id, workspace_id)
-    if not has_access:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to workspace",
-        )
-
-    is_admin = await rbac_service.user_has_role(
-        user_id, workspace_id, ["owner", "admin"]
+    permission = await rbac_service.check_permission(
+        user_id=user_id,
+        workspace_id=workspace_id,
+        required_permissions="settings:write",
     )
-    if not is_admin:
+
+    if not permission.allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin or owner role required to manage rate limits",
+            detail=f"Missing permissions: {', '.join(permission.missing_permissions)}"
+                   if permission.missing_permissions
+                   else "Admin or owner role required to manage rate limits",
         )
 
 
@@ -180,8 +178,13 @@ async def _check_workspace_member(
     Raises:
         HTTPException: If user is not a workspace member
     """
-    has_access = await rbac_service.check_workspace_membership(user_id, workspace_id)
-    if not has_access:
+    permission = await rbac_service.check_permission(
+        user_id=user_id,
+        workspace_id=workspace_id,
+        required_permissions="settings:read",
+    )
+
+    if not permission.allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to workspace",

@@ -95,8 +95,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   ], [t]);
 
   const bottomNavItems = React.useMemo(() => [
-    { id: 'companyProfile', label: t('nav.companyProfile', 'Company Profile'), icon: <Building2 size={20} />, path: '/workspace/settings?tab=profile' },
-    { id: 'myProfile', label: t('nav.myProfile', 'My Profile'), icon: <User size={20} />, path: '/settings' },
+    { id: 'myProfile', label: t('nav.myProfile', 'My Profile'), icon: <User size={20} />, path: '/workspace/profile' },
+    { id: 'branding', label: t('nav.branding', 'Branding'), icon: <Building2 size={20} />, path: '/workspace/branding' },
     { id: 'team', label: t('nav.team', 'Team'), icon: <UsersRound size={20} />, path: '/workspace/team' },
     { id: 'help', label: t('nav.helpSupport', 'Help & Support'), icon: <HelpCircle size={20} />, path: '/workspace/help' },
   ], [t]);

@@ -62,8 +62,24 @@ export type {
 export { DatePicker } from './DatePicker';
 export type { default as DatePickerProps } from './DatePicker';
 
-export { AvatarCropModal } from './AvatarCropModal';
-export type { CropData } from './AvatarCropModal';
+// Avatar Editor
+export {
+  AvatarEditor,
+  AvatarEditorModal,
+  AvatarEditorCanvas,
+  AvatarEditorControls,
+} from './AvatarEditor';
+export type {
+  CropData,
+  AvatarEditorProps,
+  AvatarEditorModalProps,
+  AvatarEditorCanvasProps,
+  AvatarEditorControlsProps,
+  EditorState,
+  FilterState,
+  TransformState,
+  ExportResult,
+} from './AvatarEditor';
 
 // Feedback Components
 export { ToastProvider, useToast, useToastActions } from './Toast';

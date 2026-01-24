@@ -19,6 +19,7 @@ import { NotificationToggleGroup, type NotificationCategory } from '../../compon
 import { AppButton } from '../../components/ui/AppButton';
 import { useNotificationPreferences } from '../../hooks/useUserSettings';
 import { useToastActions } from '../../components/ui/Toast';
+import { SettingsPageLayout } from '../../components/settings/SettingsPageLayout';
 import type { NotificationPreferences, UpdateNotificationPreferencesRequest } from '../../types/userSettings';
 
 /* =============================================================================
@@ -154,22 +155,26 @@ const NotificationSettingsPage: React.FC = () => {
   // Loading state
   if (loading && !optimisticValues) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-text-tertiary" />
-      </div>
+      <SettingsPageLayout title="Notification Settings">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="w-8 h-8 animate-spin text-text-tertiary" />
+        </div>
+      </SettingsPageLayout>
     );
   }
 
   // Error state
   if (error && !optimisticValues) {
     return (
-      <div className="p-6 bg-error/10 rounded-xl text-center">
-        <AlertCircle className="w-12 h-12 mx-auto text-error mb-3" />
-        <p className="text-error font-medium">{error.message}</p>
-        <AppButton variant="outline" onClick={refetch} className="mt-4">
-          Try Again
-        </AppButton>
-      </div>
+      <SettingsPageLayout title="Notification Settings">
+        <div className="p-6 bg-error/10 border border-error/20 rounded-xl text-center backdrop-blur-sm">
+          <AlertCircle className="w-12 h-12 mx-auto text-error mb-3" />
+          <p className="text-error font-medium">{error.message}</p>
+          <AppButton variant="outline" onClick={refetch} className="mt-4">
+            Try Again
+          </AppButton>
+        </div>
+      </SettingsPageLayout>
     );
   }
 
@@ -181,67 +186,70 @@ const NotificationSettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Page header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Notification Settings</h1>
-          <p className="text-text-secondary mt-1">
-            Choose how and when you want to be notified about activity.
-          </p>
-        </div>
+    <SettingsPageLayout
+      title="Notification Settings"
+      subtitle="Choose how and when you want to be notified about activity."
+      actions={
         <AppButton
           variant="outline"
           size="sm"
           onClick={handleResetToDefaults}
           leftIcon={<RotateCcw className="w-4 h-4" />}
+          className="glass-light"
         >
           Reset to Defaults
         </AppButton>
-      </div>
+      }
+    >
+      <div className="space-y-6">
+        {/* Channel groups */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Email notifications */}
+          <div className="card-glass rounded-2xl p-4 sm:p-6 h-full">
+            <NotificationToggleGroup
+              channel="email"
+              title="Email Notifications"
+              description="Notifications sent to your email address"
+              icon={<Mail className="w-5 h-5 text-primary" />}
+              categories={NOTIFICATION_CATEGORIES}
+              values={displayValues.email}
+              onChange={(channel, category, value) =>
+                handleToggleChange(channel as 'email' | 'in_app', category, value)
+              }
+              disabled={loading}
+              pendingCategories={pendingCategories}
+            />
+          </div>
 
-      {/* Channel groups */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Email notifications */}
-        <NotificationToggleGroup
-          channel="email"
-          title="Email Notifications"
-          description="Notifications sent to your email address"
-          icon={<Mail className="w-5 h-5" />}
-          categories={NOTIFICATION_CATEGORIES}
-          values={displayValues.email}
-          onChange={(channel, category, value) =>
-            handleToggleChange(channel as 'email' | 'in_app', category, value)
-          }
-          disabled={loading}
-          pendingCategories={pendingCategories}
-        />
+          {/* In-app notifications */}
+          <div className="card-glass rounded-2xl p-4 sm:p-6 h-full">
+            <NotificationToggleGroup
+              channel="in_app"
+              title="In-App Notifications"
+              description="Notifications shown within the application"
+              icon={<Bell className="w-5 h-5 text-accent" />}
+              categories={NOTIFICATION_CATEGORIES}
+              values={displayValues.in_app}
+              onChange={(channel, category, value) =>
+                handleToggleChange(channel as 'email' | 'in_app', category, value)
+              }
+              disabled={loading}
+              pendingCategories={pendingCategories}
+            />
+          </div>
+        </div>
 
-        {/* In-app notifications */}
-        <NotificationToggleGroup
-          channel="in_app"
-          title="In-App Notifications"
-          description="Notifications shown within the application"
-          icon={<Bell className="w-5 h-5" />}
-          categories={NOTIFICATION_CATEGORIES}
-          values={displayValues.in_app}
-          onChange={(channel, category, value) =>
-            handleToggleChange(channel as 'email' | 'in_app', category, value)
-          }
-          disabled={loading}
-          pendingCategories={pendingCategories}
-        />
+        {/* Info text */}
+        <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl text-sm text-text-secondary flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+          <p>
+            <strong className="text-text-primary">Note:</strong> System alerts about security and
+            billing cannot be fully disabled for your account protection. You will always receive
+            critical security notifications.
+          </p>
+        </div>
       </div>
-
-      {/* Info text */}
-      <div className="p-4 bg-surface-hover rounded-xl text-sm text-text-secondary">
-        <p>
-          <strong className="text-text-primary">Note:</strong> System alerts about security and
-          billing cannot be fully disabled for your account protection. You will always receive
-          critical security notifications.
-        </p>
-      </div>
-    </div>
+    </SettingsPageLayout>
   );
 };
 

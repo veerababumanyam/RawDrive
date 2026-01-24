@@ -78,7 +78,7 @@ export const QuietHoursConfiguration: React.FC<QuietHoursConfigProps> = ({
         <div
             className={`
         rounded-lg border p-4 transition-all duration-200
-        ${enabled ? 'border-primary/30 bg-primary/5' : 'border-border bg-card'}
+        ${enabled ? 'border-primary/30 bg-primary/5 backdrop-blur-md' : 'glass-card'}
         ${isLoading ? 'opacity-70 pointer-events-none' : ''}
       `}
         >

@@ -98,11 +98,11 @@ export const NotificationToggleGroup: React.FC<NotificationToggleGroupProps> = (
   pendingCategories = [],
 }) => {
   return (
-    <div className="bg-surface rounded-xl border border-border overflow-hidden">
+    <div className="rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-border bg-surface-hover/50">
+      <div className="p-4 bg-white/5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shadow-inner shadow-primary/20">
             {icon}
           </div>
           <div>
@@ -113,7 +113,7 @@ export const NotificationToggleGroup: React.FC<NotificationToggleGroupProps> = (
       </div>
 
       {/* Category toggles */}
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-white/5">
         {categories.map((category) => {
           const isChecked = values[category.key] ?? true;
           const isPending = pendingCategories.includes(`${channel}:${category.key}`);
@@ -121,7 +121,7 @@ export const NotificationToggleGroup: React.FC<NotificationToggleGroupProps> = (
           return (
             <div
               key={category.key}
-              className="flex items-center justify-between p-4 hover:bg-surface-hover/30 transition-colors"
+              className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
             >
               <div className="flex-1 min-w-0 pr-4">
                 <h4 className="font-medium text-text-primary">{category.label}</h4>

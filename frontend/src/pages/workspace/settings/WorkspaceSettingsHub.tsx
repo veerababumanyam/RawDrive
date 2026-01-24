@@ -1,27 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Building2, Sparkles, Shield, Bell, Webhook, CreditCard, ScanFace } from 'lucide-react';
+import { Sparkles, Shield, Bell, Webhook, CreditCard, ScanFace, Palette, User } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
-import { CompanyProfileForm, type ProfileFormChangeData } from '../../../components/features/settings/CompanyProfileForm';
-import { CompanyProfilePreview } from '../../../components/features/settings/CompanyProfilePreview';
-import type { CompanyProfile, CompanyVisibilityConfig } from '../../../types/companyProfile';
-import type { Theme, ThemeCustomization } from '../../../types/profileEditor';
 import { WorkspaceAISettingsPanel } from '../../../components/workspace/settings/WorkspaceAISettingsPanel';
 import { WorkspaceSecuritySettingsPanel } from '../../../components/workspace/settings/WorkspaceSecuritySettingsPanel';
 import { WorkspaceNotificationSettingsPanel } from '../../../components/workspace/settings/WorkspaceNotificationSettingsPanel';
 import { WebhooksSettingsPanel } from '../../../components/workspace/settings/WebhooksSettingsPanel';
 import { BiometricSettingsPanel } from '../../../components/workspace/settings/BiometricSettingsPanel';
-
 import { WorkspaceSubscriptionTabContent } from '../../../components/workspace/settings/WorkspaceSubscriptionTabContent';
+import { ScopeIndicator } from '../../../components/settings/ScopeIndicator';
+import { CrossLinkCard } from '../../../components/settings/CrossLinkCard';
+import { SettingsSectionDivider } from '../../../components/settings/SettingsSectionDivider';
 
-// Extended profile type for preview with theme data
-interface PreviewProfile extends Partial<CompanyProfile> {
-    _theme?: Theme | null;
-    _themeCustomization?: Partial<ThemeCustomization> | null;
-}
+// NOTE: Company profile management has been moved to /workspace/branding
+// This hub now handles only technical workspace settings
 
-type TabId = 'profile' | 'subscription' | 'ai' | 'security' | 'biometrics' | 'notifications' | 'webhooks';
+type TabId = 'subscription' | 'ai' | 'security' | 'biometrics' | 'notifications' | 'webhooks';
 
 const WorkspaceSettingsHub: React.FC = () => {
     const { t } = useTranslation('settings');
@@ -34,9 +29,9 @@ const WorkspaceSettingsHub: React.FC = () => {
     // Redirect 'account' tab to 'security' since deletion was moved there
     const urlTab = tabId || searchParams.get('tab');
     const normalizedTab = urlTab === 'account' ? 'security' : urlTab;
-    const initialTab: TabId = (normalizedTab && ['profile', 'subscription', 'ai', 'security', 'biometrics', 'notifications', 'webhooks'].includes(normalizedTab))
+    const initialTab: TabId = (normalizedTab && ['subscription', 'ai', 'security', 'biometrics', 'notifications', 'webhooks'].includes(normalizedTab))
         ? (normalizedTab as TabId)
-        : 'profile';
+        : 'subscription';
     const [activeTab, setActiveTabState] = useState<TabId>(initialTab);
 
     // Sync state with URL
@@ -58,7 +53,7 @@ const WorkspaceSettingsHub: React.FC = () => {
     useEffect(() => {
         const queryTab = searchParams.get('tab');
         const urlTab = (tabId as string) || queryTab;
-        
+
         // Redirect 'account' tab to 'security' since deletion was moved there
         if (urlTab === 'account') {
             if (tabId) {
@@ -71,16 +66,12 @@ const WorkspaceSettingsHub: React.FC = () => {
         }
 
         const currentTab = (urlTab as TabId);
-        const validTabs: TabId[] = ['profile', 'subscription', 'ai', 'security', 'biometrics', 'notifications', 'webhooks'];
-        
+        const validTabs: TabId[] = ['subscription', 'ai', 'security', 'biometrics', 'notifications', 'webhooks'];
+
         if (currentTab && validTabs.includes(currentTab) && currentTab !== activeTab) {
             setActiveTabState(currentTab);
         }
     }, [searchParams, tabId, activeTab, navigate, setSearchParams]);
-
-    // Preview state
-    const [previewProfile, setPreviewProfile] = useState<PreviewProfile | null>(null);
-    const [visibility, setVisibility] = useState<Partial<CompanyVisibilityConfig>>({});
 
     const workspaceId = user?.workspace_id;
 
@@ -88,28 +79,7 @@ const WorkspaceSettingsHub: React.FC = () => {
         return <div className="p-8 text-center text-text-secondary">No workspace selected.</div>;
     }
 
-    const handleProfileChange = (data: ProfileFormChangeData) => {
-        const profile: PreviewProfile = {
-            name: data.name,
-            tagline: data.tagline,
-            slug: data.slug,
-            logo_url: data._previewLogoUrl || data.logo_url,
-            brand_color: data.brand_color,
-            email: data.email,
-            phone: data.phone,
-            website: data.website,
-            address_structured: data.address_structured,
-            socials: data.socials || {},
-            custom_links: data.custom_links || [],
-            _theme: data._theme,
-            _themeCustomization: data._themeCustomization,
-        };
-        setPreviewProfile(profile);
-        setVisibility(data.company_visibility || {});
-    };
-
     const tabs = [
-        { id: 'profile' as TabId, label: 'Company Profile', icon: Building2 },
         { id: 'subscription' as TabId, label: 'Subscription', icon: CreditCard },
         { id: 'ai' as TabId, label: 'AI & Intelligence', icon: Sparkles },
         { id: 'security' as TabId, label: 'Security & Privacy', icon: Shield },
@@ -132,13 +102,28 @@ const WorkspaceSettingsHub: React.FC = () => {
                                         Workspace Settings
                                     </h1>
                                     <p className="text-sm text-text-secondary hidden sm:block mt-0.5">
-                                        Manage your workspace profile, preferences, and security.
+                                        Manage your workspace preferences, security, and integrations.
                                     </p>
                                 </div>
                             </div>
 
+                            {/* Scope Indicator */}
+                            <div className="mb-4">
+                                <ScopeIndicator scope="workspace" showSwitcher />
+
+                                {/* Quick Links to Related Pages */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                    <CrossLinkCard
+                                        title="Workspace Branding"
+                                        description="Manage company profile, logo, and brand identity"
+                                        icon={<Palette size={16} />}
+                                        path="/workspace/branding"
+                                    />
+                                </div>
+                            </div>
+
                             {/* Tabs */}
-                            <div className="flex space-x-1 overflow-x-auto no-scrollbar border-b border-border/50">
+                            <div className="flex space-x-1 overflow-x-auto no-scrollbar border-b border-white/10">
                                 {tabs.map((tab) => {
                                     const Icon = tab.icon;
                                     const isActive = activeTab === tab.id;
@@ -147,14 +132,17 @@ const WorkspaceSettingsHub: React.FC = () => {
                                             key={tab.id}
                                             onClick={() => setActiveTab(tab.id)}
                                             className={`
-                                                flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap
+                                                flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 whitespace-nowrap relative
                                                 ${isActive
-                                                    ? 'bg-surface text-primary border-b-2 border-primary'
-                                                    : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover/50'}
+                                                    ? 'text-primary'
+                                                    : 'text-text-secondary hover:text-text-primary hover:bg-white/5'}
                                             `}
                                         >
-                                            <Icon className={`w-4 h-4 ${isActive ? 'text-primary' : ''}`} />
+                                            <Icon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-text-tertiary group-hover:text-text-secondary'}`} />
                                             {tab.label}
+                                            {isActive && (
+                                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary shadow-[0_-2px_8px_rgba(var(--primary-rgb),0.5)]" />
+                                            )}
                                         </button>
                                     );
                                 })}
@@ -167,37 +155,38 @@ const WorkspaceSettingsHub: React.FC = () => {
                 <main className="flex-1 overflow-auto">
                     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
                         <div className="glass-card glass-card-hover rounded-2xl p-4 sm:p-6 min-h-[500px]">
-                            {activeTab === 'profile' && (
-                                <CompanyProfileForm onProfileChange={handleProfileChange} />
-                            )}
                             {activeTab === 'subscription' && <WorkspaceSubscriptionTabContent workspaceId={workspaceId} />}
                             {activeTab === 'ai' && <WorkspaceAISettingsPanel workspaceId={workspaceId} />}
-                            {activeTab === 'security' && <WorkspaceSecuritySettingsPanel workspaceId={workspaceId} />}
+                            {activeTab === 'security' && (
+                                <>
+                                    <WorkspaceSecuritySettingsPanel workspaceId={workspaceId} />
+                                    <SettingsSectionDivider label="Related Settings" />
+                                    <CrossLinkCard
+                                        title="Personal Security Settings"
+                                        description="Manage your password, 2FA, and active sessions"
+                                        icon={<User size={16} />}
+                                        path="/settings?tab=security"
+                                    />
+                                </>
+                            )}
                             {activeTab === 'biometrics' && <BiometricSettingsPanel workspaceId={workspaceId} />}
-                            {activeTab === 'notifications' && <WorkspaceNotificationSettingsPanel workspaceId={workspaceId} />}
+                            {activeTab === 'notifications' && (
+                                <>
+                                    <WorkspaceNotificationSettingsPanel workspaceId={workspaceId} />
+                                    <SettingsSectionDivider label="Related Settings" />
+                                    <CrossLinkCard
+                                        title="Personal Notification Preferences"
+                                        description="Customize your individual notification settings"
+                                        icon={<User size={16} />}
+                                        path="/settings?tab=notifications"
+                                    />
+                                </>
+                            )}
                             {activeTab === 'webhooks' && <WebhooksSettingsPanel workspaceId={workspaceId} />}
                         </div>
                     </div>
                 </main>
             </div>
-
-            {/* Preview Panel - Only for Profile Tab */}
-            {activeTab === 'profile' && (
-                <div className="hidden lg:flex lg:flex-col w-[450px] border-l border-border/50 bg-gradient-to-br from-surface-hover/50 to-surface/30 backdrop-blur-sm overflow-hidden transition-all">
-                    <div className="p-4 border-b border-border/50 glass-premium">
-                        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent animate-pulse" />
-                            Live Preview
-                        </h2>
-                    </div>
-                    <div className="flex-1 overflow-auto">
-                        <CompanyProfilePreview
-                            profile={previewProfile}
-                            visibility={visibility}
-                        />
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

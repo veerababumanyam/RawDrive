@@ -57,3 +57,12 @@ Manyam sisters/
 *_READY.md
 START_HERE.txt
 QUICK_START*.md
+
+# Debug scripts and output
+*_debug.py
+check_*.py
+verify_*.py
+*_out.txt
+
+# Test screenshots in root
+.playwright-mcp/

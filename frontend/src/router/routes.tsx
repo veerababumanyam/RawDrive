@@ -1,6 +1,6 @@
 /* @refresh reset - force update */
 import { Suspense, lazy, ComponentType } from 'react';
-import { RouteObject } from 'react-router-dom';
+import { RouteObject, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/auth';
 import ErrorBoundary from '../components/error/ErrorBoundary';
 import { RouteErrorFallback } from '../components/error/ErrorFallbacks';
@@ -144,6 +144,13 @@ const InvitationAcceptPage = lazy(() => import('../pages/public/InvitationAccept
 // User Settings pages
 // Note: Individual settings pages are deprecated - use UserSettingsPage with tabs
 const UserSettingsPage = lazy(() => import('../pages/settings/UserSettingsPage'));
+const AccountSettingsHub = lazy(() => import('../pages/settings/AccountSettingsHub'));
+
+// My Profile page (professional/photographer public profile creator)
+const MyProfilePage = lazy(() => import('../pages/profile/MyProfilePage'));
+
+// Workspace Branding page (company profile)
+const BrandingPage = lazy(() => import('../pages/workspace/BrandingPage'));
 
 // Admin pages
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
@@ -279,6 +286,15 @@ export const publicRoutes: RouteObject[] = [
   {
     path: '/solutions/business',
     element: <LazyPage component={ForBusinessPage} />,
+  },
+  // Backwards compatibility redirects
+  {
+    path: '/settings/profile',
+    element: <Navigate to="/workspace/profile" replace />,
+  },
+  {
+    path: '/workspace/settings/profile',
+    element: <Navigate to="/workspace/branding" replace />,
   },
 ];
 
@@ -430,6 +446,16 @@ export const workspaceRoutes: RouteObject[] = [
       // Profile is now a tab in Hub.
       // Note: Additional workspace settings sub-routes can be added here as needed
       // The catch-all was removed to prevent confusing redirects to dashboard
+      // My Profile - Professional/photographer public profile creator
+      {
+        path: 'profile',
+        element: <CriticalLazyPage component={MyProfilePage} />,
+      },
+      // Workspace Branding - Company profile and brand identity
+      {
+        path: 'branding',
+        element: <CriticalLazyPage component={BrandingPage} />,
+      },
       {
         path: 'help',
         element: <LazyPage component={HelpSupportPage} />,
@@ -492,8 +518,8 @@ export const workspaceRoutes: RouteObject[] = [
 ];
 
 // User Settings routes (require authentication)
-// Uses tabbed navigation within WorkspaceLayout - all settings on single /settings page
-// Tab state managed via URL query parameter: /settings?tab=security
+// Uses tabbed navigation within WorkspaceLayout - all account settings on single /settings page
+// Tab state managed via URL path or query parameter: /settings or /settings/security
 export const userSettingsRoutes: RouteObject[] = [
   {
     path: '/settings',
@@ -505,7 +531,11 @@ export const userSettingsRoutes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: <CriticalLazyPage component={UserSettingsPage} />,
+        element: <CriticalLazyPage component={AccountSettingsHub} />,
+      },
+      {
+        path: ':tabId',
+        element: <CriticalLazyPage component={AccountSettingsHub} />,
       },
     ],
   },

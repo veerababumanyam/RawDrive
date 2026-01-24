@@ -106,12 +106,12 @@ class CompanyProfileService {
     }
 
     /**
-     * Upload logo with cropped blob directly (for use with AvatarCropModal)
+     * Upload logo with cropped blob directly (for use with AvatarEditor)
      */
     async uploadCroppedLogo(
         workspaceId: string,
         croppedBlob: Blob,
-        cropData: LogoCropData
+        cropData?: LogoCropData
     ): Promise<{ logo_url: string; logo_id: string }> {
         const file = new File([croppedBlob], 'logo.webp', { type: 'image/webp' });
         return this.uploadLogo(workspaceId, file, cropData);

@@ -186,7 +186,7 @@ export const BiometricSettingsPanel: React.FC<BiometricSettingsPanelProps> = ({
 
         {/* Feature Settings - Only visible when consent granted */}
         {consentGranted && (
-          <div className="bg-surface rounded-2xl border border-border p-6">
+          <div className="glass-card p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-primary/10 rounded-lg">
                 <Sparkles className="w-6 h-6 text-primary" />
@@ -256,7 +256,7 @@ export const BiometricSettingsPanel: React.FC<BiometricSettingsPanelProps> = ({
 
         {/* Consent History */}
         {history.length > 0 && (
-          <div className="bg-surface rounded-2xl border border-border p-6">
+          <div className="glass-card p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-primary/10 rounded-lg">
                 <History className="w-6 h-6 text-primary" />
@@ -425,7 +425,7 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
   onChange,
   disabled,
 }) => (
-  <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
+  <div className="flex items-center justify-between py-3 border-b border-white/10 last:border-0">
     <div className="flex items-start gap-3 flex-1">
       <div className="text-text-tertiary mt-0.5">{icon}</div>
       <div className="flex-1">
@@ -495,8 +495,8 @@ interface ConsentModalProps {
 }
 
 const ConsentModal: React.FC<ConsentModalProps> = ({ onConfirm, onCancel, loading }) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div className="bg-surface rounded-2xl shadow-xl max-w-lg w-full p-6">
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="glass-card shadow-2xl max-w-lg w-full p-6">
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2 bg-primary/10 rounded-lg">
           <ScanFace className="w-6 h-6 text-primary" />
@@ -561,8 +561,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   onCancel,
   loading,
 }) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div className="bg-surface rounded-2xl shadow-xl max-w-lg w-full p-6">
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="glass-card shadow-2xl max-w-lg w-full p-6">
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2 bg-error/10 rounded-lg">
           <AlertTriangle className="w-6 h-6 text-error" />

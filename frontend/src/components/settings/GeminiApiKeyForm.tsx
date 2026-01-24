@@ -98,26 +98,26 @@ export const GeminiApiKeyForm: React.FC<GeminiApiKeyFormProps> = ({
           setValidated(true);
           // Continue to save
         } else {
-            // Validation failed, show error and stop
-            if (result.error) {
-              const errorInfo = GEMINI_ERROR_MESSAGES[result.error.error as GeminiErrorCode] || {
-                message: result.error.message,
-                hint: result.error.hint,
-              };
-              setError({
-                code: result.error.error as GeminiErrorCode,
-                message: errorInfo.message || result.error.message,
-                hint: errorInfo.hint || result.error.hint,
-              });
-            } else {
-               // Fallback error
-               setError({
-                code: 'INVALID_KEY',
-                message: 'Invalid API key',
-               });
-            }
-            setValidating(false);
-            return;
+          // Validation failed, show error and stop
+          if (result.error) {
+            const errorInfo = GEMINI_ERROR_MESSAGES[result.error.error as GeminiErrorCode] || {
+              message: result.error.message,
+              hint: result.error.hint,
+            };
+            setError({
+              code: result.error.error as GeminiErrorCode,
+              message: errorInfo.message || result.error.message,
+              hint: errorInfo.hint || result.error.hint,
+            });
+          } else {
+            // Fallback error
+            setError({
+              code: 'INVALID_KEY',
+              message: 'Invalid API key',
+            });
+          }
+          setValidating(false);
+          return;
         }
       } catch {
         setError({
@@ -130,7 +130,7 @@ export const GeminiApiKeyForm: React.FC<GeminiApiKeyFormProps> = ({
       }
       setValidating(false);
     } else if (!apiKey.trim()) {
-        return;
+      return;
     }
 
     // Proceed to save
@@ -192,11 +192,11 @@ export const GeminiApiKeyForm: React.FC<GeminiApiKeyFormProps> = ({
             placeholder="AIza..."
             className={`
               block w-full pl-10 pr-20 py-2.5 text-sm
-              bg-background border rounded-lg
+              bg-white/5 border rounded-lg
               text-text-primary placeholder-text-tertiary
               focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
               disabled:opacity-50 disabled:cursor-not-allowed
-              ${error ? 'border-error' : 'border-border'}
+              ${error ? 'border-error' : 'border-white/10'}
             `}
             disabled={isLoading}
             aria-invalid={!!error}

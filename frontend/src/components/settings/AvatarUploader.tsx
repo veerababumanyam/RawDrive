@@ -1,8 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Camera, Trash2, Loader2 } from 'lucide-react';
 import { AppButton } from '../ui/AppButton';
-import { AvatarCropModal } from '../ui/AvatarCropModal';
-import type { CropData } from '../ui/AvatarCropModal';
+import { AvatarEditorModal } from '../ui/AvatarEditor';
+import type { CropData } from '../ui/AvatarEditor/types';
 import { useAvatarUrl } from '../../hooks/useAvatarUrl';
 
 /* =============================================================================
@@ -59,7 +59,17 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingBlobUrlCleanup, setPendingBlobUrlCleanup] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Clean up blob URL after modal closes to prevent ERR_FILE_NOT_FOUND
+  // This defers cleanup until after React re-renders
+  useEffect(() => {
+    if (!cropModalOpen && pendingBlobUrlCleanup) {
+      URL.revokeObjectURL(pendingBlobUrlCleanup);
+      setPendingBlobUrlCleanup(null);
+    }
+  }, [cropModalOpen, pendingBlobUrlCleanup]);
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -89,36 +99,34 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
     event.target.value = '';
   }, []);
 
-  const handleCropComplete = useCallback(async (croppedBlob: Blob, cropData: CropData) => {
-    if (!selectedFile) return;
-
+  const handleSave = useCallback(async (file: File, cropData?: CropData) => {
     try {
-      // Convert the cropped blob to a File (frontend already created perfect crop)
-      const croppedFile = new File([croppedBlob], selectedFile.name, {
-        type: 'image/webp',
-        lastModified: Date.now(),
-      });
       // Send the cropped file to backend (no re-cropping needed)
-      await onUpload(croppedFile, cropData);
+      await onUpload(file, cropData);
+
+      // Mark blob URL for deferred cleanup (after modal renders)
+      if (selectedImageUrl) {
+        setPendingBlobUrlCleanup(selectedImageUrl);
+      }
+
+      // Close modal - cleanup happens in useEffect when modal closes
       setCropModalOpen(false);
     } catch (err) {
       // Error handling is done by parent, but we keep modal open
       console.error('Upload failed:', err);
     } finally {
-      // Cleanup
-      if (selectedImageUrl) {
-        URL.revokeObjectURL(selectedImageUrl);
-      }
       setSelectedImageUrl(null);
       setSelectedFile(null);
     }
-  }, [selectedFile, selectedImageUrl, onUpload]);
+  }, [selectedImageUrl, onUpload]);
 
   const handleCropCancel = useCallback(() => {
-    setCropModalOpen(false);
+    // Mark blob URL for deferred cleanup (after modal renders)
     if (selectedImageUrl) {
-      URL.revokeObjectURL(selectedImageUrl);
+      setPendingBlobUrlCleanup(selectedImageUrl);
     }
+
+    setCropModalOpen(false);
     setSelectedImageUrl(null);
     setSelectedFile(null);
   }, [selectedImageUrl]);
@@ -239,14 +247,15 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
         JPEG, PNG or WebP. Max 5MB.
       </p>
 
-      {/* Avatar Crop Modal */}
+      {/* Avatar Editor Modal */}
       {selectedImageUrl && (
-        <AvatarCropModal
-          imageSrc={selectedImageUrl}
+        <AvatarEditorModal
           isOpen={cropModalOpen}
-          onCropComplete={handleCropComplete}
+          imageSrc={selectedImageUrl}
+          onSave={handleSave}
           onCancel={handleCropCancel}
           isLoading={isUploading}
+          title="Edit Photo"
         />
       )}
     </div>

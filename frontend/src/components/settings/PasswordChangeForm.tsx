@@ -188,6 +188,7 @@ export const PasswordChangeForm: React.FC = () => {
         error={fieldErrors.currentPassword}
         disabled={loading}
         autoComplete="current-password"
+        variant="glass"
         leftIcon={<Lock className="w-5 h-5" />}
         rightIcon={
           <button
@@ -213,6 +214,7 @@ export const PasswordChangeForm: React.FC = () => {
           error={fieldErrors.newPassword}
           disabled={loading}
           autoComplete="new-password"
+          variant="glass"
           leftIcon={<Lock className="w-5 h-5" />}
           rightIcon={
             <button
@@ -236,19 +238,17 @@ export const PasswordChangeForm: React.FC = () => {
                 {[0, 1, 2, 3].map((index) => (
                   <div
                     key={index}
-                    className={`h-1.5 flex-1 rounded-full transition-colors ${
-                      index < passwordStrength.score
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${index < passwordStrength.score
                         ? passwordStrength.color
                         : 'bg-border'
-                    }`}
+                      }`}
                   />
                 ))}
               </div>
-              <span className={`text-xs font-medium ${
-                passwordStrength.score <= 1 ? 'text-error' :
-                passwordStrength.score === 2 ? 'text-warning' :
-                'text-success'
-              }`}>
+              <span className={`text-xs font-medium ${passwordStrength.score <= 1 ? 'text-error' :
+                  passwordStrength.score === 2 ? 'text-warning' :
+                    'text-success'
+                }`}>
                 {passwordStrength.label}
               </span>
             </div>
@@ -258,9 +258,8 @@ export const PasswordChangeForm: React.FC = () => {
               {requirementsMet.map((req) => (
                 <div
                   key={req.label}
-                  className={`flex items-center gap-1.5 text-xs ${
-                    req.met ? 'text-success' : 'text-text-tertiary'
-                  }`}
+                  className={`flex items-center gap-1.5 text-xs ${req.met ? 'text-success' : 'text-text-tertiary'
+                    }`}
                 >
                   {req.met ? (
                     <Check className="w-3.5 h-3.5" />
@@ -285,6 +284,7 @@ export const PasswordChangeForm: React.FC = () => {
         error={fieldErrors.confirmPassword}
         disabled={loading}
         autoComplete="new-password"
+        variant="glass"
         leftIcon={<Lock className="w-5 h-5" />}
         rightIcon={
           <button
@@ -301,9 +301,8 @@ export const PasswordChangeForm: React.FC = () => {
 
       {/* Password match indicator */}
       {confirmPassword && newPassword && (
-        <div className={`flex items-center gap-2 text-sm ${
-          confirmPassword === newPassword ? 'text-success' : 'text-error'
-        }`}>
+        <div className={`flex items-center gap-2 text-sm ${confirmPassword === newPassword ? 'text-success' : 'text-error'
+          }`}>
           {confirmPassword === newPassword ? (
             <>
               <Check className="w-4 h-4" />

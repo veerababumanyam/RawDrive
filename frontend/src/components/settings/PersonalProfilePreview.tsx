@@ -63,6 +63,8 @@ export function PersonalProfilePreview({ data }: PersonalProfilePreviewProps) {
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
 
   const theme = getTheme(data.background_theme);
+  // Brand color should come from company/workspace context or be passed in
+  // For now we use the one from data if present, but the goal is centralization
   const brandColor = data.brand_color || '#3B82F6';
 
   const Content = () => (

@@ -154,13 +154,13 @@ export const WorkspaceNotificationSettingsPanel: React.FC<
             </div>
 
             {/* Global Channel Controls */}
-            <div className="bg-card rounded-xl border border-border p-6">
+            <div className="glass-card p-6">
                 <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                     <Mail className="w-5 h-5" />
                     Delivery Channels
                 </h2>
                 <div className="flex flex-wrap gap-4">
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-background">
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-white/10 bg-white/5">
                         <input
                             type="checkbox"
                             id="email-enabled"
@@ -174,7 +174,7 @@ export const WorkspaceNotificationSettingsPanel: React.FC<
                             Email Notifications
                         </label>
                     </div>
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-background">
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-white/10 bg-white/5">
                         <input
                             type="checkbox"
                             id="in-app-enabled"

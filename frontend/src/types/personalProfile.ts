@@ -153,8 +153,30 @@ export type PersonalProfileCategory = (typeof PERSONAL_PROFILE_CATEGORIES)[numbe
 
 /**
  * Background theme options.
+ * These theme IDs reference the pre-built themes from constants/themes.ts
  */
-export const BACKGROUND_THEMES = ['dark', 'pastel', 'bold', 'cinematic', 'minimal'] as const;
+export const BACKGROUND_THEMES = [
+  'theme-clean-slate',
+  'theme-vivid-impact',
+  'theme-golden-hour',
+  'theme-tech-forward',
+  'theme-aurora-dreams',
+  'theme-monochrome',
+  'theme-ocean-breeze',
+  'theme-lavender-haze',
+  'theme-sunset-glow',
+  'theme-forest-mist',
+  'theme-midnight-noir',
+  'theme-carbon-pro',
+  'theme-earth-tones',
+  'theme-rose-gold',
+  'theme-electric-pop',
+  'theme-paper-white',
+  'theme-slate-pro',
+  'theme-cosmic-purple',
+  'theme-champagne',
+  'theme-sky-blue',
+] as const;
 
 export type BackgroundTheme = (typeof BACKGROUND_THEMES)[number];
 
@@ -217,7 +239,6 @@ export interface PersonalProfile {
   categories: string[];
 
   // Branding
-  brand_color?: string;
   background_theme?: BackgroundTheme;
 
   // Visibility
@@ -280,7 +301,6 @@ export interface CreatePersonalProfileRequest {
   categories?: string[];
 
   // Branding
-  brand_color?: string;
   background_theme?: BackgroundTheme;
 
   // Visibility
@@ -358,7 +378,6 @@ export interface PublicPersonalProfile {
   categories: string[];
 
   // Branding (always included for theming)
-  brand_color?: string;
   background_theme?: BackgroundTheme;
 
   // Verification & Badges (always included)

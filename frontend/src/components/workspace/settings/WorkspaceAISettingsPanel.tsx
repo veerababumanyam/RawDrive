@@ -71,8 +71,8 @@ const SectionCard: React.FC<SectionCardProps> = ({
     children,
     badge,
 }) => (
-    <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-        <div className="px-6 py-4 border-b border-border bg-surface-hover/50">
+    <div className="glass-card rounded-2xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-white/10 bg-white/5">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -208,7 +208,7 @@ export const WorkspaceAISettingsPanel: React.FC<WorkspaceAISettingsPanelProps> =
 
             {/* Status overview */}
             {hasApiKey && (
-                <div className="bg-surface rounded-xl border border-border p-4">
+                <div className="glass-card p-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <StatusBadge status={status} />
@@ -322,7 +322,7 @@ export const WorkspaceAISettingsPanel: React.FC<WorkspaceAISettingsPanelProps> =
             )}
 
             {/* Help Section */}
-            <div className="bg-surface rounded-xl border border-border p-6">
+            <div className="glass-card p-6">
                 <h3 className="font-semibold text-text-primary mb-3">Need Help?</h3>
                 <ul className="space-y-2 text-sm text-text-secondary">
                     <li className="flex items-start gap-2">

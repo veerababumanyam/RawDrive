@@ -352,6 +352,7 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete }) =>
               error={error || undefined}
               disabled={isProcessing}
               autoComplete="one-time-code"
+              variant="glass"
               leftIcon={<Key className="w-5 h-5" />}
             />
 
@@ -419,11 +420,10 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete }) =>
 
           {/* Backup codes remaining */}
           {status.backup_codes_remaining !== null && status.backup_codes_remaining !== undefined && (
-            <div className={`p-4 rounded-xl ${
-              status.backup_codes_remaining <= 2
+            <div className={`p-4 rounded-xl ${status.backup_codes_remaining <= 2
                 ? 'bg-warning/10'
                 : 'bg-surface-hover'
-            }`}>
+              }`}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-text-primary">
@@ -435,9 +435,8 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete }) =>
                       : 'Each code can only be used once'}
                   </p>
                 </div>
-                <span className={`text-2xl font-bold ${
-                  status.backup_codes_remaining <= 2 ? 'text-warning' : 'text-text-primary'
-                }`}>
+                <span className={`text-2xl font-bold ${status.backup_codes_remaining <= 2 ? 'text-warning' : 'text-text-primary'
+                  }`}>
                   {status.backup_codes_remaining}
                 </span>
               </div>
@@ -503,6 +502,7 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete }) =>
               placeholder="Enter your password"
               disabled={isProcessing}
               autoComplete="current-password"
+              variant="glass"
               leftIcon={<Lock className="w-5 h-5" />}
             />
 
@@ -518,6 +518,7 @@ export const TwoFactorSetup: React.FC<TwoFactorSetupProps> = ({ onComplete }) =>
               error={error || undefined}
               disabled={isProcessing}
               autoComplete="one-time-code"
+              variant="glass"
               leftIcon={<Key className="w-5 h-5" />}
               helperText="Enter a code from your authenticator app"
             />

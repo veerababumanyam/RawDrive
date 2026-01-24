@@ -68,7 +68,7 @@ export const WorkspaceSecuritySettingsPanel: React.FC<WorkspaceSecuritySettingsP
 
             <div className="space-y-6">
                 {/* 2FA Section */}
-                <div className="bg-surface rounded-2xl border border-border p-6">
+                <div className="glass-card p-6">
                     <div className="flex items-start justify-between">
                         <div className="flex gap-4">
                             <div className="p-2 bg-primary/10 rounded-lg h-fit">
@@ -110,7 +110,7 @@ export const WorkspaceSecuritySettingsPanel: React.FC<WorkspaceSecuritySettingsP
                 </div>
 
                 {/* Session Timeout */}
-                <div className="bg-surface rounded-2xl border border-border p-6">
+                <div className="glass-card p-6">
                     <div className="flex items-start justify-between">
                         <div className="flex gap-4">
                             <div className="p-2 bg-primary/10 rounded-lg h-fit">
@@ -128,7 +128,7 @@ export const WorkspaceSecuritySettingsPanel: React.FC<WorkspaceSecuritySettingsP
                                 disabled={updating}
                                 value={settings?.session_timeout_minutes || 1440}
                                 onChange={(e) => handleSessionTimeoutChange(parseInt(e.target.value))}
-                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm bg-surface-hover text-text-primary p-2 border"
+                                className="block w-full rounded-md shadow-sm focus:border-primary focus:ring-primary sm:text-sm bg-white/5 border border-white/10 text-text-primary p-2"
                             >
                                 <option value={15}>15 Minutes</option>
                                 <option value={30}>30 Minutes</option>
@@ -141,7 +141,7 @@ export const WorkspaceSecuritySettingsPanel: React.FC<WorkspaceSecuritySettingsP
                 </div>
 
                 {/* Privacy Settings Section */}
-                <div className="bg-surface rounded-2xl border border-border p-6">
+                <div className="glass-card p-6">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="p-2 bg-primary/10 rounded-lg">
                             <Shield className="w-6 h-6 text-primary" />
@@ -196,7 +196,7 @@ interface ToggleRowProps {
 }
 
 const ToggleRow: React.FC<ToggleRowProps> = ({ label, description, icon, checked, onChange, disabled }) => (
-    <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
+    <div className="flex items-center justify-between py-3 border-b border-white/10 last:border-0">
         <div className="flex items-start gap-3 flex-1">
             <div className="text-text-tertiary mt-0.5">{icon}</div>
             <div className="flex-1">

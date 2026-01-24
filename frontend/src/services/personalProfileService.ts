@@ -183,7 +183,7 @@ class PersonalProfileService {
   }
 
   /**
-   * Upload cropped avatar blob directly (for use with AvatarCropModal).
+   * Upload cropped avatar blob directly (for use with AvatarEditor).
    */
   async uploadCroppedAvatar(
     workspaceId: string,

@@ -78,7 +78,7 @@ export const WorkspaceSubscriptionTabContent: React.FC<Props> = ({ workspaceId }
             </div>
 
             {/* Current Plan Card */}
-            <div className="bg-surface border border-border/50 rounded-xl p-6 relative overflow-hidden">
+            <div className="glass-card p-6 relative overflow-hidden">
                 <div className="flex justify-between items-start z-10 relative">
                     <div>
                         <div className="flex items-center gap-2 mb-2">
@@ -155,7 +155,7 @@ export const WorkspaceSubscriptionTabContent: React.FC<Props> = ({ workspaceId }
                 <h3 className="text-md font-semibold text-text-primary mb-4 flex items-center gap-2">
                     <CreditCard className="w-4 h-4" /> Billing History
                 </h3>
-                <div className="bg-surface border border-border/50 rounded-xl p-6 text-center text-text-secondary">
+                <div className="glass-card p-6 text-center text-text-secondary">
                     <CreditCard className="w-12 h-12 mx-auto mb-3 text-text-tertiary opacity-50" />
                     <p>No invoices found for this period.</p>
                     <p className="text-sm mt-1">Your invoices will appear here after your first payment.</p>

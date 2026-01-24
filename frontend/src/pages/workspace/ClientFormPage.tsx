@@ -26,8 +26,8 @@ import { AppButton } from '../../components/ui/AppButton';
 import { AppBadge } from '../../components/ui/AppBadge';
 import { useToast } from '../../components/ui/Toast';
 import { DatePicker } from '../../components/ui/DatePicker';
-import { AvatarCropModal } from '../../components/ui/AvatarCropModal';
-import type { CropData } from '../../components/ui/AvatarCropModal';
+import { AvatarEditorModal } from '../../components/ui/AvatarEditor';
+import type { CropData } from '../../components/ui/AvatarEditor/types';
 import { clientService } from '../../services/clientService';
 import type {
   CreateClientRequest,
@@ -313,12 +313,11 @@ const ClientFormPage: React.FC = () => {
         }
 
         // If there's a pending avatar, upload it now
-        if (avatarPreview && (window as any).pendingAvatarBlob) {
+        if (avatarPreview && (window as any).pendingAvatarFile) {
           try {
-            const blob = (window as any).pendingAvatarBlob;
+            const file = (window as any).pendingAvatarFile as File;
             const cropData = (window as any).pendingCropData;
-            const croppedFile = new File([blob], 'avatar.webp', { type: 'image/webp' });
-            await clientService.uploadAvatar(workspace!.workspace_id, newClientId, croppedFile, cropData);
+            await clientService.uploadAvatar(workspace!.workspace_id, newClientId, file, cropData);
           } catch (avatarErr) {
             console.error('Failed to upload avatar for new client:', avatarErr);
             addToast({ variant: 'warning', message: 'Client created, but photo upload failed' });
@@ -537,21 +536,21 @@ const ClientFormPage: React.FC = () => {
     }
   };
 
-  // Handle crop completion
-  const handleCropComplete = async (croppedBlob: Blob, cropData: CropData) => {
+  // Handle avatar save from editor modal
+  const handleAvatarSave = async (file: File, cropData?: CropData) => {
     if (!isEditMode || !workspace?.workspace_id || !clientId) {
       setAvatarPreview(null);
       setShowCropModal(false);
 
       if (!isEditMode) {
-        // Just store the blob/data for uploading after client creation
-        (window as any).pendingAvatarBlob = croppedBlob;
+        // Just store the file/data for uploading after client creation
+        (window as any).pendingAvatarFile = file;
         (window as any).pendingCropData = cropData;
 
         // Show local preview
         const reader = new FileReader();
         reader.onload = (e) => setAvatarPreview(e.target?.result as string);
-        reader.readAsDataURL(croppedBlob);
+        reader.readAsDataURL(file);
 
         addToast({ variant: 'info', message: 'Photo ready to be saved with client' });
         return;
@@ -560,13 +559,10 @@ const ClientFormPage: React.FC = () => {
 
     setIsUploadingAvatar(true);
     try {
-      // Convert blob to File
-      const croppedFile = new File([croppedBlob], 'avatar.webp', { type: 'image/webp' });
-
       await clientService.uploadAvatar(
         workspace!.workspace_id,
         clientId,
-        croppedFile,
+        file,
         cropData
       );
 
@@ -1028,13 +1024,14 @@ const ClientFormPage: React.FC = () => {
         </section>
       </motion.div>
 
-      {/* Avatar Crop Modal */}
-      <AvatarCropModal
+      {/* Avatar Editor Modal */}
+      <AvatarEditorModal
         isOpen={showCropModal}
         imageSrc={avatarPreview || ''}
-        onCropComplete={handleCropComplete}
+        onSave={handleAvatarSave}
         onCancel={handleCropCancel}
         isLoading={isUploadingAvatar}
+        title="Edit Photo"
       />
     </motion.div>
   );

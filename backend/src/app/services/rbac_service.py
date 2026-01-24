@@ -104,6 +104,8 @@ WORKSPACE_PERMISSIONS = [
     "assets:delete",
     "billing:read",
     "billing:write",
+    "settings:read",
+    "settings:write",
     "audit:read",
 ]
 
@@ -585,10 +587,10 @@ class RBACService:
 
 # Default workspace roles created on workspace creation
 DEFAULT_WORKSPACE_ROLES = [
-    ("owner", ["workspace:*", "members:*", "roles:*", "galleries:*", "assets:*", "billing:*", "audit:read"], True),
-    ("admin", ["workspace:write", "members:write", "roles:write", "galleries:*", "assets:*", "billing:read", "audit:read"], True),
+    ("owner", ["workspace:*", "members:*", "roles:*", "galleries:*", "assets:*", "billing:*", "settings:*", "audit:read"], True),
+    ("admin", ["workspace:write", "members:write", "roles:write", "galleries:*", "assets:*", "billing:read", "settings:*", "audit:read"], True),
     ("editor", ["galleries:write", "galleries:read", "assets:write", "assets:read"], True),
-    ("viewer", ["galleries:read", "assets:read"], True),
+    ("viewer", ["galleries:read", "assets:read", "settings:read"], True),
 ]
 
 

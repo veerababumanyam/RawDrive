@@ -39,13 +39,14 @@ import { AppInput } from '../../ui/AppInput';
 import { AppButton } from '../../ui/AppButton';
 import { Card } from '../../ui/AppCard';
 import { useToastActions } from '../../ui/Toast';
-import { AvatarCropModal } from '../../ui/AvatarCropModal';
-import type { CropData } from '../../ui/AvatarCropModal';
+import { AvatarEditorModal } from '../../ui/AvatarEditor';
+import type { CropData } from '../../ui/AvatarEditor/types';
 import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '../../ui/Modal';
 import { useAuth } from '../../../contexts/AuthContext';
 import { companyProfileService, LogoCropData } from '../../../services/companyProfileService';
 import { CreateCompanyProfileRequest, CompanyVisibilityConfig } from '../../../types/companyProfile';
 import { useWorkspacePrivacySettings } from '../../../hooks/useWorkspaceSettings';
+import { ProfileStatusBar } from '../../profile/ProfileStatusBar';
 import { ThemeSelector } from './ThemeSelector';
 import { ThemeCustomization } from './ThemeCustomization';
 import { UndoRedoControls } from './UndoRedoControls';
@@ -53,6 +54,7 @@ import { useThemeUndoRedo } from '../../../hooks/useThemeUndoRedo';
 import { themeService } from '../../../services/themeService';
 import type { Theme, ThemeCustomization as ThemeCustomizationType } from '../../../types/profileEditor';
 import { validateCoordinates } from '../../../utils/themeTransformer';
+import { VisibilityToggle } from '../../settings/VisibilityToggle';
 
 /**
  * Sanitizes the profile data before submission.
@@ -213,7 +215,9 @@ const DEFAULT_PROFILE: CreateCompanyProfileRequest = {
         secondary_phone_2: true,
         qr_code: true,
         vcard: true
-    }
+    },
+    brand_color: '#3B82F6',
+    brand_font: 'Inter'
 };
 
 // Extended type for profile change callback including theme data
@@ -241,7 +245,7 @@ const CollapsibleSection: React.FC<{
 }> = ({ title, description, children, defaultOpen = false, icon, action }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     return (
-        <Card className="overflow-hidden">
+        <Card variant="glass" className="overflow-hidden">
             <div
                 className="flex flex-col sm:flex-row sm:items-center justify-between"
                 style={{ position: 'relative' }}
@@ -317,7 +321,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
     const [isFetching, setIsFetching] = useState(true);
     const [profileExists, setProfileExists] = useState(false);
     const [updatingVisibility, setUpdatingVisibility] = useState(false);
-    
+
     // Workspace privacy settings for public profile visibility
     const { settings: privacySettings, update: updatePrivacy } = useWorkspacePrivacySettings(workspace?.workspace_id || '');
 
@@ -359,6 +363,10 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
     // Crop modal state
     const [cropModalOpen, setCropModalOpen] = useState(false);
     const [imageForCrop, setImageForCrop] = useState<string | null>(null);
+
+    // Pending logo state (for profile creation - logo selected before profile exists)
+    const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
+    const [pendingLogoCropData, setPendingLogoCropData] = useState<CropData | null>(null);
 
     // Slug validation state
     const [slugValidation, setSlugValidation] = useState<{
@@ -428,6 +436,14 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
             }
         }
     }, [watchedValues, onProfileChange, isFetching, logoBlobUrl, selectedTheme, currentThemeState]);
+
+    // Sync brand_color form field with theme primary color
+    useEffect(() => {
+        const primaryColor = themeUndoRedo.state?.custom_colors?.primary;
+        if (primaryColor && !isFetching) {
+            setValue('brand_color', primaryColor);
+        }
+    }, [themeUndoRedo.state?.custom_colors?.primary, isFetching, setValue]);
 
     const loadProfile = async (id: string) => {
         setIsFetching(true);
@@ -522,25 +538,48 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
         reader.readAsDataURL(file);
     }, [workspace?.workspace_id, toast]);
 
-    // Handle crop completion - upload cropped image
-    const handleCropComplete = useCallback(async (croppedBlob: Blob, cropData: CropData) => {
+    // Handle logo save from editor modal
+    const handleLogoSave = useCallback(async (file: File, cropData?: CropData) => {
         if (!workspace?.workspace_id) return;
 
-        setIsUploadingLogo(true);
         setCropModalOpen(false);
+
+        // If profile doesn't exist yet, store logo as pending (will upload after profile creation)
+        if (!profileExists) {
+            // Store pending logo for upload after profile creation
+            setPendingLogoFile(file);
+            setPendingLogoCropData(cropData || null);
+
+            // Create preview URL for immediate display
+            const previewUrl = URL.createObjectURL(file);
+            if (logoBlobUrlRef.current) {
+                URL.revokeObjectURL(logoBlobUrlRef.current);
+            }
+            logoBlobUrlRef.current = previewUrl;
+            setLogoBlobUrl(previewUrl);
+
+            toast.success('Logo will be uploaded when you save the profile', {
+                title: 'Logo ready'
+            });
+            setImageForCrop(null);
+            return;
+        }
+
+        // Profile exists - upload immediately
+        setIsUploadingLogo(true);
 
         try {
             // Convert CropData to LogoCropData format
-            const logoCropData: LogoCropData = {
+            const logoCropData: LogoCropData | undefined = cropData ? {
                 crop_x: cropData.crop_x,
                 crop_y: cropData.crop_y,
                 crop_scale: cropData.crop_scale,
-            };
+            } : undefined;
 
-            // Upload cropped image
+            // Upload cropped image (file is already the cropped result)
             await companyProfileService.uploadCroppedLogo(
                 workspace.workspace_id,
-                croppedBlob,
+                file,
                 logoCropData
             );
             toast.success('Logo uploaded successfully');
@@ -553,7 +592,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
             setIsUploadingLogo(false);
             setImageForCrop(null);
         }
-    }, [workspace?.workspace_id, toast]);
+    }, [workspace?.workspace_id, profileExists, toast]);
 
     // Handle crop modal cancel
     const handleCropCancel = useCallback(() => {
@@ -699,6 +738,30 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                 const result = await companyProfileService.createProfile(workspace.workspace_id, data);
                 profileId = result?.profile_id;
                 setProfileExists(true); // Mark as existing for future saves
+
+                // Upload pending logo if one was selected during profile creation
+                if (pendingLogoFile) {
+                    try {
+                        const logoCropData: LogoCropData | undefined = pendingLogoCropData ? {
+                            crop_x: pendingLogoCropData.crop_x,
+                            crop_y: pendingLogoCropData.crop_y,
+                            crop_scale: pendingLogoCropData.crop_scale,
+                        } : undefined;
+
+                        await companyProfileService.uploadCroppedLogo(
+                            workspace.workspace_id,
+                            pendingLogoFile,
+                            logoCropData
+                        );
+                        // Clear pending logo state
+                        setPendingLogoFile(null);
+                        setPendingLogoCropData(null);
+                    } catch (logoError) {
+                        console.error('Failed to upload logo:', logoError);
+                        toast.error("Logo upload failed. You can try again after saving.", { title: "Warning" });
+                    }
+                }
+
                 toast.success("Company profile has been set up successfully.", { title: "Profile created" });
             }
 
@@ -792,7 +855,9 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
             custom_layout: theme.layout_config,
             is_preset: false,
         });
-    }, []);
+        // Sync brand color with theme primary color
+        setValue('brand_color', theme.base_colors.primary);
+    }, [setValue]);
 
     // Handle theme customization changes
     const handleThemeCustomizationChange = useCallback((changes: Partial<ThemeCustomizationType>) => {
@@ -813,20 +878,6 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
         }
     }, [selectedTheme, themeUndoRedo]);
 
-    // Calculate form progress based on key fields (MUST be before early return)
-    const formProgress = React.useMemo(() => {
-        const fields = [
-            watchedValues.name,
-            watchedValues.slug,
-            watchedValues.tagline,
-            watchedValues.email,
-            watchedValues.phone,
-            watchedValues.website,
-        ];
-        const filledCount = fields.filter(f => f && String(f).trim()).length;
-        return Math.round((filledCount / fields.length) * 100);
-    }, [watchedValues.name, watchedValues.slug, watchedValues.tagline, watchedValues.email, watchedValues.phone, watchedValues.website]);
-
     // Early return AFTER all hooks have been called
     if (isFetching) {
         return <div className="p-8 text-center text-text-secondary">Loading profile settings...</div>;
@@ -838,15 +889,11 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
             name={`company_visibility.${field}`}
             control={control}
             render={({ field: { onChange, value } }) => (
-                <div className="flex items-center gap-2" title={`Toggle visibility for ${label}`}>
-                    <button
-                        type="button"
-                        onClick={() => onChange(!value)}
-                        className={`p-1.5 rounded-md transition-colors ${value ? 'text-primary bg-primary/10' : 'text-text-disabled hover:text-text-secondary'}`}
-                    >
-                        {value ? <Eye size={16} /> : <EyeOff size={16} />}
-                    </button>
-                </div>
+                <VisibilityToggle
+                    isVisible={!!value}
+                    onChange={onChange}
+                    label={label}
+                />
             )}
         />
     );
@@ -857,18 +904,14 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-text-primary">Company Profile</h2>
-                    <p className="text-text-secondary">Manage your public brand presence and contact information.</p>
-                    {/* Form Progress Indicator */}
-                    <div className="mt-3 flex items-center gap-3">
-                        <div className="flex-1 max-w-[200px] h-2 bg-surface-hover rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
-                                style={{ width: `${formProgress}%` }}
-                            />
-                        </div>
-                        <span className="text-xs text-text-tertiary">{formProgress}% complete</span>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-2xl font-bold text-text-primary">Company Profile</h2>
+                        <ProfileStatusBar
+                            companyProfile={watchedValues}
+                            section="company"
+                        />
                     </div>
+                    <p className="text-text-secondary mt-1">Manage your public brand presence and contact information.</p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                     {watch('slug') && (
@@ -913,7 +956,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
 
             {/* Public Profile Visibility Toggle */}
             {workspace?.workspace_id && (
-                <div className="bg-surface rounded-xl border border-border p-4 mb-6">
+                <div className="glass-card p-4 mb-6">
                     <div className="flex items-center justify-between">
                         <div className="flex items-start gap-3 flex-1">
                             <Eye className="w-5 h-5 text-text-tertiary mt-0.5 flex-shrink-0" />
@@ -942,18 +985,21 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             }}
                             disabled={updatingVisibility || !privacySettings}
                             className={`
+                                group
                                 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full
                                 border-2 border-transparent transition-colors duration-200 ease-in-out
-                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
+                                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2
                                 disabled:cursor-not-allowed disabled:opacity-50
-                                ${privacySettings?.public_profile_enabled ? 'bg-primary' : 'bg-border'}
+                                bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-500
+                                aria-checked:bg-green-500 aria-checked:hover:bg-green-600
                             `}
+                            title={privacySettings?.public_profile_enabled ? 'Enabled' : 'Disabled'}
                         >
                             <span
                                 className={`
                                     pointer-events-none inline-block h-5 w-5 transform rounded-full
                                     bg-white shadow ring-0 transition duration-200 ease-in-out
-                                    ${privacySettings?.public_profile_enabled ? 'translate-x-5' : 'translate-x-0'}
+                                    translate-x-0 group-aria-checked:translate-x-5
                                 `}
                             />
                         </button>
@@ -1063,15 +1109,16 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                 </div>
             </CollapsibleSection>
 
-            {/* Logo Crop Modal */}
+            {/* Logo Editor Modal */}
             {
                 imageForCrop && (
-                    <AvatarCropModal
+                    <AvatarEditorModal
                         imageSrc={imageForCrop}
                         isOpen={cropModalOpen}
-                        onCropComplete={handleCropComplete}
+                        onSave={handleLogoSave}
                         onCancel={handleCropCancel}
                         isLoading={isUploadingLogo}
+                        title="Edit Logo"
                     />
                 )
             }
@@ -1092,6 +1139,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                     {...register('name', { required: "Name is required" })}
                                     error={errors.name?.message}
                                     placeholder="e.g. Acme Photography"
+                                    variant="glass"
                                 />
                             </div>
                             <div className="mt-8">
@@ -1105,6 +1153,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                     label="Tagline"
                                     {...register('tagline')}
                                     placeholder="e.g. Capturing moments that matter"
+                                    variant="glass"
                                 />
                             </div>
                             <div className="mt-8">
@@ -1123,7 +1172,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                         // Display mode - show current slug with edit button
                                         <div className="flex items-center gap-2 min-h-[48px]">
                                             <div
-                                                className="flex-1 flex items-center gap-2 px-4 py-3 bg-surface-hover rounded-lg border border-border min-h-[48px]"
+                                                className="flex-1 flex items-center gap-2 px-4 py-3 bg-white/5 rounded-lg border border-white/10 min-h-[48px]"
                                                 aria-labelledby="slug-label"
                                             >
                                                 <span className="text-text-secondary text-sm">{PUBLIC_URL_PREFIX}</span>
@@ -1163,6 +1212,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                                         error={slugValidation.status === 'taken' ? slugValidation.message : undefined}
                                                         aria-labelledby="slug-label"
                                                         aria-describedby="slug-requirements"
+                                                        variant="glass"
                                                     />
                                                     {/* Validation indicator */}
                                                     {tempSlug && tempSlug.length >= 3 && (
@@ -1223,6 +1273,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                                 leftAddon={PUBLIC_URL_PREFIX}
                                                 aria-labelledby="slug-label"
                                                 aria-describedby="slug-helper"
+                                                variant="glass"
                                             />
                                             {/* Slug validation indicator */}
                                             {currentSlug && currentSlug.length >= 3 && (
@@ -1251,6 +1302,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                     {...register('website')}
                                     placeholder="https://example.com"
                                     leftIcon={<Globe size={16} />}
+                                    variant="glass"
                                 />
                             </div>
                             <div className="mt-8">
@@ -1268,6 +1320,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                     error={errors.email?.message}
                                     placeholder="contact@example.com"
                                     leftIcon={<Mail size={16} />}
+                                    variant="glass"
                                 />
                             </div>
                             <div className="mt-8">
@@ -1282,6 +1335,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                     {...register('phone')}
                                     placeholder="+1 (555) 000-0000"
                                     leftIcon={<Phone size={16} />}
+                                    variant="glass"
                                 />
                             </div>
                             <div className="mt-8">
@@ -1326,6 +1380,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                             label={index === 0 ? "Label" : undefined}
                                             placeholder="e.g. Support"
                                             {...register(`secondary_emails.${index}.label` as const)}
+                                            variant="glass"
                                         />
                                     </div>
                                     <div className="flex-1">
@@ -1340,6 +1395,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                                 }
                                             })}
                                             error={errors.secondary_emails?.[index]?.value?.message}
+                                            variant="glass"
                                         />
                                     </div>
                                     <div className="flex items-center gap-1">
@@ -1392,6 +1448,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                             label={index === 0 ? "Label" : undefined}
                                             placeholder="e.g. Mobile"
                                             {...register(`secondary_phones.${index}.label` as const)}
+                                            variant="glass"
                                         />
                                     </div>
                                     <div className="flex-1">
@@ -1400,6 +1457,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                             placeholder="+1 (555) 000-0000"
                                             leftIcon={<Phone size={14} />}
                                             {...register(`secondary_phones.${index}.value` as const)}
+                                            variant="glass"
                                         />
                                     </div>
                                     <div className="flex items-center gap-1">
@@ -1434,15 +1492,15 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                 defaultOpen={false}
             >
                 <div className="space-y-4">
-                    <AppInput label="Address Line 1" {...register('address_structured.line1')} placeholder="123 Main St" />
-                    <AppInput label="Address Line 2" {...register('address_structured.line2')} placeholder="Suite 100" />
+                    <AppInput label="Address Line 1" {...register('address_structured.line1')} placeholder="123 Main St" variant="glass" />
+                    <AppInput label="Address Line 2" {...register('address_structured.line2')} placeholder="Suite 100" variant="glass" />
                     <div className="grid grid-cols-2 gap-4">
-                        <AppInput label="City" {...register('address_structured.city')} placeholder="New York" />
-                        <AppInput label="State/Province" {...register('address_structured.state')} placeholder="NY" />
+                        <AppInput label="City" {...register('address_structured.city')} placeholder="New York" variant="glass" />
+                        <AppInput label="State/Province" {...register('address_structured.state')} placeholder="NY" variant="glass" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <AppInput label="Postal Code" {...register('address_structured.postal_code')} placeholder="10001" />
-                        <AppInput label="Country" {...register('address_structured.country')} placeholder="USA" />
+                        <AppInput label="Postal Code" {...register('address_structured.postal_code')} placeholder="10001" variant="glass" />
+                        <AppInput label="Country" {...register('address_structured.country')} placeholder="USA" variant="glass" />
                     </div>
 
                     {/* GPS Coordinates Section */}
@@ -1471,6 +1529,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                 render={({ field: { onChange, value, ...rest }, fieldState: { error } }) => (
                                     <AppInput
                                         label="Latitude"
+                                        variant="glass"
                                         placeholder="e.g. 40.7128"
                                         leftIcon={<Navigation size={14} />}
                                         helperText="-90 to 90"
@@ -1504,6 +1563,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                 render={({ field: { onChange, value, ...rest }, fieldState: { error } }) => (
                                     <AppInput
                                         label="Longitude"
+                                        variant="glass"
                                         placeholder="e.g. -74.0060"
                                         leftIcon={<Navigation size={14} className="rotate-90" />}
                                         helperText="-180 to 180"
@@ -1573,6 +1633,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             <div className="flex-1">
                                 <AppInput
                                     label="Instagram"
+                                    variant="glass"
                                     leftIcon={<Instagram size={16} />}
                                     {...register('socials.instagram')}
                                     placeholder="username or URL"
@@ -1586,6 +1647,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             <div className="flex-1">
                                 <AppInput
                                     label="Facebook"
+                                    variant="glass"
                                     leftIcon={<Facebook size={16} />}
                                     {...register('socials.facebook')}
                                     placeholder="username or URL"
@@ -1599,6 +1661,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             <div className="flex-1">
                                 <AppInput
                                     label="Twitter / X"
+                                    variant="glass"
                                     leftIcon={<Twitter size={16} />}
                                     {...register('socials.twitter')}
                                     placeholder="username or URL"
@@ -1612,6 +1675,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             <div className="flex-1">
                                 <AppInput
                                     label="LinkedIn"
+                                    variant="glass"
                                     leftIcon={<Linkedin size={16} />}
                                     {...register('socials.linkedin')}
                                     placeholder="username or URL"
@@ -1625,6 +1689,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             <div className="flex-1">
                                 <AppInput
                                     label="YouTube"
+                                    variant="glass"
                                     leftIcon={<Youtube size={16} />}
                                     {...register('socials.youtube')}
                                     placeholder="channel URL"
@@ -1638,6 +1703,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             <div className="flex-1">
                                 <AppInput
                                     label="TikTok"
+                                    variant="glass"
                                     leftIcon={<Music2 size={16} />}
                                     {...register('socials.tiktok')}
                                     placeholder="@username or URL"
@@ -1657,6 +1723,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                 <div className="flex-1">
                                     <AppInput
                                         label="WhatsApp"
+                                        variant="glass"
                                         leftIcon={<Phone size={16} />}
                                         {...register('socials.whatsapp')}
                                         placeholder="phone number or wa.me link"
@@ -1670,6 +1737,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                 <div className="flex-1">
                                     <AppInput
                                         label="Pinterest"
+                                        variant="glass"
                                         leftIcon={<Globe size={16} />}
                                         {...register('socials.pinterest')}
                                         placeholder="username or URL"
@@ -1683,6 +1751,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                 <div className="flex-1">
                                     <AppInput
                                         label="Behance"
+                                        variant="glass"
                                         leftIcon={<Paintbrush size={16} />}
                                         {...register('socials.behance')}
                                         placeholder="username or URL"
@@ -1696,6 +1765,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                                 <div className="flex-1">
                                     <AppInput
                                         label="Dribbble"
+                                        variant="glass"
                                         leftIcon={<Dribbble size={16} />}
                                         {...register('socials.dribbble')}
                                         placeholder="username or URL"
@@ -1724,6 +1794,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             <div className="flex-1">
                                 <AppInput
                                     label={index === 0 ? "Label" : undefined}
+                                    variant="glass"
                                     placeholder="Link Title (e.g. Portfolio)"
                                     {...register(`custom_links.${index}.label` as const, { required: true })}
                                 />
@@ -1731,6 +1802,7 @@ export const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ onProfil
                             <div className="flex-[2]">
                                 <AppInput
                                     label={index === 0 ? "URL" : undefined}
+                                    variant="glass"
                                     placeholder="https://"
                                     leftIcon={<LinkIcon size={14} />}
                                     {...register(`custom_links.${index}.url` as const, { required: true })}

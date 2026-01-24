@@ -245,9 +245,9 @@ export interface ToggleProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
 }
 
 const toggleSizeStyles = {
-  sm: { track: 'w-8 h-4', thumb: 'w-3 h-3', translateChecked: 'translate-x-4', translateUnchecked: 'translate-x-0', iconSize: 10 },
-  md: { track: 'w-11 h-6', thumb: 'w-5 h-5', translateChecked: 'translate-x-5', translateUnchecked: 'translate-x-0', iconSize: 12 },
-  lg: { track: 'w-14 h-7', thumb: 'w-6 h-6', translateChecked: 'translate-x-7', translateUnchecked: 'translate-x-0', iconSize: 14 },
+  sm: { track: 'w-8 h-4', thumb: 'w-3 h-3', translateChecked: 'peer-checked:translate-x-4', translateUnchecked: 'translate-x-0', iconSize: 10 },
+  md: { track: 'w-11 h-6', thumb: 'w-5 h-5', translateChecked: 'peer-checked:translate-x-5', translateUnchecked: 'translate-x-0', iconSize: 12 },
+  lg: { track: 'w-14 h-7', thumb: 'w-6 h-6', translateChecked: 'peer-checked:translate-x-7', translateUnchecked: 'translate-x-0', iconSize: 14 },
 };
 
 export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
@@ -255,13 +255,13 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
     const generatedId = useId();
     const inputId = id || generatedId;
     const styles = toggleSizeStyles[size];
-    const isChecked = checked ?? false;
 
     // The toggle switch wrapped in a label so clicking anywhere on it triggers the input
     const toggle = (
       <label
         htmlFor={inputId}
-        className={`relative inline-flex flex-shrink-0 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        title={checked ? 'Enabled' : 'Disabled'}
+        className={`relative inline-flex flex-shrink-0 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
       >
         <input
           ref={ref}
@@ -273,44 +273,53 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
           role="switch"
           {...props}
         />
+        {/* Track */}
         <span
           className={`
             ${styles.track}
-            bg-border
+            bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-500
             rounded-full
             pointer-events-none
             transition-colors duration-200 ease-in-out
-            peer-checked:bg-primary
-            peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2
-            peer-disabled:opacity-50
+            peer-checked:bg-green-500 peer-checked:hover:bg-green-600
+            peer-focus-visible:ring-2 peer-focus-visible:ring-green-500 peer-focus-visible:ring-offset-2
           `}
         />
+        {/* Thumb */}
         <span
           className={`
             ${styles.thumb}
             absolute top-0.5 left-0.5
             bg-white
             rounded-full
-            shadow
+            shadow-sm
             pointer-events-none
             transition-transform duration-200 ease-in-out
-            ${isChecked ? styles.translateChecked : styles.translateUnchecked}
+            ${styles.translateUnchecked}
+            ${styles.translateChecked}
             flex items-center justify-center
           `}
         >
+          {/* Icons - using peer-checked logic for visibility by finding the input peer previous sibling */}
+          {/* Note: In standard CSS, we can't style children of a sibling based on that sibling's state easily without :has() or specific structure. 
+              However, for the icons, we can stick to 'checked' prop since this is a React component and 'checked' is reliable for rendering content. 
+              But for *styles* (classes), we want to avoid conditional class names based on state if possible. 
+              Actually, let's keep the `checked` usage for specific icon visibility since it's inside the thumb.
+              The thumb itself moves via peer-checked.
+          */}
           <span
             className={`
-              absolute inset-0 flex items-center justify-center transition-opacity duration-200
-              ${isChecked ? 'opacity-0' : 'opacity-100'}
-            `}
+               absolute inset-0 flex items-center justify-center transition-opacity duration-200
+               peer-checked:opacity-0 opacity-100
+             `}
           >
             <X size={styles.iconSize} className="text-text-tertiary" />
           </span>
           <span
             className={`
-              absolute inset-0 flex items-center justify-center transition-opacity duration-200
-              ${isChecked ? 'opacity-100' : 'opacity-0'}
-            `}
+               absolute inset-0 flex items-center justify-center transition-opacity duration-200
+               peer-checked:opacity-100 opacity-0
+             `}
           >
             <Check size={styles.iconSize} className="text-primary" />
           </span>

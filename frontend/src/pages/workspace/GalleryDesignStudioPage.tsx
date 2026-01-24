@@ -71,7 +71,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
     publishError,
   } = useDesignDraft({
     galleryId: galleryId || '',
-    workspaceId,
+    workspaceId: workspaceId || '',
     autoSaveInterval: 3000,
   });
 
@@ -88,7 +88,7 @@ export const GalleryDesignStudioPage: React.FC = () => {
 
   // Fetch gallery data for cover preview
   const { gallery } = useGallery({
-    workspaceId,
+    workspaceId: workspaceId || '',
     galleryId: galleryId || '',
     autoFetch: true,
   });
@@ -97,6 +97,17 @@ export const GalleryDesignStudioPage: React.FC = () => {
   const [viewportMode, setViewportMode] = useState<ViewportMode>({
     type: 'desktop',
   });
+
+  // Guard: ensure required IDs are available
+  if (!galleryId || !workspaceId) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <p className="text-gray-500">Loading design studio...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Template modals
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);

@@ -146,29 +146,26 @@ async def _check_workspace_access(
         user_id: Current user ID
         workspace_id: Target workspace ID
         rbac_service: RBAC service instance
-        require_admin: If True, require admin/owner role
+        require_admin: If True, require write permissions
 
     Raises:
         HTTPException: If user lacks required access
     """
-    # Check basic workspace membership
-    has_access = await rbac_service.check_workspace_membership(user_id, workspace_id)
-    if not has_access:
+    # Check permission based on operation type
+    required_perm = "settings:write" if require_admin else "settings:read"
+    permission = await rbac_service.check_permission(
+        user_id=user_id,
+        workspace_id=workspace_id,
+        required_permissions=required_perm,
+    )
+
+    if not permission.allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to workspace",
+            detail=f"Missing permissions: {', '.join(permission.missing_permissions)}"
+                   if permission.missing_permissions
+                   else "Access denied to workspace",
         )
-
-    if require_admin:
-        # Check for admin or owner role
-        is_admin = await rbac_service.user_has_role(
-            user_id, workspace_id, ["owner", "admin"]
-        )
-        if not is_admin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin or owner role required to manage biometric consent",
-            )
 
 
 # =============================================================================
@@ -512,6 +509,8 @@ async def get_consent_history(
     current_user: CurrentUserDep,
     consent_service: ConsentServiceDep,
     rbac_service: RBACServiceDep,
+    page: int = 1,
+    page_size: int = 20,
 ) -> ConsentHistoryResponse:
     """Get biometric consent history for compliance audit.
 
@@ -519,6 +518,10 @@ async def get_consent_history(
     This implements COM-001 audit trail requirements per GDPR Article 9.
 
     Requires admin/owner role.
+
+    Args:
+        page: Page number (1-indexed)
+        page_size: Number of entries per page
     """
     await _check_workspace_access(
         current_user.user_id, workspace_id, rbac_service, require_admin=True

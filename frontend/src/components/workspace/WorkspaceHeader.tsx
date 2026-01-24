@@ -139,10 +139,25 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const userMenuItems = [
-    { id: 'user-profile', label: 'My Profile', icon: <User size={16} />, path: '/settings?tab=profile' },
-    { id: 'company-profile', label: 'Company Profile', icon: <Building2 size={16} />, path: '/workspace/settings/profile' },
-    { id: 'billing', label: 'Billing', icon: <CreditCard size={16} />, path: '/workspace/settings/billing' },
-    { id: 'settings', label: 'Workspace Settings', icon: <Settings size={16} />, path: '/workspace/settings' },
+    // Personal section
+    { type: 'section' as const, label: 'Personal' },
+    { id: 'my-profile', label: 'My Profile', icon: <User size={16} />, path: '/workspace/profile' },
+    { id: 'account-settings', label: 'My Settings', icon: <Settings size={16} />, path: '/settings' },
+
+    // Divider
+    { type: 'divider' as const },
+
+    // Workspace section
+    { type: 'section' as const, label: 'Workspace' },
+    { id: 'workspace-branding', label: 'Branding', icon: <Building2 size={16} />, path: '/workspace/branding' },
+    { id: 'workspace-settings', label: 'Workspace Settings', icon: <Settings size={16} />, path: '/workspace/settings' },
+    { id: 'billing', label: 'Subscription', icon: <CreditCard size={16} />, path: '/workspace/settings?tab=subscription' },
+
+    // Divider
+    { type: 'divider' as const },
+
+    // Help section
+    { type: 'section' as const, label: 'Help' },
     { id: 'help', label: 'Help & Support', icon: <HelpCircle size={16} />, path: '/workspace/help' },
   ];
 
@@ -167,7 +182,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
   return (
     <header
-      className="grid grid-cols-[auto_1fr_auto] items-center px-4 lg:px-6 bg-surface border-b border-border/50 flex-shrink-0"
+      className="relative z-[1020] grid grid-cols-[auto_1fr_auto] items-center px-4 lg:px-6 bg-surface border-b border-border/50 flex-shrink-0"
       style={{ height: `${HEADER_HEIGHT}px` }}
     >
       {/* Left Section - Logo */}
@@ -260,7 +275,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
           {/* AI Highlights Dropdown */}
           {aiHighlightsOpen && (
-            <div className="absolute right-0 top-full mt-2 bg-surface border border-border rounded-xl shadow-xl overflow-hidden z-dropdown">
+            <div className="absolute right-0 top-full mt-2 bg-surface border border-border rounded-xl shadow-xl overflow-hidden z-[1000]">
               <AIHighlightsPanel
                 workspaceId=""
                 highlights={highlights}
@@ -299,7 +314,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
           {/* Notifications Dropdown */}
           {notificationsOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-surface border border-border rounded-xl shadow-lg overflow-hidden z-dropdown">
+            <div className="absolute right-0 top-full mt-2 w-80 bg-surface border border-border rounded-xl shadow-lg overflow-hidden z-[1000]">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <h3 className="font-semibold text-text-primary">Notifications</h3>
                 {unreadCount > 0 && (
@@ -394,7 +409,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
 
           {/* User Dropdown */}
           {userMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-border rounded-xl shadow-lg overflow-hidden z-dropdown">
+            <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-border rounded-xl shadow-lg overflow-hidden z-[1000]">
               <div className="px-4 py-3 border-b border-border">
                 <p className="text-sm font-medium text-text-primary truncate">
                   {user.name}
@@ -402,19 +417,40 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
                 <p className="text-xs text-text-tertiary truncate">{user.email}</p>
               </div>
               <div className="py-2">
-                {userMenuItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      navigate(item.path);
-                      setUserMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
-                  >
-                    {item.icon}
-                    {item.label}
-                  </button>
-                ))}
+                {userMenuItems.map((item, index) => {
+                  // Render section headers
+                  if (item.type === 'section') {
+                    return (
+                      <div key={`section-${index}`} className="px-4 py-2">
+                        <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
+                          {item.label}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  // Render dividers
+                  if (item.type === 'divider') {
+                    return (
+                      <div key={`divider-${index}`} className="my-1 border-t border-border" />
+                    );
+                  }
+
+                  // Render menu items
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        navigate(item.path);
+                        setUserMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
+                    >
+                      {item.icon}
+                      {item.label}
+                    </button>
+                  );
+                })}
               </div>
               <div className="border-t border-border py-2">
                 <button
@@ -434,10 +470,10 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
       {searchOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/50 z-modal-backdrop"
+            className="fixed inset-0 bg-black/50 z-[1040]"
             onClick={() => setSearchOpen(false)}
           />
-          <div className="fixed inset-x-4 top-20 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-xl z-modal">
+          <div className="fixed inset-x-4 top-20 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-xl z-[1050]">
             <div className="bg-surface border border-border rounded-xl shadow-xl overflow-hidden">
               <form onSubmit={handleSearch} className="relative">
                 <Search

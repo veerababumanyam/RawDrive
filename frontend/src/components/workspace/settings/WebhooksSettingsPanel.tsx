@@ -150,7 +150,7 @@ export const WebhooksSettingsPanel: React.FC<WebhooksSettingsPanelProps> = ({ wo
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-surface rounded-xl border border-border p-4">
+        <div className="glass-card p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
               <Webhook className="w-5 h-5 text-primary" />
@@ -161,7 +161,7 @@ export const WebhooksSettingsPanel: React.FC<WebhooksSettingsPanelProps> = ({ wo
             </div>
           </div>
         </div>
-        <div className="bg-surface rounded-xl border border-border p-4">
+        <div className="glass-card p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-success/10 rounded-lg">
               <CheckCircle2 className="w-5 h-5 text-success" />
@@ -174,7 +174,7 @@ export const WebhooksSettingsPanel: React.FC<WebhooksSettingsPanelProps> = ({ wo
             </div>
           </div>
         </div>
-        <div className="bg-surface rounded-xl border border-border p-4">
+        <div className="glass-card p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-accent/10 rounded-lg">
               <Zap className="w-5 h-5 text-accent" />
@@ -283,7 +283,7 @@ export const WebhooksSettingsPanel: React.FC<WebhooksSettingsPanelProps> = ({ wo
 // =============================================================================
 
 const EmptyState: React.FC<{ onCreateClick: () => void }> = ({ onCreateClick }) => (
-  <div className="flex flex-col items-center justify-center py-16 px-4 bg-surface rounded-2xl border border-border border-dashed">
+  <div className="flex flex-col items-center justify-center py-16 px-4 glass-card border-dashed">
     <div className="p-4 bg-primary/10 rounded-full mb-6">
       <Webhook className="w-12 h-12 text-primary" />
     </div>
@@ -326,7 +326,7 @@ const WebhookCard: React.FC<WebhookCardProps> = ({
   const [showSecret, setShowSecret] = useState(false);
 
   return (
-    <div className="bg-surface rounded-2xl border border-border p-6 hover:border-primary/30 transition-colors">
+    <div className="glass-card p-6 hover:bg-white/5 transition-colors">
       <div className="flex items-start justify-between gap-4">
         {/* Left side: Info */}
         <div className="flex-1 min-w-0">
@@ -559,7 +559,7 @@ const WebhookModal: React.FC<WebhookModalProps> = ({
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-surface rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col m-4">
+      <div className="relative glass-card shadow-2xl backdrop-blur-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col m-4">
         {/* Header */}
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <h2 className="text-xl font-semibold text-text-primary">
@@ -580,7 +580,7 @@ const WebhookModal: React.FC<WebhookModalProps> = ({
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                className="w-full px-3 py-2 bg-surface-hover border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-text-primary"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-text-primary"
                 placeholder="My Webhook"
                 required
               />
@@ -630,8 +630,8 @@ const WebhookModal: React.FC<WebhookModalProps> = ({
                     type="button"
                     onClick={() => setActiveCategory(category)}
                     className={`px-3 py-1.5 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${activeCategory === category
-                        ? 'bg-primary text-white'
-                        : 'bg-surface-hover text-text-secondary hover:text-text-primary'
+                      ? 'bg-primary text-white'
+                      : 'bg-surface-hover text-text-secondary hover:text-text-primary'
                       }`}
                   >
                     {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -667,8 +667,8 @@ const WebhookModal: React.FC<WebhookModalProps> = ({
                     <label
                       key={eventType.event_type}
                       className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors ${formData.event_types.includes(eventType.event_type)
-                          ? 'bg-primary/10 border border-primary/30'
-                          : 'bg-surface-hover hover:bg-surface-hover/80 border border-transparent'
+                        ? 'bg-primary/10 border border-primary/30'
+                        : 'bg-surface-hover hover:bg-surface-hover/80 border border-transparent'
                         }`}
                     >
                       <input
@@ -791,7 +791,7 @@ const DeliveryLogsPanel: React.FC<DeliveryLogsPanelProps> = ({ subscription, onC
               {filteredEvents.map((event) => (
                 <div
                   key={event.event_id}
-                  className="p-4 bg-surface-hover rounded-lg border border-border"
+                  className="p-4 bg-white/5 rounded-lg border border-white/10"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-text-primary">{event.event_type}</span>

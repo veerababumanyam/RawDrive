@@ -345,7 +345,60 @@ PERSONAL_PROFILE_CATEGORIES = [
     "Fine Art",
 ]
 
-BACKGROUND_THEMES = ["dark", "pastel", "bold", "cinematic", "minimal"]
+BACKGROUND_THEMES = [
+    # New theme IDs (20 themes)
+    "theme-clean-slate",
+    "theme-vivid-impact",
+    "theme-golden-hour",
+    "theme-tech-forward",
+    "theme-aurora-dreams",
+    "theme-monochrome",
+    "theme-ocean-breeze",
+    "theme-lavender-haze",
+    "theme-sunset-glow",
+    "theme-forest-mist",
+    "theme-midnight-noir",
+    "theme-carbon-pro",
+    "theme-earth-tones",
+    "theme-rose-gold",
+    "theme-electric-pop",
+    "theme-paper-white",
+    "theme-slate-pro",
+    "theme-cosmic-purple",
+    "theme-champagne",
+    "theme-sky-blue",
+    # Legacy aliases (backward compatibility)
+    "dark",
+    "pastel",
+    "bold",
+    "cinematic",
+    "minimal",
+]
+
+
+def migrate_legacy_theme(theme: Optional[str]) -> Optional[str]:
+    """Migrate legacy theme names to new theme IDs.
+
+    This function provides backward compatibility by automatically
+    converting legacy theme names to their new equivalents.
+
+    Args:
+        theme: The theme ID to potentially migrate
+
+    Returns:
+        The migrated theme ID or original if no migration needed
+    """
+    if theme is None:
+        return None
+
+    LEGACY_THEME_MAP = {
+        "dark": "theme-midnight-noir",
+        "pastel": "theme-lavender-haze",
+        "bold": "theme-vivid-impact",
+        "cinematic": "theme-golden-hour",
+        "minimal": "theme-clean-slate",
+    }
+    return LEGACY_THEME_MAP.get(theme, theme)
 
 
 # ---------------------------------------------------------------------------
@@ -496,7 +549,7 @@ class CreatePersonalProfileRequest(BaseModel):
     def validate_background_theme(cls, v):
         if v and v not in BACKGROUND_THEMES:
             raise ValueError(f"Invalid background theme. Must be one of: {', '.join(BACKGROUND_THEMES)}")
-        return v
+        return migrate_legacy_theme(v)
 
     @field_validator("categories")
     @classmethod
@@ -666,7 +719,7 @@ class UpdatePersonalProfileRequest(BaseModel):
     def validate_background_theme(cls, v):
         if v and v not in BACKGROUND_THEMES:
             raise ValueError(f"Invalid background theme. Must be one of: {', '.join(BACKGROUND_THEMES)}")
-        return v
+        return migrate_legacy_theme(v)
 
     @field_validator("categories")
     @classmethod
