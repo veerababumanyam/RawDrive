@@ -24,6 +24,8 @@ interface UseGalleryAssetsOptions {
   sortBy?: 'position' | 'favorites' | 'picks' | 'newest' | 'oldest';
   /** AI Filters state */
   aiFilters?: AIFilterState;
+  /** Filter by face group IDs (person filter) */
+  faceGroupIds?: string[];
 }
 
 interface UseGalleryAssetsReturn {
@@ -126,6 +128,7 @@ export const useGalleryAssets = ({
           search_query: searchQuery || undefined,
           sort_by: sortBy,
           asset_ids: assetIds,
+          face_group_ids: faceGroupIds,
           signal: abortControllerRef.current.signal,
         });
 
@@ -164,6 +167,7 @@ export const useGalleryAssets = ({
       sortBy,
       limit,
       aiFilters,
+      faceGroupIds,
     ]
   );
 

@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import {
@@ -107,6 +107,18 @@ const GalleriesPage: React.FC = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Handle person filter from PeoplePage navigation
+  const [searchParams] = useSearchParams();
+  const personGroupId = searchParams.get('person');
+
+  useEffect(() => {
+    // When a person filter is in the URL, navigate to the first gallery with that filter
+    if (personGroupId && galleries && galleries.length > 0 && !loading) {
+      // Navigate to the first gallery with the person filter
+      navigate(`/workspace/galleries/${galleries[0].gallery_id}?person=${personGroupId}`, { replace: true });
+    }
+  }, [personGroupId, galleries, loading, navigate]);
 
   // Fetch galleries with server-side search and filtering
   const {
@@ -242,15 +254,15 @@ const GalleriesPage: React.FC = () => {
               t('common:status.loading')
             ) : error ? (
               t('list.errorLoading')
-            ) : galleries.length === 0 && !debouncedSearch && filterStatus === 'all' && !startDate && !endDate ? (
+            ) : (galleries?.length ?? 0) === 0 && !debouncedSearch && filterStatus === 'all' && !startDate && !endDate ? (
               t('list.emptyState', { defaultValue: "No galleries yet. Let's create your first one!" })
             ) : (
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-text-primary">
-                  {meta?.total || galleries.length}
+                  {meta?.total ?? (galleries?.length ?? 0)}
                 </span>
                 <span>
-                  {(meta?.total || galleries.length) === 1 ? t('list.galleryCount_one') : t('list.galleryCount_other')}
+                  {(meta?.total ?? (galleries?.length ?? 0)) === 1 ? t('list.galleryCount_one') : t('list.galleryCount_other')}
                 </span>
                 {(searchQuery || filterStatus !== 'all' || startDate || endDate) && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">Filtered</span>
@@ -469,7 +481,7 @@ const GalleriesPage: React.FC = () => {
             {t('common:actions.retry')}
           </AppButton>
         </motion.div>
-      ) : galleries.length === 0 ? (
+      ) : (galleries?.length ?? 0) === 0 ? (
         <motion.div variants={staggerItem}>
           <GalleryEmptyState
             hasFilters={!!searchQuery || filterStatus !== 'all'}
@@ -481,7 +493,7 @@ const GalleriesPage: React.FC = () => {
           variants={staggerItem}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
         >
-          {galleries.map((gallery) => (
+          {(galleries ?? []).map((gallery) => (
             <GalleryCard
               key={gallery.gallery_id}
               gallery={gallery}
@@ -522,7 +534,7 @@ const GalleriesPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {galleries.map((gallery) => {
+              {(galleries ?? []).map((gallery) => {
                 const formatDate = (dateString: string): string => {
                   const date = new Date(dateString);
                   return date.toLocaleDateString('en-US', {

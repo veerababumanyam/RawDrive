@@ -60,7 +60,21 @@ export class GalleryService {
     if (response.error) {
       throw new Error(response.error.message || 'Failed to fetch galleries');
     }
-    return response.data!;
+    const raw = response.data;
+    if (!raw || typeof raw !== 'object') {
+      return { data: [], meta: { page: 1, limit: options?.limit ?? 20, total: 0, totalPages: 0 } };
+    }
+    return {
+      data: Array.isArray(raw.data) ? raw.data : [],
+      meta: raw.meta && typeof raw.meta === 'object'
+        ? {
+            page: Number(raw.meta.page) || 1,
+            limit: Number(raw.meta.limit) || 20,
+            total: Number(raw.meta.total) || 0,
+            totalPages: Number((raw.meta as { totalPages?: number }).totalPages) ?? (Math.ceil((Number(raw.meta.total) || 0) / (Number(raw.meta.limit) || 20)) || 1),
+          }
+        : { page: 1, limit: options?.limit ?? 20, total: 0, totalPages: 0 },
+    };
   }
 
   /**
@@ -187,6 +201,8 @@ export class GalleryService {
       // Emotion filtering (Phase 3: Frontend Integration)
       emotion?: string | null;
       min_emotion_confidence?: number;
+      // Face group/person filtering
+      face_group_ids?: string[];
       signal?: AbortSignal;
     }
   ): Promise<GalleryAssetsResponse> {
@@ -210,6 +226,9 @@ export class GalleryService {
     if (options?.sort_by) params.append('sort_by', options.sort_by);
     if (options?.asset_ids?.length) {
       options.asset_ids.forEach(id => params.append('asset_ids', id));
+    }
+    if (options?.face_group_ids?.length) {
+      options.face_group_ids.forEach(id => params.append('face_group_ids', id));
     }
 
     const query = params.toString();

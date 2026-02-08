@@ -60,6 +60,7 @@ const GalleryDetailPage: React.FC = () => {
   const { id: galleryId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const personGroupId = searchParams.get('person');
   const { workspace } = useAuth();
   const { addToast } = useToast();
 
@@ -207,6 +208,7 @@ const GalleryDetailPage: React.FC = () => {
     limit: 50,
     autoFetch: !!galleryId && !!workspace?.workspace_id,
     aiFilters: appliedFilters,
+    faceGroupIds: personGroupId ? [personGroupId] : undefined,
   });
 
   const { featureToggles } = useAIFeatureToggles({ autoFetch: true });
@@ -1387,7 +1389,8 @@ const GalleryDetailPage: React.FC = () => {
             onClose={() => setShowPeoplePanel(false)}
             onFilterByPerson={(groupId) => {
               if (groupId) {
-                addToast({ message: `Filtering by person - Coming soon`, variant: 'info' });
+                // Navigate to the same gallery with the person filter
+                navigate(`/workspace/galleries/${gallery.gallery_id}?person=${groupId}`, { replace: true });
               }
             }}
           />
