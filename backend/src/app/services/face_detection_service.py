@@ -12,6 +12,7 @@ Requirements: 1.1, 1.2, 1.4, 1.6, 1.8
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -60,6 +61,10 @@ DEFAULT_MIN_CONFIDENCE = 0.5
 # Default minimum photo dimensions for face detection
 MIN_PHOTO_WIDTH = 50
 MIN_PHOTO_HEIGHT = 50
+
+# Development mode: bypass consent checks
+# WARNING: NEVER set to True in production!
+BYPASS_CONSENT_CHECKS = os.getenv("RAWDRIVE_BYPASS_BIOMETRIC_CONSENT", "false").lower() == "true"
 
 
 class FaceDetectionService:
@@ -712,12 +717,34 @@ class FaceDetectionService:
         COM-001: Biometric consent must be checked FIRST. Face detection
         is blocked until explicit consent is granted in workspace settings.
 
+        DEVELOPMENT MODE: If RAWDRIVE_BYPASS_BIOMETRIC_CONSENT=true,
+        consent checks are bypassed for local development.
+
         Check order:
-        1. Biometric consent (GDPR Article 9 compliance) - MUST be granted
-        2. Workspace-level feature toggle
-        3. Global feature toggle
+        1. Development bypass (NEVER in production!)
+        2. Biometric consent (GDPR Article 9 compliance) - MUST be granted
+        3. Workspace-level feature toggle
+        4. Global feature toggle
         """
         try:
+            # DEVELOPMENT ONLY: Bypass consent checks for testing
+            # WARNING: This is NEVER safe in production!
+            if BYPASS_CONSENT_CHECKS:
+                logger.warning(
+                    "CONSENT BYPASS ACTIVE: Face detection enabled without consent check",
+                    extra={
+                        "workspace_id": str(workspace_id),
+                        "warning": "DEVELOPMENT MODE ONLY - NEVER USE IN PRODUCTION",
+                    },
+                )
+                # Still check feature toggles
+                value = await self.config_service.get_face_detection_setting(
+                    f"workspace_{workspace_id}_enabled"
+                )
+                if value is not None:
+                    return value.lower() == "true"
+                return True
+
             # COM-001: Check biometric consent FIRST (GDPR Article 9)
             # This takes precedence over all other settings
             consent_allowed = await self.consent_service.is_face_detection_allowed(
@@ -728,7 +755,11 @@ class FaceDetectionService:
                     "Face detection blocked: biometric consent not granted",
                     extra={"workspace_id": str(workspace_id)},
                 )
-                return False
+                # Return detailed error for better UX
+                raise DetectionDisabledError(
+                    workspace_id=workspace_id,
+                    reason="Biometric consent not granted. Please grant consent in workspace settings.",
+                )
 
             # Check workspace-level setting
             value = await self.config_service.get_face_detection_setting(
@@ -746,6 +777,9 @@ class FaceDetectionService:
 
             # Default to enabled (if consent was granted above)
             return True
+        except DetectionDisabledError:
+            # Re-raise with better context
+            raise
         except Exception as e:
             logger.warning(
                 "Error checking detection enabled status",

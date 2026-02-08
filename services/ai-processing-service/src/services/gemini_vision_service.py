@@ -58,7 +58,7 @@ class GeminiVisionService:
             raise RuntimeError(f"Gemini Vision API initialization failed: {e}")
 
     def analyze_image(
-        self, image_path: Union[str, Path], prompt: str
+        self, image_path: Union[str, Path], prompt: str, api_key: Optional[str] = None
     ) -> str:
         """
         Analyze image with custom prompt.
@@ -66,6 +66,7 @@ class GeminiVisionService:
         Args:
             image_path: Path to image file
             prompt: Analysis prompt
+            api_key: Optional API key to use (overrides system default)
 
         Returns:
             Gemini's text response
@@ -74,7 +75,21 @@ class GeminiVisionService:
             FileNotFoundError: If image file doesn't exist
             RuntimeError: If API call fails
         """
-        self._ensure_initialized()
+        # If specific key provided, specific config needed
+        if api_key:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(
+                model_name=self.settings.GEMINI_MODEL_NAME,
+                safety_settings={
+                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+                },
+            )
+        else:
+            self._ensure_initialized()
+            model = self.model
 
         try:
             with open(image_path, "rb") as image_file:
@@ -87,7 +102,7 @@ class GeminiVisionService:
                 }
             ]
 
-            response = self.model.generate_content([prompt, image_parts[0]])
+            response = model.generate_content([prompt, image_parts[0]])
 
             if not response.text:
                 logger.warning("Gemini returned empty response")
@@ -102,6 +117,60 @@ class GeminiVisionService:
         except Exception as e:
             logger.error(f"Gemini image analysis failed: {e}")
             raise RuntimeError(f"Gemini analysis failed: {e}")
+
+    def reason_over_images(
+        self, 
+        image_data_list: List[bytes], 
+        prompt: str, 
+        api_key: Optional[str] = None
+    ) -> str:
+        """
+        Reason over multiple images with a text prompt.
+
+        Args:
+            image_data_list: List of image bytes (JPEG)
+            prompt: The question or instruction
+            api_key: Optional API key to use
+
+        Returns:
+            The text response from Gemini
+        """
+        try:
+            # Configure client
+            if api_key:
+                genai.configure(api_key=api_key)
+            else:
+                self._ensure_initialized()
+
+            model = genai.GenerativeModel(
+                model_name=self.settings.GEMINI_MODEL_NAME, # Should ideally be gemini-1.5-flash or pro for MM
+                 safety_settings={
+                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+                },
+            )
+
+            # Prepare content
+            contents = [prompt]
+            for img_bytes in image_data_list:
+                contents.append({
+                    "mime_type": "image/jpeg",
+                    "data": base64.b64encode(img_bytes).decode("utf-8")
+                })
+
+            # Generate
+            response = model.generate_content(contents)
+            
+            if not response.text:
+                return ""
+            
+            return response.text
+
+        except Exception as e:
+            logger.error(f"Reasoning over images failed: {e}")
+            raise RuntimeError(f"Multi-modal reasoning failed: {e}")
 
     def verify_violations(
         self, image_path: Union[str, Path], violations: List[str]

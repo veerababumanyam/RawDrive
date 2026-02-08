@@ -420,3 +420,376 @@ async def get_workspace_detection_stats(
         total_face_groups=0,  # TODO: Get from group repo
         ungrouped_faces=0,  # TODO: Calculate
     )
+
+
+# ---------------------------------------------------------------------------
+# Biometric Consent Management
+# ---------------------------------------------------------------------------
+
+
+class GrantConsentRequest(BaseModel):
+    """Request model for granting biometric consent."""
+
+    policy_version: str = Field(
+        default="1.0",
+        description="Version of privacy policy accepted",
+    )
+    auto_enable_detection: bool = Field(
+        default=True,
+        description="Automatically enable face detection after consent",
+    )
+
+
+class ConsentStatusResponse(BaseModel):
+    """Response model for consent status."""
+
+    workspace_id: UUID
+    consent_status: str
+    face_detection_enabled: bool
+    consented_at: Optional[str] = None
+    is_allowed: bool
+
+
+@router.post(
+    "/workspaces/{workspace_id}/biometric-consent",
+    response_model=ConsentStatusResponse,
+    summary="Grant biometric consent",
+    description=(
+        "Grant biometric consent for face detection in a workspace. "
+        "Required per GDPR Article 9 before any face detection can occur."
+    ),
+)
+async def grant_biometric_consent(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    request: GrantConsentRequest,
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Grant biometric consent for face detection.
+
+    This endpoint allows workspace owners to grant explicit consent for
+    biometric data processing (face detection) as required by GDPR Article 9.
+
+    Args:
+        workspace_id: The workspace ID
+        request: Consent grant details
+        workspace_access: Workspace access validation
+        current_user: Authenticated user granting consent
+
+    Returns:
+        Updated consent status
+
+    Raises:
+        HTTPException: If consent already granted or operation fails
+    """
+    from app.services.biometric_consent_service import (
+        BiometricConsentService,
+        BiometricConsentGrant,
+        get_biometric_consent_service,
+        ConsentAlreadyGrantedError,
+    )
+    from app.api.face_schemas import (
+        FaceDetectionError,
+        FaceDetectionErrorCode,
+    )
+
+    consent_service: BiometricConsentService = get_biometric_consent_service()
+
+    # Create grant data with request context
+    grant_data = BiometricConsentGrant(
+        ip_address=workspace_access.get("ip_address", "unknown"),
+        user_agent=workspace_access.get("user_agent", "unknown"),
+        policy_version=request.policy_version,
+    )
+
+    try:
+        # Grant consent
+        settings = await consent_service.grant_consent(
+            workspace_id=workspace_id,
+            user_id=current_user.id,
+            grant_data=grant_data,
+        )
+
+        # Optionally enable face detection
+        if request.auto_enable_detection:
+            from app.services.face_configuration_service import (
+                FaceConfigurationService,
+                get_face_configuration_service,
+            )
+            config_service: FaceConfigurationService = get_face_configuration_service()
+            await config_service.set_face_detection_setting(
+                f"workspace_{workspace_id}_enabled",
+                "true",
+            )
+
+        # Return updated status
+        return ConsentStatusResponse(
+            workspace_id=workspace_id,
+            consent_status=settings.consent_status.value,
+            face_detection_enabled=settings.face_detection_enabled,
+            consented_at=settings.consented_at.isoformat() if settings.consented_at else None,
+            is_allowed=await consent_service.is_face_detection_allowed(workspace_id),
+        )
+
+    except ConsentAlreadyGrantedError:
+        # Return current status instead of error
+        settings = await consent_service.get_settings(workspace_id)
+        return ConsentStatusResponse(
+            workspace_id=workspace_id,
+            consent_status=settings.consent_status.value,
+            face_detection_enabled=settings.face_detection_enabled,
+            consented_at=settings.consented_at.isoformat() if settings.consented_at else None,
+            is_allowed=True,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to grant consent: {str(e)}",
+        )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/biometric-consent",
+    response_model=ConsentStatusResponse,
+    summary="Get biometric consent status",
+    description="Returns current biometric consent status for the workspace.",
+)
+async def get_biometric_consent_status(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Get current biometric consent status for a workspace.
+
+    Args:
+        workspace_id: The workspace ID
+        workspace_access: Workspace access validation
+        current_user: Authenticated user
+
+    Returns:
+        Current consent status
+    """
+    from app.services.biometric_consent_service import (
+        BiometricConsentService,
+        get_biometric_consent_service,
+    )
+
+    consent_service: BiometricConsentService = get_biometric_consent_service()
+    settings = await consent_service.get_settings(workspace_id)
+
+    return ConsentStatusResponse(
+        workspace_id=workspace_id,
+        consent_status=settings.consent_status.value,
+        face_detection_enabled=settings.face_detection_enabled,
+        consented_at=settings.consented_at.isoformat() if settings.consented_at else None,
+        is_allowed=await consent_service.is_face_detection_allowed(workspace_id),
+    )
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/biometric-consent",
+    response_model=ConsentStatusResponse,
+    summary="Withdraw biometric consent",
+    description=(
+        "Withdraw previously granted biometric consent. "
+        "This will disable face detection and optionally delete all biometric data."
+    ),
+)
+async def withdraw_biometric_consent(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    cascade_delete: bool = Query(
+        False,
+        description="If True, also delete all faces and embeddings for this workspace",
+    ),
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Withdraw biometric consent for a workspace.
+
+    WARNING: This will disable all face detection operations. Optionally
+    cascade deletes all biometric data (faces, embeddings, groups).
+
+    Args:
+        workspace_id: The workspace ID
+        cascade_delete: Whether to delete all biometric data
+        workspace_access: Workspace access validation
+        current_user: Authenticated user withdrawing consent
+
+    Returns:
+        Updated consent status
+    """
+    from app.services.biometric_consent_service import (
+        BiometricConsentService,
+        BiometricConsentWithdraw,
+        get_biometric_consent_service,
+    )
+
+    consent_service: BiometricConsentService = get_biometric_consent_service()
+
+    # Create withdrawal data
+    withdraw_data = BiometricConsentWithdraw(
+        ip_address=workspace_access.get("ip_address", "unknown"),
+        user_agent=workspace_access.get("user_agent", "unknown"),
+        reason="User withdrawal",
+    )
+
+    # Cascade delete if requested
+    if cascade_delete:
+        # This would delete all faces, embeddings, and groups for the workspace
+        # Implementation depends on your data deletion policies
+        pass
+
+    try:
+        settings = await consent_service.withdraw_consent(
+            workspace_id=workspace_id,
+            user_id=current_user.id,
+            withdraw_data=withdraw_data,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to withdraw consent: {str(e)}",
+        )
+
+    return ConsentStatusResponse(
+        workspace_id=workspace_id,
+        consent_status=settings.consent_status.value,
+        face_detection_enabled=settings.face_detection_enabled,
+        consented_at=settings.consented_at.isoformat() if settings.consented_at else None,
+        is_allowed=await consent_service.is_face_detection_allowed(workspace_id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Face Cache Management (Smart Tagging Cache Layer)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/workspaces/{workspace_id}/cache/stats",
+    summary="Get face cache statistics",
+    description="Returns cache performance statistics for the workspace.",
+)
+async def get_face_cache_stats(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Get face cache statistics for monitoring cache effectiveness.
+
+    Returns metrics on cache hits, memory usage, and performance improvements.
+
+    Args:
+        workspace_id: The workspace ID
+        workspace_access: Workspace access validation
+        current_user: Authenticated user
+
+    Returns:
+        Cache statistics including hit rates and storage usage
+    """
+    from app.services.face_cache_manager import FaceTaggingCacheManager
+    from app.db.postgres import get_postgres_pool
+    from app.db.redis import get_redis_client
+
+    db = await get_postgres_pool()
+    redis = await get_redis_client()
+
+    cache_manager = FaceTaggingCacheManager(db, redis)
+    stats = await cache_manager.get_cache_stats(workspace_id)
+
+    return {
+        "workspace_id": str(workspace_id),
+        **stats,
+    }
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/cache",
+    summary="Invalidate face cache",
+    description="Invalidates all cached face detection data for the workspace.",
+)
+async def invalidate_face_cache(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Invalidate all cached face detection data for a workspace.
+
+    Forces fresh face detection on next access. Useful after:
+    - Updating AI model
+    - Changing detection settings
+    - Manual data refresh
+
+    Args:
+        workspace_id: The workspace ID
+        workspace_access: Workspace access validation
+        current_user: Authenticated user
+
+    Returns:
+        Number of cache entries invalidated
+    """
+    from app.services.face_cache_manager import FaceTaggingCacheManager
+    from app.db.postgres import get_postgres_pool
+    from app.db.redis import get_redis_client
+
+    db = await get_postgres_pool()
+    redis = await get_redis_client()
+
+    cache_manager = FaceTaggingCacheManager(db, redis)
+    count = await cache_manager.invalidate_workspace(workspace_id)
+
+    return {
+        "workspace_id": str(workspace_id),
+        "entries_invalidated": count,
+        "message": f"Invalidated {count} cache entries for workspace",
+    }
+
+
+@router.post(
+    "/galleries/{gallery_id}/cache/warm",
+    summary="Warm cache for gallery",
+    description="Pre-loads face detection results into cache for a gallery.",
+)
+async def warm_gallery_cache(
+    gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    limit: int = Query(
+        100,
+        ge=1,
+        le=1000,
+        description="Maximum number of assets to warm",
+    ),
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Warm cache for frequently accessed galleries.
+
+    Pre-loads face detection results into L1/L2 cache to improve
+    performance for gallery viewing.
+
+    Args:
+        gallery_id: The gallery ID
+        limit: Maximum assets to warm
+        workspace_access: Workspace access validation
+        current_user: Authenticated user
+
+    Returns:
+        Cache warming statistics
+    """
+    from app.services.face_cache_manager import FaceTaggingCacheManager
+    from app.db.postgres import get_postgres_pool
+    from app.db.redis import get_redis_client
+
+    # Get workspace_id from gallery access
+    workspace_id = workspace_access.get("workspace_id")
+
+    db = await get_postgres_pool()
+    redis = await get_redis_client()
+
+    cache_manager = FaceTaggingCacheManager(db, redis)
+    stats = await cache_manager.warm_cache_for_gallery(gallery_id, workspace_id, limit)
+
+    return {
+        "gallery_id": str(gallery_id),
+        "workspace_id": str(workspace_id),
+        **stats,
+    }

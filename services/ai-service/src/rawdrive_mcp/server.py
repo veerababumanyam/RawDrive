@@ -1570,3 +1570,91 @@ def run_mcp_server():
 
 if __name__ == "__main__":
     run_mcp_server()
+@mcp.tool()
+async def ask_gallery(
+    workspace_id: str = Field(description="Workspace UUID"),
+    gallery_id: str = Field(description="Gallery ID to reason over"),
+    query: str = Field(description="Natural language question about the gallery"),
+    context: dict[str, Any] = Field(default={}, description="Request context with auth"),
+) -> dict[str, Any]:
+    """Ask a question about a gallery using visual reasoning (RAG).
+    
+    This tool retrieves relevant photos using semantic search and then uses
+    Gemini Vision to visually analyze them to answer the user's question.
+    REQUIRES: User must have a configured Gemini API Key.
+    """
+    try:
+        # 1. Search for relevant photos (Stage 1 retrieval)
+        search_results = await search_photos(
+            workspace_id=workspace_id,
+            query=query,
+            gallery_id=gallery_id,
+            limit=20, # Fetch top 20 candidates
+            context=context
+        )
+        
+        photos = search_results.get("photos", [])
+        if not photos:
+            return {
+                "answer": "I couldn't find any relevant photos in this gallery to answer your question.",
+                "cited_photos": []
+            }
+
+        # 2. Extract image URLs (thumbnails for speed/cost)
+        # Assuming photo objects have a 'urls' dict with 'thumbnail' or 'small'
+        image_urls = []
+        valid_photos = []
+        for photo in photos:
+            url = photo.get("urls", {}).get("small") or photo.get("urls", {}).get("thumbnail")
+            if url:
+                image_urls.append(url)
+                valid_photos.append(photo)
+        
+        if not image_urls:
+             return {
+                "answer": "I found relevant photos, but could not access their visual data.",
+                "cited_photos": []
+            }
+
+        # 3. Get User's API Key (Decrypted) via internal service call
+        # We need to use the GeminiClientService to resolve the key securely
+        # Note: In a real implementation, we'd inject this service properly
+        # For now, we'll use the factory pattern
+        from app.services.gemini_client_service import GeminiClientService
+        client_service = GeminiClientService()
+        
+        user_id = context.get("user", {}).get("id")
+        if not user_id:
+             return {
+                "error": "User context required for reasoning features.",
+                 "code": "AUTH_REQUIRED"
+            }
+
+        try:
+            config = await client_service.get_client_config(UUID(user_id), UUID(workspace_id))
+            api_key = config.api_key
+        except Exception as e:
+             return {
+                "error": "You need to configure your Gemini API Key in Settings to use reasoning features.",
+                "code": "API_KEY_MISSING"
+            }
+
+        # 4. Call RAG Service
+        from services.rag_service import get_rag_service
+        rag_service = get_rag_service()
+        
+        answer = await rag_service.answer_question_with_images(
+            query=query,
+            image_urls=image_urls,
+            api_key=api_key
+        )
+
+        return {
+            "answer": answer,
+            "cited_photos": [p["id"] for p in valid_photos],
+            "analyzed_count": len(valid_photos)
+        }
+
+    except Exception as e:
+        logger.error(f"Ask Gallery failed: {e}")
+        return {"error": str(e)}

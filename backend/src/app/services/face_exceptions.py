@@ -643,13 +643,27 @@ class DetectionDisabledError(FaceDetectionError):
     """Face detection is disabled for this workspace."""
 
     def __init__(
-        self, 
+        self,
         workspace_id: UUID | str,
+        reason: Optional[str] = None,
     ) -> None:
+        message = f"Face detection is disabled for workspace {workspace_id}"
+        if reason:
+            message += f": {reason}"
+
+        # Build user-friendly message
+        if reason and "consent" in reason.lower():
+            user_message = "Face detection requires biometric consent. Please grant consent in workspace settings to enable this feature."
+        elif reason and "administrator" in reason.lower():
+            user_message = "Face detection has been disabled by your administrator. Please contact them for more information."
+        else:
+            user_message = "Face detection is currently disabled for this workspace."
+
         super().__init__(
             code=FaceDetectionErrorCode.DETECTION_DISABLED,
-            message=f"Face detection is disabled for workspace {workspace_id}",
-            details={"workspace_id": str(workspace_id)},
+            message=message,
+            user_message=user_message,
+            details={"workspace_id": str(workspace_id), "reason": reason},
         )
 
 

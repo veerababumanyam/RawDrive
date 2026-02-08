@@ -28,7 +28,9 @@ import {
   TrendingUp,
   Zap,
   Filter,
+  MessageCircle,
 } from 'lucide-react';
+import { AskSection } from './sections/AskSection';
 import { AnalyzeSection } from './sections/AnalyzeSection';
 import { CurateSection } from './sections/CurateSection';
 import { CreateSection } from './sections/CreateSection';
@@ -62,7 +64,7 @@ export interface UnifiedAIPanelProps {
   className?: string;
 }
 
-type SectionId = 'analyze' | 'curate' | 'create' | 'discover' | 'faces' | 'similarity' | 'search' | 'tags' | 'story' | 'captions' | 'hashtags' | 'filters';
+type SectionId = 'analyze' | 'curate' | 'create' | 'discover' | 'faces' | 'similarity' | 'search' | 'tags' | 'story' | 'captions' | 'hashtags' | 'filters' | 'ask';
 
 interface AITool {
   id: SectionId;
@@ -142,6 +144,13 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
         icon: BarChart3,
         description: 'Quality scores, blur detection, technical analysis',
         status: isAnalyzing ? 'active' : hasQualityResults ? 'completed' : undefined,
+        category: 'analyze',
+      },
+      {
+        id: 'ask',
+        label: 'Ask AI',
+        icon: MessageCircle,
+        description: 'Ask questions about your gallery',
         category: 'analyze',
       },
       {
@@ -255,6 +264,7 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
       similarity: 'discover',
       search: 'discover',
       filters: 'filters',
+      ask: 'analyze',
     };
 
     const mappedId = categoryMap[toolId] || toolId;
@@ -298,6 +308,7 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
       similarity: 'bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 dark:from-emerald-500/35 dark:to-emerald-600/35 text-emerald-600 dark:text-emerald-300 hover:from-emerald-500/30 hover:to-emerald-600/30 dark:hover:from-emerald-500/45 dark:hover:to-emerald-600/45',
       search: 'bg-gradient-to-br from-violet-500/20 to-violet-600/20 dark:from-violet-500/35 dark:to-violet-600/35 text-violet-600 dark:text-violet-300 hover:from-violet-500/30 hover:to-violet-600/30 dark:hover:from-violet-500/45 dark:hover:to-violet-600/45',
       filters: 'bg-gradient-to-br from-slate-500/20 to-slate-600/20 dark:from-slate-500/35 dark:to-slate-600/35 text-slate-600 dark:text-slate-300 hover:from-slate-500/30 hover:to-slate-600/30 dark:hover:from-slate-500/45 dark:hover:to-slate-600/45',
+      ask: 'bg-gradient-to-br from-amber-500/20 to-amber-600/20 dark:from-amber-500/35 dark:to-amber-600/35 text-amber-600 dark:text-amber-300 hover:from-amber-500/30 hover:to-amber-600/30 dark:hover:from-amber-500/45 dark:hover:to-amber-600/45',
     };
 
     return colorMap[toolId] || 'bg-gradient-to-br from-gray-500/20 to-gray-600/20 dark:from-gray-500/35 dark:to-gray-600/35 text-gray-600 dark:text-gray-300 hover:from-gray-500/30 hover:to-gray-600/30 dark:hover:from-gray-500/45 dark:hover:to-gray-600/45';
@@ -415,8 +426,8 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
                   whitespace-nowrap
                   ${hoveredTool === tool.id ? 'opacity-100 visible' : 'opacity-0 invisible'}
                 `}
-                  style={{ zIndex: 9999 }}
-                >
+                    style={{ zIndex: 9999 }}
+                  >
                     <div className="font-semibold text-slate-900 dark:text-slate-100 leading-tight">{tool.label}</div>
                     {/* Arrow - iOS style with proper border matching - pointing upward */}
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-px">
@@ -443,7 +454,7 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
                 const tool = tools.find((t) => t.id === activeSection);
                 if (tool) return tool.label;
                 // Fallback for category-based sections
-                if (activeSection === 'analyze' || activeSection === 'tags') return 'Quality Analysis';
+                if (activeSection === 'analyze' || activeSection === 'tags' || activeSection === 'ask') return 'Quality Analysis';
                 if (activeSection === 'discover' || activeSection === 'faces' || activeSection === 'similarity' || activeSection === 'search') return 'Discover';
                 if (activeSection === 'create' || activeSection === 'story' || activeSection === 'captions' || activeSection === 'hashtags') {
                   const tool = tools.find((t) => t.id === activeSection);
@@ -469,6 +480,14 @@ export const UnifiedAIPanel: React.FC<UnifiedAIPanelProps> = ({
                 onStartAnalysis={async () => {
                   await startQualityAnalysis();
                 }}
+                expanded={true}
+                onToggle={handleCloseModal}
+              />
+            )}
+            {activeSection === 'ask' && (
+              <AskSection
+                workspaceId={workspaceId}
+                galleryId={galleryId}
                 expanded={true}
                 onToggle={handleCloseModal}
               />
