@@ -51,6 +51,14 @@ desktop.ini
 # Personal test data
 Manyam sisters/
 
+# Large model files (use Git LFS for version control)
+backend/models/face_recognition/*.onnx
+
+# Python virtual environments
+backend/venv/
+venv/
+*.venv/
+
 # Temporary documentation (fix summaries, etc.)
 *_SUMMARY.md
 *_COMPLETE.md
