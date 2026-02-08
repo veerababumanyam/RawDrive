@@ -1,15 +1,81 @@
 {
-  "enabledPlugins": {
-    "agent-sdk-dev@claude-plugins-official": true,
-    "asana@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true,
-    "greptile@claude-plugins-official": true,
-    "gopls-lsp@claude-plugins-official": true
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "22ae82b7f129435c83c92813708bf009.ERoyxiCHgyHNPYDC",
+    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+    "API_TIMEOUT_MS": "3000000",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.7",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-4.7",
+    "XDG_CACHE_HOME": ".cache",
+    "npm_config_cache": ".cache/npm",
+    "PIP_CACHE_DIR": ".cache/pip"
   },
   "permissions": {
     "allow": [
-      "--dangerously-skip-permissions"
-    ]
+      "WebFetch(domain:*)",
+      "Bash(agent-browser:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx:*)",
+      "Bash(pnpm:*)",
+      "Bash(yarn:*)",
+      "Bash(bun:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(electron:*)",
+      "Bash(vite:*)",
+      "Bash(cmake:*)",
+      "Bash(make:*)",
+      "Bash(gcc:*)",
+      "Bash(g++:*)",
+      "Bash(clang:*)",
+      "Bash(clang++:*)",
+      "Bash(ninja:*)",
+      "Bash(eslint:*)",
+      "Bash(prettier:*)",
+      "Bash(tailwindcss:*)",
+      "Bash(tsc:*)",
+      "Bash(ts-node:*)",
+      "Bash electron-builder:*",
+      "Bash electron-rebuild:*",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(npm:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Bash(pipenv:*)",
+      "Bash(pipenv3:*)",
+      "Bash(pipenv3:*)",
+      "Bash(git:*)"
+    ],
+    "deny": [
+      "Bash(sudo:*)",
+      "Bash(docker:*)",
+      "Bash(rm -rf:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowLocalBinding": true
+    }
   }
 }
