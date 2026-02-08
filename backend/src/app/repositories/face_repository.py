@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
+import numpy as np
+
 from app.db.postgres import get_postgres_pool
 from app.services.face_exceptions import FaceNotFoundError
 
@@ -66,11 +68,12 @@ class FaceRepository:
         """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Convert embedding to pgvector format if provided
-            embedding_str = None
+            # Convert embedding to numpy array for efficient binary serialization
+            # pgvector asyncpg codec handles numpy -> binary conversion automatically
+            embedding_arr = None
             if embedding:
-                embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
-            
+                embedding_arr = np.array(embedding, dtype=np.float32)
+
             # Note: asyncpg with jsonb codec handles dict->jsonb conversion automatically
             # Pass dicts directly, not JSON strings
             row = await conn.fetchrow(
@@ -80,7 +83,7 @@ class FaceRepository:
                     confidence, embedding, provider, detection_metadata,
                     thumbnail_urls
                 )
-                VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING *
                 """,
                 workspace_id,
@@ -88,7 +91,7 @@ class FaceRepository:
                 face_group_id,
                 bounding_box,  # Pass dict directly
                 confidence,
-                embedding_str,
+                embedding_arr,
                 provider,
                 detection_metadata or {},  # Pass dict directly
                 thumbnail_urls or {},  # Pass dict directly
@@ -126,15 +129,14 @@ class FaceRepository:
         
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            import json
-            
             created = []
             async with conn.transaction():
                 for face_data in faces:
-                    embedding_str = None
+                    # Convert embedding to numpy array for efficient binary serialization
+                    embedding_arr = None
                     if face_data.get("embedding"):
-                        embedding_str = "[" + ",".join(str(x) for x in face_data["embedding"]) + "]"
-                    
+                        embedding_arr = np.array(face_data["embedding"], dtype=np.float32)
+
                     row = await conn.fetchrow(
                         """
                         INSERT INTO faces (
@@ -142,18 +144,18 @@ class FaceRepository:
                             confidence, embedding, provider, detection_metadata,
                             thumbnail_urls
                         )
-                        VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                         RETURNING *
                         """,
                         face_data["workspace_id"],
                         face_data["photo_id"],
                         face_data.get("face_group_id"),
-                        json.dumps(face_data["bounding_box"]),
+                        face_data["bounding_box"],  # Pass dict directly, jsonb codec handles it
                         face_data["confidence"],
-                        embedding_str,
+                        embedding_arr,
                         face_data["provider"],
-                        json.dumps(face_data.get("detection_metadata", {})),
-                        json.dumps(face_data.get("thumbnail_urls", {})),
+                        face_data.get("detection_metadata", {}),  # Pass dict directly
+                        face_data.get("thumbnail_urls", {}),  # Pass dict directly
                     )
                     created.append(self._row_to_dict(row))
             
@@ -474,11 +476,52 @@ class FaceRepository:
                 gallery_id,
                 workspace_id,
             )
-    
+
+    async def find_ungrouped_by_gallery_id(
+        self,
+        workspace_id: UUID,
+        gallery_id: UUID,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find ungrouped faces in a gallery (faces not assigned to any group).
+
+        Args:
+            workspace_id: Workspace ID for tenant isolation
+            gallery_id: Gallery ID to search in
+            limit: Maximum results to return
+            offset: Number of results to skip
+
+        Returns:
+            List of face records that have no face_group_id assigned
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT f.*
+                FROM faces f
+                JOIN gallery_assets ga ON f.photo_id = ga.asset_id
+                JOIN assets a ON ga.asset_id = a.asset_id
+                WHERE ga.gallery_id = $1 AND ga.workspace_id = $2
+                AND ga.visible = TRUE
+                AND a.deleted = FALSE
+                AND f.face_group_id IS NULL
+                ORDER BY f.created_at DESC
+                LIMIT $3 OFFSET $4
+                """,
+                gallery_id,
+                workspace_id,
+                limit,
+                offset,
+            )
+
+            return [self._row_to_dict(row) for row in rows]
+
     # =========================================================================
     # UPDATE OPERATIONS
     # =========================================================================
-    
+
     async def update(
         self,
         face_id: UUID,
@@ -500,24 +543,24 @@ class FaceRepository:
         
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            import json
-            
             # Build dynamic update query
             set_clauses = []
             params = [face_id, workspace_id]
             param_idx = 3
-            
+
             for key, value in updates.items():
                 if key in ("bounding_box", "detection_metadata", "thumbnail_urls"):
+                    # JSONB fields - asyncpg codec handles dict conversion
                     set_clauses.append(f"{key} = ${param_idx}")
-                    params.append(json.dumps(value))
+                    params.append(value)
                 elif key == "embedding":
                     if value is not None:
-                        embedding_str = "[" + ",".join(str(x) for x in value) + "]"
-                        set_clauses.append(f"embedding = ${param_idx}::vector")
-                        params.append(embedding_str)
+                        # Convert to numpy array for efficient binary serialization
+                        embedding_arr = np.array(value, dtype=np.float32)
+                        set_clauses.append(f"embedding = ${param_idx}")
+                        params.append(embedding_arr)
                     else:
-                        set_clauses.append(f"embedding = NULL")
+                        set_clauses.append("embedding = NULL")
                         continue  # Don't increment param_idx
                 else:
                     set_clauses.append(f"{key} = ${param_idx}")
@@ -792,26 +835,39 @@ class FaceRepository:
     # =========================================================================
     
     def _row_to_dict(self, row: Any) -> dict[str, Any]:
-        """Convert database row to dict with proper type handling."""
+        """Convert database row to dict with proper type handling.
+
+        With pgvector asyncpg codec registered, embeddings are returned as
+        numpy arrays which we convert to Python lists for JSON serialization.
+        """
         if row is None:
             return None
-        
+
         result = dict(row)
-        
-        # Parse JSONB fields
+
+        # JSONB fields are automatically decoded by asyncpg codec
+        # Only parse if they're strings (fallback for older data)
         import json
         for field in ("bounding_box", "detection_metadata", "thumbnail_urls"):
             if field in result and isinstance(result[field], str):
                 result[field] = json.loads(result[field])
-        
-        # Convert embedding from pgvector string to list
-        if result.get("embedding"):
-            embedding_str = str(result["embedding"])
-            if embedding_str.startswith("[") and embedding_str.endswith("]"):
-                result["embedding"] = [
-                    float(x) for x in embedding_str[1:-1].split(",")
-                ]
-        
+
+        # Convert embedding from pgvector native format to list
+        # With pgvector codec: returns numpy array
+        # Without codec (fallback): returns string "[0.1,0.2,...]"
+        if result.get("embedding") is not None:
+            embedding = result["embedding"]
+            if isinstance(embedding, np.ndarray):
+                # Native pgvector codec - efficient binary deserialization
+                result["embedding"] = embedding.tolist()
+            elif isinstance(embedding, str):
+                # Fallback for string format (backwards compatibility)
+                if embedding.startswith("[") and embedding.endswith("]"):
+                    result["embedding"] = [
+                        float(x) for x in embedding[1:-1].split(",")
+                    ]
+            # Already a list - no conversion needed
+
         return result
 
 

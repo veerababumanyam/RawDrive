@@ -1,0 +1,13 @@
+{
+  "category": "API Standards & Response Format",
+  "description": "Standardize API response envelopes and pagination across all 15 microservices. Create a shared `@rawdrive/shared-api` package with: (1) Standard error response envelope matching `ErrorResponse` schema in backend, (2) Unified pagination response type using `PaginatedResponse[T]` generic from webhooks-service as standard, (3) Success response wrapper ensuring consistent `{data, meta, status}` structure. Currently services implement pagination inconsistently: some use `{items, total, page, has_next}` while others use `{data, meta}` with different field names.",
+  "id": "feature-1769952129338-ps82vnkc8",
+  "steps": [],
+  "status": "completed",
+  "skipTests": true,
+  "priority": 1,
+  "branchName": "main",
+  "startedAt": "2026-02-01T19:25:10.382Z",
+  "updatedAt": "2026-02-01T19:31:14.087Z",
+  "justFinishedAt": "2026-02-01T19:31:14.087Z"
+}

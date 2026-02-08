@@ -1,0 +1,12 @@
+{
+  "category": "Code Quality & Maintenance",
+  "description": "Consolidate fragmented error handling hierarchy across 15+ microservices. Create a shared `@rawdrive/shared-exceptions` package with base error classes (`ServiceError`, `ValidationError`, `NotFoundError`, `AuthenticationError`, `AuthorizationError`). Currently each service reimplements custom exceptions (359+ total) with inconsistent naming and inheritance patterns, making error handling unpredictable and difficult to test. Services should inherit from shared base classes while adding service-specific errors only when necessary.",
+  "id": "feature-1769952129338-nqhyqbmh0",
+  "steps": [],
+  "status": "completed",
+  "skipTests": true,
+  "priority": 1,
+  "branchName": "main",
+  "startedAt": "2026-02-01T13:33:49.288Z",
+  "updatedAt": "2026-02-01T13:33:49.567Z"
+}

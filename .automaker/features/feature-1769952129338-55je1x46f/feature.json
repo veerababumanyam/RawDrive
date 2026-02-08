@@ -1,0 +1,13 @@
+{
+  "category": "Frontend State Management",
+  "description": "Extract shared async data fetching patterns from 50+ frontend hooks into a unified `useAsyncData<T>(asyncFn, options)` hook. Current duplication: `isLoading`, `isFetching`, `error`, `data` state management is repeated across `useActivities.ts`, `useWebhookSubscriptions.ts`, `usePortfolioRecommendations.ts` and 47 other hooks. Should support: automatic error handling, configurable retries, request cancellation, stale-while-revalidate patterns, loading states (idle/loading/success/error).",
+  "id": "feature-1769952129338-55je1x46f",
+  "steps": [],
+  "status": "completed",
+  "skipTests": true,
+  "priority": 2,
+  "branchName": "main",
+  "startedAt": "2026-02-01T19:25:10.813Z",
+  "updatedAt": "2026-02-01T19:37:35.447Z",
+  "justFinishedAt": "2026-02-01T19:37:35.447Z"
+}

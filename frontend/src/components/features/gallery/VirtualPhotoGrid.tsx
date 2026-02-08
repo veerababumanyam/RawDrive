@@ -11,7 +11,7 @@
  * - Infinite scroll support via react-window-infinite-loader
  */
 
-import React, { useCallback, useRef, useState, CSSProperties } from 'react';
+import React, { useCallback, useRef, useState, useMemo, CSSProperties } from 'react';
 import { Grid, CellComponentProps, GridImperativeAPI } from 'react-window';
 import { AutoSizer } from 'react-virtualized-auto-sizer';
 import { PhotoCard } from './PhotoCard';
@@ -103,7 +103,8 @@ interface CellProps {
 }
 
 // Cell renderer for react-window v2
-const Cell = ({
+// Memoized to prevent re-renders when scrolling through virtualized grid
+const CellComponent = ({
   columnIndex,
   rowIndex,
   style,
@@ -135,24 +136,28 @@ const Cell = ({
 
   const asset = assets[index];
 
-  // Adjust style to account for gap
-  const adjustedStyle: CSSProperties = {
+  // Memoize adjusted style to prevent object recreation on every render
+  const adjustedStyle = useMemo<CSSProperties>(() => ({
     ...style,
     left: Number(style.left) + gap / 2,
     top: Number(style.top) + gap / 2,
     width: Number(style.width) - gap,
     height: Number(style.height) - gap,
-  };
+  }), [style, gap]);
+
+  // Derive selection/cover status
+  const isManagementSelected = selectedAssetIds.has(asset.asset_id);
+  const isCover = coverAssetId === asset.asset_id;
 
   return (
     <div style={adjustedStyle} data-photo-index={index} data-asset-id={asset.asset_id}>
       <PhotoCard
         asset={asset}
         index={index}
-        isManagementSelected={selectedAssetIds.has(asset.asset_id)}
+        isManagementSelected={isManagementSelected}
         managementSelectable={managementSelectable}
         showCustomerSelection={showCustomerSelection}
-        isCover={coverAssetId === asset.asset_id}
+        isCover={isCover}
         onManagementSelect={onManagementSelect}
         onClick={onAssetClick}
         onFavorite={onAssetFavorite}
@@ -170,6 +175,67 @@ const Cell = ({
     </div>
   );
 };
+
+/**
+ * Custom comparison function for Cell component memoization.
+ * This is critical for virtualization performance - without proper memoization,
+ * scrolling would cause unnecessary re-renders of visible cells.
+ */
+const areCellPropsEqual = (
+  prevProps: CellComponentProps<CellProps> & CellProps,
+  nextProps: CellComponentProps<CellProps> & CellProps
+): boolean => {
+  // Only re-render if position, dimensions, or data changed
+  if (prevProps.columnIndex !== nextProps.columnIndex) return false;
+  if (prevProps.rowIndex !== nextProps.rowIndex) return false;
+  if (prevProps.style.left !== nextProps.style.left) return false;
+  if (prevProps.style.top !== nextProps.style.top) return false;
+  if (prevProps.style.width !== nextProps.style.width) return false;
+  if (prevProps.style.height !== nextProps.style.height) return false;
+
+  // Check if the asset at this position changed
+  const prevIndex = prevProps.rowIndex * prevProps.columnCount + prevProps.columnIndex;
+  const nextIndex = nextProps.rowIndex * nextProps.columnCount + nextProps.columnIndex;
+
+  if (prevIndex >= prevProps.assets.length && nextIndex >= nextProps.assets.length) {
+    return true; // Both are empty cells
+  }
+  if (prevIndex >= prevProps.assets.length || nextIndex >= nextProps.assets.length) {
+    return false; // One is empty, one is not
+  }
+
+  const prevAsset = prevProps.assets[prevIndex];
+  const nextAsset = nextProps.assets[nextIndex];
+
+  // Check asset identity and key properties
+  if (prevAsset.asset_id !== nextAsset.asset_id) return false;
+  if (prevAsset.is_favorited !== nextAsset.is_favorited) return false;
+  if (prevAsset.is_selected !== nextAsset.is_selected) return false;
+  if (prevAsset.is_private !== nextAsset.is_private) return false;
+  if (prevAsset.asset.status !== nextAsset.asset.status) return false;
+
+  // Check selection state
+  const prevSelected = prevProps.selectedAssetIds.has(prevAsset.asset_id);
+  const nextSelected = nextProps.selectedAssetIds.has(nextAsset.asset_id);
+  if (prevSelected !== nextSelected) return false;
+
+  // Check cover state
+  const prevIsCover = prevProps.coverAssetId === prevAsset.asset_id;
+  const nextIsCover = nextProps.coverAssetId === nextAsset.asset_id;
+  if (prevIsCover !== nextIsCover) return false;
+
+  // Check other props
+  if (prevProps.managementSelectable !== nextProps.managementSelectable) return false;
+  if (prevProps.showCustomerSelection !== nextProps.showCustomerSelection) return false;
+  if (prevProps.isPrivateUnlocked !== nextProps.isPrivateUnlocked) return false;
+  if (prevProps.gap !== nextProps.gap) return false;
+
+  return true;
+};
+
+// Memoize Cell component with custom comparison
+// Cast to the expected type for react-window v2 compatibility
+const Cell = React.memo(CellComponent, areCellPropsEqual) as typeof CellComponent;
 
 export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
   assets,

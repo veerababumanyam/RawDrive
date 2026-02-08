@@ -290,3 +290,65 @@ from .face_embedding_retention_job import (
     RetentionJobProgress,
     RetentionStats,
 )
+from .face import (
+    # Face Enums
+    FaceProvider,
+    # Face Helper Models
+    BoundingBox,
+    ThumbnailUrls,
+    # Face Models
+    Face,
+    FaceCreate,
+    FaceUpdate,
+    FaceSummary,
+    FaceWithPhoto,
+    FaceBatchCreate,
+    FaceSimilarityResult,
+)
+from .face_group import (
+    # Face Group Models
+    FaceGroup,
+    FaceGroupCreate,
+    FaceGroupUpdate,
+    FaceGroupSummary,
+    # Face Group Helper Models
+    FaceGroupWithRepresentative,
+    FaceGroupMerge,
+    FaceGroupSplit,
+    FaceGroupSimilarityResult,
+    FaceGroupStats,
+    FaceGroupBatchAssign,
+)
+from .face_assignment import (
+    # Face Assignment Enums
+    AssignmentSource,
+    # Face Assignment Models
+    FaceAssignment,
+    FaceAssignmentCreate,
+    FaceAssignmentUpdate,
+    FaceAssignmentConfirm,
+    FaceAssignmentSummary,
+    # Face Assignment Helper Models
+    FaceAssignmentWithDetails,
+    FaceAssignmentBatchCreate,
+    FaceAssignmentBatchItem,
+    FaceAssignmentBatchConfirm,
+    FaceAssignmentStats,
+    UnconfirmedAssignmentReview,
+)
+from .asset import (
+    # Asset Enums
+    AssetType,
+    AssetStatus,
+    FaceScanStatus,
+    # Asset Models
+    Asset,
+    AssetCreate,
+    AssetUpdate,
+    AssetSummary,
+    # Asset Face Scan Models (T005)
+    AssetFaceScanUpdate,
+    AssetWithFaceData,
+    AssetBatchFaceScanRequest,
+    AssetBatchFaceScanResponse,
+)

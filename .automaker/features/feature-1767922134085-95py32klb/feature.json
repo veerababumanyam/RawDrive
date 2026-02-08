@@ -3,7 +3,11 @@
   "description": "Develop an automated churn prediction and prevention system that identifies at-risk clients using engagement scoring (already implemented), usage patterns, and subscription renewal signals. Trigger automated intervention campaigns (personalized emails, in-app prompts, exclusive offers, re-engagement galleries) before churn occurs. Include predictive modeling with historical data, churn risk scoring with explainable factors (\"no gallery views in 30 days\"), and A/B testing of different intervention strategies. Create admin dashboard showing at-risk client segments and intervention performance metrics.",
   "id": "feature-1767922134085-95py32klb",
   "steps": [],
-  "status": "backlog",
+  "status": "completed",
   "skipTests": true,
-  "priority": 1
+  "priority": 1,
+  "branchName": "main",
+  "startedAt": "2026-02-01T12:24:01.152Z",
+  "updatedAt": "2026-02-01T12:35:08.060Z",
+  "justFinishedAt": "2026-02-01T12:35:08.060Z"
 }

@@ -1,9 +1,0 @@
-{
-  "category": "AI & Content Creation",
-  "description": "Implement automated video highlights compilation that uses AI to extract the best moments from wedding/event videos (key dances, emotional moments, cake cutting, etc.), create reels with music, transitions, and captions, and generate highlight compilations suitable for social media (30s, 60s, 90s versions). Support custom music selection from a licensed library, AI-powered caption generation in multiple languages, and export to Instagram Reels/TikTok formats. Integrate with existing gallery system to show video highlights alongside photos.",
-  "id": "feature-1767922134085-oslrx6j6z",
-  "steps": [],
-  "status": "backlog",
-  "skipTests": true,
-  "priority": 2
-}

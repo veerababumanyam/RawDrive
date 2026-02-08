@@ -17,6 +17,7 @@ import {
   Trash2,
   FileText,
   FileInput,
+  Scissors,
 } from 'lucide-react';
 import { ActionBarTooltip } from '@/components/ui/ActionBarTooltip';
 
@@ -29,6 +30,8 @@ export interface GalleryActionBarProps {
   onAITools?: () => void;
   /** Whether AI Tools panel is open */
   aiToolsOpen?: boolean;
+  /** Callback for Culling Workflow action */
+  onCulling?: () => void;
   /** Callback for Share action */
   onShare?: () => void;
   /** Callback for Design Studio action - navigate to gallery design customization */
@@ -54,6 +57,7 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
   onFindPeople,
   onAITools,
   aiToolsOpen = false,
+  onCulling,
   onShare,
   onDesignStudio,
   onSettings,
@@ -110,6 +114,20 @@ export const GalleryActionBar: React.FC<GalleryActionBarProps> = ({
               >
                 <Sparkles size={16} className="flex-shrink-0" />
                 <span className="hidden sm:inline">AI Tools</span>
+              </button>
+            </ActionBarTooltip>
+          )}
+
+          {/* Culling - Amber (Workflow) - Navigate to culling workflow */}
+          {onCulling && (
+            <ActionBarTooltip content="Bulk photo culling workflow - select best shots, auto-reject low quality, preview final gallery">
+              <button
+                onClick={onCulling}
+                className="btn-gallery-action btn-action-amber min-h-[36px] sm:min-h-[40px]"
+                aria-label="Culling workflow"
+              >
+                <Scissors size={16} className="flex-shrink-0" />
+                <span className="hidden sm:inline">Culling</span>
               </button>
             </ActionBarTooltip>
           )}

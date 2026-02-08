@@ -1176,6 +1176,295 @@ CLIENT_SELECTION_MADE = EventTypeDefinition(
     },
 )
 
+CLIENT_ANALYTICS_UPDATED = EventTypeDefinition(
+    event_type="client.analytics_updated",
+    category="client",
+    name="Client Analytics Updated",
+    description="Triggered when client engagement analytics are updated (views, downloads, favorites)",
+    payload_schema=_create_base_schema({
+        "client_id": UUID_SCHEMA,
+        "gallery_id": UUID_SCHEMA,
+        "metrics": {
+            "type": "object",
+            "properties": {
+                "total_views": INTEGER_SCHEMA,
+                "total_downloads": INTEGER_SCHEMA,
+                "total_favorites": INTEGER_SCHEMA,
+                "session_count": INTEGER_SCHEMA,
+                "avg_session_duration_seconds": INTEGER_SCHEMA,
+                "last_activity_at": TIMESTAMP_SCHEMA,
+            }
+        },
+        "period": STRING_SCHEMA,
+        "computed_at": TIMESTAMP_SCHEMA,
+    }, ["client_id", "metrics"]),
+    sample_payload={
+        "workspace_id": "550e8400-e29b-41d4-a716-446655440001",
+        "client_id": "550e8400-e29b-41d4-a716-446655440030",
+        "gallery_id": "550e8400-e29b-41d4-a716-446655440015",
+        "metrics": {
+            "total_views": 150,
+            "total_downloads": 25,
+            "total_favorites": 45,
+            "session_count": 8,
+            "avg_session_duration_seconds": 420,
+            "last_activity_at": "2026-01-09T18:30:00Z",
+        },
+        "period": "daily",
+        "computed_at": "2026-01-09T23:59:59Z",
+    },
+)
+
+# =============================================================================
+# ANALYTICS EVENTS (For reporting and automation workflows)
+# =============================================================================
+
+ANALYTICS_DAILY_REPORT = EventTypeDefinition(
+    event_type="analytics.daily_report",
+    category="analytics",
+    name="Daily Analytics Report",
+    description="Triggered daily with summarized workspace analytics (views, uploads, downloads)",
+    payload_schema=_create_base_schema({
+        "report_date": TIMESTAMP_SCHEMA,
+        "metrics": {
+            "type": "object",
+            "properties": {
+                "total_views": INTEGER_SCHEMA,
+                "unique_visitors": INTEGER_SCHEMA,
+                "new_assets": INTEGER_SCHEMA,
+                "total_downloads": INTEGER_SCHEMA,
+                "storage_used_bytes": INTEGER_SCHEMA,
+                "active_galleries": INTEGER_SCHEMA,
+                "new_clients": INTEGER_SCHEMA,
+            }
+        },
+        "top_galleries": {"type": "array", "items": {"type": "object"}},
+        "comparison": {"type": "object", "additionalProperties": True},
+    }, ["report_date", "metrics"]),
+    sample_payload={
+        "workspace_id": "550e8400-e29b-41d4-a716-446655440001",
+        "report_date": "2026-01-09T00:00:00Z",
+        "metrics": {
+            "total_views": 1250,
+            "unique_visitors": 340,
+            "new_assets": 150,
+            "total_downloads": 89,
+            "storage_used_bytes": 15728640000,
+            "active_galleries": 12,
+            "new_clients": 3,
+        },
+        "top_galleries": [
+            {"gallery_id": "...", "title": "Smith Wedding", "views": 450},
+            {"gallery_id": "...", "title": "Johnson Portrait", "views": 230},
+        ],
+        "comparison": {
+            "views_change_percent": 12.5,
+            "downloads_change_percent": -3.2,
+        },
+    },
+)
+
+ANALYTICS_WEEKLY_REPORT = EventTypeDefinition(
+    event_type="analytics.weekly_report",
+    category="analytics",
+    name="Weekly Analytics Report",
+    description="Triggered weekly with comprehensive workspace analytics summary",
+    payload_schema=_create_base_schema({
+        "week_start": TIMESTAMP_SCHEMA,
+        "week_end": TIMESTAMP_SCHEMA,
+        "metrics": {"type": "object", "additionalProperties": True},
+        "trends": {"type": "object", "additionalProperties": True},
+        "highlights": {"type": "array", "items": STRING_SCHEMA},
+    }, ["week_start", "week_end", "metrics"]),
+    sample_payload={
+        "workspace_id": "550e8400-e29b-41d4-a716-446655440001",
+        "week_start": "2026-01-06T00:00:00Z",
+        "week_end": "2026-01-12T23:59:59Z",
+        "metrics": {
+            "total_views": 8750,
+            "unique_visitors": 2100,
+            "new_assets": 1050,
+            "total_downloads": 623,
+            "new_clients": 15,
+            "rsvp_responses": 45,
+        },
+        "trends": {
+            "views_trend": "increasing",
+            "engagement_score": 87.5,
+        },
+        "highlights": [
+            "Peak traffic on Thursday with 1,850 views",
+            "3 galleries reached 100+ downloads",
+        ],
+    },
+)
+
+ANALYTICS_MILESTONE_REACHED = EventTypeDefinition(
+    event_type="analytics.milestone_reached",
+    category="analytics",
+    name="Analytics Milestone Reached",
+    description="Triggered when a workspace reaches a significant milestone",
+    payload_schema=_create_base_schema({
+        "milestone_type": STRING_SCHEMA,
+        "milestone_value": INTEGER_SCHEMA,
+        "previous_milestone": INTEGER_SCHEMA,
+        "reached_at": TIMESTAMP_SCHEMA,
+        "context": {"type": "object", "additionalProperties": True},
+    }, ["milestone_type", "milestone_value"]),
+    sample_payload={
+        "workspace_id": "550e8400-e29b-41d4-a716-446655440001",
+        "milestone_type": "total_downloads",
+        "milestone_value": 10000,
+        "previous_milestone": 5000,
+        "reached_at": "2026-01-09T14:30:00Z",
+        "context": {
+            "gallery_id": "550e8400-e29b-41d4-a716-446655440015",
+            "days_to_reach": 45,
+        },
+    },
+)
+
+# =============================================================================
+# AUTOMATION EVENTS (For Zapier/IFTTT-style integrations)
+# =============================================================================
+
+AUTOMATION_TRIGGER = EventTypeDefinition(
+    event_type="automation.trigger",
+    category="automation",
+    name="Automation Trigger",
+    description="Custom automation trigger event for workflow integrations",
+    payload_schema=_create_base_schema({
+        "trigger_id": UUID_SCHEMA,
+        "trigger_name": STRING_SCHEMA,
+        "trigger_type": STRING_SCHEMA,
+        "source_event": STRING_SCHEMA,
+        "conditions_matched": {"type": "array", "items": {"type": "object"}},
+        "payload": {"type": "object", "additionalProperties": True},
+    }, ["trigger_id", "trigger_name", "trigger_type"]),
+    sample_payload={
+        "workspace_id": "550e8400-e29b-41d4-a716-446655440001",
+        "trigger_id": "550e8400-e29b-41d4-a716-446655440070",
+        "trigger_name": "High Engagement Alert",
+        "trigger_type": "threshold",
+        "source_event": "gallery.viewed",
+        "conditions_matched": [
+            {"field": "view_count", "operator": "gte", "value": 100},
+        ],
+        "payload": {
+            "gallery_id": "550e8400-e29b-41d4-a716-446655440015",
+            "current_views": 105,
+        },
+    },
+)
+
+AUTOMATION_WORKFLOW_COMPLETED = EventTypeDefinition(
+    event_type="automation.workflow_completed",
+    category="automation",
+    name="Automation Workflow Completed",
+    description="Triggered when an automated workflow completes execution",
+    payload_schema=_create_base_schema({
+        "workflow_id": UUID_SCHEMA,
+        "workflow_name": STRING_SCHEMA,
+        "trigger_event_id": UUID_SCHEMA,
+        "steps_executed": INTEGER_SCHEMA,
+        "execution_time_ms": INTEGER_SCHEMA,
+        "status": STRING_SCHEMA,
+        "result": {"type": "object", "additionalProperties": True},
+    }, ["workflow_id", "workflow_name", "status"]),
+    sample_payload={
+        "workspace_id": "550e8400-e29b-41d4-a716-446655440001",
+        "workflow_id": "550e8400-e29b-41d4-a716-446655440080",
+        "workflow_name": "New Client Welcome Flow",
+        "trigger_event_id": "550e8400-e29b-41d4-a716-446655440090",
+        "steps_executed": 3,
+        "execution_time_ms": 1250,
+        "status": "success",
+        "result": {
+            "email_sent": True,
+            "crm_updated": True,
+            "slack_notified": True,
+        },
+    },
+)
+
+# =============================================================================
+# EXPORT EVENTS (For CRM and external system integrations)
+# =============================================================================
+
+EXPORT_STARTED = EventTypeDefinition(
+    event_type="export.started",
+    category="export",
+    name="Export Started",
+    description="Triggered when a data export job is initiated",
+    payload_schema=_create_base_schema({
+        "export_id": UUID_SCHEMA,
+        "export_type": STRING_SCHEMA,
+        "format": STRING_SCHEMA,
+        "entity_type": STRING_SCHEMA,
+        "entity_count": INTEGER_SCHEMA,
+        "initiated_by_user_id": UUID_SCHEMA,
+    }, ["export_id", "export_type", "format"]),
+    sample_payload={
+        "workspace_id": "550e8400-e29b-41d4-a716-446655440001",
+        "export_id": "550e8400-e29b-41d4-a716-446655440100",
+        "export_type": "clients",
+        "format": "csv",
+        "entity_type": "client",
+        "entity_count": 250,
+        "initiated_by_user_id": "550e8400-e29b-41d4-a716-446655440002",
+    },
+)
+
+EXPORT_COMPLETED = EventTypeDefinition(
+    event_type="export.completed",
+    category="export",
+    name="Export Completed",
+    description="Triggered when a data export job completes successfully",
+    payload_schema=_create_base_schema({
+        "export_id": UUID_SCHEMA,
+        "export_type": STRING_SCHEMA,
+        "format": STRING_SCHEMA,
+        "download_url": STRING_SCHEMA,
+        "file_size_bytes": INTEGER_SCHEMA,
+        "record_count": INTEGER_SCHEMA,
+        "duration_ms": INTEGER_SCHEMA,
+        "expires_at": TIMESTAMP_SCHEMA,
+    }, ["export_id", "download_url"]),
+    sample_payload={
+        "workspace_id": "550e8400-e29b-41d4-a716-446655440001",
+        "export_id": "550e8400-e29b-41d4-a716-446655440100",
+        "export_type": "clients",
+        "format": "csv",
+        "download_url": "https://storage.rawdrive.ai/exports/abc123.csv",
+        "file_size_bytes": 524288,
+        "record_count": 250,
+        "duration_ms": 3500,
+        "expires_at": "2026-01-16T12:00:00Z",
+    },
+)
+
+EXPORT_FAILED = EventTypeDefinition(
+    event_type="export.failed",
+    category="export",
+    name="Export Failed",
+    description="Triggered when a data export job fails",
+    payload_schema=_create_base_schema({
+        "export_id": UUID_SCHEMA,
+        "export_type": STRING_SCHEMA,
+        "error_code": STRING_SCHEMA,
+        "error_message": STRING_SCHEMA,
+        "failed_at_step": STRING_SCHEMA,
+    }, ["export_id", "error_message"]),
+    sample_payload={
+        "workspace_id": "550e8400-e29b-41d4-a716-446655440001",
+        "export_id": "550e8400-e29b-41d4-a716-446655440100",
+        "export_type": "gallery_assets",
+        "error_code": "STORAGE_QUOTA_EXCEEDED",
+        "error_message": "Export file size exceeds storage quota",
+        "failed_at_step": "file_generation",
+    },
+)
+
 
 # =============================================================================
 # EVENT CATALOG
@@ -1242,6 +1531,18 @@ ALL_EVENTS: list[EventTypeDefinition] = [
     CLIENT_GALLERY_ACCESSED,
     CLIENT_PHOTO_FAVORITED,
     CLIENT_SELECTION_MADE,
+    CLIENT_ANALYTICS_UPDATED,
+    # Analytics events
+    ANALYTICS_DAILY_REPORT,
+    ANALYTICS_WEEKLY_REPORT,
+    ANALYTICS_MILESTONE_REACHED,
+    # Automation events
+    AUTOMATION_TRIGGER,
+    AUTOMATION_WORKFLOW_COMPLETED,
+    # Export events
+    EXPORT_STARTED,
+    EXPORT_COMPLETED,
+    EXPORT_FAILED,
 ]
 
 # Lookup dictionaries

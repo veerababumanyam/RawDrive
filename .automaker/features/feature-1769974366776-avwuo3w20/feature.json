@@ -1,0 +1,13 @@
+{
+  "category": "AI & Automation",
+  "description": "Build a bulk photo culling workflow that leverages the existing AI quality scoring service. Add a dedicated page where photographers can: (1) preview thumbnails in grid with quality scores overlay, (2) bulk-select best shots, (3) auto-reject low-quality images, (4) preview final gallery instantly. Pair with smart filtering (faces detected, sharpness >0.8, exposure optimal).",
+  "id": "feature-1769974366776-avwuo3w20",
+  "steps": [],
+  "status": "verified",
+  "skipTests": true,
+  "priority": 1,
+  "branchName": "main",
+  "startedAt": "2026-02-01T19:37:36.316Z",
+  "updatedAt": "2026-02-01T19:53:49.767Z",
+  "justFinishedAt": "2026-02-01T19:53:49.767Z"
+}

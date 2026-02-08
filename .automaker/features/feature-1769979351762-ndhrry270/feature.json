@@ -1,0 +1,13 @@
+{
+  "category": "Frontend Rendering",
+  "description": "Add React.memo() to PhotoCard component and implement useMemo/useCallback for grid asset arrays and callbacks (frontend/src/components/features/gallery/PhotoCard.tsx). Currently, hovering a single photo causes 100+ component re-renders in a large gallery grid, defeating virtualization optimization.",
+  "id": "feature-1769979351762-ndhrry270",
+  "steps": [],
+  "status": "verified",
+  "skipTests": true,
+  "priority": 1,
+  "branchName": "main",
+  "startedAt": "2026-02-01T20:55:53.253Z",
+  "updatedAt": "2026-02-01T21:00:31.326Z",
+  "justFinishedAt": "2026-02-01T21:00:31.326Z"
+}

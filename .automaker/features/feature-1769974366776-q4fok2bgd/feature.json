@@ -1,0 +1,13 @@
+{
+  "category": "User Experience & Platform Expansion",
+  "description": "Enhance PWA mobile experience with: (1) iOS/Android app install prompts with custom icons, (2) touch gesture support (pinch-zoom galleries, swipe navigation), (3) native status bar integration, (4) offline support for cached galleries, (5) home screen shortcuts for frequent galleries. Build on existing ServiceWorker infrastructure.",
+  "id": "feature-1769974366776-q4fok2bgd",
+  "steps": [],
+  "status": "verified",
+  "skipTests": true,
+  "priority": 1,
+  "branchName": "main",
+  "startedAt": "2026-02-01T19:53:50.320Z",
+  "updatedAt": "2026-02-01T20:08:11.648Z",
+  "justFinishedAt": "2026-02-01T20:08:11.648Z"
+}

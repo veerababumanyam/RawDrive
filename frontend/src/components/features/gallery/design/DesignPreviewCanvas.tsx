@@ -74,7 +74,7 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
   // Gallery asset state
   const [previewAssets, setPreviewAssets] = useState<GalleryAsset[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(true);
-  const [assetsError, setAssetsError] = useState<string | null>(null);
+  const [_assetsError, setAssetsError] = useState<string | null>(null);
 
   // Fetch gallery assets for preview
   useEffect(() => {
@@ -128,8 +128,8 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
     };
   }, [galleryId, workspaceId]); // Re-fetch if galleryId or workspaceId changes
 
-  // Get current cover style info
-  const coverStyle = getCoverStyle(config.cover.style);
+  // Get current cover style info (used for future enhancements)
+  const _coverStyle = getCoverStyle(config.cover.style);
 
   // Responsive width based on viewport mode (T051)
   const getContainerWidth = (): number | undefined => {
@@ -144,19 +144,38 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
 
   const containerWidth = getContainerWidth();
 
-  // Get responsive grid columns based on container width (T049)
+  // Get responsive grid columns based on container width and grid config (T006, T049)
   // Uses container queries when supported, fallback to viewport queries
   const getGridColumns = (): string => {
+    // Base columns based on grid size configuration
+    const sizeColumns = {
+      sm: { desktop: 5, tablet: 4, mobile: 3 },  // More columns = smaller thumbnails
+      md: { desktop: 4, tablet: 3, mobile: 2 },  // Default balanced
+      lg: { desktop: 3, tablet: 2, mobile: 1 },  // Fewer columns = larger thumbnails
+    };
+
+    const cols = sizeColumns[config.grid.size] || sizeColumns.md;
+
     if (!containerWidth) {
-      // Desktop: 3+ columns
-      return '@lg:grid-cols-4 @md:grid-cols-3 @sm:grid-cols-2 grid-cols-1';
+      // Desktop: Use configured columns
+      return `@lg:grid-cols-${cols.desktop} @md:grid-cols-${cols.tablet} @sm:grid-cols-${cols.mobile} grid-cols-1`;
     }
     if (containerWidth >= 768) {
       // Tablet: 2-3 columns
-      return '@md:grid-cols-3 @sm:grid-cols-2 grid-cols-2';
+      return `@md:grid-cols-${cols.tablet} @sm:grid-cols-${cols.mobile} grid-cols-2`;
     }
     // Mobile: 1-2 columns
-    return '@sm:grid-cols-2 grid-cols-1';
+    return `@sm:grid-cols-${cols.mobile} grid-cols-1`;
+  };
+
+  // Get grid gap based on spacing config (T006)
+  const getGridGap = (): string => {
+    const spacingGaps = {
+      sm: 'gap-1',      // Tight spacing
+      md: 'gap-3',      // Normal spacing
+      lg: 'gap-5',      // Relaxed spacing
+    };
+    return spacingGaps[config.grid.spacing] || spacingGaps.md;
   };
 
   // Get responsive text sizing (T050)
@@ -188,10 +207,15 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
 
   const textClasses = getTextClasses();
   const gridClasses = getGridColumns();
+  const gridGap = getGridGap();
+
+  // Determine if horizontal scroll should be enabled (T006)
+  const isHorizontalLayout = config.grid.style === 'horizontal';
 
   return (
     <div
       ref={previewRef}
+      data-testid="design-preview-canvas"
       className={`${containerClass} max-w-full`}
       style={{
         // Smooth transition for width changes (T052)
@@ -229,26 +253,44 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
         />
       </div>
 
-      {/* Gallery Grid Preview - Container Query Responsive (T048, T049) */}
+      {/* Gallery Grid Preview - Container Query Responsive (T006, T048, T049) */}
       <div className="mt-12 group/grid">
         <h4 className={`text-gray-600 dark:text-white/50 font-semibold tracking-wide mb-4 group-hover/grid:text-gray-700 dark:group-hover/grid:text-white/70 transition-colors ${textClasses.body}`}>
           Secondary gallery section
         </h4>
         <div
-          className={`grid gap-2 transition-all duration-300 ${gridClasses}`}
+          className={`transition-all duration-300 ${
+            isHorizontalLayout
+              ? `flex overflow-x-auto pb-4 snap-x snap-mandatory ${gridGap}`
+              : `grid ${gridClasses} ${gridGap}`
+          }`}
           style={{
             // Container type for grid container queries
             containerType: containerQueriesSupported ? 'inline-size' : undefined,
+            // Hide scrollbar for horizontal layout
+            ...(isHorizontalLayout && {
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }),
           }}
         >
           {loadingAssets ? (
             // Loading state: Show skeleton placeholders
-            [1, 2, 3, 4, 5, 6].map((i) => (
-              <div
-                key={`skeleton-${i}`}
-                className="aspect-square rounded-2xl bg-gray-200 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.05] animate-pulse"
-              />
-            ))
+            [1, 2, 3, 4, 5, 6].map((i) => {
+              const skeletonSizeClasses = {
+                sm: isHorizontalLayout ? 'w-24 h-24 flex-shrink-0' : 'aspect-square',
+                md: isHorizontalLayout ? 'w-32 h-32 flex-shrink-0' : 'aspect-square',
+                lg: isHorizontalLayout ? 'w-40 h-40 flex-shrink-0' : 'aspect-square',
+              };
+              const sizeClass = skeletonSizeClasses[config.grid.size] || skeletonSizeClasses.md;
+
+              return (
+                <div
+                  key={`skeleton-${i}`}
+                  className={`${sizeClass} rounded-2xl bg-gray-200 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.05] animate-pulse ${isHorizontalLayout ? 'snap-start' : ''}`}
+                />
+              );
+            })
           ) : previewAssets.length === 0 ? (
             // Empty state: No photos in gallery
             <div className="col-span-full flex flex-col items-center justify-center py-8 text-center">
@@ -262,10 +304,18 @@ export const DesignPreviewCanvas: React.FC<DesignPreviewCanvasProps> = ({
             previewAssets.map((asset) => {
               const imageUrl = asset.asset.preview_url || asset.asset.thumbnail_url;
 
+              // Get thumbnail size classes based on grid size config
+              const thumbnailSizeClasses = {
+                sm: isHorizontalLayout ? 'w-24 h-24 flex-shrink-0' : 'aspect-square',
+                md: isHorizontalLayout ? 'w-32 h-32 flex-shrink-0' : 'aspect-square',
+                lg: isHorizontalLayout ? 'w-40 h-40 flex-shrink-0' : 'aspect-square',
+              };
+              const sizeClass = thumbnailSizeClasses[config.grid.size] || thumbnailSizeClasses.md;
+
               return (
                 <div
                   key={asset.asset_id}
-                  className="aspect-square rounded-2xl bg-gray-200 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.05] overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:shadow-xl group/item"
+                  className={`${sizeClass} rounded-2xl bg-gray-200 dark:bg-white/[0.03] border border-gray-300 dark:border-white/[0.05] overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:shadow-xl group/item ${isHorizontalLayout ? 'snap-start' : ''}`}
                 >
                   {imageUrl ? (
                     <img

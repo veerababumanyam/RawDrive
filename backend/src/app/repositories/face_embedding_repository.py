@@ -22,6 +22,8 @@ import math
 from typing import Any, Optional
 from uuid import UUID
 
+import numpy as np
+
 from app.db.postgres import get_postgres_pool
 from app.services.face_exceptions import (
     EmbeddingDimensionMismatchError,
@@ -96,29 +98,44 @@ class FaceEmbeddingRepository:
         if abs(l2_norm - 1.0) > NORM_TOLERANCE:
             raise EmbeddingNotNormalizedError(l2_norm=l2_norm)
     
-    def _embedding_to_pgvector(self, embedding: list[float]) -> str:
-        """Convert embedding list to pgvector string format.
-        
+    def _embedding_to_pgvector(self, embedding: list[float]) -> np.ndarray:
+        """Convert embedding list to numpy array for pgvector binary format.
+
+        With pgvector asyncpg codec registered, numpy arrays are serialized
+        directly to binary format, avoiding expensive string operations.
+
         Args:
             embedding: The embedding vector
-            
+
         Returns:
-            String in pgvector format: '[0.1,0.2,...]'
+            numpy array in float32 format for efficient binary serialization
         """
-        return "[" + ",".join(str(x) for x in embedding) + "]"
-    
-    def _pgvector_to_embedding(self, pgvector_str: str) -> list[float]:
-        """Convert pgvector string to embedding list.
-        
+        return np.array(embedding, dtype=np.float32)
+
+    def _pgvector_to_embedding(self, pgvector_value: Any) -> list[float]:
+        """Convert pgvector result to embedding list.
+
+        Handles both numpy arrays (native pgvector codec) and strings
+        (fallback for backwards compatibility).
+
         Args:
-            pgvector_str: String in pgvector format
-            
+            pgvector_value: Value from database (numpy array or string)
+
         Returns:
             List of floats
         """
-        # Remove brackets and split
-        clean = pgvector_str.strip("[]")
-        return [float(x) for x in clean.split(",")]
+        if isinstance(pgvector_value, np.ndarray):
+            # Native pgvector codec - efficient binary deserialization
+            return pgvector_value.tolist()
+        elif isinstance(pgvector_value, str):
+            # Fallback for string format (backwards compatibility)
+            clean = pgvector_value.strip("[]")
+            return [float(x) for x in clean.split(",")]
+        elif isinstance(pgvector_value, list):
+            # Already a list
+            return pgvector_value
+        else:
+            raise ValueError(f"Unexpected embedding type: {type(pgvector_value)}")
     
     # =========================================================================
     # SIMILARITY SEARCH
@@ -164,27 +181,28 @@ class FaceEmbeddingRepository:
             
             # Query using pgvector cosine distance
             # Note: <=> is cosine distance, lower is more similar
+            # With pgvector codec, embeddings are returned as numpy arrays
             rows = await conn.fetch(
                 """
-                SELECT 
+                SELECT
                     f.id,
                     f.workspace_id,
                     f.photo_id,
                     f.face_group_id,
                     f.bounding_box,
                     f.confidence,
-                    f.embedding::text as embedding_str,
+                    f.embedding,
                     f.provider,
                     f.detection_metadata,
                     f.thumbnail_urls,
                     f.created_at,
                     f.updated_at,
-                    1 - (f.embedding <=> $1::vector) as similarity
+                    1 - (f.embedding <=> $1) as similarity
                 FROM faces f
                 WHERE f.workspace_id = $2
                 AND f.embedding IS NOT NULL
-                AND (f.embedding <=> $1::vector) <= $3
-                ORDER BY f.embedding <=> $1::vector ASC
+                AND (f.embedding <=> $1) <= $3
+                ORDER BY f.embedding <=> $1 ASC
                 LIMIT $4
                 """,
                 self._embedding_to_pgvector(embedding),
@@ -192,21 +210,18 @@ class FaceEmbeddingRepository:
                 max_distance,
                 limit,
             )
-            
+
             results = []
             for row in rows:
                 face_dict = dict(row)
                 similarity = face_dict.pop("similarity")
-                
-                # Convert embedding string back to list
-                if face_dict.get("embedding_str"):
+
+                # Convert embedding from pgvector native format to list
+                if face_dict.get("embedding") is not None:
                     face_dict["embedding"] = self._pgvector_to_embedding(
-                        face_dict.pop("embedding_str")
+                        face_dict["embedding"]
                     )
-                else:
-                    face_dict.pop("embedding_str", None)
-                    face_dict["embedding"] = None
-                
+
                 results.append({
                     "face": face_dict,
                     "similarity": float(similarity),
@@ -259,14 +274,14 @@ class FaceEmbeddingRepository:
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT 
+                SELECT
                     id,
                     workspace_id,
                     photo_id,
                     face_group_id,
                     bounding_box,
                     confidence,
-                    embedding::text as embedding_str,
+                    embedding,
                     provider,
                     detection_metadata,
                     thumbnail_urls,
@@ -279,19 +294,17 @@ class FaceEmbeddingRepository:
                 face_ids,
                 workspace_id,
             )
-        
+
         results = []
         for row in rows:
             face_dict = dict(row)
-            
-            if face_dict.get("embedding_str"):
+
+            # Convert embedding from pgvector native format to list
+            if face_dict.get("embedding") is not None:
                 face_dict["embedding"] = self._pgvector_to_embedding(
-                    face_dict.pop("embedding_str")
+                    face_dict["embedding"]
                 )
-            else:
-                face_dict.pop("embedding_str", None)
-                face_dict["embedding"] = None
-            
+
             results.append({
                 "face": face_dict,
                 "similarity": float(milvus_similarities[face_dict["id"]]),
@@ -352,7 +365,7 @@ class FaceEmbeddingRepository:
                 """
                 SELECT DISTINCT ON (f.photo_id)
                     f.photo_id as asset_id,
-                    1 - (f.embedding <=> $1::vector) as similarity,
+                    1 - (f.embedding <=> $1) as similarity,
                     f.id as face_id,
                     f.thumbnail_urls
                 FROM faces f
@@ -363,8 +376,8 @@ class FaceEmbeddingRepository:
                 AND ga.visible = TRUE
                 AND a.deleted = FALSE
                 AND f.embedding IS NOT NULL
-                AND (f.embedding <=> $1::vector) <= $4
-                ORDER BY f.photo_id, f.embedding <=> $1::vector ASC
+                AND (f.embedding <=> $1) <= $4
+                ORDER BY f.photo_id, f.embedding <=> $1 ASC
                 LIMIT $5
                 """,
                 self._embedding_to_pgvector(embedding),
@@ -477,22 +490,22 @@ class FaceEmbeddingRepository:
             # Get the face's embedding and photo_id
             row = await conn.fetchrow(
                 """
-                SELECT embedding::text as embedding_str, photo_id
+                SELECT embedding, photo_id
                 FROM faces
                 WHERE id = $1 AND workspace_id = $2
                 """,
                 face_id,
                 workspace_id,
             )
-            
+
             if not row:
                 raise FaceNotFoundError(face_id)
-            
-            if not row["embedding_str"]:
+
+            if row["embedding"] is None:
                 # Face has no embedding, return empty results
                 return []
-            
-            embedding = self._pgvector_to_embedding(row["embedding_str"])
+
+            embedding = self._pgvector_to_embedding(row["embedding"])
             photo_id = row["photo_id"]
             
             settings = get_settings()
@@ -527,14 +540,14 @@ class FaceEmbeddingRepository:
                 # Re-hydrate full face data from PostgreSQL
                 pg_rows = await conn.fetch(
                     """
-                    SELECT 
+                    SELECT
                         id,
                         workspace_id,
                         photo_id,
                         face_group_id,
                         bounding_box,
                         confidence,
-                        embedding::text as embedding_str,
+                        embedding,
                         provider,
                         detection_metadata,
                         thumbnail_urls,
@@ -551,50 +564,48 @@ class FaceEmbeddingRepository:
                 results = []
                 for pg_row in pg_rows:
                     face_dict = dict(pg_row)
-                    if face_dict.get("embedding_str"):
+                    # Convert embedding from pgvector native format to list
+                    if face_dict.get("embedding") is not None:
                         face_dict["embedding"] = self._pgvector_to_embedding(
-                            face_dict.pop("embedding_str")
+                            face_dict["embedding"]
                         )
-                    else:
-                        face_dict.pop("embedding_str", None)
-                        face_dict["embedding"] = None
-                    
+
                     results.append({
                         "face": face_dict,
                         "similarity": float(milvus_similarities[face_dict["id"]]),
                     })
-                
+
                 results.sort(key=lambda x: x["similarity"], reverse=True)
                 return results
-            
+
             # Fallback to pgvector if Milvus is not enabled
             max_distance = 1.0 - threshold
-            
+
             # Build query with optional photo exclusion
             if exclude_same_photo:
                 rows = await conn.fetch(
                     """
-                    SELECT 
+                    SELECT
                         f.id,
                         f.workspace_id,
                         f.photo_id,
                         f.face_group_id,
                         f.bounding_box,
                         f.confidence,
-                        f.embedding::text as embedding_str,
+                        f.embedding,
                         f.provider,
                         f.detection_metadata,
                         f.thumbnail_urls,
                         f.created_at,
                         f.updated_at,
-                        1 - (f.embedding <=> $1::vector) as similarity
+                        1 - (f.embedding <=> $1) as similarity
                     FROM faces f
                     WHERE f.workspace_id = $2
                     AND f.id != $3
                     AND f.photo_id != $4
                     AND f.embedding IS NOT NULL
-                    AND (f.embedding <=> $1::vector) <= $5
-                    ORDER BY f.embedding <=> $1::vector ASC
+                    AND (f.embedding <=> $1) <= $5
+                    ORDER BY f.embedding <=> $1 ASC
                     LIMIT $6
                     """,
                     self._embedding_to_pgvector(embedding),
@@ -607,26 +618,26 @@ class FaceEmbeddingRepository:
             else:
                 rows = await conn.fetch(
                     """
-                    SELECT 
+                    SELECT
                         f.id,
                         f.workspace_id,
                         f.photo_id,
                         f.face_group_id,
                         f.bounding_box,
                         f.confidence,
-                        f.embedding::text as embedding_str,
+                        f.embedding,
                         f.provider,
                         f.detection_metadata,
                         f.thumbnail_urls,
                         f.created_at,
                         f.updated_at,
-                        1 - (f.embedding <=> $1::vector) as similarity
+                        1 - (f.embedding <=> $1) as similarity
                     FROM faces f
                     WHERE f.workspace_id = $2
                     AND f.id != $3
                     AND f.embedding IS NOT NULL
-                    AND (f.embedding <=> $1::vector) <= $4
-                    ORDER BY f.embedding <=> $1::vector ASC
+                    AND (f.embedding <=> $1) <= $4
+                    ORDER BY f.embedding <=> $1 ASC
                     LIMIT $5
                     """,
                     self._embedding_to_pgvector(embedding),
@@ -635,20 +646,18 @@ class FaceEmbeddingRepository:
                     max_distance,
                     limit,
                 )
-            
+
             results = []
             for row in rows:
                 face_dict = dict(row)
                 similarity = face_dict.pop("similarity")
-                
-                if face_dict.get("embedding_str"):
+
+                # Convert embedding from pgvector native format to list
+                if face_dict.get("embedding") is not None:
                     face_dict["embedding"] = self._pgvector_to_embedding(
-                        face_dict.pop("embedding_str")
+                        face_dict["embedding"]
                     )
-                else:
-                    face_dict.pop("embedding_str", None)
-                    face_dict["embedding"] = None
-                
+
                 results.append({
                     "face": face_dict,
                     "similarity": float(similarity),
@@ -814,15 +823,17 @@ class FaceEmbeddingRepository:
         
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
+            # With pgvector codec, numpy arrays are serialized efficiently
+            embedding_arr = self._embedding_to_pgvector(embedding)
             if workspace_id:
                 result = await conn.execute(
                     """
                     UPDATE faces
-                    SET embedding = $1::vector,
+                    SET embedding = $1,
                         updated_at = NOW()
                     WHERE id = $2 AND workspace_id = $3
                     """,
-                    self._embedding_to_pgvector(embedding),
+                    embedding_arr,
                     face_id,
                     workspace_id,
                 )
@@ -830,11 +841,11 @@ class FaceEmbeddingRepository:
                 result = await conn.execute(
                     """
                     UPDATE faces
-                    SET embedding = $1::vector,
+                    SET embedding = $1,
                         updated_at = NOW()
                     WHERE id = $2
                     """,
-                    self._embedding_to_pgvector(embedding),
+                    embedding_arr,
                     face_id,
                 )
             
@@ -885,18 +896,18 @@ class FaceEmbeddingRepository:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT embedding::text as embedding_str
+                SELECT embedding
                 FROM faces
                 WHERE id = $1 AND workspace_id = $2
                 """,
                 face_id,
                 workspace_id,
             )
-            
-            if not row or not row["embedding_str"]:
+
+            if not row or row["embedding"] is None:
                 return None
-            
-            return self._pgvector_to_embedding(row["embedding_str"])
+
+            return self._pgvector_to_embedding(row["embedding"])
     
     async def clear_embedding(
         self,

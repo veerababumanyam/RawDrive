@@ -911,3 +911,112 @@ export type {
   TimelineEvent,
   IncidentAttachment,
 } from './compliance';
+
+// ---------------------------------------------------------------------------
+// Album Collaboration Types & Enums (Real-time Collaborative Album Design)
+// ---------------------------------------------------------------------------
+
+// Album collaboration enums
+export {
+  AlbumStatus,
+  AlbumType,
+  SpreadType,
+  ElementType,
+  AlbumOperationType,
+  CommentStatus,
+  AlbumCollaborationSessionStatus,
+  AlbumCollaborationMessageType,
+} from './album-collaboration';
+
+// Core album interfaces
+export type {
+  Album,
+  AlbumSettings,
+  AlbumSpread,
+  AlbumSpreadElement,
+  ElementContent,
+  CropSettings,
+  ImageFilters,
+  ElementStyle,
+  ShadowStyle,
+  BorderStyle,
+} from './album-collaboration';
+
+// Template interfaces
+export type {
+  AlbumTemplate,
+  SpreadTemplate,
+  SpreadLayout,
+  LayoutSlot,
+  SlotConstraints,
+} from './album-collaboration';
+
+// Collaboration interfaces
+export type {
+  AlbumCollaborationSession,
+  AlbumCollaboratorPresence,
+  AlbumCursorPosition,
+  AlbumOperation,
+  VectorClock,
+} from './album-collaboration';
+
+// Version history interfaces
+export type {
+  AlbumVersion,
+  AlbumSnapshot,
+  VersionComparison,
+  VersionChange,
+} from './album-collaboration';
+
+// Comment interfaces
+export type {
+  AlbumComment,
+  MentionedUser,
+  CommentPosition,
+} from './album-collaboration';
+
+// API request/response interfaces
+export type {
+  CreateAlbumRequest,
+  UpdateAlbumRequest,
+  CreateSpreadRequest,
+  UpdateSpreadRequest,
+  CreateElementRequest,
+  UpdateElementRequest,
+  CreateAlbumSessionRequest,
+  CreateAlbumSessionResponse,
+  ApplyOperationRequest,
+  ApplyOperationResponse,
+  OperationConflict,
+  CreateVersionRequest,
+  RollbackVersionRequest,
+  CreateCommentRequest,
+  ResolveCommentRequest,
+} from './album-collaboration';
+
+// WebSocket message interfaces
+export type {
+  AlbumCollaborationMessage,
+  JoinAlbumSessionMessage,
+  AlbumSessionJoinedMessage,
+  AlbumPresenceUpdateMessage,
+  AlbumCursorUpdateMessage,
+  AlbumOperationBroadcastMessage,
+  AlbumOperationAckMessage,
+  AlbumCommentAddedMessage,
+  AlbumCommentMentionMessage,
+  AlbumVersionCreatedMessage,
+  AlbumVersionRestoredMessage,
+} from './album-collaboration';
+
+// List/query interfaces
+export type {
+  ListAlbumsQuery,
+  ListAlbumsResponse,
+  ListVersionsQuery,
+  ListVersionsResponse,
+  ListCommentsQuery,
+  ListCommentsResponse,
+  ListTemplatesQuery,
+  ListTemplatesResponse,
+} from './album-collaboration';

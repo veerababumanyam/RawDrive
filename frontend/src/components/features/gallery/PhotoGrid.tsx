@@ -5,7 +5,7 @@
  * Supports drag-drop reordering via @dnd-kit
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -342,7 +342,37 @@ interface SortablePhotoCardProps {
   onUnlockPrivate?: () => void;
 }
 
-const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
+/**
+ * Custom comparison function for wrapper components
+ * Prevents re-renders when only callbacks change (they use stable asset_id)
+ */
+const areWrapperPropsEqual = (
+  prevProps: SortablePhotoCardProps,
+  nextProps: SortablePhotoCardProps
+): boolean => {
+  // Check asset identity and key properties
+  if (prevProps.asset.asset_id !== nextProps.asset.asset_id) return false;
+  if (prevProps.asset.is_favorited !== nextProps.asset.is_favorited) return false;
+  if (prevProps.asset.is_selected !== nextProps.asset.is_selected) return false;
+  if (prevProps.asset.is_private !== nextProps.asset.is_private) return false;
+  if (prevProps.asset.asset.status !== nextProps.asset.asset.status) return false;
+  if (prevProps.asset.asset.thumbnail_url !== nextProps.asset.asset.thumbnail_url) return false;
+
+  // Check other props
+  if (prevProps.index !== nextProps.index) return false;
+  if (prevProps.isManagementSelected !== nextProps.isManagementSelected) return false;
+  if (prevProps.managementSelectable !== nextProps.managementSelectable) return false;
+  if (prevProps.showCustomerSelection !== nextProps.showCustomerSelection) return false;
+  if (prevProps.isCover !== nextProps.isCover) return false;
+  if (prevProps.aspectRatio !== nextProps.aspectRatio) return false;
+  if (prevProps['data-photo-index'] !== nextProps['data-photo-index']) return false;
+  if (prevProps.isPrivateUnlocked !== nextProps.isPrivateUnlocked) return false;
+
+  // Callbacks intentionally not compared - they use stable identifiers
+  return true;
+};
+
+const SortablePhotoCardComponent: React.FC<SortablePhotoCardProps> = ({
   asset,
   index,
   isManagementSelected,
@@ -373,11 +403,18 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
     isDragging,
   } = useSortable({ id: asset.asset_id });
 
-  const style = {
+  // Memoize style to prevent object recreation
+  const style = useMemo(() => ({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-  };
+  }), [transform, transition, isDragging]);
+
+  // Memoize keydown handler
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => onKeyDown?.(e, index),
+    [onKeyDown, index]
+  );
 
   return (
     <div
@@ -385,7 +422,7 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
       style={style}
       data-asset-id={asset.asset_id}
       data-photo-index={dataIndex}
-      onKeyDown={(e) => onKeyDown?.(e, index)}
+      onKeyDown={handleKeyDown}
       {...attributes}
       {...listeners}
       className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
@@ -415,8 +452,11 @@ const SortablePhotoCard: React.FC<SortablePhotoCardProps> = ({
   );
 };
 
+// Memoized sortable photo card
+const SortablePhotoCard = React.memo(SortablePhotoCardComponent, areWrapperPropsEqual);
+
 // Non-sortable wrapper component
-const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
+const PhotoCardWrapperComponent: React.FC<SortablePhotoCardProps> = ({
   asset,
   index,
   isManagementSelected,
@@ -438,11 +478,17 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
   isPrivateUnlocked,
   onUnlockPrivate,
 }) => {
+  // Memoize keydown handler
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => onKeyDown?.(e, index),
+    [onKeyDown, index]
+  );
+
   return (
     <div
       data-asset-id={asset.asset_id}
       data-photo-index={dataIndex}
-      onKeyDown={(e) => onKeyDown?.(e, index)}
+      onKeyDown={handleKeyDown}
     >
       <PhotoCard
         asset={asset}
@@ -468,6 +514,9 @@ const PhotoCardWrapper: React.FC<SortablePhotoCardProps> = ({
     </div>
   );
 };
+
+// Memoized non-sortable photo card wrapper
+const PhotoCardWrapper = React.memo(PhotoCardWrapperComponent, areWrapperPropsEqual);
 
 // Memoize the entire grid to prevent re-renders from parent state changes
 export const PhotoGrid = React.memo(PhotoGridComponent);

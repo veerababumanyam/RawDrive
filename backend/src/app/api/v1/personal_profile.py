@@ -4,10 +4,10 @@ Routes for managing personal profile digital visiting cards.
 """
 
 import logging
-from typing import Annotated
+from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, status, Response, UploadFile, File
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, status, Response, UploadFile, File
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
 from app.api.personal_profile_schemas import (
@@ -27,6 +27,7 @@ from app.services.personal_profile_service import (
     AvatarUploadError,
     PublicProfileNotFoundError,
 )
+from app.services.profile_analytics_service import get_profile_analytics_service
 from app.services.vcard_service import VCardService
 from app.services.qr_service import QRCodeService
 from app.api.exceptions import AppError, NotFoundError, ValidationAppError, InternalError
@@ -218,6 +219,48 @@ async def get_public_personal_profile_avatar(
     except Exception as e:
         logger.exception("Failed to get public avatar")
         raise InternalError("Failed to get avatar")
+
+
+@public_router.post(
+    "/{slug}/track-view",
+    status_code=status.HTTP_200_OK,
+    summary="Track profile view",
+)
+async def track_profile_view(
+    slug: Annotated[str, Path(..., description="Profile slug")],
+    request: Request,
+    referrer: Annotated[Optional[str], Header(alias="Referer")] = None,
+    user_agent: Annotated[Optional[str], Header(alias="User-Agent")] = None,
+    x_forwarded_for: Annotated[Optional[str], Header(alias="X-Forwarded-For")] = None,
+    cf_ipcountry: Annotated[Optional[str], Header(alias="CF-IPCountry")] = None,
+    cf_region: Annotated[Optional[str], Header(alias="CF-Region")] = None,
+):
+    """Track a view on a public profile.
+
+    This endpoint anonymously tracks profile views for analytics.
+    No personally identifiable information (PII) is stored.
+
+    Rate limited: One tracked view per visitor per profile per hour.
+    """
+    analytics_service = get_profile_analytics_service()
+
+    # Get client IP (prefer X-Forwarded-For for proxied requests)
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else request.client.host if request.client else None
+
+    try:
+        result = await analytics_service.track_view(
+            profile_slug=slug,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            referrer=referrer,
+            country_code=cf_ipcountry,
+            region=cf_region,
+        )
+        return result
+    except Exception as e:
+        logger.warning(f"Failed to track view for profile {slug}: {e}")
+        # Don't fail the request - tracking is non-critical
+        return {"success": False, "message": "View tracking temporarily unavailable"}
 
 
 # =============================================================================
@@ -617,3 +660,86 @@ async def get_profile_preview_url(
     except Exception as e:
         logger.exception("Failed to get preview URL")
         raise InternalError("Failed to get preview URL")
+
+
+# =============================================================================
+# ANALYTICS ENDPOINTS
+# =============================================================================
+
+
+@router.get(
+    "/me/analytics",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Get profile analytics",
+)
+async def get_profile_analytics(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+    days: Annotated[int, Query(description="Number of days of history", ge=1, le=90)] = 30,
+):
+    """Get comprehensive analytics for the current user's personal profile.
+
+    Returns view counts, unique visitors, device breakdown, geographic data,
+    referrer sources, and daily time series for charting.
+    """
+    profile_service = get_personal_profile_service()
+    analytics_service = get_profile_analytics_service()
+
+    try:
+        # Get profile to ensure it exists
+        profile = await profile_service.get_profile(workspace_id, current_user.user_id)
+        profile_id = UUID(profile["profile_id"])
+
+        # Get analytics data
+        analytics = await analytics_service.get_analytics(
+            profile_id=profile_id,
+            workspace_id=workspace_id,
+            days=days,
+        )
+
+        return analytics
+    except ProfileNotFoundError:
+        raise NotFoundError("Personal Profile", str(current_user.user_id))
+    except Exception as e:
+        logger.exception("Failed to get profile analytics")
+        raise InternalError("Failed to get profile analytics")
+
+
+@router.get(
+    "/me/analytics/quick",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Get quick profile stats",
+)
+async def get_profile_quick_stats(
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
+):
+    """Get quick summary statistics for the current user's personal profile.
+
+    Lightweight endpoint suitable for dashboard widgets.
+    Returns total views, today's views, week views, month views.
+    """
+    profile_service = get_personal_profile_service()
+    analytics_service = get_profile_analytics_service()
+
+    try:
+        # Get profile to ensure it exists
+        profile = await profile_service.get_profile(workspace_id, current_user.user_id)
+        profile_id = UUID(profile["profile_id"])
+
+        # Get quick stats
+        stats = await analytics_service.get_quick_stats(
+            profile_id=profile_id,
+            workspace_id=workspace_id,
+        )
+
+        return stats
+    except ProfileNotFoundError:
+        raise NotFoundError("Personal Profile", str(current_user.user_id))
+    except Exception as e:
+        logger.exception("Failed to get profile quick stats")
+        raise InternalError("Failed to get profile quick stats")

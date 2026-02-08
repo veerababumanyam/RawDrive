@@ -3,7 +3,7 @@
   "category": "Observability",
   "title": "Correlation ID Middleware",
   "description": "Implement middleware for generating and propagating correlation IDs across requests. Ensure correlation IDs are included in all logs.",
-  "status": "verified",
+  "status": "completed",
   "priority": 1,
   "complexity": "simple",
   "dependencies": [

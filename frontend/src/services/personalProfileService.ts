@@ -15,6 +15,9 @@ import {
   ProfileExistsResponse,
   ProfilePrefillData,
   AvatarSize,
+  ProfileAnalyticsResponse,
+  ProfileQuickStats,
+  TrackViewResponse,
 } from '../types/personalProfile';
 import { WORKSPACE_PATHS, PUBLIC_PATHS } from '../constants/api';
 
@@ -289,6 +292,62 @@ class PersonalProfileService {
       .replace(/\s+/g, '-') // Replace spaces with hyphens
       .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
       .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+  }
+
+  // ==========================================================================
+  // ANALYTICS METHODS
+  // ==========================================================================
+
+  /**
+   * Track a profile view (public endpoint).
+   * Called from the public profile page to track anonymous views.
+   */
+  async trackView(slug: string): Promise<TrackViewResponse> {
+    try {
+      const response = await apiClient.post<TrackViewResponse>(
+        `${PUBLIC_PATHS.personalProfile(slug)}/track-view`,
+        {}
+      );
+      if (response.error) {
+        // Don't throw - tracking is non-critical
+        return { success: false, message: response.error.message || 'Tracking failed' };
+      }
+      return response.data!;
+    } catch {
+      // Silently fail - tracking should not break the page
+      return { success: false, message: 'Tracking temporarily unavailable' };
+    }
+  }
+
+  /**
+   * Get comprehensive analytics for the current user's profile.
+   */
+  async getAnalytics(workspaceId: string, days: number = 30): Promise<ProfileAnalyticsResponse> {
+    const response = await apiClient.get<ProfileAnalyticsResponse>(
+      `${WORKSPACE_PATHS.personalProfile(workspaceId)}/me/analytics?days=${days}`
+    );
+    if (response.error) {
+      const error: any = new Error(response.error.message || 'Failed to fetch analytics');
+      error.response = { status: response.error.status };
+      throw error;
+    }
+    return response.data!;
+  }
+
+  /**
+   * Get quick summary stats for the current user's profile.
+   * Lightweight endpoint suitable for dashboard widgets.
+   */
+  async getQuickStats(workspaceId: string): Promise<ProfileQuickStats> {
+    const response = await apiClient.get<ProfileQuickStats>(
+      `${WORKSPACE_PATHS.personalProfile(workspaceId)}/me/analytics/quick`
+    );
+    if (response.error) {
+      const error: any = new Error(response.error.message || 'Failed to fetch quick stats');
+      error.response = { status: response.error.status };
+      throw error;
+    }
+    return response.data!;
   }
 }
 

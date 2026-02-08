@@ -61,6 +61,9 @@ class WebhookEventTypeCategory(str, Enum):
     GALLERY = "gallery"
     INVITATION = "invitation"
     CLIENT = "client"
+    ANALYTICS = "analytics"
+    AUTOMATION = "automation"
+    EXPORT = "export"
 
 
 class WebhookEventTypeResponse(BaseModel):

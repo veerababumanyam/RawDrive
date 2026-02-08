@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
+import numpy as np
+
 from app.db.postgres import get_postgres_pool
 from app.services.face_exceptions import (
     FaceGroupNotFoundError,
@@ -188,14 +190,32 @@ class FaceGroupRepository:
         if abs(l2_norm - 1.0) > NORM_TOLERANCE:
             raise EmbeddingNotNormalizedError(l2_norm=l2_norm)
     
-    def _centroid_to_pgvector(self, centroid: list[float]) -> str:
-        """Convert centroid list to pgvector string format."""
-        return "[" + ",".join(str(x) for x in centroid) + "]"
-    
-    def _pgvector_to_centroid(self, pgvector_str: str) -> list[float]:
-        """Convert pgvector string to centroid list."""
-        clean = pgvector_str.strip("[]")
-        return [float(x) for x in clean.split(",")]
+    def _centroid_to_pgvector(self, centroid: list[float]) -> np.ndarray:
+        """Convert centroid list to numpy array for pgvector binary format.
+
+        With pgvector asyncpg codec registered, numpy arrays are serialized
+        directly to binary format, avoiding expensive string operations.
+        """
+        return np.array(centroid, dtype=np.float32)
+
+    def _pgvector_to_centroid(self, pgvector_value: Any) -> list[float]:
+        """Convert pgvector result to centroid list.
+
+        Handles both numpy arrays (native pgvector codec) and strings
+        (fallback for backwards compatibility).
+        """
+        if isinstance(pgvector_value, np.ndarray):
+            # Native pgvector codec - efficient binary deserialization
+            return pgvector_value.tolist()
+        elif isinstance(pgvector_value, str):
+            # Fallback for string format (backwards compatibility)
+            clean = pgvector_value.strip("[]")
+            return [float(x) for x in clean.split(",")]
+        elif isinstance(pgvector_value, list):
+            # Already a list
+            return pgvector_value
+        else:
+            raise ValueError(f"Unexpected centroid type: {type(pgvector_value)}")
     
     # =========================================================================
     # CREATE OPERATIONS
@@ -236,7 +256,7 @@ class FaceGroupRepository:
                 INSERT INTO face_groups (
                     workspace_id, name, representative_face_id, centroid, face_count
                 )
-                VALUES ($1, $2, $3, $4::vector, 0)
+                VALUES ($1, $2, $3, $4, 0)
                 RETURNING *
                 """,
                 workspace_id,
@@ -468,14 +488,14 @@ class FaceGroupRepository:
             
             rows = await conn.fetch(
                 """
-                SELECT 
+                SELECT
                     fg.*,
-                    1 - (fg.centroid <=> $1::vector) as similarity
+                    1 - (fg.centroid <=> $1) as similarity
                 FROM face_groups fg
                 WHERE fg.workspace_id = $2
                 AND fg.centroid IS NOT NULL
-                AND (fg.centroid <=> $1::vector) <= $3
-                ORDER BY fg.centroid <=> $1::vector ASC
+                AND (fg.centroid <=> $1) <= $3
+                ORDER BY fg.centroid <=> $1 ASC
                 LIMIT $4
                 """,
                 self._centroid_to_pgvector(centroid),
@@ -666,7 +686,7 @@ class FaceGroupRepository:
                 if key == "centroid":
                     if value is not None:
                         self._validate_centroid(value)
-                        set_clauses.append(f"centroid = ${param_idx}::vector")
+                        set_clauses.append(f"centroid = ${param_idx}")
                         params.append(self._centroid_to_pgvector(value))
                     else:
                         set_clauses.append("centroid = NULL")
@@ -726,7 +746,7 @@ class FaceGroupRepository:
             result = await conn.execute(
                 """
                 UPDATE face_groups
-                SET centroid = $1::vector, updated_at = NOW()
+                SET centroid = $1, updated_at = NOW()
                 WHERE id = $2 AND workspace_id = $3
                 """,
                 self._centroid_to_pgvector(centroid),
@@ -1476,15 +1496,27 @@ class FaceGroupRepository:
         return self._row_to_dict_from_dict(dict(row))
     
     def _row_to_dict_from_dict(self, result: dict[str, Any]) -> dict[str, Any]:
-        """Convert dict with raw values to properly typed dict."""
-        # Convert centroid from pgvector string to list
-        if result.get("centroid"):
-            centroid_str = str(result["centroid"])
-            if centroid_str.startswith("[") and centroid_str.endswith("]"):
-                result["centroid"] = [
-                    float(x) for x in centroid_str[1:-1].split(",")
-                ]
-        
+        """Convert dict with raw values to properly typed dict.
+
+        With pgvector asyncpg codec registered, centroids are returned as
+        numpy arrays which we convert to Python lists for JSON serialization.
+        """
+        # Convert centroid from pgvector native format to list
+        # With pgvector codec: returns numpy array
+        # Without codec (fallback): returns string "[0.1,0.2,...]"
+        if result.get("centroid") is not None:
+            centroid = result["centroid"]
+            if isinstance(centroid, np.ndarray):
+                # Native pgvector codec - efficient binary deserialization
+                result["centroid"] = centroid.tolist()
+            elif isinstance(centroid, str):
+                # Fallback for string format (backwards compatibility)
+                if centroid.startswith("[") and centroid.endswith("]"):
+                    result["centroid"] = [
+                        float(x) for x in centroid[1:-1].split(",")
+                    ]
+            # Already a list - no conversion needed
+
         return result
 
 

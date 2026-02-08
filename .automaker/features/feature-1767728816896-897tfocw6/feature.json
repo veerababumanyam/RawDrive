@@ -14,6 +14,357 @@
   "requirePlanApproval": false,
   "dependencies": [],
   "titleGenerating": false,
-  "status": "backlog",
-  "id": "feature-1767728816896-897tfocw6"
+  "status": "completed",
+  "id": "feature-1767728816896-897tfocw6",
+  "startedAt": "2026-02-01T06:27:41.594Z",
+  "updatedAt": "2026-02-01T12:27:19.060Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "I'll analyze the codebase to understand the existing microservice structure and patterns before generating the comprehensive specification.\n\n🔧 Tool: Task\nInput: {\n  \"subagent_type\": \"Explore\",\n  \"prompt\": \"Explore the RawDrive codebase to understand:\\n1. The existing microservice structure - look at services/ directory\\n2. How microservices are organized (folder structure, common patterns)\\n3. Database models and migration patterns\\n4. How services integrate with billing, notifications, and onboarding\\n5. The shared packages structure\\n6. Docker compose configuration for services\\n\\nFocus on understanding patterns from existing services like billing-service, notifications-service, and onboarding-service as they will be most relevant for the growth/referrals microservice.\",\n  \"description\": \"Explore microservice patterns\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"services/*/src/**/*.py\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\" -maxdepth 2 -type d -name \\\"services\\\" -o -name \\\"docker-compose*\\\" -o -name \\\"shared\\\" | head -20\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\" | head -30\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\infrastructure\\\" -name \\\"docker-compose*\\\" -type f\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\packages\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\notifications-service\\\\src\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\onboarding-service\\\\src\\\"\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\infrastructure\\\\docker\\\\docker-compose.yml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\main.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\notifications-service\\\\src\\\\main.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\onboarding-service\\\\src\\\\main.py\",\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\api\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\models\\\"\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\onboarding-service\\\\src\\\\main.py\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\api\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\repositories\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\\models\\\" | head -30\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\packages\\\\shared-types\\\\src\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\packages\\\\shared-constants\\\\src\\\"\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\config.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\notifications-service\\\\src\\\\config.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\database.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\services\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\schemas\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\api\\\\v1\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\alembic\\\\versions\\\" -name \\\"*.py\\\" | head -5\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\alembic\\\\versions\\\" | head -20\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\" -name \\\"alembic\\\" -type d\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\" | grep -i migrate\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\api\\\\v1\\\\subscription.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\repositories\\\\subscription_repository.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\.claude\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\.claude\\\\reference\\\" | head -20\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\.claude\\\\reference\\\\microservices-patterns.md\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\.claude\\\\PRD.md\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\notifications-service\\\\src\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\notifications-service\\\\src\\\\services\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\gallery-service\\\\src\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\notifications-service\\\\src\\\\middleware\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\notifications-service\\\\src\\\\observability\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\gallery-service\\\\src\\\\services\\\"\"\n}\n\nLet me read the billing service to understand the credit/ledger patterns and notifications service integration:\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\config.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\billing-service\\\\src\\\\main.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\notifications-service\\\\src\\\\config.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\infrastructure\\\\docker\\\\docker-compose.yml\"\n}\n\nNow let me check the database schema patterns and existing subscription/payment models:\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\\models\\\\subscription.py\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\onboarding-service\\\\src\\\\config.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"backend/src/app/models/*.py\"\n}\n\nLet me also check the onboarding service structure and the database schema patterns:\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\onboarding-service\\\\src\\\\main.py\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"services/onboarding-service/src/**/*.py\"\n}\n\nNow I have enough context to generate the comprehensive specification. Based on my analysis:\n\n1. **Existing microservice patterns** - Follows FastAPI structure with config.py, database.py, redis_client.py, observability/, middleware/, repositories/, services/, schemas/, api/v1/\n2. **Database** - Uses asyncpg with connection pooling, shared PostgreSQL database\n3. **Authentication** - JWT with EdDSA public key verification\n4. **Multi-tenancy** - workspace_id isolation on all queries\n5. **Integration points** - Billing service, notifications service, onboarding service\n6. **Docker compose port** - Next available port would be 8016\n\n---\n\n# Comprehensive Specification: Growth & Referrals (The Viral Engine) Microservice\n\n## 1. Problem Statement\n\nRawDrive needs to reduce Customer Acquisition Cost (CAC) and drive organic growth through a dedicated referral and affiliate program. Currently, there is no mechanism for users to invite peers, track referral conversions, or receive rewards for bringing new customers to the platform.\n\n## 2. User Story\n\n**As a** RawDrive photographer,\n**I want** to share a unique referral link with my peers and receive credits when they subscribe,\n**So that** I can reduce my subscription costs while helping other photographers discover RawDrive.\n\n**As a** photography educator or influencer (Partner),\n**I want** to track my affiliate referrals and earn commission on conversions,\n**So that** I can monetize my audience while promoting a tool I believe in.\n\n**As a** new user,\n**I want** to complete setup goals and earn bonus AI credits,\n**So that** I can unlock the platform's full potential quickly and feel rewarded for engagement.\n\n## 3. Acceptance Criteria\n\n### 3.1 Peer-to-Peer Referral Program\n\n**Happy Path - Referral Link Generation:**\n- **GIVEN** an authenticated user in a Pro/Studio/Enterprise plan\n- **WHEN** they request a referral link from the Billing Settings\n- **THEN** a unique 8-character alphanumeric code is generated (e.g., `ref_ABC123XY`)\n- **AND** a shareable URL is created (`https://rawdrive.ai/join?ref=ABC123XY`)\n- **AND** the referral code is persisted in the database with the user's workspace_id\n\n**Happy Path - Referee Signup:**\n- **GIVEN** a new user visits RawDrive with a valid referral code\n- **WHEN** they complete registration and activate a Pro plan subscription\n- **THEN** the referee receives 1 month free (credit applied to first invoice)\n- **AND** the referrer receives ₹500 bill credit (or $20 equivalent)\n- **AND** both parties receive email notifications about the reward\n- **AND** the conversion is tracked in `referral_conversions` table\n\n**Edge Case - Expired Referral Code:**\n- **GIVEN** a referral code that has exceeded its validity period (90 days)\n- **WHEN** a new user attempts to use it during signup\n- **THEN** the user can still register but no rewards are applied\n- **AND** a warning is shown: \"This referral code has expired\"\n\n**Edge Case - Self-Referral:**\n- **GIVEN** a user attempting to use their own referral code\n- **WHEN** the email matches the referrer's account\n- **THEN** the referral code is rejected\n- **AND** error message: \"You cannot use your own referral code\"\n\n**Error Handling - Invalid Referral Code:**\n- **GIVEN** a referral code that doesn't exist in the system\n- **WHEN** used during signup\n- **THEN** return 404 with message: \"Referral code not found\"\n- **AND** allow user to continue registration without referral benefits\n\n### 3.2 Partner Program (Affiliate)\n\n**Happy Path - Partner Registration:**\n- **GIVEN** a user applies for the Partner Program via `/api/v1/partners/apply`\n- **WHEN** they submit company info, audience size, and social links\n- **THEN** their application is stored with `status: pending`\n- **AND** admin is notified for review\n- **AND** applicant receives confirmation email\n\n**Happy Path - Partner Dashboard:**\n- **GIVEN** an approved partner\n- **WHEN** they access their dashboard\n- **THEN** they can view: total clicks, signups, conversions, and earnings\n- **AND** filter by date range\n- **AND** download earnings report (CSV)\n\n**Happy Path - Partner Payout:**\n- **GIVEN** a partner with ≥₹2,000 (or $50) pending balance\n- **WHEN** the monthly payout cycle runs (1st of each month)\n- **THEN** payout is initiated via configured method (Stripe Connect/PayPal/UPI)\n- **AND** payout record is created in `partner_payouts` table\n- **AND** partner receives email confirmation\n\n**Edge Case - Partner Account Suspended:**\n- **GIVEN** a partner flagged for fraudulent activity\n- **WHEN** they try to access partner endpoints\n- **THEN** return 403 with message: \"Partner account suspended\"\n\n### 3.3 Setup Goals Gamification\n\n**Happy Path - Goals List:**\n- **GIVEN** a newly registered user\n- **WHEN** they view their dashboard\n- **THEN** they see 5 setup goals with completion status:\n  1. Upload profile logo (50 credits)\n  2. Create first gallery (100 credits)\n  3. Share a gallery with a client (100 credits)\n  4. Enable 2FA (100 credits)\n  5. Connect payment method (150 credits)\n- **AND** total possible: 500 AI credits\n\n**Happy Path - Goal Completion:**\n- **GIVEN** a user completes \"Upload profile logo\"\n- **WHEN** the backend detects the avatar URL is set\n- **THEN** the goal is marked complete\n- **AND** 50 AI credits are added to user's balance\n- **AND** in-app notification: \"🎉 You earned 50 AI credits!\"\n\n**Edge Case - Already Completed:**\n- **GIVEN** a user who already completed a goal\n- **WHEN** they repeat the action (e.g., re-upload logo)\n- **THEN** no additional credits are awarded\n- **AND** goal remains marked as completed\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| **Service Name** | growth-service |\n| **Port** | 8016 |\n| **Affected Files** | `services/growth-service/` (new), `infrastructure/docker/docker-compose.yml`, `.env.example` |\n| **Dependencies** | fastapi, asyncpg, redis, pydantic, httpx (for service calls), stripe (for partner payouts) |\n| **Database** | Shared PostgreSQL (rawdrive database) |\n| **Constraints** | Must integrate with billing-service for credit application, notifications-service for alerts |\n| **Patterns to Follow** | onboarding-service structure, billing-service patterns, client-service repository pattern |\n\n## 5. Non-Goals\n\n- **WhatsApp/SMS sharing**: Only web-based referral links; no SMS/WhatsApp integrations in Phase 1\n- **Multi-tier referral (MLM)**: Only single-tier referrals (A refers B, not B's referrals crediting A)\n- **Instant payouts**: Partner payouts are batch-processed monthly, not real-time\n- **Referral link analytics**: Basic click/conversion tracking only; no heatmaps or A/B testing\n- **Custom commission rates per partner**: Flat 20% for all partners in Phase 1\n- **Mobile app deep links**: Web-only referral URLs; no iOS/Android deep linking\n- **International tax calculation**: Partners responsible for their own tax reporting\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation & Infrastructure\n- [ ] T001: Create growth-service directory structure following onboarding-service pattern | File: services/growth-service/\n- [ ] T002: Create config.py with Settings class (DB, Redis, JWT, rate limits, payout config) | File: services/growth-service/src/config.py\n- [ ] T003: Create database.py with asyncpg connection pooling (PgBouncer support) | File: services/growth-service/src/database.py\n- [ ] T004: Create redis_client.py with connection management | File: services/growth-service/src/cache/redis_client.py\n- [ ] T005: Create main.py FastAPI application with lifespan, middleware, health checks | File: services/growth-service/src/main.py\n- [ ] T006: Create Dockerfile following billing-service pattern | File: services/growth-service/Dockerfile\n- [ ] T007: Create requirements.txt with dependencies | File: services/growth-service/requirements.txt\n- [ ] T008: Add growth-service to docker-compose.yml | File: infrastructure/docker/docker-compose.yml\n\n## Phase 2: Database Models & Repositories\n- [ ] T009: Create Alembic migration for referral_codes table | File: backend/alembic/versions/xxxx_create_referral_codes.py\n- [ ] T010: Create Alembic migration for referral_conversions table | File: backend/alembic/versions/xxxx_create_referral_conversions.py\n- [ ] T011: Create Alembic migration for user_credits (ledger) table | File: backend/alembic/versions/xxxx_create_user_credits.py\n- [ ] T012: Create Alembic migration for partner_applications table | File: backend/alembic/versions/xxxx_create_partner_applications.py\n- [ ] T013: Create Alembic migration for partner_payouts table | File: backend/alembic/versions/xxxx_create_partner_payouts.py\n- [ ] T014: Create Alembic migration for setup_goals table | File: backend/alembic/versions/xxxx_create_setup_goals.py\n- [ ] T015: Create referral_repository.py with CRUD operations | File: services/growth-service/src/repositories/referral_repository.py\n- [ ] T016: Create credit_repository.py for ledger operations | File: services/growth-service/src/repositories/credit_repository.py\n- [ ] T017: Create partner_repository.py for affiliate data | File: services/growth-service/src/repositories/partner_repository.py\n- [ ] T018: Create goals_repository.py for setup goals tracking | File: services/growth-service/src/repositories/goals_repository.py\n\n## Phase 3: Pydantic Schemas\n- [ ] T019: Create referral schemas (ReferralCodeCreate, ReferralCodeResponse, ConversionCreate) | File: services/growth-service/src/schemas/referral.py\n- [ ] T020: Create credit schemas (CreditBalance, CreditTransaction, CreditApply) | File: services/growth-service/src/schemas/credit.py\n- [ ] T021: Create partner schemas (PartnerApplication, PartnerDashboard, PayoutRequest) | File: services/growth-service/src/schemas/partner.py\n- [ ] T022: Create goals schemas (SetupGoal, GoalProgress, GoalCompletion) | File: services/growth-service/src/schemas/goals.py\n\n## Phase 4: Service Layer (Business Logic)\n- [ ] T023: Create referral_service.py (code generation, validation, conversion tracking) | File: services/growth-service/src/services/referral_service.py\n- [ ] T024: Create credit_ledger_service.py (balance management, transaction history) | File: services/growth-service/src/services/credit_ledger_service.py\n- [ ] T025: Create partner_service.py (application, commission calculation, payout logic) | File: services/growth-service/src/services/partner_service.py\n- [ ] T026: Create goals_service.py (progress tracking, reward distribution) | File: services/growth-service/src/services/goals_service.py\n- [ ] T027: Create notification_integration.py (call notifications-service for alerts) | File: services/growth-service/src/services/notification_integration.py\n- [ ] T028: Create billing_integration.py (apply credits to billing-service invoices) | File: services/growth-service/src/services/billing_integration.py\n\n## Phase 5: API Endpoints\n- [ ] T029: Create referrals.py endpoints (GET/POST /referral-code, GET /referral-code/{code}/validate) | File: services/growth-service/src/api/v1/referrals.py\n- [ ] T030: Create conversions.py endpoints (POST /conversions, GET /conversions) | File: services/growth-service/src/api/v1/conversions.py\n- [ ] T031: Create credits.py endpoints (GET /credits/balance, GET /credits/transactions) | File: services/growth-service/src/api/v1/credits.py\n- [ ] T032: Create partners.py endpoints (POST /partners/apply, GET /partners/dashboard, POST /partners/payout-request) | File: services/growth-service/src/api/v1/partners.py\n- [ ] T033: Create goals.py endpoints (GET /goals, POST /goals/{goal_id}/complete) | File: services/growth-service/src/api/v1/goals.py\n- [ ] T034: Create router.py to aggregate all v1 routers | File: services/growth-service/src/api/v1/__init__.py\n- [ ] T035: Create dependencies.py with JWT auth, workspace extraction | File: services/growth-service/src/api/v1/dependencies.py\n\n## Phase 6: Middleware & Observability\n- [ ] T036: Create auth.py middleware with EdDSA JWT verification | File: services/growth-service/src/middleware/auth.py\n- [ ] T037: Create correlation.py middleware for request tracing | File: services/growth-service/src/middleware/correlation.py\n- [ ] T038: Create rate_limiter.py middleware | File: services/growth-service/src/middleware/rate_limiter.py\n- [ ] T039: Create health.py with DB/Redis checks | File: services/growth-service/src/observability/health.py\n- [ ] T040: Create metrics.py with Prometheus counters (referrals_created, conversions, credits_awarded) | File: services/growth-service/src/observability/metrics.py\n- [ ] T041: Create logging configuration | File: services/growth-service/src/logging/__init__.py\n\n## Phase 7: Integration & Testing\n- [ ] T042: Add integration hooks in onboarding-service for referral code capture | File: services/onboarding-service/src/services/onboarding_service.py\n- [ ] T043: Create unit tests for referral_service | File: services/growth-service/tests/test_referral_service.py\n- [ ] T044: Create unit tests for credit_ledger_service | File: services/growth-service/tests/test_credit_service.py\n- [ ] T045: Create unit tests for partner_service | File: services/growth-service/tests/test_partner_service.py\n- [ ] T046: Create integration tests for API endpoints | File: services/growth-service/tests/test_api.py\n- [ ] T047: Add Traefik routing rules for growth-service | File: infrastructure/docker/traefik/dynamic.dev.yaml\n- [ ] T048: Update .env.example with growth-service variables | File: .env.example\n```\n\n## 7. Success Metrics\n\n| Metric | Target | Measurement |\n|--------|--------|-------------|\n| Service starts without errors | Pass | Health check returns 200 |\n| Referral code generation | <50ms p95 | Prometheus histogram |\n| Referral conversion tracking | 100% accuracy | DB integrity checks |\n| Credit balance operations | ACID compliant | Transaction logs |\n| Partner dashboard load time | <200ms p95 | Prometheus histogram |\n| API response time (all endpoints) | <100ms p95 | Prometheus histogram |\n| Database connection pool | 10-50 connections | Prometheus gauge |\n| Test coverage | ≥80% | pytest-cov report |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| **Credit fraud** (fake referrals) | Require email verification + payment method before awarding credits; implement rate limiting per IP |\n| **Partner commission abuse** | Manual approval for partner applications; fraud detection rules (same IP, similar emails) |\n| **Database contention** | Use separate Redis cache for frequently accessed data (balances, referral codes); read replicas for analytics |\n| **Service dependency failure** | Circuit breaker pattern for billing-service and notifications-service calls; graceful degradation |\n| **Payout errors** | Two-phase commit for payouts; reconciliation jobs; manual review for payouts >$500 |\n| **Multi-tenant data leak** | Strict workspace_id filtering on ALL queries; integration tests to verify isolation |\n\n---",
+    "generatedAt": "2026-02-01T06:32:11.698Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create growth-service directory structure following onboarding-service pattern",
+        "filePath": "services/growth-service/",
+        "phase": "Phase 1: Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Create config.py with Settings class (DB, Redis, JWT, rate limits, payout config)",
+        "filePath": "services/growth-service/src/config.py",
+        "phase": "Phase 1: Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create database.py with asyncpg connection pooling (PgBouncer support)",
+        "filePath": "services/growth-service/src/database.py",
+        "phase": "Phase 1: Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Create redis_client.py with connection management",
+        "filePath": "services/growth-service/src/cache/redis_client.py",
+        "phase": "Phase 1: Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create main.py FastAPI application with lifespan, middleware, health checks",
+        "filePath": "services/growth-service/src/main.py",
+        "phase": "Phase 1: Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create Dockerfile following billing-service pattern",
+        "filePath": "services/growth-service/Dockerfile",
+        "phase": "Phase 1: Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create requirements.txt with dependencies",
+        "filePath": "services/growth-service/requirements.txt",
+        "phase": "Phase 1: Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Add growth-service to docker-compose.yml",
+        "filePath": "infrastructure/docker/docker-compose.yml",
+        "phase": "Phase 1: Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create Alembic migration for referral_codes table",
+        "filePath": "backend/alembic/versions/xxxx_create_referral_codes.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Create Alembic migration for referral_conversions table",
+        "filePath": "backend/alembic/versions/xxxx_create_referral_conversions.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Create Alembic migration for user_credits (ledger) table",
+        "filePath": "backend/alembic/versions/xxxx_create_user_credits.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create Alembic migration for partner_applications table",
+        "filePath": "backend/alembic/versions/xxxx_create_partner_applications.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create Alembic migration for partner_payouts table",
+        "filePath": "backend/alembic/versions/xxxx_create_partner_payouts.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create Alembic migration for setup_goals table",
+        "filePath": "backend/alembic/versions/xxxx_create_setup_goals.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Create referral_repository.py with CRUD operations",
+        "filePath": "services/growth-service/src/repositories/referral_repository.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create credit_repository.py for ledger operations",
+        "filePath": "services/growth-service/src/repositories/credit_repository.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Create partner_repository.py for affiliate data",
+        "filePath": "services/growth-service/src/repositories/partner_repository.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create goals_repository.py for setup goals tracking",
+        "filePath": "services/growth-service/src/repositories/goals_repository.py",
+        "phase": "Phase 2: Database Models & Repositories",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Create referral schemas (ReferralCodeCreate, ReferralCodeResponse, ConversionCreate)",
+        "filePath": "services/growth-service/src/schemas/referral.py",
+        "phase": "Phase 3: Pydantic Schemas",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Create credit schemas (CreditBalance, CreditTransaction, CreditApply)",
+        "filePath": "services/growth-service/src/schemas/credit.py",
+        "phase": "Phase 3: Pydantic Schemas",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Create partner schemas (PartnerApplication, PartnerDashboard, PayoutRequest)",
+        "filePath": "services/growth-service/src/schemas/partner.py",
+        "phase": "Phase 3: Pydantic Schemas",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Create goals schemas (SetupGoal, GoalProgress, GoalCompletion)",
+        "filePath": "services/growth-service/src/schemas/goals.py",
+        "phase": "Phase 3: Pydantic Schemas",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Create referral_service.py (code generation, validation, conversion tracking)",
+        "filePath": "services/growth-service/src/services/referral_service.py",
+        "phase": "Phase 4: Service Layer (Business Logic)",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create credit_ledger_service.py (balance management, transaction history)",
+        "filePath": "services/growth-service/src/services/credit_ledger_service.py",
+        "phase": "Phase 4: Service Layer (Business Logic)",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Create partner_service.py (application, commission calculation, payout logic)",
+        "filePath": "services/growth-service/src/services/partner_service.py",
+        "phase": "Phase 4: Service Layer (Business Logic)",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Create goals_service.py (progress tracking, reward distribution)",
+        "filePath": "services/growth-service/src/services/goals_service.py",
+        "phase": "Phase 4: Service Layer (Business Logic)",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Create notification_integration.py (call notifications-service for alerts)",
+        "filePath": "services/growth-service/src/services/notification_integration.py",
+        "phase": "Phase 4: Service Layer (Business Logic)",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Create billing_integration.py (apply credits to billing-service invoices)",
+        "filePath": "services/growth-service/src/services/billing_integration.py",
+        "phase": "Phase 4: Service Layer (Business Logic)",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Create referrals.py endpoints (GET/POST /referral-code, GET /referral-code/{code}/validate)",
+        "filePath": "services/growth-service/src/api/v1/referrals.py",
+        "phase": "Phase 5: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Create conversions.py endpoints (POST /conversions, GET /conversions)",
+        "filePath": "services/growth-service/src/api/v1/conversions.py",
+        "phase": "Phase 5: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create credits.py endpoints (GET /credits/balance, GET /credits/transactions)",
+        "filePath": "services/growth-service/src/api/v1/credits.py",
+        "phase": "Phase 5: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Create partners.py endpoints (POST /partners/apply, GET /partners/dashboard, POST /partners/payout-request)",
+        "filePath": "services/growth-service/src/api/v1/partners.py",
+        "phase": "Phase 5: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Create goals.py endpoints (GET /goals, POST /goals/{goal_id}/complete)",
+        "filePath": "services/growth-service/src/api/v1/goals.py",
+        "phase": "Phase 5: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Create router.py to aggregate all v1 routers",
+        "filePath": "services/growth-service/src/api/v1/__init__.py",
+        "phase": "Phase 5: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Create dependencies.py with JWT auth, workspace extraction",
+        "filePath": "services/growth-service/src/api/v1/dependencies.py",
+        "phase": "Phase 5: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Create auth.py middleware with EdDSA JWT verification",
+        "filePath": "services/growth-service/src/middleware/auth.py",
+        "phase": "Phase 6: Middleware & Observability",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Create correlation.py middleware for request tracing",
+        "filePath": "services/growth-service/src/middleware/correlation.py",
+        "phase": "Phase 6: Middleware & Observability",
+        "status": "pending"
+      },
+      {
+        "id": "T038",
+        "description": "Create rate_limiter.py middleware",
+        "filePath": "services/growth-service/src/middleware/rate_limiter.py",
+        "phase": "Phase 6: Middleware & Observability",
+        "status": "pending"
+      },
+      {
+        "id": "T039",
+        "description": "Create health.py with DB/Redis checks",
+        "filePath": "services/growth-service/src/observability/health.py",
+        "phase": "Phase 6: Middleware & Observability",
+        "status": "pending"
+      },
+      {
+        "id": "T040",
+        "description": "Create metrics.py with Prometheus counters (referrals_created, conversions, credits_awarded)",
+        "filePath": "services/growth-service/src/observability/metrics.py",
+        "phase": "Phase 6: Middleware & Observability",
+        "status": "pending"
+      },
+      {
+        "id": "T041",
+        "description": "Create logging configuration",
+        "filePath": "services/growth-service/src/logging/__init__.py",
+        "phase": "Phase 6: Middleware & Observability",
+        "status": "pending"
+      },
+      {
+        "id": "T042",
+        "description": "Add integration hooks in onboarding-service for referral code capture",
+        "filePath": "services/onboarding-service/src/services/onboarding_service.py",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T043",
+        "description": "Create unit tests for referral_service",
+        "filePath": "services/growth-service/tests/test_referral_service.py",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T044",
+        "description": "Create unit tests for credit_ledger_service",
+        "filePath": "services/growth-service/tests/test_credit_service.py",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T045",
+        "description": "Create unit tests for partner_service",
+        "filePath": "services/growth-service/tests/test_partner_service.py",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T046",
+        "description": "Create integration tests for API endpoints",
+        "filePath": "services/growth-service/tests/test_api.py",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T047",
+        "description": "Add Traefik routing rules for growth-service",
+        "filePath": "infrastructure/docker/traefik/dynamic.dev.yaml",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T048",
+        "description": "Update .env.example with growth-service variables",
+        "filePath": ".env.example",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 48,
+    "tasksCompleted": 13,
+    "approvedAt": "2026-02-01T06:32:11.700Z",
+    "currentTaskId": "T014"
+  }
 }

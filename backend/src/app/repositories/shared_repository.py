@@ -326,9 +326,10 @@ class SharedRepository:
                 FROM magic_link_accesses mla
                 JOIN magic_links ml ON ml.link_id = mla.link_id
                 WHERE ml.workspace_id = $1
-                    AND mla.accessed_at >= NOW() - INTERVAL '%s days'
-                """ % days,
+                    AND mla.accessed_at >= NOW() - MAKE_INTERVAL(days => $2)
+                """,
                 workspace_id,
+                days,
             )
 
             # Daily access trend
@@ -340,11 +341,12 @@ class SharedRepository:
                 FROM magic_link_accesses mla
                 JOIN magic_links ml ON ml.link_id = mla.link_id
                 WHERE ml.workspace_id = $1
-                    AND mla.accessed_at >= NOW() - INTERVAL '%s days'
+                    AND mla.accessed_at >= NOW() - MAKE_INTERVAL(days => $2)
                 GROUP BY DATE(mla.accessed_at)
                 ORDER BY date DESC
-                """ % days,
+                """,
                 workspace_id,
+                days,
             )
 
             # Top galleries by access
@@ -374,12 +376,13 @@ class SharedRepository:
                 FROM magic_link_accesses mla
                 JOIN magic_links ml ON ml.link_id = mla.link_id
                 WHERE ml.workspace_id = $1
-                    AND mla.accessed_at >= NOW() - INTERVAL '%s days'
+                    AND mla.accessed_at >= NOW() - MAKE_INTERVAL(days => $2)
                 GROUP BY mla.country_code
                 ORDER BY count DESC
                 LIMIT 10
-                """ % days,
+                """,
                 workspace_id,
+                days,
             )
 
             return {
@@ -524,8 +527,9 @@ class SharedRepository:
                 FROM magic_links
                 WHERE status = 'revoked'
                   AND revoked_at IS NOT NULL
-                  AND revoked_at < NOW() - INTERVAL '%s days'
-                """ % retention_days
+                  AND revoked_at < NOW() - MAKE_INTERVAL(days => $1)
+                """,
+                retention_days,
             )
 
             if remaining == 0:
@@ -540,11 +544,13 @@ class SharedRepository:
                     FROM magic_links
                     WHERE status = 'revoked'
                       AND revoked_at IS NOT NULL
-                      AND revoked_at < NOW() - INTERVAL '%s days'
+                      AND revoked_at < NOW() - MAKE_INTERVAL(days => $1)
                     ORDER BY revoked_at ASC
-                    LIMIT %s
+                    LIMIT $2
                 )
-                """ % (retention_days, batch_size)
+                """,
+                retention_days,
+                batch_size,
             )
 
             deleted_count = int(result.split(" ")[1]) if result else 0

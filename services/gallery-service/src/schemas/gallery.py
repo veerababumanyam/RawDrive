@@ -154,6 +154,12 @@ class GalleryResponse(BaseModel):
     notify_on_selection: bool = True
     notify_on_download: bool = False
 
+    # Face recognition settings (T006)
+    show_people_filter: bool = Field(
+        default=False,
+        description="When enabled, clients can filter photos by person names detected via face recognition",
+    )
+
     class Config:
         from_attributes = True
 
@@ -241,6 +247,12 @@ class GalleryUpdateRequest(BaseModel):
     notify_on_favorite: Optional[bool] = None
     notify_on_selection: Optional[bool] = None
     notify_on_download: Optional[bool] = None
+
+    # Face recognition settings (T006)
+    show_people_filter: Optional[bool] = Field(
+        None,
+        description="Enable/disable people filter for client gallery views",
+    )
 
     class Config:
         extra = "allow"  # Allow extra fields to prevent validation errors

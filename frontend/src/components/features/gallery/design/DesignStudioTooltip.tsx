@@ -11,7 +11,7 @@
 
 import React, { useState, useRef } from 'react';
 
-interface RichTooltipContent {
+export interface RichTooltipContent {
     title: string;
     description?: string;
     category?: string;
@@ -20,7 +20,7 @@ interface RichTooltipContent {
 }
 
 interface DesignStudioTooltipProps {
-    content: string | RichTooltipContent;
+    content: string | RichTooltipContent | React.ReactNode;
     children: React.ReactElement;
     position?: 'top' | 'bottom' | 'left' | 'right';
     delay?: number;
@@ -89,8 +89,9 @@ export const DesignStudioTooltip: React.FC<DesignStudioTooltipProps> = ({
         }
     };
 
-    // Check if content is rich tooltip content
-    const isRichContent = typeof content === 'object' && content !== null;
+    // Check if content is rich tooltip content (has 'title' property) vs ReactNode
+    const isRichContent = typeof content === 'object' && content !== null && 'title' in (content as RichTooltipContent);
+    const isReactNode = !isRichContent && typeof content !== 'string';
 
     return (
         <div className="relative inline-flex group">
@@ -114,7 +115,10 @@ export const DesignStudioTooltip: React.FC<DesignStudioTooltipProps> = ({
           `}
                 >
                     <div className="relative z-10">
-                        {isRichContent ? (
+                        {isReactNode ? (
+                            // ReactNode content - render as-is
+                            <>{content}</>
+                        ) : isRichContent ? (
                             // Rich content rendering
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between gap-2">

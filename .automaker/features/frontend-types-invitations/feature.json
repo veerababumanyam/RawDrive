@@ -3,7 +3,7 @@
   "category": "Frontend",
   "title": "TypeScript Invitation Types",
   "description": "Define comprehensive TypeScript types for invitations, sub-events, templates, guests, and media using shared-types package.",
-  "status": "verified",
+  "status": "completed",
   "priority": 1,
   "complexity": "simple",
   "dependencies": [],

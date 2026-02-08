@@ -108,6 +108,21 @@ class Settings(BaseSettings):
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = 30
     CIRCUIT_BREAKER_EXPECTED_EXCEPTION: str = "ConnectionError"
 
+    # AI Service Client Configuration
+    # CRITICAL: 2-second timeout prevents cascading failures from slow AI service
+    AI_SERVICE_URL: str = os.getenv("AI_SERVICE_URL", "http://ai-service:8013")
+    AI_SERVICE_TIMEOUT_SECONDS: float = float(os.getenv("AI_SERVICE_TIMEOUT", "2.0"))
+    AI_SERVICE_CONNECT_TIMEOUT: float = float(os.getenv("AI_SERVICE_CONNECT_TIMEOUT", "1.0"))
+
+    # Exponential Backoff Configuration
+    AI_SERVICE_MAX_RETRIES: int = int(os.getenv("AI_SERVICE_MAX_RETRIES", "3"))
+    AI_SERVICE_BASE_DELAY: float = float(os.getenv("AI_SERVICE_BASE_DELAY", "0.1"))  # 100ms base
+    AI_SERVICE_MAX_DELAY: float = float(os.getenv("AI_SERVICE_MAX_DELAY", "2.0"))    # 2s max
+    AI_SERVICE_JITTER: float = float(os.getenv("AI_SERVICE_JITTER", "0.1"))          # 10% jitter
+
+    # Fallback Configuration
+    AI_SERVICE_FALLBACK_ENABLED: bool = os.getenv("AI_SERVICE_FALLBACK_ENABLED", "true").lower() == "true"
+
     @property
     def CORS_ORIGINS(self) -> List[str]:
         """Get CORS origins - handled as property to avoid pydantic env parsing issues."""

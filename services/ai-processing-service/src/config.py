@@ -107,6 +107,8 @@ class Settings(BaseSettings):
     KAFKA_TOPIC_AI_RESULTS: str = Field(default="asset-ai-results")
     KAFKA_TOPIC_MODERATION: str = Field(default="asset-moderation")
     KAFKA_TOPIC_DUPLICATES: str = Field(default="asset-duplicates")
+    KAFKA_TOPIC_FACE_DETECTION: str = Field(default="asset-face-detection")
+    KAFKA_FACE_DETECTION_CONSUMER_GROUP: str = Field(default="face-detection-consumer")
 
     # ==========================================================================
     # AI Provider Configuration
@@ -162,6 +164,36 @@ class Settings(BaseSettings):
     # AI Tagging
     AI_TAGGING_ENABLED: bool = Field(default=True)
     AI_TAGGING_MIN_CONFIDENCE: float = Field(default=0.7)
+
+    # Face Detection (InsightFace)
+    FACE_DETECTION_MODEL: str = Field(
+        default="buffalo_l",
+        description="InsightFace model pack (buffalo_l, buffalo_m, buffalo_s, antelopev2)",
+    )
+    FACE_DETECTION_CONFIDENCE_THRESHOLD: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence for face detection",
+    )
+    FACE_DETECTION_MAX_FACES: int = Field(
+        default=100,
+        ge=1,
+        le=500,
+        description="Maximum faces to detect per image",
+    )
+    FACE_DETECTION_DET_SIZE: int = Field(
+        default=640,
+        description="Detection resolution (square, e.g., 640 for 640x640)",
+    )
+    FACE_DETECTION_GPU_ENABLED: bool = Field(
+        default=True,
+        description="Enable GPU acceleration for face detection",
+    )
+    FACE_EMBEDDING_DIM: int = Field(
+        default=512,
+        description="Face embedding vector dimension",
+    )
 
     # ==========================================================================
     # Google A2A Configuration

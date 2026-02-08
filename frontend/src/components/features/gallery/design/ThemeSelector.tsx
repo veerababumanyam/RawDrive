@@ -15,13 +15,16 @@ import React, { useCallback, useRef, useState } from 'react';
 import { ThemeId, ThemeMode } from '../../../../types/gallery-design';
 import { GALLERY_THEMES } from '../../../../constants/galleryThemes';
 import { DesignStudioTooltip } from './DesignStudioTooltip';
+import { AccentSwatchSelector } from './AccentSwatchSelector';
 import { Check } from 'lucide-react';
 
 interface ThemeSelectorProps {
   selectedTheme: ThemeId;
   selectedMode: ThemeMode;
+  selectedAccentOverride?: string;
   onThemeChange: (themeId: ThemeId) => void;
   onModeChange: (mode: ThemeMode) => void;
+  onAccentChange?: (accent: string | undefined) => void;
   disabled?: boolean;
 }
 
@@ -31,8 +34,10 @@ const THEME_LIST = Object.values(GALLERY_THEMES);
 export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
   selectedTheme,
   selectedMode,
+  selectedAccentOverride,
   onThemeChange,
   onModeChange,
+  onAccentChange,
   disabled = false,
 }) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
@@ -124,6 +129,18 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
           ))}
         </div>
       </div>
+
+      {/* Accent Color Selector (T012-T014) */}
+      {onAccentChange && (
+        <div className="pt-4 border-t border-gray-200 dark:border-white/5">
+          <AccentSwatchSelector
+            themeId={selectedTheme}
+            selectedAccent={selectedAccentOverride}
+            onChange={onAccentChange}
+            disabled={disabled}
+          />
+        </div>
+      )}
 
       {/* Mode Toggle */}
       <div className="pt-4 border-t border-gray-200 dark:border-white/5">

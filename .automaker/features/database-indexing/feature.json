@@ -3,7 +3,7 @@
   "category": "Database",
   "title": "Optimized Database Indexing",
   "description": "Create database indexes on critical query paths (invitation_id, workspace_id, email, created_date) for query performance optimization.",
-  "status": "verified",
+  "status": "completed",
   "priority": 1,
   "complexity": "simple",
   "dependencies": [

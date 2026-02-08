@@ -3,7 +3,7 @@
   "category": "API",
   "title": "Sliding Window Rate Limiting Middleware",
   "description": "Implement rate limiting for RSVP submissions (10/minute), CSV imports (5/hour), bulk invites (10/hour), and analytics (100/minute) per IP with Redis backend.",
-  "status": "verified",
+  "status": "completed",
   "priority": 1,
   "complexity": "moderate",
   "dependencies": [

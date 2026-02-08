@@ -239,6 +239,8 @@ export interface GalleryDetailData {
   notify_on_download?: boolean;
   // Daily download limit (US2 - Daily Download Limits)
   daily_download_limit?: number | null;
+  // People filter (Face Recognition - allows clients to filter by person)
+  show_people_filter?: boolean;
 }
 
 // Wrapper for API client response
@@ -420,6 +422,8 @@ export interface GalleryUpdateRequest {
   notify_on_download?: boolean;
   // Daily download limit (US2 - Daily Download Limits)
   daily_download_limit?: number | null;
+  // People filter (Face Recognition - allows clients to filter by person)
+  show_people_filter?: boolean;
 }
 
 // Upload Session Request
@@ -618,6 +622,8 @@ export interface ValidatedMagicLink {
     slideshow_config?: SlideshowConfig;
     activity_tracking?: ActivityTrackingConfig;
     custom_domain?: string;
+    // People filter (Face Recognition)
+    show_people_filter?: boolean;
   };
   company_profile?: {
     name: string;

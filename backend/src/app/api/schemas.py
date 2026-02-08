@@ -443,6 +443,8 @@ class UpdateGalleryRequest(BaseModel):
     font_family: Optional[str] = Field(None, max_length=100, description="Font family for typography override")
     custom_domain: Optional[str] = Field(None, max_length=255, description="Custom domain for gallery")
     custom_links: Optional[list[dict]] = Field(None, description="List of {label, url} custom navigation links")
+    # Face recognition settings (T006)
+    show_people_filter: Optional[bool] = Field(None, description="Enable people filter for client gallery views")
 
 
 class PublishGalleryRequest(BaseModel):
@@ -539,6 +541,8 @@ class GalleryDetailResponse(BaseModel):
     pinned_at: Optional[str] = None
     is_pinned: bool = False
     last_accessed_at: Optional[str] = None
+    # Face recognition settings (T006)
+    show_people_filter: bool = False
 
 
 class GalleryListItemResponse(BaseModel):
@@ -2240,3 +2244,4 @@ class UserLanguagePreferencesResponse(BaseModel):
     resolved_ui_locale: ResolvedLocaleResponse = Field(
         ..., description="Currently resolved UI locale"
     )
+test

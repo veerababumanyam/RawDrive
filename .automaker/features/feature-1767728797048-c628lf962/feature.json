@@ -14,6 +14,637 @@
   "requirePlanApproval": false,
   "dependencies": [],
   "titleGenerating": false,
-  "status": "backlog",
-  "id": "feature-1767728797048-c628lf962"
+  "status": "completed",
+  "id": "feature-1767728797048-c628lf962",
+  "startedAt": "2026-02-01T12:18:16.165Z",
+  "updatedAt": "2026-02-01T12:35:34.189Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "I'll analyze this feature request and create a comprehensive specification for the Mobile Companion App. Let me first explore the codebase to understand the existing architecture and patterns.\n\n🔧 Tool: Task\nInput: {\n  \"subagent_type\": \"Explore\",\n  \"prompt\": \"Explore the RawDrive codebase to understand:\\n1. The existing frontend architecture (React patterns, state management, API services)\\n2. The backend API structure and authentication patterns\\n3. Any existing mobile-related code or React Native configurations\\n4. The shared packages structure (@rawdrive/shared-*)\\n5. Authentication flow (JWT, biometric support if any)\\n6. Gallery service API endpoints\\n7. Client communication patterns\\n8. Push notification infrastructure if any\\n9. Offline sync patterns if any\\n\\nFocus on understanding patterns that would be relevant for building a React Native mobile app companion.\",\n  \"description\": \"Explore codebase for mobile app\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\" -type f -name \\\"*.json\\\" | grep -E \\\"(package\\\\.json|tsconfig|jest)\\\" | head -20\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\" | head -40\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\pnpm-workspace.yaml\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\package.json\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\package.json\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\" -type d | head -25\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\packages\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\" | head -30\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\services\\\" -type f -name \\\"*.ts\\\" | head -20\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\hooks\\\" -type f -name \\\"*.ts\\\" | head -20\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\packages\\\\shared-constants\\\\package.json\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\services\\\\api.ts\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\services\\\\auth.ts\",\n  \"limit\": 150\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\services\\\\auth.ts\",\n  \"offset\": 150,\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\" -type f -name \\\"*.py\\\" | head -20\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\\main.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\gallery-service\\\\src\\\" -type f -name \\\"*.py\\\" | head -25\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\gallery-service\\\\src\\\\config.py\",\n  \"limit\": 80\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\gallery-service\\\\src\\\\api\\\\v1\\\\galleries.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\packages\\\\shared-types\\\\src\\\\index.ts\",\n  \"limit\": 150\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\contexts\\\" -type f -name \\\"*.ts*\\\" | head -10\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\packages\\\\shared-constants\\\\src\\\\index.ts\",\n  \"limit\": 120\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\contexts\\\\AuthContext.tsx\",\n  \"limit\": 150\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"offline\\\\|sync\\\\|cache\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\services\\\" --include=\\\"*.ts\\\" | head -20\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"useQuery\\\\|useMutation\\\\|useInfiniteQuery\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\" --include=\\\"*.ts*\\\" | wc -l\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\gallery-service\\\\src\\\" -name \\\"*websocket*\\\" -o -name \\\"*ws*\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"notification\\\\|push\\\\|worker\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\" --include=\\\"*.ts*\\\" -l | head -10\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\gallery-service\\\\src\\\\api\\\\v1\\\\websocket.py\",\n  \"limit\": 120\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\" -name \\\"*service-worker*\\\" -o -name \\\"*manifest*\\\" -o -name \\\"*pwa*\\\" | head -10\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"workbox\\\\|ServiceWorker\\\\|offline\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\package.json\\\"\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\client-service\\\\src\\\" -name \\\"*.py\\\" -type f | head -15\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\client-service\\\\src\\\\api\\\\v1\\\\clients.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\desktop\\\\package.json\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\upload-service\\\\src\\\" -name \\\"*.py\\\" -type f | head -10\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\\notifications-service\\\\src\\\" -name \\\"*.py\\\" -type f | head -10\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"useState\\\\|useReducer\\\\|Context\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\hooks\\\" --include=\\\"*.ts*\\\" -l | head -15\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\hooks\\\\index.ts\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\hooks\\\\useGallery.ts\",\n  \"limit\": 120\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"axios\\\\|fetch\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\services\\\\api.ts\\\" --include=\\\"*.ts\\\" -A 5 | head -30\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\\models\\\" -name \\\"*.py\\\" -type f | head -20\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"notification\\\\|push\\\\|broadcast\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\services\\\" --include=\\\"*.py\\\" -l | head -10\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\\models\\\\asset.py\",\n  \"limit\": 120\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\\models\\\" -name \\\"*.py\\\" | grep -E \\\"asset|gallery|user\\\"\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\\models\\\\user.py\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\backend\\\\src\\\\app\\\\api\\\\v1\\\\auth.py\",\n  \"limit\": 120\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\docs\\\"\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\.claude\\\\PRD.md\",\n  \"limit\": 200\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -r \\\"useQuery\\\\|useMutation\\\" \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\hooks\\\\useGallery.ts\\\" -A 3 | head -20\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\services\\\\galleryService.ts\",\n  \"limit\": 120\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\.env\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\admin\\\\Desktop\\\\RawDrive2\\\\frontend\\\\src\\\\pages\\\" -name \\\"*.tsx\\\" | head -10\"\n}\n\nNow I have a comprehensive understanding of the codebase. Let me create the full specification document.\n\n---\n\n# Mobile Companion App - Full Specification Document\n\n## 1. Problem Statement\n\nProfessional photographers and studio owners need to manage their business while on location or away from their desktop. Currently, RawDrive is only accessible via web browser, which limits productivity during shoots, client meetings, and travel. A dedicated mobile companion app will enable photographers to upload BTS content instantly, respond to client inquiries, manage galleries, and track business metrics from anywhere.\n\n## 2. User Story\n\n**As a** professional photographer or studio owner,  \n**I want** a native mobile app that connects to my RawDrive workspace,  \n**So that** I can manage galleries, communicate with clients, upload photos on-the-go, and never miss important business notifications.\n\n## 3. Acceptance Criteria\n\n### Happy Path Scenarios\n\n**Authentication:**\n- GIVEN a user has a valid RawDrive account, WHEN they open the mobile app and authenticate using biometrics (FaceID/TouchID), THEN they should be logged into their default workspace\n- GIVEN a user is authenticated, WHEN they switch workspaces, THEN the app should update all data contexts and UI to reflect the new workspace\n\n**Dashboard:**\n- GIVEN a user opens the app, WHEN the dashboard loads, THEN they should see today's schedule, pending invoices count, and active gallery view counts\n- GIVEN a user taps \"Quick Actions\", WHEN they select \"Create Gallery\", THEN a new gallery creation flow should begin with minimal required fields\n\n**Gallery Management:**\n- GIVEN a user has galleries, WHEN they view the gallery list, THEN galleries should be sorted by most recent activity with thumbnail previews\n- GIVEN a user creates a gallery, WHEN they upload photos from camera roll, THEN photos should upload with progress indicator and resume on network interruption\n- GIVEN a user reviews gallery assets, WHEN they star/reject photos, THEN the action should sync to the backend and update UI immediately\n\n**Client Communication:**\n- GIVEN a client has submitted a contact form, WHEN the photographer views inquiries, THEN they should see inquiry details with one-tap WhatsApp chat option\n- GIVEN a payment is received, WHEN the notification service triggers, THEN the photographer should receive a push notification with payment details\n\n**Offline Mode:**\n- GIVEN a user is offline, WHEN they view cached data, THEN schedule, client contacts, and gallery metadata should be accessible\n- GIVEN a user performs actions offline, WHEN they come back online, THEN queued actions should sync automatically with conflict resolution\n\n### Edge Cases\n\n- GIVEN a user has multiple workspaces, WHEN they switch rapidly, THEN data should not leak between workspaces\n- GIVEN a large upload in progress, WHEN the app is backgrounded, THEN the upload should continue in background mode\n- GIVEN a token expires during offline period, WHEN user comes online, THEN refresh flow should execute before queued sync\n- GIVEN biometric authentication fails 3 times, WHEN user attempts login, THEN fallback to email/password should be offered\n\n### Error Handling\n\n- GIVEN a network error occurs, WHEN making an API call, THEN the app should show retry option with user-friendly error message\n- GIVEN the server returns 401, WHEN token refresh fails, THEN user should be redirected to login with session expired message\n- GIVEN upload fails due to file size, WHEN user selects oversized video, THEN clear file limit error should be shown (100MB image / 1GB video)\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | New `mobile/` directory (React Native project) |\n| Dependencies | React Native 0.73+, Expo, WatermelonDB, React Query, Expo SecureStore, react-native-biometrics |\n| Constraints | iOS 15+, Android 10+, Must use existing REST API, No backend changes for Phase 1 |\n| Patterns to Follow | Existing API client patterns, token refresh flow, workspace isolation headers |\n| Shared Code | Import from @rawdrive/shared-types (via API types), validation patterns |\n| Auth | JWT with biometric unlock, device fingerprinting, secure token storage |\n| Real-time | WebSocket for gallery updates, push notifications via FCM/APNs |\n\n## 5. Non-Goals (Explicit Exclusions)\n\n- **Desktop-class editing**: No photo editing, cropping, or preset application in Phase 1\n- **Tethering**: Camera-to-app wireless tethering is a future enhancement\n- **IPS Mode**: In-Person Sales softproofing mode deferred to Phase 2\n- **Full client portal**: This app is for photographers, not clients\n- **Invoice creation**: View-only for invoices; creation remains on web\n- **Calendar event creation**: View-only schedule; editing on web\n- **Custom domain support**: Deep linking uses rawdrive.in domain only\n- **White-labeling**: No studio-branded app skins in Phase 1\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Project Foundation & Infrastructure\n\n- [ ] T001: Initialize React Native project with Expo SDK 52 and TypeScript configuration | File: mobile/package.json\n- [ ] T002: Configure project structure following RawDrive conventions (screens, components, services, hooks, utils) | File: mobile/src/\n- [ ] T003: Set up Expo Router for navigation with typed routes | File: mobile/app/_layout.tsx\n- [ ] T004: Implement secure storage module using Expo SecureStore for tokens | File: mobile/src/services/secureStorage.ts\n- [ ] T005: Create API client adapted from web codebase with mobile-specific optimizations | File: mobile/src/services/api.ts\n- [ ] T006: Implement token refresh coordination and 401 error handling | File: mobile/src/services/tokenManager.ts\n- [ ] T007: Set up React Query with mobile-optimized caching configuration | File: mobile/src/providers/QueryProvider.tsx\n- [ ] T008: Configure WatermelonDB for offline data persistence | File: mobile/src/database/schema.ts\n- [ ] T009: Create workspace context with X-Workspace-ID header injection | File: mobile/src/contexts/WorkspaceContext.tsx\n- [ ] T010: Set up environment configuration for dev/staging/production | File: mobile/app.config.ts\n\n## Phase 2: Authentication & Security\n\n- [ ] T011: Implement biometric authentication (FaceID/TouchID) using react-native-biometrics | File: mobile/src/services/biometricAuth.ts\n- [ ] T012: Create login screen with email/password fallback | File: mobile/app/(auth)/login.tsx\n- [ ] T013: Implement OAuth redirect handling for Google Sign-In | File: mobile/src/services/oauth.ts\n- [ ] T014: Create device fingerprint generation for security tracking | File: mobile/src/utils/deviceFingerprint.ts\n- [ ] T015: Implement workspace selection/switching screen | File: mobile/app/(auth)/workspace-select.tsx\n- [ ] T016: Create auth context with user state management | File: mobile/src/contexts/AuthContext.tsx\n- [ ] T017: Implement session persistence and auto-login flow | File: mobile/src/hooks/useAutoLogin.ts\n- [ ] T018: Add secure logout with token revocation and data cleanup | File: mobile/src/services/logout.ts\n\n## Phase 3: Dashboard & Business Overview\n\n- [ ] T019: Create main dashboard layout with tab navigation | File: mobile/app/(tabs)/_layout.tsx\n- [ ] T020: Implement \"Today's Overview\" card with schedule summary | File: mobile/src/components/dashboard/TodayOverview.tsx\n- [ ] T021: Create pending invoices summary component | File: mobile/src/components/dashboard/PendingInvoices.tsx\n- [ ] T022: Build active galleries widget with real-time view counts | File: mobile/src/components/dashboard/ActiveGalleries.tsx\n- [ ] T023: Implement Quick Actions FAB (Create Gallery, Send Invoice, Share Link) | File: mobile/src/components/dashboard/QuickActions.tsx\n- [ ] T024: Create analytics pulse component for real-time stats | File: mobile/src/components/dashboard/AnalyticsPulse.tsx\n- [ ] T025: Implement dashboard data hooks with caching and background refresh | File: mobile/src/hooks/useDashboard.ts\n- [ ] T026: Add pull-to-refresh functionality for dashboard | File: mobile/app/(tabs)/index.tsx\n\n## Phase 4: Gallery Management\n\n- [ ] T027: Create gallery list screen with infinite scroll pagination | File: mobile/app/(tabs)/galleries/index.tsx\n- [ ] T028: Implement gallery detail view with asset grid | File: mobile/app/(tabs)/galleries/[id].tsx\n- [ ] T029: Build gallery creation flow with minimal required fields | File: mobile/app/galleries/create.tsx\n- [ ] T030: Implement gallery settings/edit screen | File: mobile/app/galleries/[id]/settings.tsx\n- [ ] T031: Create asset viewer with swipe navigation and zoom | File: mobile/src/components/gallery/AssetViewer.tsx\n- [ ] T032: Implement star/reject curation actions on assets | File: mobile/src/components/gallery/CurationActions.tsx\n- [ ] T033: Build gallery share modal with Magic Link generation | File: mobile/src/components/gallery/ShareModal.tsx\n- [ ] T034: Create gallery service with all CRUD operations | File: mobile/src/services/galleryService.ts\n- [ ] T035: Implement gallery hooks with offline support | File: mobile/src/hooks/useGallery.ts\n\n## Phase 5: Mobile Upload System\n\n- [ ] T036: Implement photo picker with multi-select from camera roll | File: mobile/src/components/upload/PhotoPicker.tsx\n- [ ] T037: Create TUS-protocol upload client for resumable uploads | File: mobile/src/services/uploadService.ts\n- [ ] T038: Build upload queue manager with background processing | File: mobile/src/services/uploadQueueManager.ts\n- [ ] T039: Implement upload progress UI with per-file and total progress | File: mobile/src/components/upload/UploadProgress.tsx\n- [ ] T040: Add background upload support using Expo Background Fetch | File: mobile/src/services/backgroundUpload.ts\n- [ ] T041: Create upload error handling with retry mechanisms | File: mobile/src/components/upload/UploadErrorHandler.tsx\n- [ ] T042: Implement upload to specific gallery flow | File: mobile/app/galleries/[id]/upload.tsx\n\n## Phase 6: Client Communication Hub\n\n- [ ] T043: Create inquiry list screen with filter options | File: mobile/app/(tabs)/inquiries/index.tsx\n- [ ] T044: Implement inquiry detail view | File: mobile/app/inquiries/[id].tsx\n- [ ] T045: Build WhatsApp integration with pre-filled templates | File: mobile/src/services/whatsappIntegration.ts\n- [ ] T046: Create client list screen with search | File: mobile/app/(tabs)/clients/index.tsx\n- [ ] T047: Implement client detail view with contact actions | File: mobile/app/clients/[id].tsx\n- [ ] T048: Build share via WhatsApp/Instagram DM functionality | File: mobile/src/components/share/SocialShare.tsx\n- [ ] T049: Create message template system for quick responses | File: mobile/src/services/messageTemplates.ts\n\n## Phase 7: Push Notifications\n\n- [ ] T050: Configure Expo Push Notifications with FCM/APNs | File: mobile/src/services/pushNotifications.ts\n- [ ] T051: Implement push notification registration and token management | File: mobile/src/hooks/usePushNotifications.ts\n- [ ] T052: Create notification handler for different event types | File: mobile/src/services/notificationHandler.ts\n- [ ] T053: Build in-app notification list screen | File: mobile/app/(tabs)/notifications.tsx\n- [ ] T054: Implement deep linking from notifications to relevant screens | File: mobile/src/navigation/deepLinking.ts\n- [ ] T055: Create notification preferences settings screen | File: mobile/app/settings/notifications.tsx\n\n## Phase 8: Offline Mode & Sync\n\n- [ ] T056: Implement WatermelonDB models for offline data | File: mobile/src/database/models/\n- [ ] T057: Create sync service with conflict resolution | File: mobile/src/services/syncService.ts\n- [ ] T058: Build action queue for offline mutations | File: mobile/src/services/offlineQueue.ts\n- [ ] T059: Implement network status detection and handling | File: mobile/src/hooks/useNetworkStatus.ts\n- [ ] T060: Create offline indicator UI component | File: mobile/src/components/common/OfflineIndicator.tsx\n- [ ] T061: Implement selective data caching strategy | File: mobile/src/services/cacheStrategy.ts\n- [ ] T062: Add background sync trigger on network reconnection | File: mobile/src/services/backgroundSync.ts\n\n## Phase 9: Settings & Device Management\n\n- [ ] T063: Create settings screen with user profile section | File: mobile/app/(tabs)/settings/index.tsx\n- [ ] T064: Implement workspace management settings | File: mobile/app/settings/workspace.tsx\n- [ ] T065: Build security settings (biometrics toggle, session management) | File: mobile/app/settings/security.tsx\n- [ ] T066: Create device info and MDM-lite revocation endpoint integration | File: mobile/src/services/deviceManagement.ts\n- [ ] T067: Implement app version check and update prompt | File: mobile/src/services/versionCheck.ts\n- [ ] T068: Build storage management for cached data cleanup | File: mobile/app/settings/storage.tsx\n- [ ] T069: Create about screen with app info and support links | File: mobile/app/settings/about.tsx\n\n## Phase 10: UI Polish & Platform Integration\n\n- [ ] T070: Create design system components matching RawDrive web theme | File: mobile/src/components/ui/\n- [ ] T071: Implement dark mode support with system preference detection | File: mobile/src/providers/ThemeProvider.tsx\n- [ ] T072: Add haptic feedback for key interactions | File: mobile/src/utils/haptics.ts\n- [ ] T073: Implement smooth animations and transitions | File: mobile/src/animations/\n- [ ] T074: Create loading skeletons for all data screens | File: mobile/src/components/skeletons/\n- [ ] T075: Add accessibility labels and VoiceOver/TalkBack support | File: mobile/src/components/ (all components)\n- [ ] T076: Implement iPad/tablet layout optimizations | File: mobile/src/layouts/\n\n## Phase 11: Testing & Quality Assurance\n\n- [ ] T077: Set up Jest and React Native Testing Library | File: mobile/jest.config.js\n- [ ] T078: Write unit tests for core services (API, auth, sync) | File: mobile/src/services/__tests__/\n- [ ] T079: Create integration tests for authentication flow | File: mobile/__tests__/auth.test.tsx\n- [ ] T080: Write E2E tests using Maestro for critical flows | File: mobile/e2e/\n- [ ] T081: Implement error boundary with crash reporting setup | File: mobile/src/components/ErrorBoundary.tsx\n- [ ] T082: Add performance monitoring using Expo insights | File: mobile/src/services/performanceMonitoring.ts\n\n## Phase 12: Build & Distribution\n\n- [ ] T083: Configure EAS Build for iOS and Android | File: mobile/eas.json\n- [ ] T084: Set up app signing and credentials | File: mobile/credentials.json (secure)\n- [ ] T085: Create App Store / Play Store metadata and screenshots | File: mobile/store-assets/\n- [ ] T086: Configure CodePush for OTA updates | File: mobile/src/services/codePush.ts\n- [ ] T087: Write release documentation and changelog | File: mobile/CHANGELOG.md\n- [ ] T088: Create CI/CD pipeline for automated builds | File: .github/workflows/mobile-build.yml\n```\n\n## 7. Success Metrics\n\n| Metric | Target | Measurement Method |\n|--------|--------|-------------------|\n| App Store Rating | ≥ 4.5 stars | App Store Connect / Play Console |\n| Login Success Rate | ≥ 99% | Analytics event tracking |\n| Upload Completion Rate | ≥ 95% (with retries) | Backend upload logs |\n| Offline Action Sync Success | ≥ 98% | Sync service logs |\n| Time to First Meaningful Paint | < 2 seconds | Performance monitoring |\n| Push Notification Delivery Rate | ≥ 95% | FCM/APNs analytics |\n| Gallery Creation Time (mobile) | < 30 seconds | User journey tracking |\n| Daily Active Users (first month) | 40% of web users | Analytics dashboard |\n| Crash-Free Sessions | ≥ 99.5% | Crashlytics/Sentry |\n\n## 8. Risks & Mitigations\n\n| Risk | Likelihood | Impact | Mitigation |\n|------|------------|--------|------------|\n| React Native performance issues with large galleries | Medium | High | Implement virtualized lists, lazy loading, image caching with memory limits |\n| Background upload unreliable on iOS | High | Medium | Use Background Fetch API, implement chunked uploads, provide foreground option |\n| Token refresh race conditions | Medium | High | Use coordinated refresh pattern from web codebase with mutex locks |\n| Offline sync conflicts | Medium | Medium | Implement last-write-wins with conflict UI for manual resolution |\n| App Store rejection (missing features) | Low | High | Review Apple/Google guidelines, ensure core functionality works offline |\n| Large app size affecting downloads | Medium | Low | Use dynamic imports, asset optimization, Hermes JS engine |\n| Biometric auth bypass attempts | Low | High | Implement secure enclave storage, server-side session validation |\n| WatermelonDB schema migrations | Medium | Medium | Version schema carefully, test upgrade paths, provide reset option |\n\n---",
+    "generatedAt": "2026-02-01T06:31:56.879Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Initialize React Native project with Expo SDK 52 and TypeScript configuration",
+        "filePath": "mobile/package.json",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Configure project structure following RawDrive conventions (screens, components, services, hooks, utils)",
+        "filePath": "mobile/src/",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Set up Expo Router for navigation with typed routes",
+        "filePath": "mobile/app/_layout.tsx",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Implement secure storage module using Expo SecureStore for tokens",
+        "filePath": "mobile/src/services/secureStorage.ts",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create API client adapted from web codebase with mobile-specific optimizations",
+        "filePath": "mobile/src/services/api.ts",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Implement token refresh coordination and 401 error handling",
+        "filePath": "mobile/src/services/tokenManager.ts",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Set up React Query with mobile-optimized caching configuration",
+        "filePath": "mobile/src/providers/QueryProvider.tsx",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Configure WatermelonDB for offline data persistence",
+        "filePath": "mobile/src/database/schema.ts",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create workspace context with X-Workspace-ID header injection",
+        "filePath": "mobile/src/contexts/WorkspaceContext.tsx",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Set up environment configuration for dev/staging/production",
+        "filePath": "mobile/app.config.ts",
+        "phase": "Phase 1: Project Foundation & Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Implement biometric authentication (FaceID/TouchID) using react-native-biometrics",
+        "filePath": "mobile/src/services/biometricAuth.ts",
+        "phase": "Phase 2: Authentication & Security",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create login screen with email/password fallback",
+        "filePath": "mobile/app/(auth)/login.tsx",
+        "phase": "Phase 2: Authentication & Security",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Implement OAuth redirect handling for Google Sign-In",
+        "filePath": "mobile/src/services/oauth.ts",
+        "phase": "Phase 2: Authentication & Security",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create device fingerprint generation for security tracking",
+        "filePath": "mobile/src/utils/deviceFingerprint.ts",
+        "phase": "Phase 2: Authentication & Security",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Implement workspace selection/switching screen",
+        "filePath": "mobile/app/(auth)/workspace-select.tsx",
+        "phase": "Phase 2: Authentication & Security",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create auth context with user state management",
+        "filePath": "mobile/src/contexts/AuthContext.tsx",
+        "phase": "Phase 2: Authentication & Security",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Implement session persistence and auto-login flow",
+        "filePath": "mobile/src/hooks/useAutoLogin.ts",
+        "phase": "Phase 2: Authentication & Security",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Add secure logout with token revocation and data cleanup",
+        "filePath": "mobile/src/services/logout.ts",
+        "phase": "Phase 2: Authentication & Security",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Create main dashboard layout with tab navigation",
+        "filePath": "mobile/app/(tabs)/_layout.tsx",
+        "phase": "Phase 3: Dashboard & Business Overview",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Implement \"Today's Overview\" card with schedule summary",
+        "filePath": "mobile/src/components/dashboard/TodayOverview.tsx",
+        "phase": "Phase 3: Dashboard & Business Overview",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Create pending invoices summary component",
+        "filePath": "mobile/src/components/dashboard/PendingInvoices.tsx",
+        "phase": "Phase 3: Dashboard & Business Overview",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Build active galleries widget with real-time view counts",
+        "filePath": "mobile/src/components/dashboard/ActiveGalleries.tsx",
+        "phase": "Phase 3: Dashboard & Business Overview",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Implement Quick Actions FAB (Create Gallery, Send Invoice, Share Link)",
+        "filePath": "mobile/src/components/dashboard/QuickActions.tsx",
+        "phase": "Phase 3: Dashboard & Business Overview",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create analytics pulse component for real-time stats",
+        "filePath": "mobile/src/components/dashboard/AnalyticsPulse.tsx",
+        "phase": "Phase 3: Dashboard & Business Overview",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Implement dashboard data hooks with caching and background refresh",
+        "filePath": "mobile/src/hooks/useDashboard.ts",
+        "phase": "Phase 3: Dashboard & Business Overview",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Add pull-to-refresh functionality for dashboard",
+        "filePath": "mobile/app/(tabs)/index.tsx",
+        "phase": "Phase 3: Dashboard & Business Overview",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Create gallery list screen with infinite scroll pagination",
+        "filePath": "mobile/app/(tabs)/galleries/index.tsx",
+        "phase": "Phase 4: Gallery Management",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Implement gallery detail view with asset grid",
+        "filePath": "mobile/app/(tabs)/galleries/[id].tsx",
+        "phase": "Phase 4: Gallery Management",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Build gallery creation flow with minimal required fields",
+        "filePath": "mobile/app/galleries/create.tsx",
+        "phase": "Phase 4: Gallery Management",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Implement gallery settings/edit screen",
+        "filePath": "mobile/app/galleries/[id]/settings.tsx",
+        "phase": "Phase 4: Gallery Management",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create asset viewer with swipe navigation and zoom",
+        "filePath": "mobile/src/components/gallery/AssetViewer.tsx",
+        "phase": "Phase 4: Gallery Management",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Implement star/reject curation actions on assets",
+        "filePath": "mobile/src/components/gallery/CurationActions.tsx",
+        "phase": "Phase 4: Gallery Management",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Build gallery share modal with Magic Link generation",
+        "filePath": "mobile/src/components/gallery/ShareModal.tsx",
+        "phase": "Phase 4: Gallery Management",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Create gallery service with all CRUD operations",
+        "filePath": "mobile/src/services/galleryService.ts",
+        "phase": "Phase 4: Gallery Management",
+        "status": "pending"
+      },
+      {
+        "id": "T035",
+        "description": "Implement gallery hooks with offline support",
+        "filePath": "mobile/src/hooks/useGallery.ts",
+        "phase": "Phase 4: Gallery Management",
+        "status": "pending"
+      },
+      {
+        "id": "T036",
+        "description": "Implement photo picker with multi-select from camera roll",
+        "filePath": "mobile/src/components/upload/PhotoPicker.tsx",
+        "phase": "Phase 5: Mobile Upload System",
+        "status": "pending"
+      },
+      {
+        "id": "T037",
+        "description": "Create TUS-protocol upload client for resumable uploads",
+        "filePath": "mobile/src/services/uploadService.ts",
+        "phase": "Phase 5: Mobile Upload System",
+        "status": "pending"
+      },
+      {
+        "id": "T038",
+        "description": "Build upload queue manager with background processing",
+        "filePath": "mobile/src/services/uploadQueueManager.ts",
+        "phase": "Phase 5: Mobile Upload System",
+        "status": "pending"
+      },
+      {
+        "id": "T039",
+        "description": "Implement upload progress UI with per-file and total progress",
+        "filePath": "mobile/src/components/upload/UploadProgress.tsx",
+        "phase": "Phase 5: Mobile Upload System",
+        "status": "pending"
+      },
+      {
+        "id": "T040",
+        "description": "Add background upload support using Expo Background Fetch",
+        "filePath": "mobile/src/services/backgroundUpload.ts",
+        "phase": "Phase 5: Mobile Upload System",
+        "status": "pending"
+      },
+      {
+        "id": "T041",
+        "description": "Create upload error handling with retry mechanisms",
+        "filePath": "mobile/src/components/upload/UploadErrorHandler.tsx",
+        "phase": "Phase 5: Mobile Upload System",
+        "status": "pending"
+      },
+      {
+        "id": "T042",
+        "description": "Implement upload to specific gallery flow",
+        "filePath": "mobile/app/galleries/[id]/upload.tsx",
+        "phase": "Phase 5: Mobile Upload System",
+        "status": "pending"
+      },
+      {
+        "id": "T043",
+        "description": "Create inquiry list screen with filter options",
+        "filePath": "mobile/app/(tabs)/inquiries/index.tsx",
+        "phase": "Phase 6: Client Communication Hub",
+        "status": "pending"
+      },
+      {
+        "id": "T044",
+        "description": "Implement inquiry detail view",
+        "filePath": "mobile/app/inquiries/[id].tsx",
+        "phase": "Phase 6: Client Communication Hub",
+        "status": "pending"
+      },
+      {
+        "id": "T045",
+        "description": "Build WhatsApp integration with pre-filled templates",
+        "filePath": "mobile/src/services/whatsappIntegration.ts",
+        "phase": "Phase 6: Client Communication Hub",
+        "status": "pending"
+      },
+      {
+        "id": "T046",
+        "description": "Create client list screen with search",
+        "filePath": "mobile/app/(tabs)/clients/index.tsx",
+        "phase": "Phase 6: Client Communication Hub",
+        "status": "pending"
+      },
+      {
+        "id": "T047",
+        "description": "Implement client detail view with contact actions",
+        "filePath": "mobile/app/clients/[id].tsx",
+        "phase": "Phase 6: Client Communication Hub",
+        "status": "pending"
+      },
+      {
+        "id": "T048",
+        "description": "Build share via WhatsApp/Instagram DM functionality",
+        "filePath": "mobile/src/components/share/SocialShare.tsx",
+        "phase": "Phase 6: Client Communication Hub",
+        "status": "pending"
+      },
+      {
+        "id": "T049",
+        "description": "Create message template system for quick responses",
+        "filePath": "mobile/src/services/messageTemplates.ts",
+        "phase": "Phase 6: Client Communication Hub",
+        "status": "pending"
+      },
+      {
+        "id": "T050",
+        "description": "Configure Expo Push Notifications with FCM/APNs",
+        "filePath": "mobile/src/services/pushNotifications.ts",
+        "phase": "Phase 7: Push Notifications",
+        "status": "pending"
+      },
+      {
+        "id": "T051",
+        "description": "Implement push notification registration and token management",
+        "filePath": "mobile/src/hooks/usePushNotifications.ts",
+        "phase": "Phase 7: Push Notifications",
+        "status": "pending"
+      },
+      {
+        "id": "T052",
+        "description": "Create notification handler for different event types",
+        "filePath": "mobile/src/services/notificationHandler.ts",
+        "phase": "Phase 7: Push Notifications",
+        "status": "pending"
+      },
+      {
+        "id": "T053",
+        "description": "Build in-app notification list screen",
+        "filePath": "mobile/app/(tabs)/notifications.tsx",
+        "phase": "Phase 7: Push Notifications",
+        "status": "pending"
+      },
+      {
+        "id": "T054",
+        "description": "Implement deep linking from notifications to relevant screens",
+        "filePath": "mobile/src/navigation/deepLinking.ts",
+        "phase": "Phase 7: Push Notifications",
+        "status": "pending"
+      },
+      {
+        "id": "T055",
+        "description": "Create notification preferences settings screen",
+        "filePath": "mobile/app/settings/notifications.tsx",
+        "phase": "Phase 7: Push Notifications",
+        "status": "pending"
+      },
+      {
+        "id": "T056",
+        "description": "Implement WatermelonDB models for offline data",
+        "filePath": "mobile/src/database/models/",
+        "phase": "Phase 8: Offline Mode & Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T057",
+        "description": "Create sync service with conflict resolution",
+        "filePath": "mobile/src/services/syncService.ts",
+        "phase": "Phase 8: Offline Mode & Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T058",
+        "description": "Build action queue for offline mutations",
+        "filePath": "mobile/src/services/offlineQueue.ts",
+        "phase": "Phase 8: Offline Mode & Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T059",
+        "description": "Implement network status detection and handling",
+        "filePath": "mobile/src/hooks/useNetworkStatus.ts",
+        "phase": "Phase 8: Offline Mode & Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T060",
+        "description": "Create offline indicator UI component",
+        "filePath": "mobile/src/components/common/OfflineIndicator.tsx",
+        "phase": "Phase 8: Offline Mode & Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T061",
+        "description": "Implement selective data caching strategy",
+        "filePath": "mobile/src/services/cacheStrategy.ts",
+        "phase": "Phase 8: Offline Mode & Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T062",
+        "description": "Add background sync trigger on network reconnection",
+        "filePath": "mobile/src/services/backgroundSync.ts",
+        "phase": "Phase 8: Offline Mode & Sync",
+        "status": "pending"
+      },
+      {
+        "id": "T063",
+        "description": "Create settings screen with user profile section",
+        "filePath": "mobile/app/(tabs)/settings/index.tsx",
+        "phase": "Phase 9: Settings & Device Management",
+        "status": "pending"
+      },
+      {
+        "id": "T064",
+        "description": "Implement workspace management settings",
+        "filePath": "mobile/app/settings/workspace.tsx",
+        "phase": "Phase 9: Settings & Device Management",
+        "status": "pending"
+      },
+      {
+        "id": "T065",
+        "description": "Build security settings (biometrics toggle, session management)",
+        "filePath": "mobile/app/settings/security.tsx",
+        "phase": "Phase 9: Settings & Device Management",
+        "status": "pending"
+      },
+      {
+        "id": "T066",
+        "description": "Create device info and MDM-lite revocation endpoint integration",
+        "filePath": "mobile/src/services/deviceManagement.ts",
+        "phase": "Phase 9: Settings & Device Management",
+        "status": "pending"
+      },
+      {
+        "id": "T067",
+        "description": "Implement app version check and update prompt",
+        "filePath": "mobile/src/services/versionCheck.ts",
+        "phase": "Phase 9: Settings & Device Management",
+        "status": "pending"
+      },
+      {
+        "id": "T068",
+        "description": "Build storage management for cached data cleanup",
+        "filePath": "mobile/app/settings/storage.tsx",
+        "phase": "Phase 9: Settings & Device Management",
+        "status": "pending"
+      },
+      {
+        "id": "T069",
+        "description": "Create about screen with app info and support links",
+        "filePath": "mobile/app/settings/about.tsx",
+        "phase": "Phase 9: Settings & Device Management",
+        "status": "pending"
+      },
+      {
+        "id": "T070",
+        "description": "Create design system components matching RawDrive web theme",
+        "filePath": "mobile/src/components/ui/",
+        "phase": "Phase 10: UI Polish & Platform Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T071",
+        "description": "Implement dark mode support with system preference detection",
+        "filePath": "mobile/src/providers/ThemeProvider.tsx",
+        "phase": "Phase 10: UI Polish & Platform Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T072",
+        "description": "Add haptic feedback for key interactions",
+        "filePath": "mobile/src/utils/haptics.ts",
+        "phase": "Phase 10: UI Polish & Platform Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T073",
+        "description": "Implement smooth animations and transitions",
+        "filePath": "mobile/src/animations/",
+        "phase": "Phase 10: UI Polish & Platform Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T074",
+        "description": "Create loading skeletons for all data screens",
+        "filePath": "mobile/src/components/skeletons/",
+        "phase": "Phase 10: UI Polish & Platform Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T075",
+        "description": "Add accessibility labels and VoiceOver/TalkBack support",
+        "filePath": "mobile/src/components/ (all components)",
+        "phase": "Phase 10: UI Polish & Platform Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T076",
+        "description": "Implement iPad/tablet layout optimizations",
+        "filePath": "mobile/src/layouts/",
+        "phase": "Phase 10: UI Polish & Platform Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T077",
+        "description": "Set up Jest and React Native Testing Library",
+        "filePath": "mobile/jest.config.js",
+        "phase": "Phase 11: Testing & Quality Assurance",
+        "status": "pending"
+      },
+      {
+        "id": "T078",
+        "description": "Write unit tests for core services (API, auth, sync)",
+        "filePath": "mobile/src/services/__tests__/",
+        "phase": "Phase 11: Testing & Quality Assurance",
+        "status": "pending"
+      },
+      {
+        "id": "T079",
+        "description": "Create integration tests for authentication flow",
+        "filePath": "mobile/__tests__/auth.test.tsx",
+        "phase": "Phase 11: Testing & Quality Assurance",
+        "status": "pending"
+      },
+      {
+        "id": "T080",
+        "description": "Write E2E tests using Maestro for critical flows",
+        "filePath": "mobile/e2e/",
+        "phase": "Phase 11: Testing & Quality Assurance",
+        "status": "pending"
+      },
+      {
+        "id": "T081",
+        "description": "Implement error boundary with crash reporting setup",
+        "filePath": "mobile/src/components/ErrorBoundary.tsx",
+        "phase": "Phase 11: Testing & Quality Assurance",
+        "status": "pending"
+      },
+      {
+        "id": "T082",
+        "description": "Add performance monitoring using Expo insights",
+        "filePath": "mobile/src/services/performanceMonitoring.ts",
+        "phase": "Phase 11: Testing & Quality Assurance",
+        "status": "pending"
+      },
+      {
+        "id": "T083",
+        "description": "Configure EAS Build for iOS and Android",
+        "filePath": "mobile/eas.json",
+        "phase": "Phase 12: Build & Distribution",
+        "status": "pending"
+      },
+      {
+        "id": "T084",
+        "description": "Set up app signing and credentials",
+        "filePath": "mobile/credentials.json (secure)",
+        "phase": "Phase 12: Build & Distribution",
+        "status": "pending"
+      },
+      {
+        "id": "T085",
+        "description": "Create App Store / Play Store metadata and screenshots",
+        "filePath": "mobile/store-assets/",
+        "phase": "Phase 12: Build & Distribution",
+        "status": "pending"
+      },
+      {
+        "id": "T086",
+        "description": "Configure CodePush for OTA updates",
+        "filePath": "mobile/src/services/codePush.ts",
+        "phase": "Phase 12: Build & Distribution",
+        "status": "pending"
+      },
+      {
+        "id": "T087",
+        "description": "Write release documentation and changelog",
+        "filePath": "mobile/CHANGELOG.md",
+        "phase": "Phase 12: Build & Distribution",
+        "status": "pending"
+      },
+      {
+        "id": "T088",
+        "description": "Create CI/CD pipeline for automated builds",
+        "filePath": ".github/workflows/mobile-build.yml",
+        "phase": "Phase 12: Build & Distribution",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 88,
+    "tasksCompleted": 0,
+    "approvedAt": "2026-02-01T06:31:56.882Z",
+    "currentTaskId": "T001"
+  }
 }

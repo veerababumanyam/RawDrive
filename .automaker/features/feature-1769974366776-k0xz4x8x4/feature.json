@@ -1,0 +1,12 @@
+{
+  "category": "User Experience & Collaboration",
+  "description": "Enable real-time multi-user collaborative editing in the Gallery Design Studio. Add presence indicators, live cursor tracking, and conflict resolution for when multiple team members edit gallery designs simultaneously. Photographers working with assistants or teams currently can't edit together—one person must finish before the next edits.",
+  "id": "feature-1769974366776-k0xz4x8x4",
+  "steps": [],
+  "status": "verified",
+  "skipTests": true,
+  "priority": 1,
+  "startedAt": "2026-02-01T19:33:10.273Z",
+  "updatedAt": "2026-02-01T20:01:14.638Z",
+  "justFinishedAt": "2026-02-01T20:01:14.638Z"
+}

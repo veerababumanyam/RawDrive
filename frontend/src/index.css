@@ -2005,6 +2005,64 @@ select option {
     0 0 70px rgba(251, 146, 60, 0.45);
 }
 
+/* AMBER - Culling/Workflow Actions (Premium Amber Glassmorphism) */
+.btn-action-amber {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.9) 0%, rgba(217, 119, 6, 0.9) 100%);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+    0 1px 2px rgba(255, 255, 255, 0.3) inset,
+    0 2px 4px rgba(245, 158, 11, 0.15),
+    0 4px 8px rgba(245, 158, 11, 0.2),
+    0 8px 16px rgba(245, 158, 11, 0.15),
+    0 0 40px rgba(217, 119, 6, 0.2);
+}
+
+.btn-action-amber:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.95) 0%, rgba(180, 83, 9, 0.95) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset,
+    0 1px 3px rgba(255, 255, 255, 0.4) inset,
+    0 4px 8px rgba(245, 158, 11, 0.2),
+    0 8px 16px rgba(245, 158, 11, 0.3),
+    0 16px 32px rgba(245, 158, 11, 0.2),
+    0 0 60px rgba(217, 119, 6, 0.3);
+}
+
+.btn-action-amber:active:not(:disabled) {
+  background: linear-gradient(135deg, rgba(180, 83, 9, 0.95) 0%, rgba(146, 64, 14, 0.95) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.15) inset,
+    0 1px 2px rgba(255, 255, 255, 0.2) inset,
+    0 2px 4px rgba(245, 158, 11, 0.2),
+    0 0 30px rgba(217, 119, 6, 0.25);
+}
+
+[data-theme="dark"] .btn-action-amber {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.95) 0%, rgba(245, 158, 11, 0.95) 100%);
+  color: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 1px 2px rgba(255, 255, 255, 0.15) inset,
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 4px 8px rgba(0, 0, 0, 0.25),
+    0 8px 16px rgba(0, 0, 0, 0.2),
+    0 0 50px rgba(251, 191, 36, 0.35);
+}
+
+[data-theme="dark"] .btn-action-amber:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(252, 211, 77, 0.95) 0%, rgba(251, 191, 36, 0.95) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset,
+    0 1px 3px rgba(255, 255, 255, 0.2) inset,
+    0 4px 8px rgba(0, 0, 0, 0.3),
+    0 8px 16px rgba(0, 0, 0, 0.25),
+    0 16px 32px rgba(0, 0, 0, 0.2),
+    0 0 70px rgba(251, 191, 36, 0.45);
+}
+
 /* BLUE - Share Actions (Premium Emerald Glassmorphism) */
 .btn-action-blue {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.9) 0%, rgba(5, 150, 105, 0.9) 100%);

@@ -17,7 +17,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { useDesignDraft } from '../../hooks/useDesignDraft';
-import { useDesignCollaboration } from '../../hooks/useDesignCollaboration';
+import { useDesignStudioCollaboration } from '../../hooks/useDesignStudioCollaboration';
 import { useGallery } from '../../hooks/useGallery';
 import { useToast } from '../../components/ui/Toast';
 import { setupThemeWithSystemPreference } from '../../utils/themeUtils';
@@ -27,7 +27,12 @@ import { DesignPreviewCanvas } from '../../components/features/gallery/design/De
 import { SaveAsTemplateModal } from '../../components/features/gallery/design/SaveAsTemplateModal';
 import { TemplateLibrary } from '../../components/features/gallery/design/TemplateLibrary';
 import { DesignStudioTooltip } from '../../components/features/gallery/design/DesignStudioTooltip';
+import { PresenceIndicators, CompactPresenceBadge, ConnectionStatusBadge } from '../../components/features/gallery/design/PresenceIndicators';
+import { LiveCursorOverlay } from '../../components/features/gallery/design/LiveCursorOverlay';
+import { CollaboratorsList } from '../../components/features/gallery/design/CollaboratorsList';
+import { ConflictResolutionModal, ConflictAlertBanner } from '../../components/features/gallery/design/ConflictResolutionModal';
 import galleryDesignService from '../../services/galleryDesignService';
+import type { DesignSection, DesignConflict } from '../../types/design-studio-collaboration';
 import {
   Undo2,
   Redo2,
@@ -37,7 +42,9 @@ import {
   Library,
   Save,
   Send,
-  Ruler
+  Ruler,
+  Users,
+  X
 } from 'lucide-react';
 
 interface ViewportMode {
@@ -75,15 +82,54 @@ export const GalleryDesignStudioPage: React.FC = () => {
     autoSaveInterval: 3000,
   });
 
-  // Setup design collaboration
+  // Setup enhanced design collaboration
   const {
-    isCollaborating: _isCollaborating,
-    lockedSections,
-    viewerCount,
+    // State
+    isCollaborating,
+    connectionStatus,
     collaborators,
-  } = useDesignCollaboration({
+    lockedSections,
+    conflicts,
+    activityFeed,
+    myUserId,
+
+    // Actions
+    joinSession,
+    leaveSession,
+    updateCursor,
+    lockSection,
+    unlockSection,
+    broadcastUpdate,
+    setTyping,
+    setFocusedSection,
+    resolveConflict,
+  } = useDesignStudioCollaboration({
     galleryId: galleryId || '',
+    workspaceId: workspaceId || '',
     enabled: true,
+    onRemoteUpdate: (remoteConfig, userId, section) => {
+      // Apply remote updates to local config (merge strategy)
+      if (remoteConfig && section) {
+        updateConfig((prev) => ({
+          ...prev,
+          [section]: { ...prev[section as keyof typeof prev], ...remoteConfig },
+        }));
+      }
+    },
+    onConflict: (conflict) => {
+      // Show conflict alert
+      setActiveConflict(conflict);
+    },
+    onSectionLocked: (section, userName) => {
+      addToast({
+        variant: 'info',
+        title: 'Section Locked',
+        message: `${userName} is now editing ${section}`,
+      });
+    },
+    onSectionUnlocked: (section) => {
+      // Silent unlock - no toast needed
+    },
   });
 
   // Fetch gallery data for cover preview
@@ -113,6 +159,11 @@ export const GalleryDesignStudioPage: React.FC = () => {
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
 
+  // Collaboration UI state
+  const [showCollaboratorsSidebar, setShowCollaboratorsSidebar] = useState(false);
+  const [activeConflict, setActiveConflict] = useState<DesignConflict | null>(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+
   // Resizable divider state - responsive initial width
   const [controlsWidth, setControlsWidth] = useState(() => {
     // On mobile (< 640px), use 200px; on tablet (< 1024px), use 280px; on desktop, use 360px
@@ -128,6 +179,95 @@ export const GalleryDesignStudioPage: React.FC = () => {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const themeCleanupRef = useRef<(() => void) | null>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
+  const cursorThrottleRef = useRef<number | null>(null);
+
+  // Handle cursor movement for collaboration
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isCollaborating || !previewContainerRef.current) return;
+
+      // Throttle cursor updates to 50ms (20fps)
+      if (cursorThrottleRef.current) return;
+
+      cursorThrottleRef.current = window.setTimeout(() => {
+        cursorThrottleRef.current = null;
+      }, 50);
+
+      const rect = previewContainerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      updateCursor({ x, y, panel: 'preview' });
+    },
+    [isCollaborating, updateCursor]
+  );
+
+  // Handle section focus for collaboration
+  const handleSectionFocus = useCallback(
+    (section: DesignSection) => {
+      setFocusedSection(section);
+    },
+    [setFocusedSection]
+  );
+
+  // Handle typing indicator for text fields
+  const handleTypingChange = useCallback(
+    (isTyping: boolean, field?: string) => {
+      setTyping(isTyping, field);
+    },
+    [setTyping]
+  );
+
+  // Handle conflict resolution
+  const handleResolveConflict = useCallback(
+    async (resolution: 'mine' | 'theirs' | 'merge') => {
+      if (!activeConflict) return;
+
+      await resolveConflict({
+        conflictId: activeConflict.conflict_id,
+        resolution,
+      });
+      setActiveConflict(null);
+      setShowConflictModal(false);
+
+      addToast({
+        variant: 'success',
+        title: 'Conflict Resolved',
+        message: 'Your changes have been synchronized.',
+      });
+    },
+    [activeConflict, resolveConflict, addToast]
+  );
+
+  // Handle unlock section from sidebar
+  const handleUnlockSection = useCallback(
+    async (section: DesignSection) => {
+      const success = await unlockSection(section);
+      if (success) {
+        addToast({
+          variant: 'success',
+          title: 'Section Unlocked',
+          message: `${section} is now available for editing.`,
+        });
+      }
+    },
+    [unlockSection, addToast]
+  );
+
+  // Handle jump to collaborator cursor
+  const handleJumpToCursor = useCallback(
+    (userId: string) => {
+      const collaborator = collaborators.find((c) => c.user_id === userId);
+      if (collaborator?.cursor && previewContainerRef.current) {
+        previewContainerRef.current.scrollTo({
+          left: collaborator.cursor.x - previewContainerRef.current.offsetWidth / 2,
+          top: collaborator.cursor.y - previewContainerRef.current.offsetHeight / 2,
+          behavior: 'smooth',
+        });
+      }
+    },
+    [collaborators]
+  );
 
   // Track actual preview panel width with ResizeObserver
   useEffect(() => {
@@ -328,6 +468,41 @@ export const GalleryDesignStudioPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4 pointer-events-auto">
+          {/* Collaboration Presence Indicators */}
+          {isCollaborating && collaborators.length > 1 && (
+            <div className="bg-gray-100 dark:bg-white/10 backdrop-blur-xl border border-gray-200 dark:border-white/20 rounded-2xl px-3 py-2 shadow-2xl">
+              <PresenceIndicators
+                collaborators={collaborators}
+                myUserId={myUserId}
+                maxVisible={3}
+                size="sm"
+                showStatus={true}
+                onClick={(collaborator) => handleJumpToCursor(collaborator.user_id)}
+              />
+            </div>
+          )}
+
+          {/* Connection Status & Collaborators Toggle */}
+          <div className="flex items-center gap-2">
+            <ConnectionStatusBadge status={connectionStatus} />
+            <DesignStudioTooltip content="View Collaborators">
+              <button
+                onClick={() => setShowCollaboratorsSidebar(!showCollaboratorsSidebar)}
+                className={`
+                  flex items-center gap-2 px-3 py-2 rounded-xl transition-all
+                  ${showCollaboratorsSidebar
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white hover:bg-gray-200 dark:hover:bg-white/20'
+                  }
+                  backdrop-blur-xl border border-gray-200 dark:border-white/20 shadow-2xl
+                `}
+              >
+                <Users className="w-4 h-4" />
+                <span className="text-sm font-medium">{collaborators.length}</span>
+              </button>
+            </DesignStudioTooltip>
+          </div>
+
           {/* Undo/Redo - Glass Capsule */}
           <div className="flex items-center bg-gray-100 dark:bg-white/10 backdrop-blur-xl border border-gray-200 dark:border-white/20 rounded-2xl p-1 shadow-2xl">
             <DesignStudioTooltip content="Undo (Ctrl+Z)">
@@ -432,6 +607,14 @@ export const GalleryDesignStudioPage: React.FC = () => {
               lastSavedAt={lastSavedAt}
               error={error}
               lockedSections={lockedSections}
+              galleryId={galleryId}
+              workspaceId={workspaceId}
+              onSectionFocus={handleSectionFocus}
+              onTypingChange={handleTypingChange}
+              onLockSection={lockSection}
+              onUnlockSection={unlockSection}
+              collaborators={collaborators}
+              myUserId={myUserId}
             />
           </div>
         </div>
@@ -459,7 +642,18 @@ export const GalleryDesignStudioPage: React.FC = () => {
         })()}
 
         {/* Right Panel - Preview Canvas Environment */}
-        <div ref={previewContainerRef} className="flex-1 relative z-10 overflow-auto bg-gray-50 dark:bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]">
+        <div
+          ref={previewContainerRef}
+          className="flex-1 relative z-10 overflow-auto bg-gray-50 dark:bg-[radial-gradient(circle_at_center,_#1e293b_0%,_#0f172a_100%)]"
+          onMouseMove={handleMouseMove}
+        >
+          {/* Live Cursor Overlay for Collaborators */}
+          <LiveCursorOverlay
+            collaborators={collaborators}
+            myUserId={myUserId}
+            containerRef={previewContainerRef}
+            enabled={isCollaborating}
+          />
           {/* Minimum width warning */}
           {actualPreviewWidth < MIN_PREVIEW_WIDTH && actualPreviewWidth > 0 ? (
             <div className="flex items-center justify-center h-full p-8 transition-opacity duration-200">
@@ -544,6 +738,56 @@ export const GalleryDesignStudioPage: React.FC = () => {
         <div className="fixed bottom-4 left-4 p-4 bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-200 rounded border border-red-300 dark:border-red-700">
           Publish failed: {publishError}
         </div>
+      )}
+
+      {/* Collaborators Sidebar */}
+      {showCollaboratorsSidebar && (
+        <div className="fixed inset-y-0 right-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/20 -left-full w-[200vw]"
+            onClick={() => setShowCollaboratorsSidebar(false)}
+          />
+          {/* Sidebar */}
+          <div className="relative shadow-2xl">
+            <CollaboratorsList
+              collaborators={collaborators}
+              myUserId={myUserId}
+              locks={lockedSections}
+              activityFeed={activityFeed}
+              onUnlockSection={handleUnlockSection}
+              onJumpToCursor={handleJumpToCursor}
+            />
+            {/* Close button */}
+            <button
+              onClick={() => setShowCollaboratorsSidebar(false)}
+              className="absolute top-4 -left-10 p-2 bg-white dark:bg-gray-800 rounded-l-lg shadow-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Conflict Alert Banner */}
+      {activeConflict && !showConflictModal && (
+        <ConflictAlertBanner
+          conflict={activeConflict}
+          onResolve={() => setShowConflictModal(true)}
+          onDismiss={() => setActiveConflict(null)}
+        />
+      )}
+
+      {/* Conflict Resolution Modal */}
+      {showConflictModal && activeConflict && (
+        <ConflictResolutionModal
+          conflict={activeConflict}
+          onResolve={handleResolveConflict}
+          onCancel={() => {
+            setShowConflictModal(false);
+            setActiveConflict(null);
+          }}
+        />
       )}
     </div>
   );

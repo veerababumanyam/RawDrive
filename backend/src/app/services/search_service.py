@@ -1,6 +1,20 @@
 """SearchService: Unified search across galleries, assets, tags, comments, and people.
 
-Implements comprehensive search within workspace scope.
+Implements comprehensive search within workspace scope using PostgreSQL full-text search.
+
+Performance Optimizations:
+- Uses PostgreSQL full-text search with GIN indexes for O(log n) complexity
+- Supports relevance ranking with ts_rank for better search results
+- Falls back to ILIKE for short queries or when FTS returns no results
+- Leverages generated tsvector columns for efficient storage and updates
+- Uses websearch_to_tsquery for advanced query syntax support
+
+Index Requirements (see migration 0190_gallery_fulltext_search_indexes.py):
+- galleries.search_vector (GIN) - combines title, description, client_name
+- tags.search_vector (GIN) - indexes tag names
+- people.search_vector (GIN) - indexes display names
+- comments.search_vector (GIN) - indexes comment body
+- assets.file_name (GIN trigram) - fuzzy filename matching
 """
 
 from __future__ import annotations
@@ -110,30 +124,83 @@ class SearchService:
         query: str,
         limit: int = 10,
     ) -> list[dict]:
-        """Search galleries by title, description, or client name."""
+        """Search galleries by title, description, or client name using full-text search.
+
+        Uses PostgreSQL full-text search with GIN index for O(log n) performance.
+        Falls back to ILIKE for very short queries (< 2 chars) where FTS may not work well.
+        Results are ranked by relevance using ts_rank with weight preferences.
+        """
         pool = await get_postgres_pool()
         async with acquire_conn(pool) as conn:
-            galleries = await conn.fetch(
-                """
-                SELECT
-                    gallery_id, title, description, client_name, status, created_at
-                FROM galleries
-                WHERE workspace_id = $1
-                AND deleted = FALSE
-                AND (
-                    title ILIKE $2
-                    OR description ILIKE $2
-                    OR client_name ILIKE $2
+            # For very short queries, full-text search may not work well
+            # Fall back to ILIKE in those cases
+            if len(query.strip()) < 2:
+                galleries = await conn.fetch(
+                    """
+                    SELECT
+                        gallery_id, title, description, client_name, status, created_at,
+                        0.0 as rank
+                    FROM galleries
+                    WHERE workspace_id = $1
+                    AND deleted = FALSE
+                    AND (
+                        title ILIKE $2
+                        OR description ILIKE $2
+                        OR client_name ILIKE $2
+                    )
+                    ORDER BY created_at DESC
+                    LIMIT $3
+                    """,
+                    workspace_id,
+                    f"%{query}%",
+                    limit,
                 )
-                ORDER BY
-                    CASE WHEN title ILIKE $2 THEN 0 ELSE 1 END,
-                    created_at DESC
-                LIMIT $3
-                """,
-                workspace_id,
-                f"%{query}%",
-                limit,
-            )
+            else:
+                # Use full-text search with ts_query for longer queries
+                # plainto_tsquery handles multi-word queries automatically
+                # websearch_to_tsquery allows advanced syntax like "OR", "-" for exclusion
+                galleries = await conn.fetch(
+                    """
+                    SELECT
+                        gallery_id, title, description, client_name, status, created_at,
+                        ts_rank(search_vector, websearch_to_tsquery('english', $2)) as rank
+                    FROM galleries
+                    WHERE workspace_id = $1
+                    AND deleted = FALSE
+                    AND search_vector @@ websearch_to_tsquery('english', $2)
+                    ORDER BY rank DESC, created_at DESC
+                    LIMIT $3
+                    """,
+                    workspace_id,
+                    query,
+                    limit,
+                )
+
+                # If no full-text results, fall back to prefix matching with ILIKE
+                # This handles cases where the query doesn't match any stemmed terms
+                if not galleries:
+                    galleries = await conn.fetch(
+                        """
+                        SELECT
+                            gallery_id, title, description, client_name, status, created_at,
+                            0.0 as rank
+                        FROM galleries
+                        WHERE workspace_id = $1
+                        AND deleted = FALSE
+                        AND (
+                            title ILIKE $2
+                            OR description ILIKE $2
+                            OR client_name ILIKE $2
+                        )
+                        ORDER BY
+                            CASE WHEN title ILIKE $2 THEN 0 ELSE 1 END,
+                            created_at DESC
+                        LIMIT $3
+                        """,
+                        workspace_id,
+                        f"%{query}%",
+                        limit,
+                    )
 
             return [
                 {
@@ -144,6 +211,7 @@ class SearchService:
                     "status": g["status"],
                     "created_at": g["created_at"].isoformat(),
                     "match_type": "gallery",
+                    "relevance_score": float(g["rank"]) if g["rank"] else 0.0,
                 }
                 for g in galleries
             ]
@@ -260,24 +328,67 @@ class SearchService:
         query: str,
         limit: int = 10,
     ) -> list[dict]:
-        """Search tags by name."""
+        """Search tags by name using full-text search with ILIKE fallback.
+
+        Uses PostgreSQL full-text search with GIN index for O(log n) performance.
+        Falls back to ILIKE for prefix matching when FTS returns no results.
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            tags = await conn.fetch(
-                """
-                SELECT
-                    t.tag_id, t.name, t.type, t.color,
-                    (SELECT COUNT(*) FROM asset_tags WHERE tag_id = t.tag_id) as usage_count
-                FROM tags t
-                WHERE t.workspace_id = $1
-                AND t.name ILIKE $2
-                ORDER BY usage_count DESC, t.name ASC
-                LIMIT $3
-                """,
-                workspace_id,
-                f"%{query}%",
-                limit,
-            )
+            # For short queries or tag searches, ILIKE with prefix matching often works better
+            # since tags are typically short single words
+            if len(query.strip()) < 3:
+                tags = await conn.fetch(
+                    """
+                    SELECT
+                        t.tag_id, t.name, t.type, t.color,
+                        (SELECT COUNT(*) FROM asset_tags WHERE tag_id = t.tag_id) as usage_count
+                    FROM tags t
+                    WHERE t.workspace_id = $1
+                    AND t.name ILIKE $2
+                    ORDER BY usage_count DESC, t.name ASC
+                    LIMIT $3
+                    """,
+                    workspace_id,
+                    f"%{query}%",
+                    limit,
+                )
+            else:
+                # Try full-text search first
+                tags = await conn.fetch(
+                    """
+                    SELECT
+                        t.tag_id, t.name, t.type, t.color,
+                        (SELECT COUNT(*) FROM asset_tags WHERE tag_id = t.tag_id) as usage_count,
+                        ts_rank(search_vector, plainto_tsquery('english', $2)) as rank
+                    FROM tags t
+                    WHERE t.workspace_id = $1
+                    AND search_vector @@ plainto_tsquery('english', $2)
+                    ORDER BY rank DESC, usage_count DESC, t.name ASC
+                    LIMIT $3
+                    """,
+                    workspace_id,
+                    query,
+                    limit,
+                )
+
+                # Fallback to ILIKE for partial matches
+                if not tags:
+                    tags = await conn.fetch(
+                        """
+                        SELECT
+                            t.tag_id, t.name, t.type, t.color,
+                            (SELECT COUNT(*) FROM asset_tags WHERE tag_id = t.tag_id) as usage_count
+                        FROM tags t
+                        WHERE t.workspace_id = $1
+                        AND t.name ILIKE $2
+                        ORDER BY usage_count DESC, t.name ASC
+                        LIMIT $3
+                        """,
+                        workspace_id,
+                        f"%{query}%",
+                        limit,
+                    )
 
             return [
                 {
@@ -297,26 +408,72 @@ class SearchService:
         query: str,
         limit: int = 10,
     ) -> list[dict]:
-        """Search people by display name."""
+        """Search people by display name using full-text search with ILIKE fallback.
+
+        Uses PostgreSQL full-text search with GIN index for O(log n) performance.
+        Falls back to ILIKE for partial/prefix matching when FTS returns no results.
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            people = await conn.fetch(
-                """
-                SELECT
-                    p.person_id, p.display_name, p.status,
-                    (SELECT COUNT(*) FROM face_detections WHERE person_id = p.person_id) as face_count,
-                    (SELECT fd.asset_id FROM face_detections fd WHERE fd.face_id = p.cover_face_id) as cover_asset_id
-                FROM people p
-                WHERE p.workspace_id = $1
-                AND p.status != 'deleted'
-                AND p.display_name ILIKE $2
-                ORDER BY face_count DESC, p.display_name ASC
-                LIMIT $3
-                """,
-                workspace_id,
-                f"%{query}%",
-                limit,
-            )
+            # For short queries, use ILIKE for prefix matching
+            if len(query.strip()) < 3:
+                people = await conn.fetch(
+                    """
+                    SELECT
+                        p.person_id, p.display_name, p.status,
+                        (SELECT COUNT(*) FROM face_detections WHERE person_id = p.person_id) as face_count,
+                        (SELECT fd.asset_id FROM face_detections fd WHERE fd.face_id = p.cover_face_id) as cover_asset_id
+                    FROM people p
+                    WHERE p.workspace_id = $1
+                    AND p.status != 'deleted'
+                    AND p.display_name ILIKE $2
+                    ORDER BY face_count DESC, p.display_name ASC
+                    LIMIT $3
+                    """,
+                    workspace_id,
+                    f"%{query}%",
+                    limit,
+                )
+            else:
+                # Try full-text search first
+                people = await conn.fetch(
+                    """
+                    SELECT
+                        p.person_id, p.display_name, p.status,
+                        (SELECT COUNT(*) FROM face_detections WHERE person_id = p.person_id) as face_count,
+                        (SELECT fd.asset_id FROM face_detections fd WHERE fd.face_id = p.cover_face_id) as cover_asset_id,
+                        ts_rank(search_vector, plainto_tsquery('english', $2)) as rank
+                    FROM people p
+                    WHERE p.workspace_id = $1
+                    AND p.status != 'deleted'
+                    AND search_vector @@ plainto_tsquery('english', $2)
+                    ORDER BY rank DESC, face_count DESC, p.display_name ASC
+                    LIMIT $3
+                    """,
+                    workspace_id,
+                    query,
+                    limit,
+                )
+
+                # Fallback to ILIKE for partial matches
+                if not people:
+                    people = await conn.fetch(
+                        """
+                        SELECT
+                            p.person_id, p.display_name, p.status,
+                            (SELECT COUNT(*) FROM face_detections WHERE person_id = p.person_id) as face_count,
+                            (SELECT fd.asset_id FROM face_detections fd WHERE fd.face_id = p.cover_face_id) as cover_asset_id
+                        FROM people p
+                        WHERE p.workspace_id = $1
+                        AND p.status != 'deleted'
+                        AND p.display_name ILIKE $2
+                        ORDER BY face_count DESC, p.display_name ASC
+                        LIMIT $3
+                        """,
+                        workspace_id,
+                        f"%{query}%",
+                        limit,
+                    )
 
             return [
                 {
@@ -337,33 +494,93 @@ class SearchService:
         gallery_id: Optional[UUID] = None,
         limit: int = 10,
     ) -> list[dict]:
-        """Search comments by body content."""
+        """Search comments by body content using full-text search with ILIKE fallback.
+
+        Uses PostgreSQL full-text search with GIN index for O(log n) performance.
+        Results are ranked by relevance using ts_rank.
+        """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             gallery_filter = ""
-            params = [workspace_id, f"%{query}%", limit]
+            gallery_filter_fts = ""
 
             if gallery_id:
                 gallery_filter = "AND c.gallery_id = $4"
-                params.append(gallery_id)
+                gallery_filter_fts = "AND c.gallery_id = $4"
 
-            comments = await conn.fetch(
-                f"""
-                SELECT
-                    c.comment_id, c.gallery_id, c.asset_id, c.body,
-                    c.author_name, c.created_at,
-                    u.display_name as author_display_name
-                FROM comments c
-                LEFT JOIN users u ON c.author_user_id = u.user_id
-                WHERE c.workspace_id = $1
-                AND c.deleted = FALSE
-                AND c.body ILIKE $2
-                {gallery_filter}
-                ORDER BY c.created_at DESC
-                LIMIT $3
-                """,
-                *params,
-            )
+            # For short queries, use ILIKE
+            if len(query.strip()) < 3:
+                params = [workspace_id, f"%{query}%", limit]
+                if gallery_id:
+                    params.append(gallery_id)
+
+                comments = await conn.fetch(
+                    f"""
+                    SELECT
+                        c.comment_id, c.gallery_id, c.asset_id, c.body,
+                        c.author_name, c.created_at,
+                        u.display_name as author_display_name,
+                        0.0 as rank
+                    FROM comments c
+                    LEFT JOIN users u ON c.author_user_id = u.user_id
+                    WHERE c.workspace_id = $1
+                    AND c.deleted = FALSE
+                    AND c.body ILIKE $2
+                    {gallery_filter}
+                    ORDER BY c.created_at DESC
+                    LIMIT $3
+                    """,
+                    *params,
+                )
+            else:
+                # Try full-text search first
+                params_fts = [workspace_id, query, limit]
+                if gallery_id:
+                    params_fts.append(gallery_id)
+
+                comments = await conn.fetch(
+                    f"""
+                    SELECT
+                        c.comment_id, c.gallery_id, c.asset_id, c.body,
+                        c.author_name, c.created_at,
+                        u.display_name as author_display_name,
+                        ts_rank(c.search_vector, websearch_to_tsquery('english', $2)) as rank
+                    FROM comments c
+                    LEFT JOIN users u ON c.author_user_id = u.user_id
+                    WHERE c.workspace_id = $1
+                    AND c.deleted = FALSE
+                    AND c.search_vector @@ websearch_to_tsquery('english', $2)
+                    {gallery_filter_fts}
+                    ORDER BY rank DESC, c.created_at DESC
+                    LIMIT $3
+                    """,
+                    *params_fts,
+                )
+
+                # Fallback to ILIKE for partial matches
+                if not comments:
+                    params = [workspace_id, f"%{query}%", limit]
+                    if gallery_id:
+                        params.append(gallery_id)
+
+                    comments = await conn.fetch(
+                        f"""
+                        SELECT
+                            c.comment_id, c.gallery_id, c.asset_id, c.body,
+                            c.author_name, c.created_at,
+                            u.display_name as author_display_name,
+                            0.0 as rank
+                        FROM comments c
+                        LEFT JOIN users u ON c.author_user_id = u.user_id
+                        WHERE c.workspace_id = $1
+                        AND c.deleted = FALSE
+                        AND c.body ILIKE $2
+                        {gallery_filter}
+                        ORDER BY c.created_at DESC
+                        LIMIT $3
+                        """,
+                        *params,
+                    )
 
             return [
                 {
@@ -374,6 +591,7 @@ class SearchService:
                     "author_name": c["author_display_name"] or c["author_name"] or "Anonymous",
                     "created_at": c["created_at"].isoformat(),
                     "match_type": "comment",
+                    "relevance_score": float(c["rank"]) if c["rank"] else 0.0,
                 }
                 for c in comments
             ]

@@ -1378,6 +1378,128 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # Growth & Referrals Microservice
+  # Handles referral programs, partner/affiliate management, credit ledger,
+  # and setup goals gamification with KEDA autoscaling support
+  # ============================================================================
+  growth-service:
+    build:
+      context: ../../services/growth-service
+      dockerfile: Dockerfile
+    container_name: rawdrive-growth-service
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Service
+      SERVICE_NAME: growth-service
+      SERVICE_VERSION: "1.0.0"
+      SERVICE_PORT: ${PORT_GROWTH:-8016}
+      SERVICE_HOST: 0.0.0.0
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Database (shared with backend)
+      DATABASE_URL: postgresql://rawdrive:rawdrive@postgres:${PORT_POSTGRES}/rawdrive
+      DATABASE_READ_REPLICA_URL: ${DATABASE_READ_REPLICA_URL:-}
+      DB_POOL_MIN_SIZE: ${GROWTH_DB_POOL_MIN_SIZE:-10}
+      DB_POOL_MAX_SIZE: ${GROWTH_DB_POOL_MAX_SIZE:-50}
+      DB_COMMAND_TIMEOUT: ${DB_COMMAND_TIMEOUT:-60}
+
+      # PgBouncer connection pooler (for 5000+ concurrent scaling)
+      PGBOUNCER_ENABLED: ${PGBOUNCER_ENABLED:-false}
+      PGBOUNCER_HOST: ${PGBOUNCER_HOST:-pgbouncer}
+      PGBOUNCER_PORT: ${PGBOUNCER_PORT:-6432}
+
+      # Redis - Caching for referral codes, credit balances, partner data
+      REDIS_URL: redis://redis:${PORT_REDIS}/0
+      REDIS_MAX_CONNECTIONS: ${GROWTH_REDIS_MAX_CONNECTIONS:-30}
+      REDIS_KEY_PREFIX: "growth:"
+
+      # JWT (must match backend - EdDSA with public key)
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public_key
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-EdDSA}
+
+      # CORS
+      CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+
+      # Rate Limiting
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_DEFAULT: "100/minute"
+      RATE_LIMIT_REFERRAL_CREATE: "10/minute"
+      RATE_LIMIT_CONVERSION_CREATE: "5/minute"
+      RATE_LIMIT_PARTNER_APPLY: "3/hour"
+      RATE_LIMIT_PAYOUT_REQUEST: "5/day"
+
+      # Referral Program Settings
+      REFERRAL_CODE_VALIDITY_DAYS: ${REFERRAL_CODE_VALIDITY_DAYS:-90}
+      REFERRAL_REWARD_REFERRER_INR: ${REFERRAL_REWARD_REFERRER_INR:-500}
+      REFERRAL_REWARD_REFERRER_USD: ${REFERRAL_REWARD_REFERRER_USD:-20}
+      REFERRAL_REWARD_REFEREE_MONTHS_FREE: ${REFERRAL_REWARD_REFEREE_MONTHS_FREE:-1}
+
+      # Partner/Affiliate Program Settings
+      PARTNER_COMMISSION_RATE: ${PARTNER_COMMISSION_RATE:-0.20}
+      PARTNER_MINIMUM_PAYOUT_INR: ${PARTNER_MINIMUM_PAYOUT_INR:-2000}
+      PARTNER_MINIMUM_PAYOUT_USD: ${PARTNER_MINIMUM_PAYOUT_USD:-50}
+      PARTNER_PAYOUT_DAY: ${PARTNER_PAYOUT_DAY:-1}
+
+      # Payment Providers (for partner payouts)
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_CONNECT_ENABLED: ${STRIPE_CONNECT_ENABLED:-true}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      UPI_ENABLED: ${UPI_ENABLED:-true}
+
+      # Service Integration URLs
+      BILLING_SERVICE_URL: http://billing-service:${PORT_BILLING:-8002}
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:${PORT_NOTIFICATIONS:-8010}
+      ONBOARDING_SERVICE_URL: http://onboarding-service:${PORT_ONBOARDING:-8007}
+
+      # Circuit Breaker
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      CIRCUIT_BREAKER_RECOVERY_TIMEOUT: ${CIRCUIT_BREAKER_RECOVERY_TIMEOUT:-30}
+
+      # Metrics
+      METRICS_ENABLED: "true"
+      METRICS_CUSTOM_PREFIX: growth
+
+    ports:
+      # Bind to localhost only - accessible via Traefik reverse proxy
+      - "127.0.0.1:${PORT_GROWTH:-8016}:${PORT_GROWTH:-8016}"
+
+    volumes:
+      - ../../services/growth-service:/app
+      # Mount JWT public key for token verification (EdDSA)
+      - ../../backend/secrets/ed25519_public_key.pem:/run/secrets/jwt_public_key:ro
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_GROWTH:-8016}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    networks:
+      - default
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ============================================================================
   # Prometheus - Metrics Collection (for production monitoring)
   # ============================================================================
   # ============================================================================

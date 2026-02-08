@@ -187,6 +187,8 @@ def row_to_gallery_dict(row: Any, sub_galleries: List = None, stats: Any = None)
         "notify_on_favorite": row.get("notify_on_favorite", False),
         "notify_on_selection": row.get("notify_on_selection", True),
         "notify_on_download": row.get("notify_on_download", False),
+        # Face recognition settings (T006)
+        "show_people_filter": row.get("show_people_filter", False),
         "sub_galleries": [
             {
                 "sub_gallery_id": str(sg["sub_gallery_id"]),
@@ -266,7 +268,9 @@ class GalleryService:
                             cover_asset_id, created_by_user_id, published_at,
                             created_at, updated_at, deleted, pinned_at, last_accessed_at,
                             -- Denormalized stats for faster queries (no COUNT needed)
-                            photo_count, video_count, total_size_bytes
+                            photo_count, video_count, total_size_bytes,
+                            -- Face recognition settings (T006)
+                            show_people_filter
                         FROM galleries
                         WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
                         """,
@@ -476,7 +480,9 @@ class GalleryService:
                         email_registration_required, expires_at, custom_domain,
                         primary_color, gradient_config, font_family, custom_links,
                         cover_asset_id, created_by_user_id, published_at,
-                        created_at, updated_at, deleted
+                        created_at, updated_at, deleted,
+                        -- Face recognition settings (T006)
+                        show_people_filter
                     FROM galleries
                     WHERE gallery_id = $1 AND deleted = FALSE AND status = 'published'
                     """,
@@ -963,6 +969,8 @@ class GalleryService:
                     "watermark_config", "findme_config", "slideshow_config", "activity_tracking",
                     # Notification settings
                     "notify_on_comment", "notify_on_favorite", "notify_on_selection", "notify_on_download",
+                    # Face recognition settings (T006)
+                    "show_people_filter",
                 }
 
                 # Helper to add updating clause

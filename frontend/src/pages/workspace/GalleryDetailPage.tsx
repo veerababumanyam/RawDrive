@@ -297,6 +297,15 @@ const GalleryDetailPage: React.FC = () => {
     navigate(`/workspace/galleries/${galleryId}/design`);
   }, [galleryId, navigate]);
 
+  /**
+   * Navigate to Culling Workflow
+   * Opens the bulk photo culling interface for selecting best shots
+   */
+  const handleCulling = useCallback(() => {
+    if (!galleryId) return;
+    navigate(`/workspace/galleries/${galleryId}/culling`);
+  }, [galleryId, navigate]);
+
   const handleApplyAIFilters = useCallback(() => {
     setAppliedFilters(filters);
     addToast({ message: 'Filters applied', variant: 'success' });
@@ -917,6 +926,7 @@ const GalleryDetailPage: React.FC = () => {
               onFindPeople={() => setShowPeoplePanel(true)}
               onAITools={undefined}
               aiToolsOpen={false}
+              onCulling={handleCulling}
               onShare={() => setShowShareDialog(true)}
               onDesignStudio={handleDesignStudio}
               onSettings={() => setShowSettings(true)}

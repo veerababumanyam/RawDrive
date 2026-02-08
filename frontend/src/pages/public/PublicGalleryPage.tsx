@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { galleryService } from '../../services/galleryService';
+import { faceApiService } from '../../services/faceApiService';
 import { magicLinkService } from '../../services/magicLinkService';
 import { GalleryDetailData, PublicGalleryAsset, GalleryAssetItem } from '../../types/gallery';
 import { gradientToCss, isValidGradientConfig } from '../../utils/gradientUtils';
@@ -30,13 +31,21 @@ import {
     VolumeX,
     Video,
     Keyboard,
+    Film,
+    Tv2,
+    MessageCircle,
+    Users,
 } from 'lucide-react';
 import { ClientEmailModal } from '../../components/features/gallery/ClientEmailModal';
 import { PinVerificationModal } from '../../components/features/gallery/PinVerificationModal';
 import { PasswordVerificationModal } from '../../components/features/gallery/PasswordVerificationModal';
 import { FaceDiscovery } from '../../components/features/gallery/FaceDiscovery';
+import { ClientPeopleFilter } from '../../components/features/gallery/ClientPeopleFilter';
 import { ShareMenu } from '../../components/features/gallery/ShareMenu';
 import { Breadcrumbs, BreadcrumbItem } from '../../components/features/gallery/Breadcrumbs';
+import { CinematicViewer } from '../../components/features/gallery/presentation/CinematicViewer';
+import { PresentationModeSelector, type PresentationMode } from '../../components/features/gallery/PresentationModeSelector';
+import { Guestbook } from '../../components/features/gallery/Guestbook';
 import { useUtmTracking } from '../../hooks/useUtmTracking';
 import {
     VISITOR_STORAGE_KEY_PREFIX,
@@ -84,6 +93,12 @@ const PublicGalleryPage: React.FC = () => {
     const [filteredPhotoIds, setFilteredPhotoIds] = useState<string[] | null>(null);
     const [matchSimilarity, setMatchSimilarity] = useState<number | null>(null);
 
+    // People Filter State (for show_people_filter feature)
+    const [showPeopleFilter, setShowPeopleFilter] = useState(false);
+    const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+    const [selectedPersonName, setSelectedPersonName] = useState<string | undefined>(undefined);
+    const [personPhotoIds, setPersonPhotoIds] = useState<string[] | null>(null);
+
     // UTM Tracking for marketing attribution
     const { getUtmPayload, clearUtm } = useUtmTracking();
 
@@ -95,6 +110,11 @@ const PublicGalleryPage: React.FC = () => {
     const [lightboxIndex, setLightboxIndex] = useState<number>(0);
     const [showExif, setShowExif] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
+
+    // Presentation mode state
+    const [presentationMode, setPresentationMode] = useState<PresentationMode>('grid');
+    const [showCinematicViewer, setShowCinematicViewer] = useState(false);
+    const [showGuestbook, setShowGuestbook] = useState(false);
 
     // Video player state
     const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -472,6 +492,43 @@ const PublicGalleryPage: React.FC = () => {
         setMatchSimilarity(null);
     }, []);
 
+    // People filter handler (for show_people_filter feature)
+    const handleFilterByPerson = useCallback((groupId: string | null, personName?: string) => {
+        setSelectedPersonId(groupId);
+        setSelectedPersonName(personName);
+        // When filtering by person, clear face discovery filter to avoid conflicts
+        if (groupId) {
+            setFilteredPhotoIds(null);
+            setMatchSimilarity(null);
+        } else {
+            setPersonPhotoIds(null);
+        }
+    }, []);
+
+    // Fetch photo IDs when a person is selected
+    useEffect(() => {
+        if (!selectedPersonId || !gallery?.workspace_id) {
+            setPersonPhotoIds(null);
+            return;
+        }
+
+        const fetchPersonPhotos = async () => {
+            try {
+                const photoIds = await faceApiService.getPhotosByPerson(
+                    gallery.workspace_id,
+                    selectedPersonId,
+                    actualGalleryId || undefined
+                );
+                setPersonPhotoIds(photoIds);
+            } catch (err) {
+                console.error('Failed to fetch person photos:', err);
+                setPersonPhotoIds([]);
+            }
+        };
+
+        fetchPersonPhotos();
+    }, [selectedPersonId, gallery?.workspace_id, actualGalleryId]);
+
     // Client interaction handlers
     const handleFavorite = useCallback(async (assetId: string) => {
         if (!actualGalleryId) return;
@@ -553,7 +610,7 @@ const PublicGalleryPage: React.FC = () => {
     const favoriteCount = localFavorites.size;
     const selectionCount = localSelections.size;
 
-    // Compute displayed assets based on face filter, sub-gallery, and privacy
+    // Compute displayed assets based on face filter, person filter, sub-gallery, and privacy
     const displayedAssets = useMemo(() => {
         let result = assets;
 
@@ -562,14 +619,21 @@ const PublicGalleryPage: React.FC = () => {
             result = result.filter(asset => !asset.is_private);
         }
 
+        // Face discovery filter (Find Me)
         if (filteredPhotoIds) {
             result = result.filter(asset => filteredPhotoIds.includes(asset.asset_id));
         }
+
+        // Person filter (People filter feature)
+        if (personPhotoIds) {
+            result = result.filter(asset => personPhotoIds.includes(asset.asset_id));
+        }
+
         if (activeSubGallery) {
             result = result.filter(asset => asset.sub_gallery_id === activeSubGallery);
         }
         return result;
-    }, [assets, filteredPhotoIds, activeSubGallery, isPrivateUnlocked]);
+    }, [assets, filteredPhotoIds, personPhotoIds, activeSubGallery, isPrivateUnlocked]);
 
     // Count of private photos (for unlock button badge)
     const privatePhotoCount = useMemo(() => {
@@ -1215,6 +1279,18 @@ const PublicGalleryPage: React.FC = () => {
                 galleryTitle={gallery.title}
             />
 
+            {/* People Filter Panel */}
+            {gallery.show_people_filter && actualGalleryId && gallery.workspace_id && (
+                <ClientPeopleFilter
+                    galleryId={actualGalleryId}
+                    workspaceId={gallery.workspace_id}
+                    isOpen={showPeopleFilter}
+                    onClose={() => setShowPeopleFilter(false)}
+                    onFilterByPerson={handleFilterByPerson}
+                    selectedPersonId={selectedPersonId}
+                />
+            )}
+
             {/* Enhanced Lightbox with swipe support */}
             {lightboxAsset && (
                 <div
@@ -1616,6 +1692,21 @@ const PublicGalleryPage: React.FC = () => {
                             </AppButton>
                         )}
 
+                        {/* People Filter Button - only show when show_people_filter is enabled */}
+                        {gallery.show_people_filter && isVisitorAuthenticated && isPinVerified && assets.length > 0 && (
+                            <AppButton
+                                variant={selectedPersonId ? 'primary' : 'outline'}
+                                leftIcon={<Users size={16} />}
+                                size="sm"
+                                onClick={() => setShowPeopleFilter(true)}
+                                aria-label={selectedPersonId ? `Filtering by ${selectedPersonName || 'person'}` : 'Filter by person'}
+                            >
+                                <span className="hidden sm:inline">
+                                    {selectedPersonId ? (selectedPersonName || 'Person') : 'People'}
+                                </span>
+                            </AppButton>
+                        )}
+
                         {/* Bulk Download Button */}
                         {gallery.download_policy !== 'view_only' && isVisitorAuthenticated && isPinVerified && displayedAssets.length > 0 && (
                             <AppButton
@@ -1636,6 +1727,34 @@ const PublicGalleryPage: React.FC = () => {
                                                 : 'Download All'
                                     }
                                 </span>
+                            </AppButton>
+                        )}
+
+                        {/* Cinematic Mode Button */}
+                        {isVisitorAuthenticated && isPinVerified && displayedAssets.length > 0 && (
+                            <AppButton
+                                variant="outline"
+                                leftIcon={<Film size={16} />}
+                                size="sm"
+                                onClick={() => setShowCinematicViewer(true)}
+                                aria-label="Start cinematic presentation"
+                                title="Cinematic Mode"
+                            >
+                                <span className="hidden sm:inline">Cinematic</span>
+                            </AppButton>
+                        )}
+
+                        {/* Guestbook Button */}
+                        {isVisitorAuthenticated && isPinVerified && (
+                            <AppButton
+                                variant="outline"
+                                leftIcon={<MessageCircle size={16} />}
+                                size="sm"
+                                onClick={() => setShowGuestbook(true)}
+                                aria-label="Open guestbook"
+                                title="Leave a message"
+                            >
+                                <span className="hidden sm:inline">Guestbook</span>
                             </AppButton>
                         )}
 
@@ -1967,6 +2086,33 @@ const PublicGalleryPage: React.FC = () => {
                             </div>
                         )}
 
+                        {/* Person Filter Active Indicator */}
+                        {selectedPersonId && personPhotoIds && (
+                            <div
+                                className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-between animate-fade-in"
+                                role="status"
+                                aria-live="polite"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Users size={20} className="text-primary" />
+                                    <div>
+                                        <p className="font-medium text-text-primary">
+                                            Showing {displayedAssets.length} photo{displayedAssets.length !== 1 ? 's' : ''} of {selectedPersonName || 'selected person'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <AppButton
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleFilterByPerson(null)}
+                                    aria-label="Clear person filter and show all photos"
+                                >
+                                    <X size={16} className="mr-1" />
+                                    Clear
+                                </AppButton>
+                            </div>
+                        )}
+
                         {displayedAssets.length === 0 ? (
                             <div className="text-center py-20 text-gray-500">
                                 <Grid className="w-12 h-12 mx-auto mb-4 opacity-20" />
@@ -2081,6 +2227,64 @@ const PublicGalleryPage: React.FC = () => {
                     )}
                 </div>
             </footer>
+
+            {/* Cinematic Viewer Portal */}
+            {showCinematicViewer && (
+                <CinematicViewer
+                    isOpen={showCinematicViewer}
+                    onClose={() => setShowCinematicViewer(false)}
+                    assets={canvasAssets}
+                    initialIndex={lightboxIndex}
+                    onIndexChange={setLightboxIndex}
+                    getAssetUrl={(assetId, variant) => {
+                        const asset = canvasAssets.find(a => a.asset_id === assetId);
+                        if (!asset) return undefined;
+                        switch (variant) {
+                            case 'thumbnail':
+                                return asset.asset?.thumbnail_url;
+                            case 'preview':
+                            default:
+                                return asset.asset?.preview_url;
+                        }
+                    }}
+                    galleryTitle={gallery.title}
+                    branding={{
+                        name: company_profile?.name,
+                        logoUrl: company_profile?.logo_url,
+                        primaryColor: gallery.primary_color,
+                    }}
+                />
+            )}
+
+            {/* Guestbook Modal */}
+            {showGuestbook && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Guestbook</h2>
+                            <button
+                                onClick={() => setShowGuestbook(false)}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
+                        <Guestbook
+                            galleryId={actualGalleryId || ''}
+                            enabled={true}
+                            galleryTitle={gallery.title}
+                            onSubmitMessage={async (data) => {
+                                // API call would go here
+                                console.log('Guestbook message submitted:', data);
+                            }}
+                            onHeartMessage={async (messageId) => {
+                                // API call would go here
+                                console.log('Heart message:', messageId);
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

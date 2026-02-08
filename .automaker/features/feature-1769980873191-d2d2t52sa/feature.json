@@ -1,0 +1,12 @@
+{
+  "category": "Security",
+  "description": "Restrict CORS Headers to Explicit Allowlist\n\nThe CORS configuration in `backend/src/app/main.py` (lines 193-200) uses overly permissive header allowlist:\n```python\nCORSMiddleware(\n    allow_headers=[\"*\"],  # Allows ANY header, including custom malicious headers\n)\n```\n\nThis allows attackers to send arbitrary custom headers that could:\n- Bypass additional security middleware\n- Inject headers that vulnerable backend code might trust\n- Be used in header-based injection attacks\n\nFix Implementation:\n1. Replace wildcard with explicit allowlist:\n   ```python\n   allow_headers=[\n       \"content-type\",\n       \"authorization\",\n       \"accept\",\n       \"x-correlation-id\",\n       \"x-request-id\",\n       \"accept-language\",\n       # Add other required headers, but NOT \"*\"\n   ]\n   ```\n2. Keep wildcard for `allow_methods` (GET, POST, etc.) - this is safe\n3. Document all required headers in API specification\n4. Review all headers used by frontend clients and add them explicitly\n\nNote: The CORS configuration correctly restricts origins based on `settings.allowed_cors_origins` - only the headers allowlist needs tightening.",
+  "id": "feature-1769980873191-d2d2t52sa",
+  "steps": [],
+  "status": "backlog",
+  "skipTests": true,
+  "priority": 2,
+  "branchName": "main",
+  "startedAt": "2026-02-01T21:21:14.589Z",
+  "updatedAt": "2026-02-01T21:21:26.627Z"
+}

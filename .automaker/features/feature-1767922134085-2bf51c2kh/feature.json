@@ -3,7 +3,11 @@
   "description": "Implement real-time collaborative album design where multiple team members can simultaneously edit album layouts, add captions, arrange spreads, and see live updates via WebSocket. Include presence indicators (who's editing), conflict-free collaborative editing (operational transformation or CRDTs), version history with rollback, and template-based layouts for different album types (wedding, portrait, events). Support commenting on individual spreads and @mentions for team feedback.",
   "id": "feature-1767922134085-2bf51c2kh",
   "steps": [],
-  "status": "backlog",
+  "status": "completed",
   "skipTests": true,
-  "priority": 2
+  "priority": 2,
+  "branchName": "main",
+  "startedAt": "2026-02-01T12:56:22.609Z",
+  "updatedAt": "2026-02-01T13:21:25.855Z",
+  "justFinishedAt": "2026-02-01T13:21:25.855Z"
 }

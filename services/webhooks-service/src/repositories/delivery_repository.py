@@ -224,6 +224,179 @@ class DeliveryRepository:
 
             return [dict(row) for row in rows], total
 
+    async def get_time_series(
+        self,
+        subscription_id: Optional[UUID] = None,
+        workspace_id: Optional[UUID] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        granularity: str = "hour",  # "hour", "day", "week"
+    ) -> List[Dict[str, Any]]:
+        """
+        Get time series data for delivery analytics.
+
+        Returns aggregated delivery counts and response times by time bucket.
+        """
+        pool = await get_pool()
+
+        # Determine time bucket function
+        if granularity == "day":
+            bucket_fn = "date_trunc('day', created_at)"
+        elif granularity == "week":
+            bucket_fn = "date_trunc('week', created_at)"
+        else:  # hour
+            bucket_fn = "date_trunc('hour', created_at)"
+
+        where_clauses = ["1=1"]
+        params: List[Any] = []
+
+        if subscription_id:
+            params.append(subscription_id)
+            where_clauses.append(f"subscription_id = ${len(params)}")
+
+        if workspace_id:
+            params.append(workspace_id)
+            where_clauses.append(f"workspace_id = ${len(params)}")
+
+        if start_time:
+            params.append(start_time)
+            where_clauses.append(f"created_at >= ${len(params)}")
+
+        if end_time:
+            params.append(end_time)
+            where_clauses.append(f"created_at <= ${len(params)}")
+
+        where_sql = " AND ".join(where_clauses)
+
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""
+                SELECT
+                    {bucket_fn} as timestamp,
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE status = 'succeeded') as successful,
+                    COUNT(*) FILTER (WHERE status IN ('failed', 'exhausted')) as failed,
+                    COUNT(*) FILTER (WHERE status = 'retrying') as retrying,
+                    AVG(response_duration_ms) FILTER (WHERE response_duration_ms IS NOT NULL) as avg_response_time_ms,
+                    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_duration_ms)
+                        FILTER (WHERE response_duration_ms IS NOT NULL) as p95_response_time_ms
+                FROM webhook_deliveries
+                WHERE {where_sql}
+                GROUP BY {bucket_fn}
+                ORDER BY timestamp ASC
+                """,
+                *params,
+            )
+
+            return [dict(row) for row in rows]
+
+    async def get_status_breakdown(
+        self,
+        subscription_id: Optional[UUID] = None,
+        workspace_id: Optional[UUID] = None,
+        start_time: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get delivery count breakdown by status."""
+        pool = await get_pool()
+
+        where_clauses = ["1=1"]
+        params: List[Any] = []
+
+        if subscription_id:
+            params.append(subscription_id)
+            where_clauses.append(f"subscription_id = ${len(params)}")
+
+        if workspace_id:
+            params.append(workspace_id)
+            where_clauses.append(f"workspace_id = ${len(params)}")
+
+        if start_time:
+            params.append(start_time)
+            where_clauses.append(f"created_at >= ${len(params)}")
+
+        where_sql = " AND ".join(where_clauses)
+
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""
+                SELECT
+                    status,
+                    COUNT(*) as count
+                FROM webhook_deliveries
+                WHERE {where_sql}
+                GROUP BY status
+                ORDER BY count DESC
+                """,
+                *params,
+            )
+
+            total = sum(row["count"] for row in rows)
+            return [
+                {
+                    "status": row["status"],
+                    "count": row["count"],
+                    "percentage": (row["count"] / total * 100) if total > 0 else 0,
+                }
+                for row in rows
+            ]
+
+    async def get_event_type_breakdown(
+        self,
+        subscription_id: Optional[UUID] = None,
+        workspace_id: Optional[UUID] = None,
+        start_time: Optional[datetime] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Get delivery breakdown by event type."""
+        pool = await get_pool()
+
+        where_clauses = ["1=1"]
+        params: List[Any] = []
+
+        if subscription_id:
+            params.append(subscription_id)
+            where_clauses.append(f"d.subscription_id = ${len(params)}")
+
+        if workspace_id:
+            params.append(workspace_id)
+            where_clauses.append(f"d.workspace_id = ${len(params)}")
+
+        if start_time:
+            params.append(start_time)
+            where_clauses.append(f"d.created_at >= ${len(params)}")
+
+        where_sql = " AND ".join(where_clauses)
+        params.append(limit)
+
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""
+                SELECT
+                    e.event_type,
+                    COUNT(*) as count,
+                    COUNT(*) FILTER (WHERE d.status = 'succeeded') as successful,
+                    COUNT(*) FILTER (WHERE d.status IN ('failed', 'exhausted')) as failed
+                FROM webhook_deliveries d
+                JOIN webhook_events e ON d.event_id = e.event_id
+                WHERE {where_sql}
+                GROUP BY e.event_type
+                ORDER BY count DESC
+                LIMIT ${len(params)}
+                """,
+                *params,
+            )
+
+            return [
+                {
+                    "event_type": row["event_type"],
+                    "count": row["count"],
+                    "successful": row["successful"],
+                    "failed": row["failed"],
+                    "success_rate": (row["successful"] / row["count"] * 100) if row["count"] > 0 else 0,
+                }
+                for row in rows
+            ]
+
 
 # Global singleton
 delivery_repository = DeliveryRepository()

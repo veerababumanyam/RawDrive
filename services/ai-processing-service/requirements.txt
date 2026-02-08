@@ -28,6 +28,12 @@ imagehash==4.3.1  # Perceptual hashing for duplicate detection
 numpy==2.2.1
 scipy==1.15.0
 
+# Face Detection (InsightFace)
+insightface==0.7.3  # Face detection, recognition, and analysis
+onnxruntime==1.19.2  # ONNX Runtime for CPU inference
+onnxruntime-gpu==1.19.2  # ONNX Runtime with GPU (CUDA) support
+opencv-python==4.10.0.84  # OpenCV for image processing
+
 # Google Cloud AI
 google-cloud-vision==3.8.1  # Vision API for content moderation
 google-generativeai==0.8.3  # Gemini API

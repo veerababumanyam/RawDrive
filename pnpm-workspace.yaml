@@ -4,3 +4,4 @@ packages:
   - 'backend'
   - 'services/*'
   - 'desktop'
+  - 'mobile'

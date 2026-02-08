@@ -1,4 +1,4 @@
-"""Circuit Breaker Pattern Implementation.
+"""Circuit Breaker Pattern Implementation with Exponential Backoff.
 
 Prevents cascading failures when calling external services (ai-service).
 Implements the circuit breaker pattern with three states:
@@ -6,14 +6,21 @@ Implements the circuit breaker pattern with three states:
 - OPEN: Too many failures, requests fail immediately
 - HALF_OPEN: Testing if service recovered
 
+Features:
+- Exponential backoff with jitter for retries
+- Configurable timeouts (2-second default for AI service)
+- Fallback response support
+
 Architecture: Protects gallery-service from ai-service failures
 """
 
 import time
+import random
 from enum import Enum
-from typing import Callable, Any, TypeVar, Generic
+from typing import Callable, Any, TypeVar, Generic, Optional
 import asyncio
 from datetime import datetime
+from dataclasses import dataclass
 
 from src.log_config import get_logger
 from src.observability.metrics import get_metrics
@@ -22,6 +29,41 @@ logger = get_logger(__name__)
 metrics = get_metrics()
 
 T = TypeVar('T')
+
+
+@dataclass
+class BackoffConfig:
+    """Configuration for exponential backoff retry behavior.
+
+    Attributes:
+        max_retries: Maximum number of retry attempts (0 = no retries)
+        base_delay: Initial delay in seconds before first retry
+        max_delay: Maximum delay cap in seconds
+        jitter: Randomization factor (0.0-1.0) to prevent thundering herd
+    """
+    max_retries: int = 3
+    base_delay: float = 0.1  # 100ms
+    max_delay: float = 2.0   # 2 seconds
+    jitter: float = 0.1      # 10% jitter
+
+    def calculate_delay(self, attempt: int) -> float:
+        """Calculate delay for given retry attempt with exponential backoff + jitter.
+
+        Uses the formula: delay = min(base * 2^attempt, max_delay) * (1 + jitter * random)
+
+        Args:
+            attempt: Current retry attempt number (0-based)
+
+        Returns:
+            Delay in seconds to wait before next retry
+        """
+        # Exponential delay: 0.1, 0.2, 0.4, 0.8, 1.6, capped at max_delay
+        exponential_delay = min(self.base_delay * (2 ** attempt), self.max_delay)
+
+        # Add jitter to prevent thundering herd
+        jitter_factor = 1.0 + (random.random() * self.jitter)
+
+        return exponential_delay * jitter_factor
 
 
 class CircuitState(Enum):
@@ -44,6 +86,7 @@ class CircuitBreaker(Generic[T]):
     """Circuit breaker for protecting against cascading failures.
 
     Usage:
+        # Basic usage with default backoff
         breaker = CircuitBreaker("ai-service", failure_threshold=5, timeout=60)
 
         try:
@@ -52,11 +95,21 @@ class CircuitBreaker(Generic[T]):
             # Circuit is open, use fallback
             result = fallback_value
 
+        # With custom backoff configuration
+        backoff = BackoffConfig(max_retries=3, base_delay=0.1, max_delay=2.0)
+        breaker = CircuitBreaker("ai-service", backoff_config=backoff)
+
+        # With retry on specific exceptions
+        result = await breaker.call_with_retry(
+            func, retryable_exceptions=(TimeoutError, ConnectionError)
+        )
+
     Args:
         service_name: Name of the service being protected
         failure_threshold: Number of failures before opening circuit
         timeout: Seconds to wait before attempting half-open state
         success_threshold: Number of successes in half-open before closing
+        backoff_config: Configuration for exponential backoff retries
     """
 
     def __init__(
@@ -65,11 +118,13 @@ class CircuitBreaker(Generic[T]):
         failure_threshold: int = 5,
         timeout: int = 60,
         success_threshold: int = 2,
+        backoff_config: Optional[BackoffConfig] = None,
     ):
         self.service_name = service_name
         self.failure_threshold = failure_threshold
         self.timeout = timeout  # seconds
         self.success_threshold = success_threshold
+        self.backoff_config = backoff_config or BackoffConfig()
 
         # State
         self.state = CircuitState.CLOSED
@@ -78,9 +133,14 @@ class CircuitBreaker(Generic[T]):
         self.last_failure_time: float | None = None
         self.opened_at: float | None = None
 
+        # Retry statistics
+        self.total_retries = 0
+        self.successful_retries = 0
+
         logger.info(
             f"Circuit breaker initialized for {service_name}: "
-            f"threshold={failure_threshold}, timeout={timeout}s"
+            f"threshold={failure_threshold}, timeout={timeout}s, "
+            f"max_retries={self.backoff_config.max_retries}"
         )
 
     async def call(self, func: Callable[..., Any], *args, **kwargs) -> Any:
@@ -128,6 +188,96 @@ class CircuitBreaker(Generic[T]):
         except Exception as e:
             self._on_failure()
             raise
+
+    async def call_with_retry(
+        self,
+        func: Callable[..., Any],
+        *args,
+        retryable_exceptions: tuple = (asyncio.TimeoutError, ConnectionError, OSError),
+        **kwargs
+    ) -> Any:
+        """Execute function with circuit breaker protection AND exponential backoff retries.
+
+        This method wraps the circuit breaker call with automatic retry logic using
+        exponential backoff for transient failures (timeouts, connection errors).
+
+        Args:
+            func: Async function to execute
+            *args: Positional arguments for function
+            retryable_exceptions: Tuple of exception types that trigger retry
+            **kwargs: Keyword arguments for function
+
+        Returns:
+            Result from function call
+
+        Raises:
+            CircuitBreakerError: If circuit is open
+            Exception: Original exception after all retries exhausted
+        """
+        last_exception: Optional[Exception] = None
+
+        for attempt in range(self.backoff_config.max_retries + 1):
+            try:
+                result = await self.call(func, *args, **kwargs)
+
+                # Track successful retry
+                if attempt > 0:
+                    self.successful_retries += 1
+                    logger.info(
+                        f"Circuit breaker call succeeded after {attempt} retries "
+                        f"for {self.service_name}"
+                    )
+                    metrics.counter_inc(
+                        "gallery_circuit_breaker_retry_success_total",
+                        {"service": self.service_name, "attempt": str(attempt)}
+                    )
+
+                return result
+
+            except CircuitBreakerError:
+                # Circuit is open - don't retry, propagate immediately
+                raise
+
+            except retryable_exceptions as e:
+                last_exception = e
+                self.total_retries += 1
+
+                # Check if we should retry
+                if attempt < self.backoff_config.max_retries:
+                    delay = self.backoff_config.calculate_delay(attempt)
+                    logger.warning(
+                        f"Retryable error for {self.service_name} (attempt {attempt + 1}/"
+                        f"{self.backoff_config.max_retries + 1}): {e}. "
+                        f"Retrying in {delay:.3f}s"
+                    )
+                    metrics.counter_inc(
+                        "gallery_circuit_breaker_retry_total",
+                        {"service": self.service_name, "attempt": str(attempt)}
+                    )
+
+                    await asyncio.sleep(delay)
+                else:
+                    # All retries exhausted
+                    logger.error(
+                        f"All {self.backoff_config.max_retries + 1} attempts exhausted "
+                        f"for {self.service_name}: {e}"
+                    )
+                    metrics.counter_inc(
+                        "gallery_circuit_breaker_retry_exhausted_total",
+                        {"service": self.service_name}
+                    )
+                    raise
+
+            except Exception as e:
+                # Non-retryable exception - propagate immediately
+                logger.error(
+                    f"Non-retryable error for {self.service_name}: {e}"
+                )
+                raise
+
+        # Should not reach here, but just in case
+        if last_exception:
+            raise last_exception
 
     def _should_attempt_reset(self) -> bool:
         """Check if enough time has passed to attempt reset."""
@@ -245,6 +395,15 @@ class CircuitBreaker(Generic[T]):
             "timeout": self.timeout,
             "last_failure_time": datetime.fromtimestamp(self.last_failure_time).isoformat() if self.last_failure_time else None,
             "opened_at": datetime.fromtimestamp(self.opened_at).isoformat() if self.opened_at else None,
+            # Retry statistics
+            "total_retries": self.total_retries,
+            "successful_retries": self.successful_retries,
+            "backoff_config": {
+                "max_retries": self.backoff_config.max_retries,
+                "base_delay": self.backoff_config.base_delay,
+                "max_delay": self.backoff_config.max_delay,
+                "jitter": self.backoff_config.jitter,
+            },
         }
 
     def reset(self):

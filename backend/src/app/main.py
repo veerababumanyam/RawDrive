@@ -59,6 +59,7 @@ async def lifespan(app: FastAPI):  # type: ignore[override]
             ServiceCapability(name="roles:manage", version="1.0", endpoint="/api/v1/roles"),
             ServiceCapability(name="clients:read", version="1.0", endpoint="/api/v1/clients"),
             ServiceCapability(name="clients:write", version="1.0", endpoint="/api/v1/clients"),
+            ServiceCapability(name="search:geo", version="1.0", endpoint="/api/v1/workspaces/{workspace_id}/geo/search"),
         ],
         health_endpoint="/health",
     )

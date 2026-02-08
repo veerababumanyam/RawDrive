@@ -14,10 +14,10 @@
   "requirePlanApproval": false,
   "dependencies": [],
   "titleGenerating": false,
-  "status": "backlog",
+  "status": "completed",
   "id": "feature-1767728727199-hgkslna3b",
-  "startedAt": "2026-01-07T15:58:45.830Z",
-  "updatedAt": "2026-01-07T15:59:33.548Z",
+  "startedAt": "2026-02-01T06:27:40.847Z",
+  "updatedAt": "2026-02-01T06:35:40.314Z",
   "planSpec": {
     "status": "approved",
     "version": 1,

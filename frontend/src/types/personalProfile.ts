@@ -447,6 +447,90 @@ export interface ProfileExistsResponse {
  */
 export type AvatarSize = 64 | 128 | 256 | 512;
 
+// =========================================================================
+// PROFILE ANALYTICS TYPES
+// =========================================================================
+
+/**
+ * Daily time series data point for profile analytics charting.
+ */
+export interface ProfileAnalyticsTimeSeries {
+  date: string;
+  views: number;
+  unique_visitors: number;
+}
+
+/**
+ * Country breakdown entry for analytics.
+ */
+export interface ProfileCountryBreakdown {
+  country_code: string;
+  count: number;
+}
+
+/**
+ * Referrer breakdown entry for analytics.
+ */
+export interface ProfileReferrerBreakdown {
+  referrer: string;
+  count: number;
+}
+
+/**
+ * Summary analytics for a profile.
+ */
+export interface ProfileAnalyticsSummary {
+  profile_id: string;
+  total_views: number;
+  unique_visitors: number;
+  views_today: number;
+  views_this_week: number;
+  views_this_month: number;
+  last_viewed_at: string | null;
+  desktop_percentage: number;
+  mobile_percentage: number;
+  tablet_percentage: number;
+  top_countries?: ProfileCountryBreakdown[];
+  top_referrers?: ProfileReferrerBreakdown[];
+}
+
+/**
+ * Complete analytics response for a profile.
+ */
+export interface ProfileAnalyticsResponse {
+  profile_id: string;
+  profile_slug: string;
+  summary: ProfileAnalyticsSummary;
+  daily_stats: ProfileAnalyticsTimeSeries[];
+  period_start: string;
+  period_end: string;
+}
+
+/**
+ * Quick stats response (lightweight).
+ */
+export interface ProfileQuickStats {
+  profile_id: string;
+  total_views: number;
+  unique_visitors: number;
+  views_today: number;
+  views_this_week: number;
+  views_this_month: number;
+  last_viewed_at: string | null;
+  desktop_percentage: number;
+  mobile_percentage: number;
+  tablet_percentage: number;
+}
+
+/**
+ * Response from view tracking endpoint.
+ */
+export interface TrackViewResponse {
+  success: boolean;
+  view_id?: string;
+  message: string;
+}
+
 /**
  * Default visibility configuration for new profiles.
  */

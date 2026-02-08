@@ -9,7 +9,7 @@
  * - Smooth hover transitions and micro-interactions
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Lock,
   Key,
@@ -133,8 +133,8 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     disabled: isLocked || isEditing,
   });
 
-  // Context menu actions
-  const contextMenuActions = createPhotoContextActions({
+  // Context menu actions - memoized to prevent re-renders
+  const contextMenuActions = useMemo(() => createPhotoContextActions({
     isFavorited: asset.is_favorited,
     isSelected: asset.is_selected,
     isPrivate: asset.is_private,
@@ -145,7 +145,20 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     onShare: onShare ? () => onShare(asset.asset_id) : undefined,
     onLock: onLock ? () => onLock(asset.asset_id, !asset.is_private) : undefined,
     onDelete: onDelete ? () => onDelete(asset.asset_id) : undefined,
-  });
+  }), [
+    asset.is_favorited,
+    asset.is_selected,
+    asset.is_private,
+    asset.asset_id,
+    index,
+    onClick,
+    onFavorite,
+    onCustomerSelectionToggle,
+    onDownload,
+    onShare,
+    onLock,
+    onDelete,
+  ]);
 
   // Get LQIP (Low Quality Image Placeholder) from asset if available
   const lqip = asset.asset.lqip;
@@ -515,4 +528,43 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   );
 };
 
-export const PhotoCard = React.memo(PhotoCardComponent);
+/**
+ * Custom comparison function for React.memo
+ * Compares only the props that actually affect rendering to prevent unnecessary re-renders.
+ * This is critical for performance when hovering photos - without this, 100+ components
+ * would re-render on every hover due to new callback references from the parent.
+ */
+const arePropsEqual = (
+  prevProps: PhotoCardProps,
+  nextProps: PhotoCardProps
+): boolean => {
+  // Check asset identity and key properties that affect rendering
+  if (prevProps.asset.asset_id !== nextProps.asset.asset_id) return false;
+  if (prevProps.asset.is_favorited !== nextProps.asset.is_favorited) return false;
+  if (prevProps.asset.is_selected !== nextProps.asset.is_selected) return false;
+  if (prevProps.asset.is_private !== nextProps.asset.is_private) return false;
+  if (prevProps.asset.has_access_code !== nextProps.asset.has_access_code) return false;
+  if (prevProps.asset.asset.status !== nextProps.asset.asset.status) return false;
+  if (prevProps.asset.asset.thumbnail_url !== nextProps.asset.asset.thumbnail_url) return false;
+  if (prevProps.asset.asset.lqip !== nextProps.asset.asset.lqip) return false;
+
+  // Check other props that affect rendering
+  if (prevProps.index !== nextProps.index) return false;
+  if (prevProps.isManagementSelected !== nextProps.isManagementSelected) return false;
+  if (prevProps.managementSelectable !== nextProps.managementSelectable) return false;
+  if (prevProps.showCustomerSelection !== nextProps.showCustomerSelection) return false;
+  if (prevProps.isCover !== nextProps.isCover) return false;
+  if (prevProps.showActions !== nextProps.showActions) return false;
+  if (prevProps.className !== nextProps.className) return false;
+  if (prevProps.aspectRatio !== nextProps.aspectRatio) return false;
+  if (prevProps.isPrivateUnlocked !== nextProps.isPrivateUnlocked) return false;
+  if (prevProps.isAccessCodeVerified !== nextProps.isAccessCodeVerified) return false;
+
+  // Callbacks are intentionally NOT compared by reference
+  // They are stable in behavior even if recreated - this is the key optimization
+  // The callbacks only use stable identifiers (asset_id, index) which we already checked
+
+  return true;
+};
+
+export const PhotoCard = React.memo(PhotoCardComponent, arePropsEqual);

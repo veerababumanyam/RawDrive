@@ -147,6 +147,7 @@ export interface GalleryTheme {
 export type GridStyle = 'vertical' | 'horizontal';
 export type GridSize = 'sm' | 'md' | 'lg';
 export type GridSpacing = 'sm' | 'md' | 'lg';
+export type NavigationStyle = 'icon-only' | 'icon-text';
 
 // =============================================================================
 // Focal Point for Cover Images
@@ -197,6 +198,7 @@ export interface GridConfig {
   style: GridStyle;
   size: GridSize;
   spacing: GridSpacing;
+  navigationStyle: NavigationStyle;
 }
 
 // =============================================================================
@@ -266,6 +268,7 @@ export const DEFAULT_GALLERY_DESIGN_CONFIG: GalleryDesignConfig = {
     style: 'vertical',
     size: 'md',
     spacing: 'md',
+    navigationStyle: 'icon-text',
   },
 };
 
@@ -313,6 +316,11 @@ export const isGridSpacing = (value: unknown): value is GridSpacing => {
   return typeof value === 'string' && validSpacings.includes(value as GridSpacing);
 };
 
+export const isNavigationStyle = (value: unknown): value is NavigationStyle => {
+  const validStyles: NavigationStyle[] = ['icon-only', 'icon-text'];
+  return typeof value === 'string' && validStyles.includes(value as NavigationStyle);
+};
+
 export const isValidFocalPoint = (value: unknown): value is FocalPoint => {
   return (
     typeof value === 'object' &&
@@ -353,6 +361,7 @@ export const isValidGalleryDesignConfig = (value: unknown): value is GalleryDesi
     typeof config.grid === 'object' &&
     isGridStyle(config.grid.style) &&
     isGridSize(config.grid.size) &&
-    isGridSpacing(config.grid.spacing)
+    isGridSpacing(config.grid.spacing) &&
+    isNavigationStyle(config.grid.navigationStyle)
   );
 };

@@ -4,16 +4,20 @@ Tests integration with ai-service microservice:
 - Semantic search
 - Emotion detection
 - Circuit breaker functionality
+- Exponential backoff with retries
+- Fallback responses
 - Error handling
 
 Note: These tests require ai-service to be running.
 """
 
 import pytest
+import asyncio
 from uuid import UUID, uuid4
 from unittest.mock import AsyncMock, patch, MagicMock
+import httpx
 
-from src.services.ai_client import AIServiceClient, CircuitBreakerError
+from src.services.ai_client import AIServiceClient, CircuitBreakerError, BackoffConfig
 from src.services.ai_client.circuit_breaker import CircuitBreaker, CircuitState
 
 
@@ -415,3 +419,352 @@ class TestAIServiceIntegration:
 
             assert "faces" in result
             assert "photo_level_summary" in result
+
+
+# =============================================================================
+# Backoff Configuration Tests
+# =============================================================================
+
+
+class TestBackoffConfig:
+    """Test BackoffConfig functionality."""
+
+    def test_backoff_config_defaults(self):
+        """BackoffConfig has sensible defaults."""
+        config = BackoffConfig()
+
+        assert config.max_retries == 3
+        assert config.base_delay == 0.1
+        assert config.max_delay == 2.0
+        assert config.jitter == 0.1
+
+    def test_backoff_delay_calculation_exponential(self):
+        """Delay increases exponentially with attempts."""
+        config = BackoffConfig(base_delay=0.1, max_delay=10.0, jitter=0.0)
+
+        delay_0 = config.calculate_delay(0)  # 0.1 * 2^0 = 0.1
+        delay_1 = config.calculate_delay(1)  # 0.1 * 2^1 = 0.2
+        delay_2 = config.calculate_delay(2)  # 0.1 * 2^2 = 0.4
+        delay_3 = config.calculate_delay(3)  # 0.1 * 2^3 = 0.8
+
+        assert delay_0 == pytest.approx(0.1, rel=0.01)
+        assert delay_1 == pytest.approx(0.2, rel=0.01)
+        assert delay_2 == pytest.approx(0.4, rel=0.01)
+        assert delay_3 == pytest.approx(0.8, rel=0.01)
+
+    def test_backoff_delay_respects_max(self):
+        """Delay is capped at max_delay."""
+        config = BackoffConfig(base_delay=1.0, max_delay=2.0, jitter=0.0)
+
+        delay_5 = config.calculate_delay(5)  # 1.0 * 2^5 = 32, capped at 2.0
+
+        assert delay_5 == pytest.approx(2.0, rel=0.01)
+
+    def test_backoff_delay_includes_jitter(self):
+        """Delay includes randomized jitter."""
+        config = BackoffConfig(base_delay=1.0, max_delay=10.0, jitter=0.5)
+
+        # With 50% jitter, delay should vary between base and base * 1.5
+        delays = [config.calculate_delay(0) for _ in range(100)]
+
+        min_delay = min(delays)
+        max_delay = max(delays)
+
+        # Base delay is 1.0, with 50% jitter: 1.0 to 1.5
+        assert min_delay >= 1.0
+        assert max_delay <= 1.5
+        # Should have some variation
+        assert max_delay > min_delay
+
+
+# =============================================================================
+# Circuit Breaker with Retry Tests
+# =============================================================================
+
+
+class TestCircuitBreakerWithRetry:
+    """Test circuit breaker with exponential backoff retry functionality."""
+
+    @pytest.mark.asyncio
+    async def test_call_with_retry_succeeds_on_first_try(self):
+        """call_with_retry succeeds immediately without retries."""
+        breaker = CircuitBreaker(
+            "test-service",
+            backoff_config=BackoffConfig(max_retries=3, base_delay=0.01),
+        )
+
+        async def success_func():
+            return "success"
+
+        result = await breaker.call_with_retry(success_func)
+
+        assert result == "success"
+        assert breaker.total_retries == 0
+
+    @pytest.mark.asyncio
+    async def test_call_with_retry_retries_on_timeout(self):
+        """call_with_retry retries on TimeoutError."""
+        breaker = CircuitBreaker(
+            "test-service",
+            backoff_config=BackoffConfig(max_retries=2, base_delay=0.01),
+        )
+
+        call_count = 0
+
+        async def flaky_func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise asyncio.TimeoutError("Timeout")
+            return "success"
+
+        result = await breaker.call_with_retry(flaky_func)
+
+        assert result == "success"
+        assert call_count == 3
+        assert breaker.total_retries == 2
+        assert breaker.successful_retries == 1
+
+    @pytest.mark.asyncio
+    async def test_call_with_retry_exhausts_retries(self):
+        """call_with_retry raises after exhausting all retries."""
+        breaker = CircuitBreaker(
+            "test-service",
+            backoff_config=BackoffConfig(max_retries=2, base_delay=0.01),
+        )
+
+        async def always_fails():
+            raise asyncio.TimeoutError("Always timeout")
+
+        with pytest.raises(asyncio.TimeoutError):
+            await breaker.call_with_retry(always_fails)
+
+        assert breaker.total_retries == 2
+
+    @pytest.mark.asyncio
+    async def test_call_with_retry_no_retry_for_circuit_breaker_error(self):
+        """call_with_retry doesn't retry CircuitBreakerError."""
+        breaker = CircuitBreaker(
+            "test-service",
+            failure_threshold=1,
+            backoff_config=BackoffConfig(max_retries=3),
+        )
+
+        # Open the circuit
+        async def failing_func():
+            raise Exception("Service down")
+
+        with pytest.raises(Exception):
+            await breaker.call(failing_func)
+
+        # Circuit is now open
+        assert breaker.state == CircuitState.OPEN
+
+        # Trying to call with retry should fail immediately with CircuitBreakerError
+        with pytest.raises(CircuitBreakerError):
+            await breaker.call_with_retry(failing_func)
+
+        # No retries should have been attempted
+        assert breaker.total_retries == 0
+
+    @pytest.mark.asyncio
+    async def test_call_with_retry_custom_retryable_exceptions(self):
+        """call_with_retry only retries specified exception types."""
+        breaker = CircuitBreaker(
+            "test-service",
+            backoff_config=BackoffConfig(max_retries=3, base_delay=0.01),
+        )
+
+        async def raises_value_error():
+            raise ValueError("Not retryable")
+
+        # ValueError is not in default retryable exceptions
+        with pytest.raises(ValueError):
+            await breaker.call_with_retry(raises_value_error)
+
+        # Should not have retried
+        assert breaker.total_retries == 0
+
+
+# =============================================================================
+# Fallback Response Tests
+# =============================================================================
+
+
+class TestFallbackResponses:
+    """Test fallback response functionality."""
+
+    @pytest.fixture
+    def ai_client_with_fallback(self):
+        """AIServiceClient with fallback enabled."""
+        return AIServiceClient(
+            ai_service_url="http://ai-service:8013",
+            timeout=0.1,  # Very short timeout for testing
+            enable_circuit_breaker=False,
+            enable_fallback=True,
+        )
+
+    @pytest.fixture
+    def ai_client_without_fallback(self):
+        """AIServiceClient with fallback disabled."""
+        return AIServiceClient(
+            ai_service_url="http://ai-service:8013",
+            timeout=0.1,
+            enable_circuit_breaker=False,
+            enable_fallback=False,
+        )
+
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.post")
+    async def test_search_returns_fallback_on_timeout(
+        self, mock_post, ai_client_with_fallback, workspace_id
+    ):
+        """Semantic search returns fallback on timeout when enabled."""
+        mock_post.side_effect = httpx.TimeoutException("Request timeout")
+
+        result = await ai_client_with_fallback.search_photos_semantic(
+            workspace_id=workspace_id,
+            query="test query",
+        )
+
+        assert result["fallback"] is True
+        assert result["total"] == 0
+        assert result["results"] == []
+        assert "AI service unavailable" in result["reason"]
+
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.post")
+    async def test_search_raises_exception_without_fallback(
+        self, mock_post, ai_client_without_fallback, workspace_id
+    ):
+        """Semantic search raises exception when fallback disabled."""
+        mock_post.side_effect = httpx.TimeoutException("Request timeout")
+
+        with pytest.raises(httpx.TimeoutException):
+            await ai_client_without_fallback.search_photos_semantic(
+                workspace_id=workspace_id,
+                query="test query",
+            )
+
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.post")
+    async def test_emotion_analysis_returns_fallback_on_error(
+        self, mock_post, ai_client_with_fallback, workspace_id, photo_id
+    ):
+        """Emotion analysis returns fallback on error when enabled."""
+        mock_post.side_effect = Exception("Connection refused")
+
+        result = await ai_client_with_fallback.analyze_photo_emotions(
+            workspace_id=workspace_id,
+            photo_id=photo_id,
+        )
+
+        assert result["fallback"] is True
+        assert result["faces"] == []
+        assert result["photo_level_summary"] is None
+
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.post")
+    async def test_per_call_fallback_override(
+        self, mock_post, ai_client_without_fallback, workspace_id
+    ):
+        """use_fallback parameter overrides client setting."""
+        mock_post.side_effect = httpx.TimeoutException("Timeout")
+
+        # Client has fallback disabled, but we enable it per-call
+        result = await ai_client_without_fallback.search_photos_semantic(
+            workspace_id=workspace_id,
+            query="test",
+            use_fallback=True,  # Override
+        )
+
+        assert result["fallback"] is True
+
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.post")
+    async def test_fallback_on_circuit_breaker_open(
+        self, mock_post, workspace_id, auth_context
+    ):
+        """Fallback is returned when circuit breaker is open."""
+        client = AIServiceClient(
+            ai_service_url="http://ai-service:8013",
+            enable_circuit_breaker=True,
+            enable_fallback=True,
+        )
+
+        # Configure low failure threshold
+        client.circuit_breaker.failure_threshold = 2
+
+        mock_post.side_effect = Exception("Service unavailable")
+
+        # Trigger failures to open circuit
+        for _ in range(2):
+            result = await client.search_photos_semantic(
+                workspace_id=workspace_id,
+                query="test",
+                use_fallback=True,
+            )
+            assert result["fallback"] is True
+
+        # Circuit should be open now
+        assert client.circuit_breaker.state == CircuitState.OPEN
+
+        # Next call should return fallback immediately
+        result = await client.search_photos_semantic(
+            workspace_id=workspace_id,
+            query="test",
+        )
+
+        assert result["fallback"] is True
+
+
+# =============================================================================
+# Timeout Configuration Tests
+# =============================================================================
+
+
+class TestTimeoutConfiguration:
+    """Test timeout configuration for AI service calls."""
+
+    def test_default_timeout_is_2_seconds(self):
+        """Default timeout is 2 seconds as specified."""
+        client = AIServiceClient()
+
+        # Default from settings should be 2.0 seconds
+        assert client.timeout == 2.0
+        assert client.connect_timeout == 1.0
+
+    def test_custom_timeout_configuration(self):
+        """Custom timeout can be configured."""
+        client = AIServiceClient(
+            timeout=5.0,
+            connect_timeout=2.0,
+        )
+
+        assert client.timeout == 5.0
+        assert client.connect_timeout == 2.0
+
+    def test_circuit_breaker_state_includes_config(self):
+        """Circuit breaker state includes configuration details."""
+        client = AIServiceClient(
+            timeout=2.0,
+            connect_timeout=1.0,
+            max_retries=3,
+        )
+
+        state = client.get_circuit_breaker_state()
+
+        assert "client_config" in state
+        assert state["client_config"]["timeout_seconds"] == 2.0
+        assert state["client_config"]["connect_timeout_seconds"] == 1.0
+        assert state["client_config"]["max_retries"] == 3
+
+    def test_backoff_config_in_state(self):
+        """Circuit breaker state includes backoff configuration."""
+        client = AIServiceClient()
+        state = client.get_circuit_breaker_state()
+
+        assert "backoff_config" in state
+        assert "max_retries" in state["backoff_config"]
+        assert "base_delay" in state["backoff_config"]
+        assert "max_delay" in state["backoff_config"]

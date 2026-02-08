@@ -3,7 +3,11 @@
   "description": "Implement a comprehensive webhook event system that allows external services and integrations to subscribe to platform events (asset uploads, gallery published, invitation RSVP, client analytics updated, etc.). Include webhook management UI, event payload versioning, retry logic with exponential backoff, event signatures for security verification, and a webhook delivery dashboard with success/failure rates. This enables third-party developers to build plugins, integrations with external CRMs, automation workflows (Zapier/IFTTT-style), and custom reporting systems.",
   "id": "feature-1767922134085-msy8qkj2p",
   "steps": [],
-  "status": "backlog",
+  "status": "completed",
   "skipTests": true,
-  "priority": 1
+  "priority": 1,
+  "branchName": "main",
+  "startedAt": "2026-02-01T06:35:43.394Z",
+  "updatedAt": "2026-02-01T06:46:39.882Z",
+  "justFinishedAt": "2026-02-01T06:46:39.882Z"
 }

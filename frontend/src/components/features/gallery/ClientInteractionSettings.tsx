@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { MessageSquare, Heart, CheckSquare, Star, Info } from 'lucide-react';
+import { MessageSquare, Heart, CheckSquare, Star, Info, Users } from 'lucide-react';
 import { AppCard } from '../../ui/AppCard';
 import { Toggle } from '../../ui/FormControls';
 import { AppInput } from '../../ui/AppInput';
@@ -141,6 +141,28 @@ export const ClientInteractionSettings: React.FC<ClientInteractionSettingsProps>
           <div className="p-4 bg-surface-hover rounded-lg border border-border">
             <p className="text-sm text-text-secondary">
               Star ratings help you understand which photos your clients love most. Use this data to prioritize editing or album inclusion.
+            </p>
+          </div>
+        </div>
+      </AppCard>
+
+      {/* People Filter Setting */}
+      <AppCard padding="md">
+        <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center gap-2">
+          <Users size={20} />
+          People Filter
+        </h3>
+        <div className="space-y-4">
+          <Toggle
+            label="Show people filter to clients"
+            checked={gallery.show_people_filter ?? false}
+            onChange={(e) => onUpdate({ show_people_filter: e.target.checked })}
+            description="Allow clients to filter photos by detected faces/people"
+          />
+          <div className="p-4 bg-surface-hover rounded-lg border border-border">
+            <p className="text-sm text-text-secondary">
+              When enabled, clients can use face recognition to find all photos of a specific person in the gallery.
+              This feature requires face detection to be run on the gallery photos first.
             </p>
           </div>
         </div>

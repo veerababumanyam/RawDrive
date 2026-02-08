@@ -1,0 +1,72 @@
+{
+  "name": "@rawdrive/api-types",
+  "version": "0.3.6",
+  "description": "Auto-generated TypeScript types and clients for RawDrive microservice APIs",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./backend": {
+      "types": "./dist/clients/backend.d.ts",
+      "import": "./dist/clients/backend.js"
+    },
+    "./gallery-service": {
+      "types": "./dist/clients/gallery-service.d.ts",
+      "import": "./dist/clients/gallery-service.js"
+    },
+    "./webhooks-service": {
+      "types": "./dist/clients/webhooks-service.d.ts",
+      "import": "./dist/clients/webhooks-service.js"
+    },
+    "./billing-service": {
+      "types": "./dist/clients/billing-service.d.ts",
+      "import": "./dist/clients/billing-service.js"
+    },
+    "./client-service": {
+      "types": "./dist/clients/client-service.d.ts",
+      "import": "./dist/clients/client-service.js"
+    },
+    "./notifications-service": {
+      "types": "./dist/clients/notifications-service.d.ts",
+      "import": "./dist/clients/notifications-service.js"
+    },
+    "./invitations-service": {
+      "types": "./dist/clients/invitations-service.d.ts",
+      "import": "./dist/clients/invitations-service.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "openapi"
+  ],
+  "scripts": {
+    "generate:openapi": "tsx ../../scripts/generate-openapi-schemas.ts",
+    "generate:clients": "orval",
+    "generate": "pnpm generate:openapi && pnpm generate:clients",
+    "build": "tsup src/index.ts src/clients/*.ts src/schemas/*.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "orval": "^7.5.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.6.1"
+  },
+  "peerDependencies": {
+    "axios": ">=1.0.0"
+  }
+}

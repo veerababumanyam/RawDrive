@@ -1,0 +1,12 @@
+{
+  "category": "Integration & Productivity",
+  "description": "Create pre-built webhook integration templates for common automation workflows: (1) Zapier/Make.com actions (when gallery published → notify Slack, send email to clients, create Asana task), (2) visual workflow builder UI for photographers to connect Webhooks Service to external tools without code, (3) template gallery with best practices (CRM sync, notification campaigns, analytics export).",
+  "id": "feature-1769974366776-tc1k61wm4",
+  "steps": [],
+  "status": "verified",
+  "skipTests": true,
+  "priority": 2,
+  "startedAt": "2026-02-01T19:37:52.653Z",
+  "updatedAt": "2026-02-01T20:00:14.061Z",
+  "justFinishedAt": "2026-02-01T20:00:14.061Z"
+}

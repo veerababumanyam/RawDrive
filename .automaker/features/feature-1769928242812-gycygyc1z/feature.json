@@ -1,0 +1,258 @@
+{
+  "category": "Uncategorized",
+  "description": "# Face Detection and Identification Feature\n\n## Overview\n\nRawDrive's Face Detection and Identification service automatically detects, identifies, and groups faces across gallery photos. This enables photographers to organize photos by person, discover similar faces, and create face-based collections.\n\n## Key Capabilities\n\n### Automatic Face Detection\n- Detects all visible faces in uploaded photos\n- Extracts bounding box coordinates for face location\n- Generates confidence scores for detection quality\n- Supports JPEG, PNG, WebP, and HEIC formats\n\n### Face Identification and Clustering\n- Generates face embeddings for similarity matching\n- Automatically groups photos of the same person\n- Supports manual confirmation and correction\n- Enables cluster merging and splitting\n\n### AI Provider Management\n- Primary provider: Google Cloud Vision\n- Fallback provider: Google Gemini Flash\n- Automatic failover on provider failure\n- Admin-configurable settings (no hardcoded values)\n\n### Face-Based Organization\n- Browse galleries by detected faces\n- Filter photos by specific people\n- Name and manage face groups\n- Multi-face filtering support\n\n## Architecture\n\n```\n┌─────────────────────────────────────────────────────────────┐\n│                    Photo Upload                              │\n└────────────────────────┬────────────────────────────────────┘\n                         │\n                         ▼\n┌─────────────────────────────────────────────────────────────┐\n│                  Detection Job Queue                         │\n│                    (BullMQ/Redis)                           │\n└────────────────────────┬────────────────────────────────────┘\n                         │\n                         ▼\n┌─────────────────────────────────────────────────────────────┐\n│               Face Detection Service                         │\n│  ┌─────────────────────────────────────────────────────┐   │\n│  │              Provider Manager                        │   │\n│  │  ┌─────────────┐    ┌─────────────────────────┐    │   │\n│  │  │ Cloud Vision│───▶│ Gemini Flash (Fallback) │    │   │\n│  │  │  (Primary)  │    │                         │    │   │\n│  │  └─────────────┘    └─────────────────────────┘    │   │\n│  └─────────────────────────────────────────────────────┘   │\n└────────────────────────┬────────────────────────────────────┘\n                         │\n                         ▼\n┌─────────────────────────────────────────────────────────────┐\n│              Face Embedding & Clustering                     │\n│  ┌─────────────────┐  ┌─────────────────────────────────┐  │\n│  │ Embedding Store │  │     Cluster Manager             │  │\n│  │   (pgvector)    │  │  (Similarity Matching)          │  │\n│  └─────────────────┘  └─────────────────────────────────┘  │\n└────────────────────────┬────────────────────────────────────┘\n                         │\n                         ▼\n┌─────────────────────────────────────────────────────────────┐\n│                   Face Groups API                            │\n│         (Browse, Filter, Name, Organize)                    │\n└─────────────────────────────────────────────────────────────┘\n```\n\n## User Flows\n\n### Automatic Detection Flow\n1. Photographer uploads photos to gallery\n2. System queues photos for face detection\n3. Background worker processes photos through AI provider\n4. Faces are detected and embeddings generated\n5. Faces are matched to existing clusters or new clusters created\n6. Face groups become available for browsing\n\n### Manual Correction Flow\n1. User views detected faces in gallery\n2. User identifies incorrect grouping\n3. User manually assigns face to correct group\n4. System updates cluster and improves future matching\n\n### Face-Based Browsing Flow\n1. User opens gallery\n2. User views face groups sidebar\n3. User selects one or more face groups\n4. Gallery filters to show matching photos\n5. User can further refine with other filters\n\n## Configuration\n\n### Admin Settings (Preferred)\nAll AI provider settings are managed through the admin interface:\n\n- **Google Cloud Vision**\n  - Service account credentials (JSON)\n  - Rate limits\n  - Timeout values\n\n- **Google Gemini**\n  - API key\n  - Model selection (gemini-2.5-flash, gemini-3-flash-preview, etc.)\n  - Rate limits\n  - Timeout values\n\n- **Detection Settings**\n  - Similarity threshold (default: 0.85)\n  - Minimum confidence threshold (default: 0.7)\n  - Batch size for processing\n  - Retry configuration\n\n### Environment Variables (Fallback)\nWhen admin settings are not configured:\n\n```bash\n# Google Cloud Vision\nGOOGLE_CLOUD_VISION_CREDENTIALS=<path-to-service-account-json>\n\n# Google Gemini\nGEMINI_API_KEY=<api-key>\nGEMINI_MODEL=gemini-3-flash-preview\nGEMINI_MODEL_FAST=gemini-2.5-flash\n\n# Detection Settings\nFACE_SIMILARITY_THRESHOLD=0.85\nFACE_MIN_CONFIDENCE=0.7\n```\n\n## API Endpoints\n\n### Gallery Faces\n```\nGET /api/v1/galleries/{id}/faces\n```\nReturns all detected faces in a gallery with bounding boxes and cluster assignments.\n\n### Face Details\n```\nGET /api/v1/faces/{id}\n```\nReturns detailed information about a specific detected face.\n\n### Manual Identification\n```\nPOST /api/v1/faces/{id}/identify\nBody: { \"faceGroupId\": \"uuid\" }\n```\nManually assigns a face to a specific face group.\n\n### Face Groups\n```\nGET /api/v1/workspaces/{id}/face-groups\nPUT /api/v1/face-groups/{id}\nPOST /api/v1/face-groups/merge\nPOST /api/v1/face-groups/{id}/split\n```\nManage face groups within a workspace.\n\n### Trigger Detection\n```\nPOST /api/v1/photos/{id}/detect-faces\n```\nManually trigger face detection for a specific photo.\n\n## Database Schema\n\n### faces Table\n```sql\nCREATE TABLE faces (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    workspace_id UUID NOT NULL REFERENCES workspaces(id),\n    photo_id UUID NOT NULL REFERENCES photos(id),\n    face_group_id UUID REFERENCES face_groups(id),\n    bounding_box JSONB NOT NULL,\n    confidence DECIMAL(5,4) NOT NULL,\n    embedding vector(512),\n    provider VARCHAR(50) NOT NULL,\n    detection_metadata JSONB,\n    created_at TIMESTAMPTZ DEFAULT NOW(),\n    updated_at TIMESTAMPTZ DEFAULT NOW()\n);\n\nCREATE INDEX idx_faces_workspace ON faces(workspace_id);\nCREATE INDEX idx_faces_photo ON faces(photo_id);\nCREATE INDEX idx_faces_group ON faces(face_group_id);\nCREATE INDEX idx_faces_embedding ON faces USING ivfflat (embedding vector_cosine_ops);\n```\n\n### face_groups Table\n```sql\nCREATE TABLE face_groups (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    workspace_id UUID NOT NULL REFERENCES workspaces(id),\n    name VARCHAR(255),\n    representative_face_id UUID REFERENCES faces(id),\n    centroid vector(512),\n    face_count INTEGER DEFAULT 0,\n    created_at TIMESTAMPTZ DEFAULT NOW(),\n    updated_at TIMESTAMPTZ DEFAULT NOW()\n);\n\nCREATE INDEX idx_face_groups_workspace ON face_groups(workspace_id);\n```\n\n### ai_provider_settings Table\n```sql\nCREATE TABLE ai_provider_settings (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    provider_name VARCHAR(50) NOT NULL UNIQUE,\n    credentials_encrypted BYTEA,\n    config JSONB NOT NULL DEFAULT '{}',\n    is_enabled BOOLEAN DEFAULT true,\n    priority INTEGER DEFAULT 0,\n    rate_limit_per_minute INTEGER,\n    timeout_ms INTEGER DEFAULT 30000,\n    created_at TIMESTAMPTZ DEFAULT NOW(),\n    updated_at TIMESTAMPTZ DEFAULT NOW()\n);\n```\n\n## Security Considerations\n\n- All face data is scoped by workspace_id\n- Cross-workspace face matching is prevented\n- Provider credentials are encrypted at rest\n- API endpoints require authentication\n- Face data access is audited\n\n## Performance Targets\n\n- Face detection: < 3 seconds per photo\n- Similarity search: < 100ms for 10,000 faces\n- Batch processing: 100 photos per minute\n- Embedding storage: Optimized with pgvector indexes\n\n## Related Documentation\n\n- `docs/TechnicalSpecs/people_face_recognition.json` - Technical specification\n- `docs/Features/AI_POWERED_FEATURES.md` - AI features overview\n- `docs/Features/GalleryFeatures.md` - Gallery features\n",
+  "title": " Face Detection",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": false,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "branchName": "main",
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1769928242812-gycygyc1z",
+  "startedAt": "2026-02-01T06:45:25.856Z",
+  "updatedAt": "2026-02-01T12:08:36.503Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "# Face Detection and Identification Feature Specification\n\n## 1. Problem Statement\n\nPhotographers need to efficiently organize large photo galleries by the people appearing in them. Currently, there's no automated way to detect faces, group similar faces together, or filter photos by specific individuals. This feature will enable automatic face detection, intelligent clustering, and face-based organization across galleries.\n\n## 2. User Story\n\nAs a **photographer**, I want **automatic face detection and grouping in my galleries**, so that **I can quickly find and organize photos of specific people without manual tagging**.\n\n## 3. Acceptance Criteria\n\n### Happy Path - Automatic Detection\n- **GIVEN** a photo is uploaded to a gallery\n- **WHEN** the upload completes\n- **THEN** the system queues the photo for face detection, detects all visible faces, generates embeddings, and assigns faces to existing or new clusters\n\n### Happy Path - Face Browsing\n- **GIVEN** a gallery has photos with detected faces\n- **WHEN** the user opens the gallery and views the face groups sidebar\n- **THEN** the user sees all detected face groups with representative thumbnails and photo counts\n\n### Happy Path - Face Filtering\n- **GIVEN** a gallery has multiple face groups\n- **WHEN** the user selects one or more face groups\n- **THEN** the gallery filters to show only photos containing those faces\n\n### Edge Case - No Faces Detected\n- **GIVEN** a photo with no visible faces\n- **WHEN** face detection runs\n- **THEN** the photo is marked as processed with zero faces detected, no error occurs\n\n### Edge Case - Low Confidence Detection\n- **GIVEN** a photo with partially obscured faces\n- **WHEN** face detection runs with confidence below threshold\n- **THEN** faces below the minimum confidence threshold are not stored\n\n### Edge Case - Provider Failure\n- **GIVEN** the primary AI provider (Cloud Vision) is unavailable\n- **WHEN** face detection is attempted\n- **THEN** the system automatically fails over to Gemini Flash provider\n\n### Error Handling - Rate Limited\n- **GIVEN** the AI provider rate limit is reached\n- **WHEN** face detection is attempted\n- **THEN** the job is requeued with exponential backoff\n\n### Error Handling - Invalid Image\n- **GIVEN** an unsupported or corrupted image file\n- **WHEN** face detection is attempted\n- **THEN** the job fails gracefully with an error message and the photo is marked as detection_failed\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `backend/src/app/models/face.py`, `backend/src/app/models/face_group.py`, `backend/src/app/services/face_detection_service.py`, `backend/src/app/services/face_clustering_service.py`, `backend/src/app/api/v1/faces.py`, `backend/src/app/workers/face_detection_worker.py`, `frontend/src/components/features/gallery/FaceGroupsSidebar.tsx`, `frontend/src/hooks/useFaces.ts`, `services/ai-processing-service/src/providers/` |\n| Dependencies | `pgvector` (already in use), `google-cloud-vision`, `google-generativeai`, `numpy`, `scikit-learn` |\n| Constraints | Must maintain workspace isolation, AI providers must be configurable (not hardcoded), Detection must complete in <3 seconds per photo |\n| Patterns to Follow | Existing AI service patterns in `services/ai-processing-service/`, Repository-Service-API pattern, BullMQ for job queues |\n\n## 5. Non-Goals\n\n- **Cross-workspace face matching** - Faces are strictly isolated by workspace\n- **Real-time detection during upload** - Detection is asynchronous via job queue\n- **Face recognition training** - Using pre-trained models only, no custom training\n- **Third-party face database integration** - No external face databases\n- **Automatic naming of faces** - Users must manually name face groups\n- **Video face detection** - Photos only in this phase\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Database Foundation & Models\n- [ ] T001: Create Alembic migration for faces, face_groups, and ai_provider_settings tables with pgvector indexes | File: backend/migrations/versions/xxxx_face_detection_tables.py\n- [ ] T002: Create Face SQLAlchemy model with workspace isolation and embedding vector field | File: backend/src/app/models/face.py\n- [ ] T003: Create FaceGroup SQLAlchemy model with centroid vector and face count | File: backend/src/app/models/face_group.py\n- [ ] T004: Create AIProviderSettings SQLAlchemy model for encrypted credentials storage | File: backend/src/app/models/ai_provider_settings.py\n- [ ] T005: Add models to __init__.py exports and create base repositories | File: backend/src/app/models/__init__.py\n\n## Phase 2: AI Provider Layer\n- [ ] T006: Create base AIProvider abstract class with detect_faces interface | File: services/ai-processing-service/src/providers/base_provider.py\n- [ ] T007: Implement CloudVisionProvider for Google Cloud Vision face detection | File: services/ai-processing-service/src/providers/cloud_vision_provider.py\n- [ ] T008: Implement GeminiProvider for Gemini Flash face detection fallback | File: services/ai-processing-service/src/providers/gemini_provider.py\n- [ ] T009: Create ProviderManager with failover logic and health checking | File: services/ai-processing-service/src/providers/provider_manager.py\n- [ ] T010: Create AIProviderSettingsService for credential management | File: backend/src/app/services/ai_provider_settings_service.py\n\n## Phase 3: Core Face Detection Service\n- [ ] T011: Create FaceRepository with CRUD operations and embedding similarity search | File: backend/src/app/repositories/face_repository.py\n- [ ] T012: Create FaceGroupRepository with centroid management and merge/split operations | File: backend/src/app/repositories/face_group_repository.py\n- [ ] T013: Create FaceDetectionService for orchestrating detection with provider manager | File: backend/src/app/services/face_detection_service.py\n- [ ] T014: Create FaceClusteringService for embedding-based face grouping | File: backend/src/app/services/face_clustering_service.py\n- [ ] T015: Create FaceDetectionWorker for async processing via job queue | File: backend/src/app/workers/face_detection_worker.py\n\n## Phase 4: API Endpoints\n- [ ] T016: Create faces API router with gallery faces endpoint | File: backend/src/app/api/v1/faces.py\n- [ ] T017: Add face details, manual identification, and trigger detection endpoints | File: backend/src/app/api/v1/faces.py\n- [ ] T018: Create face_groups API router with CRUD, merge, and split operations | File: backend/src/app/api/v1/face_groups.py\n- [ ] T019: Add Pydantic schemas for face and face_group requests/responses | File: backend/src/app/schemas/face.py\n- [ ] T020: Register routers in main API router and add OpenAPI documentation | File: backend/src/app/api/v1/__init__.py\n\n## Phase 5: Upload Integration\n- [ ] T021: Add face detection job trigger after photo upload completes | File: backend/src/app/services/upload_service.py\n- [ ] T022: Add face detection status field to photos model if needed | File: backend/src/app/models/photo.py\n- [ ] T023: Create job queue configuration for face detection with retry policies | File: backend/src/app/config/job_queues.py\n\n## Phase 6: Frontend Components\n- [ ] T024: Create useFaces hook for fetching gallery faces and face groups | File: frontend/src/hooks/useFaces.ts\n- [ ] T025: Create FaceGroupsSidebar component for displaying detected face groups | File: frontend/src/components/features/gallery/FaceGroupsSidebar.tsx\n- [ ] T026: Create FaceGroupCard component for individual face group display | File: frontend/src/components/features/gallery/FaceGroupCard.tsx\n- [ ] T027: Add face filtering support to gallery state management | File: frontend/src/contexts/GalleryContext.tsx\n- [ ] T028: Create FaceManagementModal for naming, merging, and splitting groups | File: frontend/src/components/features/gallery/FaceManagementModal.tsx\n\n## Phase 7: Testing & Documentation\n- [ ] T029: Create unit tests for FaceDetectionService and FaceClusteringService | File: backend/tests/unit/services/test_face_detection_service.py\n- [ ] T030: Create integration tests for face detection API endpoints | File: backend/tests/integration/api/test_faces_api.py\n- [ ] T031: Create frontend tests for face components and hooks | File: frontend/src/components/features/gallery/__tests__/FaceGroupsSidebar.test.tsx\n- [ ] T032: Update API documentation with face detection endpoints | File: docs/api/faces.md\n```\n\n## 7. Success Metrics\n\n| Metric | Target |\n|--------|--------|\n| Face detection latency | < 3 seconds per photo |\n| Face similarity search latency | < 100ms for 10,000 faces |\n| Batch processing throughput | 100 photos per minute |\n| Face clustering accuracy | > 90% correct grouping |\n| Provider failover time | < 500ms to fallback provider |\n| API endpoint response time | < 200ms for face listing |\n| Test coverage | > 80% for new code |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| AI provider costs could be high | Implement rate limiting, batch processing, and usage monitoring |\n| Face detection accuracy varies by photo quality | Store confidence scores, allow manual correction, set minimum thresholds |\n| pgvector performance at scale | Use IVFFlat indexes, implement pagination, consider partitioning by workspace |\n| Privacy concerns with face data | Strict workspace isolation, encrypted storage, audit logging, GDPR compliance |\n| Provider API changes | Abstract provider interface, version pinning, integration tests |\n| Embedding dimension mismatch between providers | Standardize on 512-dimensional embeddings, normalize vectors |",
+    "generatedAt": "2026-02-01T06:46:21.261Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create Alembic migration for faces, face_groups, and ai_provider_settings tables with pgvector indexes",
+        "filePath": "backend/migrations/versions/xxxx_face_detection_tables.py",
+        "phase": "Phase 1: Database Foundation & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Create Face SQLAlchemy model with workspace isolation and embedding vector field",
+        "filePath": "backend/src/app/models/face.py",
+        "phase": "Phase 1: Database Foundation & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create FaceGroup SQLAlchemy model with centroid vector and face count",
+        "filePath": "backend/src/app/models/face_group.py",
+        "phase": "Phase 1: Database Foundation & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Create AIProviderSettings SQLAlchemy model for encrypted credentials storage",
+        "filePath": "backend/src/app/models/ai_provider_settings.py",
+        "phase": "Phase 1: Database Foundation & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Add models to __init__.py exports and create base repositories",
+        "filePath": "backend/src/app/models/__init__.py",
+        "phase": "Phase 1: Database Foundation & Models",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create base AIProvider abstract class with detect_faces interface",
+        "filePath": "services/ai-processing-service/src/providers/base_provider.py",
+        "phase": "Phase 2: AI Provider Layer",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Implement CloudVisionProvider for Google Cloud Vision face detection",
+        "filePath": "services/ai-processing-service/src/providers/cloud_vision_provider.py",
+        "phase": "Phase 2: AI Provider Layer",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Implement GeminiProvider for Gemini Flash face detection fallback",
+        "filePath": "services/ai-processing-service/src/providers/gemini_provider.py",
+        "phase": "Phase 2: AI Provider Layer",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create ProviderManager with failover logic and health checking",
+        "filePath": "services/ai-processing-service/src/providers/provider_manager.py",
+        "phase": "Phase 2: AI Provider Layer",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Create AIProviderSettingsService for credential management",
+        "filePath": "backend/src/app/services/ai_provider_settings_service.py",
+        "phase": "Phase 2: AI Provider Layer",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Create FaceRepository with CRUD operations and embedding similarity search",
+        "filePath": "backend/src/app/repositories/face_repository.py",
+        "phase": "Phase 3: Core Face Detection Service",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create FaceGroupRepository with centroid management and merge/split operations",
+        "filePath": "backend/src/app/repositories/face_group_repository.py",
+        "phase": "Phase 3: Core Face Detection Service",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create FaceDetectionService for orchestrating detection with provider manager",
+        "filePath": "backend/src/app/services/face_detection_service.py",
+        "phase": "Phase 3: Core Face Detection Service",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create FaceClusteringService for embedding-based face grouping",
+        "filePath": "backend/src/app/services/face_clustering_service.py",
+        "phase": "Phase 3: Core Face Detection Service",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Create FaceDetectionWorker for async processing via job queue",
+        "filePath": "backend/src/app/workers/face_detection_worker.py",
+        "phase": "Phase 3: Core Face Detection Service",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Create faces API router with gallery faces endpoint",
+        "filePath": "backend/src/app/api/v1/faces.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Add face details, manual identification, and trigger detection endpoints",
+        "filePath": "backend/src/app/api/v1/faces.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create face_groups API router with CRUD, merge, and split operations",
+        "filePath": "backend/src/app/api/v1/face_groups.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Add Pydantic schemas for face and face_group requests/responses",
+        "filePath": "backend/src/app/schemas/face.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Register routers in main API router and add OpenAPI documentation",
+        "filePath": "backend/src/app/api/v1/__init__.py",
+        "phase": "Phase 4: API Endpoints",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Add face detection job trigger after photo upload completes",
+        "filePath": "backend/src/app/services/upload_service.py",
+        "phase": "Phase 5: Upload Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Add face detection status field to photos model if needed",
+        "filePath": "backend/src/app/models/photo.py",
+        "phase": "Phase 5: Upload Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Create job queue configuration for face detection with retry policies",
+        "filePath": "backend/src/app/config/job_queues.py",
+        "phase": "Phase 5: Upload Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create useFaces hook for fetching gallery faces and face groups",
+        "filePath": "frontend/src/hooks/useFaces.ts",
+        "phase": "Phase 6: Frontend Components",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Create FaceGroupsSidebar component for displaying detected face groups",
+        "filePath": "frontend/src/components/features/gallery/FaceGroupsSidebar.tsx",
+        "phase": "Phase 6: Frontend Components",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Create FaceGroupCard component for individual face group display",
+        "filePath": "frontend/src/components/features/gallery/FaceGroupCard.tsx",
+        "phase": "Phase 6: Frontend Components",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Add face filtering support to gallery state management",
+        "filePath": "frontend/src/contexts/GalleryContext.tsx",
+        "phase": "Phase 6: Frontend Components",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Create FaceManagementModal for naming, merging, and splitting groups",
+        "filePath": "frontend/src/components/features/gallery/FaceManagementModal.tsx",
+        "phase": "Phase 6: Frontend Components",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Create unit tests for FaceDetectionService and FaceClusteringService",
+        "filePath": "backend/tests/unit/services/test_face_detection_service.py",
+        "phase": "Phase 7: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Create integration tests for face detection API endpoints",
+        "filePath": "backend/tests/integration/api/test_faces_api.py",
+        "phase": "Phase 7: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create frontend tests for face components and hooks",
+        "filePath": "frontend/src/components/features/gallery/__tests__/FaceGroupsSidebar.test.tsx",
+        "phase": "Phase 7: Testing & Documentation",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Update API documentation with face detection endpoints",
+        "filePath": "docs/api/faces.md",
+        "phase": "Phase 7: Testing & Documentation",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 32,
+    "tasksCompleted": 3,
+    "approvedAt": "2026-02-01T06:46:21.263Z",
+    "currentTaskId": "T004"
+  }
+}

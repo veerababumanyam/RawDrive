@@ -227,3 +227,328 @@ export interface WebhookDeliveryFilters {
   start_date?: string;
   end_date?: string;
 }
+
+// =============================================================================
+// Integration Template Types
+// =============================================================================
+
+export type TemplateCategory =
+  | 'communication'
+  | 'crm'
+  | 'project_management'
+  | 'analytics'
+  | 'automation'
+  | 'notification'
+  | 'developer';
+
+export type IntegrationType = 'zapier' | 'make' | 'native' | 'custom';
+
+export type WorkflowStepType =
+  | 'trigger'
+  | 'transform'
+  | 'condition'
+  | 'http_request'
+  | 'delay'
+  | 'branch';
+
+export type WorkflowExecutionStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface WorkflowStepDefinition {
+  type: WorkflowStepType;
+  name: string;
+  description?: string;
+  event?: string;
+  config: Record<string, unknown>;
+  input_mapping?: Record<string, string>;
+  output_mapping?: Record<string, string>;
+  condition?: Record<string, unknown>;
+}
+
+export interface WebhookTemplate {
+  template_id: string;
+  slug: string;
+  name: string;
+  short_description: string;
+  long_description?: string;
+  category: TemplateCategory;
+  integration_type: IntegrationType;
+  tags: string[];
+  provider?: string;
+  provider_logo_url?: string;
+  provider_website?: string;
+  trigger_events: string[];
+  default_config: Record<string, unknown>;
+  workflow_steps?: WorkflowStepDefinition[];
+  sample_payload?: Record<string, unknown>;
+  required_fields: string[];
+  setup_instructions?: string;
+  use_cases?: string[];
+  best_practices?: Record<string, unknown>;
+  documentation_url?: string;
+  usage_count: number;
+  rating?: number;
+  rating_count: number;
+  is_featured: boolean;
+  is_premium: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebhookTemplateSummary {
+  template_id: string;
+  slug: string;
+  name: string;
+  short_description: string;
+  category: TemplateCategory;
+  integration_type: IntegrationType;
+  tags: string[];
+  provider?: string;
+  provider_logo_url?: string;
+  trigger_events: string[];
+  usage_count: number;
+  rating?: number;
+  is_featured: boolean;
+  is_premium: boolean;
+}
+
+export interface TemplateListResponse {
+  templates: WebhookTemplateSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface TemplateFilterParams {
+  category?: TemplateCategory;
+  integration_type?: IntegrationType;
+  provider?: string;
+  tags?: string[];
+  search?: string;
+  event_type?: string;
+  featured_only?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export interface TemplateCategoryStats {
+  category: TemplateCategory;
+  total_templates: number;
+  featured_count: number;
+  total_usage: number;
+}
+
+// =============================================================================
+// Workflow Types
+// =============================================================================
+
+export interface WebhookWorkflow {
+  workflow_id: string;
+  workspace_id: string;
+  name: string;
+  description?: string;
+  template_id?: string;
+  subscription_id?: string;
+  trigger_events: string[];
+  trigger_conditions?: Record<string, unknown>;
+  workflow_steps: WorkflowStepResponse[];
+  configuration: Record<string, unknown>;
+  retry_policy?: Record<string, unknown>;
+  timeout_seconds: number;
+  rate_limit?: number;
+  is_active: boolean;
+  last_executed_at?: string;
+  execution_count: number;
+  success_count: number;
+  failure_count: number;
+  created_by_user_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowStepResponse {
+  step_id: string;
+  workflow_id: string;
+  step_order: number;
+  step_type: WorkflowStepType;
+  name: string;
+  description?: string;
+  configuration: Record<string, unknown>;
+  input_mapping?: Record<string, string>;
+  output_mapping?: Record<string, string>;
+  condition?: Record<string, unknown>;
+  continue_on_error: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowSummary {
+  workflow_id: string;
+  name: string;
+  description?: string;
+  template_id?: string;
+  trigger_events: string[];
+  is_active: boolean;
+  last_executed_at?: string;
+  execution_count: number;
+  success_count: number;
+  failure_count: number;
+  success_rate: number;
+}
+
+export interface WorkflowListResponse {
+  workflows: WorkflowSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface CreateWorkflowFromTemplateRequest {
+  template_id: string;
+  name: string;
+  description?: string;
+  configuration?: Record<string, unknown>;
+  is_active?: boolean;
+}
+
+export interface CreateCustomWorkflowRequest {
+  name: string;
+  description?: string;
+  trigger_events: string[];
+  trigger_conditions?: Record<string, unknown>;
+  workflow_steps: WorkflowStepDefinition[];
+  configuration?: Record<string, unknown>;
+  timeout_seconds?: number;
+  rate_limit?: number;
+  is_active?: boolean;
+}
+
+export interface UpdateWorkflowRequest {
+  name?: string;
+  description?: string;
+  trigger_events?: string[];
+  trigger_conditions?: Record<string, unknown>;
+  workflow_steps?: WorkflowStepDefinition[];
+  configuration?: Record<string, unknown>;
+  timeout_seconds?: number;
+  rate_limit?: number;
+  is_active?: boolean;
+}
+
+// =============================================================================
+// Workflow Execution Types
+// =============================================================================
+
+export interface WorkflowStepResult {
+  step_id: string;
+  step_name: string;
+  status: 'success' | 'failed' | 'skipped';
+  started_at: string;
+  completed_at?: string;
+  duration_ms?: number;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  error?: string;
+}
+
+export interface WorkflowExecution {
+  execution_id: string;
+  workflow_id: string;
+  workspace_id: string;
+  trigger_event_id?: string;
+  trigger_event_type: string;
+  trigger_payload?: Record<string, unknown>;
+  status: WorkflowExecutionStatus;
+  started_at?: string;
+  completed_at?: string;
+  duration_ms?: number;
+  steps_completed: number;
+  steps_total: number;
+  step_results?: WorkflowStepResult[];
+  error_message?: string;
+  error_step_id?: string;
+  retry_count: number;
+  output?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface WorkflowExecutionSummary {
+  execution_id: string;
+  workflow_id: string;
+  trigger_event_type: string;
+  status: WorkflowExecutionStatus;
+  started_at?: string;
+  completed_at?: string;
+  duration_ms?: number;
+  steps_completed: number;
+  steps_total: number;
+  error_message?: string;
+  created_at: string;
+}
+
+export interface WorkflowExecutionListResponse {
+  executions: WorkflowExecutionSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+// =============================================================================
+// Visual Workflow Builder Types
+// =============================================================================
+
+export interface WorkflowBuilderNode {
+  id: string;
+  type: WorkflowStepType;
+  position: { x: number; y: number };
+  data: Record<string, unknown>;
+  connections: string[];
+}
+
+export interface WorkflowBuilderEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
+}
+
+export interface WorkflowBuilderState {
+  nodes: WorkflowBuilderNode[];
+  edges: WorkflowBuilderEdge[];
+  viewport?: { x: number; y: number; zoom: number };
+}
+
+export interface SaveWorkflowBuilderRequest {
+  name: string;
+  description?: string;
+  builder_state: WorkflowBuilderState;
+  configuration?: Record<string, unknown>;
+  is_active?: boolean;
+}
+
+export interface WorkflowValidationResult {
+  is_valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+// =============================================================================
+// Template Stats
+// =============================================================================
+
+export interface TemplateStatsResponse {
+  total_templates: number;
+  total_workflows: number;
+  categories: TemplateCategoryStats[];
+  top_templates: WebhookTemplateSummary[];
+  recent_workflows: WorkflowSummary[];
+}

@@ -3,7 +3,7 @@
   "category": "Observability",
   "title": "Prometheus Metrics Collection",
   "description": "Set up Prometheus client library with metrics endpoint. Define core metrics for requests, errors, and custom business metrics.",
-  "status": "verified",
+  "status": "completed",
   "priority": 1,
   "complexity": "moderate",
   "dependencies": [

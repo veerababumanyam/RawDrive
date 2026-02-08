@@ -1,0 +1,13 @@
+{
+  "category": "Database Access Layer",
+  "description": "Extract repeated SQL patterns and database utilities into a shared `@rawdrive/database-utils` package. Currently duplicated across 10+ services: (1) LIKE pattern escaping via `_escape_like_pattern()`, (2) Asyncpg connection pooling setup, (3) Transaction context managers, (4) Pagination query builders, (5) Soft delete queries, (6) Workspace isolation WHERE clauses. Each service reimplements with potential inconsistency or security gaps.",
+  "id": "feature-1769952129338-uce45bpyr",
+  "steps": [],
+  "status": "verified",
+  "skipTests": true,
+  "priority": 2,
+  "branchName": "main",
+  "startedAt": "2026-02-01T19:32:22.425Z",
+  "updatedAt": "2026-02-01T19:43:34.760Z",
+  "justFinishedAt": "2026-02-01T19:43:34.760Z"
+}

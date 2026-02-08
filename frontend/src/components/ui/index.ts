@@ -148,3 +148,8 @@ export type { FileUploaderProps, UploadFile, DropZoneProps } from './FileUploade
 // Accessibility Components
 export { SkipLink } from './SkipLink';
 export { VisuallyHidden } from './VisuallyHidden';
+
+// PWA Components
+export { PWAUpdateNotification } from './PWAUpdateNotification';
+export { PWAInstallPrompt, PWAInstallBanner } from './PWAInstallPrompt';
+export { OfflineIndicator, NetworkStatusBadge, OfflineModeBanner } from './OfflineIndicator';

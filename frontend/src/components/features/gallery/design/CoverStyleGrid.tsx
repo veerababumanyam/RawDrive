@@ -212,7 +212,7 @@ export const CoverStyleGrid: React.FC<CoverStyleGridProps> = ({
   }, [focusedStyleIndex, visibleStyles, handleStyleSelect]);
 
   return (
-    <div className="space-y-4">
+    <div data-testid="cover-style-grid" className="space-y-4">
       {/* Search Input - Phase 1 Enhancement */}
       <div className="relative">
         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">

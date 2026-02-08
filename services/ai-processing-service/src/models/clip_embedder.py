@@ -58,6 +58,69 @@ class CLIPEmbedder:
             logger.error(f"Failed to load CLIP model: {e}")
             raise RuntimeError(f"CLIP model initialization failed: {e}")
 
+    def embed_text(self, text: str) -> np.ndarray:
+        """Generate CLIP text embedding for natural language query.
+
+        Uses CLIP's text encoder to convert text to a 512-dimensional vector
+        that is semantically aligned with image embeddings. This enables
+        cross-modal similarity search (text-to-image retrieval).
+
+        Args:
+            text: Natural language text to embed (e.g., "sunset on beach",
+                  "wedding ceremony", "portrait with bokeh")
+
+        Returns:
+            512-dimensional numpy array of float32 values, L2-normalized
+            to unit length for cosine similarity computation.
+
+        Raises:
+            ValueError: If text is empty or None
+            RuntimeError: If embedding generation fails
+        """
+        self._ensure_initialized()
+
+        # Validate input
+        if not text or not text.strip():
+            logger.error("Empty text provided for embedding")
+            raise ValueError("Text cannot be empty or whitespace only")
+
+        # Clean and prepare text
+        cleaned_text = text.strip()
+
+        try:
+            # Tokenize text using CLIP processor
+            # CLIP processor handles truncation automatically (max 77 tokens)
+            inputs = self.processor(
+                text=[cleaned_text],
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=77  # CLIP's max context length
+            )
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            # Generate text features with inference mode for performance
+            with torch.no_grad():
+                text_features = self.model.get_text_features(**inputs)
+                # L2 normalize to unit vector for cosine similarity
+                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+
+            # Convert to numpy and return
+            embedding = text_features[0].cpu().numpy().astype(np.float32)
+
+            logger.debug(
+                f"Generated CLIP text embedding for query: "
+                f"'{cleaned_text[:50]}{'...' if len(cleaned_text) > 50 else ''}'"
+            )
+            return embedding
+
+        except Exception as e:
+            logger.error(
+                f"Failed to generate CLIP text embedding for "
+                f"'{cleaned_text[:30]}...': {e}"
+            )
+            raise RuntimeError(f"CLIP text embedding failed: {e}")
+
     def embed_image(self, image_path: Union[str, Path]) -> np.ndarray:
         """Generate CLIP embedding for a single image."""
         self._ensure_initialized()

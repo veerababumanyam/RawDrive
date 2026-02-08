@@ -279,3 +279,83 @@ export type {
   DuplicateGroupListItem,
   DuplicateGroupListResponse,
 } from './useDuplicateDetection';
+
+// Async Data Fetching hook (unified pattern)
+export {
+  useAsyncData,
+  useAsyncOnce,
+  useAsyncMutation,
+} from './useAsyncData';
+export type {
+  AsyncDataStatus,
+  UseAsyncDataOptions,
+  UseAsyncDataReturn,
+  RefetchOptions,
+  AsyncFn,
+} from './useAsyncData';
+
+// Design Studio Collaboration hooks
+export { useDesignStudioCollaboration } from './useDesignStudioCollaboration';
+export type { UseDesignStudioCollaborationOptions } from './useDesignStudioCollaboration';
+export type { UseDesignStudioCollaborationReturn } from '../types/design-studio-collaboration';
+
+export { useDesignCollaboration } from './useDesignCollaboration';
+export type {
+  DesignSection,
+  UseDesignCollaborationOptions,
+  UseDesignCollaborationReturn,
+} from './useDesignCollaboration';
+
+// Webhook Templates hooks
+export {
+  useWebhookTemplates,
+  useWebhookTemplate,
+  useFeaturedTemplates,
+  useTemplateCategories,
+  useTemplateStats,
+  useWebhookWorkflows,
+  useWebhookWorkflow,
+  useWorkflowExecutions,
+  useWorkflowExecution,
+  useWorkflowBuilder,
+  useTemplateSetup,
+} from './useWebhookTemplates';
+
+// Culling Workflow hooks
+export { useCullingWorkflow } from './useCullingWorkflow';
+export type {
+  CullingViewMode,
+  CullingSortBy,
+  UseCullingWorkflowOptions,
+  UseCullingWorkflowReturn,
+} from './useCullingWorkflow';
+
+// PWA hooks
+export { usePWA } from './usePWA';
+export type {
+  PWADisplayMode,
+  PlatformInfo,
+  PWAInstallState,
+  NetworkState,
+  PWAShortcut,
+  UsePWAOptions,
+  UsePWAReturn,
+} from './usePWA';
+
+// Gallery Gestures hook
+export { useGalleryGestures } from './useGalleryGestures';
+export type {
+  GestureState,
+  UseGalleryGesturesOptions,
+  UseGalleryGesturesReturn,
+} from './useGalleryGestures';
+
+// Offline Gallery hook
+export { useOfflineGallery } from './useOfflineGallery';
+export type {
+  CachedGallery,
+  CachedAsset,
+  CacheSyncStatus,
+  UseOfflineGalleryOptions,
+  UseOfflineGalleryReturn,
+} from './useOfflineGallery';

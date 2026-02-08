@@ -23,6 +23,8 @@ from __future__ import annotations
 import logging
 import math
 import re
+import sys
+from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID
 
@@ -34,6 +36,14 @@ from app.services.client_exceptions import (
     TagDuplicateError,
     TagNotFoundError,
 )
+
+# Import escape_like_pattern from shared database-utils package
+# In production, PYTHONPATH includes the package path
+_packages_path = Path(__file__).parent.parent.parent.parent.parent / "packages" / "database-utils" / "python"
+if str(_packages_path) not in sys.path:
+    sys.path.insert(0, str(_packages_path))
+
+from database_utils.query_builders import escape_like_pattern
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +71,6 @@ MAX_TAG_NAME_LENGTH = 50
 
 # Hex color validation pattern
 HEX_COLOR_PATTERN = re.compile(r"^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$")
-
-
-def escape_like_pattern(pattern: str) -> str:
-    """Escape LIKE metacharacters to prevent pattern injection.
-
-    Escapes %, _, and \ characters that have special meaning in SQL LIKE patterns.
-    """
-    return pattern.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 # ---------------------------------------------------------------------------

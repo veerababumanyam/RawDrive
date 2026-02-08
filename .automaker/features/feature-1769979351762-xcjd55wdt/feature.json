@@ -1,0 +1,13 @@
+{
+  "category": "API Performance",
+  "description": "Combine sequential gallery verification queries into single batch operation. Currently, bulk asset operations execute 3+ sequential database queries for verification, count validation, and updates (backend/src/app/api/v1/gallery_assets.py:130-158). Implement transaction-based batch verification instead.",
+  "id": "feature-1769979351762-xcjd55wdt",
+  "steps": [],
+  "status": "verified",
+  "skipTests": true,
+  "priority": 1,
+  "branchName": "main",
+  "startedAt": "2026-02-01T20:55:53.025Z",
+  "updatedAt": "2026-02-01T20:59:18.510Z",
+  "justFinishedAt": "2026-02-01T20:59:18.510Z"
+}

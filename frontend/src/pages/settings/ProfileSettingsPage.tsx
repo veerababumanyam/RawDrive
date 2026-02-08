@@ -14,6 +14,9 @@ import {
   Download,
   Globe,
   Plus,
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useUserProfile } from '../../hooks/useUserSettings';
@@ -27,6 +30,7 @@ import { EmailChangeModal } from '../../components/settings/EmailChangeModal';
 import { SettingsPageLayout } from '../../components/settings/SettingsPageLayout';
 import { personalProfileService } from '../../services/personalProfileService';
 import type { CropData } from '../../components/ui/AvatarEditor/types';
+import { ProfileAnalytics } from '../../components/features/profile/ProfileAnalytics';
 
 /* =============================================================================
    Profile Settings Page Component
@@ -65,6 +69,9 @@ const ProfileSettingsPage: React.FC = () => {
   const [slugError, setSlugError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isDownloadingQr, setIsDownloadingQr] = useState(false);
+
+  // Analytics panel state
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   // Initialize form when profile loads
   useEffect(() => {
@@ -356,91 +363,126 @@ const ProfileSettingsPage: React.FC = () => {
 
           {/* Main Content - Show when slug exists */}
           {publicProfileSlug && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left Column - URL and Actions */}
-              <div className="space-y-6">
-                {/* Public URL Display */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-text-primary">
-                    Your Public Profile URL
-                  </label>
-                  <div className="flex gap-2">
-                    <AppInput
-                      value={personalProfileService.getPublicProfileUrl(publicProfileSlug)}
-                      readOnly
-                      variant="glass"
-                      leftIcon={<Globe className="w-4 h-4" />}
-                      className="flex-1 font-mono text-sm"
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                    <AppButton
-                      variant={copySuccess ? "success" : "outline"}
-                      size="md"
-                      onClick={handleCopyUrl}
-                      leftIcon={copySuccess ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      className="whitespace-nowrap"
-                    >
-                      {copySuccess ? 'Copied!' : 'Copy'}
-                    </AppButton>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column - URL and Actions */}
+                <div className="space-y-6">
+                  {/* Public URL Display */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-text-primary">
+                      Your Public Profile URL
+                    </label>
+                    <div className="flex gap-2">
+                      <AppInput
+                        value={personalProfileService.getPublicProfileUrl(publicProfileSlug)}
+                        readOnly
+                        variant="glass"
+                        leftIcon={<Globe className="w-4 h-4" />}
+                        className="flex-1 font-mono text-sm"
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                      />
+                      <AppButton
+                        variant={copySuccess ? "success" : "outline"}
+                        size="md"
+                        onClick={handleCopyUrl}
+                        leftIcon={copySuccess ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        className="whitespace-nowrap"
+                      >
+                        {copySuccess ? 'Copied!' : 'Copy'}
+                      </AppButton>
+                    </div>
+                    <p className="text-text-tertiary text-xs">
+                      Share this link on your website, social media, or business cards
+                    </p>
                   </div>
-                  <p className="text-text-tertiary text-xs">
-                    Share this link on your website, social media, or business cards
-                  </p>
+
+                  {/* Quick Actions */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-text-primary">
+                      Quick Actions
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <AppButton
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyUrl}
+                        leftIcon={<Copy className="w-4 h-4" />}
+                      >
+                        Copy URL
+                      </AppButton>
+                      <AppButton
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDownloadQr}
+                        isLoading={isDownloadingQr}
+                        leftIcon={<Download className="w-4 h-4" />}
+                      >
+                        Download QR
+                      </AppButton>
+                      <AppButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleViewProfile}
+                        leftIcon={<ExternalLink className="w-4 h-4" />}
+                      >
+                        View Profile
+                      </AppButton>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-text-primary">
-                    Quick Actions
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    <AppButton
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCopyUrl}
-                      leftIcon={<Copy className="w-4 h-4" />}
-                    >
-                      Copy URL
-                    </AppButton>
-                    <AppButton
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDownloadQr}
-                      isLoading={isDownloadingQr}
-                      leftIcon={<Download className="w-4 h-4" />}
-                    >
-                      Download QR
-                    </AppButton>
-                    <AppButton
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleViewProfile}
-                      leftIcon={<ExternalLink className="w-4 h-4" />}
-                    >
-                      View Profile
-                    </AppButton>
+                {/* Right Column - QR Code Preview */}
+                <div className="flex flex-col items-center justify-center">
+                  <div className="space-y-3 text-center">
+                    <label className="block text-sm font-medium text-text-primary">
+                      QR Code Preview
+                    </label>
+                    <div className="relative w-64 h-64 rounded-xl border-2 border-border bg-white p-4 flex items-center justify-center">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(personalProfileService.getPublicProfileUrl(publicProfileSlug))}`}
+                        alt={`QR code for ${publicProfileSlug} public profile`}
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                      />
+                    </div>
+                    <p className="text-text-tertiary text-xs max-w-xs mx-auto">
+                      Clients can scan this QR code to access your profile instantly
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Right Column - QR Code Preview */}
-              <div className="flex flex-col items-center justify-center">
-                <div className="space-y-3 text-center">
-                  <label className="block text-sm font-medium text-text-primary">
-                    QR Code Preview
-                  </label>
-                  <div className="relative w-64 h-64 rounded-xl border-2 border-border bg-white p-4 flex items-center justify-center">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(personalProfileService.getPublicProfileUrl(publicProfileSlug))}`}
-                      alt={`QR code for ${publicProfileSlug} public profile`}
-                      className="w-full h-full object-contain"
-                      loading="lazy"
-                    />
+              {/* Profile Analytics Section */}
+              <div className="border-t border-white/10 pt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowAnalytics(!showAnalytics)}
+                  className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <BarChart3 className="w-5 h-5 text-primary" />
+                    <div className="text-left">
+                      <h3 className="font-medium text-text-primary">Profile Analytics</h3>
+                      <p className="text-sm text-text-tertiary">Track views and engagement on your public profile</p>
+                    </div>
                   </div>
-                  <p className="text-text-tertiary text-xs max-w-xs mx-auto">
-                    Clients can scan this QR code to access your profile instantly
-                  </p>
-                </div>
+                  {showAnalytics ? (
+                    <ChevronUp className="w-5 h-5 text-text-tertiary" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-text-tertiary" />
+                  )}
+                </button>
+
+                {showAnalytics && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-4"
+                  >
+                    <ProfileAnalytics days={30} />
+                  </motion.div>
+                )}
               </div>
             </div>
           )}

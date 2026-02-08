@@ -13,3 +13,5 @@ export { RSVPDashboard } from './RSVPDashboard';
 export { RSVPExport } from './RSVPExport';
 export { InvitationQRModal } from './InvitationQRModal';
 export { ShareMenu } from './ShareMenu';
+export { RegionalFontSelector } from './RegionalFontSelector';
+export type { RegionalFontSelectorProps } from './RegionalFontSelector';

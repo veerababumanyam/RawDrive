@@ -314,9 +314,9 @@ async def embed_text(
             content={"error": str(e)}
         )
 
-# TODO: Add API routes for manual triggering and monitoring
-# from api.v1 import router as api_router
-# app.include_router(api_router, prefix="/api/v1")
+# API v1 routes (face detection, embedding extraction, etc.)
+from api.v1 import router as api_router
+app.include_router(api_router, prefix="/api/v1")
 
 
 # =============================================================================

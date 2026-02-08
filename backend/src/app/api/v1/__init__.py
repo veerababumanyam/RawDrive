@@ -24,6 +24,7 @@ from app.api.v1.tags import router as tags_router
 from app.api.v1.comments import router as comments_router
 from app.api.v1.people import router as people_router
 from app.api.v1.search import router as search_router
+from app.api.v1.geo_search import router as geo_search_router
 
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.company_profile import router as company_profile_router
@@ -45,6 +46,7 @@ from app.api.v1.shared import router as shared_router
 from app.api.v1.storage import router as storage_router
 # from app.api.v1.smart_tagging import router as smart_tagging_router  # Moved to ai-service microservice
 from app.api.v1.curation_sessions import router as curation_sessions_router
+from app.api.v1.culling_workflow import router as culling_workflow_router
 from app.api.v1.subscription import (
     router as subscription_router,
     plans_router as subscription_plans_router,
@@ -145,6 +147,14 @@ router.include_router(
     search_router,
     prefix="/api/v1/workspaces/{workspace_id}/search",
     tags=["search"],
+)
+
+# GEO (Generative Engine Optimization) Search routes
+# Natural language photo search using query parsing, metadata matching, and vector similarity
+router.include_router(
+    geo_search_router,
+    prefix="/api/v1/workspaces/{workspace_id}/geo",
+    tags=["geo-search"],
 )
 
 router.include_router(
@@ -264,6 +274,14 @@ router.include_router(
     curation_sessions_router,
     prefix="/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/curation-sessions",
     tags=["curation-sessions"],
+)
+
+# Culling Workflow routes (Bulk Photo Culling)
+# AI-powered bulk photo culling with quality scoring integration
+router.include_router(
+    culling_workflow_router,
+    prefix="/api/v1/workspaces/{workspace_id}/galleries/{gallery_id}/culling",
+    tags=["culling-workflow"],
 )
 
 # Subscription management routes (006-user-profile-sidebar)
@@ -396,6 +414,15 @@ router.include_router(
     engagement_router,
     prefix="/api/v1/workspaces/{workspace_id}/engagement",
     tags=["engagement-scoring"],
+)
+
+# Churn Prevention routes (Automated Churn Prediction and Prevention System)
+# ML-based churn prediction, intervention campaigns, A/B testing
+from app.api.v1.churn_prevention import router as churn_prevention_router
+router.include_router(
+    churn_prevention_router,
+    prefix="/api/v1/workspaces/{workspace_id}/churn-prevention",
+    tags=["churn-prevention"],
 )
 
 # Collaborative Editing routes
@@ -555,5 +582,25 @@ from app.api.v1.gallery_design_templates import router as gallery_design_templat
 router.include_router(
     gallery_design_templates_router,
     tags=["gallery-design-templates"],
+)
+
+# Portfolio Recommendations routes (AI Portfolio Recommendation Engine)
+# AI-powered portfolio recommendations using CLIP embeddings, engagement scoring,
+# client preference learning, and A/B testing for algorithm optimization
+from app.api.v1.portfolio_recommendations import router as portfolio_recommendations_router
+router.include_router(
+    portfolio_recommendations_router,
+    prefix="/api/v1/workspaces/{workspace_id}/portfolio-recommendations",
+    tags=["portfolio-recommendations"],
+)
+
+# Album Collaboration routes (Real-time Collaborative Album Design)
+# Multi-user album editing with CRDT-based conflict resolution, presence tracking,
+# version history with rollback, and commenting with @mentions
+from app.api.v1.album_collaboration import router as album_collaboration_router
+router.include_router(
+    album_collaboration_router,
+    prefix="/api/v1/workspaces/{workspace_id}",
+    tags=["album-collaboration"],
 )
 

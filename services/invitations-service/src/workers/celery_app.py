@@ -10,7 +10,10 @@ celery_app = Celery(
     "invitations",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["src.workers.email_worker"],
+    include=[
+        "src.workers.email_worker",
+        "src.workers.cleanup_worker",  # T028-T032: Auto-deletion for GDPR/DPDP
+    ],
 )
 
 # Celery configuration
@@ -30,4 +33,5 @@ celery_app.conf.update(
 # Task routing
 celery_app.conf.task_routes = {
     "src.workers.email_worker.*": {"queue": "emails"},
+    "src.workers.cleanup_worker.*": {"queue": "cleanup"},
 }

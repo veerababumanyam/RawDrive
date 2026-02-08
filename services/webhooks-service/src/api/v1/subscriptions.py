@@ -4,7 +4,7 @@ Webhook subscription CRUD endpoints.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
+from typing import Optional, List, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -18,6 +18,13 @@ from src.schemas import (
     WebhookTestRequest,
     WebhookTestResponse,
     PaginatedResponse,
+)
+from src.schemas.stats import (
+    DeliveryDashboardResponse,
+    DashboardMetrics,
+    DeliveryTimeSeriesPoint,
+    StatusBreakdownItem,
+    EventTypeBreakdownItem,
 )
 from src.repositories import subscription_repository, delivery_repository
 from src.services.signature_service import signature_service
@@ -352,4 +359,269 @@ async def rotate_secret(
         new_secret=new_secret,
         secret_version=subscription["secret_version"],
         old_secret_valid_until=subscription["previous_secret_expires_at"],
+    )
+
+
+@router.get(
+    "/subscriptions/{subscription_id}/analytics",
+    response_model=DeliveryDashboardResponse,
+    summary="Get subscription delivery analytics",
+)
+async def get_subscription_analytics(
+    subscription_id: UUID,
+    workspace_id: UUID = Depends(get_workspace_id),
+    period: Literal["24h", "7d", "30d"] = Query(default="7d"),
+):
+    """
+    Get comprehensive delivery analytics for a webhook subscription.
+
+    Returns time series data, status breakdown, and event type breakdown
+    for the delivery dashboard.
+    """
+    # Verify subscription exists
+    subscription = await subscription_repository.get_by_id(
+        subscription_id=subscription_id,
+        workspace_id=workspace_id,
+    )
+
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Webhook subscription not found",
+        )
+
+    # Calculate time range and granularity
+    now = datetime.now(timezone.utc)
+    if period == "24h":
+        start_time = now - timedelta(hours=24)
+        granularity = "hour"
+    elif period == "7d":
+        start_time = now - timedelta(days=7)
+        granularity = "day"
+    else:  # 30d
+        start_time = now - timedelta(days=30)
+        granularity = "day"
+
+    # Fetch all analytics data in parallel
+    import asyncio
+    stats_task = delivery_repository.get_stats_for_subscription(
+        subscription_id=subscription_id,
+        workspace_id=workspace_id,
+        start_time=start_time,
+    )
+    time_series_task = delivery_repository.get_time_series(
+        subscription_id=subscription_id,
+        workspace_id=workspace_id,
+        start_time=start_time,
+        end_time=now,
+        granularity=granularity,
+    )
+    status_breakdown_task = delivery_repository.get_status_breakdown(
+        subscription_id=subscription_id,
+        workspace_id=workspace_id,
+        start_time=start_time,
+    )
+    event_type_breakdown_task = delivery_repository.get_event_type_breakdown(
+        subscription_id=subscription_id,
+        workspace_id=workspace_id,
+        start_time=start_time,
+        limit=10,
+    )
+
+    stats, time_series_raw, status_breakdown_raw, event_type_breakdown_raw = await asyncio.gather(
+        stats_task,
+        time_series_task,
+        status_breakdown_task,
+        event_type_breakdown_task,
+    )
+
+    # Build response
+    total = stats.get("total_deliveries", 0) or 0
+    successful = stats.get("successful", 0) or 0
+    failed = stats.get("failed", 0) or 0
+    retrying = stats.get("retrying", 0) or 0
+    exhausted = stats.get("exhausted", 0) or 0
+
+    metrics = DashboardMetrics(
+        total_deliveries=total,
+        successful_deliveries=successful,
+        failed_deliveries=failed,
+        retried_deliveries=retrying,
+        exhausted_deliveries=exhausted,
+        success_rate=(successful / total * 100) if total > 0 else 0,
+        avg_response_time_ms=stats.get("avg_duration") or 0,
+        p95_response_time_ms=stats.get("p95_duration") or 0,
+    )
+
+    time_series = [
+        DeliveryTimeSeriesPoint(
+            timestamp=point["timestamp"],
+            total=point["total"],
+            successful=point["successful"],
+            failed=point["failed"],
+            retrying=point.get("retrying", 0),
+            avg_response_time_ms=point.get("avg_response_time_ms"),
+            p95_response_time_ms=point.get("p95_response_time_ms"),
+        )
+        for point in time_series_raw
+    ]
+
+    status_breakdown = [
+        StatusBreakdownItem(
+            status=item["status"],
+            count=item["count"],
+            percentage=item["percentage"],
+        )
+        for item in status_breakdown_raw
+    ]
+
+    event_type_breakdown = [
+        EventTypeBreakdownItem(
+            event_type=item["event_type"],
+            count=item["count"],
+            successful=item["successful"],
+            failed=item["failed"],
+            success_rate=item["success_rate"],
+        )
+        for item in event_type_breakdown_raw
+    ]
+
+    return DeliveryDashboardResponse(
+        period=period,
+        granularity=granularity,
+        metrics=metrics,
+        time_series=time_series,
+        status_breakdown=status_breakdown,
+        event_type_breakdown=event_type_breakdown,
+    )
+
+
+@router.get(
+    "/analytics",
+    response_model=DeliveryDashboardResponse,
+    summary="Get workspace-wide delivery analytics",
+)
+async def get_workspace_analytics(
+    workspace_id: UUID = Depends(get_workspace_id),
+    period: Literal["24h", "7d", "30d"] = Query(default="7d"),
+):
+    """
+    Get comprehensive delivery analytics for all webhooks in the workspace.
+
+    Returns aggregated time series data, status breakdown, and event type breakdown.
+    """
+    # Calculate time range and granularity
+    now = datetime.now(timezone.utc)
+    if period == "24h":
+        start_time = now - timedelta(hours=24)
+        granularity = "hour"
+    elif period == "7d":
+        start_time = now - timedelta(days=7)
+        granularity = "day"
+    else:  # 30d
+        start_time = now - timedelta(days=30)
+        granularity = "day"
+
+    # Fetch all analytics data in parallel
+    import asyncio
+    time_series_task = delivery_repository.get_time_series(
+        workspace_id=workspace_id,
+        start_time=start_time,
+        end_time=now,
+        granularity=granularity,
+    )
+    status_breakdown_task = delivery_repository.get_status_breakdown(
+        workspace_id=workspace_id,
+        start_time=start_time,
+    )
+    event_type_breakdown_task = delivery_repository.get_event_type_breakdown(
+        workspace_id=workspace_id,
+        start_time=start_time,
+        limit=10,
+    )
+
+    time_series_raw, status_breakdown_raw, event_type_breakdown_raw = await asyncio.gather(
+        time_series_task,
+        status_breakdown_task,
+        event_type_breakdown_task,
+    )
+
+    # Calculate aggregate metrics from time series
+    total = sum(point["total"] for point in time_series_raw) if time_series_raw else 0
+    successful = sum(point["successful"] for point in time_series_raw) if time_series_raw else 0
+    failed = sum(point["failed"] for point in time_series_raw) if time_series_raw else 0
+    retrying = sum(point.get("retrying", 0) for point in time_series_raw) if time_series_raw else 0
+
+    # Calculate average response times
+    response_times = [
+        point["avg_response_time_ms"]
+        for point in time_series_raw
+        if point.get("avg_response_time_ms") is not None
+    ]
+    avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+
+    p95_times = [
+        point["p95_response_time_ms"]
+        for point in time_series_raw
+        if point.get("p95_response_time_ms") is not None
+    ]
+    p95_response_time = max(p95_times) if p95_times else 0
+
+    # Count exhausted from status breakdown
+    exhausted = next(
+        (item["count"] for item in status_breakdown_raw if item["status"] == "exhausted"),
+        0,
+    )
+
+    metrics = DashboardMetrics(
+        total_deliveries=total,
+        successful_deliveries=successful,
+        failed_deliveries=failed,
+        retried_deliveries=retrying,
+        exhausted_deliveries=exhausted,
+        success_rate=(successful / total * 100) if total > 0 else 0,
+        avg_response_time_ms=avg_response_time,
+        p95_response_time_ms=p95_response_time,
+    )
+
+    time_series = [
+        DeliveryTimeSeriesPoint(
+            timestamp=point["timestamp"],
+            total=point["total"],
+            successful=point["successful"],
+            failed=point["failed"],
+            retrying=point.get("retrying", 0),
+            avg_response_time_ms=point.get("avg_response_time_ms"),
+            p95_response_time_ms=point.get("p95_response_time_ms"),
+        )
+        for point in time_series_raw
+    ]
+
+    status_breakdown = [
+        StatusBreakdownItem(
+            status=item["status"],
+            count=item["count"],
+            percentage=item["percentage"],
+        )
+        for item in status_breakdown_raw
+    ]
+
+    event_type_breakdown = [
+        EventTypeBreakdownItem(
+            event_type=item["event_type"],
+            count=item["count"],
+            successful=item["successful"],
+            failed=item["failed"],
+            success_rate=item["success_rate"],
+        )
+        for item in event_type_breakdown_raw
+    ]
+
+    return DeliveryDashboardResponse(
+        period=period,
+        granularity=granularity,
+        metrics=metrics,
+        time_series=time_series,
+        status_breakdown=status_breakdown,
+        event_type_breakdown=event_type_breakdown,
     )

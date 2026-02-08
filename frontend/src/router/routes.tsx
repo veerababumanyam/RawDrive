@@ -71,6 +71,10 @@ const PublicGalleryPage = lazy(() => import('../pages/public/PublicGalleryPage')
 const PublicInvitationPage = lazy(() => import('../pages/public/PublicInvitationPage'));
 const AlbumProofPage = lazy(() => import('../pages/public/AlbumProofPage'));
 
+// TV Ambient Display pages
+const TVActivationPage = lazy(() => import('../pages/public/TVActivationPage'));
+const AmbientDisplayPage = lazy(() => import('../pages/public/AmbientDisplayPage'));
+
 // Onboarding pages (automated onboarding system)
 const OnboardingLayout = lazy(() => import('../pages/onboarding/OnboardingLayout'));
 const PlanSelectionPage = lazy(() => import('../pages/onboarding/PlanSelectionPage'));
@@ -104,6 +108,7 @@ const RecentPage = lazy(() => import('../pages/workspace/RecentPage'));
 const GalleryCreatePage = lazy(() => import('../pages/workspace/GalleryCreatePage'));
 const GalleryDetailPage = lazy(() => import('../pages/workspace/GalleryDetailPage'));
 const GalleryDesignStudioPage = lazy(() => import('../pages/workspace/GalleryDesignStudioPage'));
+const CullingWorkflowPage = lazy(() => import('../pages/workspace/CullingWorkflowPage'));
 const ReviewModePage = lazy(() => import('../pages/workspace/ReviewModePage'));
 const RecycleBinPage = lazy(() => import('../pages/workspace/RecycleBinPage'));
 const SharedDashboardPage = lazy(() => import('../pages/workspace/SharedDashboardPage'));
@@ -136,6 +141,9 @@ const BookingsPage = lazy(() => import('../pages/workspace/BookingsPage'));
 const AnalyticsDashboardPage = lazy(() => import('../pages/workspace/AnalyticsDashboardPage'));
 const GalleryAnalyticsPage = lazy(() => import('../pages/workspace/GalleryAnalyticsPage'));
 const ReportsPage = lazy(() => import('../pages/workspace/ReportsPage'));
+
+// Churn Prevention page
+const ChurnPreventionPage = lazy(() => import('../pages/workspace/ChurnPreventionPage'));
 
 // Team Management pages
 const TeamPage = lazy(() => import('../pages/workspace/TeamPage'));
@@ -260,6 +268,15 @@ export const publicRoutes: RouteObject[] = [
   {
     path: '/invite/:token',
     element: <CriticalLazyPage component={InvitationAcceptPage} />,
+  },
+  // TV Ambient Display routes
+  {
+    path: '/tv/activate',
+    element: <LazyPage component={TVActivationPage} />,
+  },
+  {
+    path: '/tv/display/:galleryId',
+    element: <LazyPage component={AmbientDisplayPage} />,
   },
   // Legal/Policy pages
   {
@@ -389,6 +406,10 @@ export const workspaceRoutes: RouteObject[] = [
         element: <CriticalLazyPage component={ReviewModePage} />,
       },
       {
+        path: 'galleries/:id/culling',
+        element: <CriticalLazyPage component={CullingWorkflowPage} />,
+      },
+      {
         path: 'people',
         element: <LazyPage component={PeoplePage} />,
       },
@@ -499,6 +520,11 @@ export const workspaceRoutes: RouteObject[] = [
       {
         path: 'reports',
         element: <CriticalLazyPage component={ReportsPage} />,
+      },
+      // Churn Prevention routes
+      {
+        path: 'churn-prevention',
+        element: <CriticalLazyPage component={ChurnPreventionPage} />,
       },
       // AI Dashboard routes - TODO: Uncomment when pages are implemented
       // {

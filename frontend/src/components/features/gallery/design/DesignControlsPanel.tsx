@@ -19,6 +19,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { GalleryDesignConfig, DesignDraftStatus, FontPairingId, CoverStyleId } from '../../../../types/gallery-design';
+import type { DesignSection, DesignSectionLock, DesignStudioCollaborator } from '../../../../types/design-studio-collaboration';
 import { FONT_PAIRINGS } from '../../../../constants/fontPairings';
 import { LockableControlSection } from './ControlLockIndicator';
 import { ThemeSelector } from './ThemeSelector';
@@ -30,10 +31,9 @@ import {
   Type as TypeIcon,
   Palette,
   LayoutGrid,
-  Construction
 } from 'lucide-react';
-
-type DesignSection = 'cover' | 'typography' | 'theme' | 'grid';
+import { GridLayoutSection } from './GridLayoutSection';
+import { CoverPhotoSection } from './CoverPhotoSection';
 
 interface DesignControlsPanelProps {
   config: GalleryDesignConfig;
@@ -41,7 +41,16 @@ interface DesignControlsPanelProps {
   saveStatus: DesignDraftStatus;
   lastSavedAt: Date | null;
   error?: string;
-  lockedSections?: Map<DesignSection, { locked_by_user_name?: string }>;
+  lockedSections?: Map<DesignSection, DesignSectionLock>;
+  galleryId?: string;
+  workspaceId?: string;
+  // Collaboration callbacks
+  onSectionFocus?: (section: DesignSection) => void;
+  onTypingChange?: (isTyping: boolean, field?: string) => void;
+  onLockSection?: (section: DesignSection) => Promise<{ success: boolean; error?: string }>;
+  onUnlockSection?: (section: DesignSection) => Promise<boolean>;
+  collaborators?: DesignStudioCollaborator[];
+  myUserId?: string;
 }
 
 export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
@@ -51,6 +60,14 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
   lastSavedAt: _lastSavedAt,
   error,
   lockedSections = new Map(),
+  galleryId,
+  workspaceId,
+  onSectionFocus,
+  onTypingChange,
+  onLockSection,
+  onUnlockSection,
+  collaborators = [],
+  myUserId,
 }) => {
   const [activeTab, setActiveTab] = useState<DesignSection>('cover');
   const [coverCategory, setCoverCategory] = useState<'all' | 'basic' | 'text' | 'advanced' | 'premium'>('all');
@@ -105,7 +122,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-transparent text-gray-900 dark:text-white font-sans">
+    <div data-testid="design-controls-panel" className="h-full flex flex-col bg-transparent text-gray-900 dark:text-white font-sans">
       {/* Header Section - Enhanced Contrast */}
       <div className="px-6 py-6 sm:py-8 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/40 backdrop-blur-3xl flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
@@ -147,7 +164,10 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
                 id={`tab-${tab}`}
                 aria-selected={activeTab === tab}
                 aria-controls={`panel-${tab}`}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => {
+                  setActiveTab(tab);
+                  onSectionFocus?.(tab);
+                }}
                 onKeyDown={(e) => handleTabKeyDown(e, tab)}
                 className={`flex-1 flex flex-col items-center justify-center py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-lg sm:rounded-xl transition-all duration-300 relative min-w-0 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-black ${activeTab === tab
                   ? 'bg-white text-[#0a1628] shadow-lg scale-[1.02]'
@@ -175,10 +195,22 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
         {activeTab === 'cover' && (
           <LockableControlSection
             isLocked={lockedSections.has('cover')}
-            lockedByUser={lockedSections.get('cover')?.locked_by_user_name}
+            lockedByUser={lockedSections.get('cover')?.lockedByUserName}
             section="cover"
           >
-            <div className="space-y-6">
+            <div className="space-y-8">
+              {/* Cover Photo Configuration (T007-T011) */}
+              {galleryId && workspaceId && (
+                <CoverPhotoSection
+                  config={config.cover}
+                  galleryId={galleryId}
+                  workspaceId={workspaceId}
+                  onChange={(updates) => onChange({ cover: { ...config.cover, ...updates } })}
+                  disabled={lockedSections.has('cover')}
+                />
+              )}
+
+              {/* Cover Style Selection */}
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <h3 className="text-[10px] font-semibold text-gray-700 dark:text-white/60 tracking-wide">Gallery cover mode</h3>
@@ -202,7 +234,7 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
         {activeTab === 'typography' && (
           <LockableControlSection
             isLocked={lockedSections.has('typography')}
-            lockedByUser={lockedSections.get('typography')?.locked_by_user_name}
+            lockedByUser={lockedSections.get('typography')?.lockedByUserName}
             section="typography"
           >
             <div className="space-y-6">
@@ -238,15 +270,17 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
         {activeTab === 'theme' && (
           <LockableControlSection
             isLocked={lockedSections.has('theme')}
-            lockedByUser={lockedSections.get('theme')?.locked_by_user_name}
+            lockedByUser={lockedSections.get('theme')?.lockedByUserName}
             section="theme"
           >
             <div className="py-2">
               <ThemeSelector
                 selectedTheme={config.theme.id}
                 selectedMode={config.theme.mode}
-                onThemeChange={(themeId) => onChange({ theme: { ...config.theme, id: themeId } })}
+                selectedAccentOverride={config.theme.accentColorOverride}
+                onThemeChange={(themeId) => onChange({ theme: { ...config.theme, id: themeId, accentColorOverride: undefined } })}
                 onModeChange={(mode) => onChange({ theme: { ...config.theme, mode } })}
+                onAccentChange={(accent) => onChange({ theme: { ...config.theme, accentColorOverride: accent } })}
                 disabled={lockedSections.has('theme')}
               />
             </div>
@@ -256,13 +290,15 @@ export const DesignControlsPanel: React.FC<DesignControlsPanelProps> = ({
         {activeTab === 'grid' && (
           <LockableControlSection
             isLocked={lockedSections.has('grid')}
-            lockedByUser={lockedSections.get('grid')?.locked_by_user_name}
+            lockedByUser={lockedSections.get('grid')?.lockedByUserName}
             section="grid"
           >
-            <div className="py-8 flex flex-col items-center justify-center text-center opacity-40">
-              <Construction className="w-10 h-10 text-gray-400 dark:text-white/40 mb-4" />
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-white mb-2">Grid engine</h3>
-              <p className="text-xs text-gray-600 dark:text-white/60">Layout orchestration arriving in Phase 2.</p>
+            <div className="py-2">
+              <GridLayoutSection
+                config={config.grid}
+                onChange={(updates) => onChange({ grid: { ...config.grid, ...updates } })}
+                disabled={lockedSections.has('grid')}
+              />
             </div>
           </LockableControlSection>
         )}

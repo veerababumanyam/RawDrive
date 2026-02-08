@@ -21,6 +21,198 @@ from app.services.gallery_service import get_gallery_service
 
 logger = logging.getLogger(__name__)
 
+
+async def verify_gallery_and_assets_batch(
+    conn,
+    workspace_id: UUID,
+    gallery_id: UUID,
+    asset_ids: list[UUID],
+) -> dict:
+    """Verify gallery existence and asset ownership in a single batch query.
+
+    Combines multiple sequential verification queries into one efficient query
+    that performs all validations atomically within a transaction.
+
+    Returns:
+        dict with keys:
+            - gallery_exists: bool
+            - valid_asset_count: int (number of assets that belong to gallery)
+            - requested_count: int (number of requested assets)
+
+    Raises:
+        NotFoundError: If gallery doesn't exist
+        ValidationAppError: If some assets don't belong to the gallery
+    """
+    result = await conn.fetchrow(
+        """
+        WITH gallery_check AS (
+            SELECT gallery_id, 1 as gallery_exists
+            FROM galleries
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+        ),
+        asset_check AS (
+            SELECT COUNT(*)::int as valid_count
+            FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1
+              AND ga.gallery_id = $2
+              AND ga.asset_id = ANY($3::uuid[])
+              AND a.deleted = FALSE
+        )
+        SELECT
+            COALESCE(gc.gallery_exists, 0) as gallery_exists,
+            COALESCE(ac.valid_count, 0) as valid_asset_count
+        FROM (SELECT 1) dummy
+        LEFT JOIN gallery_check gc ON TRUE
+        LEFT JOIN asset_check ac ON TRUE
+        """,
+        workspace_id,
+        gallery_id,
+        asset_ids,
+    )
+
+    if not result["gallery_exists"]:
+        raise NotFoundError("Gallery", str(gallery_id))
+
+    if result["valid_asset_count"] != len(asset_ids):
+        raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
+
+    return {
+        "gallery_exists": bool(result["gallery_exists"]),
+        "valid_asset_count": result["valid_asset_count"],
+        "requested_count": len(asset_ids),
+    }
+
+
+async def verify_gallery_assets_and_subgallery_batch(
+    conn,
+    workspace_id: UUID,
+    gallery_id: UUID,
+    asset_ids: list[UUID],
+    sub_gallery_id: UUID | None = None,
+) -> dict:
+    """Verify gallery, sub-gallery, and asset ownership in a single batch query.
+
+    Extended version that also validates sub-gallery when provided.
+
+    Returns:
+        dict with verification results
+
+    Raises:
+        NotFoundError: If gallery or sub-gallery doesn't exist
+        ValidationAppError: If some assets don't belong to the gallery
+    """
+    result = await conn.fetchrow(
+        """
+        WITH gallery_check AS (
+            SELECT gallery_id, 1 as gallery_exists
+            FROM galleries
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+        ),
+        subgallery_check AS (
+            SELECT sub_gallery_id, 1 as subgallery_exists
+            FROM sub_galleries
+            WHERE workspace_id = $1
+              AND gallery_id = $2
+              AND sub_gallery_id = $4
+              AND deleted = FALSE
+        ),
+        asset_check AS (
+            SELECT COUNT(*)::int as valid_count
+            FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1
+              AND ga.gallery_id = $2
+              AND ga.asset_id = ANY($3::uuid[])
+              AND a.deleted = FALSE
+        )
+        SELECT
+            COALESCE(gc.gallery_exists, 0) as gallery_exists,
+            COALESCE(sc.subgallery_exists, 0) as subgallery_exists,
+            COALESCE(ac.valid_count, 0) as valid_asset_count
+        FROM (SELECT 1) dummy
+        LEFT JOIN gallery_check gc ON TRUE
+        LEFT JOIN subgallery_check sc ON TRUE
+        LEFT JOIN asset_check ac ON TRUE
+        """,
+        workspace_id,
+        gallery_id,
+        asset_ids,
+        sub_gallery_id,
+    )
+
+    if not result["gallery_exists"]:
+        raise NotFoundError("Gallery", str(gallery_id))
+
+    if sub_gallery_id and not result["subgallery_exists"]:
+        raise NotFoundError("Sub-gallery", str(sub_gallery_id))
+
+    if result["valid_asset_count"] != len(asset_ids):
+        raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
+
+    return {
+        "gallery_exists": bool(result["gallery_exists"]),
+        "subgallery_exists": bool(result["subgallery_exists"]) if sub_gallery_id else None,
+        "valid_asset_count": result["valid_asset_count"],
+        "requested_count": len(asset_ids),
+    }
+
+
+async def verify_gallery_and_single_asset_batch(
+    conn,
+    workspace_id: UUID,
+    gallery_id: UUID,
+    asset_id: UUID,
+) -> dict:
+    """Verify gallery existence and single asset ownership in one query.
+
+    Optimized for single-asset operations like update_asset.
+
+    Returns:
+        dict with verification results
+
+    Raises:
+        NotFoundError: If gallery or asset doesn't exist
+    """
+    result = await conn.fetchrow(
+        """
+        WITH gallery_check AS (
+            SELECT gallery_id, 1 as gallery_exists
+            FROM galleries
+            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
+        ),
+        asset_check AS (
+            SELECT ga.asset_id, 1 as asset_exists
+            FROM gallery_assets ga
+            JOIN assets a ON ga.asset_id = a.asset_id
+            WHERE ga.workspace_id = $1
+              AND ga.gallery_id = $2
+              AND ga.asset_id = $3
+              AND a.deleted = FALSE
+        )
+        SELECT
+            COALESCE(gc.gallery_exists, 0) as gallery_exists,
+            COALESCE(ac.asset_exists, 0) as asset_exists
+        FROM (SELECT 1) dummy
+        LEFT JOIN gallery_check gc ON TRUE
+        LEFT JOIN asset_check ac ON TRUE
+        """,
+        workspace_id,
+        gallery_id,
+        asset_id,
+    )
+
+    if not result["gallery_exists"]:
+        raise NotFoundError("Gallery", str(gallery_id))
+
+    if not result["asset_exists"]:
+        raise NotFoundError("Asset", str(asset_id))
+
+    return {
+        "gallery_exists": bool(result["gallery_exists"]),
+        "asset_exists": bool(result["asset_exists"]),
+    }
+
 router = APIRouter()
 
 
@@ -128,34 +320,10 @@ async def update_sort_order(
     pool = await get_postgres_pool()
 
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access (exclude deleted)
-        gallery = await conn.fetchrow(
-            """
-            SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
+        # Batch verify gallery and assets in single query
+        await verify_gallery_and_assets_batch(
+            conn, workspace_id, gallery_id, request.asset_ids
         )
-
-        if not gallery:
-            raise NotFoundError("Gallery", str(gallery_id))
-
-        # Verify all assets belong to this gallery (exclude deleted)
-        asset_count = await conn.fetchval(
-            """
-            SELECT COUNT(*) FROM gallery_assets ga
-            JOIN assets a ON ga.asset_id = a.asset_id
-            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
-            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
-            request.asset_ids,
-        )
-
-        if asset_count != len(request.asset_ids):
-            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
 
         # Update sort_order for all assets in a single batch query
         # Uses UNNEST WITH ORDINALITY to preserve array order and assign sort_order
@@ -200,49 +368,10 @@ async def move_assets(
     pool = await get_postgres_pool()
 
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access (exclude deleted)
-        gallery = await conn.fetchrow(
-            """
-            SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
+        # Batch verify gallery, sub-gallery (if provided), and assets in single query
+        await verify_gallery_assets_and_subgallery_batch(
+            conn, workspace_id, gallery_id, request.asset_ids, request.sub_gallery_id
         )
-
-        if not gallery:
-            raise NotFoundError("Gallery", str(gallery_id))
-
-        # Verify sub-gallery exists if provided (exclude deleted)
-        if request.sub_gallery_id:
-            sub_gallery = await conn.fetchrow(
-                """
-                SELECT sub_gallery_id FROM sub_galleries
-                WHERE workspace_id = $1 AND gallery_id = $2 AND sub_gallery_id = $3 AND deleted = FALSE
-                """,
-                workspace_id,
-                gallery_id,
-                request.sub_gallery_id,
-            )
-
-            if not sub_gallery:
-                raise NotFoundError("Sub-gallery", str(request.sub_gallery_id))
-
-        # Verify all assets belong to this gallery (exclude deleted)
-        asset_count = await conn.fetchval(
-            """
-            SELECT COUNT(*) FROM gallery_assets ga
-            JOIN assets a ON ga.asset_id = a.asset_id
-            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
-            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
-            request.asset_ids,
-        )
-
-        if asset_count != len(request.asset_ids):
-            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
 
         # Update sub_gallery_id for all assets in a single batch query
         await conn.execute(
@@ -279,7 +408,7 @@ async def delete_assets(
     request: DeleteAssetsRequest,
 ) -> dict:
     """Soft delete assets from gallery (moves to recycle bin).
-    
+
     This properly soft-deletes assets by setting deleted=TRUE and deleted_at
     on the assets table, making them appear in the recycle bin.
     Also hides the gallery_asset link by setting visible=FALSE.
@@ -289,34 +418,10 @@ async def delete_assets(
     deletion_service = get_deletion_service()
 
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access (exclude deleted)
-        gallery = await conn.fetchrow(
-            """
-            SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
+        # Batch verify gallery and assets in single query
+        await verify_gallery_and_assets_batch(
+            conn, workspace_id, gallery_id, request.asset_ids
         )
-
-        if not gallery:
-            raise NotFoundError("Gallery", str(gallery_id))
-
-        # Verify all assets belong to this gallery (exclude deleted)
-        asset_count = await conn.fetchval(
-            """
-            SELECT COUNT(*) FROM gallery_assets ga
-            JOIN assets a ON ga.asset_id = a.asset_id
-            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
-            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
-            request.asset_ids,
-        )
-
-        if asset_count != len(request.asset_ids):
-            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
 
         # Hide from gallery view (set visible = FALSE)
         await conn.execute(
@@ -337,7 +442,7 @@ async def delete_assets(
         asset_ids=request.asset_ids,
         user_id=current_user.user_id,
     )
-    
+
     deleted_count = len(results)
     return {"message": f"Deleted {deleted_count} asset(s) successfully. Items moved to recycle bin."}
 
@@ -363,34 +468,10 @@ async def restore_assets(
     pool = await get_postgres_pool()
 
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access (exclude deleted)
-        gallery = await conn.fetchrow(
-            """
-            SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
+        # Batch verify gallery and assets in single query
+        await verify_gallery_and_assets_batch(
+            conn, workspace_id, gallery_id, request.asset_ids
         )
-
-        if not gallery:
-            raise NotFoundError("Gallery", str(gallery_id))
-
-        # Verify all assets belong to this gallery (exclude deleted assets)
-        asset_count = await conn.fetchval(
-            """
-            SELECT COUNT(*) FROM gallery_assets ga
-            JOIN assets a ON ga.asset_id = a.asset_id
-            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
-            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
-            request.asset_ids,
-        )
-
-        if asset_count != len(request.asset_ids):
-            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
 
         # Restore assets (set visible = TRUE)
         await conn.execute(
@@ -403,7 +484,7 @@ async def restore_assets(
             gallery_id,
             request.asset_ids,
         )
-        
+
         return {"message": f"Restored {len(request.asset_ids)} asset(s) successfully"}
 
 
@@ -428,34 +509,10 @@ async def toggle_favorite(
     pool = await get_postgres_pool()
 
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access (exclude deleted)
-        gallery = await conn.fetchrow(
-            """
-            SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
+        # Batch verify gallery and assets in single query
+        await verify_gallery_and_assets_batch(
+            conn, workspace_id, gallery_id, request.asset_ids
         )
-
-        if not gallery:
-            raise NotFoundError("Gallery", str(gallery_id))
-
-        # Verify all assets belong to this gallery (exclude deleted)
-        asset_count = await conn.fetchval(
-            """
-            SELECT COUNT(*) FROM gallery_assets ga
-            JOIN assets a ON ga.asset_id = a.asset_id
-            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
-            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
-            request.asset_ids,
-        )
-
-        if asset_count != len(request.asset_ids):
-            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
 
         # Update favorite status
         await conn.execute(
@@ -469,12 +526,12 @@ async def toggle_favorite(
             gallery_id,
             request.asset_ids,
         )
-        
+
         # Note: favorites_count is typically a gallery-level aggregate stat
         # For individual asset favorites, we just update is_favorited flag
         # If favorites_count needs to be maintained per asset, it should be calculated
         # from a separate favorites table or updated via triggers
-        
+
         action = "favorited" if request.favorited else "unfavorited"
         return {"message": f"{action.capitalize()} {len(request.asset_ids)} asset(s) successfully"}
 
@@ -500,35 +557,11 @@ async def toggle_selection(
     pool = await get_postgres_pool()
 
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access (exclude deleted)
-        gallery = await conn.fetchrow(
-            """
-            SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
+        # Batch verify gallery and assets in single query
+        await verify_gallery_and_assets_batch(
+            conn, workspace_id, gallery_id, request.asset_ids
         )
 
-        if not gallery:
-            raise NotFoundError("Gallery", str(gallery_id))
-
-        # Verify all assets belong to this gallery (exclude deleted)
-        asset_count = await conn.fetchval(
-            """
-            SELECT COUNT(*) FROM gallery_assets ga
-            JOIN assets a ON ga.asset_id = a.asset_id
-            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
-            AND ga.asset_id = ANY($3::uuid[]) AND a.deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
-            request.asset_ids,
-        )
-
-        if asset_count != len(request.asset_ids):
-            raise ValidationAppError("Some assets do not belong to this gallery", field="asset_ids")
-        
         # Update selection status
         await conn.execute(
             """
@@ -541,7 +574,7 @@ async def toggle_selection(
             gallery_id,
             request.asset_ids,
         )
-        
+
         action = "selected" if request.selected else "deselected"
         return {"message": f"{action.capitalize()} {len(request.asset_ids)} asset(s) successfully"}
 
@@ -568,34 +601,10 @@ async def update_asset(
     pool = await get_postgres_pool()
 
     async with pool.acquire() as conn:
-        # Verify gallery exists and user has access
-        gallery = await conn.fetchrow(
-            """
-            SELECT gallery_id FROM galleries
-            WHERE workspace_id = $1 AND gallery_id = $2 AND deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
+        # Batch verify gallery and asset in single query
+        await verify_gallery_and_single_asset_batch(
+            conn, workspace_id, gallery_id, asset_id
         )
-
-        if not gallery:
-            raise NotFoundError("Gallery", str(gallery_id))
-
-        # Verify asset belongs to this gallery
-        asset = await conn.fetchrow(
-            """
-            SELECT ga.asset_id FROM gallery_assets ga
-            JOIN assets a ON ga.asset_id = a.asset_id
-            WHERE ga.workspace_id = $1 AND ga.gallery_id = $2
-            AND ga.asset_id = $3 AND a.deleted = FALSE
-            """,
-            workspace_id,
-            gallery_id,
-            asset_id,
-        )
-
-        if not asset:
-            raise NotFoundError("Asset", str(asset_id))
 
         # Build update query dynamically based on provided fields
         updates = []

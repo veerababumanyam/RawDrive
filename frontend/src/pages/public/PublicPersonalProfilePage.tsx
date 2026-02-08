@@ -56,6 +56,16 @@ export function PublicPersonalProfilePage() {
     loadProfile();
   }, [slug]);
 
+  // Track profile view (after profile loads successfully)
+  useEffect(() => {
+    if (!slug || !profile) return;
+
+    // Track the view asynchronously - don't block rendering
+    personalProfileService.trackView(slug).catch(() => {
+      // Silently ignore tracking errors - non-critical
+    });
+  }, [slug, profile?.slug]); // Only re-track if slug changes
+
   // Handle share
   const handleShare = async () => {
     if (!profile) return;

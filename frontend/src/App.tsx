@@ -2,9 +2,9 @@ import React from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider } from './contexts';
-import { ToastProvider } from './components/ui';
-import { PWAUpdateNotification } from './components/ui/PWAUpdateNotification';
+import { AuthProvider, PWAProvider } from './contexts';
+import { ToastProvider, PWAUpdateNotification, PWAInstallPrompt, OfflineIndicator } from './components/ui';
+import { ThemeProvider } from './hooks';
 import { routes } from './router';
 import ErrorBoundary from './components/error/ErrorBoundary';
 import { AppErrorFallback } from './components/error/ErrorFallbacks';
@@ -42,12 +42,18 @@ const App: React.FC = () => {
     <ErrorBoundary fallback={<AppErrorFallback />}>
       <QueryClientProvider client={queryClient}>
         <HelmetProvider>
-          <AuthProvider>
-            <ToastProvider position="bottom-center">
-              <RouterProvider router={router} future={{ v7_startTransition: true }} />
-              <PWAUpdateNotification />
-            </ToastProvider>
-          </AuthProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <PWAProvider>
+                <ToastProvider position="bottom-center">
+                  <RouterProvider router={router} future={{ v7_startTransition: true }} />
+                  <PWAUpdateNotification />
+                  <PWAInstallPrompt />
+                  <OfflineIndicator position="bottom" autoHide />
+                </ToastProvider>
+              </PWAProvider>
+            </AuthProvider>
+          </ThemeProvider>
         </HelmetProvider>
       </QueryClientProvider>
     </ErrorBoundary>
