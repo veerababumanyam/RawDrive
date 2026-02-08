@@ -75,6 +75,7 @@ Modular knowledge domains that agents can load on-demand. based on task context.
 | `nestjs-expert` | NestJS modules, DI, decorators |
 | `nodejs-best-practices` | Node.js async, modules |
 | `python-patterns` | Python standards, FastAPI |
+| `google-cloud-vision` | Image labeling, OCR, Face detection |
 
 ### Database
 | Skill | Description |
@@ -251,7 +252,7 @@ For details, see [scripts/README.md](scripts/README.md)
 | Metric | Value |
 |--------|-------|
 | **Total Agents** | 19 |
-| **Total Skills** | 36 |
+| **Total Skills** | 37 |
 | **Total Workflows** | 11 |
 | **Total Scripts** | 2 (master) + 18 (skill-level) |
 | **Coverage** | ~90% web/mobile development |
