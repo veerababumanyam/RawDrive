@@ -78,3 +78,8 @@ verify_*.py
 seed-app-settings.cjs
 **/seed-app-settings.cjs
 scripts/seed-app-settings.cjs
+
+# Local cache and sensitive credentials
+.cache/
+**/.cache/
+rawdrive_deploy_key

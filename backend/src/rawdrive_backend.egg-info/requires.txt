@@ -17,7 +17,8 @@ pyotp>=2.9
 geoip2>=4.7
 qrcode>=7.4
 Pillow>=10.0
-structlog>=25.5.0
+structlog>=24.1.0
+celery[redis]>=5.3.6
 
 [dev]
 pytest>=8.3
