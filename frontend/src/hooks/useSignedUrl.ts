@@ -90,12 +90,11 @@ export const useSignedUrl = ({
            workspace.workspace_id,
            assetId,
            variant,
-           true,
-           abortControllerRef.current.signal
+           true
          );
       } else {
          // Use context for batched fetching
-         signedUrl = await context.getSignedUrl(assetId, variant, abortControllerRef.current.signal);
+         signedUrl = await context.getSignedUrl(assetId, variant);
       }
 
       if (mountedRef.current) setUrl(signedUrl);

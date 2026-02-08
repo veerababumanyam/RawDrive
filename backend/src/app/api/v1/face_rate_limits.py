@@ -14,7 +14,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep
@@ -381,6 +381,7 @@ async def get_detection_quota(
     summary="Reset to default limits",
     description="Reset rate limits to platform defaults.",
     response_model=None,
+    response_class=Response,
     responses={
         403: {"model": ErrorResponse, "description": "Access denied"},
     },

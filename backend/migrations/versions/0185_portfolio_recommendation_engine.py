@@ -17,8 +17,9 @@ Create Date: 2026-02-01
 
 from alembic import op
 
-revision = "0185"
-down_revision = "0184"
+# Revision identifiers used by Alembic
+revision = "0185a"
+down_revision = "0185"
 branch_labels = None
 depends_on = None
 

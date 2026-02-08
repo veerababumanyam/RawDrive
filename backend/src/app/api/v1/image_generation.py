@@ -9,7 +9,7 @@ Feature: 016-save-the-date Phase 10
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_current_user
@@ -145,7 +145,7 @@ async def validate_provider(
         )
 
 
-@router.delete("/settings/{provider}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete("/settings/{provider}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_provider_settings(
     provider: AIProvider,
     current_user: dict = Depends(get_current_user),
@@ -153,14 +153,13 @@ async def delete_provider_settings(
 ):
     """Delete a provider's settings."""
     user_id = current_user.get("user_id")
-    
+
     deleted = await service.delete_provider_settings(UUID(user_id), provider)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Provider settings not found",
         )
-    return None
 
 
 @router.post("/generate", response_model=GenerateBackgroundResponse)

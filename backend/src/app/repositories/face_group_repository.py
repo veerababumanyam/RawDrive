@@ -380,6 +380,42 @@ class FaceGroupRepository:
             
             return [self._row_to_dict(row) for row in rows]
 
+    async def list_groups(
+        self,
+        workspace_id: UUID,
+        page: int = 1,
+        limit: int = 50,
+        order_by: str = "face_count",
+        order_desc: bool = True,
+        min_faces: Optional[int] = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """List face groups in a workspace with thumbnails and total count.
+
+        Used by GET /api/v1/workspaces/{workspace_id}/face-groups.
+
+        Args:
+            workspace_id: Workspace ID
+            page: Page number (1-based)
+            limit: Items per page
+            order_by: Sort field (face_count, name, created_at, updated_at)
+            order_desc: Sort descending
+            min_faces: Minimum face count filter (optional)
+
+        Returns:
+            Tuple of (list of group dicts with rep_face_id, rep_thumbnail_urls, person_id, person_name), total count
+        """
+        offset = (page - 1) * limit
+        groups = await self.find_by_workspace_with_thumbnails(
+            workspace_id=workspace_id,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+            order_desc=order_desc,
+            min_faces=min_faces,
+        )
+        total = await self.count_by_workspace(workspace_id, min_faces=min_faces)
+        return (groups, total)
+
     async def find_by_workspace_with_thumbnails(
         self,
         workspace_id: UUID,

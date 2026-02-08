@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +149,8 @@ class FeedbackType(str, Enum):
 class AssetEmbeddingBase(BaseModel):
     """Base schema for asset embedding."""
 
+    model_config = ConfigDict(protected_namespaces=())
+
     scene_category: SceneCategory | None = None
     scene_confidence: float | None = None
     scene_tags: list[str] = Field(default_factory=list)
@@ -178,16 +180,7 @@ class AssetEmbeddingCreate(AssetEmbeddingBase):
 class AssetEmbeddingResponse(AssetEmbeddingBase):
     """Response schema for asset embedding."""
 
-    embedding_id: UUID
-    workspace_id: UUID
-    asset_id: UUID
-    gallery_id: UUID | None
-    model_version: str
-    processed_at: datetime
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
 
 # ---------------------------------------------------------------------------
@@ -225,8 +218,7 @@ class EngagementScoreResponse(EngagementScoreBase):
     conversion_score: float
     last_calculated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------
@@ -266,8 +258,7 @@ class ClientPreferenceResponse(ClientPreferenceBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------
@@ -372,8 +363,7 @@ class RecommendationItemResponse(BaseModel):
     filename: str | None = None
     gallery_name: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RecommendationResponse(BaseModel):
@@ -410,8 +400,7 @@ class RecommendationResponse(BaseModel):
     completed_at: datetime | None
     expires_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RecommendationSummary(BaseModel):
@@ -428,8 +417,7 @@ class RecommendationSummary(BaseModel):
     items_selected: int
     requested_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------
@@ -459,8 +447,7 @@ class FeedbackResponse(BaseModel):
     comment: str | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------
@@ -543,8 +530,7 @@ class ABTestResponse(BaseModel):
     statistical_significance_reached: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------
@@ -583,8 +569,7 @@ class RecommendationMetricsResponse(BaseModel):
     # Lift
     selection_rate_vs_baseline: float | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TopAssetResponse(BaseModel):
@@ -609,8 +594,7 @@ class TopAssetResponse(BaseModel):
     asset_url: str | None = None
     thumbnail_url: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------

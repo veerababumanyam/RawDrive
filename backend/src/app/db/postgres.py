@@ -97,9 +97,33 @@ async def _setup_connection(conn: asyncpg.Connection) -> None:
         from pgvector.asyncpg import register_vector
         await register_vector(conn)
     except ImportError:
-        # Graceful degradation if pgvector package not installed
+        # Graceful degradation: encode vector as text so inserts work without pgvector
         logger.warning(
             "pgvector package not installed - using string-based vector serialization"
+        )
+
+        def _vector_encoder(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            # Already serialized (e.g. from face_repository._embedding_for_db)
+            if isinstance(value, str):
+                return value
+            if hasattr(value, "tolist"):
+                value = value.tolist()
+            return "[" + ",".join(str(float(x)) for x in value) + "]"
+
+        def _vector_decoder(value: Any) -> Optional[list]:
+            if value is None or value == "":
+                return None
+            s = str(value).strip("[]")
+            return [float(x) for x in s.split(",")] if s else []
+
+        await conn.set_type_codec(
+            "vector",
+            encoder=_vector_encoder,
+            decoder=_vector_decoder,
+            schema="public",
+            format="text",
         )
     except Exception as e:
         # pgvector extension may not be enabled in the database

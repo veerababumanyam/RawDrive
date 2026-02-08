@@ -30,7 +30,8 @@ import {
   useStartABTest,
   useConcludeABTest,
 } from '../../../hooks/usePortfolioRecommendations';
-import type { ABTest, ABTestStatus, ABTestVariant } from '../../../services/portfolioRecommendationService';
+import { ABTestStatus } from '@rawdrive/shared-types';
+import type { ABTest, ABTestVariant } from '../../../services/portfolioRecommendationService';
 
 /* =============================================================================
    Types
@@ -47,39 +48,39 @@ interface ABTestPanelProps {
    ============================================================================= */
 
 const getStatusConfig = (status: ABTestStatus) => {
-  const configs: Record<ABTestStatus, { label: string; color: string; bgColor: string; icon: React.ReactNode }> = {
-    draft: {
+  const configs: Record<string, { label: string; color: string; bgColor: string; icon: React.ReactNode }> = {
+    [ABTestStatus.DRAFT]: {
       label: 'Draft',
       color: 'text-neutral-500',
       bgColor: 'bg-neutral-500/10',
       icon: <Clock size={16} />,
     },
-    running: {
+    [ABTestStatus.RUNNING]: {
       label: 'Running',
       color: 'text-green-500',
       bgColor: 'bg-green-500/10',
       icon: <PlayCircle size={16} />,
     },
-    paused: {
+    [ABTestStatus.PAUSED]: {
       label: 'Paused',
       color: 'text-yellow-500',
       bgColor: 'bg-yellow-500/10',
       icon: <PauseCircle size={16} />,
     },
-    completed: {
+    [ABTestStatus.COMPLETED]: {
       label: 'Completed',
       color: 'text-blue-500',
       bgColor: 'bg-blue-500/10',
       icon: <CheckCircle size={16} />,
     },
-    cancelled: {
+    [ABTestStatus.CANCELLED]: {
       label: 'Cancelled',
       color: 'text-red-500',
       bgColor: 'bg-red-500/10',
       icon: <X size={16} />,
     },
   };
-  return configs[status] || configs.draft;
+  return configs[status] || configs[ABTestStatus.DRAFT];
 };
 
 const formatPercentage = (value: number): string => {
@@ -106,11 +107,15 @@ const VariantCard: React.FC<{
   isWinner?: boolean;
   isControl?: boolean;
 }> = ({ variant, index, isWinner, isControl }) => {
-  const clickRate = variant.impressions > 0
-    ? (variant.clicks / variant.impressions)
+  const impressions = variant.impressions ?? 0;
+  const clicks = variant.clicks ?? 0;
+  const conversions = variant.conversions ?? 0;
+
+  const clickRate = impressions > 0
+    ? (clicks / impressions)
     : 0;
-  const conversionRate = variant.clicks > 0
-    ? (variant.conversions / variant.clicks)
+  const conversionRate = clicks > 0
+    ? (conversions / clicks)
     : 0;
 
   return (
@@ -159,7 +164,7 @@ const VariantCard: React.FC<{
             Impressions
           </div>
           <p className="text-lg font-bold text-text-primary">
-            {variant.impressions.toLocaleString()}
+            {impressions.toLocaleString()}
           </p>
         </div>
         <div className="p-2 rounded bg-surface-secondary">
@@ -168,7 +173,7 @@ const VariantCard: React.FC<{
             Clicks
           </div>
           <p className="text-lg font-bold text-text-primary">
-            {variant.clicks.toLocaleString()}
+            {clicks.toLocaleString()}
           </p>
         </div>
         <div className="p-2 rounded bg-surface-secondary">
@@ -186,7 +191,7 @@ const VariantCard: React.FC<{
             Conversions
           </div>
           <p className="text-lg font-bold text-text-primary">
-            {variant.conversions.toLocaleString()}
+            {conversions.toLocaleString()}
           </p>
         </div>
       </div>
@@ -219,7 +224,7 @@ export const ABTestPanel: React.FC<ABTestPanelProps> = ({
   const { data: results, isLoading: isLoadingResults } = useABTestResults(
     workspaceId,
     testId,
-    { enabled: !!test && test.status !== 'draft' }
+    { enabled: !!test && test.status !== ABTestStatus.DRAFT }
   );
 
   // Mutations
@@ -319,10 +324,10 @@ export const ABTestPanel: React.FC<ABTestPanelProps> = ({
       <div className="p-4">
         <h4 className="text-sm font-medium text-text-primary mb-3 flex items-center gap-2">
           <BarChart3 size={16} className="text-primary" />
-          Variants ({test.variants.length})
+          Variants ({test.variants?.length ?? 0})
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {test.variants.map((variant, index) => (
+          {test.variants?.map((variant, index) => (
             <VariantCard
               key={variant.variant_id}
               variant={variant}
@@ -345,21 +350,21 @@ export const ABTestPanel: React.FC<ABTestPanelProps> = ({
             <div className="p-3 rounded-lg bg-surface-tertiary">
               <p className="text-xs text-text-tertiary mb-1">Total Impressions</p>
               <p className="text-xl font-bold text-text-primary">
-                {results.total_impressions.toLocaleString()}
+                {(results.total_impressions ?? 0).toLocaleString()}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-surface-tertiary">
               <p className="text-xs text-text-tertiary mb-1">Total Clicks</p>
               <p className="text-xl font-bold text-text-primary">
-                {results.total_clicks.toLocaleString()}
+                {(results.total_clicks ?? 0).toLocaleString()}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-surface-tertiary">
               <p className="text-xs text-text-tertiary mb-1">P-Value</p>
               <p className={`text-xl font-bold ${
-                results.p_value < 0.05 ? 'text-green-500' : 'text-text-primary'
+                (results.p_value ?? 1) < 0.05 ? 'text-green-500' : 'text-text-primary'
               }`}>
-                {results.p_value.toFixed(4)}
+                {(results.p_value ?? 1).toFixed(4)}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-surface-tertiary">
@@ -375,7 +380,7 @@ export const ABTestPanel: React.FC<ABTestPanelProps> = ({
             <div className="mt-3 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
               <p className="text-sm text-green-500 flex items-center gap-2">
                 <Trophy size={16} />
-                Recommended Winner: {test.variants.find(v => v.variant_id === results.recommended_winner)?.name || 'Unknown'}
+                Recommended Winner: {test.variants?.find(v => v.variant_id === results.recommended_winner)?.name || 'Unknown'}
               </p>
             </div>
           )}
@@ -385,12 +390,12 @@ export const ABTestPanel: React.FC<ABTestPanelProps> = ({
       {/* Actions */}
       <div className="p-4 border-t border-border flex items-center justify-between">
         <div className="text-xs text-text-tertiary">
-          {test.status === 'running' && (
+          {test.status === ABTestStatus.RUNNING && (
             <span>Collecting data...</span>
           )}
         </div>
         <div className="flex gap-2">
-          {test.status === 'draft' && (
+          {test.status === ABTestStatus.DRAFT && (
             <AppButton
               variant="primary"
               size="sm"
@@ -401,7 +406,7 @@ export const ABTestPanel: React.FC<ABTestPanelProps> = ({
               Start Test
             </AppButton>
           )}
-          {test.status === 'running' && (
+          {test.status === ABTestStatus.RUNNING && (
             <AppButton
               variant="secondary"
               size="sm"

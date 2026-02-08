@@ -1,4 +1,4 @@
-﻿"""
+"""
 Gallery Service - Core business logic for gallery operations.
 
 Implements gallery CRUD with Redis caching for 50K concurrent users.
@@ -790,6 +790,9 @@ class GalleryService:
                     "(a.exif->>'date_taken')::TIMESTAMPTZ AS date_taken",
                     "a.exif",
                     "a.lqip",  # LQIP placeholder for blur-up effect
+                    "a.thumbnail_object_key",
+                    "a.medium_object_key",
+                    "a.preview_object_key",
                 ]
 
                 # Include emotion metadata if filtering by emotion
@@ -817,12 +820,16 @@ class GalleryService:
         from src.services.r2_service import get_r2_service
         r2_service = get_r2_service()
 
-        # Build asset list for batch URL generation
+        # Build asset list for batch URL generation (include stored variant keys for Phase 2)
         asset_list = [
             {
                 "asset_id": str(row["asset_id"]),
                 "filename": row["filename"] or "",
                 "is_private": row["is_private"],
+                "mime_type": row.get("mime_type"),
+                "thumbnail_object_key": str(row["thumbnail_object_key"]) if row.get("thumbnail_object_key") else None,
+                "medium_object_key": str(row["medium_object_key"]) if row.get("medium_object_key") else None,
+                "preview_object_key": str(row["preview_object_key"]) if row.get("preview_object_key") else None,
             }
             for row in assets
         ]

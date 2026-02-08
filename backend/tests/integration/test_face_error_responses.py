@@ -120,7 +120,7 @@ class TestFaceNotFoundErrors:
                 from app.api.v1.faces import get_face
 
                 try:
-                    await get_face(face_id, mock_user)
+                    await get_face(face_id, MagicMock(), mock_user, mock_repo)
                 except Exception as e:
                     # Should be HTTPException with generic message
                     assert hasattr(e, "detail")
@@ -141,13 +141,14 @@ class TestFaceNotFoundErrors:
 
         with patch("app.api.v1.faces.get_face_repository", return_value=mock_repo):
             with patch("app.api.v1.faces.get_current_user", return_value=mock_user):
-                from app.api.v1.faces import assign_face_to_group
-                from app.api.v1.faces import FaceAssignRequest
+                from app.api.v1.faces import identify_face
+                from app.api.face_schemas import AssignFaceToGroupRequest as FaceAssignRequest
 
-                request = FaceAssignRequest(group_id=uuid.uuid4())
+                request = FaceAssignRequest(face_id=face_id, group_id=uuid.uuid4())
+                mock_access = MagicMock()
 
                 try:
-                    await assign_face_to_group(face_id, request, mock_user)
+                    await identify_face(face_id, mock_access, mock_user, request, mock_repo)
                 except Exception as e:
                     assert hasattr(e, "detail")
                     error_detail = str(e.detail)
@@ -194,7 +195,7 @@ class TestFaceGroupNotFoundErrors:
                 from app.api.v1.face_groups import get_face_group
 
                 try:
-                    await get_face_group(group_id, mock_user)
+                    mock_repo.get_group_detail = AsyncMock(return_value=None); await get_face_group(workspace_id, group_id, MagicMock(), mock_user, mock_repo)
                 except Exception as e:
                     assert hasattr(e, "detail")
                     error_detail = str(e.detail)
@@ -219,12 +220,14 @@ class TestFaceGroupNotFoundErrors:
                 "app.api.v1.face_groups.get_current_user", return_value=mock_user
             ):
                 from app.api.v1.face_groups import update_face_group
-                from app.api.v1.face_groups import FaceGroupUpdateRequest
+                from app.api.face_schemas import FaceGroupUpdate as FaceGroupUpdateRequest
 
                 request = FaceGroupUpdateRequest(name="New Name")
+                mock_access = MagicMock()
+                mock_repo.find_by_id.return_value = None
 
                 try:
-                    await update_face_group(group_id, request, mock_user)
+                    mock_repo.update = AsyncMock(return_value=None); await update_face_group(group_id, mock_access, mock_user, request, mock_repo)
                 except Exception as e:
                     assert hasattr(e, "detail")
                     error_detail = str(e.detail)
@@ -248,9 +251,10 @@ class TestFaceGroupNotFoundErrors:
                 "app.api.v1.face_groups.get_current_user", return_value=mock_user
             ):
                 from app.api.v1.face_groups import delete_face_group
+                mock_access = MagicMock()
 
                 try:
-                    await delete_face_group(group_id, mock_user)
+                    await delete_face_group(group_id, mock_access, mock_user, mock_repo)
                 except Exception as e:
                     assert hasattr(e, "detail")
                     error_detail = str(e.detail)
@@ -297,7 +301,7 @@ class TestCrossWorkspaceErrorConsistency:
                 from app.api.v1.faces import get_face
 
                 try:
-                    await get_face(face_id, mock_user)
+                    await get_face(face_id, MagicMock(), mock_user, mock_repo)
                 except Exception as e:
                     assert hasattr(e, "detail")
                     error_detail = str(e.detail)
@@ -330,7 +334,7 @@ class TestCrossWorkspaceErrorConsistency:
                 from app.api.v1.face_groups import get_face_group
 
                 try:
-                    await get_face_group(group_id, mock_user)
+                    mock_repo.get_group_detail = AsyncMock(return_value=None); await get_face_group(workspace_id, group_id, MagicMock(), mock_user, mock_repo)
                 except Exception as e:
                     assert hasattr(e, "detail")
                     error_detail = str(e.detail)

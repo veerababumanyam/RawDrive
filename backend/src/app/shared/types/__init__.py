@@ -5,7 +5,8 @@ types from the shared-types package for type consistency across the stack.
 """
 
 from .gradient import ColorStop, GradientConfiguration
-# Import EventType from parent types.py (it's defined there, not in invitations.py)
+
+# Import from parent types.py file (avoiding circular import by using importlib)
 import importlib.util
 from pathlib import Path
 _parent_types_path = Path(__file__).parent.parent / "types.py"
@@ -13,10 +14,15 @@ if _parent_types_path.exists():
     spec = importlib.util.spec_from_file_location("_parent_types", _parent_types_path)
     _parent_types = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(_parent_types)
+    # Invitation types
     EventType = _parent_types.EventType
     InvitationStatus = _parent_types.InvitationStatus
     RSVPStatus = _parent_types.RSVPStatus
     TemplateCategory = _parent_types.TemplateCategory
+    # Gallery types
+    DownloadPolicy = _parent_types.DownloadPolicy
+    GalleryStatus = _parent_types.GalleryStatus
+    GradientType = _parent_types.GradientType
 else:
     # Fallback if types.py doesn't exist
     from enum import Enum
@@ -38,36 +44,15 @@ else:
         declined = "declined"
     class TemplateCategory(Enum):
         wedding = "wedding"
-# Import from parent types.py file (avoiding circular import by using importlib)
-import importlib.util
-from pathlib import Path
-_parent_types_path = Path(__file__).parent.parent / "types.py"
-if _parent_types_path.exists():
-    spec = importlib.util.spec_from_file_location("_parent_types", _parent_types_path)
-    _parent_types = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(_parent_types)
-    InvitationStatus = _parent_types.InvitationStatus
-    RSVPStatus = _parent_types.RSVPStatus
-    TemplateCategory = _parent_types.TemplateCategory
-else:
-    # Fallback if types.py doesn't exist
-    from enum import Enum
-    class InvitationStatus(Enum):
+    class DownloadPolicy(Enum):
+        view_only = "view_only"
+        web_only = "web_only"
+        watermarked_only = "watermarked_only"
+        original_allowed = "original_allowed"
+    class GalleryStatus(Enum):
         draft = "draft"
         published = "published"
         archived = "archived"
-        expired = "expired"
-        cancelled = "cancelled"
-        deleted = "deleted"
-    class RSVPStatus(Enum):
-        pending = "pending"
-        attending = "attending"
-        not_attending = "not_attending"
-        maybe = "maybe"
-        confirmed = "confirmed"
-        declined = "declined"
-    class TemplateCategory(Enum):
-        wedding = "wedding"
 from .sync import (
     # Enums
     SyncMappingStatus,
@@ -132,6 +117,10 @@ __all__ = [
     "InvitationStatus",
     "RSVPStatus",
     "TemplateCategory",
+    # Gallery types
+    "DownloadPolicy",
+    "GalleryStatus",
+    "GradientType",
     # Enums
     "SyncMappingStatus",
     "SyncSessionStatus",

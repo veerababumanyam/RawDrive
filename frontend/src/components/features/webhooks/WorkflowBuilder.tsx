@@ -45,7 +45,7 @@ import type {
   WorkflowBuilderEdge,
   WorkflowBuilderState,
   WorkflowValidationResult,
-} from '../../../types/webhooks';
+} from '@/types/webhooks';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -371,7 +371,7 @@ function WorkflowNode({
                 }
                 placeholder="e.g., gallery.published"
                 disabled={readOnly}
-                size="sm"
+
               />
             </div>
           )}
@@ -388,7 +388,7 @@ function WorkflowNode({
                   }
                   placeholder="https://api.example.com/webhook"
                   disabled={readOnly}
-                  size="sm"
+  
                 />
               </div>
               <div>
@@ -427,7 +427,7 @@ function WorkflowNode({
                 }
                 min={1}
                 disabled={readOnly}
-                size="sm"
+
               />
             </div>
           )}
@@ -443,7 +443,7 @@ function WorkflowNode({
                 }
                 placeholder='e.g., payload.status == "published"'
                 disabled={readOnly}
-                size="sm"
+
               />
             </div>
           )}
@@ -479,7 +479,7 @@ function WorkflowNode({
                 }
                 placeholder="Optional description"
                 disabled={readOnly}
-                size="sm"
+
               />
             </div>
           )}
@@ -790,7 +790,7 @@ export function WorkflowBuilder({
               <>
                 <AppButton
                   variant="outline"
-                  size="sm"
+  
                   onClick={handleValidate}
                   disabled={isValidating || nodes.length === 0}
                 >
@@ -802,7 +802,7 @@ export function WorkflowBuilder({
                   Validate
                 </AppButton>
                 <AppButton
-                  size="sm"
+  
                   onClick={handleSave}
                   disabled={
                     isSaving ||

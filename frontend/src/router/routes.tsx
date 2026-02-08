@@ -184,11 +184,33 @@ const LazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
   </Suspense>
 );
 
+const DEBUG_INGEST_URL = 'http://127.0.0.1:7245/ingest/715e7440-4e94-4a7b-b53a-d09c71fb3275';
+
 // Wrapper for critical lazy loaded components with error boundary
 const CriticalLazyPage: React.FC<{ component: React.LazyExoticComponent<any> }> = ({
   component: Component,
 }) => (
-  <ErrorBoundary fallback={<RouteErrorFallback />}>
+  <ErrorBoundary
+    fallback={<RouteErrorFallback />}
+    onError={(error, errorInfo) => {
+      const componentName = (Component as any)?.displayName ?? (Component as any)?.name ?? 'Unknown';
+      fetch(DEBUG_INGEST_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'routes.tsx:CriticalLazyPage',
+          message: 'ErrorBoundary caught',
+          data: {
+            component: componentName,
+            errorMessage: error?.message,
+            errorName: error?.name,
+            componentStack: errorInfo?.componentStack?.slice(0, 500),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    }}
+  >
     <Suspense fallback={<PageLoader />}>
       <Component />
     </Suspense>

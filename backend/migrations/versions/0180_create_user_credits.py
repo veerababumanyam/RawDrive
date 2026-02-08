@@ -193,11 +193,10 @@ def upgrade() -> None:
         """
     )
 
-    # Date-based analytics
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_user_credits_date
-        ON user_credits (DATE(created_at), source, transaction_type);
+        ON user_credits (created_at, source, transaction_type);
         """
     )
 

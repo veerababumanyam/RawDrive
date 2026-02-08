@@ -14,7 +14,6 @@
     "src/gallery.ts",
     "src/gradient.ts",
     "src/common.ts",
-    "src/sync.ts",
     "src/collaboration.ts",
     "src/admin.ts",
     "src/calendar.ts",
@@ -23,7 +22,8 @@
     "src/compliance.ts",
     "src/export.ts",
     "src/permissions.ts",
-    "src/livesync.ts"
+    "src/livesync.ts",
+    "src/album-collaboration.ts"
   ],
   "exclude": [
     "node_modules",

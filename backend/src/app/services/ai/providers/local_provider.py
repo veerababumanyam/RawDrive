@@ -25,6 +25,7 @@ import os
 from app.api.face_schemas import (
     BoundingBox,
     FaceAttributes,
+    FaceDetectionErrorCode,
     FaceDetectionResult,
 )
 from app.services.face_exceptions import (
@@ -186,7 +187,7 @@ class LocalProvider(BaseProvider):
             
             if image is None:
                 raise FaceDetectionError(
-                    code="IMAGE_DECODE_FAILED",
+                    code=FaceDetectionErrorCode.IMAGE_DECODE_FAILED,
                     message="Failed to decode image",
                     user_message="Could not read the image. Please try a different format.",
                 )

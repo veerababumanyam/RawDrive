@@ -136,10 +136,10 @@ async def get_favorites_analytics(
     sort_by: str = Query(
         default="favorite_count",
         description="Field to sort by",
-        regex="^(favorite_count|first_favorited_at|last_favorited_at|filename)$",
+        pattern="^(favorite_count|first_favorited_at|last_favorited_at|filename)$",
     ),
     order: str = Query(
-        default="desc", description="Sort order", regex="^(asc|desc)$"
+        default="desc", description="Sort order", pattern="^(asc|desc)$"
     ),
     page: int = Query(default=1, ge=1, description="Page number"),
     limit: int = Query(default=50, ge=1, le=100, description="Items per page"),

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep, PermissionCheckerDep
@@ -523,7 +523,6 @@ async def update_condition(
 @router.delete(
     "/conditions/{condition_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Delete permission condition",
     description="Delete a permission condition.",
 )
@@ -619,7 +618,6 @@ async def list_granular_permissions(
 @router.delete(
     "/granular/{permission_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Revoke granular permission",
     description="Revoke a granular permission.",
 )
@@ -720,7 +718,6 @@ async def list_time_based_assignments(
 @router.post(
     "/time-based/{assignment_id}/revoke",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Revoke time-based access",
     description="Revoke a time-based role assignment early.",
 )

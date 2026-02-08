@@ -16,6 +16,7 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 
+from app.api.dependencies.auth import get_workspace_id
 from app.repositories.face_rate_limit_repository import (
     get_face_rate_limit_repository,
     FaceRateLimitConfigRepository,
@@ -119,7 +120,7 @@ async def _check_face_rate_limit(
 
 
 async def check_face_search_rate_limit(
-    workspace_id: UUID,
+    workspace_id: UUID = Depends(get_workspace_id),
     rate_limit_repo: FaceRateLimitConfigRepository = Depends(get_face_rate_limit_repository),
 ) -> None:
     """Dependency to check face search rate limit.
@@ -148,7 +149,7 @@ async def check_face_search_rate_limit(
 
 
 async def check_face_detect_rate_limit(
-    workspace_id: UUID,
+    workspace_id: UUID = Depends(get_workspace_id),
     rate_limit_repo: FaceRateLimitConfigRepository = Depends(get_face_rate_limit_repository),
 ) -> None:
     """Dependency to check face detection rate limit (daily quota).
@@ -205,7 +206,7 @@ async def check_face_detect_rate_limit(
 
 
 async def check_face_bulk_rate_limit(
-    workspace_id: UUID,
+    workspace_id: UUID = Depends(get_workspace_id),
     rate_limit_repo: FaceRateLimitConfigRepository = Depends(get_face_rate_limit_repository),
 ) -> None:
     """Dependency to check bulk face operations rate limit.
@@ -234,7 +235,7 @@ async def check_face_bulk_rate_limit(
 
 
 async def check_face_group_merge_rate_limit(
-    workspace_id: UUID,
+    workspace_id: UUID = Depends(get_workspace_id),
     rate_limit_repo: FaceRateLimitConfigRepository = Depends(get_face_rate_limit_repository),
 ) -> None:
     """Dependency to check face group merge rate limit.

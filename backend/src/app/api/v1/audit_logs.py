@@ -21,7 +21,7 @@ from enum import Enum
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, Response, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -1239,7 +1239,6 @@ async def download_export(
 @router.delete(
     "/exports/{export_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Cancel or delete export",
     description="Cancel a pending export or delete a completed export.",
     responses={
@@ -1253,7 +1252,7 @@ async def cancel_export(
     export_id: Annotated[UUID, Path(..., description="Export ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-) -> None:
+):
     """Cancel a pending export or delete a completed export."""
     pool = await get_postgres_pool()
 

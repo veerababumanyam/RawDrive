@@ -214,11 +214,10 @@ def upgrade() -> None:
         """
     )
 
-    # Analytics: conversions by date for reporting
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_referral_conversions_date
-        ON referral_conversions (DATE(converted_at), conversion_type);
+        ON referral_conversions (converted_at, conversion_type);
         """
     )
 

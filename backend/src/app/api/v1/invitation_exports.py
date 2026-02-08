@@ -9,7 +9,7 @@ Feature: 016-save-the-date Phase 11
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_current_user
@@ -202,7 +202,7 @@ async def get_export(
     )
 
 
-@router.delete("/{export_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete("/{export_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_export(
     workspace_id: UUID,
     invitation_id: UUID,
@@ -212,10 +212,9 @@ async def delete_export(
 ):
     """Delete an export."""
     deleted = await service.delete_export(workspace_id, export_id)
-    
+
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Export not found",
         )
-    return None

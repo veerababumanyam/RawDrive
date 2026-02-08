@@ -193,7 +193,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
 
     // Find all @mentions and highlight them
     const mentionRegex = /@(\w+)/g;
-    let match;
+    let match: RegExpExecArray | null;
 
     while ((match = mentionRegex.exec(content)) !== null) {
       // Add text before mention
@@ -203,7 +203,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
 
       // Add highlighted mention
       const mentionedUser = comment.mentioned_users.find(
-        (u) => u.name.toLowerCase().replace(/\s+/g, '') === match[1].toLowerCase()
+        (u) => u.name.toLowerCase().replace(/\s+/g, '') === match![1].toLowerCase()
       );
 
       parts.push(

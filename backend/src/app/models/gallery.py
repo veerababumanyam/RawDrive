@@ -350,7 +350,7 @@ class Gallery(BaseModel):
         description="URL-friendly slug for sharing"
     )
     status: GalleryStatus = Field(
-        default=GalleryStatus.DRAFT,
+        default=GalleryStatus.draft,
         description="Gallery publication status"
     )
 
@@ -489,7 +489,7 @@ class Gallery(BaseModel):
     # =========================================================================
 
     download_policy: DownloadPolicy = Field(
-        default=DownloadPolicy.VIEW_ONLY,
+        default=DownloadPolicy.view_only,
         description="Download permission policy"
     )
     original_quality_enabled: bool = Field(
@@ -726,17 +726,17 @@ class Gallery(BaseModel):
     @property
     def is_published(self) -> bool:
         """Check if gallery is published."""
-        return self.status == GalleryStatus.PUBLISHED
+        return self.status == GalleryStatus.published
 
     @property
     def is_archived(self) -> bool:
         """Check if gallery is archived."""
-        return self.status == GalleryStatus.ARCHIVED
+        return self.status == GalleryStatus.archived
 
     @property
     def is_draft(self) -> bool:
         """Check if gallery is in draft status."""
-        return self.status == GalleryStatus.DRAFT
+        return self.status == GalleryStatus.draft
 
     @property
     def is_expired(self) -> bool:
@@ -777,14 +777,14 @@ class Gallery(BaseModel):
     def allows_original_downloads(self) -> bool:
         """Check if original quality downloads are allowed."""
         return (
-            self.download_policy == DownloadPolicy.ORIGINAL_ALLOWED
+            self.download_policy == DownloadPolicy.original_allowed
             and self.original_quality_enabled
         )
 
     @property
     def allows_any_downloads(self) -> bool:
         """Check if any downloads are allowed."""
-        return self.download_policy != DownloadPolicy.VIEW_ONLY
+        return self.download_policy != DownloadPolicy.view_only
 
     @property
     def has_watermark(self) -> bool:
@@ -848,7 +848,7 @@ class GalleryCreate(BaseModel):
     # Optional basic fields
     description: Optional[str] = Field(None, max_length=1000)
     slug: Optional[str] = Field(None, max_length=255)
-    status: GalleryStatus = Field(default=GalleryStatus.DRAFT)
+    status: GalleryStatus = Field(default=GalleryStatus.draft)
 
     # Client fields
     client_name: Optional[str] = Field(None, max_length=255)
@@ -883,7 +883,7 @@ class GalleryCreate(BaseModel):
     design_config: Optional[DesignConfig] = Field(None)
 
     # Download fields
-    download_policy: DownloadPolicy = Field(default=DownloadPolicy.VIEW_ONLY)
+    download_policy: DownloadPolicy = Field(default=DownloadPolicy.view_only)
     original_quality_enabled: bool = False
     daily_download_limit: Optional[int] = Field(None, ge=1)
 

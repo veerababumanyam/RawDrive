@@ -24,7 +24,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { AppButton } from '../../components/ui/AppButton';
 import { DeleteConfirmationDialog } from '../../components/ui/DeleteConfirmationDialog';
 import { useToast } from '../../components/ui/Toast';
-import { faceApiService, FaceGroup, MergeSuggestion } from '../../services/faceApiService';
+import { faceApiService, FaceApiError, FaceGroup, MergeSuggestion } from '../../services/faceApiService';
 import { FaceGroupMergeModal } from '../../components/features/gallery/FaceGroupMergeModal';
 
 /* =============================================================================
@@ -57,6 +57,7 @@ const PeoplePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [total, setTotal] = useState(0);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Inline selection state (like gallery photos)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -82,8 +83,13 @@ const PeoplePage: React.FC = () => {
 
   // Fetch face groups
   const fetchGroups = useCallback(async (showRefreshSpinner = false) => {
-    if (!workspace?.workspace_id) return;
+    if (!workspace?.workspace_id) {
+      setLoading(false);
+      setFetchError(null);
+      return;
+    }
 
+    setFetchError(null);
     if (showRefreshSpinner) {
       setRefreshing(true);
     } else {
@@ -99,10 +105,15 @@ const PeoplePage: React.FC = () => {
       setTotal(result.total);
     } catch (err) {
       console.error('Failed to fetch people:', err);
-      addToast({
-        message: 'Failed to load people. Please try again.',
-        variant: 'error',
-      });
+      const status = err instanceof FaceApiError ? err.status : undefined;
+      const hint = status === 403
+        ? ' Check workspace access or biometric consent.'
+        : status === 422
+          ? ' Backend validation failed.'
+          : '';
+      const message = `Failed to load people (${status ?? 'error'}).${hint} Please try again.`;
+      setFetchError(message);
+      addToast({ message, variant: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -126,9 +137,12 @@ const PeoplePage: React.FC = () => {
     }
   }, [workspace?.workspace_id]);
 
+  // Run fetch once per workspace (avoid duplicate run when addToast identity changes)
   useEffect(() => {
+    if (!workspace?.workspace_id) return;
     fetchGroups();
-  }, [fetchGroups]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-fetch when workspace changes
+  }, [workspace?.workspace_id]);
 
   // Fetch suggestions when groups are loaded
   useEffect(() => {
@@ -420,6 +434,18 @@ const PeoplePage: React.FC = () => {
             <Loader2 className="w-10 h-10 animate-spin mb-4 text-primary" />
             <p>Loading people...</p>
           </div>
+        ) : fetchError ? (
+          <div className="flex flex-col items-center justify-center py-24 text-text-secondary">
+            <div className="w-24 h-24 rounded-full bg-error/10 flex items-center justify-center mb-6">
+              <UserCircle className="w-12 h-12 text-error opacity-70" />
+            </div>
+            <h3 className="text-lg font-medium text-text-primary mb-2">Could not load people</h3>
+            <p className="text-center max-w-md text-text-secondary mb-4">{fetchError}</p>
+            <AppButton variant="primary" onClick={() => fetchGroups()}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Retry
+            </AppButton>
+          </div>
         ) : filteredGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-text-secondary">
             <div className="w-24 h-24 rounded-full bg-surface-hover flex items-center justify-center mb-6">
@@ -448,14 +474,22 @@ const PeoplePage: React.FC = () => {
                 </h3>
                 <p className="text-center max-w-md text-text-secondary">
                   Our AI automatically identifies and groups faces from your photos in real-time.
-                  Upload photos with faces to your galleries, and they'll magically appear here for lightning-fast searching.
+                  Upload photos with faces to your galleries, or open a gallery and use &quot;Group Detected Faces&quot; to cluster any detected faces.
                 </p>
-                <div className="mt-4 flex flex-col items-center gap-2">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                   <AppButton
                     variant="primary"
                     onClick={() => navigate('/workspace/galleries')}
                   >
                     Go to Galleries
+                  </AppButton>
+                  <AppButton
+                    variant="outline"
+                    onClick={() => fetchGroups(true)}
+                    disabled={refreshing}
+                  >
+                    {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                    Refresh
                   </AppButton>
                   <button
                     className="text-xs text-primary hover:underline"

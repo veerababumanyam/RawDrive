@@ -10,7 +10,7 @@ import traceback
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_current_user, CurrentUser
@@ -498,7 +498,6 @@ async def update_template(
 @router.delete(
     "/templates/{template_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Delete template",
 )
 async def delete_template(

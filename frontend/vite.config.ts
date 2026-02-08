@@ -170,6 +170,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@/*': path.resolve(__dirname, './src/*'),
     },
     // Ensure React is properly deduplicated and available to all dependencies
     dedupe: ['react', 'react-dom'],

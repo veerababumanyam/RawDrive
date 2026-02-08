@@ -11,15 +11,11 @@ This table is part of the multi-tier caching architecture:
 Performance: 50-200ms cache hits vs 5-10s AI API calls.
 """
 
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 from uuid import UUID
 
-from sqlalchemy import Column, DateTime, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.sql import func
-
-from app.models.base import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AssetEmbeddingsCache(BaseModel):
@@ -29,31 +25,33 @@ class AssetEmbeddingsCache(BaseModel):
     Results are automatically promoted from L3 to L2 and L1 caches on access.
     """
 
-    __tablename__ = "asset_embeddings_cache"
+    model_config = ConfigDict(from_attributes=True)
 
     # Primary keys
-    workspace_id = Column(String, nullable=False, index=True)
-    asset_id = Column(String, nullable=False, index=True)
-    image_hash = Column(String(64), nullable=False, index=True)
+    workspace_id: str = Field(..., description="Workspace identifier")
+    asset_id: str = Field(..., description="Asset identifier")
+    image_hash: str = Field(..., max_length=64, description="SHA-256 hash of image")
 
     # Cached detection results
-    faces_detected = Column(Integer, default=0, nullable=False)
-    bounding_boxes = Column(JSONB, nullable=True)  # Array of {x, y, width, height}
-    embeddings = Column(JSONB, nullable=True)  # Array of 512-d vectors
-    confidence_scores = Column(JSONB, nullable=True)  # Array of scores
-    detection_metadata = Column(JSONB, nullable=True)  # Additional metadata
+    faces_detected: int = Field(default=0, description="Number of faces detected")
+    bounding_boxes: Optional[list[dict[str, Any]]] = Field(
+        None, description="Array of {x, y, width, height}"
+    )
+    embeddings: Optional[list[list[float]]] = Field(
+        None, description="Array of 512-d vectors"
+    )
+    confidence_scores: Optional[list[float]] = Field(
+        None, description="Array of confidence scores"
+    )
+    detection_metadata: Optional[dict[str, Any]] = Field(
+        None, description="Additional metadata"
+    )
 
     # Cache management
-    cached_at = Column(DateTime, default=datetime.now, nullable=False)
-    ttl_seconds = Column(Integer, default=3600, nullable=False)  # 1 hour default
-    hit_count = Column(Integer, default=0, nullable=False)
-    last_accessed_at = Column(DateTime, default=datetime.now, nullable=False)
-
-    # Unique constraint ensures one entry per (workspace, asset, image_hash)
-    __table_args__ = (
-        # Use Index for unique constraint
-        # Already defined in migration
-    )
+    cached_at: datetime = Field(default_factory=datetime.now, description="Cache timestamp")
+    ttl_seconds: int = Field(default=3600, description="Time to live in seconds (1 hour default)")
+    hit_count: int = Field(default=0, description="Number of cache hits")
+    last_accessed_at: datetime = Field(default_factory=datetime.now, description="Last access timestamp")
 
     def is_expired(self) -> bool:
         """Check if this cache entry has expired.
@@ -62,7 +60,13 @@ class AssetEmbeddingsCache(BaseModel):
             True if expired, False otherwise
         """
         expiry_time = self.cached_at + timedelta(seconds=self.ttl_seconds)
-        return datetime.now() > expiry_time
+        now = datetime.now(timezone.utc) if self.cached_at.tzinfo else datetime.now()
+        return now > expiry_time
+
+    def record_hit(self) -> None:
+        """Update hit count and access timestamp."""
+        self.hit_count += 1
+        self.last_accessed_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> dict:
         """Convert to dictionary format for API responses.
@@ -80,18 +84,3 @@ class AssetEmbeddingsCache(BaseModel):
             "hit_count": self.hit_count,
             "is_expired": self.is_expired(),
         }
-
-    def record_hit(self) -> None:
-        """Record a cache hit by updating hit count and last access time."""
-        self.hit_count += 1
-        self.last_accessed_at = datetime.now()
-
-    def extend_ttl(self, additional_seconds: int) -> None:
-        """Extend the TTL for this cache entry.
-
-        Useful for keeping frequently-accessed items in cache longer.
-
-        Args:
-            additional_seconds: Additional seconds to add to TTL
-        """
-        self.ttl_seconds += additional_seconds

@@ -15,7 +15,7 @@ import logging
 from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, status
+from fastapi import APIRouter, Depends, Path, Query, status, Response
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -1726,7 +1726,6 @@ async def get_gallery_health(
 @router.post(
     "/health/refresh",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Refresh tagging health statistics",
     responses={
         403: {"model": ErrorResponse, "description": "Access denied"},
@@ -1736,7 +1735,7 @@ async def refresh_health_stats(
     workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-) -> None:
+):
     """
     Refresh the materialized view for tagging health statistics.
 

@@ -1,15 +1,18 @@
 {
-  "include": ["frontend/src", "backend/src"],
+  "include": [
+    "frontend/src",
+    "backend/src"
+  ],
   "exclude": [],
-  "ignore": ["**/node_modules", "**/__pycache__"],
+  "ignore": [
+    "**/node_modules",
+    "**/__pycache__"
+  ],
   "pythonVersion": "3.11",
   "pythonPlatform": "Darwin",
   "typeCheckingMode": "basic",
   "useLibraryCodeForTypes": true,
   "reportMissingImports": "none",
-  "reportUnknownVariableType": "none",
-  "reportUnknownMemberType": "none",
-  "reportUnknownArgumentType": "none",
   "reportMissingTypeStubs": "none",
   "reportImportCycles": "error",
   "reportUnusedImport": "warning",

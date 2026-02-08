@@ -1,0 +1,142 @@
+﻿python : C:\Users\admin\AppData\Roaming\Python\Python311\sit
+e-packages\dash\dash.py:22: UserWarning: pkg_resources is 
+deprecated as an API. See 
+https://setuptools.pypa.io/en/latest/pkg_resources.html. 
+The pkg_resources package is slated for removal as early as 
+2025-11-30. Refrain from using this package or pin to 
+Setuptools<81.
+At line:1 char:1
++ python -m pytest 
+backend/tests/integration/test_face_error_responses. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\admin 
+   \... Setuptools<81.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  from pkg_resources import get_distribution, parse_version
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-8.3.4, pluggy-1.5.0 -- C:\Program Files\Python311\python.exe
+cachedir: .pytest_cache
+Fugue tests will be initialized with options:
+rootdir: C:\Users\admin\Desktop\RawDrive2\backend
+configfile: pyproject.toml
+plugins: anyio-3.7.1, dash-2.9.3, fugue-0.9.1, langsmith-0.3.37, asyncio-0.25.2, base-url-2.1.0, cov-6.0.0, mock-3.15.0, playwright-0.7.2, timeout-2.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=function
+timeout: 300.0s
+timeout method: thread
+timeout func_only: False
+collecting ... collected 32 items
+
+backend\tests\integration\test_face_error_responses.py::TestFaceNotFoundErrors::test_get_face_returns_generic_message PASSED [  3%]
+backend\tests\integration\test_face_error_responses.py::TestFaceNotFoundErrors::test_assign_face_returns_generic_message_for_missing_face FAILED [  6%]
+backend\tests\integration\test_face_error_responses.py::TestFaceNotFoundErrors::test_face_not_found_error_class_uses_generic_message PASSED [  9%]
+backend\tests\integration\test_face_error_responses.py::TestFaceGroupNotFoundErrors::test_get_face_group_returns_generic_message FAILED [ 12%]
+backend\tests\integration\test_face_error_responses.py::TestFaceGroupNotFoundErrors::test_update_face_group_returns_generic_message FAILED [ 15%]
+backend\tests\integration\test_face_error_responses.py::TestFaceGroupNotFoundErrors::test_delete_face_group_returns_generic_message PASSED [ 18%]
+backend\tests\integration\test_face_error_responses.py::TestFaceGroupNotFoundErrors::test_face_group_not_found_error_class_uses_generic_message PASSED [ 21%]
+backend\tests\integration\test_face_error_responses.py::TestCrossWorkspaceErrorConsistency::test_face_in_other_workspace_returns_same_error PASSED [ 25%]
+backend\tests\integration\test_face_error_responses.py::TestCrossWorkspaceErrorConsistency::test_face_group_in_other_workspace_returns_same_error FAILED [ 28%]
+backend\tests\integration\test_face_error_responses.py::TestAuthorizationErrors::test_workspace_access_denied_uses_generic_message PASSED [ 31%]
+backend\tests\integration\test_face_error_responses.py::TestAuthorizationErrors::test_cross_workspace_access_uses_generic_message PASSED [ 34%]
+backend\tests\integration\test_face_error_responses.py::TestAuthorizationErrors::test_detection_disabled_uses_generic_message PASSED [ 37%]
+backend\tests\integration\test_face_error_responses.py::TestProviderErrorSanitization::test_provider_unavailable_hides_provider_name PASSED [ 40%]
+backend\tests\integration\test_face_error_responses.py::TestProviderErrorSanitization::test_provider_rate_limited_hides_provider_name PASSED [ 43%]
+backend\tests\integration\test_face_error_responses.py::TestProviderErrorSanitization::test_all_providers_failed_hides_provider_details PASSED [ 46%]
+backend\tests\integration\test_face_error_responses.py::TestEmbeddingErrorSanitization::test_embedding_dimension_mismatch_uses_generic_message PASSED [ 50%]
+backend\tests\integration\test_face_error_responses.py::TestEmbeddingErrorSanitization::test_embedding_not_normalized_uses_generic_message PASSED [ 53%]
+backend\tests\integration\test_face_error_responses.py::TestErrorResponseStructure::test_face_detection_error_to_api_response_structure PASSED [ 56%]
+backend\tests\integration\test_face_error_responses.py::TestErrorResponseStructure::test_error_response_includes_correlation_id_when_provided PASSED [ 59%]
+backend\tests\integration\test_face_error_responses.py::TestHttpStatusCodes::test_face_not_found_returns_404 PASSED [ 62%]
+backend\tests\integration\test_face_error_responses.py::TestHttpStatusCodes::test_face_group_not_found_returns_404 PASSED [ 65%]
+backend\tests\integration\test_face_error_responses.py::TestHttpStatusCodes::test_workspace_access_denied_returns_403 PASSED [ 68%]
+backend\tests\integration\test_face_error_responses.py::TestHttpStatusCodes::test_provider_rate_limited_returns_429 PASSED [ 71%]
+backend\tests\integration\test_face_error_responses.py::TestHttpStatusCodes::test_provider_unavailable_returns_503 PASSED [ 75%]
+backend\tests\integration\test_face_error_responses.py::TestSEC002Compliance::test_no_uuid_in_user_message[FaceNotFoundError-args0] PASSED [ 78%]
+backend\tests\integration\test_face_error_responses.py::TestSEC002Compliance::test_no_uuid_in_user_message[FaceGroupNotFoundError-args1] PASSED [ 81%]
+backend\tests\integration\test_face_error_responses.py::TestSEC002Compliance::test_no_uuid_in_user_message[WorkspaceAccessDeniedError-args2] PASSED [ 84%]
+backend\tests\integration\test_face_error_responses.py::TestSEC002Compliance::test_no_uuid_in_user_message[CrossWorkspaceAccessError-args3] PASSED [ 87%]
+backend\tests\integration\test_face_error_responses.py::TestSEC002Compliance::test_no_uuid_in_user_message[DetectionDisabledError-args4] PASSED [ 90%]
+backend\tests\integration\test_face_error_responses.py::TestSEC002Compliance::test_no_uuid_in_user_message[PhotoNotFoundError-args5] PASSED [ 93%]
+backend\tests\integration\test_face_error_responses.py::TestSEC002Compliance::test_no_uuid_in_api_response[FaceNotFoundError-args0] PASSED [ 96%]
+backend\tests\integration\test_face_error_responses.py::TestSEC002Compliance::test_no_uuid_in_api_response[FaceGroupNotFoundError-args1] PASSED [100%]
+
+================================== FAILURES ===================================
+_ TestFaceNotFoundErrors.test_assign_face_returns_generic_message_for_missing_face _
+backend\tests\integration\test_face_error_responses.py:147: in test_assign_face_returns_generic_message_for_missing_face
+    request = FaceAssignRequest(group_id=uuid.uuid4())
+E   pydantic_core._pydantic_core.ValidationError: 1 validation error for AssignFaceToGroupRequest
+E   face_id
+E     Field required [type=missing, input_value={'group_id': UUID('2ba9ec...7ff-a98e-69fcf9589792')}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.12/v/missing
+___ TestFaceGroupNotFoundErrors.test_get_face_group_returns_generic_message ___
+backend\tests\integration\test_face_error_responses.py:198: in test_get_face_group_returns_generic_message
+    await get_face_group(workspace_id, group_id, MagicMock(), mock_user, mock_repo)
+backend\src\app\api\v1\face_groups.py:386: in get_face_group
+    return FaceGroupDetailResponse(**group)
+E   TypeError: AsyncMock.keys() returned a non-iterable (type coroutine)
+
+During handling of the above exception, another exception occurred:
+backend\tests\integration\test_face_error_responses.py:200: in test_get_face_group_returns_generic_message
+    assert hasattr(e, "detail")
+E   AssertionError: assert False
+E    +  where False = hasattr(TypeError('AsyncMock.keys() returned a non-iterable (type coroutine)'), 'detail')
+---------------------------- Captured stdout call -----------------------------
+2026-02-08 17:01:32,676 - app.services.cache_service - WARNING - Redis cache write failed: Object of type AsyncMock is not JSON serializable
+------------------------------ Captured log call ------------------------------
+WARNING  app.services.cache_service:cache_service.py:618 Redis cache write failed: Object of type AsyncMock is not JSON serializable
+_ TestFaceGroupNotFoundErrors.test_update_face_group_returns_generic_message __
+backend\tests\integration\test_face_error_responses.py:229: in test_update_face_group_returns_generic_message
+    await update_face_group(group_id, mock_access, mock_user, request, mock_repo)
+backend\src\app\api\v1\face_groups.py:434: in update_face_group
+    return FaceGroupResponse(**updated_group)
+E   TypeError: AsyncMock.keys() returned a non-iterable (type coroutine)
+
+During handling of the above exception, another exception occurred:
+backend\tests\integration\test_face_error_responses.py:231: in test_update_face_group_returns_generic_message
+    assert hasattr(e, "detail")
+E   AssertionError: assert False
+E    +  where False = hasattr(TypeError('AsyncMock.keys() returned a non-iterable (type coroutine)'), 'detail')
+_ TestCrossWorkspaceErrorConsistency.test_face_group_in_other_workspace_returns_same_error _
+backend\tests\integration\test_face_error_responses.py:336: in test_face_group_in_other_workspace_returns_same_error
+    await get_face_group(workspace_id, group_id, MagicMock(), mock_user, mock_repo)
+backend\src\app\api\v1\face_groups.py:386: in get_face_group
+    return FaceGroupDetailResponse(**group)
+E   TypeError: AsyncMock.keys() returned a non-iterable (type coroutine)
+
+During handling of the above exception, another exception occurred:
+backend\tests\integration\test_face_error_responses.py:338: in test_face_group_in_other_workspace_returns_same_error
+    assert hasattr(e, "detail")
+E   AssertionError: assert False
+E    +  where False = hasattr(TypeError('AsyncMock.keys() returned a non-iterable (type coroutine)'), 'detail')
+---------------------------- Captured stdout call -----------------------------
+2026-02-08 17:01:32,726 - app.services.cache_service - WARNING - Redis cache write failed: Object of type AsyncMock is not JSON serializable
+------------------------------ Captured log call ------------------------------
+WARNING  app.services.cache_service:cache_service.py:618 Redis cache write failed: Object of type AsyncMock is not JSON serializable
+============================== warnings summary ===============================
+tests/integration/test_face_error_responses.py::TestFaceGroupNotFoundErrors::test_get_face_group_returns_generic_message
+tests/integration/test_face_error_responses.py::TestCrossWorkspaceErrorConsistency::test_face_group_in_other_workspace_returns_same_error
+  C:\Users\admin\Desktop\RawDrive2\backend\src\app\api\v1\face_groups.py:386: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    return FaceGroupDetailResponse(**group)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/integration/test_face_error_responses.py::TestFaceGroupNotFoundErrors::test_update_face_group_returns_generic_message
+  C:\Users\admin\Desktop\RawDrive2\backend\src\app\api\v1\face_groups.py:434: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    return FaceGroupResponse(**updated_group)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED backend\tests\integration\test_face_error_responses.py::TestFaceNotFoundErrors::test_assign_face_returns_generic_message_for_missing_face - pydantic_core._pydantic_core.ValidationError: 1 validation error for AssignFaceToGroupRequest
+face_id
+  Field required [type=missing, input_value={'group_id': UUID('2ba9ec...7ff-a98e-69fcf9589792')}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+FAILED backend\tests\integration\test_face_error_responses.py::TestFaceGroupNotFoundErrors::test_get_face_group_returns_generic_message - AssertionError: assert False
+ +  where False = hasattr(TypeError('AsyncMock.keys() returned a non-iterable (type coroutine)'), 'detail')
+FAILED backend\tests\integration\test_face_error_responses.py::TestFaceGroupNotFoundErrors::test_update_face_group_returns_generic_message - AssertionError: assert False
+ +  where False = hasattr(TypeError('AsyncMock.keys() returned a non-iterable (type coroutine)'), 'detail')
+FAILED backend\tests\integration\test_face_error_responses.py::TestCrossWorkspaceErrorConsistency::test_face_group_in_other_workspace_returns_same_error - AssertionError: assert False
+ +  where False = hasattr(TypeError('AsyncMock.keys() returned a non-iterable (type coroutine)'), 'detail')
+================== 4 failed, 28 passed, 3 warnings in 2.47s ===================

@@ -24,6 +24,19 @@ from app.services.face_exceptions import FaceNotFoundError
 logger = logging.getLogger(__name__)
 
 
+def _embedding_for_db(embedding: Optional[list[float] | np.ndarray]) -> Optional[str]:
+    """Serialize embedding for asyncpg when pgvector is not installed.
+
+    asyncpg expects a string for vector columns when using string-based
+    serialization; passing ndarray causes DataError (expected str, got ndarray).
+    """
+    if embedding is None:
+        return None
+    if hasattr(embedding, "tolist"):
+        embedding = embedding.tolist()
+    return "[" + ",".join(str(float(x)) for x in embedding) + "]"
+
+
 class FaceRepository:
     """Data access layer for face records.
     
@@ -68,11 +81,9 @@ class FaceRepository:
         """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Convert embedding to numpy array for efficient binary serialization
-            # pgvector asyncpg codec handles numpy -> binary conversion automatically
-            embedding_arr = None
-            if embedding:
-                embedding_arr = np.array(embedding, dtype=np.float32)
+            # Serialize embedding for DB: string format when pgvector not installed,
+            # so asyncpg does not receive ndarray (DataError: expected str, got ndarray).
+            embedding_param = _embedding_for_db(embedding)
 
             # Note: asyncpg with jsonb codec handles dict->jsonb conversion automatically
             # Pass dicts directly, not JSON strings
@@ -91,7 +102,7 @@ class FaceRepository:
                 face_group_id,
                 bounding_box,  # Pass dict directly
                 confidence,
-                embedding_arr,
+                embedding_param,
                 provider,
                 detection_metadata or {},  # Pass dict directly
                 thumbnail_urls or {},  # Pass dict directly
@@ -132,10 +143,7 @@ class FaceRepository:
             created = []
             async with conn.transaction():
                 for face_data in faces:
-                    # Convert embedding to numpy array for efficient binary serialization
-                    embedding_arr = None
-                    if face_data.get("embedding"):
-                        embedding_arr = np.array(face_data["embedding"], dtype=np.float32)
+                    embedding_param = _embedding_for_db(face_data.get("embedding"))
 
                     row = await conn.fetchrow(
                         """
@@ -152,7 +160,7 @@ class FaceRepository:
                         face_data.get("face_group_id"),
                         face_data["bounding_box"],  # Pass dict directly, jsonb codec handles it
                         face_data["confidence"],
-                        embedding_arr,
+                        embedding_param,
                         face_data["provider"],
                         face_data.get("detection_metadata", {}),  # Pass dict directly
                         face_data.get("thumbnail_urls", {}),  # Pass dict directly
@@ -555,10 +563,9 @@ class FaceRepository:
                     params.append(value)
                 elif key == "embedding":
                     if value is not None:
-                        # Convert to numpy array for efficient binary serialization
-                        embedding_arr = np.array(value, dtype=np.float32)
+                        embedding_param = _embedding_for_db(value)
                         set_clauses.append(f"embedding = ${param_idx}")
-                        params.append(embedding_arr)
+                        params.append(embedding_param)
                     else:
                         set_clauses.append("embedding = NULL")
                         continue  # Don't increment param_idx

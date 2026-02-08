@@ -56,16 +56,20 @@ Performance:
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
 
 import numpy as np
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, update, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.schema import (
+    asset_embeddings_cache as asset_cache_table,
+    gallery_assets as gallery_assets_table,
+    assets as assets_table,
+)
 from app.models.asset_embeddings_cache import AssetEmbeddingsCache
-from app.models.face_group_centroids_cache import FaceGroupCentroidsCache
 
 logger = logging.getLogger(__name__)
 
@@ -299,15 +303,12 @@ class FaceTaggingCacheManager:
         Returns:
             Number of cache entries invalidated
         """
-        # Get all asset IDs in the gallery from database
-        from app.models.gallery_asset import GalleryAsset
-
         result = await self.db.execute(
-            select(GalleryAsset.asset_id)
-            .where(GalleryAsset.gallery_id == gallery_id)
-            .where(GalleryAsset.workspace_id == workspace_id)
+            select(gallery_assets_table.c.asset_id)
+            .where(gallery_assets_table.c.gallery_id == gallery_id)
+            .where(gallery_assets_table.c.workspace_id == workspace_id)
         )
-        asset_ids = result.scalars().all()
+        asset_ids = [row[0] for row in result.all()]
 
         count = 0
         for asset_id in asset_ids:
@@ -364,18 +365,15 @@ class FaceTaggingCacheManager:
         Returns:
             Dictionary with warming statistics
         """
-        from app.models.gallery_asset import GalleryAsset
-        from app.models.asset import Asset
-
         # Get recent assets in gallery
         result = await self.db.execute(
-            select(Asset.asset_id, Asset.face_scan_status, Asset.faces_count)
-            .join(GalleryAsset, GalleryAsset.asset_id == Asset.asset_id)
-            .where(GalleryAsset.gallery_id == gallery_id)
-            .where(GalleryAsset.workspace_id == workspace_id)
-            .where(Asset.face_scan_status == "completed")
-            .where(Asset.faces_count > 0)
-            .order_by(GalleryAsset.created_at.desc())
+            select(assets_table.c.asset_id, assets_table.c.face_scan_status, assets_table.c.faces_count)
+            .join(gallery_assets_table, gallery_assets_table.c.asset_id == assets_table.c.asset_id)
+            .where(gallery_assets_table.c.gallery_id == gallery_id)
+            .where(gallery_assets_table.c.workspace_id == workspace_id)
+            .where(assets_table.c.face_scan_status == "completed")
+            .where(assets_table.c.faces_count > 0)
+            .order_by(gallery_assets_table.c.created_at.desc())
             .limit(limit)
         )
         assets = result.all()
@@ -576,23 +574,44 @@ class FaceTaggingCacheManager:
         """Get asset from L3 database cache."""
         try:
             result = await self.db.execute(
-                select(AssetEmbeddingsCache).where(
-                    AssetEmbeddingsCache.asset_id == asset_id,
-                    AssetEmbeddingsCache.workspace_id == workspace_id,
+                select(asset_cache_table).where(
+                    asset_cache_table.c.asset_id == asset_id,
+                    asset_cache_table.c.workspace_id == workspace_id,
                 )
             )
-            entry = result.scalar_one_or_none()
+            row = result.fetchone()
+            
+            if not row:
+                return None
+            
+            row_dict = row._asdict()
+            row_dict["workspace_id"] = str(row_dict["workspace_id"])
+            row_dict["asset_id"] = str(row_dict["asset_id"])
+            entry = AssetEmbeddingsCache.model_validate(row_dict)
 
             if entry:
-                # Check if expired
                 if entry.is_expired():
-                    await self.db.delete(entry)
+                    stmt = delete(asset_cache_table).where(
+                        asset_cache_table.c.asset_id == asset_id,
+                        asset_cache_table.c.workspace_id == workspace_id,
+                    )
+                    await self.db.execute(stmt)
                     await self.db.commit()
                     return None
 
                 # Update hit count and last accessed
-                entry.hit_count += 1
-                entry.last_accessed_at = datetime.now()
+                stmt = (
+                    update(asset_cache_table)
+                    .where(
+                        asset_cache_table.c.asset_id == asset_id,
+                        asset_cache_table.c.workspace_id == workspace_id,
+                    )
+                    .values(
+                        hit_count=asset_cache_table.c.hit_count + 1,
+                        last_accessed_at=datetime.now(timezone.utc),
+                    )
+                )
+                await self.db.execute(stmt)
                 await self.db.commit()
 
                 return entry.to_dict()
@@ -610,7 +629,7 @@ class FaceTaggingCacheManager:
     ) -> None:
         """Set asset in L3 database cache."""
         try:
-            entry = AssetEmbeddingsCache(
+            insert_stmt = asset_cache_table.insert().values(
                 workspace_id=workspace_id,
                 asset_id=asset_id,
                 image_hash=image_hash,
@@ -621,7 +640,7 @@ class FaceTaggingCacheManager:
                 detection_metadata=detection_data.get("detection_metadata"),
                 ttl_seconds=ttl,
             )
-            self.db.add(entry)
+            await self.db.execute(insert_stmt)
             await self.db.commit()
         except Exception as e:
             logger.warning(f"Database cache set failed for asset {asset_id}: {e}")
@@ -631,9 +650,9 @@ class FaceTaggingCacheManager:
         """Invalidate asset from L3 database cache."""
         try:
             result = await self.db.execute(
-                delete(AssetEmbeddingsCache).where(
-                    AssetEmbeddingsCache.asset_id == asset_id,
-                    AssetEmbeddingsCache.workspace_id == workspace_id,
+                delete(asset_cache_table).where(
+                    asset_cache_table.c.asset_id == asset_id,
+                    asset_cache_table.c.workspace_id == workspace_id,
                 )
             )
             await self.db.commit()
@@ -647,8 +666,8 @@ class FaceTaggingCacheManager:
         """Invalidate all workspace entries from L3 database cache."""
         try:
             result = await self.db.execute(
-                delete(AssetEmbeddingsCache).where(
-                    AssetEmbeddingsCache.workspace_id == workspace_id
+                delete(asset_cache_table).where(
+                    asset_cache_table.c.workspace_id == workspace_id
                 )
             )
             await self.db.commit()
@@ -669,12 +688,10 @@ class FaceTaggingCacheManager:
                     func.count().label("total"),
                     func.count(
                         func.case(
-                            (AssetEmbeddingsCache.cached_at
-                             + func.interval("second", AssetEmbeddingsCache.ttl_seconds)
-                             > func.now(), 1)
+                            (text("cached_at + (ttl_seconds || ' seconds')::interval > now()"), 1)
                         )
                     ).label("active"),
-                ).where(AssetEmbeddingsCache.workspace_id == workspace_id)
+                ).where(asset_cache_table.c.workspace_id == workspace_id)
             )
             row = result.one()
             return {
@@ -716,3 +733,37 @@ class FaceTaggingCacheManager:
     def _embedding_cache_key(workspace_id: UUID, face_crop_hash: str) -> str:
         """Generate cache key for individual face embedding."""
         return f"embedding:{workspace_id}:{face_crop_hash}"
+
+
+# =============================================================================
+# Singleton Instance
+# =============================================================================
+
+_cache_manager: Optional[FaceTaggingCacheManager] = None
+
+
+async def get_face_cache_manager(
+    db: AsyncSession,
+) -> FaceTaggingCacheManager:
+    """Get or create the face cache manager singleton.
+
+    Args:
+        db: Database session
+
+    Returns:
+        FaceTaggingCacheManager instance with Redis client
+    """
+    global _cache_manager
+
+    if _cache_manager is None:
+        # Get Redis client for L2 cache
+        redis_client = None
+        try:
+            from app.db.redis import get_redis_client
+            redis_client = await get_redis_client()
+        except Exception as e:
+            logger.warning(f"Redis client not available for L2 cache: {e}")
+
+        _cache_manager = FaceTaggingCacheManager(db, redis_client)
+
+    return _cache_manager

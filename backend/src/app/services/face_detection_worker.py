@@ -314,9 +314,16 @@ class FaceDetectionWorker:
             return
         
         try:
+            logger.info(
+                "Downloading photo from storage",
+                extra={"job_id": str(job_id), "photo_id": str(photo_id), "object_key": (object_key[:80] + "...") if (object_key and len(object_key) > 80) else (object_key or "")},
+            )
             # Download encrypted photo from R2
             encrypted_data = await self.storage_service.download_by_object_key(object_key)
-            
+            logger.info(
+                "Photo downloaded, decrypting",
+                extra={"job_id": str(job_id), "photo_id": str(photo_id), "encrypted_bytes": len(encrypted_data) if encrypted_data else 0},
+            )
             # Decrypt the photo
             from app.services.encryption_service import get_encryption_service
             encryption_service = get_encryption_service()
@@ -326,7 +333,16 @@ class FaceDetectionWorker:
                 photo_id, 
                 variant="original"
             )
+            logger.info(
+                "Photo decrypted, starting detection",
+                extra={"job_id": str(job_id), "photo_id": str(photo_id), "image_bytes": len(image_buffer) if image_buffer else 0},
+            )
         except Exception as e:
+            logger.error(
+                "Download or decrypt failed",
+                extra={"job_id": str(job_id), "photo_id": str(photo_id), "error": str(e)},
+                exc_info=True,
+            )
             await self._update_job_status(
                 job_id,
                 FaceDetectionJobStatus.FAILED,
@@ -366,6 +382,8 @@ class FaceDetectionWorker:
             "Detection job completed",
             extra={
                 "job_id": str(job_id),
+                "photo_id": str(photo_id),
+                "workspace_id": str(workspace_id),
                 "faces_detected": len(faces),
             },
         )

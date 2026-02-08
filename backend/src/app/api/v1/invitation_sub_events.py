@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_current_user
@@ -183,7 +183,7 @@ async def update_sub_event(
     return sub_event
 
 
-@router.delete("/{sub_event_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete("/{sub_event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sub_event(
     workspace_id: UUID,
     invitation_id: UUID,
@@ -198,7 +198,6 @@ async def delete_sub_event(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Sub-event not found",
         )
-    return None
 
 
 @router.post("/reorder", response_model=List[SubEventResponse])

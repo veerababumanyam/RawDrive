@@ -1,0 +1,20 @@
+{
+  "workspace_id": "11111111-1111-1111-1111-000000000001",
+  "consent_status_code": 200,
+  "consent_body": {
+    "workspace_id": "11111111-1111-1111-1111-000000000001",
+    "consent_status": "granted",
+    "face_detection_enabled": true,
+    "consented_at": "2026-02-08T18:41:58.603050+00:00",
+    "is_allowed": true
+  },
+  "upload_status_code": 200,
+  "upload_body": {
+    "asset_id": "511d34a5-1752-4d3e-9e14-3a82b1148039",
+    "status": "processing",
+    "analysis_queued": true
+  },
+  "detection_status_code": "TIMEOUT",
+  "detection_body": null,
+  "error": null
+}

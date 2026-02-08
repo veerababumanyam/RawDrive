@@ -207,10 +207,8 @@ async def update_role(
 @router.delete(
     "/{role_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Delete role",
     description="Delete a custom role from the workspace.",
-    response_class=Response,
 )
 async def delete_role(
     workspace_id: UUID = Path(..., description="Workspace ID"),
@@ -235,5 +233,3 @@ async def delete_role(
             "deleted_by": str(current_user.user_id),
         },
     )
-    
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)

@@ -59,6 +59,17 @@ def upgrade() -> None:
     # ---------------------------------------------------------------------------
     # Albums Table - Master album entity
     # ---------------------------------------------------------------------------
+    # If albums table exists (from 0160), add missing columns
+    op.execute("ALTER TABLE albums ADD COLUMN IF NOT EXISTS template_id UUID REFERENCES album_templates(template_id) ON DELETE SET NULL")
+    op.execute("ALTER TABLE albums ADD COLUMN IF NOT EXISTS album_type VARCHAR(50) DEFAULT 'wedding'")
+    op.execute("ALTER TABLE albums ADD COLUMN IF NOT EXISTS page_count INTEGER DEFAULT 0")
+    op.execute("ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_config JSONB DEFAULT '{}'::jsonb")
+    op.execute("ALTER TABLE albums ADD COLUMN IF NOT EXISTS spine_config JSONB DEFAULT '{}'::jsonb")
+    op.execute("ALTER TABLE albums ADD COLUMN IF NOT EXISTS design_config JSONB DEFAULT '{}'::jsonb")
+    op.execute("ALTER TABLE albums ADD COLUMN IF NOT EXISTS current_version INTEGER DEFAULT 1")
+    op.execute("ALTER TABLE albums ADD COLUMN IF NOT EXISTS last_edited_by UUID REFERENCES users(user_id) ON DELETE SET NULL")
+    op.execute("ALTER TABLE albums ADD COLUMN IF NOT EXISTS last_edited_at TIMESTAMPTZ")
+    
     op.execute(
         """
         CREATE TABLE IF NOT EXISTS albums (
@@ -99,6 +110,17 @@ def upgrade() -> None:
     # ---------------------------------------------------------------------------
     # Album Spreads Table - Individual pages/spreads
     # ---------------------------------------------------------------------------
+    # If album_spreads table exists (from 0160), add missing columns
+    op.execute("ALTER TABLE album_spreads ADD COLUMN IF NOT EXISTS spread_number INTEGER")
+    op.execute("ALTER TABLE album_spreads ADD COLUMN IF NOT EXISTS spread_type VARCHAR(50) DEFAULT 'double'")
+    op.execute("ALTER TABLE album_spreads ADD COLUMN IF NOT EXISTS layout_template_id VARCHAR(100)")
+    op.execute("ALTER TABLE album_spreads ADD COLUMN IF NOT EXISTS layout_config JSONB DEFAULT '{}'::jsonb")
+    op.execute("ALTER TABLE album_spreads ADD COLUMN IF NOT EXISTS background_config JSONB DEFAULT '{}'::jsonb")
+    op.execute("ALTER TABLE album_spreads ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE")
+    op.execute("ALTER TABLE album_spreads ADD COLUMN IF NOT EXISTS locked_by UUID REFERENCES users(user_id) ON DELETE SET NULL")
+    op.execute("ALTER TABLE album_spreads ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ")
+    op.execute("ALTER TABLE album_spreads ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1")
+
     op.execute(
         """
         CREATE TABLE IF NOT EXISTS album_spreads (
@@ -163,6 +185,14 @@ def upgrade() -> None:
     # ---------------------------------------------------------------------------
     # Album Comments Table - Comments with @mentions
     # ---------------------------------------------------------------------------
+    # If album_comments table exists (from 0160), add missing columns
+    op.execute("ALTER TABLE album_comments ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(user_id) ON DELETE CASCADE")
+    op.execute("ALTER TABLE album_comments ADD COLUMN IF NOT EXISTS element_id UUID REFERENCES album_spread_elements(element_id) ON DELETE CASCADE")
+    op.execute("ALTER TABLE album_comments ADD COLUMN IF NOT EXISTS content TEXT")
+    op.execute("ALTER TABLE album_comments ADD COLUMN IF NOT EXISTS mentions UUID[] DEFAULT '{}'")
+    op.execute("ALTER TABLE album_comments ADD COLUMN IF NOT EXISTS position JSONB")
+    op.execute("ALTER TABLE album_comments ADD COLUMN IF NOT EXISTS resolved_by UUID REFERENCES users(user_id) ON DELETE SET NULL")
+
     op.execute(
         """
         CREATE TABLE IF NOT EXISTS album_comments (
@@ -199,6 +229,11 @@ def upgrade() -> None:
     # ---------------------------------------------------------------------------
     # Album Versions Table - Full version history for rollback
     # ---------------------------------------------------------------------------
+    # If album_versions table exists (from 0160), add missing columns
+    op.execute("ALTER TABLE album_versions ADD COLUMN IF NOT EXISTS snapshot JSONB")
+    op.execute("ALTER TABLE album_versions ADD COLUMN IF NOT EXISTS change_summary TEXT")
+    op.execute("ALTER TABLE album_versions ADD COLUMN IF NOT EXISTS change_type VARCHAR(50) DEFAULT 'edit'")
+
     op.execute(
         """
         CREATE TABLE IF NOT EXISTS album_versions (

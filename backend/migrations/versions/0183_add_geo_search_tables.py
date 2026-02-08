@@ -167,18 +167,9 @@ def upgrade() -> None:
     # =========================================================================
     # EXTEND AI_PROCESSING_RESULTS TABLE with GEO metadata
     # =========================================================================
-    op.add_column(
-        "ai_processing_results",
-        sa.Column("scene_classification", postgresql.JSONB, nullable=True),
-    )
-    op.add_column(
-        "ai_processing_results",
-        sa.Column("mood_tags", postgresql.JSONB, nullable=True),
-    )
-    op.add_column(
-        "ai_processing_results",
-        sa.Column("activity_tags", postgresql.JSONB, nullable=True),
-    )
+    op.execute("ALTER TABLE ai_processing_results ADD COLUMN IF NOT EXISTS scene_classification JSONB")
+    op.execute("ALTER TABLE ai_processing_results ADD COLUMN IF NOT EXISTS mood_tags JSONB")
+    op.execute("ALTER TABLE ai_processing_results ADD COLUMN IF NOT EXISTS activity_tags JSONB")
 
     # GIN indexes for JSONB columns to support GEO metadata queries
     op.execute(

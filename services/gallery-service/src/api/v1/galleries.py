@@ -529,11 +529,17 @@ async def get_gallery(
         
         return result
     except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, content=error_response.model_dump())
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=getattr(e, 'status', 500), content=error_response.model_dump())
     except Exception as e:
-        raise
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, content=error_response.model_dump())
 
 
 @router.get("/{gallery_id}/assets", response_model=GalleryAssetsListResponse)
@@ -566,12 +572,11 @@ async def list_gallery_assets(
     if emotion:
         valid_emotions = {"joy", "sadness", "anger", "surprise", "fear", "disgust", "contentment"}
         if emotion.lower() not in valid_emotions:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "INVALID_EMOTION",
-                    "message": f"Invalid emotion: {emotion}. Must be one of: {', '.join(valid_emotions)}"
-                }
+            raise_http_exception(
+                ErrorCode.VALIDATION_ERROR,
+                f"Invalid emotion: {emotion}. Must be one of: {', '.join(valid_emotions)}",
+                details={"field": "emotion", "value": emotion, "valid_values": list(valid_emotions)},
+                request_id=request_id
             )
 
     try:
@@ -588,9 +593,13 @@ async def list_gallery_assets(
         )
         return result
     except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, content=error_response.model_dump())
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=getattr(e, 'status', 500), content=error_response.model_dump())
 
 
 # =============================================================================
@@ -600,6 +609,7 @@ async def list_gallery_assets(
 
 @router.post("/cache/warm")
 async def warm_cache(
+    request: Request,
     workspace_id: str = Depends(get_workspace_id),
     force: bool = Query(False, description="Force re-warming even if already warm"),
 ):
@@ -611,6 +621,7 @@ async def warm_cache(
 
     Use the force parameter to re-warm even if the cache was recently warmed.
     """
+    request_id = get_correlation_id() or request.headers.get("X-Correlation-ID", "")
     cache_warming_service = get_cache_warming_service()
 
     try:
@@ -621,9 +632,11 @@ async def warm_cache(
         return result
     except Exception as e:
         logger.error(f"Cache warming failed: {e}", extra={"workspace_id": workspace_id})
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "CACHE_WARM_FAILED", "message": str(e)}
+        raise_http_exception(
+            ErrorCode.CACHE_ERROR,
+            ErrorMessage.CACHE_ERROR,
+            details={"workspace_id": workspace_id, "exception": str(e)},
+            request_id=request_id
         )
 
 
@@ -664,9 +677,13 @@ async def set_download_limit(
             limit_enabled=result.get('daily_download_limit') is not None and result.get('daily_download_limit') > 0,
         )
     except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, content=error_response.model_dump())
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=getattr(e, 'status', 500), content=error_response.model_dump())
 
 
 @router.get("/{gallery_id}/download-limit", response_model=DownloadLimitResponse)
@@ -693,9 +710,13 @@ async def get_download_limit(
             limit_enabled=daily_limit is not None and daily_limit > 0,
         )
     except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, content=error_response.model_dump())
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=getattr(e, 'status', 500), content=error_response.model_dump())
 
 
 # =============================================================================
@@ -723,13 +744,18 @@ async def get_design_config(
         )
         return result
     except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, content=error_response.model_dump())
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=getattr(e, 'status', 500), content=error_response.model_dump())
 
 
 @router.patch("/{gallery_id}/design", response_model=GalleryDesignResponse)
 async def update_design_config(
+    req: Request,
     gallery_id: str,
     request: GalleryDesignUpdateRequest,
     workspace_id: str = Depends(get_workspace_id),
@@ -745,6 +771,7 @@ async def update_design_config(
     Changes are immediately published to the live gallery and broadcasted
     to public viewing channels for real-time updates.
     """
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
     gallery_service = get_gallery_service()
     user_id = UUID(current_user["user_id"])
 
@@ -753,12 +780,11 @@ async def update_design_config(
         try:
             validated_config = GalleryDesignConfig(**request.design_config)
         except Exception as e:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "INVALID_DESIGN_CONFIG",
-                    "message": f"Invalid design configuration: {str(e)}"
-                }
+            raise_http_exception(
+                ErrorCode.INVALID_DESIGN_CONFIG,
+                ErrorMessage.INVALID_DESIGN_CONFIG.format(reason=str(e)),
+                details={"validation_error": str(e)},
+                request_id=request_id
             )
 
         result = await gallery_service.update_design_config(
@@ -785,9 +811,18 @@ async def update_design_config(
 
         return result
     except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, content=error_response.model_dump())
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=getattr(e, 'status', 500), content=error_response.model_dump())
     except Exception as e:
         logger.error(f"Design config update failed: {e}", extra={"gallery_id": gallery_id, "workspace_id": workspace_id})
-        raise HTTPException(status_code=500, detail={"error": "INTERNAL_ERROR", "message": "Failed to update design configuration"})
+        raise_http_exception(
+            ErrorCode.INTERNAL_ERROR,
+            ErrorMessage.INTERNAL_ERROR,
+            details={"gallery_id": gallery_id, "exception": str(e)},
+            request_id=request_id
+        )

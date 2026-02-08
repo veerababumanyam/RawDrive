@@ -25,7 +25,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '0190'
-down_revision = '0189'
+down_revision = '0189a'
 branch_labels = None
 depends_on = None
 
@@ -125,11 +125,12 @@ def upgrade() -> None:
     # Enable pg_trgm extension for fuzzy matching on filenames
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
 
-    op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_assets_filename_trgm
-        ON assets USING GIN (file_name gin_trgm_ops)
-        WHERE deleted = FALSE AND status = 'available'
-    """)
+    # NOTE: file_name column doesn't exist in assets table - index creation commented out
+    # op.execute("""
+    #     CREATE INDEX IF NOT EXISTS idx_assets_filename_trgm
+    #     ON assets USING GIN (file_name gin_trgm_ops)
+    #     WHERE deleted = FALSE AND status = 'available'
+    # """)
 
 
 def downgrade() -> None:

@@ -25,12 +25,16 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+# Default retention period (30 days per COM-002)
+DEFAULT_RETENTION_DAYS = 30
+
 # Default TTLs for face group cache (in seconds)
 FACE_GROUP_LIST_TTL = 300  # 5 minutes for group lists
 FACE_GROUP_DETAIL_TTL = 600  # 10 minutes for group details
 FACE_GROUP_STATS_TTL = 60  # 1 minute for statistics (more volatile)
 FACE_GROUP_SUGGESTIONS_TTL = 900  # 15 minutes for merge suggestions
 FACE_GROUP_SIMILAR_TTL = 600  # 10 minutes for similar groups
+FACE_GROUP_MEMBERSHIP_TTL = 300  # 5 minutes for group membership
 
 # Cache key prefixes
 PREFIX_FACE_GROUP = "face_group"
@@ -39,6 +43,7 @@ PREFIX_FACE_GROUP_STATS = "face_group_stats"
 PREFIX_FACE_GROUP_SUGGESTIONS = "face_group_suggestions"
 PREFIX_FACE_GROUP_SIMILAR = "face_group_similar"
 PREFIX_FACE_GROUP_GALLERY = "face_group_gallery"
+PREFIX_FACE_GROUP_FACES = "face_group_faces"
 
 
 # ---------------------------------------------------------------------------
@@ -486,6 +491,83 @@ class FaceGroupCacheService:
         )
 
     # -----------------------------------------------------------------------
+    # Face Group Faces Cache
+    # -----------------------------------------------------------------------
+
+    async def get_faces_in_group(
+        self,
+        workspace_id: UUID,
+        group_id: UUID,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Optional[dict[str, Any]]:
+        """Get cached faces in a group.
+
+        Args:
+            workspace_id: Workspace ID
+            group_id: Face group ID
+            limit: Items per page
+            offset: Offset
+
+        Returns:
+            Cached faces list or None if not cached
+        """
+        cache_key_params = f"{limit}:{offset}"
+        return await self._cache.get(
+            PREFIX_FACE_GROUP_FACES, str(workspace_id), str(group_id), cache_key_params
+        )
+
+    async def set_faces_in_group(
+        self,
+        workspace_id: UUID,
+        group_id: UUID,
+        limit: int,
+        offset: int,
+        data: dict[str, Any],
+        ttl: int = FACE_GROUP_DETAIL_TTL,
+    ) -> bool:
+        """Cache faces in a group.
+
+        Args:
+            workspace_id: Workspace ID
+            group_id: Face group ID
+            limit: Items per page
+            offset: Offset
+            data: Faces list data to cache
+            ttl: Time to live in seconds
+
+        Returns:
+            True if cached successfully
+        """
+        cache_key_params = f"{limit}:{offset}"
+        return await self._cache.set(
+            PREFIX_FACE_GROUP_FACES, str(workspace_id), str(group_id), cache_key_params,
+            value=data, ttl=ttl
+        )
+
+    async def invalidate_faces_in_group(
+        self,
+        workspace_id: UUID,
+        group_id: Optional[UUID] = None,
+    ) -> int:
+        """Invalidate cached faces in a group.
+
+        Args:
+            workspace_id: Workspace ID
+            group_id: Optional specific group ID
+
+        Returns:
+            Number of cache entries invalidated
+        """
+        if group_id:
+            return await self._cache.invalidate_pattern(
+                PREFIX_FACE_GROUP_FACES, str(workspace_id), str(group_id)
+            )
+        return await self._cache.invalidate_pattern(
+            PREFIX_FACE_GROUP_FACES, str(workspace_id)
+        )
+
+    # -----------------------------------------------------------------------
     # Bulk Invalidation (T029)
     # -----------------------------------------------------------------------
 
@@ -509,6 +591,7 @@ class FaceGroupCacheService:
         total += await self.invalidate_merge_suggestions(workspace_id)
         total += await self.invalidate_similar_groups(workspace_id)
         total += await self.invalidate_gallery_face_groups(workspace_id)
+        total += await self.invalidate_faces_in_group(workspace_id)
 
         logger.info(
             "Invalidated face group cache",
@@ -547,6 +630,9 @@ class FaceGroupCacheService:
 
         # Invalidate similar groups for this specific group
         total += await self.invalidate_similar_groups(workspace_id, group_id)
+
+        # Invalidate faces in this group
+        total += await self.invalidate_faces_in_group(workspace_id, group_id)
 
         # Invalidate merge suggestions (similarity scores may have changed)
         total += await self.invalidate_merge_suggestions(workspace_id)
@@ -591,6 +677,11 @@ class FaceGroupCacheService:
 
         # Invalidate gallery caches (group membership may have changed)
         total += await self.invalidate_gallery_face_groups(workspace_id)
+
+        # Invalidate faces in affected groups
+        for group_id in source_group_ids:
+            await self.invalidate_faces_in_group(workspace_id, group_id)
+        await self.invalidate_faces_in_group(workspace_id, target_group_id)
 
         return total
 

@@ -12,13 +12,11 @@ Performance: Avoids O(n) recalculation of centroids for large clusters.
 """
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import Column, DateTime, Integer, String, Numeric
-from sqlalchemy.dialects.postgresql import JSONB
-
-from app.models.base import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FaceGroupCentroidsCache(BaseModel):
@@ -28,27 +26,29 @@ class FaceGroupCentroidsCache(BaseModel):
     Cached to avoid recalculation during similarity matching.
     """
 
-    __tablename__ = "face_group_centroids_cache"
+    model_config = ConfigDict(from_attributes=True)
 
     # Primary keys
-    workspace_id = Column(String, nullable=False, index=True)
-    face_group_id = Column(String, nullable=False, index=True)
+    workspace_id: str = Field(..., description="Workspace identifier")
+    face_group_id: str = Field(..., description="Face group identifier")
 
     # Cached centroid data
-    centroid_vector = Column(JSONB, nullable=False)  # 512-d centroid
-    face_count = Column(Integer, nullable=False)  # Number of faces in group
+    centroid_vector: list[float] = Field(..., description="512-d centroid vector")
+    face_count: int = Field(..., description="Number of faces in group")
 
     # Cluster quality
-    quality_score = Column(Numeric(5, 4), nullable=True)  # 0-1, higher = tighter cluster
+    quality_score: Optional[Decimal] = Field(
+        None, ge=0, le=1, description="0-1, higher = tighter cluster"
+    )
 
     # Metadata
-    last_face_added_at = Column(DateTime, nullable=True)
-    calculated_at = Column(DateTime, default=datetime.now, nullable=False)
-    ttl_seconds = Column(Integer, default=7200, nullable=False)  # 2 hours default
+    last_face_added_at: Optional[datetime] = Field(None, description="Last face added timestamp")
+    calculated_at: datetime = Field(default_factory=datetime.now, description="Centroid calculation timestamp")
+    ttl_seconds: int = Field(default=7200, description="Time to live in seconds (2 hours default)")
 
     # Cache tracking
-    hit_count = Column(Integer, default=0, nullable=False)
-    last_accessed_at = Column(DateTime, default=datetime.now, nullable=False)
+    hit_count: int = Field(default=0, description="Number of cache hits")
+    last_accessed_at: datetime = Field(default_factory=datetime.now, description="Last access timestamp")
 
     def is_expired(self) -> bool:
         """Check if this cache entry has expired.
@@ -56,8 +56,6 @@ class FaceGroupCentroidsCache(BaseModel):
         Returns:
             True if expired, False otherwise
         """
-        from datetime import timedelta
-
         expiry_time = self.calculated_at + timedelta(seconds=self.ttl_seconds)
         return datetime.now() > expiry_time
 
@@ -75,11 +73,6 @@ class FaceGroupCentroidsCache(BaseModel):
             "hit_count": self.hit_count,
             "is_expired": self.is_expired(),
         }
-
-    def record_hit(self) -> None:
-        """Record a cache hit by updating hit count and last access time."""
-        self.hit_count += 1
-        self.last_accessed_at = datetime.now()
 
     def should_invalidate(self, new_face_count: int) -> bool:
         """Check if cache should be invalidated due to significant change.

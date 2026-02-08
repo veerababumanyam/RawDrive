@@ -24,7 +24,7 @@ import type {
   WebhookTemplateSummary,
   TemplateCategory,
   IntegrationType,
-} from '../../../types/webhooks';
+} from '@/types/webhooks';
 
 // ---------------------------------------------------------------------------
 // Types

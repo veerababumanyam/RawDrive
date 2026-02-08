@@ -30,8 +30,8 @@ from app.models.face_embedding_retention_job import (
 logger = logging.getLogger(__name__)
 
 
-# Default retention period (7 years)
-DEFAULT_RETENTION_DAYS = 2555
+# Default retention period (30 days per COM-002)
+DEFAULT_RETENTION_DAYS = 30
 
 
 class FaceRetentionRepository:

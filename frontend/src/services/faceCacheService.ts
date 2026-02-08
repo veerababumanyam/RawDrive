@@ -15,8 +15,7 @@
  * @module services/faceCacheService
  */
 
-import { apiClient } from './apiClient';
-import { FaceDetectionResult } from './faceApiService';
+import { apiClient } from './api';
 
 // ============================================================================
 // Types
@@ -110,7 +109,7 @@ class FaceCacheService {
       // Cache the stats locally
       this.setLocalStorage(this.CACHE_STATS_KEY(workspaceId), response, this.CACHE_STATS_TTL);
 
-      return response.data;
+      return response.data!;
     } catch (error) {
       console.error('Failed to get face cache stats:', error);
       throw error;
@@ -151,7 +150,7 @@ class FaceCacheService {
       // Clear local cache stats
       this.removeLocalStorage(this.CACHE_STATS_KEY(workspaceId));
 
-      return response.data;
+      return response.data!;
     } catch (error) {
       console.error('Failed to invalidate face cache:', error);
       throw error;
@@ -166,9 +165,7 @@ class FaceCacheService {
    */
   async invalidateGalleryCache(workspaceId: string, galleryId: string): Promise<void> {
     try {
-      await apiClient.delete(`/api/v1/galleries/${galleryId}/cache`, {
-        params: { workspace_id: workspaceId }
-      });
+      await apiClient.delete(`/api/v1/galleries/${galleryId}/cache?workspace_id=${workspaceId}`);
 
       // Clear local cache stats
       this.removeLocalStorage(this.CACHE_STATS_KEY(workspaceId));
@@ -200,12 +197,10 @@ class FaceCacheService {
   ): Promise<FaceCacheWarmResult> {
     try {
       const response = await apiClient.post<FaceCacheWarmResult>(
-        `/api/v1/galleries/${galleryId}/cache/warm`,
-        null,
-        { params: { limit } }
+        `/api/v1/galleries/${galleryId}/cache/warm?limit=${limit}`
       );
 
-      return response.data;
+      return response.data!;
     } catch (error) {
       console.error('Failed to warm gallery cache:', error);
       throw error;
@@ -238,7 +233,7 @@ class FaceCacheService {
         this.CONSENT_STATUS_TTL
       );
 
-      return response.data;
+      return response.data!;
     } catch (error) {
       console.error('Failed to get consent status:', error);
       throw error;
@@ -277,7 +272,7 @@ class FaceCacheService {
       // Clear cached status
       this.removeLocalStorage(this.CONSENT_STATUS_KEY(workspaceId));
 
-      return response.data;
+      return response.data!;
     } catch (error) {
       console.error('Failed to grant consent:', error);
       throw error;
@@ -300,14 +295,13 @@ class FaceCacheService {
   ): Promise<BiometricConsentStatus> {
     try {
       const response = await apiClient.delete<BiometricConsentStatus>(
-        `/api/v1/workspaces/${workspaceId}/biometric-consent`,
-        { params: { cascade_delete: cascadeDelete } }
+        `/api/v1/workspaces/${workspaceId}/biometric-consent?cascade_delete=${cascadeDelete}`
       );
 
       // Clear cached status
       this.removeLocalStorage(this.CONSENT_STATUS_KEY(workspaceId));
 
-      return response.data;
+      return response.data!;
     } catch (error) {
       console.error('Failed to withdraw consent:', error);
       throw error;
@@ -426,12 +420,3 @@ class FaceCacheService {
 
 // Export singleton instance
 export const faceCacheService = new FaceCacheService();
-
-// Export types
-export type {
-  FaceCacheStats,
-  FaceCacheWarmResult,
-  FaceCacheInvalidateResult,
-  BiometricConsentStatus,
-  GrantConsentRequest,
-};

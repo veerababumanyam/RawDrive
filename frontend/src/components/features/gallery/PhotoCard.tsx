@@ -133,6 +133,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [usePreviewFallback, setUsePreviewFallback] = useState(false);
   const [useOriginalFallback, setUseOriginalFallback] = useState(false);
   // Track if full image has loaded for blur-up transition
   const [imageLoaded, setImageLoaded] = useState(() =>
@@ -203,6 +204,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   // Reset image error state when asset changes
   useEffect(() => {
     setImageError(false);
+    setUsePreviewFallback(false);
     setUseOriginalFallback(false);
     // Check if this image was already loaded
     setImageLoaded(isInImageCache(asset.asset_id));
@@ -220,7 +222,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   } = useSignedUrl({
     assetId: asset.asset_id,
     variant: 'thumbnail',
-    enabled: enabledCondition && !useOriginalFallback,
+    enabled: enabledCondition && !usePreviewFallback && !useOriginalFallback,
   });
 
   // Fetch original URL as fallback when thumbnail fails
@@ -311,10 +313,12 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     setIsEditing(false);
   };
 
-  // Use signed URL if available, fallback to cached thumbnail_url, then original as last resort
+  // Fallback chain: thumbnail → preview (on 404) → original (on 404) to avoid broken images
   const displayUrl = useOriginalFallback
     ? (originalUrl || asset.asset.original_url || undefined)
-    : (thumbnailUrl || asset.asset.thumbnail_url || undefined);
+    : usePreviewFallback
+      ? (asset.asset.preview_url || undefined)
+      : (thumbnailUrl || asset.asset.thumbnail_url || undefined);
 
   // Generate unique IDs for ARIA descriptions
   const statusDescriptionId = `photo-status-${asset.asset_id}`;
@@ -408,12 +412,13 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
               addToImageCache(asset.asset_id);
             }}
             onError={() => {
-              // If thumbnail fails and we haven't tried original yet, fallback to original
-              if (!useOriginalFallback && !originalUrlLoading) {
+              // Fallback chain: try preview_url (from API) then original
+              if (!usePreviewFallback && (asset.asset.preview_url)) {
+                setUsePreviewFallback(true);
+              } else if (!useOriginalFallback && !originalUrlLoading) {
                 setUseOriginalFallback(true);
               } else {
                 setImageError(true);
-                // Try refreshing URL on error
                 if (!urlLoading && !useOriginalFallback) {
                   refreshUrl();
                 }

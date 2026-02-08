@@ -13,12 +13,13 @@ from datetime import datetime, timezone
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
+from app.api.dependencies.auth import get_current_user as _get_raw_user, CurrentUser, get_workspace_id_from_access
+from app.api.dependencies.db import get_db
 from app.db.redis import get_redis_client
 from app.models.user import User
 from app.services.album_collaboration_service import (
@@ -26,6 +27,15 @@ from app.services.album_collaboration_service import (
     AlbumOperationType,
     get_album_collaboration_service,
 )
+
+
+async def get_current_user(
+    user: Annotated[CurrentUser, Depends(_get_raw_user)],
+    workspace_id: Annotated[UUID, Depends(get_workspace_id_from_access)],
+) -> Any:
+    """Compatibility dependency to inject active_workspace_id."""
+    user.active_workspace_id = workspace_id # type: ignore
+    return user
 
 logger = logging.getLogger(__name__)
 
@@ -472,7 +482,7 @@ async def delete_album(
     album_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> None:
+):
     """Delete an album."""
     workspace_id = current_user.active_workspace_id
     if not workspace_id:
@@ -652,7 +662,7 @@ async def delete_spread(
     spread_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> None:
+):
     """Delete a spread."""
     workspace_id = current_user.active_workspace_id
     if not workspace_id:
@@ -806,7 +816,7 @@ async def delete_element(
     element_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> None:
+):
     """Delete an element."""
     workspace_id = current_user.active_workspace_id
     if not workspace_id:

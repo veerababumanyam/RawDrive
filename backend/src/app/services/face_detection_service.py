@@ -468,7 +468,8 @@ class FaceDetectionService:
         """
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
-            # Upsert detection job with priority
+            # Upsert detection job with priority. Do not reset jobs that are already
+            # completed, so repeated --queue runs do not undo progress.
             row = await conn.fetchrow(
                 """
                 INSERT INTO face_detection_jobs (
@@ -480,18 +481,26 @@ class FaceDetectionService:
                     priority = GREATEST(face_detection_jobs.priority, $3),
                     error_message = NULL,
                     retry_count = 0
+                WHERE face_detection_jobs.status != 'completed'
                 RETURNING id
                 """,
                 workspace_id,
                 photo_id,
                 priority,
             )
+            if row is None:
+                # Job already completed; WHERE excluded the update. Return existing id.
+                row = await conn.fetchrow(
+                    "SELECT id FROM face_detection_jobs WHERE photo_id = $1 AND workspace_id = $2",
+                    photo_id,
+                    workspace_id,
+                )
             
             logger.info(
                 "Photo queued for reprocessing",
                 extra={
                     "photo_id": str(photo_id),
-                    "job_id": str(row["id"]),
+                    "job_id": str(row["id"]) if row else None,
                     "priority": priority,
                 },
             )
@@ -739,7 +748,8 @@ class FaceDetectionService:
                 )
                 # Still check feature toggles
                 value = await self.config_service.get_face_detection_setting(
-                    f"workspace_{workspace_id}_enabled"
+                    f"workspace_{workspace_id}_enabled",
+                    "true",
                 )
                 if value is not None:
                     return value.lower() == "true"
@@ -749,6 +759,10 @@ class FaceDetectionService:
             # This takes precedence over all other settings
             consent_allowed = await self.consent_service.is_face_detection_allowed(
                 workspace_id
+            )
+            logger.info(
+                "Face detection consent check",
+                extra={"workspace_id": str(workspace_id), "allowed": consent_allowed},
             )
             if not consent_allowed:
                 logger.debug(
@@ -763,19 +777,25 @@ class FaceDetectionService:
 
             # Check workspace-level setting
             value = await self.config_service.get_face_detection_setting(
-                f"workspace_{workspace_id}_enabled"
+                f"workspace_{workspace_id}_enabled",
+                "true",
             )
             if value is not None:
                 return value.lower() == "true"
 
             # Fall back to global setting
             global_value = await self.config_service.get_face_detection_setting(
-                "enabled"
+                "enabled",
+                "true",
             )
             if global_value is not None:
                 return global_value.lower() == "true"
 
             # Default to enabled (if consent was granted above)
+            logger.debug(
+                "Face detection enabled for workspace",
+                extra={"workspace_id": str(workspace_id)},
+            )
             return True
         except DetectionDisabledError:
             # Re-raise with better context
@@ -792,7 +812,8 @@ class FaceDetectionService:
         """Get minimum confidence threshold for storing faces."""
         try:
             value = await self.config_service.get_face_detection_setting(
-                "min_confidence"
+                "min_confidence",
+                str(DEFAULT_MIN_CONFIDENCE),
             )
             return float(value) if value else DEFAULT_MIN_CONFIDENCE
         except Exception:
@@ -804,7 +825,8 @@ class FaceDetectionService:
         DEFAULT_CLUSTERING_THRESHOLD = 0.5
         try:
             value = await self.config_service.get_face_detection_setting(
-                "clustering_confidence_threshold"
+                "clustering_confidence_threshold",
+                "0.5",
             )
             return float(value) if value else DEFAULT_CLUSTERING_THRESHOLD
         except Exception:

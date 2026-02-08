@@ -245,11 +245,10 @@ def upgrade() -> None:
         """
     )
 
-    # Date-based analytics
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_partner_payouts_date
-        ON partner_payouts (DATE(created_at), status, payout_method);
+        ON partner_payouts (created_at, status, payout_method);
         """
     )
 

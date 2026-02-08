@@ -39,13 +39,13 @@ import {
   useABTests,
   useRefreshEngagementScores,
 } from '../../../hooks/usePortfolioRecommendations';
+import { ABTestStatus } from '@rawdrive/shared-types';
 import type {
   TopAsset,
   RecommendationItem,
   ABTest,
-  ABTestStatus,
-  SceneCategory,
 } from '../../../services/portfolioRecommendationService';
+import { SceneCategory } from '../../../services/portfolioRecommendationService';
 
 /* =============================================================================
    Types
@@ -64,32 +64,32 @@ interface PortfolioRecommendationDashboardProps {
    ============================================================================= */
 
 const getSceneCategoryConfig = (category: SceneCategory) => {
-  const configs: Record<SceneCategory, { label: string; icon: React.ReactNode; color: string }> = {
-    ceremony: { label: 'Ceremony', icon: <Star size={14} />, color: 'text-amber-500 bg-amber-500/10' },
-    reception: { label: 'Reception', icon: <Sparkles size={14} />, color: 'text-purple-500 bg-purple-500/10' },
-    portrait: { label: 'Portrait', icon: <Users size={14} />, color: 'text-blue-500 bg-blue-500/10' },
-    detail: { label: 'Detail', icon: <Image size={14} />, color: 'text-emerald-500 bg-emerald-500/10' },
-    candid: { label: 'Candid', icon: <Zap size={14} />, color: 'text-rose-500 bg-rose-500/10' },
-    landscape: { label: 'Landscape', icon: <Layers size={14} />, color: 'text-cyan-500 bg-cyan-500/10' },
-    group: { label: 'Group', icon: <Users size={14} />, color: 'text-indigo-500 bg-indigo-500/10' },
-    couple: { label: 'Couple', icon: <Users size={14} />, color: 'text-pink-500 bg-pink-500/10' },
-    family: { label: 'Family', icon: <Users size={14} />, color: 'text-orange-500 bg-orange-500/10' },
-    food: { label: 'Food', icon: <Image size={14} />, color: 'text-lime-500 bg-lime-500/10' },
-    venue: { label: 'Venue', icon: <Layers size={14} />, color: 'text-slate-500 bg-slate-500/10' },
-    other: { label: 'Other', icon: <Image size={14} />, color: 'text-neutral-500 bg-neutral-500/10' },
+  const configs: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+    [SceneCategory.CEREMONY]: { label: 'Ceremony', icon: <Star size={14} />, color: 'text-amber-500 bg-amber-500/10' },
+    [SceneCategory.RECEPTION]: { label: 'Reception', icon: <Sparkles size={14} />, color: 'text-purple-500 bg-purple-500/10' },
+    [SceneCategory.PORTRAIT]: { label: 'Portrait', icon: <Users size={14} />, color: 'text-blue-500 bg-blue-500/10' },
+    [SceneCategory.DETAIL]: { label: 'Detail', icon: <Image size={14} />, color: 'text-emerald-500 bg-emerald-500/10' },
+    [SceneCategory.CANDID]: { label: 'Candid', icon: <Zap size={14} />, color: 'text-rose-500 bg-rose-500/10' },
+    [SceneCategory.LANDSCAPE]: { label: 'Landscape', icon: <Layers size={14} />, color: 'text-cyan-500 bg-cyan-500/10' },
+    [SceneCategory.GROUP]: { label: 'Group', icon: <Users size={14} />, color: 'text-indigo-500 bg-indigo-500/10' },
+    [SceneCategory.COUPLE]: { label: 'Couple', icon: <Users size={14} />, color: 'text-pink-500 bg-pink-500/10' },
+    [SceneCategory.FAMILY]: { label: 'Family', icon: <Users size={14} />, color: 'text-orange-500 bg-orange-500/10' },
+    [SceneCategory.FOOD]: { label: 'Food', icon: <Image size={14} />, color: 'text-lime-500 bg-lime-500/10' },
+    [SceneCategory.VENUE]: { label: 'Venue', icon: <Layers size={14} />, color: 'text-slate-500 bg-slate-500/10' },
+    [SceneCategory.OTHER]: { label: 'Other', icon: <Image size={14} />, color: 'text-neutral-500 bg-neutral-500/10' },
   };
-  return configs[category] || configs.other;
+  return configs[category] || configs[SceneCategory.OTHER];
 };
 
 const getABTestStatusConfig = (status: ABTestStatus) => {
-  const configs: Record<ABTestStatus, { label: string; color: string; icon: React.ReactNode }> = {
-    draft: { label: 'Draft', color: 'text-neutral-500 bg-neutral-500/10', icon: <Clock size={14} /> },
-    running: { label: 'Running', color: 'text-green-500 bg-green-500/10', icon: <PlayCircle size={14} /> },
-    paused: { label: 'Paused', color: 'text-yellow-500 bg-yellow-500/10', icon: <PauseCircle size={14} /> },
-    completed: { label: 'Completed', color: 'text-blue-500 bg-blue-500/10', icon: <CheckCircle size={14} /> },
-    cancelled: { label: 'Cancelled', color: 'text-red-500 bg-red-500/10', icon: <Clock size={14} /> },
+  const configs: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+    [ABTestStatus.DRAFT]: { label: 'Draft', color: 'text-neutral-500 bg-neutral-500/10', icon: <Clock size={14} /> },
+    [ABTestStatus.RUNNING]: { label: 'Running', color: 'text-green-500 bg-green-500/10', icon: <PlayCircle size={14} /> },
+    [ABTestStatus.PAUSED]: { label: 'Paused', color: 'text-yellow-500 bg-yellow-500/10', icon: <PauseCircle size={14} /> },
+    [ABTestStatus.COMPLETED]: { label: 'Completed', color: 'text-blue-500 bg-blue-500/10', icon: <CheckCircle size={14} /> },
+    [ABTestStatus.CANCELLED]: { label: 'Cancelled', color: 'text-red-500 bg-red-500/10', icon: <Clock size={14} /> },
   };
-  return configs[status] || configs.draft;
+  return configs[status] || configs[ABTestStatus.DRAFT];
 };
 
 const formatEngagementScore = (score: number): string => {
@@ -188,7 +188,7 @@ const TopAssetsGrid: React.FC<{
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {assets.slice(0, 6).map((asset, index) => {
           const categoryConfig = asset.scene_category
-            ? getSceneCategoryConfig(asset.scene_category)
+            ? getSceneCategoryConfig(asset.scene_category as SceneCategory)
             : null;
 
           return (
@@ -259,7 +259,7 @@ const HeroShotsPanel: React.FC<{
 
   const handleLoad = useCallback(() => {
     fetchHeroShots(
-      { limit: 8, includeMetadata: true },
+      { limit: 8 },
       {
         onSuccess: () => setHasLoaded(true),
       }
@@ -351,7 +351,7 @@ const ABTestsList: React.FC<{
   onTestClick?: (testId: string) => void;
 }> = ({ workspaceId, onTestClick }) => {
   const { data: testsData, isLoading } = useABTests(workspaceId, {
-    status: 'running',
+    status: ABTestStatus.RUNNING,
     limit: 5,
   });
 
@@ -369,7 +369,7 @@ const ABTestsList: React.FC<{
     );
   }
 
-  const tests = testsData?.tests || [];
+  const tests = Array.isArray(testsData) ? testsData : [];
 
   if (tests.length === 0) {
     return (
@@ -399,7 +399,7 @@ const ABTestsList: React.FC<{
       <div className="space-y-2">
         {tests.map((test) => {
           const statusConfig = getABTestStatusConfig(test.status);
-          const totalImpressions = test.variants.reduce((sum, v) => sum + v.impressions, 0);
+          const totalImpressions = (test.variants || []).reduce((sum, v) => sum + (v.impressions || 0), 0);
 
           return (
             <motion.button
@@ -418,12 +418,12 @@ const ABTestsList: React.FC<{
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs text-text-tertiary">
-                <span>{test.variants.length} variants</span>
+                <span>{test.variants?.length || 0} variants</span>
                 <span>{totalImpressions.toLocaleString()} impressions</span>
               </div>
               {test.winner_variant_id && (
                 <div className="mt-2 px-2 py-1 rounded bg-green-500/10 text-green-500 text-xs">
-                  Winner: Variant {test.variants.findIndex((v) => v.variant_id === test.winner_variant_id) + 1}
+                  Winner: Variant {(test.variants || []).findIndex((v) => v.variant_id === test.winner_variant_id) + 1}
                 </div>
               )}
             </motion.button>
@@ -437,15 +437,15 @@ const ABTestsList: React.FC<{
 const EngagementMetricsPanel: React.FC<{
   assets: TopAsset[];
 }> = ({ assets }) => {
-  const totalViews = assets.reduce((sum, a) => sum + a.view_count, 0);
-  const totalDownloads = assets.reduce((sum, a) => sum + a.download_count, 0);
-  const totalFavorites = assets.reduce((sum, a) => sum + a.favorite_count, 0);
+  const totalViews = assets.reduce((sum, a) => sum + (a.view_count || 0), 0);
+  const totalDownloads = assets.reduce((sum, a) => sum + (a.download_count || 0), 0);
+  const totalFavorites = assets.reduce((sum, a) => sum + (a.favorite_count || 0), 0);
   const avgScore = assets.length > 0
     ? assets.reduce((sum, a) => sum + a.engagement_score, 0) / assets.length
     : 0;
 
   // Category distribution
-  const categoryCount: Partial<Record<SceneCategory, number>> = {};
+  const categoryCount: Partial<Record<string, number>> = {};
   assets.forEach((asset) => {
     if (asset.scene_category) {
       categoryCount[asset.scene_category] = (categoryCount[asset.scene_category] || 0) + 1;
@@ -453,7 +453,7 @@ const EngagementMetricsPanel: React.FC<{
   });
 
   const topCategories = Object.entries(categoryCount)
-    .sort(([, a], [, b]) => b - a)
+    .sort(([, a], [, b]) => (b || 0) - (a || 0))
     .slice(0, 4);
 
   return (
@@ -539,7 +539,7 @@ export const PortfolioRecommendationDashboard: React.FC<PortfolioRecommendationD
 
   const { mutate: refreshScores, isPending: isRefreshing } = useRefreshEngagementScores(workspaceId);
 
-  const topAssets = topAssetsData?.assets || [];
+  const topAssets = Array.isArray(topAssetsData) ? topAssetsData : [];
 
   // Handle refresh
   const handleRefresh = useCallback(() => {

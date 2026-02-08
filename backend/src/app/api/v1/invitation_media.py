@@ -3,7 +3,7 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel
 
 from app.api.dependencies import get_current_user
@@ -93,7 +93,6 @@ async def list_invitation_media(
 @router.delete(
     "/{invitation_id}/media/{media_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
 )
 async def delete_invitation_media(
     invitation_id: UUID,
@@ -101,7 +100,7 @@ async def delete_invitation_media(
     workspace_id: UUID,
     service: InvitationMediaService = Depends(get_invitation_media_service),
     current_user: Any = Depends(get_current_user),
-) -> None:
+):
     """Delete media from invitation."""
     success = await service.delete_media(workspace_id, invitation_id, media_id)
     if not success:

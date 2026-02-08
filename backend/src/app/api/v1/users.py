@@ -454,7 +454,7 @@ async def get_user_avatar(
 )
 async def stream_user_avatar(
     current_user: CurrentUserDep,
-    size: Annotated[str, Query(description="Avatar size", example="original")] = "original",
+    size: Annotated[str, Query(description="Avatar size", examples=["original"])] = "original",
 ):
     """Proxy avatar bytes through the API to avoid cross-origin issues."""
 
@@ -481,7 +481,7 @@ async def stream_user_avatar(
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception:
         logger.exception("Failed to stream avatar")
-        return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
@@ -1233,7 +1233,7 @@ async def get_export_status(
     export = await data_export_service.get_latest_export(user_id=str(current_user.user_id))
 
     if not export:
-        return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return DataExportResponse(
         export_id=export.export_id,

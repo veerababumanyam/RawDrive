@@ -1067,3 +1067,348 @@ export interface WorkspaceAnalyticsStats {
   cacheHitRate: number;
   dataFreshness: string;
 }
+
+// ---------------------------------------------------------------------------
+// Portfolio Recommendation Types & Enums
+// ---------------------------------------------------------------------------
+
+/**
+ * A/B Test Status
+ */
+export const ABTestStatus = {
+  DRAFT: 'draft',
+  ACTIVE: 'active',
+  RUNNING: 'running',
+  PAUSED: 'paused',
+  CONCLUDED: 'concluded',
+  COMPLETED: 'completed', // Alias for concluded
+  ARCHIVED: 'archived',
+  CANCELLED: 'cancelled', // Alias for archived
+} as const;
+export type ABTestStatus = typeof ABTestStatus[keyof typeof ABTestStatus];
+
+/**
+ * A/B Test Type
+ */
+export const ABTestType = {
+  ALGORITHM: 'algorithm',
+  SCORING_WEIGHTS: 'scoring_weights',
+  UI_PRESENTATION: 'ui_presentation',
+  RECOMMENDATION_COUNT: 'recommendation_count',
+  DIVERSITY_FACTOR: 'diversity_factor',
+  PERSONALIZATION_LEVEL: 'personalization_level',
+} as const;
+export type ABTestType = typeof ABTestType[keyof typeof ABTestType];
+
+/**
+ * Primary Metric for A/B Tests
+ */
+export const PrimaryMetric = {
+  SELECTION_RATE: 'selection_rate',
+  DOWNLOAD_RATE: 'download_rate',
+  TIME_TO_SELECTION: 'time_to_selection',
+  USER_RATING: 'user_rating',
+  ITEMS_VIEWED: 'items_viewed',
+  ENGAGEMENT_RATE: 'engagement_rate',
+} as const;
+export type PrimaryMetric = typeof PrimaryMetric[keyof typeof PrimaryMetric];
+
+/**
+ * A/B Test Variant
+ */
+export interface ABTestVariant {
+  name: string;
+  config: Record<string, unknown>;
+  weight: number;
+  impressions?: number;
+  clicks?: number;
+  conversions?: number;
+  description?: string;
+}
+
+/**
+ * A/B Test
+ */
+export interface ABTest {
+  test_id: string;
+  workspace_id: string;
+  test_name?: string;
+  name?: string;
+  test_description?: string;
+  description?: string;
+  hypothesis?: string;
+  test_type: ABTestType;
+  status: ABTestStatus;
+  target_recommendation_types: string[];
+  traffic_percentage: number;
+  start_date: string;
+  started_at?: string;
+  end_date?: string;
+  concluded_at?: string;
+  primary_metric: PrimaryMetric;
+  current_results: Record<string, unknown>;
+  winner_variant?: string;
+  winner_variant_id?: string;
+  variants?: ABTestVariant[];
+  statistical_significance_reached: boolean;
+  created_at: string;
+}
+
+/**
+ * A/B Test Results
+ */
+export interface ABTestResults {
+  test_id: string;
+  test_name: string;
+  status: ABTestStatus;
+  primary_metric: PrimaryMetric;
+  variant_results: Record<string, {
+    sample_size: number;
+    items_recommended?: number;
+    items_selected?: number;
+    selection_rate: number;
+    avg_rating?: number;
+  }>;
+  significance_results: Record<string, {
+    lift: number;
+    p_value: number;
+    is_significant: boolean;
+  }>;
+  total_impressions?: number;
+  total_clicks?: number;
+  p_value?: number;
+  is_significant?: boolean;
+  recommended_winner?: string;
+  total_samples: number;
+  min_sample_size: number;
+}
+
+/**
+ * Recommendation Type
+ */
+export const RecommendationType = {
+  PORTFOLIO_SELECTION: 'portfolio_selection',
+  HERO_SHOTS: 'hero_shots',
+  SIMILAR_STYLE: 'similar_style',
+  SEASONAL_PICKS: 'seasonal_picks',
+  SEASONAL: 'seasonal',
+  TRENDING_SHOTS: 'trending_shots',
+  PERSONALIZED: 'personalized',
+  QUICK_DELIVERY: 'quick_delivery',
+  PRINT_WORTHY: 'print_worthy',
+  SOCIAL_MEDIA: 'social_media',
+  ALBUM_COVER: 'album_cover',
+} as const;
+export type RecommendationType = typeof RecommendationType[keyof typeof RecommendationType];
+
+/**
+ * Recommendation Status
+ */
+export const RecommendationStatus = {
+  PENDING: 'pending',
+  PROCESSING: 'processing',
+  COMPLETED: 'completed',
+  ACCEPTED: 'accepted',
+  FAILED: 'failed',
+  EXPIRED: 'expired',
+} as const;
+export type RecommendationStatus = typeof RecommendationStatus[keyof typeof RecommendationStatus];
+
+/**
+ * Scene Category
+ */
+export const SceneCategory = {
+  WEDDING: 'wedding',
+  CEREMONY: 'ceremony',
+  RECEPTION: 'reception',
+  PORTRAIT: 'portrait',
+  DETAIL: 'detail',
+  CANDID: 'candid',
+  LANDSCAPE: 'landscape',
+  GROUP: 'group',
+  COUPLE: 'couple',
+  FAMILY: 'family',
+  FOOD: 'food',
+  VENUE: 'venue',
+  EVENT: 'event',
+  PRODUCT: 'product',
+  LIFESTYLE: 'lifestyle',
+  CORPORATE: 'corporate',
+  NATURE: 'nature',
+  ARCHITECTURE: 'architecture',
+  FASHION: 'fashion',
+  SPORTS: 'sports',
+  OTHER: 'other',
+} as const;
+export type SceneCategory = typeof SceneCategory[keyof typeof SceneCategory];
+
+/**
+ * Top Asset
+ */
+export interface TopAsset {
+  asset_id: string;
+  gallery_id?: string;
+  engagement_score: number;
+  total_views: number;
+  view_count?: number;
+  total_favorites: number;
+  favorite_count?: number;
+  total_selections: number;
+  total_downloads: number;
+  download_count?: number;
+  conversion_rate: number;
+  scene_category?: string;
+  aesthetic_score?: number;
+  quality_score?: number;
+  rank_in_workspace: number;
+  rank_in_category?: number;
+  percentile: number;
+  asset_url?: string;
+  thumbnail_url?: string;
+}
+
+/**
+ * Hero Shots Request
+ */
+export interface HeroShotsRequest {
+  gallery_ids?: string[];
+  galleryIds?: string[];
+  limit?: number;
+  min_quality_score?: number;
+  minQualityScore?: number;
+  diversity_factor?: number;
+  diversityFactor?: number;
+  includeMetadata?: boolean;
+}
+
+/**
+ * Seasonal Request
+ */
+export interface SeasonalRequest {
+  target_season: 'spring' | 'summer' | 'fall' | 'winter';
+  gallery_ids?: string[];
+  galleryIds?: string[];
+  limit?: number;
+  occasion_type?: string;
+  occasionType?: string;
+}
+
+/**
+ * Client Type
+ */
+export type ClientType =
+  | 'wedding_client'
+  | 'portrait_client'
+  | 'corporate_client'
+  | 'event_client'
+  | 'family_client'
+  | 'commercial_client'
+  | 'general';
+
+/**
+ * Client Preference
+ */
+export interface ClientPreference {
+  preference_id: string;
+  workspace_id: string;
+  client_id: string;
+  client_type: ClientType;
+  occasion_type?: string;
+  preferred_styles: string[];
+  preferred_colors: string[];
+  preferred_compositions: string[];
+  preferred_scenes: string[];
+  embedding_confidence?: number;
+  embedding_sample_size: number;
+  total_galleries_viewed: number;
+  total_selections_made: number;
+  preference_confidence: number;
+  last_interaction_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Client Preference Update
+ */
+export interface ClientPreferenceUpdate {
+  client_type?: ClientType;
+  occasion_type?: string;
+  preferred_styles?: string[];
+  preferred_colors?: string[];
+  preferred_compositions?: string[];
+  preferred_scenes?: string[];
+}
+
+/**
+ * Feedback Type
+ */
+export type FeedbackType =
+  | 'rating'
+  | 'selection'
+  | 'rejection'
+  | 'reorder'
+  | 'comment'
+  | 'helpful'
+  | 'not_helpful'
+  | 'too_few'
+  | 'too_many'
+  | 'wrong_style';
+
+/**
+ * Feedback Request
+ */
+export interface FeedbackRequest {
+  feedback_type: FeedbackType;
+  rating?: number;
+  comment?: string;
+  selected_count?: number;
+  rejected_count?: number;
+}
+
+/**
+ * Feedback
+ */
+export interface Feedback {
+  feedback_id: string;
+  recommendation_id: string;
+  feedback_source: string;
+  feedback_type: FeedbackType;
+  rating?: number;
+  comment?: string;
+  created_at: string;
+}
+
+/**
+ * Batch Embedding Request
+ */
+export interface BatchEmbeddingRequest {
+  gallery_ids?: string[];
+  asset_ids?: string[];
+  force_regenerate?: boolean;
+  batch_size?: number;
+}
+
+/**
+ * Batch Embedding Response
+ */
+export interface BatchEmbeddingResponse {
+  total_requested: number;
+  total_processed: number;
+  total_failed: number;
+  failed_asset_ids: string[];
+  processing_time_ms: number;
+}
+
+/**
+ * Refresh Engagement Response
+ */
+export interface RefreshEngagementResponse {
+  total_assets_updated: number;
+  processing_time_ms: number;
+}
+
+/**
+ * Season type
+ */
+export type Season = 'spring' | 'summer' | 'fall' | 'winter';

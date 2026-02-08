@@ -9,10 +9,10 @@ import logging
 from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, Response
 from pydantic import BaseModel, Field
 
-from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
+from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep, get_current_user
 from app.api.face_schemas import (
     FaceGroupResponse,
     FaceGroupDetailResponse,
@@ -55,6 +55,12 @@ from app.services.face_exceptions import (
 )
 from app.services.signed_url_service import get_signed_url_service
 from app.services.audit_service import AuditService, AuditEventType
+from app.api.dependencies.face_rate_limit import (
+    check_face_bulk_rate_limit,
+    check_face_group_merge_rate_limit,
+)
+from app.services.biometric_consent_service import require_biometric_consent
+from app.services.face_group_cache_service import get_face_group_cache_service
 
 
 logger = logging.getLogger(__name__)
@@ -96,7 +102,7 @@ FaceRepoDep = Annotated[FaceRepository, Depends(get_face_repo)]
     "/workspaces/{workspace_id}/face-groups",
     response_model=FaceGroupListResponse,
     summary="List face groups",
-    description="Returns all face groups (clusters) in the workspace.",
+    description="Returns all face groups (clusters) in the workspace. Read-only; does not require biometric consent.",
 )
 async def list_face_groups(
     workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
@@ -109,29 +115,49 @@ async def list_face_groups(
     order_desc: Annotated[bool, Query(description="Sort descending")] = True,
     min_faces: Annotated[Optional[int], Query(ge=1, description="Minimum faces in group")] = None,
 ):
-    """List all face groups in a workspace."""
-    offset = (page - 1) * limit
+    """List all face groups (clusters) in the workspace."""
+    logger.info(
+        "list_face_groups called",
+        extra={"workspace_id": str(workspace_id), "page": page, "limit": limit},
+    )
+    cache_service = get_face_group_cache_service()
 
-    # Use the method that includes thumbnail info
-    groups = await group_repo.find_by_workspace_with_thumbnails(
+    # Try cache
+    cached_data = await cache_service.get_face_group_list(
         workspace_id=workspace_id,
+        page=page,
         limit=limit,
-        offset=offset,
+        order_by=order_by,
+        order_desc=order_desc,
+        min_faces=min_faces,
+    )
+    if cached_data:
+        # Normalize legacy cache: meta may have totalPages (camelCase) but schema expects total_pages
+        meta = cached_data.get("meta") or {}
+        if "total_pages" not in meta and "totalPages" in meta:
+            meta = {**meta, "total_pages": meta["totalPages"]}
+            cached_data = {**cached_data, "meta": meta}
+        return FaceGroupListResponse(**cached_data)
+
+    # Cache miss - fetch from DB
+    groups, total = await group_repo.list_groups(
+        workspace_id=workspace_id,
+        page=page,
+        limit=limit,
         order_by=order_by,
         order_desc=order_desc,
         min_faces=min_faces,
     )
 
-    # Generate signed URLs for thumbnails
+    total_pages = (total + limit - 1) // limit
+
+    # Build response with signed thumbnail URLs (same pattern as list_gallery_face_groups)
     signed_url_service = get_signed_url_service()
     response_groups = []
     for g in groups:
-        # Generate signed thumbnail URL if we have representative face info
         representative_thumbnail_url = None
         if g.get("rep_face_id") and g.get("rep_thumbnail_urls"):
             thumbnail_urls = g.get("rep_thumbnail_urls")
-            # Handle both dict and double-encoded JSON string formats
-            # (legacy data may have been stored as JSON strings)
             if isinstance(thumbnail_urls, str):
                 import json
                 try:
@@ -145,33 +171,46 @@ async def list_face_groups(
                     size="medium",
                 )
                 representative_thumbnail_url = url_data["url"]
+        response_groups.append({
+            "id": g["id"],
+            "workspace_id": g["workspace_id"],
+            "name": g.get("name"),
+            "representative_face_id": g.get("representative_face_id"),
+            "face_count": g.get("face_count", 0),
+            "created_at": g.get("created_at"),
+            "updated_at": g.get("updated_at"),
+            "representative_thumbnail_url": representative_thumbnail_url,
+            "person_id": g.get("person_id"),
+            "person_name": g.get("person_name"),
+        })
 
-        # Build response, excluding internal fields
-        response_groups.append(FaceGroupResponse(
-            id=g["id"],
-            workspace_id=g["workspace_id"],
-            name=g.get("name"),
-            representative_face_id=g.get("representative_face_id"),
-            face_count=g.get("face_count", 0),
-            created_at=g.get("created_at"),
-            updated_at=g.get("updated_at"),
-            representative_thumbnail_url=representative_thumbnail_url,
-            person_id=g.get("person_id"),
-            person_name=g.get("person_name"),
-        ))
+    response_data = {
+        "data": response_groups,
+        "meta": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "total_pages": total_pages,
+        }
+    }
 
-    total = await group_repo.count_by_workspace(workspace_id, min_faces=min_faces)
-    total_pages = (total + limit - 1) // limit if total > 0 else 1
-
-    return FaceGroupListResponse(
-        data=response_groups,
-        meta=FaceListMeta(
-            page=page,
-            limit=limit,
-            total=total,
-            total_pages=total_pages,
-        ),
+    logger.info(
+        "list_face_groups result",
+        extra={"workspace_id": str(workspace_id), "total": total, "returned": len(response_groups)},
     )
+
+    # Store in cache
+    await cache_service.set_face_group_list(
+        workspace_id=workspace_id,
+        page=page,
+        limit=limit,
+        order_by=order_by,
+        order_desc=order_desc,
+        min_faces=min_faces,
+        data=response_data,
+    )
+
+    return FaceGroupListResponse(**response_data)
 
 
 @router.get(
@@ -191,6 +230,23 @@ async def list_gallery_face_groups(
     search: Annotated[Optional[str], Query(description="Search by person name")] = None,
 ):
     """List face groups for a gallery."""
+    cache_service = get_face_group_cache_service()
+    
+    # Try cache
+    cached_data = await cache_service.get_gallery_face_groups(
+        workspace_id=workspace_id,
+        gallery_id=gallery_id,
+        page=page,
+        limit=limit,
+        search=search,
+    )
+    if cached_data:
+        meta = cached_data.get("meta") or {}
+        if "total_pages" not in meta and "totalPages" in meta:
+            meta = {**meta, "total_pages": meta["totalPages"]}
+            cached_data = {**cached_data, "meta": meta}
+        return FaceGroupGalleryStatsListResponse(**cached_data)
+
     offset = (page - 1) * limit
 
     # 1. Get groups with stats
@@ -244,15 +300,27 @@ async def list_gallery_face_groups(
     total = await group_repo.count_by_gallery_id(workspace_id, gallery_id)
     total_pages = (total + limit - 1) // limit if total > 0 else 1
 
-    return FaceGroupGalleryStatsListResponse(
-        data=response_groups,
-        meta=FaceListMeta(
-            page=page,
-            limit=limit,
-            total=total,
-            total_pages=total_pages,
-        ),
+    response_data = {
+        "data": response_groups,
+        "meta": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "total_pages": total_pages,
+        }
+    }
+
+    # Store in cache
+    await cache_service.set_gallery_face_groups(
+        workspace_id=workspace_id,
+        gallery_id=gallery_id,
+        page=page,
+        limit=limit,
+        search=search,
+        data=response_data,
     )
+
+    return FaceGroupGalleryStatsListResponse(**response_data)
 
 
 @router.post(
@@ -273,6 +341,10 @@ async def cluster_ungrouped_faces(
     automatically clustered (e.g., due to low confidence scores).
     """
     result = await cluster_service.cluster_all_ungrouped(workspace_id)
+
+    # Invalidate cache
+    cache_service = get_face_group_cache_service()
+    await cache_service.invalidate_workspace_cache(workspace_id)
 
     logger.info(
         "Clustered ungrouped faces",
@@ -311,6 +383,11 @@ async def create_face_group(
         name=request.name,
     )
     
+    # Invalidate cache
+    cache_service = get_face_group_cache_service()
+    await cache_service.invalidate_face_group_lists(workspace_id)
+    await cache_service.invalidate_face_group_stats(workspace_id)
+    
     logger.info(
         "Face group created",
         extra={
@@ -330,52 +407,33 @@ async def create_face_group(
     description="Returns detailed information about a face group.",
 )
 async def get_face_group(
-    group_id: Annotated[UUID, Path(..., description="Face group ID")],
+    workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    group_id: Annotated[UUID, Path(..., description="Face Group ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     group_repo: GroupRepoDep,
-    face_repo: FaceRepoDep,
+    _: None = Depends(require_biometric_consent),
 ):
-    """Get face group details with sample faces."""
-    workspace_id = workspace_access[1]
+    """Get detailed information about a face group."""
+    cache_service = get_face_group_cache_service()
     
-    group = await group_repo.find_by_id(group_id, workspace_id)
+    # Try cache
+    cached_data = await cache_service.get_face_group_detail(workspace_id, group_id)
+    if cached_data:
+        return FaceGroupDetailResponse(**cached_data)
+
+    # Cache miss
+    group = await group_repo.get_group_detail(workspace_id, group_id)
     if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Face group not found"  # SEC-002: Generic message to prevent ID enumeration,
+            detail="Face group not found",
         )
-    
-    # Get sample faces from this group
-    sample_faces = await face_repo.find_by_group_id(
-        group_id=group_id,
-        workspace_id=workspace_id,
-        limit=5,
-    )
-    
-    # Get representative thumbnail URL (signed)
-    representative_thumbnail = None
-    if group.get("representative_face_id"):
-        rep_face = await face_repo.find_by_id(
-            group["representative_face_id"], workspace_id
-        )
-        if rep_face and rep_face.get("thumbnail_urls"):
-            thumbnail_urls = rep_face["thumbnail_urls"]
-            if isinstance(thumbnail_urls, dict) and thumbnail_urls.get("medium"):
-                # Generate signed URL for the face thumbnail
-                signed_url_service = get_signed_url_service()
-                url_data = signed_url_service.generate_face_thumbnail_url(
-                    workspace_id=workspace_id,
-                    face_id=rep_face["id"],
-                    size="medium",
-                )
-                representative_thumbnail = url_data["url"]
 
-    return FaceGroupDetailResponse(
-        **group,
-        representative_thumbnail_url=representative_thumbnail,
-        sample_faces=sample_faces,
-    )
+    # Store in cache
+    await cache_service.set_face_group_detail(workspace_id, group_id, group)
+
+    return FaceGroupDetailResponse(**group)
 
 
 @router.put(
@@ -406,6 +464,16 @@ async def update_face_group(
         workspace_id=workspace_id,
         **updates,
     )
+
+    if updated_group:
+        # Invalidate cache
+        cache_service = get_face_group_cache_service()
+        await cache_service.invalidate_on_group_change(workspace_id, group_id)
+    
+    if not updated_group:
+        # Invalidate cache
+        cache_service = get_face_group_cache_service()
+        await cache_service.invalidate_on_group_change(workspace_id, group_id)
     
     if not updated_group:
         raise HTTPException(
@@ -486,6 +554,10 @@ async def name_face_group(
             detail=str(e),
         )
 
+    # Invalidate cache
+    cache_service = get_face_group_cache_service()
+    await cache_service.invalidate_on_group_change(workspace_id, group_id)
+
     return FaceGroupPersonResponse(
         id=result["id"],
         name=result.get("name"),
@@ -498,7 +570,6 @@ async def name_face_group(
 @router.delete(
     "/workspaces/{workspace_id}/face-groups/{group_id}/name",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Remove person from face group",
     description="Unassign the person from a face group.",
 )
@@ -522,13 +593,10 @@ async def unname_face_group(
             detail="Face group not found",
         )
 
-    return None
-
 
 @router.delete(
     "/face-groups/{group_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Delete face group",
     description="Delete a face group. Faces in the group become ungrouped.",
 )
@@ -540,15 +608,20 @@ async def delete_face_group(
 ):
     """Delete a face group (faces become ungrouped)."""
     workspace_id = workspace_access[1]
-    
+
     deleted = await group_repo.delete(group_id, workspace_id)
-    
+
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Face group not found"  # SEC-002: Generic message to prevent ID enumeration,
         )
-    
+
+    if deleted:
+        # Invalidate cache
+        cache_service = get_face_group_cache_service()
+        await cache_service.invalidate_on_group_change(workspace_id, group_id)
+
     logger.info(
         "Face group deleted",
         extra={"group_id": str(group_id)},
@@ -596,6 +669,14 @@ async def merge_face_groups(
             detail="Cannot merge these face groups",
         )
 
+    # Invalidate cache
+    cache_service = get_face_group_cache_service()
+    await cache_service.invalidate_on_merge(
+        workspace_id=workspace_id,
+        source_group_ids=[request.source_group_id],
+        target_group_id=request.target_group_id,
+    )
+
     return FaceGroupResponse(**merged_group)
 
 
@@ -612,6 +693,8 @@ async def split_face_group(
     current_user: CurrentUserDep,
     request: SplitFaceGroupRequest,
     cluster_service: ClusterServiceDep,
+    _: None = Depends(require_biometric_consent),
+    __: None = Depends(check_face_bulk_rate_limit),
 ):
     """Split faces from a group into a new group."""
     workspace_id = workspace_access[1]
@@ -635,6 +718,10 @@ async def split_face_group(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot split these faces from the group",
         )
+
+    # Invalidate cache
+    cache_service = get_face_group_cache_service()
+    await cache_service.invalidate_workspace_cache(workspace_id)
 
     return FaceGroupResponse(**new_group)
 
@@ -662,6 +749,8 @@ async def multi_merge_face_groups(
     current_user: CurrentUserDep,
     request: MultiMergeFaceGroupsRequest,
     cluster_service: ClusterServiceDep,
+    _: None = Depends(require_biometric_consent),
+    __: None = Depends(check_face_group_merge_rate_limit),
 ):
     """Merge multiple face groups into one target group."""
     try:
@@ -723,6 +812,14 @@ async def multi_merge_face_groups(
             "source_group_count": len(result["source_group_ids"]),
             "faces_merged": result["faces_merged"],
         },
+    )
+
+    # Invalidate cache
+    cache_service = get_face_group_cache_service()
+    await cache_service.invalidate_on_merge(
+        workspace_id=workspace_id,
+        source_group_ids=result["source_group_ids"],
+        target_group_id=request.target_group_id,
     )
 
     return MergeResultResponse(
@@ -800,6 +897,10 @@ async def set_representative_face(
         )
         representative_thumbnail_url = url_data["url"]
 
+    # Invalidate cache
+    cache_service = get_face_group_cache_service()
+    await cache_service.invalidate_on_group_change(workspace_id, group_id)
+
     return FaceGroupResponse(
         id=updated_group["id"],
         workspace_id=updated_group["workspace_id"],
@@ -839,6 +940,13 @@ async def get_merge_suggestions(
     limit: Annotated[int, Query(ge=1, le=100, description="Max pairs to return")] = 50,
 ):
     """Get suggested face group pairs to merge."""
+    cache_service = get_face_group_cache_service()
+    
+    # Try cache
+    cached_data = await cache_service.get_merge_suggestions(workspace_id, threshold, limit)
+    if cached_data:
+        return MergeSuggestionsResponse(suggestions=cached_data, total=len(cached_data))
+
     pairs = await group_repo.find_similar_pairs(
         workspace_id=workspace_id,
         threshold=threshold,
@@ -887,6 +995,9 @@ async def get_merge_suggestions(
             similarity=pair["similarity"],
         ))
 
+    # Store in cache
+    await cache_service.set_merge_suggestions(workspace_id, threshold, limit, [s.model_dump() for s in suggestions])
+
     return MergeSuggestionsResponse(
         suggestions=suggestions,
         total=len(suggestions),
@@ -909,10 +1020,21 @@ async def get_similar_groups(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     group_repo: GroupRepoDep,
+    _: None = Depends(require_biometric_consent),
     threshold: Annotated[float, Query(ge=0.5, le=0.99, description="Similarity threshold")] = 0.75,
     limit: Annotated[int, Query(ge=1, le=50, description="Max results")] = 10,
 ):
     """Get face groups similar to a specific group."""
+    cache_service = get_face_group_cache_service()
+    
+    # Try cache
+    cached_data = await cache_service.get_similar_groups(workspace_id, group_id, threshold, limit)
+    if cached_data:
+        # Return directly if we can't easily rebuild source_group from cache, 
+        # or just fetch source_group and return. 
+        # For now, let's assume we want full response.
+        pass
+
     try:
         # Get the source group for the response
         source_group = await group_repo.get_by_id(group_id, workspace_id)
@@ -1004,11 +1126,25 @@ async def get_faces_in_group(
     current_user: CurrentUserDep,
     face_repo: FaceRepoDep,
     group_repo: GroupRepoDep,
+    _: None = Depends(require_biometric_consent),
     limit: Annotated[int, Query(ge=1, le=500, description="Items per page")] = 100,
     offset: Annotated[int, Query(ge=0, description="Offset")] = 0,
 ):
     """Get all faces in a group with thumbnails."""
-    # Verify group exists and get representative face ID
+    cache_service = get_face_group_cache_service()
+    
+    # Try cache
+    cached_data = await cache_service.get_faces_in_group(
+        workspace_id=workspace_id,
+        group_id=group_id,
+        limit=limit,
+        offset=offset,
+    )
+    if cached_data:
+        return FacesInGroupResponse(**cached_data)
+
+    # Cache miss
+    # 1. Verify group exists and get representative face ID
     group = await group_repo.find_by_id(group_id, workspace_id)
     if not group:
         raise HTTPException(
@@ -1018,7 +1154,7 @@ async def get_faces_in_group(
 
     representative_face_id = group.get("representative_face_id")
 
-    # Get faces
+    # 2. Get faces
     faces = await face_repo.find_by_group_id(
         group_id=group_id,
         workspace_id=workspace_id,
@@ -1026,9 +1162,9 @@ async def get_faces_in_group(
         offset=offset,
     )
 
-    # Build response with signed URLs
+    # 3. Build response with signed URLs
     signed_url_service = get_signed_url_service()
-    face_responses = []
+    response_faces = []
 
     for face in faces:
         thumbnail_url = None
@@ -1042,7 +1178,7 @@ async def get_faces_in_group(
                 )
                 thumbnail_url = url_data["url"]
 
-        face_responses.append(FaceResponse(
+        response_faces.append(FaceResponse(
             id=face["id"],
             photo_id=face.get("photo_id"),
             bounding_box=face.get("bounding_box"),
@@ -1052,12 +1188,23 @@ async def get_faces_in_group(
         ))
 
     total = group.get("face_count", len(faces))
+    
+    response_data = {
+        "faces": response_faces,
+        "total": total,
+        "representative_face_id": representative_face_id,
+    }
 
-    return FacesInGroupResponse(
-        faces=face_responses,
-        total=total,
-        representative_face_id=representative_face_id,
+    # Store in cache
+    await cache_service.set_faces_in_group(
+        workspace_id=workspace_id,
+        group_id=group_id,
+        limit=limit,
+        offset=offset,
+        data=response_data,
     )
+
+    return FacesInGroupResponse(**response_data)
 
 
 # ---------------------------------------------------------------------------

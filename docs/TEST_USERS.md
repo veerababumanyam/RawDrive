@@ -5,6 +5,28 @@
 All test users are seeded with deterministic UUIDs for reproducible testing. Email is verified by default.
 
 ---
+## test users
+### All users use the same password: Test@123
+
+Subscription Tier Users:
+  - free@test.rawdrive.in (Free plan)
+  - starter@test.rawdrive.in (Starter plan)
+  - professional@test.rawdrive.in (Professional plan)
+  - business@test.rawdrive.in (Business plan)
+  - enterprise@test.rawdrive.in (Enterprise plan)
+
+  Platform Admin Users:
+  - superadmin@test.rawdrive.in (Super Admin)
+  - platformadmin@test.rawdrive.in (Platform Admin)
+  - supportadmin@test.rawdrive.in (Support Admin)
+  - billingadmin@test.rawdrive.in (Billing Admin)
+  - And 5 more...
+
+  Workspace Role Users:
+  - workspaceowner@test.rawdrive.in (Owner)
+  - workspaceadmin@test.rawdrive.in (Admin)
+  - staffuser@test.rawdrive.in (Editor)
+  - clientviewer@test.rawdrive.in (Viewer)
 
 ## 1. Subscription Tier Test Users
 
@@ -12,11 +34,11 @@ These users test different subscription plans and their limits.
 
 | Email | UUID | Plan | Storage | Galleries | Clients | Team | AI Credits |
 |-------|------|------|---------|-----------|---------|------|------------|
-| `free@test.rawdrive.ai` | `11111111-1111-1111-1111-111111111001` | Free | 1 GB | 3 | 5 | 3 | 50/mo |
-| `starter@test.rawdrive.ai` | `11111111-1111-1111-1111-111111111002` | Starter | 10 GB | 10 | 20 | 10 | 200/mo |
-| `professional@test.rawdrive.ai` | `11111111-1111-1111-1111-111111111003` | Professional | 100 GB | 50 | 100 | 50 | 1000/mo |
-| `business@test.rawdrive.ai` | `11111111-1111-1111-1111-111111111004` | Business | 1 TB | 200 | 500 | 200 | 2500/mo |
-| `enterprise@test.rawdrive.ai` | `11111111-1111-1111-1111-111111111005` | Enterprise | Unlimited | 10000 | 10000 | 10000 | 10000/mo |
+| `free@test.rawdrive.in` | `11111111-1111-1111-1111-111111111001` | Free | 1 GB | 3 | 5 | 3 | 50/mo |
+| `starter@test.rawdrive.in` | `11111111-1111-1111-1111-111111111002` | Starter | 10 GB | 10 | 20 | 10 | 200/mo |
+| `professional@test.rawdrive.in` | `11111111-1111-1111-1111-111111111003` | Professional | 100 GB | 50 | 100 | 50 | 1000/mo |
+| `business@test.rawdrive.in` | `11111111-1111-1111-1111-111111111004` | Business | 1 TB | 200 | 500 | 200 | 2500/mo |
+| `enterprise@test.rawdrive.in` | `11111111-1111-1111-1111-111111111005` | Enterprise | Unlimited | 10000 | 10000 | 10000 | 10000/mo |
 
 Each tier user owns their own workspace (e.g., `free`, `starter`, etc.) with a 30-day trial subscription.
 
@@ -54,6 +76,10 @@ These users belong to a shared **test-roles-workspace** (`44444444-4444-4444-444
 ---
 
 ## Quick Reference
+
+### Biometric consent (FaceID)
+
+Biometric consent for test users is **stored in the database** only (no .env). Migration **0194_seed_biometric_consent_test_users** grants consent for test workspaces when you run `alembic upgrade head`. Workspaces covered: tier (`11111111-1111-1111-1111-000000000001`–`005`) and test-roles (`44444444-4444-4444-4444-444444444000`). Ensure **0165_add_biometric_consent_tables** is applied first (creates `workspace_biometric_settings`). Test users are not prompted for consent after migrations are applied.
 
 ### Login Credentials
 ```

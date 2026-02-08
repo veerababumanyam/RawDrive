@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
-from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
+from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep, get_current_user
 from app.api.face_schemas import (
     FaceResponse,
     FaceDetailResponse,
@@ -42,6 +42,12 @@ from app.repositories.face_repository import (
 from app.services.face_exceptions import (
     FaceDetectionError,
     FaceNotFoundError,
+)
+from app.services.biometric_consent_service import require_biometric_consent
+from app.api.dependencies.face_rate_limit import (
+    check_face_search_rate_limit,
+    check_face_detect_rate_limit,
+    check_face_bulk_rate_limit,
 )
 
 
@@ -93,6 +99,7 @@ async def list_gallery_faces(
     face_repo: FaceRepoDep,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
+    _: None = Depends(require_biometric_consent),
 ):
     """List all faces in a gallery.
     
@@ -134,6 +141,7 @@ async def list_photo_faces(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     face_repo: FaceRepoDep,
+    _: None = Depends(require_biometric_consent),
 ):
     """List all faces in a photo."""
     workspace_id = workspace_access["workspace_id"]
@@ -168,6 +176,7 @@ async def get_face(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     face_repo: FaceRepoDep,
+    _: None = Depends(require_biometric_consent),
 ):
     """Get detailed information about a face."""
     workspace_id = workspace_access["workspace_id"]
@@ -176,7 +185,7 @@ async def get_face(
     if not face:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Face not found",  # SEC-002: Generic message to prevent ID enumeration
+            detail="Face not found",  # SEC-002: Generic message
         )
 
     return FaceDetailResponse(**face, id=face["id"])
@@ -194,6 +203,7 @@ async def identify_face(
     current_user: CurrentUserDep,
     request: AssignFaceToGroupRequest,
     face_repo: FaceRepoDep,
+    _: None = Depends(require_biometric_consent),
 ):
     """Manually assign a face to a face group."""
     workspace_id = workspace_access["workspace_id"]
@@ -234,6 +244,8 @@ async def bulk_assign_faces(
     current_user: CurrentUserDep,
     request: BulkAssignFacesRequest,
     face_repo: FaceRepoDep,
+    _: None = Depends(require_biometric_consent),
+    __: None = Depends(check_face_bulk_rate_limit),
 ):
     """Bulk assign faces to a group."""
     workspace_id = workspace_access["workspace_id"]
@@ -264,6 +276,8 @@ async def trigger_detection(
     current_user: CurrentUserDep,
     detection_service: DetectionServiceDep,
     priority: Annotated[int, Query(ge=-10, le=10, description="Job priority")] = 0,
+    _: None = Depends(require_biometric_consent),
+    __: None = Depends(check_face_detect_rate_limit),
 ):
     """Trigger face detection on a photo."""
     workspace_id = workspace_access["workspace_id"]
@@ -295,6 +309,7 @@ async def get_photo_faces(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     detection_service: DetectionServiceDep,
+    _: None = Depends(require_biometric_consent),
 ):
     """Get all faces detected in a photo."""
     workspace_id = workspace_access["workspace_id"]
@@ -323,6 +338,7 @@ async def get_detection_status(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     detection_service: DetectionServiceDep,
+    _: None = Depends(require_biometric_consent),
 ):
     """Get face detection job status for a photo."""
     workspace_id = workspace_access["workspace_id"]
@@ -351,6 +367,8 @@ async def search_similar_faces(
     request: SimilarFaceSearchRequest,
     cluster_service: ClusterServiceDep,
     face_repo: FaceRepoDep,
+    _: None = Depends(require_biometric_consent),
+    __: None = Depends(check_face_search_rate_limit),
 ):
     """Search for faces similar to a reference."""
     workspace_id = workspace_access["workspace_id"]
@@ -406,6 +424,7 @@ async def get_workspace_detection_stats(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     detection_service: DetectionServiceDep,
+    _: None = Depends(require_biometric_consent),
 ):
     """Get face detection statistics for a workspace."""
     stats = await detection_service.get_detection_stats(workspace_id)
@@ -597,12 +616,12 @@ async def get_biometric_consent_status(
 )
 async def withdraw_biometric_consent(
     workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
     cascade_delete: bool = Query(
         False,
         description="If True, also delete all faces and embeddings for this workspace",
     ),
-    workspace_access: WorkspaceAccessDep,
-    current_user: CurrentUserDep,
 ):
     """Withdraw biometric consent for a workspace.
 
@@ -752,14 +771,14 @@ async def invalidate_face_cache(
 )
 async def warm_gallery_cache(
     gallery_id: Annotated[UUID, Path(..., description="Gallery ID")],
+    workspace_access: WorkspaceAccessDep,
+    current_user: CurrentUserDep,
     limit: int = Query(
         100,
         ge=1,
         le=1000,
         description="Maximum number of assets to warm",
     ),
-    workspace_access: WorkspaceAccessDep,
-    current_user: CurrentUserDep,
 ):
     """Warm cache for frequently accessed galleries.
 

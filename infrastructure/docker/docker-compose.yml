@@ -257,7 +257,7 @@ services:
       loki:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_BACKEND}/health/live" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:${PORT_BACKEND}/health" ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -288,6 +288,8 @@ services:
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
       # Google Cloud Vision credentials (mounted to /run/secrets/ to avoid nested mount conflict with /app)
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp-credentials.json
+      # Set LOG_LEVEL=DEBUG in .env when debugging face detection pipeline
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     # Health check endpoint on port ${PORT_FACE_WORKER}
     ports:
       - "127.0.0.1:${PORT_FACE_WORKER}:${PORT_FACE_WORKER}"
@@ -296,12 +298,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Health: long start_period so first-run model download + ONNX load don't mark unhealthy. If restarts occur, check: docker inspect --format '{{.State.OOMKilled}} {{.State.ExitCode}}' rawdrive-face-worker
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:${PORT_FACE_WORKER}/health" ]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
-      start_period: 40s
+      start_period: 180s
     volumes:
       - ../../backend:/app
       - ../../packages:/app/packages
@@ -311,7 +314,7 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 2G
+          memory: 4G
         reservations:
           cpus: '0.5'
           memory: 512M

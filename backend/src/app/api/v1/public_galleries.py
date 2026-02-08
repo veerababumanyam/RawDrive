@@ -23,6 +23,9 @@ from app.api.schemas import (
 from app.services.visitor_service import get_visitor_service
 from app.api.exceptions import AppError, NotFoundError, InternalError
 from app.repositories.face_embedding_repository import get_face_embedding_repository
+from app.services.biometric_consent_service import get_biometric_consent_service
+from app.api.dependencies.face_rate_limit import check_face_search_rate_limit
+from app.repositories.face_rate_limit_repository import get_face_rate_limit_repository
 
 logger = logging.getLogger(__name__)
 
@@ -435,6 +438,14 @@ async def search_gallery_by_face(
 
     # Get workspace_id from gallery for face search
     workspace_id = UUID(gallery["workspace_id"])
+
+    # COM-001: Enforce biometric consent check (Public Search)
+    consent_service = get_biometric_consent_service()
+    await consent_service.check_public_search_consent(workspace_id)
+
+    # SEC-001: Apply rate limiting
+    rate_limit_repo = get_face_rate_limit_repository()
+    await check_face_search_rate_limit(workspace_id, rate_limit_repo)
 
     try:
         # Perform vector similarity search using face embedding repository

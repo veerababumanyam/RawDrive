@@ -32,6 +32,7 @@ export enum AlbumType {
   WEDDING = 'wedding',
   PORTRAIT = 'portrait',
   EVENT = 'event',
+  EVENTS = 'events',
   FAMILY = 'family',
   NEWBORN = 'newborn',
   CORPORATE = 'corporate',
@@ -332,6 +333,7 @@ export interface AlbumTemplate {
   description?: string;
   album_type: AlbumType;
   preview_url?: string;
+  thumbnail_url?: string;
   default_width: number;
   default_height: number;
   default_page_count: number;
@@ -352,7 +354,9 @@ export interface SpreadTemplate {
   spread_type: SpreadType;
   layout: SpreadLayout;
   preview_url?: string;
+  thumbnail_url?: string;
   is_default: boolean;
+  elements?: AlbumSpreadElement[];
 }
 
 /**

@@ -15,7 +15,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.auth.dependencies import get_current_user_from_token
+from app.api.dependencies.auth import get_current_user
 from app.db.postgres import get_postgres_pool
 from app.services.geo_search_service import (
     get_geo_search_service,
@@ -27,7 +27,7 @@ from app.services.gemini_client_service import GeminiClientService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1", tags=["geo-search"])
+router = APIRouter(tags=["geo-search"])
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ class GEOSearchRequest(BaseModel):
         min_length=1,
         max_length=500,
         description="Natural language search query",
-        example="outdoor wedding photos with bride smiling at golden hour",
+        examples=["outdoor wedding photos with bride smiling at golden hour"],
     )
     gallery_id: Optional[UUID] = Field(
         None,
@@ -125,7 +125,7 @@ class GEOSearchResponse(BaseModel):
 
 
 @router.post(
-    "/workspaces/{workspace_id}/geo/search",
+    "/search",
     response_model=GEOSearchResponse,
     status_code=status.HTTP_200_OK,
     summary="Search photos using natural language",
@@ -134,7 +134,7 @@ class GEOSearchResponse(BaseModel):
 async def search_photos(
     workspace_id: UUID,
     request: GEOSearchRequest,
-    current_user=Depends(get_current_user_from_token),
+    current_user=Depends(get_current_user),
     geo_service: GEOSearchService = Depends(lambda: get_geo_search_service()),
     gemini_service: GeminiClientService = Depends(
         lambda: GeminiClientService()

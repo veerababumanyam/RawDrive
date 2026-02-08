@@ -44,6 +44,7 @@ class FaceDetectionErrorCode(str, Enum):
     INVALID_IMAGE_FORMAT = "INVALID_IMAGE_FORMAT"
     IMAGE_TOO_SMALL = "IMAGE_TOO_SMALL"
     IMAGE_CORRUPTED = "IMAGE_CORRUPTED"
+    IMAGE_DECODE_FAILED = "IMAGE_DECODE_FAILED"
     DETECTION_FAILED = "DETECTION_FAILED"
     
     # Cluster/group errors - issues with face grouping operations

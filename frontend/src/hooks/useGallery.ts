@@ -206,8 +206,8 @@ export const useGalleryList = ({
         recentOnly,
         signal: abortControllerRef.current.signal,
       });
-      setGalleries(response.data);
-      setMeta(response.meta);
+      setGalleries(Array.isArray(response?.data) ? response.data : []);
+      setMeta(response?.meta && typeof response.meta === 'object' ? response.meta : null);
       setLoading(false);
     } catch (err) {
       // Ignore AbortError - component unmounted or request was cancelled

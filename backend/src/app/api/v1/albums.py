@@ -247,15 +247,13 @@ async def update_album(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete album",
     description="Delete album and all related data.",
-    response_class=Response,
-    response_model=None,
 )
 async def delete_album(
     workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
     album_id: Annotated[UUID, Path(..., description="Album ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-) -> None:
+):
     """Delete album."""
     service = _get_album_service()
 
@@ -453,8 +451,6 @@ async def resolve_album_comment(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete comment",
     description="Soft delete a comment.",
-    response_class=Response,
-    response_model=None,
 )
 async def delete_album_comment(
     workspace_id: Annotated[UUID, Path(..., description="Workspace ID")],
@@ -462,7 +458,7 @@ async def delete_album_comment(
     comment_id: Annotated[UUID, Path(..., description="Comment ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-) -> None:
+):
     """Delete a comment (soft delete)."""
     comment_repo = AlbumCommentRepository()
 

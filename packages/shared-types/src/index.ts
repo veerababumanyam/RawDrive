@@ -725,6 +725,36 @@ export type {
   WorkspaceAnalyticsStats,
 } from './analytics';
 
+// Portfolio Recommendation enums
+export {
+  ABTestStatus,
+  ABTestType,
+  PrimaryMetric,
+  RecommendationType,
+  RecommendationStatus,
+  SceneCategory,
+} from './analytics';
+
+// Portfolio Recommendation interfaces
+export type {
+  ABTest,
+  ABTestVariant,
+  ABTestResults,
+  TopAsset,
+  HeroShotsRequest,
+  SeasonalRequest,
+  ClientType,
+  ClientPreference,
+  ClientPreferenceUpdate,
+  FeedbackType,
+  FeedbackRequest,
+  Feedback,
+  BatchEmbeddingRequest,
+  BatchEmbeddingResponse,
+  RefreshEngagementResponse,
+  Season,
+} from './analytics';
+
 // ---------------------------------------------------------------------------
 // Asset Cleanup Types & Enums
 // ---------------------------------------------------------------------------

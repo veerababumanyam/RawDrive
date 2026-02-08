@@ -1429,7 +1429,7 @@ class DeletionRequestResponse(BaseModel):
 class GeminiModelPublic(BaseModel):
     """Public Gemini model information."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
     model_id: UUID
     identifier: str = Field(..., description="Google's model identifier")
@@ -1552,6 +1552,8 @@ class UpdateGeminiModelRequest(BaseModel):
 class ReorderGeminiModelsRequest(BaseModel):
     """Request to reorder Gemini models."""
 
+    model_config = ConfigDict(protected_namespaces=())
+
     model_ids: list[UUID] = Field(
         ..., description="Model IDs in desired order (first = sort_order 1)"
     )
@@ -1560,6 +1562,8 @@ class ReorderGeminiModelsRequest(BaseModel):
 class ModelDistribution(BaseModel):
     """Model usage distribution for admin stats."""
 
+    model_config = ConfigDict(protected_namespaces=())
+
     model_identifier: str
     display_name: str
     user_count: int
@@ -1567,6 +1571,8 @@ class ModelDistribution(BaseModel):
 
 class GeminiAdminStats(BaseModel):
     """Aggregate Gemini configuration statistics for admin."""
+
+    model_config = ConfigDict(protected_namespaces=())
 
     total_users: int = Field(..., description="Total users in scope")
     users_with_key: int = Field(..., description="Users with configured API key")
@@ -1641,7 +1647,7 @@ class AITagMetadata(BaseModel):
     bounding_box: Optional[dict] = Field(None, description="Bounding box if localized")
     model_version: Optional[str] = Field(None, description="AI model version used")
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", protected_namespaces=())
 
 
 class AITagInput(BaseModel):

@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep
@@ -363,7 +363,7 @@ async def get_agent_api_key(
     )
 
 
-@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent_api_key(
     workspace_id: uuid.UUID,
     key_id: uuid.UUID,

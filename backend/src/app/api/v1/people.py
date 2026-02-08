@@ -9,7 +9,7 @@ import logging
 from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, status
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
@@ -21,6 +21,7 @@ from app.services.people_service import (
     FaceNotFoundError,
     get_people_service,
 )
+from app.services.biometric_consent_service import require_biometric_consent
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,7 @@ async def create_person(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     request: CreatePersonRequest,
+    _: None = Depends(require_biometric_consent),
 ) -> PersonDetailResponse:
     """Create a new person."""
     service = get_people_service()
@@ -233,6 +235,7 @@ async def get_person(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     person_id: Annotated[UUID, Path(..., description="Person ID")],
+    _: None = Depends(require_biometric_consent),
 ) -> PersonDetailResponse:
     """Get person details."""
     service = get_people_service()
@@ -299,6 +302,7 @@ async def delete_person(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     person_id: Annotated[UUID, Path(..., description="Person ID")],
+    _: None = Depends(require_biometric_consent),
 ) -> MessageResponse:
     """Delete a person and unlink all their faces."""
     service = get_people_service()
@@ -327,6 +331,7 @@ async def merge_people(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     request: MergePeopleRequest,
+    _: None = Depends(require_biometric_consent),
 ) -> PersonDetailResponse:
     """Merge two people. Source person's faces move to target, source is deleted."""
     service = get_people_service()
@@ -361,6 +366,7 @@ async def get_person_assets(
     person_id: Annotated[UUID, Path(..., description="Person ID")],
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     limit: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 50,
+    _: None = Depends(require_biometric_consent),
 ) -> PersonAssetsResponse:
     """Get all assets containing a specific person."""
     service = get_people_service()
@@ -399,6 +405,7 @@ async def create_face_detection(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     request: CreateFaceRequest,
+    _: None = Depends(require_biometric_consent),
 ) -> FaceResponse:
     """Create a face detection (manual tagging)."""
     service = get_people_service()

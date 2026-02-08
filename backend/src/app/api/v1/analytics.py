@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from typing import Annotated, Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, status, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
@@ -3315,7 +3315,6 @@ async def update_report(
 @router.delete(
     "/reports/{report_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Delete a report",
     description="""
     Delete a custom report configuration.
@@ -3333,7 +3332,7 @@ async def delete_report(
     report_id: Annotated[UUID, Path(..., description="Report ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-) -> None:
+):
     """Delete a custom report configuration."""
     service = get_analytics_service()
     try:
@@ -3990,7 +3989,6 @@ async def download_export(
 @router.delete(
     "/exports/{export_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Delete an export",
     description="""
     Delete an export and its associated file.
@@ -4007,7 +4005,7 @@ async def delete_export(
     export_id: Annotated[UUID, Path(..., description="Export ID")],
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
-) -> None:
+):
     """Delete an export."""
     service = get_analytics_service()
     try:

@@ -40,6 +40,8 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
     // Use gallery-scoped face groups with gallery-specific stats
     const [groups, setGroups] = useState<FaceGroupWithGalleryStats[]>([]);
     const [loading, setLoading] = useState(false);
+    const [clusterLoading, setClusterLoading] = useState(false);
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [editingName, setEditingName] = useState<string | null>(null);
@@ -58,23 +60,20 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
     const fetchGroups = useCallback(async () => {
         if (!workspace?.workspace_id || !galleryId) return;
 
+        setFetchError(null);
         setLoading(true);
         try {
-            // Use gallery-scoped API to only show people in this gallery
             const result = await faceApiService.getGalleryFaceGroups(
                 workspace.workspace_id,
                 galleryId,
-                {
-                    limit: FACE_GROUPS_LIMIT,
-                }
+                { limit: FACE_GROUPS_LIMIT },
             );
             setGroups(result.groups);
         } catch (error) {
             console.error('Failed to fetch face groups:', error);
-            addToast({
-                message: 'Failed to load people. Please try again.',
-                variant: 'error'
-            });
+            const message = 'Failed to load people. Please try again.';
+            setFetchError(message);
+            addToast({ message, variant: 'error' });
         } finally {
             setLoading(false);
         }
@@ -91,7 +90,7 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
     const handleClusterUngrouped = useCallback(async () => {
         if (!workspace?.workspace_id) return;
 
-        setLoading(true);
+        setClusterLoading(true);
         try {
             const result = await faceApiService.clusterUngroupedFaces(workspace.workspace_id);
 
@@ -100,22 +99,21 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                     message: `Grouped ${result.assigned_to_existing_groups + result.new_groups_created} faces into ${result.new_groups_created} new groups`,
                     variant: 'success',
                 });
-                // Refresh the groups list
                 await fetchGroups();
             } else {
                 addToast({
-                    message: 'No ungrouped faces found to cluster',
+                    message: 'No ungrouped faces found to cluster. Upload photos with faces first.',
                     variant: 'info',
                 });
             }
         } catch (error) {
             console.error('Failed to cluster ungrouped faces:', error);
-            addToast({
-                message: 'Failed to group faces. Please try again.',
-                variant: 'error',
-            });
+            const msg = error && typeof (error as { status?: number }).status === 'number'
+                ? `Failed to group faces (${(error as { status: number }).status}). Please try again.`
+                : 'Failed to group faces. Please try again.';
+            addToast({ message: msg, variant: 'error' });
         } finally {
-            setLoading(false);
+            setClusterLoading(false);
         }
     }, [workspace?.workspace_id, addToast, fetchGroups]);
 
@@ -392,6 +390,16 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                             <Loader2 className="w-8 h-8 animate-spin mb-4" />
                             <p>Loading people...</p>
                         </div>
+                    ) : fetchError ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-text-secondary">
+                            <UserCircle className="w-16 h-16 mb-4 text-error/70" />
+                            <p className="text-center mb-2 font-medium text-text-primary">Could not load people</p>
+                            <p className="text-sm text-center opacity-75 mb-4">{fetchError}</p>
+                            <AppButton variant="primary" size="sm" onClick={fetchGroups} disabled={loading}>
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                                Retry
+                            </AppButton>
+                        </div>
                     ) : filteredGroups.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-text-secondary">
                             <UserCircle className="w-16 h-16 mb-4 opacity-50" />
@@ -404,9 +412,14 @@ export const PeoplePanel: React.FC<PeoplePanelProps> = ({
                                 variant="primary"
                                 size="sm"
                                 onClick={handleClusterUngrouped}
-                                disabled={loading}
+                                disabled={loading || clusterLoading}
+                                aria-busy={clusterLoading}
                             >
-                                <RefreshCw className="w-4 h-4 mr-2" />
+                                {clusterLoading ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                    <RefreshCw className="w-4 h-4 mr-2" />
+                                )}
                                 Group Detected Faces
                             </AppButton>
                         </div>

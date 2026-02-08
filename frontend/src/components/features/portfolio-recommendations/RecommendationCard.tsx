@@ -23,6 +23,9 @@ import {
   Check,
   X,
   Clock,
+  Share,
+  Briefcase,
+  BookOpen,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppButton } from '../../ui/AppButton';
@@ -55,7 +58,7 @@ interface RecommendationCardProps {
    ============================================================================= */
 
 const getTypeConfig = (type: RecommendationType) => {
-  const configs: Record<RecommendationType, { label: string; icon: React.ReactNode; color: string }> = {
+  const configs: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
     hero_shots: {
       label: 'Hero Shots',
       icon: <Star size={14} />,
@@ -71,32 +74,47 @@ const getTypeConfig = (type: RecommendationType) => {
       icon: <Users size={14} />,
       color: 'text-blue-500 bg-blue-500/10',
     },
-    seasonal: {
+    seasonal_picks: {
       label: 'Seasonal',
       icon: <Calendar size={14} />,
       color: 'text-emerald-500 bg-emerald-500/10',
     },
-    trending: {
+    trending_shots: {
       label: 'Trending',
       icon: <Star size={14} />,
       color: 'text-rose-500 bg-rose-500/10',
     },
-    client_preferred: {
-      label: 'Client Preferred',
-      icon: <Heart size={14} />,
+    quick_delivery: {
+      label: 'Quick Delivery',
+      icon: <Clock size={14} />,
+      color: 'text-cyan-500 bg-cyan-500/10',
+    },
+    social_media: {
+      label: 'Social Media',
+      icon: <Share size={14} />,
       color: 'text-pink-500 bg-pink-500/10',
     },
-    high_engagement: {
-      label: 'High Engagement',
-      icon: <Eye size={14} />,
-      color: 'text-cyan-500 bg-cyan-500/10',
+    portfolio_selection: {
+      label: 'Portfolio',
+      icon: <Briefcase size={14} />,
+      color: 'text-indigo-500 bg-indigo-500/10',
+    },
+    print_worthy: {
+      label: 'Print Worthy',
+      icon: <Image size={14} />,
+      color: 'text-orange-500 bg-orange-500/10',
+    },
+    album_cover: {
+      label: 'Album Cover',
+      icon: <BookOpen size={14} />,
+      color: 'text-violet-500 bg-violet-500/10',
     },
   };
   return configs[type] || configs.hero_shots;
 };
 
 const getStatusConfig = (status: RecommendationStatus) => {
-  const configs: Record<RecommendationStatus, { label: string; icon: React.ReactNode; color: string }> = {
+  const configs: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
     pending: {
       label: 'Pending',
       icon: <Clock size={14} />,
@@ -121,8 +139,8 @@ const getStatusConfig = (status: RecommendationStatus) => {
   return configs[status] || configs.pending;
 };
 
-const getSceneCategoryLabel = (category: SceneCategory): string => {
-  const labels: Record<SceneCategory, string> = {
+const getSceneCategoryLabel = (category: string): string => {
+  const labels: Record<string, string> = {
     ceremony: 'Ceremony',
     reception: 'Reception',
     portrait: 'Portrait',
@@ -134,6 +152,15 @@ const getSceneCategoryLabel = (category: SceneCategory): string => {
     family: 'Family',
     food: 'Food',
     venue: 'Venue',
+    wedding: 'Wedding',
+    event: 'Event',
+    product: 'Product',
+    lifestyle: 'Lifestyle',
+    corporate: 'Corporate',
+    nature: 'Nature',
+    architecture: 'Architecture',
+    fashion: 'Fashion',
+    sports: 'Sports',
     other: 'Other',
   };
   return labels[category] || 'Other';
@@ -190,7 +217,7 @@ const RecommendationItemCard: React.FC<{
 
       {/* Score badge */}
       <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-white text-xs font-medium">
-        {formatConfidence(item.score)}
+        {formatConfidence(item.final_score / 100)}
       </div>
 
       {/* Hover overlay */}
@@ -223,7 +250,7 @@ const FeedbackButtons: React.FC<{
   const handleFeedback = useCallback(
     (rating: 'positive' | 'negative') => {
       submitFeedback(
-        { rating, source: 'card_action' },
+        { feedback_type: 'rating', rating: rating === 'positive' ? 5 : 1 },
         { onSuccess }
       );
     },
@@ -318,18 +345,18 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-text-tertiary">
-              {formatDate(recommendation.created_at)} • {items.length} photos
+              {formatDate(recommendation.requested_at)} • {items.length} photos
             </p>
-            {recommendation.context?.target_purpose && (
+            {recommendation.target_theme && (
               <p className="text-xs text-text-tertiary mt-1">
-                Purpose: {recommendation.context.target_purpose}
+                Theme: {recommendation.target_theme}
               </p>
             )}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-tertiary">
-              Confidence: <span className="font-medium text-text-primary">
-                {formatConfidence(recommendation.confidence_score)}
+              Quality: <span className="font-medium text-text-primary">
+                {recommendation.avg_quality_score ? Math.round(recommendation.avg_quality_score) : 'N/A'}
               </span>
             </span>
           </div>

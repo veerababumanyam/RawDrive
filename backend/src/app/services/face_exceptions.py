@@ -61,6 +61,8 @@ def get_default_user_message(code: FaceDetectionErrorCode) -> str:
             "This image is too small for face detection. Please use a larger image (minimum 100x100 pixels).",
         FaceDetectionErrorCode.IMAGE_CORRUPTED: 
             "This image appears to be corrupted. Please try uploading it again or use a different image.",
+        FaceDetectionErrorCode.IMAGE_DECODE_FAILED:
+            "Could not read the image. Please try a different format.",
         FaceDetectionErrorCode.DETECTION_FAILED: 
             "Unable to detect faces in this image. Please try with a clearer photo.",
 
@@ -129,6 +131,7 @@ def get_default_http_status(code: FaceDetectionErrorCode) -> int:
         FaceDetectionErrorCode.INVALID_IMAGE_FORMAT: 400,
         FaceDetectionErrorCode.IMAGE_TOO_SMALL: 400,
         FaceDetectionErrorCode.IMAGE_CORRUPTED: 400,
+        FaceDetectionErrorCode.IMAGE_DECODE_FAILED: 400,
         FaceDetectionErrorCode.INVALID_MERGE_OPERATION: 400,
         FaceDetectionErrorCode.INVALID_SPLIT_OPERATION: 400,
         FaceDetectionErrorCode.EMBEDDING_DIMENSION_MISMATCH: 400,
@@ -182,7 +185,7 @@ class FaceDetectionError(Exception):
 
     def __init__(
         self,
-        code: FaceDetectionErrorCode,
+        code: FaceDetectionErrorCode | str,
         message: str,
         *,
         user_message: Optional[str] = None,
@@ -203,7 +206,12 @@ class FaceDetectionError(Exception):
             cause: Original exception that caused this error
         """
         super().__init__(message)
-        
+        # Normalize string code to enum when it matches a known value
+        if isinstance(code, str):
+            try:
+                code = FaceDetectionErrorCode(code)
+            except ValueError:
+                pass
         self.code = code
         self.message = message
         self.user_message = user_message or get_default_user_message(code)
@@ -224,10 +232,11 @@ class FaceDetectionError(Exception):
         Returns:
             Dictionary suitable for JSON serialization in API response
         """
+        code_val = getattr(self.code, "value", self.code)
         response: dict[str, Any] = {
             "success": False,
             "error": {
-                "code": self.code.value,
+                "code": code_val,
                 "message": self.user_message,
             },
         }
@@ -239,16 +248,18 @@ class FaceDetectionError(Exception):
 
     def __str__(self) -> str:
         """String representation for logging."""
-        parts = [f"[{self.code.value}] {self.message}"]
+        code_val = getattr(self.code, "value", self.code)
+        parts = [f"[{code_val}] {self.message}"]
         if self.correlation_id:
             parts.append(f"(correlation_id={self.correlation_id})")
         return " ".join(parts)
 
     def __repr__(self) -> str:
         """Detailed representation for debugging."""
+        code_val = getattr(self.code, "value", self.code)
         return (
             f"FaceDetectionError("
-            f"code={self.code.value!r}, "
+            f"code={code_val!r}, "
             f"message={self.message!r}, "
             f"http_status={self.http_status}, "
             f"correlation_id={self.correlation_id!r})"

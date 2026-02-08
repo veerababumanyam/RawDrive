@@ -85,8 +85,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_asset_embeddings_cache_asset
-        ON asset_embeddings_cache(asset_id)
-        WHERE cached_at + INTERVAL '1 second' * ttl_seconds > NOW();
+        ON asset_embeddings_cache(asset_id);
         """
     )
 
@@ -94,8 +93,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_asset_embeddings_cache_workspace
-        ON asset_embeddings_cache(workspace_id)
-        WHERE cached_at + INTERVAL '1 second' * ttl_seconds > NOW();
+        ON asset_embeddings_cache(workspace_id);
         """
     )
 
@@ -103,17 +101,15 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_asset_embeddings_cache_hash
-        ON asset_embeddings_cache(image_hash)
-        WHERE cached_at + INTERVAL '1 second' * ttl_seconds > NOW();
+        ON asset_embeddings_cache(image_hash);
         """
     )
 
-    # Index for TTL-based cleanup (partial index for expired entries)
+    # Index for TTL-based cleanup
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_asset_embeddings_cache_expired
-        ON asset_embeddings_cache(cached_at + INTERVAL '1 second' * ttl_seconds)
-        WHERE cached_at + INTERVAL '1 second' * ttl_seconds < NOW();
+        ON asset_embeddings_cache(cached_at, ttl_seconds);
         """
     )
 
@@ -216,8 +212,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_face_group_centroids_cache_group
-        ON face_group_centroids_cache(face_group_id)
-        WHERE calculated_at + INTERVAL '1 second' * ttl_seconds > NOW();
+        ON face_group_centroids_cache(face_group_id);
         """
     )
 
@@ -225,8 +220,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_face_group_centroids_cache_workspace
-        ON face_group_centroids_cache(workspace_id)
-        WHERE calculated_at + INTERVAL '1 second' * ttl_seconds > NOW();
+        ON face_group_centroids_cache(workspace_id);
         """
     )
 
@@ -234,8 +228,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_face_group_centroids_cache_expired
-        ON face_group_centroids_cache(calculated_at + INTERVAL '1 second' * ttl_seconds)
-        WHERE calculated_at + INTERVAL '1 second' * ttl_seconds < NOW();
+        ON face_group_centroids_cache(calculated_at, ttl_seconds);
         """
     )
 
@@ -243,10 +236,10 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_face_group_centroids_cache_quality
-        ON face_group_centroids_cache(workspace_id, quality_score DESC NULLS LAST, face_count DESC)
-        WHERE calculated_at + INTERVAL '1 second' * ttl_seconds > NOW();
+        ON face_group_centroids_cache(workspace_id, quality_score DESC NULLS LAST, face_count DESC);
         """
     )
+
 
     # Column comments
     op.execute(
@@ -358,36 +351,31 @@ def upgrade() -> None:
             table_name TEXT,
             entries_deleted BIGINT
         ) AS $$
+        DECLARE
+            v_deleted_assets BIGINT;
+            v_deleted_centroids BIGINT;
         BEGIN
-            RETURN QUERY
-
             -- Clean up expired asset embeddings
-            WITH deleted_assets AS (
-                DELETE FROM asset_embeddings_cache
-                WHERE
-                    (p_workspace_id IS NULL OR workspace_id = p_workspace_id)
-                    AND cached_at + INTERVAL '1 second' * ttl_seconds < NOW()
-                RETURNING 1
-            )
-            SELECT
-                'asset_embeddings_cache'::TEXT,
-                COUNT(*)::BIGINT
-            FROM deleted_assets
+            DELETE FROM asset_embeddings_cache
+            WHERE
+                (p_workspace_id IS NULL OR workspace_id = p_workspace_id)
+                AND cached_at + INTERVAL '1 second' * ttl_seconds < NOW();
+            GET DIAGNOSTICS v_deleted_assets = ROW_COUNT;
 
-            UNION ALL
+            table_name := 'asset_embeddings_cache';
+            entries_deleted := v_deleted_assets;
+            RETURN NEXT;
 
             -- Clean up expired face group centroids
-            WITH deleted_centroids AS (
-                DELETE FROM face_group_centroids_cache
-                WHERE
-                    (p_workspace_id IS NULL OR workspace_id = p_workspace_id)
-                    AND calculated_at + INTERVAL '1 second' * ttl_seconds < NOW()
-                RETURNING 1
-            )
-            SELECT
-                'face_group_centroids_cache'::TEXT,
-                COUNT(*)::BIGINT
-            FROM deleted_centroids;
+            DELETE FROM face_group_centroids_cache
+            WHERE
+                (p_workspace_id IS NULL OR workspace_id = p_workspace_id)
+                AND calculated_at + INTERVAL '1 second' * ttl_seconds < NOW();
+            GET DIAGNOSTICS v_deleted_centroids = ROW_COUNT;
+
+            table_name := 'face_group_centroids_cache';
+            entries_deleted := v_deleted_centroids;
+            RETURN NEXT;
         END;
         $$ LANGUAGE plpgsql;
         """

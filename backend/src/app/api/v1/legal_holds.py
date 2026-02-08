@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
@@ -1031,7 +1031,6 @@ async def add_resource_to_hold(
 @router.delete(
     "/{hold_id}/resources",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Remove resource from hold",
     description="Remove a resource from a legal hold.",
     responses={
@@ -1046,7 +1045,7 @@ async def remove_resource_from_hold(
     current_user: CurrentUserDep,
     legal_hold_service: LegalHoldServiceDep,
     request_data: RemoveResourceRequest,
-) -> None:
+):
     """Remove a resource from a legal hold."""
     try:
         removed = await legal_hold_service.remove_resource_from_hold(

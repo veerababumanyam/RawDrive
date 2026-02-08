@@ -4,6 +4,10 @@
  */
 
 import apiClient from './api';
+import { ABTestStatus, SceneCategory, RecommendationStatus } from '@rawdrive/shared-types';
+
+// Re-export types for convenience
+export { ABTestStatus, SceneCategory, RecommendationStatus } from '@rawdrive/shared-types';
 
 // ---------------------------------------------------------------------------
 // Types - Recommendations
@@ -21,28 +25,7 @@ export type RecommendationType =
   | 'social_media'
   | 'album_cover';
 
-export type RecommendationStatus =
-  | 'pending'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'expired';
-
-export type SceneCategory =
-  | 'wedding'
-  | 'portrait'
-  | 'landscape'
-  | 'event'
-  | 'product'
-  | 'lifestyle'
-  | 'corporate'
-  | 'family'
-  | 'nature'
-  | 'architecture'
-  | 'food'
-  | 'fashion'
-  | 'sports'
-  | 'other';
+// RecommendationStatus is now imported from @rawdrive/shared-types
 
 export type ClientType =
   | 'wedding_client'
@@ -73,6 +56,7 @@ export interface RecommendationItem {
   asset_id: string;
   rank_position: number;
   final_score: number;
+  score?: number; // Alias for final_score
   similarity_score?: number;
   engagement_score?: number;
   quality_score?: number;
@@ -80,6 +64,7 @@ export interface RecommendationItem {
   scene_category?: string;
   visual_tags: string[];
   match_reasons: MatchReason[];
+  reason?: string; // Primary reason
   score_breakdown?: ScoreBreakdown;
   asset_url?: string;
   thumbnail_url?: string;
@@ -157,8 +142,10 @@ export interface HeroShotsRequest {
   diversity_factor?: number;
 }
 
+export type Season = 'spring' | 'summer' | 'fall' | 'winter';
+
 export interface SeasonalRequest {
-  target_season: 'spring' | 'summer' | 'fall' | 'winter';
+  target_season: Season;
   gallery_ids?: string[];
   limit?: number;
   occasion_type?: string;
@@ -206,8 +193,6 @@ export interface LearnPreferencesRequest {
 // Types - A/B Testing
 // ---------------------------------------------------------------------------
 
-export type ABTestStatus = 'draft' | 'active' | 'paused' | 'concluded' | 'archived';
-
 export type ABTestType =
   | 'algorithm'
   | 'scoring_weights'
@@ -225,15 +210,23 @@ export type PrimaryMetric =
   | 'engagement_rate';
 
 export interface ABTestVariant {
+  variant_id: string;
   name: string;
+  description?: string;
   config: Record<string, unknown>;
   weight: number;
+  is_control?: boolean;
+  impressions?: number;
+  clicks?: number;
+  conversions?: number;
 }
 
 export interface ABTest {
   test_id: string;
   workspace_id: string;
-  test_name: string;
+  name: string;
+  description?: string;
+  test_name?: string;
   test_description?: string;
   hypothesis?: string;
   test_type: ABTestType;
@@ -241,12 +234,17 @@ export interface ABTest {
   target_recommendation_types: string[];
   traffic_percentage: number;
   start_date: string;
+  started_at?: string;
   end_date?: string;
+  concluded_at?: string;
   primary_metric: PrimaryMetric;
-  current_results: Record<string, unknown>;
+  current_results?: Record<string, unknown>;
   winner_variant?: string;
-  statistical_significance_reached: boolean;
+  winner_variant_id?: string;
+  statistical_significance_reached?: boolean;
   created_at: string;
+  created_by?: string;
+  variants?: ABTestVariant[];
 }
 
 export interface CreateABTestRequest {
@@ -285,7 +283,12 @@ export interface ABTestResults {
     p_value: number;
     is_significant: boolean;
   }>;
-  total_samples: number;
+  total_samples?: number;
+  total_impressions?: number;
+  total_clicks?: number;
+  p_value?: number;
+  is_significant?: boolean;
+  recommended_winner?: string;
   min_sample_size: number;
 }
 
@@ -332,9 +335,12 @@ export interface TopAsset {
   gallery_id?: string;
   engagement_score: number;
   total_views: number;
+  view_count?: number;
   total_favorites: number;
+  favorite_count?: number;
   total_selections: number;
   total_downloads: number;
+  download_count?: number;
   conversion_rate: number;
   scene_category?: string;
   aesthetic_score?: number;
@@ -389,7 +395,7 @@ export const portfolioRecommendationService = {
       buildPath(workspaceId, 'generate'),
       request
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -403,7 +409,7 @@ export const portfolioRecommendationService = {
       buildPath(workspaceId, 'similar'),
       request
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -430,7 +436,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.post<Recommendation>(
       `${buildPath(workspaceId, 'personalized', clientId)}?${params}`
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -441,17 +447,17 @@ export const portfolioRecommendationService = {
     options?: HeroShotsRequest
   ): Promise<Recommendation> {
     const params = new URLSearchParams();
-    if (options?.galleryIds) {
-      options.galleryIds.forEach((id) => params.append('gallery_ids', id));
+    if (options?.gallery_ids) {
+      options.gallery_ids.forEach((id: string) => params.append('gallery_ids', id));
     }
     if (options?.limit) params.append('limit', String(options.limit));
-    if (options?.minQualityScore) params.append('min_quality_score', String(options.minQualityScore));
-    if (options?.diversityFactor) params.append('diversity_factor', String(options.diversityFactor));
+    if (options?.min_quality_score) params.append('min_quality_score', String(options.min_quality_score));
+    if (options?.diversity_factor) params.append('diversity_factor', String(options.diversity_factor));
 
     const response = await apiClient.post<Recommendation>(
       `${buildPath(workspaceId, 'hero-shots')}?${params}`
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -464,16 +470,16 @@ export const portfolioRecommendationService = {
     const params = new URLSearchParams({
       target_season: request.target_season,
     });
-    if (request.galleryIds) {
-      request.galleryIds.forEach((id) => params.append('gallery_ids', id));
+    if (request.gallery_ids) {
+      request.gallery_ids.forEach((id: string) => params.append('gallery_ids', id));
     }
     if (request.limit) params.append('limit', String(request.limit));
-    if (request.occasionType) params.append('occasion_type', request.occasionType);
+    if (request.occasion_type) params.append('occasion_type', request.occasion_type);
 
     const response = await apiClient.post<Recommendation>(
       `${buildPath(workspaceId, 'seasonal')}?${params}`
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -498,7 +504,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.get<Recommendation>(
       `${buildPath(workspaceId, recommendationId)}?${params}`
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -526,7 +532,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.get<RecommendationSummary[]>(
       `${buildPath(workspaceId)}?${params}`
     );
-    return response.data;
+    return response.data!;
   },
 
   // ---------------------------------------------------------------------------
@@ -543,7 +549,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.get<ClientPreference | null>(
       buildPath(workspaceId, 'clients', clientId, 'preferences')
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -558,7 +564,7 @@ export const portfolioRecommendationService = {
       buildPath(workspaceId, 'clients', clientId, 'preferences'),
       preferences
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -573,7 +579,7 @@ export const portfolioRecommendationService = {
       buildPath(workspaceId, 'clients', clientId, 'learn'),
       request
     );
-    return response.data;
+    return response.data!;
   },
 
   // ---------------------------------------------------------------------------
@@ -591,7 +597,7 @@ export const portfolioRecommendationService = {
       buildPath(workspaceId, 'ab-tests'),
       request
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -613,7 +619,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.get<ABTest[]>(
       `${buildPath(workspaceId, 'ab-tests')}?${params}`
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -626,7 +632,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.get<ABTest>(
       buildPath(workspaceId, 'ab-tests', testId)
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -639,7 +645,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.post<ABTest>(
       buildPath(workspaceId, 'ab-tests', testId, 'start')
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -654,7 +660,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.post<ABTest>(
       `${buildPath(workspaceId, 'ab-tests', testId, 'conclude')}${params}`
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -667,7 +673,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.get<ABTestResults>(
       buildPath(workspaceId, 'ab-tests', testId, 'results')
     );
-    return response.data;
+    return response.data!;
   },
 
   // ---------------------------------------------------------------------------
@@ -686,7 +692,7 @@ export const portfolioRecommendationService = {
       buildPath(workspaceId, recommendationId, 'feedback'),
       feedback
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -728,7 +734,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.get<TopAsset[]>(
       `${buildPath(workspaceId, 'top-assets')}?${params}`
     );
-    return response.data;
+    return response.data!;
   },
 
   // ---------------------------------------------------------------------------
@@ -746,7 +752,7 @@ export const portfolioRecommendationService = {
       buildPath(workspaceId, 'embeddings', 'batch'),
       request
     );
-    return response.data;
+    return response.data!;
   },
 
   /**
@@ -758,7 +764,7 @@ export const portfolioRecommendationService = {
     const response = await apiClient.post<RefreshEngagementResponse>(
       buildPath(workspaceId, 'engagement', 'refresh')
     );
-    return response.data;
+    return response.data!;
   },
 };
 

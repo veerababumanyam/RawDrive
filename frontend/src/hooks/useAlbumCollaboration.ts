@@ -223,7 +223,8 @@ export function useAlbumCollaboration({
       case 'album:session_joined': {
         const assignedColor = message.your_color as string;
         setMyColor(assignedColor);
-        setCollaborators(message.session?.participants as AlbumCollaboratorPresence[] || []);
+        const sessionData = message.session as { participants?: AlbumCollaboratorPresence[] } | undefined;
+        setCollaborators(sessionData?.participants || []);
         break;
       }
 

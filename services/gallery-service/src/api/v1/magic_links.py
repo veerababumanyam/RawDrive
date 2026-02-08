@@ -4,7 +4,7 @@ Magic Link API Endpoints.
 Authenticated endpoints for managing magic links.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from typing import Optional
 from datetime import datetime
 
@@ -16,6 +16,13 @@ from src.services.magic_link_service import (
 from src.schemas.magic_link import (
     MagicLinkResponse,
     MagicLinkCreateRequest,
+)
+from src.api.v1.errors import (
+    raise_http_exception,
+    ErrorCode,
+    ErrorMessage,
+    get_request_id,
+    exception_to_error_response,
 )
 from src.log_config import get_logger
 from src.observability.metrics import get_metrics
@@ -52,6 +59,7 @@ async def get_user_id(
 
 @router.post("", response_model=MagicLinkResponse)
 async def create_magic_link(
+    request: Request,
     data: MagicLinkCreateRequest,
     workspace_id: str = Depends(get_workspace_id),
     user_id: str = Depends(get_user_id),
@@ -65,12 +73,21 @@ async def create_magic_link(
     - Expiration date
     - View limit
     """
+    request_id = get_request_id(request)
     magic_link_service = get_magic_link_service()
 
     try:
         expires_at = None
         if data.expires_at:
-            expires_at = datetime.fromisoformat(data.expires_at.replace("Z", "+00:00"))
+            try:
+                expires_at = datetime.fromisoformat(data.expires_at.replace("Z", "+00:00"))
+            except ValueError:
+                raise_http_exception(
+                    ErrorCode.INVALID_FORMAT,
+                    ErrorMessage.INVALID_FORMAT,
+                    details={"field": "expires_at", "value": data.expires_at},
+                    request_id=request_id
+                )
 
         result = await magic_link_service.create_magic_link(
             workspace_id=workspace_id,
@@ -83,4 +100,9 @@ async def create_magic_link(
         )
         return result
     except MagicLinkError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=getattr(e, 'status', 500),
+            content=error_response.model_dump()
+        )

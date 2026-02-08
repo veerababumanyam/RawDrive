@@ -7,7 +7,7 @@ Provides 3 specialized agents for gallery operations:
 3. Batch Processor - Bulk operations
 """
 
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, Header, Depends, Request
 from typing import Dict, Any
 from uuid import UUID
 
@@ -25,6 +25,12 @@ from src.schemas.agents import (
     A2ANextAction,
 )
 from src.middleware.auth import get_current_user
+from src.api.v1.errors import (
+    raise_http_exception,
+    ErrorCode,
+    ErrorMessage,
+    get_request_id,
+)
 from src.log_config import get_logger
 from src.observability.metrics import get_metrics
 
@@ -73,6 +79,7 @@ def create_error_response(
 
 @router.post("/gallery-manager/run", response_model=A2ARunResponse)
 async def gallery_manager_agent(
+    req: Request,
     request: A2ARunRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
@@ -105,6 +112,7 @@ async def gallery_manager_agent(
     }
     ```
     """
+    request_id = get_request_id(req)
     action = request.task.action
     params = request.task.params
     context = request.context
@@ -112,14 +120,16 @@ async def gallery_manager_agent(
 
     # SECURITY: Validate JWT claims match request context
     if context.user_id != current_user.get("user_id"):
-        raise HTTPException(
-            status_code=403,
-            detail="User ID in context does not match authenticated user"
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "User ID in context does not match authenticated user",
+            request_id=request_id
         )
     if context.workspace_id != current_user.get("workspace_id"):
-        raise HTTPException(
-            status_code=403,
-            detail="Workspace ID in context does not match authenticated workspace"
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "Workspace ID in context does not match authenticated workspace",
+            request_id=request_id
         )
 
     try:
@@ -268,6 +278,7 @@ async def gallery_manager_agent(
 
 @router.post("/proofing-assistant/run", response_model=A2ARunResponse)
 async def proofing_assistant_agent(
+    req: Request,
     request: A2ARunRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
@@ -294,6 +305,7 @@ async def proofing_assistant_agent(
     }
     ```
     """
+    request_id = get_request_id(req)
     action = request.task.action
     params = request.task.params
     context = request.context
@@ -301,14 +313,16 @@ async def proofing_assistant_agent(
 
     # SECURITY: Validate JWT claims match request context
     if context.user_id != current_user.get("user_id"):
-        raise HTTPException(
-            status_code=403,
-            detail="User ID in context does not match authenticated user"
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "User ID in context does not match authenticated user",
+            request_id=request_id
         )
     if context.workspace_id != current_user.get("workspace_id"):
-        raise HTTPException(
-            status_code=403,
-            detail="Workspace ID in context does not match authenticated workspace"
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "Workspace ID in context does not match authenticated workspace",
+            request_id=request_id
         )
 
     try:
@@ -424,6 +438,7 @@ async def proofing_assistant_agent(
 
 @router.post("/batch-processor/run", response_model=A2ARunResponse)
 async def batch_processor_agent(
+    req: Request,
     request: A2ARunRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
@@ -455,6 +470,7 @@ async def batch_processor_agent(
     }
     ```
     """
+    request_id = get_request_id(req)
     action = request.task.action
     params = request.task.params
     context = request.context
@@ -462,14 +478,16 @@ async def batch_processor_agent(
 
     # SECURITY: Validate JWT claims match request context
     if context.user_id != current_user.get("user_id"):
-        raise HTTPException(
-            status_code=403,
-            detail="User ID in context does not match authenticated user"
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "User ID in context does not match authenticated user",
+            request_id=request_id
         )
     if context.workspace_id != current_user.get("workspace_id"):
-        raise HTTPException(
-            status_code=403,
-            detail="Workspace ID in context does not match authenticated workspace"
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "Workspace ID in context does not match authenticated workspace",
+            request_id=request_id
         )
 
     try:

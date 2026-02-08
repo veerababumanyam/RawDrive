@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from typing import Optional, Any
 from uuid import UUID
 
+from fastapi import Depends
+from app.api.dependencies.auth import get_workspace_id
 from app.db.postgres import get_postgres_pool
 from app.db.redis import get_redis_client
 from app.models.workspace_biometric_settings import (
@@ -192,8 +194,14 @@ class BiometricConsentService:
 
         settings = await self.get_settings(workspace_id)
 
-        # Cache the result
-        await self._cache_consent(workspace_id, settings)
+        # Cache the result (non-blocking: do not fail consent check if Redis is down)
+        try:
+            await self._cache_consent(workspace_id, settings)
+        except Exception as e:
+            logger.warning(
+                "Failed to cache consent after DB read; using DB result",
+                extra={"workspace_id": str(workspace_id), "error": str(e)},
+            )
 
         return (
             settings.face_detection_enabled
@@ -682,7 +690,17 @@ class BiometricConsentService:
             return row["id"]
 
     def _map_settings(self, row) -> WorkspaceBiometricSettings:
-        """Map database row to WorkspaceBiometricSettings model."""
+        """Map database row to WorkspaceBiometricSettings model.
+
+        Converts INET columns (consent_ip_address, withdrawal_ip_address) to str
+        since asyncpg returns IPv4Address/IPv6Address and the model expects str.
+        """
+        consent_ip = row["consent_ip_address"]
+        withdrawal_ip = row["withdrawal_ip_address"]
+        if consent_ip is not None and not isinstance(consent_ip, str):
+            consent_ip = str(consent_ip)
+        if withdrawal_ip is not None and not isinstance(withdrawal_ip, str):
+            withdrawal_ip = str(withdrawal_ip)
         return WorkspaceBiometricSettings(
             id=row["id"],
             workspace_id=row["workspace_id"],
@@ -690,12 +708,12 @@ class BiometricConsentService:
             consent_status=BiometricConsentStatus(row["consent_status"]),
             consented_by=row["consented_by"],
             consented_at=row["consented_at"],
-            consent_ip_address=row["consent_ip_address"],
+            consent_ip_address=consent_ip,
             consent_user_agent=row["consent_user_agent"],
             consent_policy_version=row["consent_policy_version"],
             withdrawn_by=row["withdrawn_by"],
             withdrawn_at=row["withdrawn_at"],
-            withdrawal_ip_address=row["withdrawal_ip_address"],
+            withdrawal_ip_address=withdrawal_ip,
             withdrawal_reason=row["withdrawal_reason"],
             public_face_search_enabled=row["public_face_search_enabled"],
             auto_clustering_enabled=row["auto_clustering_enabled"],
@@ -723,8 +741,8 @@ def get_biometric_consent_service() -> BiometricConsentService:
 
 
 async def require_biometric_consent(
-    workspace_id: UUID,
-    service: BiometricConsentService = None,
+    workspace_id: UUID = Depends(get_workspace_id),
+    service: BiometricConsentService = Depends(get_biometric_consent_service),
 ) -> None:
     """FastAPI dependency to require biometric consent.
 
@@ -752,8 +770,8 @@ async def require_biometric_consent(
 
 
 async def require_public_face_search_enabled(
-    workspace_id: UUID,
-    service: BiometricConsentService = None,
+    workspace_id: UUID = Depends(get_workspace_id),
+    service: BiometricConsentService = Depends(get_biometric_consent_service),
 ) -> None:
     """FastAPI dependency to require public face search.
 

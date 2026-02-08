@@ -321,7 +321,6 @@ async def update_model(
 @router.delete(
     "/{model_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Delete Gemini model",
     description="Delete a model from the catalogue. Requires admin role. "
     "Users with this model selected will be migrated to the default model.",
@@ -363,8 +362,6 @@ async def delete_model(
             code=e.code,
             status_code=e.status,
         )
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 
 
 

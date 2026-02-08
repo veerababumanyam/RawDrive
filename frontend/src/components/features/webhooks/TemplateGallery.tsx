@@ -35,12 +35,12 @@ import {
   useWebhookTemplates,
   useFeaturedTemplates,
   useTemplateCategories,
-} from '../../../hooks/useWebhookTemplates';
+} from '@/hooks/useWebhookTemplates';
 import type {
   WebhookTemplateSummary,
   TemplateCategory,
   IntegrationType,
-} from '../../../types/webhooks';
+} from '@/types/webhooks';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -317,7 +317,7 @@ function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
         ) : (
           <AppButton
             key={p}
-            variant={page === p ? 'default' : 'ghost'}
+            variant={page === p ? undefined : 'ghost'}
             size="sm"
             onClick={() => onPageChange(p)}
             className="min-w-[36px]"

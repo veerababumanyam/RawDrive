@@ -487,8 +487,8 @@ export function useWebhookDashboard(subscriptionId?: string): UseWebhookDashboar
           total_deliveries: stats.total_deliveries || 0,
           successful_deliveries: stats.successful_deliveries || 0,
           failed_deliveries: stats.failed_deliveries || 0,
-          retried_deliveries: stats.retried_deliveries || 0,
-          exhausted_deliveries: stats.exhausted_deliveries || 0,
+          retried_deliveries: stats.deliveries_by_status?.retrying || 0,
+          exhausted_deliveries: stats.deliveries_by_status?.exhausted || 0,
           success_rate: stats.success_rate || 0,
           avg_response_time_ms: stats.avg_response_time_ms || 0,
           p95_response_time_ms: stats.p95_response_time_ms || 0,
@@ -520,11 +520,13 @@ export function useWebhookDashboard(subscriptionId?: string): UseWebhookDashboar
 
         // Set status breakdown
         const total = stats.total_deliveries || 1;
+        const retrying = stats.deliveries_by_status?.retrying || 0;
+        const exhausted = stats.deliveries_by_status?.exhausted || 0;
         setStatusBreakdown([
           { status: 'delivered', count: stats.successful_deliveries || 0, percentage: ((stats.successful_deliveries || 0) / total) * 100 },
           { status: 'failed', count: stats.failed_deliveries || 0, percentage: ((stats.failed_deliveries || 0) / total) * 100 },
-          { status: 'retrying', count: stats.retried_deliveries || 0, percentage: ((stats.retried_deliveries || 0) / total) * 100 },
-          { status: 'exhausted', count: stats.exhausted_deliveries || 0, percentage: ((stats.exhausted_deliveries || 0) / total) * 100 },
+          { status: 'retrying', count: retrying, percentage: (retrying / total) * 100 },
+          { status: 'exhausted', count: exhausted, percentage: (exhausted / total) * 100 },
         ].filter(s => s.count > 0));
       } else {
         // Fetch platform-wide stats (admin view)
@@ -532,34 +534,36 @@ export function useWebhookDashboard(subscriptionId?: string): UseWebhookDashboar
 
         setMetrics({
           period,
-          total_deliveries: platformStats.total_deliveries || 0,
-          successful_deliveries: platformStats.successful_deliveries || 0,
-          failed_deliveries: platformStats.failed_deliveries || 0,
+          total_deliveries: platformStats.total_deliveries_today || 0,
+          successful_deliveries: 0, // Not in platform stats
+          failed_deliveries: 0, // Not in platform stats
           retried_deliveries: 0, // Not in platform stats
-          exhausted_deliveries: platformStats.exhausted_deliveries || 0,
-          success_rate: platformStats.success_rate || 0,
+          exhausted_deliveries: platformStats.deliveries_by_status?.exhausted || 0,
+          success_rate: platformStats.success_rate_today || 0,
           avg_response_time_ms: platformStats.avg_response_time_ms || 0,
-          p95_response_time_ms: platformStats.p95_response_time_ms || 0,
+          p95_response_time_ms: 0, // Not in platform stats
         });
 
         // Status breakdown from platform stats
         if (platformStats.deliveries_by_status) {
-          const total = platformStats.total_deliveries || 1;
+          const total = platformStats.total_deliveries_today || 1;
+          const entries = Object.entries(platformStats.deliveries_by_status);
           setStatusBreakdown(
-            platformStats.deliveries_by_status.map((s: { status: string; count: number }) => ({
-              status: s.status,
-              count: s.count,
-              percentage: (s.count / total) * 100,
+            entries.map(([status, count]) => ({
+              status,
+              count,
+              percentage: (count / total) * 100,
             }))
           );
         }
 
         // Event type breakdown from platform stats
-        if (platformStats.deliveries_by_event_type) {
+        if (platformStats.events_by_type) {
+          const entries = Object.entries(platformStats.events_by_type);
           setEventTypeBreakdown(
-            platformStats.deliveries_by_event_type.map((e: { event_type: string; count: number }) => ({
-              event_type: e.event_type,
-              count: e.count,
+            entries.map(([event_type, count]) => ({
+              event_type,
+              count,
               success_rate: 0, // Not available in this response
             }))
           );

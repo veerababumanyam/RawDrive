@@ -10,11 +10,16 @@ cache operations and by background workers for cache maintenance.
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional
+from sqlalchemy import delete, func, select, update, text, case
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.db.schema import (
+    asset_embeddings_cache as asset_cache_table,
+    face_group_centroids_cache as group_cache_table,
+    gallery_assets as gallery_assets_table,
+    faces as faces_table,
+)
 from app.models.asset_embeddings_cache import AssetEmbeddingsCache
 from app.models.face_group_centroids_cache import FaceGroupCentroidsCache
 
@@ -67,16 +72,28 @@ class FaceCacheRepository:
         Returns:
             Cache entry if found and not expired, None otherwise
         """
-        query = select(AssetEmbeddingsCache).where(
-            AssetEmbeddingsCache.asset_id == str(asset_id),
-            AssetEmbeddingsCache.workspace_id == str(workspace_id),
+        query = select(asset_cache_table).where(
+            asset_cache_table.c.asset_id == asset_id,
+            asset_cache_table.c.workspace_id == workspace_id,
         )
 
         if image_hash:
-            query = query.where(AssetEmbeddingsCache.image_hash == image_hash)
+            query = query.where(asset_cache_table.c.image_hash == image_hash)
 
         result = await self.db.execute(query)
-        entry = result.scalar_one_or_none()
+        row = result.fetchone()
+        
+        if not row:
+            return None
+            
+        # Convert row to Pydantic model - convert UUIDs to strings
+        row_dict = dict(row._asdict())
+        if "workspace_id" in row_dict and isinstance(row_dict["workspace_id"], UUID):
+            row_dict["workspace_id"] = str(row_dict["workspace_id"])
+        if "asset_id" in row_dict and isinstance(row_dict["asset_id"], UUID):
+            row_dict["asset_id"] = str(row_dict["asset_id"])
+
+        entry = AssetEmbeddingsCache.model_validate(row_dict)
 
         if entry:
             # Check if expired
@@ -86,6 +103,23 @@ class FaceCacheRepository:
 
             # Update hit tracking
             entry.record_hit()
+            
+            # Persist hit count
+            stmt = (
+                update(asset_cache_table)
+                .where(
+                    asset_cache_table.c.asset_id == asset_id,
+                    asset_cache_table.c.workspace_id == workspace_id,
+                )
+                .values(
+                    hit_count=entry.hit_count,
+                    last_accessed_at=entry.last_accessed_at,
+                )
+            )
+            if image_hash:
+                stmt = stmt.where(asset_cache_table.c.image_hash == image_hash)
+                
+            await self.db.execute(stmt)
             await self.db.commit()
 
         return entry
@@ -134,6 +168,19 @@ class FaceCacheRepository:
             existing.cached_at = datetime.now()
         else:
             # Create new entry
+            insert_stmt = asset_cache_table.insert().values(
+                workspace_id=workspace_id,
+                asset_id=asset_id,
+                image_hash=image_hash,
+                faces_detected=faces_detected,
+                bounding_boxes=bounding_boxes,
+                embeddings=embeddings,
+                confidence_scores=confidence_scores,
+                detection_metadata=detection_metadata,
+                ttl_seconds=ttl_seconds or self.DEFAULT_ASSET_TTL,
+            )
+            await self.db.execute(insert_stmt)
+            # Need to create the object for return
             existing = AssetEmbeddingsCache(
                 workspace_id=str(workspace_id),
                 asset_id=str(asset_id),
@@ -145,10 +192,8 @@ class FaceCacheRepository:
                 detection_metadata=detection_metadata,
                 ttl_seconds=ttl_seconds or self.DEFAULT_ASSET_TTL,
             )
-            self.db.add(existing)
 
         await self.db.commit()
-        await self.db.refresh(existing)
         return existing
 
     async def delete_asset_cache(
@@ -166,9 +211,9 @@ class FaceCacheRepository:
             True if entry was deleted, False if not found
         """
         result = await self.db.execute(
-            delete(AssetEmbeddingsCache).where(
-                AssetEmbeddingsCache.asset_id == str(asset_id),
-                AssetEmbeddingsCache.workspace_id == str(workspace_id),
+            delete(asset_cache_table).where(
+                asset_cache_table.c.asset_id == asset_id,
+                asset_cache_table.c.workspace_id == workspace_id,
             )
         )
         await self.db.commit()
@@ -188,13 +233,11 @@ class FaceCacheRepository:
         Returns:
             Number of entries deleted
         """
-        from app.models.gallery_asset import GalleryAsset
-
         # Get all asset IDs in the gallery
         result = await self.db.execute(
-            select(GalleryAsset.asset_id).where(
-                GalleryAsset.gallery_id == str(gallery_id),
-                GalleryAsset.workspace_id == str(workspace_id),
+            select(gallery_assets_table.c.asset_id).where(
+                gallery_assets_table.c.gallery_id == gallery_id,
+                gallery_assets_table.c.workspace_id == workspace_id,
             )
         )
         asset_ids = [row[0] for row in result.all()]
@@ -204,9 +247,9 @@ class FaceCacheRepository:
 
         # Delete all cache entries for these assets
         delete_result = await self.db.execute(
-            delete(AssetEmbeddingsCache).where(
-                AssetEmbeddingsCache.asset_id.in_(asset_ids),
-                AssetEmbeddingsCache.workspace_id == str(workspace_id),
+            delete(asset_cache_table).where(
+                asset_cache_table.c.asset_id.in_(asset_ids),
+                asset_cache_table.c.workspace_id == workspace_id,
             )
         )
         await self.db.commit()
@@ -222,8 +265,8 @@ class FaceCacheRepository:
             Number of entries deleted
         """
         result = await self.db.execute(
-            delete(AssetEmbeddingsCache).where(
-                AssetEmbeddingsCache.workspace_id == str(workspace_id)
+            delete(asset_cache_table).where(
+                asset_cache_table.c.workspace_id == workspace_id
             )
         )
         await self.db.commit()
@@ -248,12 +291,17 @@ class FaceCacheRepository:
             Cache entry if found and not expired, None otherwise
         """
         result = await self.db.execute(
-            select(FaceGroupCentroidsCache).where(
-                FaceGroupCentroidsCache.face_group_id == str(face_group_id),
-                FaceGroupCentroidsCache.workspace_id == str(workspace_id),
+            select(group_cache_table).where(
+                group_cache_table.c.face_group_id == face_group_id,
+                group_cache_table.c.workspace_id == workspace_id,
             )
         )
-        entry = result.scalar_one_or_none()
+        row = result.fetchone()
+
+        if not row:
+            return None
+
+        entry = FaceGroupCentroidsCache.model_validate(row._asdict())
 
         if entry:
             # Check if expired
@@ -301,6 +349,16 @@ class FaceCacheRepository:
             existing.calculated_at = datetime.now()
         else:
             # Create new entry
+            insert_stmt = group_cache_table.insert().values(
+                workspace_id=workspace_id,
+                face_group_id=face_group_id,
+                centroid_vector=centroid_vector,
+                face_count=face_count,
+                quality_score=quality_score,
+                ttl_seconds=ttl_seconds or self.DEFAULT_GROUP_TTL,
+            )
+            await self.db.execute(insert_stmt)
+            
             existing = FaceGroupCentroidsCache(
                 workspace_id=str(workspace_id),
                 face_group_id=str(face_group_id),
@@ -309,10 +367,8 @@ class FaceCacheRepository:
                 quality_score=quality_score,
                 ttl_seconds=ttl_seconds or self.DEFAULT_GROUP_TTL,
             )
-            self.db.add(existing)
 
         await self.db.commit()
-        await self.db.refresh(existing)
         return existing
 
     async def delete_group_centroid(
@@ -330,13 +386,54 @@ class FaceCacheRepository:
             True if entry was deleted, False if not found
         """
         result = await self.db.execute(
-            delete(FaceGroupCentroidsCache).where(
-                FaceGroupCentroidsCache.face_group_id == str(face_group_id),
-                FaceGroupCentroidsCache.workspace_id == str(workspace_id),
+            delete(group_cache_table).where(
+                group_cache_table.c.face_group_id == face_group_id,
+                group_cache_table.c.workspace_id == workspace_id,
             )
         )
         await self.db.commit()
         return result.rowcount > 0
+
+    async def get_group_embeddings(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+    ) -> list[list[float]]:
+        """Get all face embeddings for a face group from cache.
+
+        Fetches embeddings from asset cache for faces belonging to
+        the specified group. Useful for computing group centroids.
+
+        Args:
+            group_id: The face group ID
+            workspace_id: The workspace ID
+
+        Returns:
+            List of 512-d face embeddings
+        """
+        # Get all faces in the group
+        result = await self.db.execute(
+            select(faces_table.c.photo_id, faces_table.c.id).where(
+                faces_table.c.face_group_id == group_id,
+                faces_table.c.workspace_id == workspace_id,
+            )
+        )
+
+        embeddings = []
+
+        for asset_id_str, face_index in result.all():
+            # Get cached detection for this asset
+            cache_entry = await self.get_asset_cache(
+                asset_id=UUID(asset_id_str),
+                workspace_id=workspace_id,
+            )
+
+            if cache_entry and cache_entry.embeddings:
+                # Get the specific face embedding by index
+                if face_index < len(cache_entry.embeddings):
+                    embeddings.append(cache_entry.embeddings[face_index])
+
+        return embeddings
 
     # =========================================================================
     # BATCH OPERATIONS
@@ -392,11 +489,11 @@ class FaceCacheRepository:
         # Get all cached embeddings for workspace
         result = await self.db.execute(
             select(
-                AssetEmbeddingsCache.asset_id,
-                AssetEmbeddingsCache.embeddings,
+                asset_cache_table.c.asset_id,
+                asset_cache_table.c.embeddings,
             ).where(
-                AssetEmbeddingsCache.workspace_id == str(workspace_id),
-                AssetEmbeddingsCache.embeddings.isnot(None),
+                asset_cache_table.c.workspace_id == workspace_id,
+                asset_cache_table.c.embeddings.isnot(None),
             ).limit(limit * 10)  # Get more to filter later
         )
 
@@ -446,16 +543,13 @@ class FaceCacheRepository:
         }
 
         # Clean up expired asset cache entries
-        asset_query = delete(AssetEmbeddingsCache)
+        asset_query = delete(asset_cache_table)
         if workspace_id:
             asset_query = asset_query.where(
-                AssetEmbeddingsCache.workspace_id == str(workspace_id)
+                asset_cache_table.c.workspace_id == workspace_id
             )
 
         # Only delete expired entries
-        # Use text-based interval for proper PostgreSQL syntax
-        from sqlalchemy import text
-
         asset_query = asset_query.where(
             text("cached_at + (ttl_seconds || ' seconds')::interval < now()")
         )
@@ -464,10 +558,10 @@ class FaceCacheRepository:
         stats["asset_cache_deleted"] = result.rowcount
 
         # Clean up expired group cache entries
-        group_query = delete(FaceGroupCentroidsCache)
+        group_query = delete(group_cache_table)
         if workspace_id:
             group_query = group_query.where(
-                FaceGroupCentroidsCache.workspace_id == str(workspace_id)
+                group_cache_table.c.workspace_id == workspace_id
             )
 
         group_query = group_query.where(
@@ -519,13 +613,13 @@ class FaceCacheRepository:
                 # Use CASE with raw text for interval comparison
                 func.count(
                     case(
-                        (literal_column("cached_at + (ttl_seconds || ' seconds')::interval > now()"), 1),
+                        (text("cached_at + (ttl_seconds || ' seconds')::interval > now()"), 1),
                         else_=None,
                     )
                 ).label("active"),
-                func.sum(AssetEmbeddingsCache.hit_count).label("total_hits"),
-                func.avg(AssetEmbeddingsCache.hit_count).label("avg_hits"),
-            ).where(AssetEmbeddingsCache.workspace_id == str(workspace_id))
+                func.sum(asset_cache_table.c.hit_count).label("total_hits"),
+                func.avg(asset_cache_table.c.hit_count).label("avg_hits"),
+            ).where(asset_cache_table.c.workspace_id == workspace_id)
         )
         row = result.one()
 
@@ -547,13 +641,13 @@ class FaceCacheRepository:
                 # Use CASE with raw text for interval comparison
                 func.count(
                     case(
-                        (literal_column("calculated_at + (ttl_seconds || ' seconds')::interval > now()"), 1),
+                        (text("calculated_at + (ttl_seconds || ' seconds')::interval > now()"), 1),
                         else_=None,
                     )
                 ).label("active"),
-                func.sum(FaceGroupCentroidsCache.hit_count).label("total_hits"),
-                func.avg(FaceGroupCentroidsCache.quality_score).label("avg_quality"),
-            ).where(FaceGroupCentroidsCache.workspace_id == str(workspace_id))
+                func.sum(group_cache_table.c.hit_count).label("total_hits"),
+                func.avg(group_cache_table.c.quality_score).label("avg_quality"),
+            ).where(group_cache_table.c.workspace_id == workspace_id)
         )
         row = result.one()
 
@@ -589,14 +683,14 @@ class FaceCacheRepository:
         """
         result = await self.db.execute(
             select(
-                AssetEmbeddingsCache.asset_id,
-                AssetEmbeddingsCache.hit_count,
+                asset_cache_table.c.asset_id,
+                asset_cache_table.c.hit_count,
             ).where(
-                AssetEmbeddingsCache.workspace_id == str(workspace_id),
-                AssetEmbeddingsCache.hit_count >= min_hits,
+                asset_cache_table.c.workspace_id == workspace_id,
+                asset_cache_table.c.hit_count >= min_hits,
             ).order_by(
-                AssetEmbeddingsCache.hit_count.desc(),
-                AssetEmbeddingsCache.last_accessed_at.desc(),
+                asset_cache_table.c.hit_count.desc(),
+                asset_cache_table.c.last_accessed_at.desc(),
             ).limit(limit)
         )
 
@@ -621,10 +715,10 @@ class FaceCacheRepository:
         max_age = datetime.now() - timedelta(hours=max_age_hours)
 
         result = await self.db.execute(
-            delete(AssetEmbeddingsCache).where(
-                AssetEmbeddingsCache.workspace_id == str(workspace_id),
-                AssetEmbeddingsCache.cached_at < max_age,
-                AssetEmbeddingsCache.hit_count < min_hit_count,
+            delete(asset_cache_table).where(
+                asset_cache_table.c.workspace_id == workspace_id,
+                asset_cache_table.c.cached_at < max_age,
+                asset_cache_table.c.hit_count < min_hit_count,
             )
         )
         await self.db.commit()

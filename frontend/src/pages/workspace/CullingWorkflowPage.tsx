@@ -51,7 +51,10 @@ const CullingWorkflowPage: React.FC = () => {
   const workspaceId = workspace?.id || '';
 
   // Fetch gallery details
-  const { gallery, isLoading: isGalleryLoading, error: galleryError } = useGallery(galleryId!);
+  const { gallery, loading: isGalleryLoading, error: galleryError } = useGallery({
+    workspaceId,
+    galleryId: galleryId!,
+  });
 
   // Culling workflow state
   const {
@@ -120,13 +123,13 @@ const CullingWorkflowPage: React.FC = () => {
       });
       setShowAutoRejectConfirm(false);
       addToast({
-        type: 'success',
+        variant: 'success',
         title: 'Auto-reject complete',
         message: 'Low quality photos have been rejected',
       });
     } catch (err) {
       addToast({
-        type: 'error',
+        variant: 'error',
         title: 'Auto-reject failed',
         message: err instanceof Error ? err.message : 'Unknown error',
       });
@@ -138,13 +141,13 @@ const CullingWorkflowPage: React.FC = () => {
     try {
       await bulkSelect();
       addToast({
-        type: 'success',
+        variant: 'success',
         title: 'Photos selected',
         message: `${selectedIds.size} photos marked as best shots`,
       });
     } catch (err) {
       addToast({
-        type: 'error',
+        variant: 'error',
         title: 'Selection failed',
         message: err instanceof Error ? err.message : 'Unknown error',
       });
@@ -157,13 +160,13 @@ const CullingWorkflowPage: React.FC = () => {
       try {
         await bulkReject(reason);
         addToast({
-          type: 'success',
+          variant: 'success',
           title: 'Photos rejected',
           message: `${selectedIds.size} photos have been rejected`,
         });
       } catch (err) {
         addToast({
-          type: 'error',
+          variant: 'error',
           title: 'Rejection failed',
           message: err instanceof Error ? err.message : 'Unknown error',
         });
@@ -177,13 +180,13 @@ const CullingWorkflowPage: React.FC = () => {
     try {
       await bulkReset();
       addToast({
-        type: 'success',
+        variant: 'success',
         title: 'Status reset',
         message: `${selectedIds.size} photos reset to pending`,
       });
     } catch (err) {
       addToast({
-        type: 'error',
+        variant: 'error',
         title: 'Reset failed',
         message: err instanceof Error ? err.message : 'Unknown error',
       });
@@ -197,7 +200,7 @@ const CullingWorkflowPage: React.FC = () => {
         const subGalleryId = await createSubGallery(name);
         if (subGalleryId) {
           addToast({
-            type: 'success',
+            variant: 'success',
             title: 'Sub-gallery created',
             message: `"${name}" has been created with your selected photos`,
           });
@@ -205,7 +208,7 @@ const CullingWorkflowPage: React.FC = () => {
         }
       } catch (err) {
         addToast({
-          type: 'error',
+          variant: 'error',
           title: 'Creation failed',
           message: err instanceof Error ? err.message : 'Unknown error',
         });
@@ -219,13 +222,13 @@ const CullingWorkflowPage: React.FC = () => {
     try {
       await markAsFavorites();
       addToast({
-        type: 'success',
+        variant: 'success',
         title: 'Marked as favorites',
         message: 'Selected photos have been marked as favorites',
       });
     } catch (err) {
       addToast({
-        type: 'error',
+        variant: 'error',
         title: 'Failed',
         message: err instanceof Error ? err.message : 'Unknown error',
       });
@@ -247,7 +250,7 @@ const CullingWorkflowPage: React.FC = () => {
             Failed to load gallery
           </h2>
           <p className="text-sm text-text-secondary mb-4">
-            {galleryError || error}
+            {String(galleryError || error)}
           </p>
           <AppButton variant="primary" onClick={() => loadPhotos()}>
             <RefreshCw size={16} className="mr-2" />
@@ -293,7 +296,7 @@ const CullingWorkflowPage: React.FC = () => {
                   Culling Workflow
                 </h1>
                 <p className="text-sm text-text-secondary">
-                  {gallery?.name || 'Loading...'}
+                  {gallery?.title || 'Loading...'}
                 </p>
               </div>
             </div>

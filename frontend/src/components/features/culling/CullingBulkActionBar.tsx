@@ -374,7 +374,6 @@ export const CullingBulkActionBar: React.FC<CullingBulkActionBarProps> = ({
         message={`This will reset the selection/rejection status for ${selectedCount} ${selectedCount === 1 ? 'photo' : 'photos'} back to pending.`}
         confirmText="Reset"
         cancelText="Cancel"
-        variant="warning"
         isLoading={isLoading}
       />
     </>

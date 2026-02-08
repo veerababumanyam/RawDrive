@@ -5,7 +5,7 @@ No authentication required - accessed via magic links.
 Uses read replicas for high-throughput 50K concurrent users.
 """
 
-from fastapi import APIRouter, HTTPException, Header, Query, Request, Body
+from fastapi import APIRouter, Header, Query, Request, Body
 from typing import Optional
 from pydantic import BaseModel
 from uuid import UUID
@@ -23,6 +23,13 @@ from src.schemas.gallery import (
 )
 from src.utils.security import verify_password
 from src.database import get_connection
+from src.api.v1.errors import (
+    raise_http_exception,
+    exception_to_error_response,
+    ErrorCode,
+    ErrorMessage,
+    get_request_id,
+)
 from src.log_config import get_logger
 from src.observability.metrics import get_metrics
 
@@ -78,25 +85,24 @@ async def verify_gallery_access(
         validation = await magic_link_service.validate_magic_link(x_magic_link_token)
 
         if not validation["valid"]:
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "ACCESS_DENIED", "message": "Invalid or expired magic link"}
+            raise_http_exception(
+                ErrorCode.FORBIDDEN,
+                "Invalid or expired magic link"
             )
 
         if validation["gallery_id"] != gallery_id:
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "ACCESS_DENIED", "message": "Magic link does not match gallery"}
+            raise_http_exception(
+                ErrorCode.FORBIDDEN,
+                "Magic link does not match gallery"
             )
 
         # Check if protected
         if validation["requires_pin"] or validation["requires_password"]:
             if not x_access_token:
-                raise HTTPException(
-                    status_code=403,
-                    detail={
-                        "error": "VERIFICATION_REQUIRED",
-                        "message": "Gallery requires PIN or password verification",
+                raise_http_exception(
+                    ErrorCode.FORBIDDEN,
+                    "Gallery requires PIN or password verification",
+                    details={
                         "requires_pin": validation["requires_pin"],
                         "requires_password": validation["requires_password"],
                     }
@@ -107,9 +113,9 @@ async def verify_gallery_access(
 
         return {"gallery_id": gallery_id, "token": x_magic_link_token}
 
-    raise HTTPException(
-        status_code=401,
-        detail={"error": "UNAUTHORIZED", "message": "Magic link token required"}
+    raise_http_exception(
+        ErrorCode.UNAUTHORIZED,
+        ErrorMessage.UNAUTHORIZED
     )
 
 
@@ -120,6 +126,7 @@ async def verify_gallery_access(
 
 @router.get("/{gallery_id}")
 async def get_public_gallery(
+    request: Request,
     gallery_id: str,
     x_access_token: Optional[str] = Header(None, alias="X-Access-Token"),
     x_magic_link_token: Optional[str] = Header(None, alias="X-Magic-Link-Token"),
@@ -130,6 +137,8 @@ async def get_public_gallery(
     Requires valid magic link token.
     For protected galleries, also requires access token from verification.
     """
+    request_id = get_request_id(request)
+
     # Verify access
     await verify_gallery_access(
         gallery_id=gallery_id,
@@ -143,16 +152,26 @@ async def get_public_gallery(
         result = await gallery_service.get_public_gallery(gallery_id=gallery_id)
         return result
     except GalleryNotFoundError:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found or not published"}
+        raise_http_exception(
+            ErrorCode.GALLERY_NOT_FOUND,
+            ErrorMessage.GALLERY_NOT_FOUND,
+            details={"gallery_id": gallery_id},
+            request_id=request_id
         )
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        from src.api.v1.errors import STATUS_CODE_MAP
+        status_code = STATUS_CODE_MAP.get(error_response.error.code, getattr(e, 'status', 500))
+        raise HTTPException(
+            status_code=status_code,
+            content=error_response.model_dump()
+        )
 
 
 @router.get("/{gallery_id}/assets")
 async def get_public_gallery_assets(
+    request: Request,
     gallery_id: str,
     x_access_token: Optional[str] = Header(None, alias="X-Access-Token"),
     x_magic_link_token: Optional[str] = Header(None, alias="X-Magic-Link-Token"),
@@ -166,6 +185,8 @@ async def get_public_gallery_assets(
     Returns visible assets only.
     Uses read replica for high throughput.
     """
+    request_id = get_request_id(request)
+
     # Verify access
     await verify_gallery_access(
         gallery_id=gallery_id,
@@ -189,12 +210,25 @@ async def get_public_gallery_assets(
         )
         return result
     except GalleryNotFoundError:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found or not published"}
+        raise_http_exception(
+            ErrorCode.GALLERY_NOT_FOUND,
+            ErrorMessage.GALLERY_NOT_FOUND,
+            details={"gallery_id": gallery_id},
+            request_id=request_id
         )
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        status_code = getattr(e, 'status', 500)
+        # Map error code to status code if available
+        if error_response.error.code in ErrorCode.__dict__.values():
+            # Get the status code from STATUS_CODE_MAP
+            from src.api.v1.errors import STATUS_CODE_MAP
+            status_code = STATUS_CODE_MAP.get(error_response.error.code, status_code)
+        raise HTTPException(
+            status_code=status_code,
+            content=error_response.model_dump()
+        )
 
 
 # =============================================================================
@@ -204,20 +238,25 @@ async def get_public_gallery_assets(
 
 @router.post("/{gallery_id}/verify-pin", response_model=VerifyResponse)
 async def verify_gallery_pin(
+    request: Request,
     gallery_id: str,
-    request: PinVerifyRequest,
+    verify_request: PinVerifyRequest,
 ):
     """
     Verify PIN for a protected gallery.
 
     Returns whether the PIN is valid.
     """
+    request_id = get_request_id(request)
+
     try:
         gallery_uuid = UUID(gallery_id)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "INVALID_GALLERY_ID", "message": "Invalid gallery ID format"}
+        raise_http_exception(
+            ErrorCode.INVALID_FORMAT,
+            ErrorMessage.INVALID_FORMAT,
+            details={"field": "gallery_id", "value": gallery_id},
+            request_id=request_id
         )
 
     async with get_connection() as conn:
@@ -232,15 +271,18 @@ async def verify_gallery_pin(
         )
 
         if not result:
-            raise HTTPException(
-                status_code=404,
-                detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"}
+            raise_http_exception(
+                ErrorCode.GALLERY_NOT_FOUND,
+                ErrorMessage.GALLERY_NOT_FOUND,
+                details={"gallery_id": gallery_id},
+                request_id=request_id
             )
 
         if result["status"] != "published":
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "GALLERY_NOT_PUBLISHED", "message": "Gallery is not published"}
+            raise_http_exception(
+                ErrorCode.FORBIDDEN,
+                "Gallery is not published",
+                request_id=request_id
             )
 
         if not result["pin_hash"]:
@@ -248,7 +290,7 @@ async def verify_gallery_pin(
             return VerifyResponse(valid=True, message="Gallery is not PIN protected")
 
         # Verify PIN
-        is_valid = verify_password(request.pin, result["pin_hash"])
+        is_valid = verify_password(verify_request.pin, result["pin_hash"])
 
         if is_valid:
             return VerifyResponse(valid=True, message="PIN verified successfully")
@@ -258,20 +300,25 @@ async def verify_gallery_pin(
 
 @router.post("/{gallery_id}/verify-password", response_model=VerifyResponse)
 async def verify_gallery_password(
+    request: Request,
     gallery_id: str,
-    request: PasswordVerifyRequest,
+    verify_request: PasswordVerifyRequest,
 ):
     """
     Verify password for a protected gallery.
 
     Returns whether the password is valid.
     """
+    request_id = get_request_id(request)
+
     try:
         gallery_uuid = UUID(gallery_id)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "INVALID_GALLERY_ID", "message": "Invalid gallery ID format"}
+        raise_http_exception(
+            ErrorCode.INVALID_FORMAT,
+            ErrorMessage.INVALID_FORMAT,
+            details={"field": "gallery_id", "value": gallery_id},
+            request_id=request_id
         )
 
     async with get_connection() as conn:
@@ -286,15 +333,18 @@ async def verify_gallery_password(
         )
 
         if not result:
-            raise HTTPException(
-                status_code=404,
-                detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"}
+            raise_http_exception(
+                ErrorCode.GALLERY_NOT_FOUND,
+                ErrorMessage.GALLERY_NOT_FOUND,
+                details={"gallery_id": gallery_id},
+                request_id=request_id
             )
 
         if result["status"] != "published":
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "GALLERY_NOT_PUBLISHED", "message": "Gallery is not published"}
+            raise_http_exception(
+                ErrorCode.FORBIDDEN,
+                "Gallery is not published",
+                request_id=request_id
             )
 
         if not result["password_hash"]:
@@ -302,7 +352,7 @@ async def verify_gallery_password(
             return VerifyResponse(valid=True, message="Gallery is not password protected")
 
         # Verify password
-        is_valid = verify_password(request.password, result["password_hash"])
+        is_valid = verify_password(verify_request.password, result["password_hash"])
 
         if is_valid:
             return VerifyResponse(valid=True, message="Password verified successfully")
@@ -330,8 +380,9 @@ class RatingResponse(BaseModel):
 
 @router.post("/{gallery_id}/rate", response_model=RatingResponse)
 async def rate_asset(
+    request: Request,
     gallery_id: str,
-    request: RatingRequest,
+    rating_request: RatingRequest,
     x_visitor_id: Optional[str] = Header(None, alias="X-Visitor-ID"),
     x_magic_link_token: Optional[str] = Header(None, alias="X-Magic-Link-Token"),
 ):
@@ -343,43 +394,52 @@ async def rate_asset(
     - Gallery must have ratings_enabled = true
     - Rating value must be 1-5
     """
+    request_id = get_request_id(request)
+
     # Validate rating value
-    if request.rating < 1 or request.rating > 5:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "INVALID_RATING", "message": "Rating must be between 1 and 5"}
+    if rating_request.rating < 1 or rating_request.rating > 5:
+        raise_http_exception(
+            ErrorCode.VALIDATION_ERROR,
+            "Rating must be between 1 and 5",
+            details={"field": "rating", "value": rating_request.rating},
+            request_id=request_id
         )
 
     # Validate UUIDs
     try:
         gallery_uuid = UUID(gallery_id)
-        asset_uuid = UUID(request.asset_id)
+        asset_uuid = UUID(rating_request.asset_id)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "INVALID_ID", "message": "Invalid gallery or asset ID format"}
+        raise_http_exception(
+            ErrorCode.INVALID_FORMAT,
+            ErrorMessage.INVALID_FORMAT,
+            details={"field": "gallery_id or asset_id"},
+            request_id=request_id
         )
 
     # Validate magic link
     if not x_magic_link_token:
-        raise HTTPException(
-            status_code=401,
-            detail={"error": "UNAUTHORIZED", "message": "Magic link token required"}
+        raise_http_exception(
+            ErrorCode.UNAUTHORIZED,
+            ErrorMessage.UNAUTHORIZED,
+            request_id=request_id
         )
 
     magic_link_service = get_magic_link_service()
-    validation = await magic_link_service.validate_magic_link(x_magic_link_token)
+    magic_link_validation = await magic_link_service.validate_magic_link(x_magic_link_token)
 
-    if not validation["valid"]:
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "ACCESS_DENIED", "message": "Invalid or expired magic link"}
+    if not magic_link_validation["valid"]:
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "Invalid or expired magic link",
+            request_id=request_id
         )
 
-    if validation["gallery_id"] != gallery_id:
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "ACCESS_DENIED", "message": "Magic link does not match gallery"}
+    if magic_link_validation["gallery_id"] != gallery_id:
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "Magic link does not match gallery",
+            request_id=request_id
         )
 
     async with get_connection() as conn:
@@ -394,15 +454,18 @@ async def rate_asset(
         )
 
         if not gallery:
-            raise HTTPException(
-                status_code=404,
-                detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"}
+            raise_http_exception(
+                ErrorCode.GALLERY_NOT_FOUND,
+                ErrorMessage.GALLERY_NOT_FOUND,
+                details={"gallery_id": gallery_id},
+                request_id=request_id
             )
 
         if not gallery["ratings_enabled"]:
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "RATINGS_DISABLED", "message": "Ratings are not enabled for this gallery"}
+            raise_http_exception(
+                ErrorCode.FORBIDDEN,
+                "Ratings are not enabled for this gallery",
+                request_id=request_id
             )
 
         workspace_id = gallery["workspace_id"]
@@ -418,9 +481,11 @@ async def rate_asset(
         )
 
         if not asset_check:
-            raise HTTPException(
-                status_code=404,
-                detail={"error": "ASSET_NOT_FOUND", "message": "Asset not found in this gallery"}
+            raise_http_exception(
+                ErrorCode.ASSET_NOT_FOUND,
+                ErrorMessage.ASSET_NOT_FOUND,
+                details={"asset_id": str(asset_uuid)},
+                request_id=request_id
             )
 
         # Generate visitor ID if not provided
@@ -440,7 +505,7 @@ async def rate_asset(
             gallery_uuid,
             asset_uuid,
             {"visitor_id": visitor_id},
-            {"value": request.rating},
+            {"value": rating_request.rating},
         )
 
         # Calculate new average rating
@@ -483,6 +548,7 @@ async def rate_asset(
 
 @router.get("/{gallery_id}/breadcrumbs", response_model=BreadcrumbsResponse)
 async def get_gallery_breadcrumbs(
+    request: Request,
     gallery_id: str,
     sub_gallery_id: Optional[str] = Query(
         None,
@@ -509,26 +575,31 @@ async def get_gallery_breadcrumbs(
     }
     ```
     """
+    request_id = get_request_id(request)
+
     # Validate magic link for public access
     if not x_magic_link_token:
-        raise HTTPException(
-            status_code=401,
-            detail={"error": "UNAUTHORIZED", "message": "Magic link token required"}
+        raise_http_exception(
+            ErrorCode.UNAUTHORIZED,
+            ErrorMessage.UNAUTHORIZED,
+            request_id=request_id
         )
 
     magic_link_service = get_magic_link_service()
     validation = await magic_link_service.validate_magic_link(x_magic_link_token)
 
     if not validation["valid"]:
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "ACCESS_DENIED", "message": "Invalid or expired magic link"}
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "Invalid or expired magic link",
+            request_id=request_id
         )
 
     if validation["gallery_id"] != gallery_id:
-        raise HTTPException(
-            status_code=403,
-            detail={"error": "ACCESS_DENIED", "message": "Magic link does not match gallery"}
+        raise_http_exception(
+            ErrorCode.FORBIDDEN,
+            "Magic link does not match gallery",
+            request_id=request_id
         )
 
     gallery_service = get_gallery_service()
@@ -540,9 +611,18 @@ async def get_gallery_breadcrumbs(
         )
         return result
     except GalleryNotFoundError:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found or not published"}
+        raise_http_exception(
+            ErrorCode.GALLERY_NOT_FOUND,
+            ErrorMessage.GALLERY_NOT_FOUND,
+            details={"gallery_id": gallery_id},
+            request_id=request_id
         )
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        from src.api.v1.errors import STATUS_CODE_MAP
+        status_code = STATUS_CODE_MAP.get(error_response.error.code, getattr(e, 'status', 500))
+        raise HTTPException(
+            status_code=status_code,
+            content=error_response.model_dump()
+        )

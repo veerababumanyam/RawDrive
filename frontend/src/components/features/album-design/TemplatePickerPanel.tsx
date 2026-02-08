@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import type { AlbumTemplate, AlbumType, SpreadTemplate } from '@rawdrive/shared-types';
+import { AlbumType, SpreadType, ElementType } from '@rawdrive/shared-types';
+import type { AlbumTemplate, SpreadTemplate, AlbumSpreadElement } from '@rawdrive/shared-types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,13 +37,14 @@ type TabType = 'album' | 'spread';
 // ---------------------------------------------------------------------------
 
 const ALBUM_TYPE_LABELS: Record<AlbumType, string> = {
-  wedding: 'Wedding',
-  portrait: 'Portrait',
-  events: 'Events',
-  family: 'Family',
-  newborn: 'Newborn',
-  corporate: 'Corporate',
-  custom: 'Custom',
+  [AlbumType.WEDDING]: 'Wedding',
+  [AlbumType.PORTRAIT]: 'Portrait',
+  [AlbumType.EVENT]: 'Event',
+  [AlbumType.EVENTS]: 'Events',
+  [AlbumType.FAMILY]: 'Family',
+  [AlbumType.NEWBORN]: 'Newborn',
+  [AlbumType.CORPORATE]: 'Corporate',
+  [AlbumType.CUSTOM]: 'Custom',
 };
 
 // ---------------------------------------------------------------------------
@@ -54,19 +56,31 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
     id: 'template-wedding-classic',
     name: 'Classic Wedding',
     description: 'Elegant traditional wedding album with full-spread layouts',
-    album_type: 'wedding',
+    album_type: AlbumType.WEDDING,
     thumbnail_url: '/assets/templates/wedding-classic.jpg',
     default_width: 3600,
     default_height: 2400,
+    default_page_count: 20,
+    default_settings: {},
+    is_system: true,
+    sort_order: 1,
     spread_templates: [
       {
         id: 'spread-cover',
         name: 'Cover',
-        spread_type: 'single_page',
+        spread_type: SpreadType.SINGLE_PAGE,
+        layout: {
+          columns: 1,
+          rows: 1,
+          gap: 0,
+          padding: 0,
+          slots: [],
+        },
+        is_default: true,
         thumbnail_url: '/assets/templates/spreads/cover.jpg',
         elements: [
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 0,
             y: 0,
             width: 3600,
@@ -78,7 +92,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'text',
+            element_type: ElementType.TEXT,
             x: 1600,
             y: 2100,
             width: 400,
@@ -94,16 +108,24 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
               text_align: 'center',
             },
           },
-        ],
+        ] as AlbumSpreadElement[],
       },
       {
         id: 'spread-full-photo',
         name: 'Full Spread Photo',
-        spread_type: 'full_spread',
+        spread_type: SpreadType.FULL_SPREAD,
+        layout: {
+          columns: 1,
+          rows: 1,
+          gap: 0,
+          padding: 0,
+          slots: [],
+        },
+        is_default: false,
         thumbnail_url: '/assets/templates/spreads/full-photo.jpg',
         elements: [
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 0,
             y: 0,
             width: 7200,
@@ -114,16 +136,24 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             content: {},
             style: {},
           },
-        ],
+        ] as AlbumSpreadElement[],
       },
       {
         id: 'spread-two-photos',
         name: 'Two Photos',
-        spread_type: 'full_spread',
+        spread_type: SpreadType.FULL_SPREAD,
+        layout: {
+          columns: 2,
+          rows: 1,
+          gap: 200,
+          padding: 100,
+          slots: [],
+        },
+        is_default: false,
         thumbnail_url: '/assets/templates/spreads/two-photos.jpg',
         elements: [
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 100,
             y: 100,
             width: 3400,
@@ -135,7 +165,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 3700,
             y: 100,
             width: 3400,
@@ -146,30 +176,41 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             content: {},
             style: {},
           },
-        ],
+        ] as AlbumSpreadElement[],
       },
     ],
     is_premium: false,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
   },
   {
     id: 'template-portrait-minimal',
     name: 'Minimal Portrait',
     description: 'Clean, minimalist portrait album with generous white space',
-    album_type: 'portrait',
+    album_type: AlbumType.PORTRAIT,
     thumbnail_url: '/assets/templates/portrait-minimal.jpg',
     default_width: 3000,
     default_height: 3000,
+    default_page_count: 15,
+    default_settings: {},
+    is_system: true,
+    sort_order: 2,
     spread_templates: [
       {
         id: 'spread-centered',
         name: 'Centered Portrait',
-        spread_type: 'single_page',
+        spread_type: SpreadType.SINGLE_PAGE,
+        layout: {
+          columns: 1,
+          rows: 1,
+          gap: 0,
+          padding: 500,
+          slots: [],
+        },
+        is_default: true,
         thumbnail_url: '/assets/templates/spreads/centered.jpg',
         elements: [
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 500,
             y: 500,
             width: 2000,
@@ -180,30 +221,41 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             content: {},
             style: {},
           },
-        ],
+        ] as AlbumSpreadElement[],
       },
     ],
     is_premium: false,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
   },
   {
     id: 'template-events-dynamic',
     name: 'Dynamic Events',
     description: 'Vibrant event album with collage-style layouts',
-    album_type: 'events',
+    album_type: AlbumType.EVENTS,
     thumbnail_url: '/assets/templates/events-dynamic.jpg',
     default_width: 3600,
     default_height: 2400,
+    default_page_count: 25,
+    default_settings: {},
+    is_system: true,
+    sort_order: 3,
     spread_templates: [
       {
         id: 'spread-collage-4',
         name: '4-Photo Collage',
-        spread_type: 'full_spread',
+        spread_type: SpreadType.FULL_SPREAD,
+        layout: {
+          columns: 2,
+          rows: 2,
+          gap: 200,
+          padding: 100,
+          slots: [],
+        },
+        is_default: false,
         thumbnail_url: '/assets/templates/spreads/collage-4.jpg',
         elements: [
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 100,
             y: 100,
             width: 3400,
@@ -215,7 +267,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 3700,
             y: 100,
             width: 3400,
@@ -227,7 +279,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 100,
             y: 1300,
             width: 3400,
@@ -239,7 +291,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 3700,
             y: 1300,
             width: 3400,
@@ -250,30 +302,41 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             content: {},
             style: {},
           },
-        ],
+        ] as AlbumSpreadElement[],
       },
     ],
     is_premium: false,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
   },
   {
     id: 'template-family-warm',
     name: 'Warm Family',
     description: 'Cozy family album with soft borders and warm tones',
-    album_type: 'family',
+    album_type: AlbumType.FAMILY,
     thumbnail_url: '/assets/templates/family-warm.jpg',
     default_width: 3600,
     default_height: 2700,
+    default_page_count: 20,
+    default_settings: {},
+    is_system: true,
+    sort_order: 4,
     spread_templates: [
       {
         id: 'spread-family-grid',
         name: 'Family Grid',
-        spread_type: 'full_spread',
+        spread_type: SpreadType.FULL_SPREAD,
+        layout: {
+          columns: 3,
+          rows: 2,
+          gap: 200,
+          padding: 200,
+          slots: [],
+        },
+        is_default: false,
         thumbnail_url: '/assets/templates/spreads/family-grid.jpg',
         elements: [
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 200,
             y: 200,
             width: 2200,
@@ -285,7 +348,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 2600,
             y: 200,
             width: 2200,
@@ -297,7 +360,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 2600,
             y: 1400,
             width: 2200,
@@ -309,7 +372,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 5000,
             y: 200,
             width: 2000,
@@ -320,30 +383,41 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             content: {},
             style: {},
           },
-        ],
+        ] as AlbumSpreadElement[],
       },
     ],
     is_premium: false,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
   },
   {
     id: 'template-newborn-soft',
     name: 'Soft Newborn',
     description: 'Gentle newborn album with delicate pastel accents',
-    album_type: 'newborn',
+    album_type: AlbumType.NEWBORN,
     thumbnail_url: '/assets/templates/newborn-soft.jpg',
     default_width: 3000,
     default_height: 3000,
+    default_page_count: 15,
+    default_settings: {},
+    is_system: true,
+    sort_order: 5,
     spread_templates: [
       {
         id: 'spread-newborn-single',
         name: 'Single Portrait',
-        spread_type: 'single_page',
+        spread_type: SpreadType.SINGLE_PAGE,
+        layout: {
+          columns: 1,
+          rows: 1,
+          gap: 0,
+          padding: 100,
+          slots: [],
+        },
+        is_default: true,
         thumbnail_url: '/assets/templates/spreads/newborn-single.jpg',
         elements: [
           {
-            element_type: 'shape',
+            element_type: ElementType.SHAPE,
             x: 100,
             y: 100,
             width: 2800,
@@ -358,7 +432,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             },
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 400,
             y: 400,
             width: 2200,
@@ -371,30 +445,41 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
               border_radius: 1100,
             },
           },
-        ],
+        ] as AlbumSpreadElement[],
       },
     ],
     is_premium: true,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
   },
   {
     id: 'template-corporate-professional',
     name: 'Professional Corporate',
     description: 'Sleek corporate album for headshots and team photos',
-    album_type: 'corporate',
+    album_type: AlbumType.CORPORATE,
     thumbnail_url: '/assets/templates/corporate-professional.jpg',
     default_width: 4200,
     default_height: 2970,
+    default_page_count: 16,
+    default_settings: {},
+    is_system: true,
+    sort_order: 6,
     spread_templates: [
       {
         id: 'spread-team-grid',
         name: 'Team Grid',
-        spread_type: 'full_spread',
+        spread_type: SpreadType.FULL_SPREAD,
+        layout: {
+          columns: 4,
+          rows: 2,
+          gap: 200,
+          padding: 200,
+          slots: [],
+        },
+        is_default: false,
         thumbnail_url: '/assets/templates/spreads/team-grid.jpg',
         elements: [
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 200,
             y: 200,
             width: 1800,
@@ -406,7 +491,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 2200,
             y: 200,
             width: 1800,
@@ -418,7 +503,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 4200,
             y: 200,
             width: 1800,
@@ -430,7 +515,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 6200,
             y: 200,
             width: 1800,
@@ -442,7 +527,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 200,
             y: 1570,
             width: 1800,
@@ -454,7 +539,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 2200,
             y: 1570,
             width: 1800,
@@ -466,7 +551,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 4200,
             y: 1570,
             width: 1800,
@@ -478,7 +563,7 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             style: {},
           },
           {
-            element_type: 'photo',
+            element_type: ElementType.PHOTO,
             x: 6200,
             y: 1570,
             width: 1800,
@@ -489,12 +574,11 @@ const DEFAULT_TEMPLATES: AlbumTemplate[] = [
             content: {},
             style: {},
           },
-        ],
+        ] as AlbumSpreadElement[],
       },
     ],
     is_premium: false,
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
   },
 ];
 
@@ -840,20 +924,20 @@ interface SpreadTemplatePreviewProps {
 }
 
 const SpreadTemplatePreview: React.FC<SpreadTemplatePreviewProps> = ({ spread }) => {
-  const width = spread.spread_type === 'full_spread' ? 200 : 100;
+  const width = spread.spread_type === SpreadType.FULL_SPREAD ? 200 : 100;
   const height = 66;
   const scale = 0.02;
 
   return (
     <div className="w-full h-full flex items-center justify-center bg-white dark:bg-gray-600">
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-        {spread.elements.map((el, idx) => {
+        {spread.elements?.map((el, idx) => {
           const x = el.x * scale;
           const y = el.y * scale;
           const w = el.width * scale;
           const h = el.height * scale;
 
-          if (el.element_type === 'photo') {
+          if (el.element_type === ElementType.PHOTO) {
             return (
               <rect
                 key={idx}
@@ -866,7 +950,7 @@ const SpreadTemplatePreview: React.FC<SpreadTemplatePreviewProps> = ({ spread })
                 strokeWidth={0.5}
               />
             );
-          } else if (el.element_type === 'text') {
+          } else if (el.element_type === ElementType.TEXT) {
             return (
               <rect
                 key={idx}
@@ -879,7 +963,7 @@ const SpreadTemplatePreview: React.FC<SpreadTemplatePreviewProps> = ({ spread })
                 strokeWidth={0.5}
               />
             );
-          } else if (el.element_type === 'shape') {
+          } else if (el.element_type === ElementType.SHAPE) {
             return (
               <rect
                 key={idx}
@@ -1074,24 +1158,24 @@ const SpreadPreviewModal: React.FC<SpreadPreviewModalProps> = ({
             <svg
               width="100%"
               height="100%"
-              viewBox={`0 0 ${spread.spread_type === 'full_spread' ? 400 : 200} 133`}
+              viewBox={`0 0 ${spread.spread_type === SpreadType.FULL_SPREAD ? 400 : 200} 133`}
               preserveAspectRatio="xMidYMid meet"
             >
               <rect
                 x="0"
                 y="0"
-                width={spread.spread_type === 'full_spread' ? 400 : 200}
+                width={spread.spread_type === SpreadType.FULL_SPREAD ? 400 : 200}
                 height="133"
                 fill="white"
               />
-              {spread.elements.map((el, idx) => {
+              {spread.elements?.map((el, idx) => {
                 const scale = 0.04;
                 const x = el.x * scale;
                 const y = el.y * scale;
                 const w = el.width * scale;
                 const h = el.height * scale;
 
-                if (el.element_type === 'photo') {
+                if (el.element_type === ElementType.PHOTO) {
                   return (
                     <g key={idx}>
                       <rect
@@ -1107,7 +1191,7 @@ const SpreadPreviewModal: React.FC<SpreadPreviewModalProps> = ({
                       <line x1={x + w} y1={y} x2={x} y2={y + h} stroke="#9ca3af" strokeWidth={0.5} />
                     </g>
                   );
-                } else if (el.element_type === 'text') {
+                } else if (el.element_type === ElementType.TEXT) {
                   return (
                     <rect
                       key={idx}
@@ -1120,7 +1204,7 @@ const SpreadPreviewModal: React.FC<SpreadPreviewModalProps> = ({
                       strokeWidth={1}
                     />
                   );
-                } else if (el.element_type === 'shape') {
+                } else if (el.element_type === ElementType.SHAPE) {
                   return (
                     <rect
                       key={idx}
@@ -1143,10 +1227,10 @@ const SpreadPreviewModal: React.FC<SpreadPreviewModalProps> = ({
           <div className="mt-4 text-sm text-gray-600 dark:text-gray-300">
             <p>
               <span className="font-medium">Type:</span>{' '}
-              {spread.spread_type === 'full_spread' ? 'Full Spread (2 pages)' : 'Single Page'}
+              {spread.spread_type === SpreadType.FULL_SPREAD ? 'Full Spread (2 pages)' : 'Single Page'}
             </p>
             <p>
-              <span className="font-medium">Elements:</span> {spread.elements.length} placeholders
+              <span className="font-medium">Elements:</span> {spread.elements?.length ?? 0} placeholders
             </p>
           </div>
         </div>

@@ -9,7 +9,7 @@ import logging
 from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, UploadFile, File, Form, status, Request
+from fastapi import APIRouter, UploadFile, File, Form, status, Request, Response
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep, WorkspaceIdDep
 from app.api.schemas import (
@@ -137,6 +137,7 @@ async def upload_file_data(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Upload file chunk (TUS protocol)",
     response_model=None,
+    response_class=Response,
     responses={
         400: {"model": ErrorResponse, "description": "Validation error"},
         404: {"model": ErrorResponse, "description": "Upload session not found"},

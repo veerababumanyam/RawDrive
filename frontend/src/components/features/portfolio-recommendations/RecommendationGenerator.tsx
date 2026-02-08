@@ -29,6 +29,7 @@ import type {
   SceneCategory,
   Season,
   GenerateRecommendationsRequest,
+  SeasonalRequest,
 } from '../../../services/portfolioRecommendationService';
 
 /* =============================================================================
@@ -53,10 +54,9 @@ const RECOMMENDATION_TYPES: { value: RecommendationType; label: string; descript
   { value: 'hero_shots', label: 'Hero Shots', description: 'Best overall photos from your portfolio' },
   { value: 'similar_style', label: 'Similar Style', description: 'Photos matching a specific style' },
   { value: 'personalized', label: 'Personalized', description: 'Based on client preferences' },
-  { value: 'seasonal', label: 'Seasonal', description: 'Themed for current season' },
-  { value: 'trending', label: 'Trending', description: 'Currently popular styles' },
-  { value: 'client_preferred', label: 'Client Preferred', description: 'Based on past client choices' },
-  { value: 'high_engagement', label: 'High Engagement', description: 'Photos with best engagement' },
+  { value: 'seasonal_picks', label: 'Seasonal', description: 'Themed for current season' },
+  { value: 'trending_shots', label: 'Trending', description: 'Currently popular styles' },
+  { value: 'quick_delivery', label: 'Quick Delivery', description: 'Fast turnaround recommendations' },
 ];
 
 const SCENE_CATEGORIES: { value: SceneCategory; label: string }[] = [
@@ -114,8 +114,11 @@ export const RecommendationGenerator: React.FC<RecommendationGeneratorProps> = (
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Mutations
-  const { mutate: generateRecommendations, isPending } = useGenerateRecommendations(workspaceId);
-  const { mutate: getSeasonalRecs, isPending: isLoadingSeasonal } = useSeasonalRecommendations(workspaceId);
+  const generateRecommendationsMutation = useGenerateRecommendations(workspaceId);
+  const seasonalRecommendationsMutation = useSeasonalRecommendations(workspaceId);
+
+  const isPending = generateRecommendationsMutation.isPending;
+  const isLoadingSeasonal = seasonalRecommendationsMutation.isPending;
 
   // Toggle category selection
   const toggleCategory = useCallback((category: SceneCategory) => {
@@ -128,46 +131,43 @@ export const RecommendationGenerator: React.FC<RecommendationGeneratorProps> = (
 
   // Handle generation
   const handleGenerate = useCallback(() => {
-    if (selectedType === 'seasonal' && selectedSeason) {
-      getSeasonalRecs(
-        {
-          season: selectedSeason,
-          galleryIds,
-          limit,
-          occasion: purpose || undefined,
+    if (selectedType === 'seasonal_picks' && selectedSeason) {
+      const request: SeasonalRequest = {
+        target_season: selectedSeason,
+        gallery_ids: galleryIds,
+        limit,
+        occasion_type: purpose || undefined,
+      };
+
+      seasonalRecommendationsMutation.mutate(request, {
+        onSuccess: (result) => {
+          addToast({
+            variant: 'success',
+            message: `Generated ${result.items.length} seasonal recommendations`,
+          });
+          onSuccess?.(result.recommendation_id);
         },
-        {
-          onSuccess: (result) => {
-            addToast({
-              variant: 'success',
-              message: `Generated ${result.items.length} seasonal recommendations`,
-            });
-            onSuccess?.(result.recommendation_id);
-          },
-          onError: (error) => {
-            addToast({
-              variant: 'error',
-              message: error instanceof Error ? error.message : 'Failed to generate recommendations',
-            });
-          },
-        }
-      );
+        onError: (error) => {
+          addToast({
+            variant: 'error',
+            message: error instanceof Error ? error.message : 'Failed to generate recommendations',
+          });
+        },
+      });
       return;
     }
 
     const request: GenerateRecommendationsRequest = {
-      recommendationType: selectedType,
-      galleryIds,
-      clientId,
+      recommendation_type: selectedType,
+      source_gallery_ids: galleryIds,
+      client_id: clientId,
       limit,
-      context: {
-        sceneCategories: selectedCategories.length > 0 ? selectedCategories : undefined,
-        targetPurpose: purpose || undefined,
-        season: selectedSeason,
-      },
+      filter_criteria: selectedCategories.length > 0 ? {
+        scene_categories: selectedCategories,
+      } : undefined,
     };
 
-    generateRecommendations(request, {
+    generateRecommendationsMutation.mutate(request, {
       onSuccess: (result) => {
         addToast({
           variant: 'success',
@@ -190,8 +190,8 @@ export const RecommendationGenerator: React.FC<RecommendationGeneratorProps> = (
     clientId,
     limit,
     purpose,
-    generateRecommendations,
-    getSeasonalRecs,
+    generateRecommendationsMutation,
+    seasonalRecommendationsMutation,
     addToast,
     onSuccess,
   ]);
@@ -264,7 +264,7 @@ export const RecommendationGenerator: React.FC<RecommendationGeneratorProps> = (
 
         {/* Season (for seasonal type) */}
         <AnimatePresence>
-          {selectedType === 'seasonal' && (
+          {selectedType === 'seasonal_picks' && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -392,7 +392,7 @@ export const RecommendationGenerator: React.FC<RecommendationGeneratorProps> = (
           size="sm"
           leftIcon={isLoading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
           onClick={handleGenerate}
-          disabled={isLoading || (selectedType === 'seasonal' && !selectedSeason)}
+          disabled={isLoading || (selectedType === 'seasonal_picks' && !selectedSeason)}
           className="ml-auto"
         >
           {isLoading ? 'Generating...' : 'Generate Recommendations'}

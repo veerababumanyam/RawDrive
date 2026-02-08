@@ -158,6 +158,16 @@ class InMemoryRedis:
 
         return next_cursor, [k.encode("utf-8") if isinstance(k, str) else k for k in result_keys]
 
+    async def scan_iter(self, match: Optional[str] = None, count: int = 100):
+        """Iterate over all keys matching a pattern."""
+        cursor = 0
+        while True:
+            cursor, keys = await self.scan(cursor, match=match, count=count)
+            for key in keys:
+                yield key
+            if cursor == 0:
+                break
+
     # -- Counter operations ----------------------------------------------------
     async def incrby(self, key: str, amount: int = 1) -> int:
         """Increment a counter."""

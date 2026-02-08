@@ -67,6 +67,8 @@ class FaceEmbedder:
         self._net = None
         self._initialized = False
         self._init_lock = asyncio.Lock()
+        # OpenCV DNN is not thread-safe; serialize inference when CONCURRENT_JOBS > 1
+        self._inference_lock = asyncio.Lock()
 
         # Circuit breaker state
         self._circuit_failure_count = 0
@@ -379,15 +381,18 @@ class FaceEmbedder:
         if not await self.ensure_initialized():
             return None
 
-        try:
-            result = await asyncio.to_thread(self._generate_sync, face_crop)
-            if result is not None:
-                self._record_success()
-            return result
-        except Exception as e:
-            self._record_failure()
-            logger.error(f"Embedding generation failed: {e}")
-            return None
+        # Serialize inference: OpenCV DNN legacy backend is not thread-safe (assertion
+        # failures in addHost/releaseReference when _net is used from multiple threads).
+        async with self._inference_lock:
+            try:
+                result = await asyncio.to_thread(self._generate_sync, face_crop)
+                if result is not None:
+                    self._record_success()
+                return result
+            except Exception as e:
+                self._record_failure()
+                logger.error(f"Embedding generation failed: {e}")
+                return None
         
     def _generate_sync(self, face_crop: np.ndarray) -> list[float]:
         """Run synchronous inference."""

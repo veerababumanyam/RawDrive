@@ -461,8 +461,6 @@ async def delete_my_personal_profile(
                 "deletion_reason": "user_requested",
             },
         )
-
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ProfileNotFoundError:
         raise NotFoundError("Personal Profile", str(current_user.user_id))
     except PersonalProfileError as e:
@@ -585,8 +583,6 @@ async def delete_personal_profile_avatar(
             target_entity_type="personal_profile",
             details={"action": "avatar_deleted"},
         )
-
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ProfileNotFoundError:
         raise NotFoundError("Personal Profile", str(current_user.user_id))
     except Exception as e:

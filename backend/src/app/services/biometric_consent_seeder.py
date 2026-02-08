@@ -7,6 +7,7 @@ Features:
 - Seed consent for test workspaces
 - Seed consent for all workspaces (development)
 - Verify consent status
+- Auto-seed for test user workspaces at startup (development only)
 
 WARNING: This bypasses GDPR Article 9 consent requirements and should
 NEVER be used in production environments.
@@ -27,12 +28,22 @@ from app.models.workspace_biometric_settings import BiometricConsentStatus
 
 logger = logging.getLogger(__name__)
 
-# Known test workspace IDs from TEST_USERS.md
+# Known test workspace IDs: tier users (TEST_USERS.md) + test-roles workspace
+# Tier: free, starter, professional, business, enterprise
+# Test roles workspace: shared workspace for workspaceowner, workspaceadmin, etc.
 TEST_WORKSPACE_IDS = [
-    # Add your test workspace IDs here
+    UUID("11111111-1111-1111-1111-000000000001"),  # free
+    UUID("11111111-1111-1111-1111-000000000002"),  # starter
+    UUID("11111111-1111-1111-1111-000000000003"),  # professional
+    UUID("11111111-1111-1111-1111-000000000004"),  # business
+    UUID("11111111-1111-1111-1111-000000000005"),  # enterprise
+    UUID("44444444-4444-4444-4444-444444444000"),  # test-roles-workspace
 ]
 
-# Test user email for consent attribution
+# Test user email domains (TEST_USERS.md) – workspaces with members using these get consent
+TEST_EMAIL_DOMAINS = ("@test.rawdrive.in", "@test.rawdrive.ai")
+
+# Test user for consent attribution (system/dev)
 TEST_CONSENT_USER = UUID("00000000-0000-0000-0000-000000000001")  # System user
 
 
@@ -207,6 +218,83 @@ async def seed_test_workspaces() -> dict[str, int]:
             stats["skipped"] += 1
 
     logger.info(f"Test workspace consent seeding complete: {stats}")
+    return stats
+
+
+async def seed_consent_for_test_user_workspaces(
+    policy_version: str = "1.0-dev",
+) -> dict[str, int]:
+    """Seed biometric consent for all test-user workspaces (persistent, idempotent).
+
+    - Grants consent for TEST_WORKSPACE_IDS (tier + test-roles).
+    - Also finds workspaces where any member has email ending with
+      @test.rawdrive.in or @test.rawdrive.ai and grants consent for those.
+    So all test users get consent pre-granted and are not asked again.
+
+    Call at backend startup in development only (see main.py lifespan).
+    Data is stored in workspace_biometric_settings; Redis cache is invalidated per workspace.
+
+    Returns:
+        Dictionary with granted, skipped, failed, total.
+    """
+    pool = await get_postgres_pool()
+    consent_service = get_biometric_consent_service()
+    stats = {"granted": 0, "skipped": 0, "failed": 0, "total": 0}
+
+    # 1) Collect workspace IDs: known test list + workspaces with test-user members
+    workspace_ids: set[UUID] = set(TEST_WORKSPACE_IDS)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT wm.workspace_id
+            FROM workspace_memberships wm
+            JOIN users u ON u.user_id = wm.user_id
+            WHERE wm.status = 'active'
+            AND (u.email LIKE $1 OR u.email LIKE $2)
+            """,
+            "%@test.rawdrive.in",
+            "%@test.rawdrive.ai",
+        )
+        for row in rows:
+            workspace_ids.add(row["workspace_id"])
+
+    ordered_ids = list(workspace_ids)
+    stats["total"] = len(ordered_ids)
+
+    grant_data = BiometricConsentGrant(
+        ip_address="127.0.0.1",
+        user_agent="RawDrive Test User Consent Seeder (Startup)",
+        policy_version=policy_version,
+    )
+
+    for workspace_id in ordered_ids:
+        settings = await consent_service.get_settings(workspace_id)
+        if settings.consent_status == BiometricConsentStatus.GRANTED:
+            stats["skipped"] += 1
+            continue
+        try:
+            await consent_service.grant_consent(
+                workspace_id, TEST_CONSENT_USER, grant_data
+            )
+            stats["granted"] += 1
+            logger.debug("Granted biometric consent for test workspace %s", workspace_id)
+        except Exception as e:
+            stats["failed"] += 1
+            logger.warning(
+                "Failed to grant consent for workspace %s: %s",
+                workspace_id,
+                e,
+            )
+
+    if stats["granted"] or stats["skipped"]:
+        logger.info(
+            "Test user biometric consent seeding: total=%s granted=%s skipped=%s failed=%s",
+            stats["total"],
+            stats["granted"],
+            stats["skipped"],
+            stats["failed"],
+        )
     return stats
 
 

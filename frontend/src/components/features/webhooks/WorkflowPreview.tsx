@@ -31,7 +31,7 @@ import type {
   WorkflowStepDefinition,
   WorkflowStepResponse,
   WorkflowStepResult,
-} from '../../../types/webhooks';
+} from '@/types/webhooks';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,6 +61,13 @@ export interface WorkflowPreviewProps {
 // ---------------------------------------------------------------------------
 // Helper Functions
 // ---------------------------------------------------------------------------
+
+/**
+ * Extract step type from either WorkflowStepDefinition or WorkflowStepResponse
+ */
+function getStepType(step: WorkflowStepDefinition | WorkflowStepResponse): WorkflowStepType {
+  return 'type' in step ? getStepType(step) : step.step_type;
+}
 
 /**
  * Get icon component for step type
@@ -194,7 +201,7 @@ function StepNode({
   showDetails,
   onClick,
 }: StepNodeProps) {
-  const colors = getStepColors(step.type);
+  const colors = getStepColors(getStepType(step));
   const status = getStepStatus(result);
 
   const sizeClasses = {
@@ -241,7 +248,7 @@ function StepNode({
         )}
       >
         <div className={cn(classes.iconInner, colors.icon)}>
-          {getStepIcon(step.type)}
+          {getStepIcon(getStepType(step))}
         </div>
 
         {/* Status Indicator */}
@@ -268,7 +275,7 @@ function StepNode({
       <div className={cn('mt-2 text-center', classes.text)}>
         <p className="font-medium truncate max-w-full">{step.name}</p>
         <p className="text-muted-foreground truncate max-w-full">
-          {getStepTypeLabel(step.type)}
+          {getStepTypeLabel(getStepType(step))}
         </p>
       </div>
 
@@ -282,7 +289,7 @@ function StepNode({
             )}
             <div className="flex items-center gap-2 text-xs">
               <span className={cn('px-1.5 py-0.5 rounded', colors.bg, colors.icon)}>
-                {getStepTypeLabel(step.type)}
+                {getStepTypeLabel(getStepType(step))}
               </span>
               {result?.duration_ms && (
                 <span className="text-muted-foreground">
@@ -482,7 +489,7 @@ export function SimpleWorkflowSteps({ steps, className }: SimpleWorkflowStepsPro
   return (
     <div className={cn('space-y-2', className)}>
       {steps.map((step, index) => {
-        const colors = getStepColors(step.type);
+        const colors = getStepColors(getStepType(step));
         const stepId = 'step_id' in step ? step.step_id : `step-${index}`;
 
         return (
@@ -497,7 +504,7 @@ export function SimpleWorkflowSteps({ steps, className }: SimpleWorkflowStepsPro
                 colors.icon
               )}
             >
-              <div className="h-3 w-3">{getStepIcon(step.type)}</div>
+              <div className="h-3 w-3">{getStepIcon(getStepType(step))}</div>
             </div>
             <span className="font-medium">{step.name}</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />

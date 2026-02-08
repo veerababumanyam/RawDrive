@@ -308,6 +308,30 @@ async def process_asset_handler(payload: dict[str, Any]) -> dict[str, Any]:
 
         logger.info(f"Asset {asset_id} processing completed successfully")
 
+        # Trigger Face Detection (T010 - Auto-detect faces on upload)
+        # This resolves the "No ungrouped faces" issue by ensuring faces enter the pipeline
+        if file_type == "photo":
+            try:
+                from app.services.face_detection_service import get_face_detection_service
+                
+                face_service = get_face_detection_service()
+                # Use priority 10 (normal/high) for new uploads
+                job_id = await face_service.reprocess_photo(
+                    photo_id=asset_id,
+                    workspace_id=workspace_id,
+                    priority=10
+                )
+                logger.info(
+                    f"Triggered face detection for asset {asset_id}",
+                    extra={"job_id": str(job_id)}
+                )
+            except Exception as e:
+                # Don't fail the upload if detection queuing fails
+                logger.warning(
+                    f"Failed to queue face detection for asset {asset_id}: {e}",
+                    exc_info=True
+                )
+
         # Emit WebSocket event for asset processing completion
         try:
             from app.services.websocket_service import emit_asset_processed

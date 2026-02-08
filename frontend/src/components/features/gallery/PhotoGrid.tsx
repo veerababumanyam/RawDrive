@@ -23,9 +23,11 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Image as ImageIcon } from 'lucide-react';
 import { PhotoCard } from './PhotoCard';
 import { GalleryAssetItem } from '../../../types/gallery';
 import { ResponsiveColumns } from '../../../types/canvas';
+import { useTranslation } from 'react-i18next';
 
 export interface PhotoGridProps {
   assets: GalleryAssetItem[];
@@ -102,6 +104,7 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
   isPrivateUnlocked,
   onUnlockPrivate,
 }) => {
+  const { t } = useTranslation();
   const [items, setItems] = useState<GalleryAssetItem[]>(assets);
 
   // Update items when assets prop changes
@@ -227,33 +230,8 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
     }
   }, [items.length, currentColCount]);
 
-  // Loading skeleton
-  if (isLoading) {
-    return (
-      <div className={`grid ${getColumnClasses(columns)} ${getGapClass(gap)} ${className}`}>
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div
-            key={i}
-            className="aspect-[4/3] bg-surface-hover rounded-card animate-pulse"
-          />
-        ))}
-      </div>
-    );
-  }
-
-  // Empty state
-  if (assets.length === 0) {
-    return (
-      <div className={`flex flex-col items-center justify-center py-16 ${className}`}>
-        <div className="w-16 h-16 mb-4 rounded-full bg-surface flex items-center justify-center">
-          <span className="text-text-tertiary text-2xl">📷</span>
-        </div>
-        <p className="text-text-secondary">No photos in this gallery</p>
-      </div>
-    );
-  }
-
-  // Memoize grid content to prevent recreation on every render
+  // Memoize grid content to prevent recreation on every render.
+  // Must run unconditionally (before any early return) to satisfy Rules of Hooks.
   const gridContent = useMemo(() => (
     <div
       className={`grid ${getColumnClasses(columns)} ${getGapClass(gap)} ${className}`}
@@ -317,6 +295,32 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
     isPrivateUnlocked,
     onUnlockPrivate,
   ]);
+
+  // Loading skeleton (early return after all hooks)
+  if (isLoading) {
+    return (
+      <div className={`grid ${getColumnClasses(columns)} ${getGapClass(gap)} ${className}`}>
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div
+            key={i}
+            className="aspect-[4/3] bg-surface-hover rounded-card animate-pulse"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Empty state
+  if (assets.length === 0) {
+    return (
+      <div className={`flex flex-col items-center justify-center py-16 ${className}`}>
+        <div className="w-16 h-16 mb-4 rounded-full bg-surface flex items-center justify-center">
+          <ImageIcon size={32} className="text-text-tertiary" aria-hidden="true" />
+        </div>
+        <p className="text-text-secondary">{t('gallery.list.noPhotos')}</p>
+      </div>
+    );
+  }
 
   // Enable DndContext if sortable or drag-to-tab is enabled
   // This DndContext handles both sorting within grid and drag-to-tab

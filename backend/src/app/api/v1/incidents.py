@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, Response
 from pydantic import BaseModel, Field
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
@@ -1875,7 +1875,6 @@ async def update_affected_resource(
 @router.delete(
     "/{incident_id}/affected-resources/{resource_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    response_model=None,
     summary="Remove affected resource",
     description="Remove a resource from the affected resources list.",
     responses={
@@ -1890,7 +1889,7 @@ async def remove_affected_resource(
     workspace_access: WorkspaceAccessDep,
     current_user: CurrentUserDep,
     incident_service: IncidentServiceDep,
-) -> None:
+):
     """Remove an affected resource from an incident."""
     try:
         removed = await incident_service.remove_affected_resource(

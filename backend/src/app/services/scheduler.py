@@ -44,6 +44,8 @@ class SchedulerService:
         last_trial_check = datetime.min.replace(tzinfo=timezone.utc)
         last_tagging_stats_refresh = datetime.min.replace(tzinfo=timezone.utc)
         last_invitation_deletion = datetime.min.replace(tzinfo=timezone.utc)
+        last_face_cache_recent = datetime.min.replace(tzinfo=timezone.utc)
+        last_face_cache_popular = datetime.min.replace(tzinfo=timezone.utc)
 
         while self._running:
             try:
@@ -72,6 +74,18 @@ class SchedulerService:
                     await self._schedule_invitation_auto_deletion()
                     await self._schedule_invitation_deletion_warnings()
                     last_invitation_deletion = now
+
+                # Face cache warming - recent uploads: every 30 minutes
+                # Warms cache for recently uploaded assets
+                if (now - last_face_cache_recent).total_seconds() >= 1800:
+                    await self._schedule_face_cache_warm_recent()
+                    last_face_cache_recent = now
+
+                # Face cache warming - popular galleries: every 6 hours
+                # Warms cache for frequently accessed galleries
+                if (now - last_face_cache_popular).total_seconds() >= 21600:
+                    await self._schedule_face_cache_warm_popular()
+                    last_face_cache_popular = now
 
                 # Sleep for 1 minute between checks
                 await asyncio.sleep(60)
@@ -151,6 +165,40 @@ class SchedulerService:
             priority=TaskPriority.NORMAL,
         )
         logger.info("Scheduled 1-day deletion warning check", extra={"task_id": task_id_1d})
+
+    async def _schedule_face_cache_warm_recent(self) -> None:
+        """Schedule face cache warming for recent uploads.
+
+        Feature: Smart Face Caching
+        Warms cache for recently uploaded assets to reduce AI API calls.
+        Runs every 30 minutes for all active workspaces.
+        """
+        task_id = await enqueue_task(
+            task_type="face_cache.warm_recent",
+            payload={
+                "limit": 100,  # Assets per workspace
+                "hours_ago": 24,  # Look at last 24 hours
+            },
+            priority=TaskPriority.NORMAL,
+        )
+        logger.info("Scheduled face cache warming for recent uploads", extra={"task_id": task_id})
+
+    async def _schedule_face_cache_warm_popular(self) -> None:
+        """Schedule face cache warming for popular galleries.
+
+        Feature: Smart Face Caching
+        Warms cache for frequently accessed galleries to improve performance.
+        Runs every 6 hours for all active workspaces.
+        """
+        task_id = await enqueue_task(
+            task_type="face_cache.warm_popular",
+            payload={
+                "limit": 20,  # Galleries per workspace
+                "days_ago": 7,  # Look at last 7 days
+            },
+            priority=TaskPriority.NORMAL,
+        )
+        logger.info("Scheduled face cache warming for popular galleries", extra={"task_id": task_id})
 
 
 # Global instance

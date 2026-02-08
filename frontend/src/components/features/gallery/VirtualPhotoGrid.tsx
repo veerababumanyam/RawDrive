@@ -14,9 +14,11 @@
 import React, { useCallback, useRef, useState, useMemo, CSSProperties } from 'react';
 import { Grid, CellComponentProps, GridImperativeAPI } from 'react-window';
 import { AutoSizer } from 'react-virtualized-auto-sizer';
+import { Image as ImageIcon } from 'lucide-react';
 import { PhotoCard } from './PhotoCard';
 import type { GalleryAssetItem } from '../../../types/gallery';
 import type { ResponsiveColumns } from '../../../types/canvas';
+import { useTranslation } from 'react-i18next';
 
 export interface VirtualPhotoGridProps {
   assets: GalleryAssetItem[];
@@ -266,6 +268,7 @@ export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
   onLoadMore,
   hasMore = false,
 }) => {
+  const { t } = useTranslation();
   const gridRef = useRef<GridImperativeAPI>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
@@ -370,9 +373,9 @@ export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
     return (
       <div className={`flex flex-col items-center justify-center py-16 ${className}`}>
         <div className="w-16 h-16 mb-4 rounded-full bg-surface flex items-center justify-center">
-          <span className="text-text-tertiary text-2xl">📷</span>
+          <ImageIcon size={32} className="text-text-tertiary" aria-hidden="true" />
         </div>
-        <p className="text-text-secondary">No photos in this gallery</p>
+        <p className="text-text-secondary">{t('gallery.list.noPhotos')}</p>
       </div>
     );
   }

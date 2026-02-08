@@ -15,11 +15,13 @@ import type {
   ClientPreferenceUpdate,
   LearnPreferencesRequest,
   CreateABTestRequest,
-  ABTestStatus,
   FeedbackRequest,
-  SceneCategory,
   BatchEmbeddingRequest,
 } from '../services/portfolioRecommendationService';
+import {
+  ABTestStatus,
+  SceneCategory,
+} from '@rawdrive/shared-types';
 
 // ---------------------------------------------------------------------------
 // Query Keys

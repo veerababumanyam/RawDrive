@@ -114,6 +114,11 @@ TASK_ASSET_EXTRACT_METADATA = "asset.extract_metadata"
 TASK_FACE_DETECTION = "face.detection"
 TASK_FACE_CLUSTERING = "face.clustering"
 
+# Face cache warming tasks (Feature: Smart Face Caching)
+TASK_FACE_CACHE_WARM_RECENT = "face_cache.warm_recent"
+TASK_FACE_CACHE_WARM_POPULAR = "face_cache.warm_popular"
+TASK_FACE_CACHE_WARM_FAVORITES = "face_cache.warm_favorites"
+
 # AI/Curation tasks (Feature: 023-enhanced-smart-curate)
 TASK_CURATION_QUALITY_ANALYSIS = "curation.quality_analysis"
 TASK_CURATION_SIMILARITY_GROUPING = "curation.similarity_grouping"
@@ -914,4 +919,211 @@ async def handle_extract_metadata(payload: dict[str, Any]) -> dict[str, Any]:
 
     except Exception as e:
         logger.exception(f"Metadata extraction failed for {asset_id}")
+        return {"success": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Face Cache Warming Handlers (Feature: Smart Face Caching)
+# ---------------------------------------------------------------------------
+
+
+@register_task_handler("face_cache.warm_recent")
+async def handle_face_cache_warm_recent(payload: dict[str, Any]) -> dict[str, Any]:
+    """Warm face cache for recently uploaded assets.
+
+    Scheduled task to warm cache for recently uploaded assets.
+    Runs every 30 minutes to keep cache warm for new content.
+
+    Payload:
+        - workspace_id: The workspace UUID (optional, if omitted processes all active workspaces)
+        - limit: Maximum number of assets to warm (default: 100)
+        - hours_ago: Look at assets uploaded in this time window (default: 24)
+
+    Returns:
+        Dictionary with warming statistics
+    """
+    from uuid import UUID
+    from sqlalchemy import select
+    from app.db.postgres import get_postgres_pool
+    from app.models.workspace import Workspace
+    from app.services.face_cache_warmer import get_face_cache_warmer
+
+    workspace_id = payload.get("workspace_id")
+    limit = payload.get("limit", 100)
+    hours_ago = payload.get("hours_ago", 24)
+
+    pool = await get_postgres_pool()
+    results = []
+
+    try:
+        # Get workspaces to process
+        if workspace_id:
+            workspace_ids = [UUID(workspace_id)]
+        else:
+            # Get all active workspaces
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    select(Workspace.workspace_id).where(
+                        Workspace.is_active == True,
+                    )
+                )
+                workspace_ids = [row[0] for row in result]
+
+        # Process each workspace
+        for ws_id in workspace_ids:
+            try:
+                warmer = await get_face_cache_warmer(pool)
+                stats = await warmer.warm_recent_uploads(
+                    workspace_id=ws_id,
+                    limit=limit,
+                    hours_ago=hours_ago,
+                )
+                results.append({
+                    "workspace_id": str(ws_id),
+                    "stats": stats,
+                })
+            except Exception as e:
+                logger.error(f"Failed to warm recent uploads for workspace {ws_id}: {e}")
+                results.append({
+                    "workspace_id": str(ws_id),
+                    "error": str(e),
+                })
+
+        return {
+            "success": True,
+            "workspaces_processed": len(results),
+            "results": results,
+        }
+
+    except Exception as e:
+        logger.exception("Face cache warm recent uploads failed")
+        return {"success": False, "error": str(e)}
+
+
+@register_task_handler("face_cache.warm_popular")
+async def handle_face_cache_warm_popular(payload: dict[str, Any]) -> dict[str, Any]:
+    """Warm face cache for popular galleries.
+
+    Scheduled task to warm cache for frequently accessed galleries.
+    Runs every 6 hours to keep cache warm for popular content.
+
+    Payload:
+        - workspace_id: The workspace UUID (optional, if omitted processes all active workspaces)
+        - limit: Maximum number of galleries to warm (default: 20)
+        - days_ago: Look at galleries updated in this time window (default: 7)
+
+    Returns:
+        Dictionary with warming statistics
+    """
+    from uuid import UUID
+    from sqlalchemy import select
+    from app.db.postgres import get_postgres_pool
+    from app.models.workspace import Workspace
+    from app.services.face_cache_warmer import get_face_cache_warmer
+
+    workspace_id = payload.get("workspace_id")
+    limit = payload.get("limit", 20)
+    days_ago = payload.get("days_ago", 7)
+
+    pool = await get_postgres_pool()
+    results = []
+
+    try:
+        # Get workspaces to process
+        if workspace_id:
+            workspace_ids = [UUID(workspace_id)]
+        else:
+            # Get all active workspaces
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    select(Workspace.workspace_id).where(
+                        Workspace.is_active == True,
+                    )
+                )
+                workspace_ids = [row[0] for row in result]
+
+        # Process each workspace
+        for ws_id in workspace_ids:
+            try:
+                warmer = await get_face_cache_warmer(pool)
+                stats = await warmer.warm_popular_galleries(
+                    workspace_id=ws_id,
+                    limit=limit,
+                    days_ago=days_ago,
+                )
+                results.append({
+                    "workspace_id": str(ws_id),
+                    "stats": stats,
+                })
+            except Exception as e:
+                logger.error(f"Failed to warm popular galleries for workspace {ws_id}: {e}")
+                results.append({
+                    "workspace_id": str(ws_id),
+                    "error": str(e),
+                })
+
+        return {
+            "success": True,
+            "workspaces_processed": len(results),
+            "results": results,
+        }
+
+    except Exception as e:
+        logger.exception("Face cache warm popular galleries failed")
+        return {"success": False, "error": str(e)}
+
+
+@register_task_handler("face_cache.warm_favorites")
+async def handle_face_cache_warm_favorites(payload: dict[str, Any]) -> dict[str, Any]:
+    """Warm face cache for user's favorite galleries.
+
+    Task to warm cache for galleries frequently accessed by users.
+    Can be triggered on-demand or scheduled.
+
+    Payload:
+        - workspace_id: The workspace UUID (required)
+        - user_id: The user UUID (optional, if omitted warms all recent galleries)
+        - limit: Maximum number of galleries to warm (default: 50)
+
+    Returns:
+        Dictionary with warming statistics
+    """
+    from uuid import UUID
+    from app.db.postgres import get_postgres_pool
+    from app.services.face_cache_warmer import get_face_cache_warmer
+
+    workspace_id = payload.get("workspace_id")
+    user_id = payload.get("user_id")
+    limit = payload.get("limit", 50)
+
+    if not workspace_id:
+        return {"success": False, "error": "workspace_id is required"}
+
+    pool = await get_postgres_pool()
+
+    try:
+        warmer = await get_face_cache_warmer(pool)
+
+        if user_id:
+            stats = await warmer.warm_user_favorites(
+                workspace_id=UUID(workspace_id),
+                user_id=UUID(user_id),
+                limit=limit,
+            )
+        else:
+            # Warm all recent galleries for the workspace
+            stats = await warmer.warm_user_favorites(
+                workspace_id=UUID(workspace_id),
+                user_id=None,  # This will warm all recent galleries
+                limit=limit,
+            )
+
+        return {
+            "success": True,
+            "workspace_id": workspace_id,
+            "stats": stats,
+        }
+
+    except Exception as e:
+        logger.exception(f"Face cache warm favorites failed for workspace {workspace_id}")
         return {"success": False, "error": str(e)}

@@ -109,6 +109,9 @@ def handle_signal(signum, frame):
 
 def main():
     """Main entry point for the worker service."""
+    import os as _os
+    log_level_name = (_os.getenv("LOG_LEVEL") or "INFO").upper()
+    logging.getLogger().setLevel(getattr(logging, log_level_name, logging.INFO))
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
@@ -116,15 +119,16 @@ def main():
     logger.info("Starting Face Detection Worker Service...")
     
     # Run the FastAPI app with uvicorn
-    # Port from environment or default to 8001
+    # Port from environment or default to 8001. LOG_LEVEL=DEBUG for verbose tracing.
     import os
     port = int(os.getenv("PORT", 8001))
+    log_level = (os.getenv("LOG_LEVEL") or "info").lower()
     uvicorn.run(
         "app.face_worker_main:app",
         host="0.0.0.0",
         port=port,
         workers=1,  # Single worker - the async worker handles parallelism
-        log_level="info",
+        log_level=log_level,
     )
 
 

@@ -372,6 +372,10 @@ from .gallery import (
     GallerySummary,
     GalleryPublic,
 )
+from .gallery_asset import (
+    # Gallery Asset Junction Model
+    GalleryAsset,
+)
 from .asset_embeddings_cache import (
     # Face Embedding Cache Models (Smart Tagging Cache Layer)
     AssetEmbeddingsCache,

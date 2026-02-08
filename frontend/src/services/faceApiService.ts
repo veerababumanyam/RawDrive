@@ -116,13 +116,26 @@ export interface WorkspaceDetectionStats {
     total_groups: number;
 }
 
+// Error with status for UI (e.g. toast with 403/422 hint)
+export class FaceApiError extends Error {
+    constructor(
+        message: string,
+        public readonly status?: number,
+        public readonly code?: string
+    ) {
+        super(message);
+        this.name = 'FaceApiError';
+    }
+}
+
 // Helper to extract data from API response
 function extractData<T>(response: ApiResponse<T>): T {
     if (response.error) {
-        throw new Error(response.error.message || 'API request failed');
+        const err = response.error as { message?: string; status?: number; code?: string };
+        throw new FaceApiError(err.message || 'API request failed', err.status, err.code);
     }
     if (!response.data) {
-        throw new Error('No data in response');
+        throw new FaceApiError('No data in response');
     }
     return response.data;
 }

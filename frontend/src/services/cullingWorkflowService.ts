@@ -3,7 +3,7 @@
  * API client for bulk photo culling workflow
  */
 
-import { apiClient } from './apiClient';
+import { apiClient } from './api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -155,7 +155,7 @@ class CullingWorkflowService {
     const response = await apiClient.get<CullingPhotosResponse>(
       `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/culling/photos?${params.toString()}`
     );
-    return response.data;
+    return response.data!;
   }
 
   /**
@@ -165,7 +165,7 @@ class CullingWorkflowService {
     const response = await apiClient.get<CullingStats>(
       `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/culling/stats`
     );
-    return response.data;
+    return response.data!;
   }
 
   /**
@@ -179,13 +179,13 @@ class CullingWorkflowService {
     const response = await apiClient.post<AutoRejectResponse>(
       `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/culling/auto-reject`,
       {
-        threshold: options.threshold ?? 40,
+        max_overall_score: options.max_overall_score ?? 40,
+        max_sharpness_score: options.max_sharpness_score ?? 40,
         reject_blur: options.reject_blur ?? true,
-        reject_low_sharpness: options.reject_low_sharpness ?? true,
-        sharpness_threshold: options.sharpness_threshold ?? 40,
+        exclude_bokeh: options.exclude_bokeh ?? true,
       }
     );
-    return response.data;
+    return response.data!;
   }
 
   /**
@@ -200,7 +200,7 @@ class CullingWorkflowService {
       `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/culling/bulk-select`,
       { asset_ids: assetIds }
     );
-    return response.data;
+    return response.data!;
   }
 
   /**
@@ -216,7 +216,7 @@ class CullingWorkflowService {
       `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/culling/bulk-reject`,
       { asset_ids: assetIds, reason }
     );
-    return response.data;
+    return response.data!;
   }
 
   /**
@@ -231,7 +231,7 @@ class CullingWorkflowService {
       `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/culling/bulk-reset`,
       { asset_ids: assetIds }
     );
-    return response.data;
+    return response.data!;
   }
 
   /**
@@ -246,7 +246,7 @@ class CullingWorkflowService {
     const response = await apiClient.get<CullingPhotosResponse>(
       `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/culling/selection?page=${page}&limit=${limit}`
     );
-    return response.data;
+    return response.data!;
   }
 
   /**
@@ -261,7 +261,7 @@ class CullingWorkflowService {
       `/api/v1/workspaces/${workspaceId}/galleries/${galleryId}/culling/apply`,
       request
     );
-    return response.data;
+    return response.data!;
   }
 }
 
