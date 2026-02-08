@@ -171,6 +171,7 @@ const CellComponent = ({
         aspectRatio="square"
         isPrivateUnlocked={isPrivateUnlocked}
         onUnlockPrivate={onUnlockPrivate}
+        id={`photo-card-${asset.asset_id}`}
       />
     </div>
   );
@@ -268,6 +269,7 @@ export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
   const gridRef = useRef<GridImperativeAPI>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+  const gridId = useMemo(() => `photo-grid-${Math.random().toString(36).substr(2, 9)}`, []);
 
   const gapValue = GAP_VALUES[gap];
 
@@ -325,7 +327,7 @@ export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
     },
     [
       enableKeyboardNavigation,
-      assets,
+      assets.length,
       focusedIndex,
       columns,
       minItemSize,
@@ -382,6 +384,7 @@ export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
       style={{ height: height || '100%', minHeight: 400 }}
       role="grid"
       aria-label="Photo gallery"
+      aria-activedescendant={focusedIndex >= 0 ? `photo-card-${assets[focusedIndex]?.asset_id}` : undefined}
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onContextMenu={(e) => e.preventDefault()}
@@ -409,8 +412,8 @@ export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
           const itemWidth = (width - gapValue) / columnCount;
           const itemHeight = itemWidth / itemAspectRatio;
 
-          // Create cell props for react-window v2
-          const cellProps: CellProps = {
+          // Memoize cell props to prevent recreation on every render
+          const cellProps: CellProps = useMemo(() => ({
             assets,
             columnCount,
             selectedAssetIds,
@@ -429,7 +432,26 @@ export const VirtualPhotoGridComponent: React.FC<VirtualPhotoGridProps> = ({
             isPrivateUnlocked,
             onUnlockPrivate,
             gap: gapValue,
-          };
+          }), [
+            assets,
+            columnCount,
+            selectedAssetIds,
+            managementSelectable,
+            showCustomerSelection,
+            coverAssetId,
+            onManagementSelect,
+            onAssetClick,
+            onAssetFavorite,
+            onCustomerSelectionToggle,
+            onAssetDownload,
+            onAssetShare,
+            onAssetLock,
+            onAssetDelete,
+            onSetCover,
+            isPrivateUnlocked,
+            onUnlockPrivate,
+            gapValue,
+          ]);
 
           return (
             <Grid<CellProps>

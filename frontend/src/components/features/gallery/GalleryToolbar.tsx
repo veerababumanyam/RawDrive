@@ -11,6 +11,7 @@ import { Checkbox } from '../../ui/FormControls';
 import { ViewMode, FilterType } from '../../../types/gallery';
 import { GallerySearchBar } from './GallerySearchBar';
 import type { SearchFilters } from '../../../hooks/useAssetSearch';
+import { useTranslation } from 'react-i18next';
 
 export interface GalleryToolbarProps {
   viewMode: ViewMode;
@@ -49,7 +50,7 @@ export interface GalleryToolbarProps {
   reviewModeEnabled?: boolean;
 }
 
-// Filter pill button styles
+// Filter pill button styles - using design tokens
 const getFilterPillClasses = (isActive: boolean, variant: 'default' | 'favorites' = 'default') => {
   const baseClasses = `
     inline-flex items-center gap-1.5
@@ -64,7 +65,8 @@ const getFilterPillClasses = (isActive: boolean, variant: 'default' | 'favorites
 
   if (isActive) {
     if (variant === 'favorites') {
-      return `${baseClasses} bg-pink-500 border-pink-500 text-white focus-visible:ring-pink-500`;
+      // Use error color token (pink/red) for favorites instead of hardcoded pink-500
+      return `${baseClasses} bg-error border-error text-white focus-visible:ring-error`;
     }
     return `${baseClasses} bg-primary border-primary text-white focus-visible:ring-primary`;
   }
@@ -100,6 +102,8 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
   onReviewModeClick,
   reviewModeEnabled = false,
 }) => {
+  const { t } = useTranslation();
+
   const handleFilterToggle = (filterKey: 'picks' | 'favorites' | 'selections') => {
     if (onFiltersChange) {
       onFiltersChange({
@@ -114,7 +118,11 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
       <div className="flex flex-wrap items-center gap-3 sm:gap-4">
         {/* View Mode Toggle - Grid/List buttons with active highlight */}
         <div className="flex items-center">
-          <div className="inline-flex items-center p-0.5 bg-surface-hover/50 rounded-lg border border-border/50">
+          <div
+            className="inline-flex items-center p-0.5 bg-surface-hover/50 rounded-lg border border-border/50"
+            role="group"
+            aria-label="View mode"
+          >
             <button
               onClick={() => onViewModeChange('grid')}
               className={`
@@ -124,10 +132,10 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
                   : 'text-text-tertiary hover:text-text-primary hover:bg-surface-hover'
                 }
               `}
-              aria-label="Grid view"
+              aria-label={`Grid view${viewMode === 'grid' ? ', current view' : ''}`}
               aria-pressed={viewMode === 'grid'}
             >
-              <Grid size={18} />
+              <Grid size={18} aria-hidden="true" />
             </button>
             <button
               onClick={() => onViewModeChange('masonry')}
@@ -138,10 +146,10 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
                   : 'text-text-tertiary hover:text-text-primary hover:bg-surface-hover'
                 }
               `}
-              aria-label="Masonry view"
+              aria-label={`Masonry view${viewMode === 'masonry' ? ', current view' : ''}`}
               aria-pressed={viewMode === 'masonry'}
             >
-              <LayoutDashboard size={18} />
+              <LayoutDashboard size={18} aria-hidden="true" />
             </button>
             <button
               onClick={() => onViewModeChange('list')}
@@ -152,10 +160,10 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
                   : 'text-text-tertiary hover:text-text-primary hover:bg-surface-hover'
                 }
               `}
-              aria-label="List view"
+              aria-label={`List view${viewMode === 'list' ? ', current view' : ''}`}
               aria-pressed={viewMode === 'list'}
             >
-              <List size={18} />
+              <List size={18} aria-hidden="true" />
             </button>
           </div>
 
@@ -172,7 +180,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               aria-label="Enter Pro Review Mode"
               title="Pro Review Mode (Lightroom-style culling)"
             >
-              <SlidersHorizontal size={18} />
+              <SlidersHorizontal size={18} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -182,16 +190,21 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
 
         {/* Filter Pills - Matching screenshot exactly */}
         {onFiltersChange && (
-          <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-2"
+            role="group"
+            aria-label="Photo filters"
+          >
             {/* Picks Filter - Star icon */}
             <button
               onClick={() => handleFilterToggle('picks')}
               className={getFilterPillClasses(!!activeFilters.picks)}
               aria-pressed={!!activeFilters.picks}
-              aria-label="Show picks only"
+              aria-expanded={!!activeFilters.picks}
+              aria-label={`Filter by picks${activeFilters.picks ? ' - active' : ', click to toggle'}`}
             >
-              <Sparkles size={14} />
-              <span>Picks</span>
+              <Sparkles size={14} aria-hidden="true" />
+              <span>{t('gallery.filters.picks')}</span>
             </button>
 
             {/* Favorites Filter - Heart icon */}
@@ -199,10 +212,11 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               onClick={() => handleFilterToggle('favorites')}
               className={getFilterPillClasses(!!activeFilters.favorites, 'favorites')}
               aria-pressed={!!activeFilters.favorites}
-              aria-label="Show favorites only"
+              aria-expanded={!!activeFilters.favorites}
+              aria-label={`Filter by favorites${activeFilters.favorites ? ' - active' : ', click to toggle'}`}
             >
-              <Heart size={14} className={activeFilters.favorites ? 'fill-current' : ''} />
-              <span>Favorites</span>
+              <Heart size={14} className={activeFilters.favorites ? 'fill-current' : ''} aria-hidden="true" />
+              <span>{t('gallery.filters.favorites')}</span>
             </button>
 
             {/* Select All Filter - Check icon */}
@@ -210,11 +224,12 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               onClick={() => handleFilterToggle('selections')}
               className={getFilterPillClasses(!!activeFilters.selections)}
               aria-pressed={!!activeFilters.selections}
-              aria-label="Show selected only"
+              aria-expanded={!!activeFilters.selections}
+              aria-label={`Filter by selected photos${activeFilters.selections ? ' - active' : ', click to toggle'}`}
             >
               <CheckSquare size={14} />
-              <span className="hidden sm:inline">Selected Only</span>
-              <span className="sm:hidden">Selected</span>
+              <span className="hidden sm:inline">{t('gallery.filters.selections')}</span>
+              <span className="sm:hidden">{t('gallery.filters.selections')}</span>
             </button>
 
             {/* Clear Selection Button - Only if items selected */}
@@ -234,7 +249,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
                   aria-label="Deselect all"
                 >
                   <X size={14} />
-                  <span>Clear</span>
+                  <span>{t('gallery.filters.clearAll')}</span>
                </button>
             )}
           </div>
@@ -257,7 +272,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
                 aria-label="Save filtered results as a new sub-gallery"
               >
                 <FolderPlus size={14} />
-                <span className="hidden sm:inline">Save as Gallery</span>
+                <span className="hidden sm:inline">{t('gallery.actions.addSubGallery')}</span>
               </button>
             )}
             {aiFiltersApplied && onClearAIFilters && (
@@ -266,7 +281,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
                 onClick={onClearAIFilters}
                 className="text-xs text-primary hover:underline"
               >
-                Clear AI filters
+                {t('gallery.filters.clearAll')}
               </button>
             )}
           </div>
@@ -278,7 +293,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
             <GallerySearchBar
               galleryId={galleryId}
               onFiltersChange={onEnhancedFiltersChange}
-              placeholder="Search by filename, #tag, or @person..."
+              placeholder={t('gallery.filters.searchPlaceholder')}
               showSourceFilter
               compact
             />
@@ -288,7 +303,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
             <input
               type="text"
-              placeholder="Filter items..."
+              placeholder={t('gallery.filters.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="
@@ -327,7 +342,7 @@ export const GalleryToolbar: React.FC<GalleryToolbarProps> = ({
               checked={selectAll}
               onChange={(e) => onSelectAllChange(e.target.checked)}
             />
-            <span className="text-sm text-text-secondary">Select All</span>
+            <span className="text-sm text-text-secondary">{t('common.actions.selectAll')}</span>
           </label>
         )}
 

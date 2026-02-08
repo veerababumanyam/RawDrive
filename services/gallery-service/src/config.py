@@ -63,12 +63,18 @@ class Settings(BaseSettings):
     REDIS_MAX_CONNECTIONS: int = 50
 
     # JWT Authentication
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+    # CRITICAL: JWT_SECRET must be set in environment - no default for security
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "")
+    if not JWT_SECRET:
+        raise ValueError("JWT_SECRET environment variable must be set and must be at least 32 bytes")
     JWT_PUBLIC_KEY_PATH: str = os.getenv("JWT_PUBLIC_KEY_PATH", "")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "EdDSA")
 
     # Encryption
-    ENCRYPTION_MASTER_KEY: str = os.getenv("ENCRYPTION_MASTER_KEY", "0000000000000000000000000000000000000000000000000000000000000000")
+    # CRITICAL: ENCRYPTION_MASTER_KEY must be set in environment - no default for security
+    ENCRYPTION_MASTER_KEY: str = os.getenv("ENCRYPTION_MASTER_KEY", "")
+    if not ENCRYPTION_MASTER_KEY:
+        raise ValueError("ENCRYPTION_MASTER_KEY environment variable must be set and must be 64 hex characters")
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -122,6 +128,98 @@ class Settings(BaseSettings):
 
     # Fallback Configuration
     AI_SERVICE_FALLBACK_ENABLED: bool = os.getenv("AI_SERVICE_FALLBACK_ENABLED", "true").lower() == "true"
+
+    # =========================================================================
+    # AI Provider Configuration (Face Detection & Recognition)
+    # =========================================================================
+
+    # Primary AI Provider for Face Detection
+    # Options: "cloud_vision", "gemini", "local"
+    # - cloud_vision: Google Cloud Vision API (highest accuracy, requires API key)
+    # - gemini: Google Gemini API (good accuracy, multimodal support)
+    # - local: InsightFace local detection (no API required, lower accuracy)
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "cloud_vision")
+
+    # Provider API Keys
+    # Cloud Vision API Key (https://cloud.google.com/vision/docs)
+    GOOGLE_CLOUD_VISION_API_KEY: str = os.getenv("GOOGLE_CLOUD_VISION_API_KEY", "")
+
+    # Gemini API Key (https://ai.google.dev/)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+
+    # Local Provider Configuration (InsightFace)
+    LOCAL_FACE_DETECTION_MODEL_PATH: str = os.getenv(
+        "LOCAL_FACE_DETECTION_MODEL_PATH",
+        "/app/models/face_recognition"
+    )
+    LOCAL_FACE_DETECTION_MODEL_URL: str = os.getenv(
+        "LOCAL_FACE_DETECTION_MODEL_URL",
+        "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
+    )
+    LOCAL_FACE_DETECTION_CONFIDENCE_THRESHOLD: float = float(
+        os.getenv("LOCAL_FACE_DETECTION_CONFIDENCE_THRESHOLD", "0.7")
+    )
+
+    # Face Detection Settings
+    FACE_DETECTION_CONFIDENCE_THRESHOLD: float = float(
+        os.getenv("FACE_DETECTION_CONFIDENCE_THRESHOLD", "0.7")
+    )
+    FACE_DETECTION_MIN_FACE_SIZE: int = int(
+        os.getenv("FACE_DETECTION_MIN_FACE_SIZE", "40")
+    )
+    FACE_DETECTION_MAX_FACES_PER_IMAGE: int = int(
+        os.getenv("FACE_DETECTION_MAX_FACES_PER_IMAGE", "50")
+    )
+
+    # Face Embedding Settings (ArcFace)
+    FACE_EMBEDDING_DIMENSION: int = int(
+        os.getenv("FACE_EMBEDDING_DIMENSION", "512")
+    )
+    FACE_EMBEDDING_MODEL: str = os.getenv(
+        "FACE_EMBEDDING_MODEL",
+        "w600k_r50.onnx"  # ArcFace model
+    )
+
+    # Face Clustering Settings
+    FACE_CLUSTERING_SIMILARITY_THRESHOLD: float = float(
+        os.getenv("FACE_CLUSTERING_SIMILARITY_THRESHOLD", "0.5")
+    )
+    FACE_CLUSTERING_MIN_CLUSTER_SIZE: int = int(
+        os.getenv("FACE_CLUSTERING_MIN_CLUSTER_SIZE", "3")
+    )
+    FACE_CLUSTERING_ALGORITHM: str = os.getenv(
+        "FACE_CLUSTERING_ALGORITHM",
+        "dbscan"  # Options: dbscan, hierarchical, kmeans
+    )
+
+    # Face Detection Rate Limiting
+    FACE_DETECTION_RATE_LIMIT_PER_MINUTE: int = int(
+        os.getenv("FACE_DETECTION_RATE_LIMIT_PER_MINUTE", "100")
+    )
+    FACE_DETECTION_CONCURRENT_JOBS: int = int(
+        os.getenv("FACE_DETECTION_CONCURRENT_JOBS", "5")
+    )
+
+    # Face Detection Timeout
+    FACE_DETECTION_TIMEOUT_SECONDS: int = int(
+        os.getenv("FACE_DETECTION_TIMEOUT_SECONDS", "120")
+    )
+
+    # Model Download Settings
+    FACE_MODEL_DOWNLOAD_TIMEOUT_SECONDS: int = int(
+        os.getenv("FACE_MODEL_DOWNLOAD_TIMEOUT_SECONDS", "300")
+    )
+    FACE_MODEL_DOWNLOAD_MAX_RETRIES: int = int(
+        os.getenv("FACE_MODEL_DOWNLOAD_MAX_RETRIES", "3")
+    )
+
+    # Circuit Breaker Settings for Face Detection
+    FACE_DETECTION_CIRCUIT_FAILURE_THRESHOLD: int = int(
+        os.getenv("FACE_DETECTION_CIRCUIT_FAILURE_THRESHOLD", "3")
+    )
+    FACE_DETECTION_CIRCUIT_RECOVERY_TIMEOUT_SECONDS: int = int(
+        os.getenv("FACE_DETECTION_CIRCUIT_RECOVERY_TIMEOUT_SECONDS", "60")
+    )
 
     @property
     def CORS_ORIGINS(self) -> List[str]:

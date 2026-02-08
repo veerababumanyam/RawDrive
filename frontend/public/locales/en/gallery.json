@@ -11,6 +11,12 @@
     },
     "empty": "No galleries yet",
     "emptyDescription": "Create your first gallery to start organizing your photos.",
+    "list": {
+        "noPhotos": "No photos",
+        "uploadToGetStarted": "Upload photos to get started",
+        "searchPlaceholder": "Search photos...",
+        "loadingPhotos": "Loading photos..."
+    },
     "form": {
         "name": "Gallery Name",
         "namePlaceholder": "Enter gallery name",

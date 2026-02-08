@@ -253,7 +253,8 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
     );
   }
 
-  const gridContent = (
+  // Memoize grid content to prevent recreation on every render
+  const gridContent = useMemo(() => (
     <div
       className={`grid ${getColumnClasses(columns)} ${getGapClass(gap)} ${className}`}
       role="grid"
@@ -261,10 +262,11 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
       onContextMenu={(e) => e.preventDefault()}
     >
       {items.map((asset, index) => {
-        const SortableItem = sortable ? SortablePhotoCard : PhotoCardWrapper;
+        // Use stable component reference based on sortable prop
+        const ItemComponent = sortable ? SortablePhotoCard : PhotoCardWrapper;
 
         return (
-          <SortableItem
+          <ItemComponent
             key={asset.asset_id}
             asset={asset}
             index={index}
@@ -292,7 +294,29 @@ export const PhotoGridComponent: React.FC<PhotoGridProps> = ({
         );
       })}
     </div>
-  );
+  ), [
+    items,
+    selectedAssetIds,
+    coverAssetId,
+    sortable,
+    managementSelectable,
+    showCustomerSelection,
+    columns,
+    gap,
+    className,
+    onManagementSelect,
+    onAssetClick,
+    onAssetFavorite,
+    onCustomerSelectionToggle,
+    onAssetDownload,
+    onAssetShare,
+    onAssetLock,
+    onAssetDelete,
+    onSetCover,
+    handleKeyDown,
+    isPrivateUnlocked,
+    onUnlockPrivate,
+  ]);
 
   // Enable DndContext if sortable or drag-to-tab is enabled
   // This DndContext handles both sorting within grid and drag-to-tab

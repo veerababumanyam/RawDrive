@@ -484,6 +484,17 @@ class MagicLinkService:
             logger.warning(f"Error reading from magic link cache: {e}")
             cached_data = None
 
+        # CRITICAL: Use constant-time comparison for cached data validation to prevent timing attacks
+        if cached_data:
+            # Verify token hash using constant-time comparison
+            stored_hash = cached_data.get("token_hash")
+            if stored_hash and not self._constant_time_compare(token_hash, stored_hash):
+                logger.warning(
+                    "Magic link cache validation failed: token hash mismatch",
+                    extra={"token_hash_prefix": token_hash[:8]},
+                )
+                cached_data = None
+
         if cached_data:
             link_id_str = cached_data["link_id"]
             
@@ -622,10 +633,12 @@ class MagicLinkService:
         # Cache the result (if no max_accesses restriction)
         # Use 60 seconds TTL (short enough for reasonable revocation/expiry propagation)
         if not link.get("max_accesses"):
+            # CRITICAL: Include token_hash in cache for constant-time comparison validation
+            result["token_hash"] = token_hash
             try:
                 await redis.setex(
                     cache_key,
-                    60, 
+                    60,
                     json.dumps(result, cls=UUIDEncoder)
                 )
             except Exception as e:

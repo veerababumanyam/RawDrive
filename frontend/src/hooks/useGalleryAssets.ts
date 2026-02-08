@@ -65,7 +65,10 @@ export const useGalleryAssets = ({
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchAssets = useCallback(
-    async (pageNum: number = currentPage, append: boolean = false) => {
+    async (pageNum: number | ((prev: number) => number) = 1, append: boolean = false) => {
+      // Resolve page number from function or value
+      const pageToFetch = typeof pageNum === 'function' ? pageNum(currentPage) : pageNum;
+
       // Cancel any previous request
       abortControllerRef.current?.abort();
       abortControllerRef.current = new AbortController();
@@ -90,7 +93,7 @@ export const useGalleryAssets = ({
         if (hasAIFilters) {
           const aiResult = await aiFilterService.getFilteredAssets(workspaceId, galleryId, {
             ...aiFilters,
-            page: pageNum,
+            page: pageToFetch,
             limit,
           });
 
@@ -110,7 +113,7 @@ export const useGalleryAssets = ({
         }
 
         const response = await galleryService.listGalleryAssets(workspaceId, galleryId, {
-          page: pageNum,
+          page: pageToFetch,
           limit,
           // Pass sub_gallery_id correctly:
           // - null → '' (root gallery only, no sub-gallery)
@@ -135,7 +138,7 @@ export const useGalleryAssets = ({
         // If using AI filters, use the AI meta for total counts/pagination
         setMeta(hasAIFilters && aiMeta ? aiMeta : response.meta);
 
-        setCurrentPage(pageNum);
+        setCurrentPage(pageToFetch);
         setLoading(false);
       } catch (err) {
         // Ignore AbortError - component unmounted or request was cancelled
@@ -160,7 +163,6 @@ export const useGalleryAssets = ({
       searchQuery,
       sortBy,
       limit,
-      currentPage,
       aiFilters,
     ]
   );
@@ -182,9 +184,10 @@ export const useGalleryAssets = ({
 
   const loadMore = useCallback(async () => {
     if (meta?.hasMore && !loading) {
-      await fetchAssets(currentPage + 1, true);
+      // Use functional state update to get latest page
+      await fetchAssets((prevPage) => prevPage + 1, true);
     }
-  }, [meta?.hasMore, loading, currentPage, fetchAssets]);
+  }, [meta?.hasMore, loading, fetchAssets]);
 
   const updateAsset = useCallback((assetId: string, changes: Partial<GalleryAssetItem>) => {
     setAssets((prev) =>

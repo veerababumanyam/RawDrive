@@ -352,3 +352,31 @@ from .asset import (
     AssetBatchFaceScanRequest,
     AssetBatchFaceScanResponse,
 )
+from .gallery import (
+    # Gallery Enums
+    CoverStyle,
+    LayoutStyle,
+    ThemeMode,
+    # Gallery Configuration Models
+    WatermarkConfig,
+    FindMeConfig,
+    SlideshowConfig,
+    ActivityTrackingConfig,
+    ProofingSettings,
+    CustomTheme,
+    DesignConfig,
+    # Gallery Models
+    Gallery,
+    GalleryCreate,
+    GalleryUpdate,
+    GallerySummary,
+    GalleryPublic,
+)
+from .asset_embeddings_cache import (
+    # Face Embedding Cache Models (Smart Tagging Cache Layer)
+    AssetEmbeddingsCache,
+)
+from .face_group_centroids_cache import (
+    # Face Group Centroid Cache Models
+    FaceGroupCentroidsCache,
+)

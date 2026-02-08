@@ -11,6 +11,7 @@ import { Checkbox } from '../../ui/FormControls';
 import { useSignedUrl } from '../../../hooks/useSignedUrl';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { GalleryAssetItem } from '../../../types/gallery';
+import { useTranslation } from 'react-i18next';
 
 export interface PhotoListViewProps {
   assets: GalleryAssetItem[];
@@ -42,6 +43,7 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
   isPrivateUnlocked = false,
 }) => {
   const { workspace } = useAuth();
+  const { t } = useTranslation();
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -98,7 +100,7 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
         <div className="flex items-center justify-center py-12">
           <div className="flex flex-col items-center gap-4">
             <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <p className="text-text-secondary">Loading photos...</p>
+            <p className="text-text-secondary">{t('gallery.list.loadingPhotos')}</p>
           </div>
         </div>
       </AppCard>
@@ -111,8 +113,8 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
       <AppCard padding="md" className={className}>
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <ImageIcon size={48} className="text-text-tertiary mb-4" />
-          <p className="text-text-secondary font-medium mb-1">No photos</p>
-          <p className="text-text-tertiary text-sm">Upload photos to get started</p>
+          <p className="text-text-secondary font-medium mb-1">{t('gallery.list.noPhotos')}</p>
+          <p className="text-text-tertiary text-sm">{t('gallery.list.uploadToGetStarted')}</p>
         </div>
       </AppCard>
     );
@@ -121,10 +123,23 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
   return (
     <AppCard padding="none" className={className}>
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table
+          className="w-full"
+          role="table"
+          aria-label="Photo gallery list view"
+          aria-describedby="photo-list-description"
+        >
+          <caption id="photo-list-description" className="sr-only">
+            Photo gallery table with sorting and filtering capabilities. Use arrow keys to navigate.
+          </caption>
           <thead className="bg-surface-hover border-b border-border">
-            <tr>
-              <th className="px-4 py-3 text-left">
+            <tr role="row">
+              <th
+                className="px-4 py-3 text-left"
+                scope="col"
+                role="columnheader"
+                aria-sort="none"
+              >
                 <Checkbox
                   checked={selectedAssetIds.size === assets.length && assets.length > 0}
                   onChange={(e) => {
@@ -137,49 +152,57 @@ export const PhotoListView: React.FC<PhotoListViewProps> = ({
                   aria-label="Select all"
                 />
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider" scope="col">
                 Thumbnail
               </th>
-              <th className="px-4 py-3 text-left">
+              <th className="px-4 py-3 text-left" scope="col">
                 <button
                   onClick={() => handleSort('filename')}
                   className="flex items-center gap-1 text-xs font-semibold text-text-secondary uppercase tracking-wider hover:text-text-primary transition-colors"
+                  aria-label={`Sort by filename${sortField === 'filename' ? `, ${sortDirection === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+                  aria-sort={sortField === 'filename' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}
                 >
                   Filename
-                  <ArrowUpDown size={14} className={sortField === 'filename' ? 'text-primary' : 'text-text-tertiary'} />
+                  <ArrowUpDown size={14} className={sortField === 'filename' ? 'text-primary' : 'text-text-tertiary'} aria-hidden="true" />
                 </button>
               </th>
-              <th className="px-4 py-3 text-left">
+              <th className="px-4 py-3 text-left" scope="col">
                 <button
                   onClick={() => handleSort('dimensions')}
                   className="flex items-center gap-1 text-xs font-semibold text-text-secondary uppercase tracking-wider hover:text-text-primary transition-colors"
+                  aria-label={`Sort by dimensions${sortField === 'dimensions' ? `, ${sortDirection === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+                  aria-sort={sortField === 'dimensions' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}
                 >
                   Dimensions
-                  <ArrowUpDown size={14} className={sortField === 'dimensions' ? 'text-primary' : 'text-text-tertiary'} />
+                  <ArrowUpDown size={14} className={sortField === 'dimensions' ? 'text-primary' : 'text-text-tertiary'} aria-hidden="true" />
                 </button>
               </th>
-              <th className="px-4 py-3 text-left">
+              <th className="px-4 py-3 text-left" scope="col">
                 <button
                   onClick={() => handleSort('created_at')}
                   className="flex items-center gap-1 text-xs font-semibold text-text-secondary uppercase tracking-wider hover:text-text-primary transition-colors"
+                  aria-label={`Sort by date${sortField === 'created_at' ? `, ${sortDirection === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+                  aria-sort={sortField === 'created_at' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}
                 >
                   Date
-                  <ArrowUpDown size={14} className={sortField === 'created_at' ? 'text-primary' : 'text-text-tertiary'} />
+                  <ArrowUpDown size={14} className={sortField === 'created_at' ? 'text-primary' : 'text-text-tertiary'} aria-hidden="true" />
                 </button>
               </th>
-              <th className="px-4 py-3 text-left">
+              <th className="px-4 py-3 text-left" scope="col">
                 <button
                   onClick={() => handleSort('favorites_count')}
                   className="flex items-center gap-1 text-xs font-semibold text-text-secondary uppercase tracking-wider hover:text-text-primary transition-colors"
+                  aria-label={`Sort by favorites${sortField === 'favorites_count' ? `, ${sortDirection === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+                  aria-sort={sortField === 'favorites_count' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}
                 >
                   Favorites
-                  <ArrowUpDown size={14} className={sortField === 'favorites_count' ? 'text-primary' : 'text-text-tertiary'} />
+                  <ArrowUpDown size={14} className={sortField === 'favorites_count' ? 'text-primary' : 'text-text-tertiary'} aria-hidden="true" />
                 </button>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider" scope="col">
                 Selections
               </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">
+              <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider" scope="col">
                 Actions
               </th>
             </tr>
@@ -270,6 +293,15 @@ const PhotoListRow: React.FC<PhotoListRowProps> = ({
         ${isSelected ? 'bg-primary/5' : ''}
       `}
       onClick={onClick}
+      role="row"
+      aria-selected={isSelected}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
       {/* Checkbox */}
       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>

@@ -428,6 +428,7 @@ async def rate_asset(
 
         # Upsert rating interaction (update if exists, insert if not)
         # Using ON CONFLICT to handle re-ratings by same visitor
+        # CRITICAL: Use parameterized JSONB to prevent SQL injection
         await conn.execute(
             """
             INSERT INTO client_interactions (workspace_id, gallery_id, asset_id, type, actor, payload)
@@ -438,8 +439,8 @@ async def rate_asset(
             workspace_id,
             gallery_uuid,
             asset_uuid,
-            f'{{"visitor_id": "{visitor_id}"}}',
-            f'{{"value": {request.rating}}}',
+            {"visitor_id": visitor_id},
+            {"value": request.rating},
         )
 
         # Calculate new average rating

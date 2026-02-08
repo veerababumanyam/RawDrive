@@ -43,8 +43,10 @@ class Settings(BaseSettings):
     REDIS_KEY_PREFIX: str = "billing:"
 
     # JWT Authentication
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
-    JWT_ALGORITHM: str = "HS256"
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "")
+    if not JWT_SECRET:
+        raise ValueError("JWT_SECRET environment variable must be set and must be at least 32 bytes")
+    JWT_ALGORITHM: str = "EdDSA"
 
     # CORS
     CORS_ORIGINS: List[str] = [

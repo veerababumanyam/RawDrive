@@ -52,17 +52,26 @@ export const useSignedUrl = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Use ref instead of state to track mount status - avoids re-render loops
+  // Track abort controller to cancel in-flight requests on unmount/rapid updates
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Use ref to track mount status - avoids re-render loops
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      // Cancel any in-flight request on unmount
+      abortControllerRef.current?.abort();
     };
   }, []);
 
   const fetchUrl = useCallback(async () => {
+    // Cancel any previous request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
     if (!assetId || !workspace?.workspace_id || !enabled) {
       if (mountedRef.current) setUrl(null);
       return;
@@ -77,14 +86,24 @@ export const useSignedUrl = ({
       let signedUrl: string | null = null;
       if (download) {
          // Downloads bypass batching - use service directly
-         signedUrl = await signedUrlService.getSignedUrl(workspace.workspace_id, assetId, variant, true);
+         signedUrl = await signedUrlService.getSignedUrl(
+           workspace.workspace_id,
+           assetId,
+           variant,
+           true,
+           abortControllerRef.current.signal
+         );
       } else {
          // Use context for batched fetching
-         signedUrl = await context.getSignedUrl(assetId, variant);
+         signedUrl = await context.getSignedUrl(assetId, variant, abortControllerRef.current.signal);
       }
 
       if (mountedRef.current) setUrl(signedUrl);
     } catch (err) {
+      // Ignore AbortError - request was cancelled
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
       if (mountedRef.current) {
         const error = err instanceof Error ? err : new Error('Failed to fetch signed URL');
         setError(error);

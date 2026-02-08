@@ -24,9 +24,42 @@ import type { GalleryAssetItem } from '../../../types/gallery';
 import { HoverOverlay } from './HoverOverlay';
 import { InlineEditForm } from './InlineEditForm';
 import { PhotoContextMenu, createPhotoContextActions } from './PhotoContextMenu';
+import { useTranslation } from 'react-i18next';
 
-// Track loaded images for instant display (no placeholder needed)
-const loadedImageCache = new Set<string>();
+// Component-local image cache with LRU eviction to prevent memory leaks
+// Using a module-level cache with size limits instead of global Set
+interface ImageCacheEntry {
+  timestamp: number;
+  assetId: string;
+}
+
+const MAX_CACHE_SIZE = 100;
+const imageCache = new Map<string, ImageCacheEntry>();
+
+const addToImageCache = (assetId: string) => {
+  // Evict oldest entry if cache is full
+  if (imageCache.size >= MAX_CACHE_SIZE) {
+    let oldestTimestamp = Infinity;
+    let oldestKey = '';
+
+    for (const [key, entry] of imageCache.entries()) {
+      if (entry.timestamp < oldestTimestamp) {
+        oldestTimestamp = entry.timestamp;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      imageCache.delete(oldestKey);
+    }
+  }
+
+  imageCache.set(assetId, { timestamp: Date.now(), assetId });
+};
+
+const isInImageCache = (assetId: string): boolean => {
+  return imageCache.has(assetId);
+};
 
 export interface PhotoCardProps {
   asset: GalleryAssetItem;
@@ -62,6 +95,8 @@ export interface PhotoCardProps {
   isAccessCodeVerified?: boolean;
   /** Callback to trigger access code verification modal */
   onVerifyAccessCode?: () => void;
+  /** Optional HTML id attribute for accessibility (e.g., aria-activedescendant) */
+  id?: string;
 }
 
 export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
@@ -88,18 +123,20 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
   onUnlockPrivate,
   isAccessCodeVerified,
   onVerifyAccessCode,
+  id,
 }) => {
   const isPrivateLocked = asset.is_private && !isPrivateUnlocked;
   const isAccessCodeLocked = asset.has_access_code && !isAccessCodeVerified;
   const isLocked = isPrivateLocked || isAccessCodeLocked;
   const { workspace } = useAuth();
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [useOriginalFallback, setUseOriginalFallback] = useState(false);
   // Track if full image has loaded for blur-up transition
   const [imageLoaded, setImageLoaded] = useState(() =>
-    loadedImageCache.has(asset.asset_id)
+    isInImageCache(asset.asset_id)
   );
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -168,7 +205,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     setImageError(false);
     setUseOriginalFallback(false);
     // Check if this image was already loaded
-    setImageLoaded(loadedImageCache.has(asset.asset_id));
+    setImageLoaded(isInImageCache(asset.asset_id));
   }, [asset.asset_id]);
 
   // Fetch signed URL for thumbnail - simplified without variant switching
@@ -279,6 +316,11 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
     ? (originalUrl || asset.asset.original_url || undefined)
     : (thumbnailUrl || asset.asset.thumbnail_url || undefined);
 
+  // Generate unique IDs for ARIA descriptions
+  const statusDescriptionId = `photo-status-${asset.asset_id}`;
+  const selectionDescriptionId = `photo-selection-${asset.asset_id}`;
+  const lockDescriptionId = `photo-lock-${asset.asset_id}`;
+
   // Build dynamic class names for selection/favorite states
   const selectionClasses = [
     isManagementSelected ? 'photo-card-selected' : '',
@@ -288,6 +330,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
 
   return (
     <div
+      id={id}
       className={`
         group relative
         rounded-card overflow-hidden
@@ -319,6 +362,13 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
       }}
       aria-selected={isManagementSelected || asset.is_selected}
       aria-label={`Photo ${index + 1}: ${asset.asset.filename || 'Untitled'}${asset.is_favorited ? ' (Favorited)' : ''}${asset.is_selected ? ' (Selected)' : ''}`}
+      aria-describedby={
+        [
+          (isCover || asset.is_private || asset.asset.type === 'video') ? statusDescriptionId : null,
+          (isManagementSelected || asset.is_selected) ? selectionDescriptionId : null,
+          isLocked ? lockDescriptionId : null,
+        ].filter(Boolean).join(' ') || undefined
+      }
     >
       {isEditing && (
         <InlineEditForm
@@ -355,7 +405,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
             onLoad={() => {
               setImageLoaded(true);
               // Cache that this image has loaded
-              loadedImageCache.add(asset.asset_id);
+              addToImageCache(asset.asset_id);
             }}
             onError={() => {
               // If thumbnail fails and we haven't tried original yet, fallback to original
@@ -376,10 +426,10 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
           {asset.asset.status === 'processing' ? (
             <>
               <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2" />
-              <div className="text-text-secondary text-xs font-medium">Processing...</div>
+              <div className="text-text-secondary text-xs font-medium">{t('gallery.photoCard.processing')}</div>
             </>
           ) : asset.asset.status === 'failed' ? (
-            <div className="text-error text-xs font-medium">Upload Failed</div>
+            <div className="text-error text-xs font-medium">{t('gallery.photoCard.uploadFailed')}</div>
           ) : urlLoading && !lqip ? (
             // Skeleton Loader (only if no LQIP available)
             <div className="w-full h-full absolute inset-0 bg-surface-hover animate-pulse flex items-center justify-center">
@@ -397,7 +447,7 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
             />
           ) : (
             <div className="text-text-tertiary text-sm">
-              {urlError ? 'Failed to load' : 'No image'}
+              {urlError ? t('gallery.photoCard.failedToLoad') : t('gallery.photoCard.noImage')}
             </div>
           )}
         </div>
@@ -409,11 +459,12 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         {isCover && (
           <div
             className="px-2 py-1 rounded-full bg-primary/90 backdrop-blur-sm flex items-center gap-1"
-            aria-label="Cover Photo"
-            title="Gallery Cover"
+            aria-label={t('gallery.photoCard.coverPhoto')}
+            title={t('gallery.photoCard.galleryCover')}
           >
-            <Image size={12} className="text-white" />
-            <span className="text-[10px] font-semibold text-white uppercase tracking-wide">Cover</span>
+            <Image size={12} className="text-white" aria-hidden="true" />
+            <span className="text-[10px] font-semibold text-white uppercase tracking-wide">{t('gallery.photoCard.cover')}</span>
+            <span className="sr-only">{t('gallery.photoCard.galleryCover')}</span>
           </div>
         )}
 
@@ -421,10 +472,11 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         {asset.is_private && (
           <div
             className="p-1.5 rounded-full bg-warning/90 backdrop-blur-sm"
-            aria-label="Private"
-            title="Private Photo"
+            aria-label={t('gallery.photoCard.private')}
+            title={t('gallery.photoCard.privatePhoto')}
           >
-            <Lock size={14} className="text-white" />
+            <Lock size={14} className="text-white" aria-hidden="true" />
+            <span className="sr-only">{t('gallery.photoCard.privatePhoto')}</span>
           </div>
         )}
 
@@ -432,14 +484,15 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         {asset.asset.type === 'video' && (
           <div
             className="px-2 py-1 rounded-full bg-neutral-900/60 backdrop-blur-sm flex items-center gap-1"
-            aria-label="Video"
+            aria-label={`Video${asset.asset.duration_ms ? `, ${Math.floor(asset.asset.duration_ms / 1000)} seconds` : ''}`}
           >
-            <Play size={12} className="text-white fill-white" />
+            <Play size={12} className="text-white fill-white" aria-hidden="true" />
             {asset.asset.duration_ms && (
               <span className="text-xs font-medium text-white">
                 {Math.floor(asset.asset.duration_ms / 1000)}s
               </span>
             )}
+            <span className="sr-only">Video asset</span>
           </div>
         )}
       </div>
@@ -463,6 +516,20 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
               console.warn('[PhotoCard] onUnlockPrivate is undefined!');
             }
           }}
+          role="button"
+          tabIndex={0}
+          aria-label={isAccessCodeLocked ? t('gallery.accessCode.protected') : t('gallery.photoCard.privatePhoto')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (isAccessCodeLocked) {
+                onVerifyAccessCode?.();
+              } else {
+                onUnlockPrivate?.();
+              }
+            }
+          }}
         >
           {/* Background gradient for better visibility */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-black/20" />
@@ -480,10 +547,10 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
               )}
             </div>
             <span className="text-sm font-medium drop-shadow-md tracking-wide uppercase opacity-90">
-              {isAccessCodeLocked ? 'Protected' : 'Private'}
+              {isAccessCodeLocked ? t('gallery.accessCode.protected') : t('gallery.photoCard.private')}
             </span>
             <span className="text-xs text-white/70 group-hover/lock:text-white transition-colors mt-1">
-              {isAccessCodeLocked ? 'Enter code to view' : 'Tap to unlock'}
+              {isAccessCodeLocked ? t('gallery.accessCode.enterCodeToView') : t('gallery.photoCard.tapToUnlock')}
             </span>
           </div>
         </div>
@@ -524,6 +591,30 @@ export const PhotoCardComponent: React.FC<PhotoCardProps> = ({
         actions={contextMenuActions}
         title={asset.asset.filename || 'Photo'}
       />
+
+      {/* Hidden screen reader descriptions for WCAG compliance */}
+      {(isCover || asset.is_private || asset.asset.type === 'video') && (
+        <span id={statusDescriptionId} className="sr-only">
+          {isCover && 'Gallery cover photo. '}
+          {asset.is_private && 'Private photo, requires unlock. '}
+          {asset.asset.type === 'video' && 'Video file. '}
+        </span>
+      )}
+
+      {(isManagementSelected || asset.is_selected) && (
+        <span id={selectionDescriptionId} className="sr-only">
+          {isManagementSelected && 'Selected for management. '}
+          {asset.is_selected && 'Customer selected for delivery. '}
+        </span>
+      )}
+
+      {isLocked && (
+        <span id={lockDescriptionId} className="sr-only">
+          {isAccessCodeLocked
+            ? 'This photo is protected with an access code. Press to enter the code to view.'
+            : 'This photo is private. Press to unlock and view.'}
+        </span>
+      )}
     </div>
   );
 };
@@ -559,6 +650,7 @@ const arePropsEqual = (
   if (prevProps.aspectRatio !== nextProps.aspectRatio) return false;
   if (prevProps.isPrivateUnlocked !== nextProps.isPrivateUnlocked) return false;
   if (prevProps.isAccessCodeVerified !== nextProps.isAccessCodeVerified) return false;
+  if (prevProps.id !== nextProps.id) return false;
 
   // Callbacks are intentionally NOT compared by reference
   // They are stable in behavior even if recreated - this is the key optimization
