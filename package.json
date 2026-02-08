@@ -1,9 +1,13 @@
 {
   "name": "rawdrive",
+  "version": "0.4.0",
   "private": true,
   "scripts": {
     "build:packages": "pnpm -r --filter packages/* run build",
     "generate:python": "tsx scripts/generate-python-types.ts",
+    "generate:openapi": "tsx scripts/generate-openapi-schemas.ts",
+    "generate:api-clients": "pnpm --filter @rawdrive/api-types run generate:clients",
+    "generate:api-types": "pnpm generate:openapi && pnpm generate:api-clients",
     "test:packages": "pnpm -r --filter packages/* run test",
     "test:parity": "pnpm --filter @rawdrive/shared-types run test"
   },
