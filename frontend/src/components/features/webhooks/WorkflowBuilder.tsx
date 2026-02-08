@@ -674,7 +674,7 @@ export function WorkflowBuilder({
       const newNodes = nodes.filter((n) => n.id !== nodeId);
 
       // Remove edges connected to this node and reconnect if needed
-      let newEdges = edges.filter(
+      const newEdges = edges.filter(
         (e) => e.source !== nodeId && e.target !== nodeId
       );
 

@@ -4,7 +4,7 @@ Authenticated Gallery API Endpoints.
 Requires JWT authentication for all endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
 from typing import Optional
 from uuid import UUID
 
@@ -39,6 +39,13 @@ from src.schemas.gallery_design import (
     GalleryDesignConfig,
 )
 from src.middleware.auth import get_workspace_id, get_current_user
+from src.middleware.correlation import get_correlation_id
+from src.api.v1.errors import (
+    raise_http_exception,
+    exception_to_error_response,
+    ErrorCode,
+    ErrorMessage,
+)
 from src.log_config import get_logger
 from src.observability.metrics import get_metrics
 
@@ -53,6 +60,14 @@ router = APIRouter()
 # - get_workspace_id: Extracts workspace ID from header or path
 
 
+def handle_service_error(exc: Exception, request_id: str):
+    """Convert service exceptions to HTTP exceptions with unified format."""
+    error_response = exception_to_error_response(exc, request_id)
+    from fastapi import HTTPException
+    status_code = getattr(exc, "status", 500)
+    raise HTTPException(status_code=status_code, content=error_response.model_dump())
+
+
 # =============================================================================
 # Gallery Endpoints
 # =============================================================================
@@ -60,6 +75,7 @@ router = APIRouter()
 
 @router.get("", response_model=GalleryListResponse)
 async def list_galleries(
+    request: Request,
     workspace_id: str = Depends(get_workspace_id),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
@@ -76,6 +92,7 @@ async def list_galleries(
     the 5 most recent galleries for faster subsequent access.
     """
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or request.headers.get("X-Correlation-ID", "")
 
     # Trigger background cache warming on first page load (non-blocking)
     if page == 1 and not search and not status:
@@ -93,17 +110,19 @@ async def list_galleries(
         )
         return result
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.post("", response_model=GalleryResponse)
 async def create_gallery(
+    req: Request,
     request: GalleryCreateRequest,
     workspace_id: str = Depends(get_workspace_id),
     current_user: dict = Depends(get_current_user),
 ):
     """Create a new gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     # Convert ISO string to datetime if present
     shoot_date = None
@@ -112,13 +131,22 @@ async def create_gallery(
         try:
             shoot_date = datetime.fromisoformat(request.shoot_date)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid shoot_date format")
+            raise_http_exception(
+                ErrorCode.INVALID_FORMAT,
+                ErrorMessage.INVALID_FORMAT,
+                details={"field": "shoot_date", "value": request.shoot_date},
+                request_id=request_id
+            )
 
     try:
         # Extract user_id from JWT payload - should always be present after auth
         user_id_str = current_user.get("user_id")
         if not user_id_str:
-            raise HTTPException(status_code=401, detail="User ID not found in token")
+            raise_http_exception(
+                ErrorCode.UNAUTHORIZED,
+                ErrorMessage.UNAUTHORIZED,
+                request_id=request_id
+            )
 
         result = await gallery_service.create_gallery(
             workspace_id=UUID(workspace_id),
@@ -131,43 +159,49 @@ async def create_gallery(
         )
         return result
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.patch("/{gallery_id}", response_model=GalleryResponse)
 async def update_gallery(
+    req: Request,
     gallery_id: str,
     request: GalleryUpdateRequest,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Update a gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         # Filter out None values from request model
         updates = request.model_dump(exclude_unset=True)
-        
+
         result = await gallery_service.update_gallery(
             workspace_id=UUID(workspace_id),
             gallery_id=UUID(gallery_id),
             **updates
         )
         return result
-    except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail={"error": "INTERNAL_ERROR", "message": str(e)})
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, content=error_response.model_dump())
 
 
 @router.get("/{gallery_id}/credentials", response_model=GalleryCredentialsResponse)
 async def get_gallery_credentials(
+    req: Request,
     gallery_id: str,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Get gallery credentials."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         result = await gallery_service.get_gallery_credentials(
@@ -175,46 +209,54 @@ async def get_gallery_credentials(
             gallery_id=gallery_id,
         )
         return result
-    except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
     except ValueError as e:
-        # UUID conversion errors or other validation errors
-        raise HTTPException(status_code=400, detail={"error": "INVALID_REQUEST", "message": str(e)})
+        raise_http_exception(
+            ErrorCode.INVALID_FORMAT,
+            ErrorMessage.INVALID_FORMAT,
+            details={"field": "gallery_id", "value": gallery_id},
+            request_id=request_id
+        )
     except Exception as e:
-        # Re-raise to let FastAPI's exception handlers deal with it
-        # This ensures proper error formatting and prevents 500 errors
-        raise
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, content=error_response.model_dump())
 
 
 @router.delete("/{gallery_id}", status_code=204)
 async def delete_gallery(
+    req: Request,
     gallery_id: str,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Delete a gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         await gallery_service.delete_gallery(
             workspace_id=UUID(workspace_id),
             gallery_id=UUID(gallery_id),
         )
-    except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.post("/{gallery_id}/publish", response_model=GalleryResponse)
 async def publish_gallery(
+    req: Request,
     gallery_id: str,
     request: GalleryPublishRequest,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Publish or unpublish a gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         result = await gallery_service.publish_gallery(
@@ -223,14 +265,15 @@ async def publish_gallery(
             publish=request.publish,
         )
         return result
-    except GalleryNotFoundError:
-         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.post("/{gallery_id}/sub-galleries", status_code=201)
 async def create_sub_gallery(
+    req: Request,
     gallery_id: str,
     request: SubGalleryCreateRequest,
     workspace_id: str = Depends(get_workspace_id),
@@ -245,6 +288,7 @@ async def create_sub_gallery(
     To create a nested sub-gallery, provide parent_sub_gallery_id.
     """
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         result = await gallery_service.create_sub_gallery(
@@ -255,20 +299,22 @@ async def create_sub_gallery(
             parent_sub_gallery_id=UUID(request.parent_sub_gallery_id) if request.parent_sub_gallery_id else None,
         )
         return result
-    except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.patch("/{gallery_id}/sub-galleries/sort-order", status_code=200)
 async def update_sub_galleries_sort_order(
+    req: Request,
     gallery_id: str,
     request: UpdateSubGalleriesSortOrderRequest,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Update sort order for multiple sub-galleries."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         await gallery_service.update_sub_galleries_sort_order(
@@ -276,18 +322,21 @@ async def update_sub_galleries_sort_order(
             gallery_id=UUID(gallery_id),
             sub_gallery_ids=request.sub_gallery_ids,  # Pass strings, service handles conversion
         )
-        
+
         return {"message": "Sub-galleries sort order updated successfully"}
-    except GalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
     except Exception as e:
-        raise
+        error_response = exception_to_error_response(e, request_id)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, content=error_response.model_dump())
 
 
 @router.patch("/{gallery_id}/sub-galleries/{sub_gallery_id}")
 async def update_sub_gallery(
+    req: Request,
     gallery_id: str,
     sub_gallery_id: str,
     request: SubGalleryUpdateRequest,
@@ -295,6 +344,7 @@ async def update_sub_gallery(
 ):
     """Update a sub-gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         updates = request.model_dump(exclude_unset=True)
@@ -305,20 +355,22 @@ async def update_sub_gallery(
             **updates
         )
         return result
-    except SubGalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "SUB_GALLERY_NOT_FOUND", "message": "Sub-gallery not found"})
+    except SubGalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.delete("/{gallery_id}/sub-galleries/{sub_gallery_id}", status_code=204)
 async def delete_sub_gallery(
+    req: Request,
     gallery_id: str,
     sub_gallery_id: str,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Delete a sub-gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         await gallery_service.delete_sub_gallery(
@@ -326,20 +378,22 @@ async def delete_sub_gallery(
             gallery_id=UUID(gallery_id),
             sub_gallery_id=UUID(sub_gallery_id),
         )
-    except SubGalleryNotFoundError:
-        raise HTTPException(status_code=404, detail={"error": "SUB_GALLERY_NOT_FOUND", "message": "Sub-gallery not found"})
+    except SubGalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 
 @router.post("/{gallery_id}/pin", response_model=GalleryResponse)
 async def pin_gallery(
+    req: Request,
     gallery_id: str,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Pin a gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         result = await gallery_service.pin_gallery(
@@ -347,19 +401,21 @@ async def pin_gallery(
             gallery_id=UUID(gallery_id),
         )
         return result
-    except GalleryNotFoundError:
-         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.post("/{gallery_id}/unpin", response_model=GalleryResponse)
 async def unpin_gallery(
+    req: Request,
     gallery_id: str,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Unpin a gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         result = await gallery_service.unpin_gallery(
@@ -367,20 +423,22 @@ async def unpin_gallery(
             gallery_id=UUID(gallery_id),
         )
         return result
-    except GalleryNotFoundError:
-         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.post("/{gallery_id}/assets", response_model=GalleryResponse)
 async def add_assets(
+    req: Request,
     gallery_id: str,
     request: AddAssetsRequest,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Add assets to a gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         result = await gallery_service.add_assets(
@@ -389,34 +447,38 @@ async def add_assets(
             asset_ids=[UUID(aid) for aid in request.asset_ids],
         )
         return result
-    except GalleryNotFoundError:
-         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.post("/{gallery_id}/assets/remove", status_code=204)
 async def remove_assets(
+    req: Request,
     gallery_id: str,
     request: AddAssetsRequest,
     workspace_id: str = Depends(get_workspace_id),
 ):
     """Remove assets from gallery."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
+
     try:
         await gallery_service.remove_assets(
             workspace_id=UUID(workspace_id),
             gallery_id=UUID(gallery_id),
             asset_ids=[UUID(aid) for aid in request.asset_ids],
         )
-    except GalleryNotFoundError:
-         raise HTTPException(status_code=404, detail={"error": "GALLERY_NOT_FOUND", "message": "Gallery not found"})
+    except GalleryNotFoundError as e:
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(status_code=e.status, detail={"error": e.code, "message": str(e)})
+        handle_service_error(e, request_id)
 
 
 @router.patch("/{gallery_id}/assets/{asset_id}")
 async def update_asset(
+    req: Request,
     gallery_id: str,
     asset_id: str,
     request: UpdateAssetRequest,
@@ -424,6 +486,7 @@ async def update_asset(
 ):
     """Update metadata for a gallery asset (title, description, is_private)."""
     gallery_service = get_gallery_service()
+    request_id = get_correlation_id() or req.headers.get("X-Correlation-ID", "")
 
     try:
         updates = request.model_dump(exclude_unset=True)
@@ -435,19 +498,14 @@ async def update_asset(
         )
         return result
     except GalleryNotFoundError as e:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": "NOT_FOUND", "message": str(e)}
-        )
+        handle_service_error(e, request_id)
     except GalleryError as e:
-        raise HTTPException(
-            status_code=e.status,
-            detail={"error": e.code, "message": str(e)}
-        )
+        handle_service_error(e, request_id)
 
 
 @router.get("/{gallery_id}", response_model=GalleryResponse)
 async def get_gallery(
+    req: Request,
     gallery_id: str,
     workspace_id: str = Depends(get_workspace_id),
 ):

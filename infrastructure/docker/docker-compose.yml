@@ -264,6 +264,7 @@ services:
       start_period: 40s
     volumes:
       - ../../backend:/app
+      - ../../packages:/app/packages
       - ../../backend/secrets/jwtEd25519.key:/run/secrets/jwt_private_key:ro
       - ../../backend/secrets/ed25519_public_key.pem:/run/secrets/jwt_public_key:ro
   face-worker:
@@ -303,6 +304,7 @@ services:
       start_period: 40s
     volumes:
       - ../../backend:/app
+      - ../../packages:/app/packages
       # Mount Google Cloud credentials from path defined in .env (GOOGLE_APPLICATION_CREDENTIALS_FILE)
       - ../../${GOOGLE_APPLICATION_CREDENTIALS_FILE:-docs/docparser-468004-9b82008238af.json}:/run/secrets/gcp-credentials.json:ro
     deploy:
@@ -349,6 +351,7 @@ services:
       start_period: 40s
     volumes:
       - ../../backend:/app
+      - ../../packages:/app/packages
       # Mount Google Cloud credentials from path defined in .env
       - ../../${GOOGLE_APPLICATION_CREDENTIALS_FILE:-docs/docparser-468004-9b82008238af.json}:/run/secrets/gcp-credentials.json:ro
     deploy:
@@ -386,6 +389,7 @@ services:
         condition: service_healthy
     volumes:
       - ../../backend:/app
+      - ../../packages:/app/packages
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:${PORT_QUALITY_WORKER}/health" ]
       interval: 30s
@@ -702,6 +706,7 @@ services:
 
     volumes:
       - ../../services/gallery-service:/app
+      - ../../packages:/app/packages
       # Mount JWT public key for token verification (EdDSA)
       - ../../backend/secrets/jwtEd25519.key.pub:/run/secrets/jwt_public_key:ro
 

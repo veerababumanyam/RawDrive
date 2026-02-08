@@ -26,6 +26,8 @@ PyJWT>=2.8.0
 # Utilities
 python-multipart>=0.0.6
 lxml>=5.0.0  # XMP metadata parsing
+numpy>=1.24.0  # Array operations for recommendation service
+scikit-learn>=1.3.0  # K-means clustering for photo sampling
 
 # Observability
 structlog>=23.3.0

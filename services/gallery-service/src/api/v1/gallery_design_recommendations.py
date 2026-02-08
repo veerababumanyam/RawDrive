@@ -25,8 +25,7 @@ from src.services.gallery_recommendation_service import (
     InsufficientGalleryDataError,
     RecommendationError,
 )
-from src.repositories.gallery_repository import get_gallery_repository
-from src.cache import get_redis_client
+from src.cache.redis_client import redis_client
 
 logger = get_logger(__name__)
 metrics = get_metrics()
@@ -36,10 +35,7 @@ router = APIRouter()
 
 def get_recommendation_service() -> GalleryRecommendationService:
     """Get or create Gallery Recommendation Service instance."""
-    repository = get_gallery_repository()
-    redis_client = get_redis_client()
     return GalleryRecommendationService(
-        repository=repository,
         redis_client=redis_client,
     )
 
@@ -199,7 +195,6 @@ async def get_ai_recommendations(
 async def check_recommendation_cache(
     gallery_id: UUID,
     workspace_id: str = Depends(get_workspace_id),
-    redis_client = Depends(get_redis_client),
 ) -> dict[str, Any]:
     """Check if cached recommendations exist for a gallery.
 
@@ -282,7 +277,6 @@ async def check_recommendation_cache(
 async def invalidate_recommendation_cache(
     gallery_id: UUID,
     workspace_id: str = Depends(get_workspace_id),
-    redis_client = Depends(get_redis_client),
 ) -> dict[str, str]:
     """Invalidate cached recommendations for a gallery.
 

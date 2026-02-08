@@ -187,7 +187,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
 
   // Render content with highlighted mentions
   const renderContent = () => {
-    let content = comment.content;
+    const content = comment.content;
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
 

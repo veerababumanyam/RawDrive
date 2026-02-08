@@ -38,11 +38,30 @@ from app.services.client_exceptions import (
 )
 
 # Import escape_like_pattern from shared database-utils package
-# In production, PYTHONPATH includes the package path
-_packages_path = Path(__file__).parent.parent.parent.parent.parent / "packages" / "database-utils" / "python"
-if str(_packages_path) not in sys.path:
-    sys.path.insert(0, str(_packages_path))
+def _setup_db_utils():
+    """Add database-utils to path for both host and Docker environments."""
+    import sys
+    from pathlib import Path
 
+    # 1. Try environment variable
+    import os
+    if env_path := os.environ.get("DATABASE_UTILS_PATH"):
+        path = Path(env_path)
+        if path.exists() and str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+            return
+
+    current = Path(__file__).resolve().parent
+    for _ in range(6):
+        # Look for the folder that contains 'database_utils' package
+        pkg_root = current / "packages" / "database-utils"
+        if pkg_root.exists() and (pkg_root / "database_utils").exists():
+            if str(pkg_root) not in sys.path:
+                sys.path.insert(0, str(pkg_root))
+            return
+        current = current.parent
+
+_setup_db_utils()
 from database_utils.query_builders import escape_like_pattern
 
 logger = logging.getLogger(__name__)
