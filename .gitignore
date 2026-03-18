@@ -83,3 +83,6 @@ scripts/seed-app-settings.cjs
 .cache/
 **/.cache/
 rawdrive_deploy_key
+
+# Google Cloud credentials
+docs/RawDrivFaceID.json
