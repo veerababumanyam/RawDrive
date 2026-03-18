@@ -69,8 +69,8 @@
 
 ### Shared Packages
 
-- [ ] **PKG-01**: @rawdrive/api-types package built with dist output
-- [ ] **PKG-02**: @rawdrive/database-utils package built with dist output
+- [x] **PKG-01**: @rawdrive/api-types package built with dist output
+- [x] **PKG-02**: @rawdrive/database-utils package built with dist output
 
 ### Test Coverage
 
@@ -154,8 +154,8 @@
 | NOTF-02 | Phase 8 | Complete |
 | NOTF-03 | Phase 8 | Complete |
 | NOTF-04 | Phase 8 | Complete |
-| PKG-01 | Phase 9 | Pending |
-| PKG-02 | Phase 9 | Pending |
+| PKG-01 | Phase 9 | Complete |
+| PKG-02 | Phase 9 | Complete |
 | TEST-01 | Phase 9 | Pending |
 | TEST-02 | Phase 9 | Pending |
 | TEST-03 | Phase 9 | Pending |

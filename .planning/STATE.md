@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-03-18T23:31:42.176Z"
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-18T23:49:48.254Z"
 progress:
   total_phases: 9
   completed_phases: 8
-  total_plans: 19
-  completed_plans: 19
+  total_plans: 23
+  completed_plans: 21
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow must function end-to-end without stubbed or broken steps.
-**Current focus:** Phase 08 — notifications (COMPLETE)
+**Current focus:** Phase 09 — shared-packages-test-coverage
 
 ## Current Position
 
-Phase: 08 (notifications) — COMPLETE
-Plan: 2 of 2 (done)
+Phase: 09 (shared-packages-test-coverage) — EXECUTING
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -63,6 +63,8 @@ Plan: 2 of 2 (done)
 | Phase 07 P01 | 4min | 2 tasks | 5 files |
 | Phase 08 P01 | 4min | 2 tasks | 5 files |
 | Phase 08 P02 | 4min | 2 tasks | 4 files |
+| Phase 09 P03 | 4min | 2 tasks | 6 files |
+| Phase 09 P01 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -108,6 +110,7 @@ Recent decisions affecting current work:
 - [Phase 08]: Used _client.publish() directly to bypass RedisClient key prefix for ws:workspace channels
 - [Phase 08]: Subscriber runs as asyncio.create_task in lifespan with graceful cancellation on shutdown
 - [Phase 08]: Wrap emit_event in try/except so WebSocket failure never breaks core notification logic
+- [Phase 09]: Used pnpm directory filter {packages/**} instead of package name glob for cross-platform compatibility
 
 ### Pending Todos
 
@@ -121,6 +124,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T23:29:33.576Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-03-18T23:49:48.252Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
