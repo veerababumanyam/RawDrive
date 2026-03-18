@@ -154,13 +154,13 @@ Plans:
   2. Backend integration tests cover auth flows, multi-tenant isolation, and email sending
   3. Backend tests cover AI worker concurrency and security enforcement
   4. Frontend component tests cover gallery viewing, upload workflows, and auth pages
-**Plans**: 2 plans
+**Plans**: 4 plans
 
 Plans:
-- [ ] 09-01: Shared package builds (api-types, database-utils)
-- [ ] 09-02: Backend integration tests (auth, tenant isolation, email, AI workers)
-- [ ] 09-03: Frontend component tests (gallery, upload, auth pages)
-- [ ] 09-04: Security enforcement tests
+- [ ] 09-01-PLAN.md — Fix shared package builds: api-types (tsup) and database-utils (tsc) (PKG-01, PKG-02)
+- [ ] 09-02-PLAN.md — Backend integration tests: auth flows, multi-tenant isolation, email sending (TEST-01, TEST-02, TEST-03)
+- [ ] 09-03-PLAN.md — Frontend component tests: upload workflows and auth pages (TEST-05, TEST-06)
+- [ ] 09-04-PLAN.md — AI worker concurrency and security enforcement tests (TEST-04, TEST-07)
 
 ## Progress
 
@@ -177,4 +177,4 @@ Phases 1-4 are parallelizable. Phases 5+ follow dependency chains: 2->5->7, 3->6
 | 6. AI/ML Pipeline | 0/5 | Planning complete | - |
 | 7. Gallery Completion | 0/2 | Planning complete | - |
 | 8. Notifications | 0/2 | Not started | - |
-| 9. Shared Packages & Test Coverage | 0/4 | Not started | - |
+| 9. Shared Packages & Test Coverage | 0/4 | Planning complete | - |
