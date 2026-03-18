@@ -76,10 +76,10 @@ Plans:
   1. Redis sliding window rate limiter enforces per-key limits from agent_api_keys.rate_limit_rpm
   2. Requests exceeding the limit receive 429 with Retry-After header
   3. Rate limiter can be toggled between log-only and enforcing modes
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 04-01: Redis sliding window rate limiter implementation and deployment
+- [ ] 04-01-PLAN.md — Wire A2A rate limiting: TDD tests + implementation (RateLimitService, A2AContext, settings toggle)
 
 ### Phase 5: Email Features
 **Goal**: Users receive transactional emails for verification, password reset, invitations, and gallery delivery
@@ -171,7 +171,7 @@ Phases 1-4 are parallelizable. Phases 5+ follow dependency chains: 2->5->7, 3->6
 | 1. Security Hardening | 2/2 | Complete   | 2026-03-18 |
 | 2. Email Infrastructure | 0/2 | Not started | - |
 | 3. AI Service Stabilization | 1/2 | Gap closure | - |
-| 4. Rate Limiting | 0/1 | Not started | - |
+| 4. Rate Limiting | 0/1 | Planning complete | - |
 | 5. Email Features | 0/3 | Not started | - |
 | 6. AI/ML Pipeline | 0/5 | Not started | - |
 | 7. Gallery Completion | 0/1 | Not started | - |
