@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-03-18T22:01:28.991Z"
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-18T22:26:34.125Z"
 progress:
   total_phases: 9
   completed_phases: 5
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 15
+  completed_plans: 11
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow must function end-to-end without stubbed or broken steps.
-**Current focus:** Phase 05 — email-features
+**Current focus:** Phase 06 — ai-ml-pipeline
 
 ## Current Position
 
-Phase: 05 (email-features) — EXECUTING
-Plan: 3 of 3
+Phase: 06 (ai-ml-pipeline) — EXECUTING
+Plan: 2 of 5
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Plan: 3 of 3
 | Phase 05 P03 | 3min | 1 tasks | 3 files |
 | Phase 05 P01 | 8min | 2 tasks | 5 files |
 | Phase 05 P02 | 9min | 2 tasks | 7 files |
+| Phase 06 P01 | 4min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Email sending in auth endpoint layer, not token services (separation of concerns)
 - [Phase 05-02]: Standalone PostalClient copy per microservice since containers cannot import from backend
 - [Phase 05-02]: Invitation email tests run locally (not Docker) because invitations-service files not mounted in backend container
+- [Phase 06]: Pre-bake CLIP model in Docker build stage using TRANSFORMERS_CACHE env var
+- [Phase 06]: Batch embedding endpoint with per-image error handling (partial failures OK)
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T21:57:14.181Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-03-18T22:26:34.123Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None

@@ -32,9 +32,9 @@
 
 ### AI/ML Features
 
-- [ ] **AI-01**: CLIP ViT-B/32 model pre-baked into ai-processing-service Docker image (no runtime download)
+- [x] **AI-01**: CLIP ViT-B/32 model pre-baked into ai-processing-service Docker image (no runtime download)
 - [ ] **AI-02**: CLIPEmbedder wired to backend similarity_worker via Celery task dispatch
-- [ ] **AI-03**: Batch embedding computation processes photos asynchronously (non-blocking)
+- [x] **AI-03**: Batch embedding computation processes photos asynchronously (non-blocking)
 - [ ] **AI-04**: Embeddings stored in pgvector column with HNSW index (m=16, ef_construction=64)
 - [ ] **AI-05**: Hash-based duplicate detection fixed — image byte fetching from R2 storage working
 - [ ] **AI-06**: Embedding-based duplicate detection using cosine similarity threshold
@@ -63,7 +63,7 @@
 
 ### Performance
 
-- [ ] **PERF-01**: Image processing moved from main backend request loop to ai-processing-service
+- [x] **PERF-01**: Image processing moved from main backend request loop to ai-processing-service
 - [ ] **PERF-02**: Duplicate detection query uses indexed lookups instead of full table scan
 - [ ] **PERF-03**: Similarity groups migrated from in-memory storage to Redis
 
@@ -136,15 +136,15 @@
 | MAIL-07 | Phase 5 | Complete |
 | MAIL-08 | Phase 5 | Complete |
 | MAIL-09 | Phase 5 | Complete |
-| AI-01 | Phase 6 | Pending |
+| AI-01 | Phase 6 | Complete |
 | AI-02 | Phase 6 | Pending |
-| AI-03 | Phase 6 | Pending |
+| AI-03 | Phase 6 | Complete |
 | AI-04 | Phase 6 | Pending |
 | AI-05 | Phase 6 | Pending |
 | AI-06 | Phase 6 | Pending |
 | AI-07 | Phase 6 | Pending |
 | AI-08 | Phase 6 | Pending |
-| PERF-01 | Phase 6 | Pending |
+| PERF-01 | Phase 6 | Complete |
 | PERF-02 | Phase 6 | Pending |
 | PERF-03 | Phase 6 | Pending |
 | GAL-01 | Phase 7 | Pending |
