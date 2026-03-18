@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-03-18T23:08:14.503Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-18T23:23:52.286Z"
 progress:
   total_phases: 9
   completed_phases: 7
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 19
+  completed_plans: 18
 ---
 
 # Project State
@@ -19,11 +19,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow must function end-to-end without stubbed or broken steps.
-**Current focus:** Phase 07 — gallery-completion
+**Current focus:** Phase 08 — notifications
 
 ## Current Position
 
-Phase: 07 (gallery-completion) — EXECUTING
+Phase: 08 (notifications) — EXECUTING
 Plan: 2 of 2
 
 ## Performance Metrics
@@ -61,6 +61,7 @@ Plan: 2 of 2
 | Phase 06 P05 | 3min | 2 tasks | 5 files |
 | Phase 07 P02 | 2min | 1 tasks | 2 files |
 | Phase 07 P01 | 4min | 2 tasks | 5 files |
+| Phase 08 P01 | 4min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,8 @@ Recent decisions affecting current work:
 - [Phase 07]: Exported mapSlideshowConfigToSettings from PublicGalleryPage for unit testability
 - [Phase 07]: Standalone PostalClient copy in gallery-service (Phase 05-02 pattern)
 - [Phase 07]: delivery_email_sent_at guard prevents re-send on re-publish; email failures never block publish
+- [Phase 08]: Used _client.publish() directly to bypass RedisClient key prefix for ws:workspace channels
+- [Phase 08]: Subscriber runs as asyncio.create_task in lifespan with graceful cancellation on shutdown
 
 ### Pending Todos
 
@@ -116,6 +119,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T23:05:49.072Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-03-18T23:23:52.283Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None

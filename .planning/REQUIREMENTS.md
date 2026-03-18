@@ -49,8 +49,8 @@
 
 ### Notifications
 
-- [ ] **NOTF-01**: WebSocket connection established on backend for real-time notifications
-- [ ] **NOTF-02**: Notifications-service publishes events via Redis pub/sub to connected clients
+- [x] **NOTF-01**: WebSocket connection established on backend for real-time notifications
+- [x] **NOTF-02**: Notifications-service publishes events via Redis pub/sub to connected clients
 - [ ] **NOTF-03**: Churn intervention notifications wired (currently stubbed)
 - [ ] **NOTF-04**: Curation session status notifications wired (currently stubbed)
 
@@ -150,8 +150,8 @@
 | GAL-01 | Phase 7 | Complete |
 | GAL-02 | Phase 7 | Complete |
 | GAL-03 | Phase 7 | Complete |
-| NOTF-01 | Phase 8 | Pending |
-| NOTF-02 | Phase 8 | Pending |
+| NOTF-01 | Phase 8 | Complete |
+| NOTF-02 | Phase 8 | Complete |
 | NOTF-03 | Phase 8 | Pending |
 | NOTF-04 | Phase 8 | Pending |
 | PKG-01 | Phase 9 | Pending |

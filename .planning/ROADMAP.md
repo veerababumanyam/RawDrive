@@ -142,8 +142,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md -- WebSocket + notifications-service Redis pub/sub pipeline (NOTF-01, NOTF-02)— WebSocket + notifications-service Redis pub/sub pipeline (NOTF-01, NOTF-02)
-- [ ] 08-02-PLAN.md -- Churn intervention + curation session notification wiring (NOTF-03, NOTF-04)— Churn intervention + curation session notification wiring (NOTF-03, NOTF-04)
+- [ ] 08-01-PLAN.md -- WebSocket + notifications-service Redis pub/sub pipeline (NOTF-01, NOTF-02)ï¿½ WebSocket + notifications-service Redis pub/sub pipeline (NOTF-01, NOTF-02)
+- [ ] 08-02-PLAN.md -- Churn intervention + curation session notification wiring (NOTF-03, NOTF-04)ï¿½ Churn intervention + curation session notification wiring (NOTF-03, NOTF-04)
 
 ### Phase 9: Shared Packages & Test Coverage
 **Goal**: Shared packages build cleanly and critical paths have integration/component test coverage
