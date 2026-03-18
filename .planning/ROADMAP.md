@@ -12,7 +12,7 @@ RawDrive has extensive scaffolding (13 microservices, 60+ pages, 90+ endpoints) 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Security Hardening** - Fix timing-safe comparison, permission checks, and state machine locking
+- [x] **Phase 1: Security Hardening** - Fix timing-safe comparison, permission checks, and state machine locking (completed 2026-03-18)
 - [ ] **Phase 2: Email Infrastructure** - Deploy Postal and build the EmailService abstraction
 - [ ] **Phase 3: AI Service Stabilization** - Fix crash-looping ai-processing-service container
 - [ ] **Phase 4: Rate Limiting** - Implement Redis sliding window rate limiter for A2A API keys
@@ -167,7 +167,7 @@ Phases 1-4 are parallelizable. Phases 5+ follow dependency chains: 2->5->7, 3->6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Security Hardening | 0/2 | Not started | - |
+| 1. Security Hardening | 2/2 | Complete   | 2026-03-18 |
 | 2. Email Infrastructure | 0/2 | Not started | - |
 | 3. AI Service Stabilization | 0/1 | Not started | - |
 | 4. Rate Limiting | 0/1 | Not started | - |

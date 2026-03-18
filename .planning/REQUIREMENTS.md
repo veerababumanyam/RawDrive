@@ -7,10 +7,10 @@
 
 ### Security Hardening
 
-- [ ] **SEC-01**: A2A API key comparison uses timing-safe hmac.compare_digest instead of string equality
-- [ ] **SEC-02**: Comment endpoints enforce workspace_id filtering on all queries
-- [ ] **SEC-03**: Curation session state machine uses advisory locks and validates state transitions before updates
-- [ ] **SEC-04**: All security fixes verified with regression tests that fail without the fix
+- [x] **SEC-01**: A2A API key comparison uses timing-safe hmac.compare_digest instead of string equality
+- [x] **SEC-02**: Comment endpoints enforce workspace_id filtering on all queries
+- [x] **SEC-03**: Curation session state machine uses advisory locks and validates state transitions before updates
+- [x] **SEC-04**: All security fixes verified with regression tests that fail without the fix
 
 ### Email Infrastructure
 
@@ -116,10 +116,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEC-01 | Phase 1 | Pending |
-| SEC-02 | Phase 1 | Pending |
-| SEC-03 | Phase 1 | Pending |
-| SEC-04 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Complete |
+| SEC-02 | Phase 1 | Complete |
+| SEC-03 | Phase 1 | Complete |
+| SEC-04 | Phase 1 | Complete |
 | MAIL-01 | Phase 2 | Pending |
 | MAIL-02 | Phase 2 | Pending |
 | MAIL-03 | Phase 2 | Pending |

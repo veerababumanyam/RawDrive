@@ -1,3 +1,17 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: phase-complete
+stopped_at: Completed 01-02-PLAN.md (Phase 01 complete)
+last_updated: "2026-03-18T20:20:57.382Z"
+progress:
+  total_phases: 9
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
+---
+
 # Project State
 
 ## Project Reference
@@ -5,35 +19,34 @@
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow must function end-to-end without stubbed or broken steps.
-**Current focus:** Phase 1: Security Hardening
+**Current focus:** Phase 01 — security-hardening (COMPLETE)
 
 ## Current Position
 
-Phase: 1 of 9 (Security Hardening)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-03-18 -- Roadmap created
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 01 (security-hardening) — COMPLETE
+Plan: 2 of 2 (all plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+
+- Total plans completed: 2
+- Average duration: ~3 min
+- Total execution time: ~0.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-security-hardening | 2 | ~6 min | ~3 min |
 
 **Recent Trend:**
-- Last 5 plans: -
-- Trend: -
+
+- Last 5 plans: 01-01 (~3 min), 01-02 (~3 min)
+- Trend: stable
 
 *Updated after each plan completion*
+| Phase 01 P01 | 3min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -45,6 +58,9 @@ Recent decisions affecting current work:
 - Phases 1-4 are parallelizable (security, email infra, AI stabilization, rate limiting have no interdependencies)
 - AI service crash-loop must be fixed (Phase 3) before wiring CLIP/embeddings (Phase 6)
 - Email infrastructure (Phase 2) has DNS lead time -- start early alongside security work
+- [01-02] Used pg_advisory_xact_lock(hashtext(session_id)) for curation state machine locking
+- [01-02] Kept deprecated update_status for backward compat; new code uses update_status_atomic
+- [Phase 01]: Fetch all active keys per workspace then loop with hmac.compare_digest for timing-safe A2A key validation
 
 ### Pending Todos
 
@@ -58,6 +74,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18
-Stopped at: Roadmap created, ready to plan Phase 1
+Last session: 2026-03-18T20:20:56.701Z
+Stopped at: Completed 01-01-PLAN.md
 Resume file: None
