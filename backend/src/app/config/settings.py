@@ -281,6 +281,33 @@ class AppSettings(BaseSettings):
         description="SMTP connection timeout in seconds",
     )
 
+    # Postal (self-hosted mail server)
+    postal_api_url: Optional[str] = Field(
+        default="http://postal:5000",
+        alias="POSTAL_API_URL",
+        description="Postal HTTP API base URL",
+    )
+    postal_api_key: Optional[SecretStr] = Field(
+        default=None,
+        alias="POSTAL_API_KEY",
+        description="Postal server API key (generated in Postal web UI)",
+    )
+    postal_from_email: Optional[str] = Field(
+        default=None,
+        alias="POSTAL_FROM_EMAIL",
+        description="Default from email for Postal",
+    )
+    postal_from_name: Optional[str] = Field(
+        default="RawDrive",
+        alias="POSTAL_FROM_NAME",
+        description="Default from name for Postal",
+    )
+    postal_webhook_secret: Optional[SecretStr] = Field(
+        default=None,
+        alias="POSTAL_WEBHOOK_SECRET",
+        description="Secret for validating Postal webhook callbacks",
+    )
+
     # AI Providers
     gemini_api_key: Optional[SecretStr] = Field(
         default=None,
@@ -405,6 +432,8 @@ class AppSettings(BaseSettings):
             "RAZORPAY_WEBHOOK_SECRET",
             "sendgrid_api_key",
             "smtp_password",
+            "postal_api_key",
+            "postal_webhook_secret",
             "gemini_api_key",
             "openai_api_key",
             "anthropic_api_key",
