@@ -36,31 +36,32 @@ Configuration options for `.planning/` directory behavior.
 - User must add `.planning/` to `.gitignore`
 - Useful for: OSS contributions, client projects, keeping planning private
 
-**Using gsd-tools.js (preferred):**
+**Using gsd-tools.cjs (preferred):**
 
 ```bash
 # Commit with automatic commit_docs + gitignore checks:
-node ./.claude/get-shit-done/bin/gsd-tools.js commit "docs: update state" --files .planning/STATE.md
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs: update state" --files .planning/STATE.md
 
 # Load config via state load (returns JSON):
-INIT=$(node ./.claude/get-shit-done/bin/gsd-tools.js state load)
+INIT=$(node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" state load)
+if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 # commit_docs is available in the JSON output
 
 # Or use init commands which include commit_docs:
-INIT=$(node ./.claude/get-shit-done/bin/gsd-tools.js init execute-phase "1")
+INIT=$(node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" init execute-phase "1")
+if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 # commit_docs is included in all init command outputs
 ```
 
 **Auto-detection:** If `.planning/` is gitignored, `commit_docs` is automatically `false` regardless of config.json. This prevents git errors when users have `.planning/` in `.gitignore`.
 
-**Conditional git operations:**
+**Commit via CLI (handles checks automatically):**
 
 ```bash
-if [ "$COMMIT_DOCS" = "true" ]; then
-  git add .planning/STATE.md
-  git commit -m "docs: update state"
-fi
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs: update state" --files .planning/STATE.md
 ```
+
+The CLI checks `commit_docs` config and gitignore status internally — no manual conditionals needed.
 
 </commit_docs_behavior>
 
@@ -101,6 +102,8 @@ To use uncommitted mode:
    git rm -r --cached .planning/
    git commit -m "chore: stop tracking planning docs"
    ```
+
+4. **Branch merges:** When using `branching_strategy: phase` or `milestone`, the `complete-milestone` workflow automatically strips `.planning/` files from staging before merge commits when `commit_docs: false`.
 
 </setup_uncommitted_mode>
 
@@ -143,13 +146,15 @@ To use uncommitted mode:
 
 Use `init execute-phase` which returns all config as JSON:
 ```bash
-INIT=$(node ./.claude/get-shit-done/bin/gsd-tools.js init execute-phase "1")
+INIT=$(node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" init execute-phase "1")
+if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 # JSON output includes: branching_strategy, phase_branch_template, milestone_branch_template
 ```
 
 Or use `state load` for the config values:
 ```bash
-INIT=$(node ./.claude/get-shit-done/bin/gsd-tools.js state load)
+INIT=$(node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" state load)
+if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 # Parse branching_strategy, phase_branch_template, milestone_branch_template from JSON
 ```
 

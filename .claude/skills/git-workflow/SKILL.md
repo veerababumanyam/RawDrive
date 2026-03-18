@@ -1,318 +1,105 @@
 ---
 name: git-workflow
-aliases: [git, commits, branches, pr, pull-request, version-control]
-description: Git workflow conventions for RawDrive. Use when creating commits, branches, pull requests, or reviewing code changes.
+description: "Git workflow conventions for RawDrive: conventional commits, branch strategy, PR process, CI/CD pipeline, and GitHub Actions. Use this skill when creating commits, branches, pull requests, or working with the CI/CD pipeline. Also use for understanding the branching strategy, commit message format, or deployment workflow. Triggers on: commit, branch, pull request, PR, merge, git workflow, conventional commit, CI/CD, deploy, release, version tag."
 ---
 
 # Git Workflow
 
-## Branch Naming
+RawDrive uses conventional commits, feature branches, and GitHub Actions for CI/CD.
 
-```bash
-feature/add-album-sharing      # New features
-fix/photo-upload-timeout       # Bug fixes
-refactor/gallery-service       # Code improvements
-docs/api-documentation         # Documentation
-chore/update-dependencies      # Maintenance
-hotfix/critical-auth-bug       # Production fixes
-```
-
-### Pattern
+## Commit Message Format
 
 ```
-{type}/{short-description}
+<type>(<scope>): <subject>
+
+# Examples:
+feat(gallery): add password protection for shared galleries
+fix(auth): resolve token expiration race condition
+chore(deps): update SQLAlchemy to 2.0.35
+refactor(billing): extract payment validation to service layer
+docs(api): update gallery endpoint documentation
+test(faces): add integration tests for face grouping
+perf(gallery-service): optimize 3-tier cache invalidation
 ```
 
-| Type | Use Case |
-|------|----------|
-| `feature/` | New functionality |
-| `fix/` | Bug fixes |
-| `refactor/` | Code restructuring (no behavior change) |
-| `docs/` | Documentation only |
-| `chore/` | Build, deps, tooling |
-| `hotfix/` | Urgent production fixes |
-
-## Commit Messages
-
-### Format
-
-```
-type(scope): description
-
-[optional body]
-
-[optional footer]
-```
-
-### Examples
-
-```bash
-feat(gallery): add bulk photo selection
-fix(upload): handle timeout on large files
-refactor(auth): extract token validation to middleware
-docs(api): add gallery endpoints documentation
-test(photos): add integration tests for upload flow
-chore(deps): update React to v19.1
-
-# With ticket reference
-feat(gallery): add sharing feature [RAW-123]
-
-# With breaking change
-feat(api)!: change gallery response format
-
-BREAKING CHANGE: Gallery response now uses `items` instead of `galleries`
-```
-
-### Types
-
-| Type | Description |
-|------|-------------|
+| Type | When |
+|------|------|
 | `feat` | New feature |
 | `fix` | Bug fix |
-| `refactor` | Code change (no feature/fix) |
-| `docs` | Documentation |
+| `chore` | Maintenance, deps, config |
+| `refactor` | Code restructuring (no behavior change) |
+| `docs` | Documentation only |
 | `test` | Adding/updating tests |
-| `chore` | Build, deps, config |
-| `style` | Formatting (no code change) |
 | `perf` | Performance improvement |
+| `style` | Formatting (no logic change) |
+| `ci` | CI/CD changes |
 
-### Scopes (Common)
+**Scope** matches the service/area: `gallery`, `auth`, `billing`, `faces`, `invitations`, `upload`, `frontend`, `deps`, `docker`, `api`
 
-| Scope | Area |
-|-------|------|
-| `gallery` | Gallery features |
-| `upload` | Upload system |
-| `auth` | Authentication |
-| `api` | API endpoints |
-| `ui` | UI components |
-| `db` | Database/migrations |
-| `ai` | AI features |
-| `storage` | R2/BYOS storage |
-
-## Pull Request Guidelines
-
-### PR Title
-
-Same format as commit messages:
+## Branch Strategy
 
 ```
-feat(gallery): add bulk selection and download
+main (protected)
+├── feature/gallery-password-protection
+├── feature/invitation-rsvp-export
+├── fix/auth-token-refresh
+├── chore/upgrade-react-query
+└── release/v0.4.0
 ```
 
-### PR Template
+| Branch | Purpose |
+|--------|---------|
+| `main` | Production-ready, protected |
+| `feature/<name>` | New features |
+| `fix/<name>` | Bug fixes |
+| `chore/<name>` | Maintenance |
+| `release/<version>` | Release preparation |
 
-```markdown
-## Summary
+**Do NOT use:** `bugfix/`, `feat-`, `dev/`, or other formats.
 
-Brief description of what this PR does.
+## PR Process
 
-## Changes
-
-- Added bulk selection to gallery grid
-- Implemented ZIP download for selected photos
-- Added progress indicator for downloads
-
-## Testing
-
-- [ ] Unit tests added/updated
-- [ ] Manual testing completed
-- [ ] Tested in dark mode
-- [ ] Tested on mobile
-
-## Screenshots
-
-(if UI changes)
-
-## Related Issues
-
-Closes #123
-```
+1. Create feature branch from `main`
+2. Make changes with conventional commits
+3. Self-review code before opening PR
+4. PR triggers CI/CD (lint, type check, tests, Docker build)
+5. Merge to `main` (squash or merge commit)
 
 ### PR Checklist
+- [ ] Unit tests included
+- [ ] Passes lint (`pnpm lint` / `ruff check .`)
+- [ ] Passes type checking (`tsc` / `mypy`)
+- [ ] Self-reviewed
+- [ ] No hardcoded secrets or credentials
+- [ ] Migration included (if schema change)
+- [ ] Documentation updated (if behavior change)
 
-Before requesting review:
+## CI/CD Pipeline (GitHub Actions)
 
-- [ ] Branch is up to date with `main`
-- [ ] All tests pass
-- [ ] Linting passes (`npm run lint`, `ruff check`)
-- [ ] No console.log or debug code
-- [ ] Commit messages follow conventions
-- [ ] Self-reviewed the diff
-- [ ] Added tests for new functionality
-- [ ] Updated documentation if needed
+**File:** `.github/workflows/docker-build-push.yml`
 
-### PR Size Guidelines
+**Triggers:**
+- Push to `main` or `develop`
+- Version tags (`v*`)
+- Path-specific: `backend/**`, `services/**`, `infrastructure/docker/**`
+- Manual dispatch with service selection
 
-| Size | Lines Changed | Review Time |
-|------|---------------|-------------|
-| XS | < 50 | ~10 min |
-| S | 50-200 | ~30 min |
-| M | 200-500 | ~1 hour |
-| L | 500-1000 | Split if possible |
-| XL | > 1000 | Must split |
-
-**Prefer smaller PRs** - easier to review, faster to merge, less risk.
-
-## Git Commands
-
-### Daily Workflow
-
-```bash
-# Start new feature
-git checkout main
-git pull origin main
-git checkout -b feature/my-feature
-
-# Work on feature
-git add -A
-git commit -m "feat(scope): description"
-
-# Push and create PR
-git push -u origin feature/my-feature
-gh pr create --fill
+**Pipeline:**
+```
+Push → Prepare (detect changes) → Build (Docker multi-stage) → Push to GHCR
 ```
 
-### Keeping Branch Updated
+**Version tagging:**
+- Tags (`v1.0.0`) → release version
+- `main` → `latest`
+- `develop` → `develop`
+- Other branches → `sha-<commit>`
 
-```bash
-# Rebase on main (preferred for clean history)
-git fetch origin
-git rebase origin/main
+## Version Numbering
 
-# Or merge (if conflicts are complex)
-git merge origin/main
-```
+Format: `v<major>.<minor>.<patch>` (e.g., `v0.3.6`)
 
-### Fixing Commits
-
-```bash
-# Amend last commit (before push)
-git commit --amend -m "fix(scope): better message"
-
-# Interactive rebase (before push)
-git rebase -i HEAD~3
-
-# Undo last commit (keep changes)
-git reset --soft HEAD~1
-```
-
-### Stashing
-
-```bash
-# Save work temporarily
-git stash push -m "WIP: gallery feature"
-
-# List stashes
-git stash list
-
-# Apply and remove
-git stash pop
-
-# Apply specific stash
-git stash apply stash@{2}
-```
-
-## Protected Branches
-
-### `main`
-
-- Requires PR with approval
-- Must pass CI checks
-- No force push
-- Squash merge preferred
-
-### Release Process
-
-```bash
-# Tag release
-git tag -a v1.2.0 -m "Release v1.2.0"
-git push origin v1.2.0
-
-# Hotfix process
-git checkout -b hotfix/critical-bug main
-# ... fix bug ...
-git commit -m "fix(auth): critical security patch"
-git push -u origin hotfix/critical-bug
-# Create PR to main
-```
-
-## Code Review Etiquette
-
-### As Author
-
-- Keep PRs focused and small
-- Respond to feedback promptly
-- Don't take feedback personally
-- Explain complex changes in PR description
-
-### As Reviewer
-
-- Be constructive and specific
-- Suggest, don't demand
-- Approve if changes are minor
-- Use conventional comments:
-
-```
-# Blocking issue
-🔴 This will cause a null pointer exception
-
-# Suggestion (non-blocking)
-💡 Consider using useMemo here for performance
-
-# Question
-❓ Why was this approach chosen over X?
-
-# Nitpick (optional)
-🔵 Nit: Prefer const over let here
-```
-
-## .gitignore Essentials
-
-```gitignore
-# Dependencies
-node_modules/
-.venv/
-__pycache__/
-
-# Build
-dist/
-build/
-*.egg-info/
-
-# Environment
-.env
-.env.local
-*.pem
-
-# IDE
-.idea/
-.vscode/
-*.swp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-logs/
-
-# Test
-coverage/
-.pytest_cache/
-```
-
-## Useful Aliases
-
-```bash
-# Add to ~/.gitconfig
-[alias]
-  co = checkout
-  br = branch
-  ci = commit
-  st = status
-  lg = log --oneline --graph --decorate -20
-  unstage = reset HEAD --
-  last = log -1 HEAD
-  amend = commit --amend --no-edit
-```
+Current: v0.4.0 — update in:
+- `CLAUDE.md` version header
+- `packages/api-types/package.json`
+- Git tag for releases

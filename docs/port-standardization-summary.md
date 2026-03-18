@@ -164,3 +164,23 @@ This ensures one-api uses port 3002 internally instead of the default 3000 which
 - Application microservices must use unique ports both internally and externally to avoid conflicts
 - All port references now use environment variables, making it easy to change port assignments in the future
 - The `.env` file is the single source of truth for all port configurations
+
+## Services Added After Initial Standardization (March 2026)
+
+The following services were added in the 8010-8016 range:
+
+```env
+PORT_NOTIFICATIONS=8010     # Notifications service
+PORT_CLIENT=8011            # Client CRM service
+PORT_AI_PROCESSING=8012     # AI processing (embeddings, CLIP)
+PORT_AI_SERVICE=8013        # AI service (MCP orchestration)
+PORT_WEBHOOKS=8015          # Webhooks event delivery
+PORT_FACE_SERVICE=8016      # Growth service / face service
+PORT_MILVUS=19530           # Milvus vector DB
+PORT_MILVUS_METRICS=9091    # Milvus metrics
+PORT_MINIO=9000             # MinIO object storage
+PORT_MINIO_CONSOLE=9001     # MinIO web console
+PORT_ETCD=2379              # etcd for Milvus
+```
+
+See [docs/port-reference.md](port-reference.md) for the complete current port mapping.

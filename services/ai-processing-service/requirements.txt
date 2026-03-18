@@ -32,7 +32,7 @@ scipy==1.15.0
 insightface==0.7.3  # Face detection, recognition, and analysis
 onnxruntime==1.19.2  # ONNX Runtime for CPU inference
 onnxruntime-gpu==1.19.2  # ONNX Runtime with GPU (CUDA) support
-opencv-python==4.10.0.84  # OpenCV for image processing
+opencv-python-headless==4.10.0.84  # OpenCV for image processing (headless - no libGL needed)
 
 # Google Cloud AI
 google-cloud-vision==3.8.1  # Vision API for content moderation

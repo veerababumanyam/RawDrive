@@ -6,25 +6,20 @@ Execute a phase prompt (PLAN.md) and create the outcome summary (SUMMARY.md).
 Read STATE.md before any operation to load project context.
 Read config.json for planning behavior settings.
 
-@./.claude/get-shit-done/references/git-integration.md
+@C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/references/git-integration.md
 </required_reading>
 
 <process>
 
 <step name="init_context" priority="first">
-Load execution context (uses `init execute-phase` for full context, including file contents):
+Load execution context (paths only to minimize orchestrator context):
 
 ```bash
-INIT=$(node ./.claude/get-shit-done/bin/gsd-tools.js init execute-phase "${PHASE}" --include state,config)
+INIT=$(node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" init execute-phase "${PHASE}")
+if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Extract from init JSON: `executor_model`, `commit_docs`, `phase_dir`, `phase_number`, `plans`, `summaries`, `incomplete_plans`.
-
-**File contents (from --include):** `state_content`, `config_content`. Access with:
-```bash
-STATE_CONTENT=$(echo "$INIT" | jq -r '.state_content // empty')
-CONFIG_CONTENT=$(echo "$INIT" | jq -r '.config_content // empty')
-```
+Extract from init JSON: `executor_model`, `commit_docs`, `phase_dir`, `phase_number`, `plans`, `summaries`, `incomplete_plans`, `state_path`, `config_path`.
 
 If `.planning/` missing: error.
 </step>
@@ -40,7 +35,7 @@ Find first PLAN without matching SUMMARY. Decimal phases supported (`01.1-hotfix
 
 ```bash
 PHASE=$(echo "$PLAN_PATH" | grep -oE '[0-9]+(\.[0-9]+)?-[0-9]+')
-# config_content already loaded via --include config in init_context
+# config settings can be fetched via gsd-tools config-get if needed
 ```
 
 <if mode="yolo">
@@ -111,6 +106,12 @@ Pattern B only (verify-only checkpoints). Skip for A/C.
    - Verify key-files.created exist on disk with `[ -f ]`
    - Check `git log --oneline --all --grep="{phase}-{plan}"` returns ≥1 commit
    - Append `## Self-Check: PASSED` or `## Self-Check: FAILED` to SUMMARY
+
+   **Known Claude Code bug (classifyHandoffIfNeeded):** If any segment agent reports "failed" with `classifyHandoffIfNeeded is not defined`, this is a Claude Code runtime bug — not a real failure. Run spot-checks; if they pass, treat as successful.
+
+
+
+
 </step>
 
 <step name="load_prompt">
@@ -118,11 +119,14 @@ Pattern B only (verify-only checkpoints). Skip for A/C.
 cat .planning/phases/XX-name/{phase}-{plan}-PLAN.md
 ```
 This IS the execution instructions. Follow exactly. If plan references CONTEXT.md: honor user's vision throughout.
+
+**If plan contains `<interfaces>` block:** These are pre-extracted type definitions and contracts. Use them directly — do NOT re-read the source files to discover types. The planner already extracted what you need.
 </step>
 
 <step name="previous_phase_check">
 ```bash
-ls .planning/phases/*/SUMMARY.md 2>/dev/null | sort -r | head -2 | tail -1
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" phases list --type summaries --raw
+# Extract the second-to-last summary from the JSON result
 ```
 If previous SUMMARY has unresolved "Issues Encountered" or "Next Phase Readiness" blockers: AskUserQuestion(header="Previous Issues", options: "Proceed anyway" | "Address first" | "Review previous").
 </step>
@@ -131,9 +135,12 @@ If previous SUMMARY has unresolved "Issues Encountered" or "Next Phase Readiness
 Deviations are normal — handle via rules below.
 
 1. Read @context files from prompt
-2. Per task:
+2. **MCP tools:** If CLAUDE.md or project instructions reference MCP tools (e.g. jCodeMunch for code navigation), prefer them over Grep/Glob when available. Fall back to Grep/Glob if MCP tools are not accessible.
+3. Per task:
+   - **MANDATORY read_first gate:** If the task has a `<read_first>` field, you MUST read every listed file BEFORE making any edits. This is not optional. Do not skip files because you "already know" what's in them — read them. The read_first files establish ground truth for the task.
    - `type="auto"`: if `tdd="true"` → TDD execution. Implement with deviation rules + auth gates. Verify done criteria. Commit (see task_commit). Track hash for Summary.
    - `type="checkpoint:*"`: STOP → checkpoint_protocol → wait for user → continue only after confirmation.
+   - **MANDATORY acceptance_criteria check:** After completing each task, if it has `<acceptance_criteria>`, verify EVERY criterion before moving to the next task. Use grep, file reads, or CLI commands to confirm each criterion. If any criterion fails, fix the implementation before proceeding. Do not skip criteria or mark them as "will verify later".
 3. Run `<verification>` checks
 4. Confirm `<success_criteria>` met
 5. Document deviations in Summary
@@ -219,8 +226,25 @@ For `type: tdd` plans — RED-GREEN-REFACTOR:
 
 Errors: RED doesn't fail → investigate test/existing feature. GREEN doesn't pass → debug, iterate. REFACTOR breaks → undo.
 
-See `./.claude/get-shit-done/references/tdd.md` for structure.
+See `C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/references/tdd.md` for structure.
 </tdd_plan_execution>
+
+<precommit_failure_handling>
+## Pre-commit Hook Failure Handling
+
+Your commits may trigger pre-commit hooks. Auto-fix hooks handle themselves transparently — files get fixed and re-staged automatically.
+
+If a commit is BLOCKED by a hook:
+
+1. The `git commit` command fails with hook error output
+2. Read the error — it tells you exactly which hook and what failed
+3. Fix the issue (type error, lint violation, secret leak, etc.)
+4. `git add` the fixed files
+5. Retry the commit
+6. Do NOT use `--no-verify`
+
+This is normal and expected. Budget 1-2 retry cycles per commit.
+</precommit_failure_handling>
 
 <task_commit>
 ## Task Commit Protocol
@@ -256,6 +280,15 @@ TASK_COMMIT=$(git rev-parse --short HEAD)
 TASK_COMMITS+=("Task ${TASK_NUM}: ${TASK_COMMIT}")
 ```
 
+**6. Check for untracked generated files:**
+```bash
+git status --short | grep '^??'
+```
+If new untracked files appeared after running scripts or tools, decide for each:
+- **Commit it** — if it's a source file, config, or intentional artifact
+- **Add to .gitignore** — if it's a generated/runtime output (build artifacts, `.env` files, cache files, compiled output)
+- Do NOT leave generated files untracked
+
 </task_commit>
 
 <step name="checkpoint_protocol">
@@ -271,7 +304,7 @@ Display: `CHECKPOINT: [Type]` box → Progress {X}/{Y} → Task name → type-sp
 
 After response: verify if specified. Pass → continue. Fail → inform, wait. WAIT for user — do NOT hallucinate completion.
 
-See ./.claude/get-shit-done/references/checkpoints.md for details.
+See C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/references/checkpoints.md for details.
 </step>
 
 <step name="checkpoint_return_for_orchestrator">
@@ -283,7 +316,22 @@ Orchestrator parses → presents to user → spawns fresh continuation with your
 </step>
 
 <step name="verification_failure_gate">
-If verification fails: STOP. Present: "Verification failed for Task [X]: [name]. Expected: [criteria]. Actual: [result]." Options: Retry | Skip (mark incomplete) | Stop (investigate). If skipped → SUMMARY "Issues Encountered".
+If verification fails:
+
+**Check if node repair is enabled** (default: on):
+```bash
+NODE_REPAIR=$(node "./.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow.node_repair 2>/dev/null || echo "true")
+```
+
+If `NODE_REPAIR` is `true`: invoke `@./.claude/get-shit-done/workflows/node-repair.md` with:
+- FAILED_TASK: task number, name, done-criteria
+- ERROR: expected vs actual result
+- PLAN_CONTEXT: adjacent task names + phase goal
+- REPAIR_BUDGET: `workflow.node_repair_budget` from config (default: 2)
+
+Node repair will attempt RETRY, DECOMPOSE, or PRUNE autonomously. Only reaches this gate again if repair budget is exhausted (ESCALATE).
+
+If `NODE_REPAIR` is `false` OR repair returns ESCALATE: STOP. Present: "Verification failed for Task [X]: [name]. Expected: [criteria]. Actual: [result]. Repair attempted: [summary of what was tried]." Options: Retry | Skip (mark incomplete) | Stop (investigate). If skipped → SUMMARY "Issues Encountered".
 </step>
 
 <step name="record_completion_time">
@@ -309,13 +357,13 @@ fi
 grep -A 50 "^user_setup:" .planning/phases/XX-name/{phase}-{plan}-PLAN.md | head -50
 ```
 
-If user_setup exists: create `{phase}-USER-SETUP.md` using template `./.claude/get-shit-done/templates/user-setup.md`. Per service: env vars table, account setup checklist, dashboard config, local dev notes, verification commands. Status "Incomplete". Set `USER_SETUP_CREATED=true`. If empty/missing: skip.
+If user_setup exists: create `{phase}-USER-SETUP.md` using template `C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/templates/user-setup.md`. Per service: env vars table, account setup checklist, dashboard config, local dev notes, verification commands. Status "Incomplete". Set `USER_SETUP_CREATED=true`. If empty/missing: skip.
 </step>
 
 <step name="create_summary">
-Create `{phase}-{plan}-SUMMARY.md` at `.planning/phases/XX-name/`. Use `./.claude/get-shit-done/templates/summary.md`.
+Create `{phase}-{plan}-SUMMARY.md` at `.planning/phases/XX-name/`. Use `C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/templates/summary.md`.
 
-**Frontmatter:** phase, plan, subsystem, tags | requires/provides/affects | tech-stack.added/patterns | key-files.created/modified | key-decisions | duration ($DURATION), completed ($PLAN_END_TIME date).
+**Frontmatter:** phase, plan, subsystem, tags | requires/provides/affects | tech-stack.added/patterns | key-files.created/modified | key-decisions | requirements-completed (**MUST** copy `requirements` array from PLAN.md frontmatter verbatim) | duration ($DURATION), completed ($PLAN_END_TIME date).
 
 Title: `# Phase [X] Plan [Y]: [Name] Summary`
 
@@ -323,19 +371,50 @@ One-liner SUBSTANTIVE: "JWT auth with refresh rotation using jose library" not "
 
 Include: duration, start/end times, task count, file count.
 
-Next: more plans → "Ready for {next-plan}" | last → "Phase complete, ready for transition".
+Next: more plans → "Ready for {next-plan}" | last → "Phase complete, ready for next step".
 </step>
 
 <step name="update_current_position">
-Update STATE.md: Phase [current]/[total] ([name]) | Plan [completed]/[total] | Status | Last activity: [today] - Completed {phase}-{plan} | Progress bar (█/░). Calculate: (total SUMMARYs / total PLANs) × 100%.
+Update STATE.md using gsd-tools:
+
+```bash
+# Advance plan counter (handles last-plan edge case)
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" state advance-plan
+
+# Recalculate progress bar from disk state
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" state update-progress
+
+# Record execution metrics
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" state record-metric \
+  --phase "${PHASE}" --plan "${PLAN}" --duration "${DURATION}" \
+  --tasks "${TASK_COUNT}" --files "${FILE_COUNT}"
+```
 </step>
 
 <step name="extract_decisions_and_issues">
-From SUMMARY: "Decisions Made" (if not "None") → STATE.md Decisions: `| [phase] | [summary] | [rationale] |`. "Next Phase Readiness" blockers → STATE.md "Blockers/Concerns Carried Forward".
+From SUMMARY: Extract decisions and add to STATE.md:
+
+```bash
+# Add each decision from SUMMARY key-decisions
+# Prefer file inputs for shell-safe text (preserves `$`, `*`, etc. exactly)
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" state add-decision \
+  --phase "${PHASE}" --summary-file "${DECISION_TEXT_FILE}" --rationale-file "${RATIONALE_FILE}"
+
+# Add blockers if any found
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" state add-blocker --text-file "${BLOCKER_TEXT_FILE}"
+```
 </step>
 
 <step name="update_session_continuity">
-STATE.md Session: Last session [date/time] | Stopped at: Completed {phase}-{plan} | Resume file: [path or "None"]. Keep STATE.md under 150 lines.
+Update session info using gsd-tools:
+
+```bash
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" state record-session \
+  --stopped-at "Completed ${PHASE}-${PLAN}-PLAN.md" \
+  --resume-file "None"
+```
+
+Keep STATE.md under 150 lines.
 </step>
 
 <step name="issues_review_gate">
@@ -343,14 +422,27 @@ If SUMMARY "Issues Encountered" ≠ "None": yolo → log and continue. Interacti
 </step>
 
 <step name="update_roadmap">
-More plans → update plan count, keep "In progress". Last plan → mark phase "Complete", add date.
+```bash
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap update-plan-progress "${PHASE}"
+```
+Counts PLAN vs SUMMARY files on disk. Updates progress table row with correct count and status (`In Progress` or `Complete` with date).
+</step>
+
+<step name="update_requirements">
+Mark completed requirements from the PLAN.md frontmatter `requirements:` field:
+
+```bash
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" requirements mark-complete ${REQ_IDS}
+```
+
+Extract requirement IDs from the plan's frontmatter (e.g., `requirements: [AUTH-01, AUTH-02]`). If no requirements field, skip.
 </step>
 
 <step name="git_commit_metadata">
 Task code already committed per-task. Commit plan metadata:
 
 ```bash
-node ./.claude/get-shit-done/bin/gsd-tools.js commit "docs({phase}-{plan}): complete [plan-name] plan" --files .planning/phases/XX-name/{phase}-{plan}-SUMMARY.md .planning/STATE.md .planning/ROADMAP.md
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs({phase}-{plan}): complete [plan-name] plan" --files .planning/phases/XX-name/{phase}-{plan}-SUMMARY.md .planning/STATE.md .planning/ROADMAP.md .planning/REQUIREMENTS.md
 ```
 </step>
 
@@ -365,7 +457,7 @@ git diff --name-only ${FIRST_TASK}^..HEAD 2>/dev/null
 Update only structural changes: new src/ dir → STRUCTURE.md | deps → STACK.md | file pattern → CONVENTIONS.md | API client → INTEGRATIONS.md | config → STACK.md | renamed → update paths. Skip code-only/bugfix/content changes.
 
 ```bash
-git add .planning/codebase/*.md && git commit --amend --no-edit
+node "C:/Users/admin/Desktop/RawDrive2/.claude/get-shit-done/bin/gsd-tools.cjs" commit "" --files .planning/codebase/*.md --amend
 ```
 </step>
 

@@ -242,31 +242,37 @@ docker compose -f infrastructure/docker/docker-compose.yml up -d --build gallery
 
 ### All Services (20 total)
 
-**Microservices (8)**:
-- backend (8000) - Main API
-- gallery-service (8004) - Gallery viewing
-- billing-service (8005) - Payments
-- onboarding-service (8006) - Registration
-- invitations-api (8007) - Invitations
-- upload-service (8008) - File uploads
-- webhooks-service (8003) - Webhook delivery
-- notifications-service (8010) - Notifications
+**Microservices (12)** — ports from `PORT_*` in `.env`:
+- backend (PORT_BACKEND=8000) - Main API
+- gallery-service (PORT_GALLERY=8004) - Gallery viewing
+- billing-service (PORT_BILLING=8005) - Payments
+- onboarding-service (PORT_ONBOARDING=8006) - Registration
+- invitations-api (PORT_INVITATIONS=8007) - Invitations
+- upload-service (PORT_UPLOAD=8008) - File uploads
+- notifications-service (PORT_NOTIFICATIONS=8010) - Notifications
+- client-service (PORT_CLIENT=8011) - CRM
+- ai-processing (PORT_AI_PROCESSING=8012) - Embeddings, CLIP
+- ai-service-mcp (PORT_AI_SERVICE=8013) - AI orchestration
+- webhooks-service (PORT_WEBHOOKS=8015) - Webhook delivery
+- growth-service (PORT_FACE_SERVICE=8016) - Referrals
 
-**Workers (4)**:
-- face-worker (8001) - Face detection
-- content-worker (8002) - Content analysis
-- quality-worker (8003) - Quality scoring
-- invitations-worker (8009) - Email processing
+**Workers (3)**:
+- face-worker (PORT_FACE_WORKER=8001) - Face detection
+- content-worker (PORT_CONTENT_WORKER=8002) - Content analysis
+- quality-worker (PORT_QUALITY_WORKER=8003) - Quality scoring
 
-**Infrastructure (8)**:
-- postgres (5432) - PostgreSQL 16 + pgvector
-- redis (6379) - Redis 7
-- pgbouncer (6432) - Connection pooler
+**Infrastructure (11)**:
+- postgres (PORT_POSTGRES=5432) - PostgreSQL 16 + pgvector
+- redis (PORT_REDIS=6379) - Redis 7
+- pgbouncer (PORT_PGBOUNCER=6432) - Connection pooler
 - traefik (80, 443, 8080) - API Gateway
-- prometheus (9090) - Metrics
-- grafana (3000) - Dashboards
-- loki (3100) - Logs
-- one-api (3002) - AI gateway
+- prometheus (PORT_PROMETHEUS=9090) - Metrics
+- grafana (PORT_GRAFANA=3000) - Dashboards
+- loki (PORT_LOKI=3100) - Logs
+- milvus (PORT_MILVUS=19530) - Vector DB
+- etcd (PORT_ETCD=2379) - Service discovery
+- minio (PORT_MINIO=9000) - Object storage
+- one-api (PORT_ONE_API=3002) - AI gateway
 
 ## 🛠️ IDE Configuration
 

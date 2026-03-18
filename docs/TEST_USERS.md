@@ -1,116 +1,179 @@
-# RawDrive Test Users Reference
+# Test Users
 
-> **Password for ALL test users:** `Test@123`
+All test users share the password **`Test@123`** and have deterministic UUIDs for automation.
 
-All test users are seeded with deterministic UUIDs for reproducible testing. Email is verified by default.
+## Subscription Tier Users
 
----
-## test users
-### All users use the same password: Test@123
+| Email | Plan | User ID | Workspace ID |
+|-------|------|---------|--------------|
+| `free@test.rawdrive.in` | Free (Starter) | `11111111-1111-1111-1111-111111111001` | `11111111-1111-1111-1111-000000000001` |
+| `starter@test.rawdrive.in` | Starter | `11111111-1111-1111-1111-111111111002` | `11111111-1111-1111-1111-000000000002` |
+| `professional@test.rawdrive.in` | Professional | `11111111-1111-1111-1111-111111111003` | `11111111-1111-1111-1111-000000000003` |
+| `business@test.rawdrive.in` | Studio | `11111111-1111-1111-1111-111111111004` | `11111111-1111-1111-1111-000000000004` |
+| `enterprise@test.rawdrive.in` | Enterprise | `11111111-1111-1111-1111-111111111005` | `11111111-1111-1111-1111-000000000005` |
 
-Subscription Tier Users:
-  - free@test.rawdrive.in (Free plan)
-  - starter@test.rawdrive.in (Starter plan)
-  - professional@test.rawdrive.in (Professional plan)
-  - business@test.rawdrive.in (Business plan)
-  - enterprise@test.rawdrive.in (Enterprise plan)
+Each tier user owns their workspace with the `owner` role (full permissions).
 
-  Platform Admin Users:
-  - superadmin@test.rawdrive.in (Super Admin)
-  - platformadmin@test.rawdrive.in (Platform Admin)
-  - supportadmin@test.rawdrive.in (Support Admin)
-  - billingadmin@test.rawdrive.in (Billing Admin)
-  - And 5 more...
+## Platform Admin Users
 
-  Workspace Role Users:
-  - workspaceowner@test.rawdrive.in (Owner)
-  - workspaceadmin@test.rawdrive.in (Admin)
-  - staffuser@test.rawdrive.in (Editor)
-  - clientviewer@test.rawdrive.in (Viewer)
+| Email | Platform Role | User ID | Workspace ID |
+|-------|---------------|---------|--------------|
+| `superadmin@test.rawdrive.in` | `super_admin` | `22222222-2222-2222-2222-222222222001` | `22222222-2222-2222-2222-000000000001` |
+| `platformadmin@test.rawdrive.in` | `platform_admin` | `22222222-2222-2222-2222-222222222002` | `22222222-2222-2222-2222-000000000002` |
+| `supportadmin@test.rawdrive.in` | `support_admin` | `22222222-2222-2222-2222-222222222003` | `22222222-2222-2222-2222-000000000003` |
+| `billingadmin@test.rawdrive.in` | `billing_admin` | `22222222-2222-2222-2222-222222222004` | `22222222-2222-2222-2222-000000000004` |
+| `contentmod@test.rawdrive.in` | `content_moderator` | `22222222-2222-2222-2222-222222222005` | `22222222-2222-2222-2222-000000000005` |
+| `securityadmin@test.rawdrive.in` | `security_admin` | `22222222-2222-2222-2222-222222222006` | `22222222-2222-2222-2222-000000000006` |
+| `observabilityadmin@test.rawdrive.in` | `observability_admin` | `22222222-2222-2222-2222-222222222007` | `22222222-2222-2222-2222-000000000007` |
+| `productadmin@test.rawdrive.in` | `product_admin` | `22222222-2222-2222-2222-222222222008` | `22222222-2222-2222-2222-000000000008` |
 
-## 1. Subscription Tier Test Users
+## Workspace Roles
 
-These users test different subscription plans and their limits.
+Every workspace is created with four system roles:
 
-| Email | UUID | Plan | Storage | Galleries | Clients | Team | AI Credits |
-|-------|------|------|---------|-----------|---------|------|------------|
-| `free@test.rawdrive.in` | `11111111-1111-1111-1111-111111111001` | Free | 1 GB | 3 | 5 | 3 | 50/mo |
-| `starter@test.rawdrive.in` | `11111111-1111-1111-1111-111111111002` | Starter | 10 GB | 10 | 20 | 10 | 200/mo |
-| `professional@test.rawdrive.in` | `11111111-1111-1111-1111-111111111003` | Professional | 100 GB | 50 | 100 | 50 | 1000/mo |
-| `business@test.rawdrive.in` | `11111111-1111-1111-1111-111111111004` | Business | 1 TB | 200 | 500 | 200 | 2500/mo |
-| `enterprise@test.rawdrive.in` | `11111111-1111-1111-1111-111111111005` | Enterprise | Unlimited | 10000 | 10000 | 10000 | 10000/mo |
+| Role | Permissions |
+|------|-------------|
+| `owner` | `workspace:*`, `members:*`, `roles:*`, `galleries:*`, `assets:*`, `billing:*`, `audit:read` |
+| `admin` | `workspace:write`, `members:write`, `roles:write`, `galleries:*`, `assets:*`, `billing:read`, `audit:read` |
+| `editor` | `galleries:write`, `galleries:read`, `assets:write`, `assets:read` |
+| `viewer` | `galleries:read`, `assets:read` |
 
-Each tier user owns their own workspace (e.g., `free`, `starter`, etc.) with a 30-day trial subscription.
+## Plan Capabilities
 
----
+| Plan | Storage | Galleries | AI Credits | Price (INR) |
+|------|---------|-----------|------------|-------------|
+| Free/Starter | 5 GB | 3 | 50/month | Free |
+| Professional | 100 GB | Unlimited | 500/month | 999/month |
+| Studio | 500 GB | Unlimited | 2000/month | 2,499/month |
+| Enterprise | Unlimited | Unlimited | Unlimited | Custom |
 
-## 2. Platform Admin Test Users
+## Login
 
-These users have **platform-level** (global) administrative privileges—they do NOT automatically have access to customer workspace data.
+### Web UI
 
-| Email | UUID | Role | Permissions | Responsibilities |
-|-------|------|------|-------------|------------------|
-| `superadmin@test.rawdrive.ai` | `22222222-2222-2222-2222-222222222001` | **Super Admin** | `platform:admins:write`, `platform:admins:read`, `platform:workspaces:read`, `platform:config:write`, `platform:audit:read` | Full platform control; manage other admins; view all workspaces; modify platform config; read audit logs |
-| `platformadmin@test.rawdrive.ai` | `22222222-2222-2222-2222-222222222002` | Platform Admin | `platform:admins:read`, `platform:workspaces:read`, `platform:billing:read`, `platform:feature_flags:write` | View admins/workspaces; read billing; manage feature flags |
-| `supportadmin@test.rawdrive.ai` | `22222222-2222-2222-2222-222222222003` | Support Admin | `platform:support_access:start`, `platform:support_access:stop`, `platform:workspaces:read` | Start/stop customer support sessions; view workspaces |
-| `billingadmin@test.rawdrive.ai` | `22222222-2222-2222-2222-222222222004` | Billing Admin | `platform:billing:read`, `platform:billing:write` | View and modify billing/subscription data |
-| `contentmod@test.rawdrive.ai` | `22222222-2222-2222-2222-222222222005` | Content Moderator | `platform:moderation:read`, `platform:moderation:write` | Review and act on flagged content |
-| `securityadmin@test.rawdrive.ai` | `22222222-2222-2222-2222-222222222006` | Security Admin | `platform:observability:read`, `platform:config:write`, `platform:audit:read` | Monitor security metrics; update security config; read audit logs |
-| `observabilityadmin@test.rawdrive.ai` | `22222222-2222-2222-2222-222222222007` | Observability Admin | `platform:observability:read` | View platform metrics/logs |
-| `auditor@test.rawdrive.ai` | `22222222-2222-2222-2222-222222222008` | Auditor (Read-only) | `platform:audit:read` | Read-only access to audit logs |
-| `productadmin@test.rawdrive.ai` | `22222222-2222-2222-2222-222222222009` | Product Admin | `platform:feature_flags:write`, `platform:feature_flags:read` | Manage feature flags/rollouts |
+1. Open `http://localhost:5173` (Vite dev server) or `http://localhost` (via Traefik)
+2. Enter email and password from the tables above
 
----
+### API (cURL)
 
-## 3. Workspace Role Test Users
+```bash
+# Login and get JWT token
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "free@test.rawdrive.in", "password": "Test@123"}'
 
-These users belong to a shared **test-roles-workspace** (`44444444-4444-4444-4444-444444444000`) and demonstrate workspace-level RBAC.
-
-| Email | UUID | Role | Permissions | Responsibilities |
-|-------|------|------|-------------|------------------|
-| `workspaceowner@test.rawdrive.ai` | `33333333-3333-3333-3333-333333333001` | **Owner** | `workspace:write`, `members:write`, `roles:write`, `galleries:write`, `assets:write`, `billing:write`, `audit:read` | Full workspace control; manage members & roles; billing; audit |
-| `workspaceadmin@test.rawdrive.ai` | `33333333-3333-3333-3333-333333333002` | Admin | `workspace:write`, `members:write`, `roles:write`, `galleries:write`, `assets:write`, `billing:read`, `audit:read` | Manage workspace settings, members, roles; cannot modify billing |
-| `staffuser@test.rawdrive.ai` | `33333333-3333-3333-3333-333333333003` | Editor | `galleries:write`, `assets:write` | Create/edit galleries and assets |
-| `clientviewer@test.rawdrive.ai` | `33333333-3333-3333-3333-333333333004` | Viewer | `galleries:read`, `assets:read` | Read-only access to galleries and assets |
-
----
-
-## Quick Reference
-
-### Biometric consent (FaceID)
-
-Biometric consent for test users is **stored in the database** only (no .env). Migration **0194_seed_biometric_consent_test_users** grants consent for test workspaces when you run `alembic upgrade head`. Workspaces covered: tier (`11111111-1111-1111-1111-000000000001`–`005`) and test-roles (`44444444-4444-4444-4444-444444444000`). Ensure **0165_add_biometric_consent_tables** is applied first (creates `workspace_biometric_settings`). Test users are not prompted for consent after migrations are applied.
-
-### Login Credentials
-```
-Email: <any of the above>
-Password: Test@123
+# Response includes access_token and refresh_token
+# Use access_token in subsequent requests:
+curl http://localhost:8000/api/v1/users/me \
+  -H "Authorization: Bearer <access_token>"
 ```
 
-### API Endpoints
+### Admin API
+
+```bash
+# Login as super admin
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "superadmin@test.rawdrive.in", "password": "Test@123"}'
+
+# Access admin endpoints
+curl http://localhost:8000/api/v1/admin/users \
+  -H "Authorization: Bearer <access_token>"
 ```
-POST /api/v1/auth/login
-{
-  "email": "superadmin@test.rawdrive.ai",
-  "password": "Test@123"
-}
+
+## Seeding
+
+### Create test users
+
+```bash
+# After migrations are applied:
+docker exec rawdrive-backend python /app/scripts/seed_test_users_with_subscriptions.py
+
+# Full seed (tier + admin users):
+docker exec rawdrive-backend python /app/seed_all_test_users.py
+
+# Force recreate (deletes and rebuilds):
+docker exec rawdrive-backend python /app/scripts/seed_test_users_with_subscriptions.py --force
 ```
 
-### Key Concepts
+### Verify test users exist
 
-| Concept | Description |
-|---------|-------------|
-| **Platform Roles** | Global admin privileges; NO implicit customer data access |
-| **Workspace Roles** | Scoped to a single workspace; control galleries/assets/members |
-| **Subscription Tiers** | Enforce storage, gallery, client, team, and AI credit limits |
-| **Workspace Isolation** | All queries MUST filter by `workspace_id` |
+```bash
+docker exec rawdrive-backend python /app/scripts/check_test_users.py
+```
 
-### UUID Patterns
-- `11111111-...-111111111001–005` → Tier test users
-- `22222222-...-222222222001–009` → Platform admins
-- `33333333-...-333333333001–004` → Workspace role users
-- `44444444-...-444444444000` → Shared test-roles-workspace
-- `aaaaaaaa-...-aaaaaaaaa001–005` → Subscription plans
+### Repair broken test users
 
+```bash
+docker exec rawdrive-backend python /app/scripts/repair_all_test_users.py
+```
 
-openai: (root/123456
+## Service Endpoints
+
+| Service | Port | Container | Direct URL |
+|---------|------|-----------|-----------|
+| Backend API | 8000 | rawdrive-backend | `http://localhost:8000/api/v1/` |
+| Gallery | 8004 | rawdrive-gallery-service | `http://localhost:8004/` |
+| Billing | 8005 | rawdrive-billing-service | `http://localhost:8005/` |
+| Onboarding | 8006 | rawdrive-onboarding-service | `http://localhost:8006/` |
+| Invitations | 8007 | rawdrive-invitations-api | `http://localhost:8007/` |
+| Upload | 8008 | rawdrive-upload-service | `http://localhost:8008/` |
+| Notifications | 8010 | rawdrive-notifications-service | `http://localhost:8010/` |
+| Client | 8011 | rawdrive-client-service | `http://localhost:8011/` |
+| AI Processing | 8012 | rawdrive-ai-processing | `http://localhost:8012/` |
+| AI Service | 8013 | rawdrive-ai-service-mcp | `http://localhost:8013/` |
+| Webhooks | 8015 | rawdrive-webhooks-service | `http://localhost:8015/` |
+| Growth | 8016 | rawdrive-growth-service | `http://localhost:8016/` |
+
+### Infrastructure
+
+| Service | Port | Container |
+|---------|------|-----------|
+| Traefik (HTTP) | 80 | rawdrive-traefik |
+| Traefik Dashboard | 8080 | rawdrive-traefik |
+| PostgreSQL | 5432 | rawdrive-postgres |
+| Redis | 6379 | rawdrive-redis |
+| PgBouncer | 6432 | rawdrive-pgbouncer |
+| Grafana | 3000 (admin/admin) | rawdrive-grafana |
+| Prometheus | 9090 | rawdrive-prometheus |
+| Loki | 3100 | rawdrive-loki |
+| Milvus | 19530 | rawdrive-milvus |
+| MinIO Console | 9001 (minioadmin/minioadmin) | rawdrive-minio |
+
+## Health Checks
+
+```bash
+# Backend health
+curl http://localhost:8000/health
+
+# All services health (quick check)
+for port in 8000 8004 8005 8006 8007 8008 8010 8011 8012 8013 8015 8016; do
+  echo "Port $port: $(curl -s -o /dev/null -w '%{http_code}' http://localhost:$port/health)"
+done
+
+# Via Traefik (tests API gateway routing)
+curl http://localhost/api/v1/health
+```
+
+## Troubleshooting
+
+### "Plans not found" during seeding
+
+Run migrations first: `docker exec rawdrive-backend alembic upgrade head`
+
+### "User already exists"
+
+Use `--force` to delete and recreate: `docker exec rawdrive-backend python /app/scripts/seed_test_users_with_subscriptions.py --force`
+
+### Login returns 401
+
+1. Verify the user exists: `docker exec rawdrive-backend python /app/scripts/check_test_users.py`
+2. The seed script uses a hardcoded Argon2 hash. If it doesn't match `Test@123`, run: `docker exec rawdrive-backend python /app/scripts/repair_all_test_users.py`
+
+### Database connection refused
+
+Ensure PostgreSQL is running: `docker ps --filter name=rawdrive-postgres`
+
+### JWT token issues
+
+All services share the same `JWT_SECRET` from `.env`. Microservices use EdDSA keys mounted at `/app/secrets/`.

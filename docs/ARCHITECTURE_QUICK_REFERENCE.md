@@ -1,6 +1,6 @@
 # RawDrive Architecture Quick Reference
 
-**Last Updated**: January 9, 2026 (v0.3.2)
+**Last Updated**: March 18, 2026 (v0.3.3)
 
 ## System Overview
 
@@ -19,22 +19,24 @@ flowchart TB
     end
 
     subgraph Backend["⚙️ Microservices Cluster"]
-        ServiceA[Backend API]
-        ServiceB[Gallery Service]
-        ServiceC[Billing Service]
-        ServiceD[Upload Service]
-        ServiceE[Invitations Service]
-        ServiceF[Notifications Service]
-        ServiceG[Onboarding Service]
-        ServiceH[Client Service]
-        ServiceI[AI Service]
-        ServiceJ[Webhooks Service]
+        ServiceA[Backend API :8000]
+        ServiceB[Gallery Service :8004]
+        ServiceC[Billing Service :8005]
+        ServiceD[Upload Service :8008]
+        ServiceE[Invitations Service :8007]
+        ServiceF[Notifications Service :8010]
+        ServiceG[Onboarding Service :8006]
+        ServiceH[Client Service :8011]
+        ServiceI[AI Service :8013]
+        ServiceJ[Webhooks Service :8015]
+        ServiceK[Growth Service :8016]
     end
 
     subgraph Processing["🤖 AI & Processing"]
         OneAPI[One-API / LLM Proxy]
-        Workers[Celery/BullMQ Workers]
-        Workers --> Face[FaceID Processing]
+        AIProc[AI Processing :8012]
+        Workers[Background Workers]
+        Workers --> Face[Face Worker :8001]
         Workers --> Quality[Quality Scoring]
     end
 

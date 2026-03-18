@@ -1,20 +1,12 @@
 {
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "ANTHROPIC_AUTH_TOKEN": "22ae82b7f129435c83c92813708bf009.ERoyxiCHgyHNPYDC",
-    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
-    "API_TIMEOUT_MS": "3000000",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.7",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-4.7",
-    "XDG_CACHE_HOME": ".cache",
-    "npm_config_cache": ".cache/npm",
-    "PIP_CACHE_DIR": ".cache/pip"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
-      "WebFetch(domain:*)",
-      "Bash(agent-browser:*)",
+      "Bash(git:*)",
+      "Bash(npm:*)",
       "Bash(npm run:*)",
       "Bash(npm test:*)",
       "Bash(npm install:*)",
@@ -25,15 +17,28 @@
       "Bash(pnpm:*)",
       "Bash(yarn:*)",
       "Bash(bun:*)",
+      "Bash(node:*)",
       "Bash(python3:*)",
       "Bash(python:*)",
-      "Bash(git diff:*)",
-      "Bash(git status:*)",
-      "Bash(git log:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(electron:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Bash(pipenv:*)",
+      "Bash(uvicorn:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(alembic:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
       "Bash(vite:*)",
+      "Bash(tsc:*)",
+      "Bash(ts-node:*)",
+      "Bash(eslint:*)",
+      "Bash(prettier:*)",
+      "Bash(tailwindcss:*)",
+      "Bash(electron:*)",
+      "Bash(electron-builder:*)",
+      "Bash(electron-rebuild:*)",
       "Bash(cmake:*)",
       "Bash(make:*)",
       "Bash(gcc:*)",
@@ -41,43 +46,109 @@
       "Bash(clang:*)",
       "Bash(clang++:*)",
       "Bash(ninja:*)",
-      "Bash(eslint:*)",
-      "Bash(prettier:*)",
-      "Bash(tailwindcss:*)",
-      "Bash(tsc:*)",
-      "Bash(ts-node:*)",
-      "Bash electron-builder:*",
-      "Bash electron-rebuild:*",
-      "Bash(python3:*)",
-      "Bash(python:*)",
-      "Bash(npm:*)",
-      "Bash(curl:*)",
-      "Bash(wget:*)",
-      "Bash(pip:*)",
-      "Bash(pip3:*)",
-      "Bash(pipenv:*)",
-      "Bash(pipenv3:*)",
-      "Bash(pipenv3:*)",
-      "Bash(git:*)"
+      "Bash(docker compose:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker inspect:*)",
+      "Bash(gh:*)",
+      "Bash(jq:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(echo:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(pwd:*)",
+      "Bash(which:*)",
+      "Bash(touch:*)",
+      "Bash(chmod:*)",
+      "Bash(agent-browser:*)",
+      "WebFetch(domain:*)"
     ],
     "deny": [
       "Bash(sudo:*)",
-      "Bash(docker:*)",
-      "Bash(rm -rf:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker rmi:*)",
+      "Bash(docker system prune:*)",
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(~/.ssh/**)",
-      "Read(~/.aws/**)"
+      "Read(~/.aws/**)",
+      "Read(./secrets/**)",
+      "Read(./**/credentials.json)"
     ],
-    "defaultMode": "acceptEdits"
+    "additionalDirectories": [
+      "../"
+    ]
   },
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
     "allowUnsandboxedCommands": false,
+    "excludedCommands": [
+      "docker",
+      "git",
+      "gh",
+      "code"
+    ],
+    "filesystem": {
+      "allowWrite": [
+        "//tmp/build",
+        "~/.claude",
+        "~/.npm",
+        "~/.pnpm-store",
+        "~/.cache"
+      ],
+      "denyWrite": [
+        "//etc",
+        "//usr/local/bin",
+        "~/.ssh",
+        "~/.aws"
+      ],
+      "denyRead": [
+        "~/.aws/credentials",
+        "~/.ssh/id_rsa",
+        "~/.ssh/id_ed25519"
+      ]
+    },
     "network": {
+      "allowedDomains": [
+        "github.com",
+        "*.github.com",
+        "*.npmjs.org",
+        "registry.yarnpkg.com",
+        "registry.npmmirror.com",
+        "pypi.org",
+        "*.pypi.org",
+        "files.pythonhosted.org",
+        "*.cloudflare.com",
+        "*.r2.cloudflarestorage.com",
+        "localhost",
+        "127.0.0.1"
+      ],
       "allowLocalBinding": true
     }
+  },
+  "worktree": {
+    "symlinkDirectories": [
+      "node_modules",
+      ".cache",
+      ".venv"
+    ],
+    "sparsePaths": []
+  },
+  "attribution": {
+    "commit": "Generated with Claude Code",
+    "pr": "Generated with [Claude Code](https://claude.ai/code)"
   },
   "hooks": {
     "SessionStart": [
@@ -89,10 +160,22 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gsd-context-monitor.js"
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
     "type": "command",
-    "command": "node .claude/hooks/gsd-statusline.js"
-  }
+    "command": "node .claude/hooks/gsd-statusline.js",
+    "padding": 2
+  },
+  "skipDangerousModePermissionPrompt": true
 }

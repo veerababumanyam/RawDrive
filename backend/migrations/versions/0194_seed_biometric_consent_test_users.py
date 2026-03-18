@@ -29,7 +29,7 @@ TEST_WORKSPACE_IDS = [
     "44444444-4444-4444-4444-444444444000",  # test-roles-workspace
 ]
 
-CONSENT_POLICY_VERSION = "1.0-migration-test-users"
+CONSENT_POLICY_VERSION = "1.0-mig-test"
 
 
 def upgrade() -> None:

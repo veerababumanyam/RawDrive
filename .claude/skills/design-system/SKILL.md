@@ -1,241 +1,123 @@
 ---
 name: design-system
-aliases: [ui, styling, tokens, theme, colors, components, tailwind, css]
-description: Design system guidelines for RawDrive. Use when styling components, using color tokens, implementing themes, or following UI patterns.
+description: "RawDrive design system: UI components, design tokens, theming (light/dark), TailwindCSS patterns, accessibility (WCAG 2.1 AA), and component conventions. Use this skill when building UI components, working with the design system, implementing themes, choosing colors, adding animations (Framer Motion), ensuring accessibility, or creating responsive layouts. Also use for icon usage (Heroicons/Lucide), typography, spacing, or any visual design decisions. Triggers on: UI component, design system, theme, dark mode, TailwindCSS, accessibility, WCAG, ARIA, animation, Framer Motion, color, typography, responsive, icon."
 ---
 
-# RawDrive Design System
+# Design System & UI Patterns
 
-## Core Files
+RawDrive uses a custom design system with TailwindCSS, supporting light/dark themes. Never hardcode colors — always use design tokens.
 
-| Purpose | Location |
-|---------|----------|
-| CSS Variables & Tokens | `frontend/src/index.css` |
-| Tailwind Config | `frontend/tailwind.config.js` |
-| UI Components | `frontend/src/components/ui/` |
-| Layout Components | `frontend/src/components/layout/` |
-
-## Brand Colors
-
-```css
-/* Primary - Blue (Brand Core) */
---color-primary: #2563EB;
---color-primary-hover: #1D4ED8;
-
-/* Accent - Cyan */
---color-accent: #06B6D4;
---color-accent-hover: #0891B2;
-
-/* Gold - Premium */
---color-gold: #D4AF37;
---color-gold-light: #FDE68A;
-```
-
-## Semantic Tokens
-
-```css
-/* Backgrounds */
---color-background: #F8FAFC;
---color-surface: #FFFFFF;
---color-surface-hover: #F1F5F9;
-
-/* Text */
---color-text-primary: #0F172A;
---color-text-secondary: #475569;
---color-text-tertiary: #64748B;
-
-/* Borders */
---color-border: #E2E8F0;
---color-border-focus: #2563EB;
-
-/* Status */
---color-success: #059669;
---color-warning: #B45309;
---color-error: #B91C1C;
-```
-
-## Component Library
-
-### Required Imports
+## Design Tokens
 
 ```typescript
-import { AppButton, AppInput, AppCard, AppBadge } from '@/components/ui';
-import { Modal, Toast, Spinner, Skeleton } from '@/components/ui';
-import { AppShell, Sidebar } from '@/components/layout';
-import { useTheme } from '@/hooks';
+// ALWAYS use tokens from @rawdrive/shared-constants, never raw hex values
+import { COLORS, SPACING, TYPOGRAPHY } from '@rawdrive/shared-constants';
+
+// WRONG
+<div className="bg-[#1a1a2e] text-[#e94560]">
+
+// CORRECT
+<div className="bg-primary text-accent dark:bg-primary-dark">
 ```
 
-### AppButton
+## Component Conventions
+
+### UI Components (`components/ui/`)
+Base building blocks — `AppButton`, `AppInput`, `AppModal`, `AppSelect`, etc.
 
 ```typescript
-// Variants: primary, secondary, outline, ghost, destructive, gold
-<AppButton variant="primary">Save</AppButton>
-<AppButton variant="outline">Cancel</AppButton>
-<AppButton variant="destructive">Delete</AppButton>
-<AppButton variant="gold">Upgrade</AppButton>
-
-// Sizes: sm, md, lg, icon
-<AppButton size="icon"><X size={20} /></AppButton>
-
-// States
-<AppButton isLoading>Saving...</AppButton>
-<AppButton disabled>Disabled</AppButton>
-
-// With icons
-<AppButton leftIcon={<Plus size={16} />}>Add</AppButton>
-```
-
-### AppInput
-
-```typescript
-<AppInput
-  label="Email"
-  type="email"
-  placeholder="Enter email"
-  isRequired
-/>
-
-<AppInput
-  label="Password"
-  error={errors.password?.message}
-  helperText="Must be 8+ characters"
-/>
-
-<AppInput
-  leftIcon={<Search size={16} />}
-  rightIcon={<X size={16} />}
-/>
-```
-
-### AppCard
-
-```typescript
-// Variants: default, elevated, glass
-<AppCard variant="elevated" hoverable onClick={handleClick}>
-  <Card.Header>
-    <Card.Title>Title</Card.Title>
-  </Card.Header>
-  <Card.Content>Content</Card.Content>
-  <Card.Footer>
-    <AppButton>Action</AppButton>
-  </Card.Footer>
-</AppCard>
-```
-
-### Modal
-
-```typescript
-<Modal isOpen={isOpen} onClose={onClose} size="md">
-  <Modal.Header>
-    <Modal.Title>Edit Gallery</Modal.Title>
-  </Modal.Header>
-  <Modal.Body>{/* Form */}</Modal.Body>
-  <Modal.Footer>
-    <AppButton variant="secondary" onClick={onClose}>Cancel</AppButton>
-    <AppButton variant="primary" onClick={onSave}>Save</AppButton>
-  </Modal.Footer>
-</Modal>
-```
-
-### Toast
-
-```typescript
-import { useToastActions } from '@/components/ui';
-
-const toast = useToastActions();
-toast.success('Gallery created');
-toast.error('Upload failed');
-toast.warning('Storage almost full');
-```
-
-## Theme System
-
-```typescript
-import { useTheme } from '@/hooks';
-
-const { theme, toggleTheme, isDark } = useTheme();
-
-<AppButton variant="ghost" size="icon" onClick={toggleTheme}>
-  {isDark ? <Sun size={20} /> : <Moon size={20} />}
-</AppButton>
-```
-
-```css
-/* Light theme (default) */
-:root {
-  --color-background: #F8FAFC;
-  --color-surface: #FFFFFF;
+// components/ui/AppButton.tsx
+interface AppButtonProps {
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  size?: 'sm' | 'md' | 'lg';
+  loading?: boolean;
+  children: React.ReactNode;
+  onClick?: () => void;
 }
 
-/* Dark theme */
-[data-theme="dark"] {
-  --color-background: #020617;
-  --color-surface: #0F172A;
-}
+export const AppButton: React.FC<AppButtonProps> = ({
+  variant = 'primary',
+  size = 'md',
+  loading = false,
+  children,
+  ...props
+}) => {
+  // Use consistent Tailwind class mapping
+};
 ```
 
-## Glassmorphism
-
-```css
-.glass {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.glass-dark {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(12px);
-}
+### Feature Components (`components/features/`)
+Domain-specific, compose UI components:
+```
+components/features/
+├── gallery/     # GalleryCard, GalleryGrid, GalleryToolbar
+├── upload/      # UploadDropzone, UploadProgress, UploadQueue
+├── ai/          # AIPanel, AIFilterBar, SmartTagBadge
+└── invitations/ # InvitationEditor, RSVPForm
 ```
 
-## Typography
-
-```css
---font-sans: 'Inter', system-ui, sans-serif;
---font-serif: 'Playfair Display', Georgia, serif;
---font-mono: 'Roboto Mono', monospace;
-```
+## Theme Support
 
 ```typescript
-<h1 className="heading-1">Page Title</h1>     // 36px bold
-<h2 className="heading-2">Section</h2>        // 30px bold
-<span className="text-gradient">Gradient</span>
+// ThemeEngine handles light/dark switching
+// Always provide both variants in Tailwind classes
+<div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+
+// For dynamic theming in Design Studio
+import { ThemeEngine } from '@/utils/ThemeEngine';
 ```
 
-## Spacing (4px base)
+## Accessibility (WCAG 2.1 AA)
 
-| Class | Value | Use Case |
-|-------|-------|----------|
-| `p-1` | 4px | Tight inline |
-| `p-2` | 8px | Default inline |
-| `p-4` | 16px | Card padding |
-| `p-6` | 24px | Section spacing |
+Every component must meet these minimums:
 
-## Animations
+1. **Keyboard navigation:** All interactive elements reachable via Tab, activated via Enter/Space
+2. **ARIA labels:** Non-text interactive elements need `aria-label` or `aria-labelledby`
+3. **Color contrast:** 4.5:1 for normal text, 3:1 for large text
+4. **Focus indicators:** Visible focus rings on all interactive elements
+5. **Screen reader:** Semantic HTML (`<nav>`, `<main>`, `<button>`, not `<div onClick>`)
 
 ```typescript
-<div className="animate-fade-in-up">Fade in</div>
-<div className="animate-scale-in">Scale in</div>
-<div className="animate-pulse-glow">Glow</div>
+// WRONG
+<div onClick={handleClick} className="cursor-pointer">Delete</div>
 
-// With delays
-<div className="animate-fade-in-up delay-100">Delayed</div>
+// CORRECT
+<button onClick={handleClick} aria-label="Delete gallery">Delete</button>
 ```
 
-## Design Rules
+## Animation (Framer Motion)
 
-### ALWAYS Do
+```typescript
+import { motion, AnimatePresence } from 'framer-motion';
 
-1. Use design tokens: `bg-surface`, `text-text-primary`
-2. Use component library: `AppButton`, `AppInput`
-3. Support dark mode
-4. Include all states: hover, focus, disabled
-5. Add `focus-visible:ring-2` for keyboard nav
+// Page transitions
+<AnimatePresence mode="wait">
+  <motion.div
+    key={currentPage}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -20 }}
+    transition={{ duration: 0.2 }}
+  >
+    {children}
+  </motion.div>
+</AnimatePresence>
+```
 
-### NEVER Do
+Keep animations subtle and purposeful. Respect `prefers-reduced-motion`.
 
-1. Hardcode colors: No `bg-blue-500`, `#ffffff`
-2. Create custom buttons/inputs
-3. Use `outline-none` without replacement
-4. Skip loading/error states
+## Icons
+
+Use Heroicons (primary) or Lucide React:
+```typescript
+import { PhotoIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { Camera } from 'lucide-react';
+```
+
+## Responsive Breakpoints
+
+Follow Tailwind defaults: `sm:640px`, `md:768px`, `lg:1024px`, `xl:1280px`, `2xl:1536px`
+
+Mobile-first: base styles for mobile, then add breakpoints up.
+
+**Deep dive:** Read `.claude/reference/ui-ux-design-best-practices.md`

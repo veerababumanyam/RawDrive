@@ -31,6 +31,11 @@ async def get_pool() -> asyncpg.Pool:
     return _pool
 
 
+async def get_db() -> asyncpg.Pool:
+    """Alias for get_pool() — compatibility with SQLAlchemy-style imports."""
+    return await get_pool()
+
+
 async def close_pool() -> None:
     """Close the database connection pool."""
     global _pool

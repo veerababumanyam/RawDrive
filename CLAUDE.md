@@ -1,490 +1,195 @@
-﻿# CLAUDE.md
+# CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+**RawDrive** — Enterprise SaaS photography platform. Microservices architecture, React frontend, FastAPI backend, PostgreSQL + pgvector.
 
----
+## Commands
 
-**RawDrive** is an enterprise SaaS professional photography platform with microservices architecture.
-
-**Version**: 0.3.6 | **Status**: Production | **Updated**: 2026-01-23
-
----
-
-## 📚 Comprehensive Documentation
-
-For detailed best practices, architecture patterns, and product requirements, refer to:
-
-### **Primary References**
-- **[Product Requirements Document (PRD)](.claude/PRD.md)** - Complete product vision, architecture, features, and tech stack
-- **[Best Practices Directory](.claude/reference/)** - 24 comprehensive guides covering all technical domains
-
-### **Claude Code Configuration**
-- **[Commands](.claude/commands/)** - Development workflow commands (health checks, testing, deployment, etc.)
-- **[Skills](.claude/skills/)** - 20 auto-loaded context-aware development skills
-- **[Agents](.claude/agents/)** - 10 specialized AI agents for debugging, deployment, security, UI design, etc.
-
----
-
-## ⚡ Quick Start
-
-### Start Development Environment
-```bash
-# One-command setup (recommended)
-.\setup-dev-environment.ps1
-
-# Or manual setup
-docker compose -f infrastructure/docker/docker-compose.yml up -d
-cd frontend && pnpm dev  # http://localhost:5173
-```
-
-### Test Login
-- Email: `free@test.rawdrive.in`
-- Password: `Test@123`
-
-### Common Commands
 ```bash
 # Frontend
-cd frontend && pnpm dev                      # Start dev server
-cd frontend && pnpm test                     # Run all tests
-cd frontend && pnpm test src/path/file.test.ts  # Run single test file
-cd frontend && pnpm test --watch             # Watch mode
-cd frontend && pnpm lint                     # Lint code
+cd frontend && pnpm dev                          # Dev server → http://localhost:5173
+cd frontend && pnpm test                         # Run all tests
+cd frontend && pnpm test src/path/file.test.ts   # Single test
+cd frontend && pnpm lint                         # Lint
 
-# Backend (Docker)
-docker exec rawdrive-backend pytest                        # Run all tests
-docker exec rawdrive-backend pytest tests/path/test_file.py  # Run single test
-docker exec rawdrive-backend pytest -k "test_name"         # Run by test name
-docker exec rawdrive-backend pytest --cov=src              # With coverage
-docker exec rawdrive-backend alembic upgrade head          # Run migrations
-docker exec rawdrive-backend alembic revision -m "msg"     # Create migration
+# Backend (Docker — preferred)
+docker exec rawdrive-backend pytest                         # All tests
+docker exec rawdrive-backend pytest tests/path/test_file.py # Single test
+docker exec rawdrive-backend pytest -k "test_name"          # By name
+docker exec rawdrive-backend alembic upgrade head           # Run migrations
+docker exec rawdrive-backend alembic revision -m "msg"      # New migration
 
-# Backend (Local development - outside Docker)
+# Backend (local)
 cd backend && uvicorn app.main:app --reload --port 8000
-cd backend && ruff check src && mypy src                   # Lint Python
+cd backend && ruff check src && mypy src
 
-# Health Checks
-curl http://localhost:8000/health/live   # Backend
-curl http://localhost:8004/health/live   # Gallery service
+# Shared packages
+pnpm build:packages       # Build all shared packages (must run before frontend if types changed)
+pnpm generate:python      # Generate Python types from TypeScript
+
+# Dev environment
+.\setup-dev-environment.ps1                                        # One-command setup
+docker compose -f infrastructure/docker/docker-compose.yml up -d   # Manual setup
 ```
 
-**📖 For detailed commands, see**: [`.claude/commands/`](.claude/commands/)
+**Test login:** `free@test.rawdrive.in` / `Test@123` — See [docs/TEST_USERS.md](docs/TEST_USERS.md) for all 13 test accounts
 
----
+## Architecture
 
-## 🏗️ Architecture Overview
+15 microservices + workers on shared PostgreSQL. All services validate JWT with shared `JWT_SECRET`. Ports configured via `PORT_*` vars in `infrastructure/docker/.env`. See [docs/port-reference.md](docs/port-reference.md) for full mapping.
 
-### Microservices (13 Services)
+| Service | Env Var | Default | Container |
+|---------|---------|---------|-----------|
+| Backend (main API) | PORT_BACKEND | 8000 | rawdrive-backend |
+| Gallery | PORT_GALLERY | 8004 | rawdrive-gallery-service |
+| Billing | PORT_BILLING | 8005 | rawdrive-billing-service |
+| Onboarding | PORT_ONBOARDING | 8006 | rawdrive-onboarding-service |
+| Invitations | PORT_INVITATIONS | 8007 | rawdrive-invitations-api |
+| Upload | PORT_UPLOAD | 8008 | rawdrive-upload-service |
+| Notifications | PORT_NOTIFICATIONS | 8010 | rawdrive-notifications-service |
+| Client | PORT_CLIENT | 8011 | rawdrive-client-service |
+| AI Processing | PORT_AI_PROCESSING | 8012 | rawdrive-ai-processing |
+| AI Service | PORT_AI_SERVICE | 8013 | rawdrive-ai-service-mcp |
+| Webhooks | PORT_WEBHOOKS | 8015 | rawdrive-webhooks-service |
+| Growth | PORT_FACE_SERVICE | 8016 | rawdrive-growth-service |
 
-| Service | Port | Purpose | Reference |
-|---------|------|---------|-----------|
-| **Backend** | 8000 | Main API, core features | [FastAPI Best Practices](.claude/reference/fastapi-best-practices.md) |
-| **Gallery Service** | 8004 | High-performance gallery viewing | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
-| **Billing Service** | 8005 | Payment processing (Stripe/Razorpay) | [Billing Best Practices](.claude/reference/billing-payments-best-practices.md) |
-| **Upload Service** | 8008 | TUS resumable uploads | [Storage Best Practices](.claude/reference/storage-upload-best-practices.md) |
-| **Webhooks Service** | 8003 | Event-driven webhook delivery | [Webhooks Best Practices](.claude/reference/webhooks-integration-best-practices.md) |
-| **Notifications Service** | 8010 | Multi-channel notifications | [Notifications Best Practices](.claude/reference/notifications-email-best-practices.md) |
-| **Onboarding Service** | 8006 | User registration & workspace setup | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
-| **Invitations Service** | 8007 | Digital wedding invitations | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
-| **Client Service** | 8009 | Client/contact management | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
-| **AI Service** | 8011 | AI orchestration & inference | [AI/ML Best Practices](.claude/reference/ai-ml-best-practices.md) |
-| **AI Processing Service** | 8012 | Heavy AI workloads (embeddings, CLIP) | [AI/ML Best Practices](.claude/reference/ai-ml-best-practices.md) |
-| **LiveSync Service** | 8013 | Real-time file synchronization | [Microservices Patterns](.claude/reference/microservices-patterns.md) |
-| **LLM Service** | 8014 | LLM integration & chat | [AI Agents Best Practices](.claude/reference/ai-agents-best-practices.md) |
+**Infrastructure:** PostgreSQL (:5432), Redis (:6379), PgBouncer (:6432), Traefik (:80/:8080)
+**Monitoring:** Prometheus (:9090), Grafana (:3000, admin/admin), Loki (:3100), Alertmanager (:9093)
+**Vector DB:** Milvus (:19530), etcd (:2379), MinIO (:9000/:9001)
 
-**📖 For architecture details, see**: [PRD Section 7](.claude/PRD.md#7-architecture--tech-stack)
+## Critical Rules
 
-### Tech Stack
+<important if="writing any database query, repository method, or API endpoint">
 
-| Layer | Technologies | Reference |
-|-------|--------------|-----------|
-| **Frontend** | React 18.3, TypeScript, Vite, TailwindCSS | [React Best Practices](.claude/reference/react-frontend-best-practices.md) |
-| **Backend** | Python 3.11, FastAPI, SQLAlchemy 2.0 | [FastAPI Best Practices](.claude/reference/fastapi-best-practices.md) |
-| **Database** | PostgreSQL 16, pgvector, Redis 7 | [PostgreSQL Best Practices](.claude/reference/postgresql-best-practices.md) |
-| **Infrastructure** | Traefik v3, KEDA, Kubernetes, Docker | [Deployment Best Practices](.claude/reference/deployment-best-practices.md) |
-| **AI/ML** | Gemini, Cloud Vision, CLIP, Milvus | [AI/ML Best Practices](.claude/reference/ai-ml-best-practices.md) |
-| **Monitoring** | Prometheus, Grafana, Loki | [Observability Best Practices](.claude/reference/observability-best-practices.md) |
+### Multi-tenant isolation (MANDATORY)
+Every query MUST filter by `workspace_id`. Extract from JWT — never trust client-provided values.
 
-**📖 For complete tech stack, see**: [PRD Section 7](.claude/PRD.md#7-architecture--tech-stack)
-
----
-
-## 📁 Critical File Structure Rules
-
-**ALWAYS follow these strict file placement rules. NEVER create files in random locations.**
-
-### Frontend Files
-```
-frontend/src/
-├── components/
-│   ├── ui/              # Design system (AppButton, AppInput, etc.)
-│   ├── layout/          # Layout components (Header, Sidebar)
-│   └── features/        # Feature-specific components
-│       ├── gallery/     # Gallery components
-│       ├── upload/      # Upload components
-│       └── [feature]/   # Other features
-├── pages/               # Page components (route handlers)
-├── hooks/               # Custom React hooks
-├── services/            # API client services
-├── contexts/            # React contexts
-└── utils/               # Utility functions
-```
-
-### Backend Files
-```
-backend/src/app/
-├── api/v1/              # API endpoints
-├── models/              # SQLAlchemy models (ONLY database models)
-├── repositories/        # Data access layer
-├── services/            # Business logic (NEVER in models/)
-├── middleware/          # FastAPI middleware
-└── workers/             # Background workers (Celery)
-```
-
-### Microservices Files
-```
-services/[service-name]/
-├── src/
-│   ├── api/v1/          # API endpoints
-│   ├── services/        # Business logic
-│   ├── repositories/    # Database access
-│   ├── schemas/         # Pydantic schemas
-│   ├── observability/   # Health checks, metrics
-│   └── config.py        # Configuration
-└── tests/               # Unit, integration, load tests
-```
-
-**📖 For complete file structure, see**: [Coding Standards](.claude/reference/coding-standards.md)
-
----
-
-## 🔒 Critical Security Rules
-
-### Multi-Tenant Isolation (MANDATORY)
 ```python
-# EVERY query MUST include workspace_id
 result = await db.execute(
     select(Asset).where(Asset.workspace_id == workspace_id)
 )
-# NEVER trust client-provided workspace_id - extract from JWT token
+```
+</important>
+
+### Backend 3-layer architecture
+Repository (DB access) → Service (business logic) → API (HTTP). Never put logic in models.
+
+### Never hardcode
+API keys, secrets, LLM provider/model names, colors (use design tokens), user-facing strings (use i18n), magic numbers (use constants).
+
+### RBAC
+Workspace RBAC and Platform RBAC are separate systems. Download policies: `view_only|web_only|watermarked_only|original_allowed`.
+
+## File Structure
+
+```
+frontend/src/{components/ui|features|layout, pages/, hooks/, services/, contexts/, utils/}
+backend/src/app/{api/v1/, models/, repositories/, services/, middleware/, workers/}
+services/[name]/src/{api/v1/, services/, repositories/, schemas/, observability/, config.py}
 ```
 
-### RBAC Separation (Important)
-- **Workspace RBAC ≠ Platform RBAC** - Keep these permission systems separate
-- Auth: Google OAuth primary; local fallback
-- Client portal & share links: capability-based; respect per-link download policy
-- Download policies: `view_only|web_only|watermarked_only|original_allowed`
-
-### Never Hardcode
-- ❌ API keys, secrets, credentials
-- ❌ LLM provider names or model identifiers
-- ❌ Colors (use design tokens from `@rawdrive/shared-constants`)
-- ❌ User-facing strings (use i18n)
-- ❌ Magic numbers (use named constants)
-
-### Security Checklist
-- ✅ Validate JWT tokens in all microservices
-- ✅ Use shared `JWT_SECRET` across all services
-- ✅ Implement rate limiting on public endpoints
-- ✅ Sanitize user inputs (use `@rawdrive/shared-validation`)
-- ✅ Use parameterized queries (SQLAlchemy prevents SQL injection)
-- ✅ Encrypt sensitive data at rest (AES-256)
-
-**📖 For security details, see**: [Security Best Practices](.claude/reference/security-best-practices.md)
-
----
-
-## 🎨 Code Style & Conventions
-
-### Naming Conventions
-
-| Type | Convention | Example |
-|------|------------|---------|
-| React components | `PascalCase.tsx` | `GalleryUpload.tsx` |
-| React hooks | `useCamelCase.ts` | `useUpload.ts` |
-| Python services | `snake_case.py` | `upload_service.py` |
-| Python classes | `PascalCase` | `UploadService` |
-| API routes | `/api/v1/kebab-case` | `/api/v1/gallery-items` |
-| Database tables | `snake_case` | `gallery_items` |
-| Environment variables | `SCREAMING_SNAKE` | `JWT_SECRET` |
-
-### Architecture Pattern (Backend)
-```python
-# Repository → Service → API (3-layer architecture)
-
-# 1. Repository (database access)
-class GalleryRepository:
-    async def get_by_id(self, gallery_id: UUID, workspace_id: UUID) -> Gallery:
-        # Database query with workspace isolation
-
-# 2. Service (business logic)
-class GalleryService:
-    async def get_gallery(self, gallery_id: UUID, workspace_id: UUID) -> Gallery:
-        # Business logic + validation
-
-# 3. API (HTTP handling)
-@router.get("/galleries/{gallery_id}")
-async def get_gallery(gallery_id: UUID, service: GalleryService = Depends()):
-    return await service.get_gallery(gallery_id)
-```
-
-**📖 For coding standards, see**: [Coding Standards](.claude/reference/coding-standards.md)
-
----
-
-## 📦 Shared Packages (pnpm Workspaces)
-
-RawDrive uses a **monorepo with pnpm workspaces** for shared code:
-
-| Package | Purpose | Exports |
-|---------|---------|---------|
-| `@rawdrive/shared-types` | Domain types | `InvitationStatus`, `GalleryStatus`, etc. |
-| `@rawdrive/shared-constants` | Configuration | `API_BASE`, `STORAGE`, `AI_THRESHOLDS`, etc. |
-| `@rawdrive/shared-validation` | Validation | `isValidHexColor`, `sanitizeHtml`, etc. |
-| `@rawdrive/shared-utils` | Utilities | `formatRelativeDate`, `formatFileSize`, etc. |
-
-### Usage
-```typescript
-// Frontend: Import from shared packages
-import { InvitationStatus } from '@rawdrive/shared-types';
-import { API_BASE, PAGINATION } from '@rawdrive/shared-constants';
-import { isValidHexColor } from '@rawdrive/shared-validation';
-```
-
-```python
-# Backend: Import from generated Python modules
-from app.shared.types import InvitationStatus, GalleryStatus
-from app.shared.constants import API_BASE, PAGINATION
-```
-
-### Commands
-```bash
-pnpm build:packages      # Build all shared packages
-pnpm generate:python     # Generate Python types from TypeScript
-pnpm test:packages       # Test shared packages
-```
-
----
-
-## 🛠️ Development Workflows
-
-### Adding New Features
-
-1. **Check References**: Review relevant best practices in `.claude/reference/`
-2. **Follow Structure**: Place files in correct directories (see File Structure Rules)
-3. **Use Shared Packages**: Reuse types, constants, validation
-4. **Write Tests**: Unit tests (80%+ coverage), integration tests, E2E tests
-5. **Create Migration**: Database changes require Alembic migration
-6. **Update Documentation**: When changing behavior, update both `docs/Features/*.md` AND matching tech spec in `docs/TechnicalSpecs/*.json` (update `lastUpdated`)
+## Shared Packages (pnpm workspaces)
 
-### Documentation Discipline
-- Keep terminology consistent with specs: `workspace_id`, Share Links, download policies
-- Canonical contracts live in `docs/TechnicalSpecs/*.json` (validated by `_schema.json`)
-- Some scaffolding may be incomplete; verify package manifests before assuming scripts exist
+| Package | Purpose |
+|---------|---------|
+| `@rawdrive/shared-types` | Domain types (`InvitationStatus`, `GalleryStatus`) |
+| `@rawdrive/shared-constants` | Config (`API_BASE`, `STORAGE`, `AI_THRESHOLDS`) |
+| `@rawdrive/shared-validation` | Validation (`isValidHexColor`, `sanitizeHtml`) |
+| `@rawdrive/shared-utils` | Utilities (`formatRelativeDate`, `formatFileSize`) |
 
-**📖 For workflows, see**: [`.claude/commands/`](.claude/commands/)
+Backend Python equivalents: `from app.shared.types import ...`
 
-### Working with Microservices
+## Skills (auto-loaded by context)
 
-1. **Use shared database** - All services connect to same PostgreSQL instance
-2. **Validate JWT tokens** - Use shared `JWT_SECRET` and validate in middleware
-3. **Include workspace_id** - Every query must filter by `workspace_id`
-4. **Follow service templates** - Use gallery-service as reference
-5. **Add health checks** - `/health/live` and `/health/ready` endpoints required
-6. **Expose metrics** - Prometheus `/metrics` endpoint for monitoring
+26 skills in `.claude/skills/`:
 
-**📖 For microservices patterns, see**: [Microservices Patterns](.claude/reference/microservices-patterns.md)
+**Core Architecture:** `multi-tenant-security` | `fastapi-services` | `react-frontend` | `database-migrations` | `microservice-development` | `api-design`
+**Features:** `gallery-features` | `invitations` | `client-management` | `billing-payments` | `ai-ml-integration` | `storage-uploads`
+**Quality & Ops:** `testing-patterns` | `performance-optimization` | `design-system` | `observability` | `traefik-infrastructure` | `git-workflow`
+**Workflow & Shipping:** `qa-testing` | `design-audit` | `pre-landing-review` | `ship-release` | `doc-sync` | `engineering-retro`
+**Cross-cutting:** `i18n-localization` | `shared-packages`
 
----
+## Gotchas
 
-## 🤖 Claude Code Skills & Agents
+- Docker container name is `rawdrive-backend` — all `docker exec` commands need this exact name
+- Shared packages must be built (`pnpm build:packages`) before frontend can use updated types
+- Alembic migrations run inside Docker: `docker exec rawdrive-backend alembic ...`
+- Gallery-service is the reference implementation for new microservices — copy its patterns
+- All services need `/health/live`, `/health/ready`, and Prometheus `/metrics` endpoints
+- Some scaffolding is incomplete — verify package manifests before assuming scripts exist
+- Tech specs live in `docs/TechnicalSpecs/*.json` (validated by `_schema.json`) — update `lastUpdated` when changing behavior
 
-### Skills (Auto-loaded based on context)
+## Key Environment Variables
 
-20 specialized skills available in `.claude/skills/`:
+`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_ENDPOINT_URL`, `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `STRIPE_SECRET_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`
 
-| Skill | Use When |
-|-------|----------|
-| `accessibility` | WCAG 2.1 AA compliance, ARIA, keyboard navigation |
-| `ai-mcp-integration` | AI features, MCP integration, LLM tooling |
-| `api-standards` | API conventions, response formats, pagination |
-| `design-system` | Design tokens, UI components, theming |
-| `frontend-design` | Premium UI, animations, modern aesthetics |
-| `security` | Authentication, RBAC, encryption, compliance |
-| `testing` | Vitest, pytest patterns, test coverage |
-| `performance` | Optimization, caching, scaling, web vitals |
+## References
 
-**📖 For all skills, see**: [`.claude/skills/README.md`](.claude/skills/README.md)
+- **[PRD](.claude/PRD.md)** — Product requirements, architecture, tech stack
+- **[Test Users](docs/TEST_USERS.md)** — All test accounts, credentials, API examples, seeding commands
+- **[Deployment Checklist](docs/deployment-checklist.md)** — Pre-deployment verification steps
+- **[Best practices](.claude/reference/)** — 24 technical guides
+- **[Coding standards](.claude/reference/coding-standards.md)** — Naming, patterns, file rules
+- **[Security](.claude/reference/security-best-practices.md)** — Auth, encryption, compliance
 
-### Agents (Specialized AI assistants)
+# context-mode — MANDATORY routing rules
 
-10 agents available in `.claude/agents/`:
+You have context-mode MCP tools available. These rules are NOT optional — they protect your context window from flooding. A single unrouted command can dump 56 KB into context and waste the entire session.
 
-| Agent | Purpose |
-|-------|---------|
-| `project-planner` | Task breakdown, feature planning, architecture decisions |
-| `database-architect` | Schema design, query optimization, migrations |
-| `debugger` | Root cause analysis, systematic debugging |
-| `devops-engineer` | Deployment, CI/CD, infrastructure management |
-| `performance-optimizer` | Performance analysis and optimization |
-| `coding-standards-enforcer` | Review code for adherence to standards |
-| `security-code-reviewer` | Comprehensive security-focused code review |
-| `ui-component-designer` | Design modern, accessible UI components |
-| `auth-troubleshooter` | Debug authentication/authorization issues |
-| `skills-architect` | Create and maintain project skills |
+## BLOCKED commands — do NOT attempt these
 
-**📖 For agent details, see**: [`.claude/agents/`](.claude/agents/)
+### curl / wget — BLOCKED
+Any Bash command containing `curl` or `wget` is intercepted and replaced with an error message. Do NOT retry.
+Instead use:
+- `ctx_fetch_and_index(url, source)` to fetch and index web pages
+- `ctx_execute(language: "javascript", code: "const r = await fetch(...)")` to run HTTP calls in sandbox
 
-### IDE Agents (Antigravity Kit)
+### Inline HTTP — BLOCKED
+Any Bash command containing `fetch('http`, `requests.get(`, `requests.post(`, `http.get(`, or `http.request(` is intercepted and replaced with an error message. Do NOT retry with Bash.
+Instead use:
+- `ctx_execute(language, code)` to run HTTP calls in sandbox — only stdout enters context
 
-RawDrive also includes **Antigravity Kit** - an extensive IDE agent toolkit in `.agent/`:
+### WebFetch — BLOCKED
+WebFetch calls are denied entirely. The URL is extracted and you are told to use `ctx_fetch_and_index` instead.
+Instead use:
+- `ctx_fetch_and_index(url, source)` then `ctx_search(queries)` to query the indexed content
 
-| Category | Count | Examples |
-|----------|-------|----------|
-| **Agents** | 19 | `backend-specialist`, `frontend-specialist`, `database-architect`, `devops-engineer`, `security-auditor` |
-| **Skills** | 36 | `api-patterns`, `database-design`, `frontend-design`, `testing-patterns`, `deployment-procedures` |
-| **Workflows** | 11 | `/brainstorm`, `/create`, `/debug`, `/deploy`, `/orchestrate` |
+## REDIRECTED tools — use sandbox equivalents
 
-**📖 For IDE agent details, see**: [`.agent/ARCHITECTURE.md`](.agent/ARCHITECTURE.md)
+### Bash (>20 lines output)
+Bash is ONLY for: `git`, `mkdir`, `rm`, `mv`, `cd`, `ls`, `npm install`, `pip install`, and other short-output commands.
+For everything else, use:
+- `ctx_batch_execute(commands, queries)` — run multiple commands + search in ONE call
+- `ctx_execute(language: "shell", code: "...")` — run in sandbox, only stdout enters context
 
----
+### Read (for analysis)
+If you are reading a file to **Edit** it → Read is correct (Edit needs content in context).
+If you are reading to **analyze, explore, or summarize** → use `ctx_execute_file(path, language, code)` instead. Only your printed summary enters context. The raw file content stays in the sandbox.
 
-## 🔍 Key Environment Variables
+### Grep (large results)
+Grep results can flood context. Use `ctx_execute(language: "shell", code: "grep ...")` to run searches in sandbox. Only your printed summary enters context.
 
-```bash
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/rawdrive
-REDIS_URL=redis://localhost:6379/0
+## Tool selection hierarchy
 
-# Auth
-JWT_SECRET=<64-byte-hex>
+1. **GATHER**: `ctx_batch_execute(commands, queries)` — Primary tool. Runs all commands, auto-indexes output, returns search results. ONE call replaces 30+ individual calls.
+2. **FOLLOW-UP**: `ctx_search(queries: ["q1", "q2", ...])` — Query indexed content. Pass ALL questions as array in ONE call.
+3. **PROCESSING**: `ctx_execute(language, code)` | `ctx_execute_file(path, language, code)` — Sandbox execution. Only stdout enters context.
+4. **WEB**: `ctx_fetch_and_index(url, source)` then `ctx_search(queries)` — Fetch, chunk, index, query. Raw HTML never enters context.
+5. **INDEX**: `ctx_index(content, source)` — Store content in FTS5 knowledge base for later search.
 
-# Storage
-R2_ACCESS_KEY_ID=<cloudflare-r2-key>
-R2_SECRET_ACCESS_KEY=<cloudflare-r2-secret>
-R2_BUCKET_NAME=rawdrive-assets
-R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+## Subagent routing
 
-# AI (NEVER hardcode!)
-AI_PROVIDER=<provider>
-AI_API_KEY=<api-key>
-AI_MODEL=<model-name>
+When spawning subagents (Agent/Task tool), the routing block is automatically injected into their prompt. Bash-type subagents are upgraded to general-purpose so they have access to MCP tools. You do NOT need to manually instruct subagents about context-mode.
 
-# Payment
-STRIPE_SECRET_KEY=<stripe-key>
-RAZORPAY_KEY_ID=<razorpay-id>
-RAZORPAY_KEY_SECRET=<razorpay-secret>
-```
+## Output constraints
 
----
+- Keep responses under 500 words.
+- Write artifacts (code, configs, PRDs) to FILES — never return them as inline text. Return only: file path + 1-line description.
+- When indexing content, use descriptive source labels so others can `ctx_search(source: "label")` later.
 
-## 📊 Monitoring & Observability
+## ctx commands
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| Prometheus | 9090 | Metrics collection |
-| Grafana | 3000 | Dashboards (admin/admin) |
-| Traefik Dashboard | 8080 | API Gateway metrics |
-| Loki | 3100 | Log aggregation |
-
-**📖 For observability details, see**: [Observability Best Practices](.claude/reference/observability-best-practices.md)
-
----
-
-## 📖 Additional Documentation
-
-### Core Documentation
-- **[PRD](.claude/PRD.md)** - Complete product requirements and architecture
-- **[Best Practices](.claude/reference/)** - 24 comprehensive technical guides
-- **[Architecture](docs/ARCHITECTURE_QUICK_REFERENCE.md)** - Quick architecture reference
-- **[Test Users](docs/TEST_USERS.md)** - Test user credentials and configurations
-
-### Feature Documentation
-- **[Features](docs/Features/)** - Detailed feature specifications
-- **[Business Features](docs/Business_Features/)** - Business feature specs
-- **[Specs](specs/)** - Technical specifications
-
-### Operational Documentation
-- **[Runbooks](docs/runbooks/)** - Operational guides
-- **[Troubleshooting](docs/troubleshooting/)** - Debugging guides
-
----
-
-## 🎯 Development Principles
-
-### From the PRD
-
-1. **Client Experience is the Product** - End-client viewing experience must be flawless
-2. **AI as a Copilot** - AI features enhance without taking control
-3. **Trust by Design** - Security, privacy, and governance are foundational
-4. **Performance at Scale** - Sub-second retrieval for millions of assets
-5. **Platform Reliability** - Microservices ensure fault isolation and scalability
-
-**📖 For complete principles, see**: [PRD Section 2](.claude/PRD.md#2-product-principles)
-
-### Best Practices
-
-- **Always reference** `.claude/reference/` for domain-specific best practices
-- **Use skills** for context-aware development guidance
-- **Invoke agents** for specialized code review and design tasks
-- **Follow the PRD** for product requirements and architecture decisions
-- **Maintain consistency** across all services and components
-
----
-
-## 📝 Version History
-
-### Current: v0.3.6 (2026-01-22)
-
-**Major Features:**
-- Gallery Design Studio enhancements with real-time preview
-- Cover template system with 28+ SVG thumbnail previews
-- Premium cover styles (Cosmos, Reef, Bondi, West, Cliff, Cedar)
-- CoverStyleGrid virtualization for performance
-- AI cover recommendations hooks
-- Light/dark theme support in Design Studio
-- Session handling and auth service improvements
-- Collaboration service for gallery-service
-
-### v0.3.3 (2026-01-21)
-
-**Major Features:**
-- JWT authentication fixes for gallery and upload services
-- Magic link service improvements with Redis caching
-- Download policy defaults updated to watermarked only
-- Gallery branding data on public endpoints
-- Album proofing and notification templates
-- Client service security enhancements
-
-### v0.3.2 (2026-01-09)
-
-**Major Features:**
-- Personal Profile Digital Visiting Card (`/u/{slug}`)
-- Webhooks Microservice (event-driven integration)
-- Workspace Settings System (AI, security, notifications, privacy)
-- Gallery Performance Optimizations (LQIP, extended TTL, prefetching)
-- SEO & Search Engine Integration
-
-**📖 For complete changelog, see**: [PRD Section 9](.claude/PRD.md#9-delivery-plan)
-
----
-
-## 🆘 Getting Help
-
-1. **Check References First**: Review `.claude/reference/` for best practices
-2. **Use Skills**: Invoke relevant skills for guided development
-3. **Consult PRD**: Review product requirements and architecture
-4. **Use Commands**: Run `.claude/commands/` for common workflows
-5. **Invoke Agents**: Use specialized agents for code review and design
-
-**Remember**: This file provides quick reference. For comprehensive guidance, always refer to:
-- **[.claude/PRD.md](.claude/PRD.md)** - Product requirements
-- **[.claude/reference/](.claude/reference/)** - Best practices
-- **[.claude/skills/](.claude/skills/)** - Development skills
-- **[.claude/agents/](.claude/agents/)** - Specialized agents
-- **[.claude/commands/](.claude/commands/)** - Workflow commands
-
----
-
-**Maintained by**: RawDrive Development Team
-**Last Updated**: 2026-01-23
-**Status**: Production Ready ✅
+| Command | Action |
+|---------|--------|
+| `ctx stats` | Call the `ctx_stats` MCP tool and display the full output verbatim |
+| `ctx doctor` | Call the `ctx_doctor` MCP tool, run the returned shell command, display as checklist |
+| `ctx upgrade` | Call the `ctx_upgrade` MCP tool, run the returned shell command, display as checklist |
