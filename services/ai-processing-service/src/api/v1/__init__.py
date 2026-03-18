@@ -6,6 +6,7 @@ Aggregates all v1 API routers.
 from fastapi import APIRouter
 
 from api.v1.faces import router as faces_router
+from api.v1.embeddings import router as embeddings_router
 
 router = APIRouter()
 
@@ -14,6 +15,13 @@ router.include_router(
     faces_router,
     prefix="/faces",
     tags=["faces"],
+)
+
+# CLIP embedding endpoints
+router.include_router(
+    embeddings_router,
+    prefix="/embed",
+    tags=["embeddings"],
 )
 
 __all__ = ["router"]
