@@ -412,20 +412,22 @@ class SimilarityWorker:
         embeddings: list[dict[str, Any]],
         similarity_threshold: float,
     ) -> list[list[dict[str, Any]]]:
-        """Cluster embeddings using cosine similarity.
+        """Cluster embeddings via ai-processing-service DBSCAN endpoint.
+
+        Delegates to the ai-processing-service /api/v1/clustering/cluster
+        endpoint which uses DBSCAN with cosine distance matrix.
 
         Args:
-            embeddings: List of embedding dicts
-            similarity_threshold: Minimum similarity for grouping
+            embeddings: List of embedding dicts with asset_id and embedding
+            similarity_threshold: Minimum cosine similarity for grouping
 
         Returns:
             List of clusters, each a list of embedding dicts
         """
-        # TODO: Implement actual clustering algorithm
-        # Real implementation in T032
-
-        # Skeleton: treat each photo as its own cluster
-        return [[emb] for emb in embeddings]
+        await self._ensure_clip_model()  # ensures _embedding_client is set
+        return await self._embedding_client.cluster_embeddings(
+            embeddings, similarity_threshold
+        )
 
     async def _get_quality_scores(
         self, workspace_id: UUID, session_id: UUID

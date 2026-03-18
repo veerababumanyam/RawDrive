@@ -104,6 +104,68 @@ class EmbeddingClient:
             raise last_error
         return []
 
+    async def cluster_embeddings(
+        self,
+        embeddings: list[dict[str, Any]],
+        similarity_threshold: float = 0.85,
+    ) -> list[list[dict[str, Any]]]:
+        """Cluster embeddings via ai-processing-service DBSCAN endpoint.
+
+        Args:
+            embeddings: List of dicts with "asset_id" and "embedding" keys.
+            similarity_threshold: Minimum cosine similarity for grouping.
+
+        Returns:
+            List of clusters, each a list of embedding dicts.
+
+        Raises:
+            httpx.HTTPStatusError: On non-2xx response.
+            httpx.ConnectError: On connection failure (retried once).
+        """
+        url = f"{self.base_url}/api/v1/clustering/cluster"
+        payload = {
+            "embeddings": [
+                {"asset_id": str(e["asset_id"]), "embedding": e["embedding"]}
+                for e in embeddings
+            ],
+            "similarity_threshold": similarity_threshold,
+        }
+
+        last_error: Optional[Exception] = None
+
+        for attempt in range(2):
+            try:
+                async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
+                    response = await client.post(url, json=payload)
+                    response.raise_for_status()
+
+                data = response.json()
+                clusters = data.get("clusters", [])
+
+                logger.info(
+                    "Clustering API returned %d clusters (%.1fms)",
+                    len(clusters),
+                    data.get("processing_time_ms", 0),
+                )
+
+                return clusters
+
+            except httpx.ConnectError as exc:
+                last_error = exc
+                if attempt == 0:
+                    logger.warning(
+                        "Connection error to ai-processing-service clustering, retrying: %s",
+                        exc,
+                    )
+                    continue
+                raise
+            except Exception:
+                raise
+
+        if last_error:
+            raise last_error
+        return []
+
 
 # ---------------------------------------------------------------------------
 # Singleton factory
