@@ -91,12 +91,12 @@ Plans:
   3. Bulk wedding invitation emails are sent to guest lists through invitations-service
   4. Email templates exist for verification, password reset, invitation, and gallery delivery
   5. Email delivery status is tracked in the database via Postal webhook callbacks
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: Email verification and password reset flows
-- [ ] 05-02: Invitation emails, gallery delivery emails, and templates
-- [ ] 05-03: Delivery tracking via Postal webhooks
+- [ ] 05-01-PLAN.md — Email verification and password reset flows (MAIL-05, MAIL-06, MAIL-08)
+- [ ] 05-02-PLAN.md — Invitation email migration and gallery delivery template (MAIL-07, MAIL-08)
+- [ ] 05-03-PLAN.md — Delivery tracking PostgreSQL persistence (MAIL-09)
 
 ### Phase 6: AI/ML Pipeline
 **Goal**: Photos are automatically embedded, deduplicated, and clustered for curation
@@ -172,7 +172,7 @@ Phases 1-4 are parallelizable. Phases 5+ follow dependency chains: 2->5->7, 3->6
 | 2. Email Infrastructure | 0/2 | Not started | - |
 | 3. AI Service Stabilization | 1/2 | Gap closure | - |
 | 4. Rate Limiting | 0/1 | Planning complete | - |
-| 5. Email Features | 0/3 | Not started | - |
+| 5. Email Features | 0/3 | Planning complete | - |
 | 6. AI/ML Pipeline | 0/5 | Not started | - |
 | 7. Gallery Completion | 0/1 | Not started | - |
 | 8. Notifications | 0/2 | Not started | - |
