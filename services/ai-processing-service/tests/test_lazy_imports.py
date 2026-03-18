@@ -95,3 +95,51 @@ class TestDatabaseLazyImports:
         assert "pymilvus" not in sys.modules, (
             "pymilvus was imported at module load time by core.database"
         )
+
+
+class TestApiLayerLazyImports:
+    """Verify api.v1 does not import cv2/numpy/PIL at module level.
+
+    The import chain main.py -> api.v1.__init__ -> api.v1.faces must NOT
+    trigger heavy ML library imports. These should only load when endpoint
+    handler functions are actually called.
+    """
+
+    def test_no_cv2_at_api_import(self):
+        """Importing api.v1 does NOT trigger cv2 import."""
+        _clean_module("api.v1", also_remove=["api"])
+        _clean_module("cv2")
+
+        assert "cv2" not in sys.modules, "cv2 was already loaded before test"
+
+        importlib.import_module("api.v1")
+
+        assert "cv2" not in sys.modules, (
+            "cv2 was imported at module load time by api.v1 (via faces.py)"
+        )
+
+    def test_no_numpy_at_api_import(self):
+        """Importing api.v1 does NOT trigger numpy import."""
+        _clean_module("api.v1", also_remove=["api"])
+        _clean_module("numpy")
+
+        assert "numpy" not in sys.modules, "numpy was already loaded before test"
+
+        importlib.import_module("api.v1")
+
+        assert "numpy" not in sys.modules, (
+            "numpy was imported at module load time by api.v1 (via faces.py)"
+        )
+
+    def test_no_pil_at_api_import(self):
+        """Importing api.v1 does NOT trigger PIL import."""
+        _clean_module("api.v1", also_remove=["api"])
+        _clean_module("PIL")
+
+        assert "PIL" not in sys.modules, "PIL was already loaded before test"
+
+        importlib.import_module("api.v1")
+
+        assert "PIL" not in sys.modules, (
+            "PIL was imported at module load time by api.v1 (via faces.py)"
+        )
