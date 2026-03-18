@@ -39,7 +39,7 @@
 - [x] **AI-05**: Hash-based duplicate detection fixed — image byte fetching from R2 storage working
 - [x] **AI-06**: Embedding-based duplicate detection using cosine similarity threshold
 - [x] **AI-07**: DBSCAN clustering groups similar photos for culling/curation review
-- [ ] **AI-08**: Similarity groups stored in database/Redis (not in-memory)
+- [x] **AI-08**: Similarity groups stored in database/Redis (not in-memory)
 
 ### Gallery Features
 
@@ -65,7 +65,7 @@
 
 - [x] **PERF-01**: Image processing moved from main backend request loop to ai-processing-service
 - [x] **PERF-02**: Duplicate detection query uses indexed lookups instead of full table scan
-- [ ] **PERF-03**: Similarity groups migrated from in-memory storage to Redis
+- [x] **PERF-03**: Similarity groups migrated from in-memory storage to Redis
 
 ### Shared Packages
 
@@ -143,10 +143,10 @@
 | AI-05 | Phase 6 | Complete |
 | AI-06 | Phase 6 | Complete |
 | AI-07 | Phase 6 | Complete |
-| AI-08 | Phase 6 | Pending |
+| AI-08 | Phase 6 | Complete |
 | PERF-01 | Phase 6 | Complete |
 | PERF-02 | Phase 6 | Complete |
-| PERF-03 | Phase 6 | Pending |
+| PERF-03 | Phase 6 | Complete |
 | GAL-01 | Phase 7 | Pending |
 | GAL-02 | Phase 7 | Pending |
 | GAL-03 | Phase 7 | Pending |
