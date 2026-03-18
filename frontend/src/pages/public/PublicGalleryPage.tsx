@@ -4,7 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import { galleryService } from '../../services/galleryService';
 import { faceApiService } from '../../services/faceApiService';
 import { magicLinkService } from '../../services/magicLinkService';
-import { GalleryDetailData, PublicGalleryAsset, GalleryAssetItem } from '../../types/gallery';
+import { GalleryDetailData, PublicGalleryAsset, GalleryAssetItem, SlideshowConfig } from '../../types/gallery';
 import { gradientToCss, isValidGradientConfig } from '../../utils/gradientUtils';
 import { GalleryCanvas } from '../../components/features/gallery/GalleryCanvas';
 import { AppButton } from '../../components/ui/AppButton';
@@ -43,7 +43,7 @@ import { FaceDiscovery } from '../../components/features/gallery/FaceDiscovery';
 import { ClientPeopleFilter } from '../../components/features/gallery/ClientPeopleFilter';
 import { ShareMenu } from '../../components/features/gallery/ShareMenu';
 import { Breadcrumbs, BreadcrumbItem } from '../../components/features/gallery/Breadcrumbs';
-import { CinematicViewer } from '../../components/features/gallery/presentation/CinematicViewer';
+import { CinematicViewer, type CinematicTransition, type CinematicViewerSettings } from '../../components/features/gallery/presentation/CinematicViewer';
 import { PresentationModeSelector, type PresentationMode } from '../../components/features/gallery/PresentationModeSelector';
 import { Guestbook } from '../../components/features/gallery/Guestbook';
 import { useUtmTracking } from '../../hooks/useUtmTracking';
@@ -58,6 +58,29 @@ import {
 
 // Workflow tab type for client viewing
 type WorkflowTab = 'all' | 'favorites' | 'selections';
+
+/**
+ * Maps gallery SlideshowConfig to CinematicViewer settings.
+ * Converts seconds to ms, maps transitions, wires audio fields.
+ * Returns empty object for missing/disabled config (CinematicViewer uses its own defaults).
+ */
+export function mapSlideshowConfigToSettings(
+  config?: SlideshowConfig | null
+): Partial<CinematicViewerSettings> {
+  if (!config || !config.enabled) return {};
+  return {
+    interval: (config.interval_seconds ?? 5) * 1000,
+    loop: config.loop ?? true,
+    transition: config.transition === 'none'
+      ? 'instant'
+      : (config.transition as CinematicTransition) ?? 'fade',
+    audio: {
+      enabled: config.audio_enabled ?? false,
+      volume: config.audio_volume ?? 0.7,
+      muted: !(config.audio_autoplay ?? false),
+    },
+  };
+}
 
 const PublicGalleryPage: React.FC = () => {
     // Note: Parameter name must match route definition
@@ -2247,6 +2270,8 @@ const PublicGalleryPage: React.FC = () => {
                                 return asset.asset?.preview_url;
                         }
                     }}
+                    settings={mapSlideshowConfigToSettings(gallery.slideshow_config)}
+                    musicUrl={gallery.slideshow_config?.audio_url}
                     galleryTitle={gallery.title}
                     branding={{
                         name: company_profile?.name,
