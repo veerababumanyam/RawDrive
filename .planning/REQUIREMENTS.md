@@ -44,7 +44,7 @@
 ### Gallery Features
 
 - [x] **GAL-01**: Slideshow generation implemented for client-viewable gallery playback
-- [ ] **GAL-02**: Gallery delivery emails sent to clients when gallery is ready (includes magic link)
+- [x] **GAL-02**: Gallery delivery emails sent to clients when gallery is ready (includes magic link)
 - [x] **GAL-03**: Slideshow respects gallery branding settings (colors, logo, music preference)
 
 ### Notifications
@@ -148,7 +148,7 @@
 | PERF-02 | Phase 6 | Complete |
 | PERF-03 | Phase 6 | Complete |
 | GAL-01 | Phase 7 | Complete |
-| GAL-02 | Phase 7 | Pending |
+| GAL-02 | Phase 7 | Complete |
 | GAL-03 | Phase 7 | Complete |
 | NOTF-01 | Phase 8 | Pending |
 | NOTF-02 | Phase 8 | Pending |

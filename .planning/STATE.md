@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-03-18T23:03:55.766Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-18T23:05:49.074Z"
 progress:
   total_phases: 9
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -60,6 +60,7 @@ Plan: 2 of 2
 | Phase 06 P04 | 3min | 2 tasks | 7 files |
 | Phase 06 P05 | 3min | 2 tasks | 5 files |
 | Phase 07 P02 | 2min | 1 tasks | 2 files |
+| Phase 07 P01 | 4min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,8 @@ Recent decisions affecting current work:
 - [Phase 06]: 1-hour TTL (3600s) for similarity group Redis cache
 - [Phase 06]: Cache-first read with DB fallback and write-through on miss
 - [Phase 07]: Exported mapSlideshowConfigToSettings from PublicGalleryPage for unit testability
+- [Phase 07]: Standalone PostalClient copy in gallery-service (Phase 05-02 pattern)
+- [Phase 07]: delivery_email_sent_at guard prevents re-send on re-publish; email failures never block publish
 
 ### Pending Todos
 
@@ -113,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T23:03:55.763Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-03-18T23:05:49.072Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
