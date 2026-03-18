@@ -70,7 +70,13 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
     CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
     
-    # Email (SendGrid)
+    # Email (Postal — self-hosted transactional email)
+    POSTAL_API_URL: str = os.getenv("POSTAL_API_URL", "")
+    POSTAL_API_KEY: str = os.getenv("POSTAL_API_KEY", "")
+    POSTAL_FROM_EMAIL: str = os.getenv("POSTAL_FROM_EMAIL", "noreply@rawdrive.in")
+    POSTAL_FROM_NAME: str = os.getenv("POSTAL_FROM_NAME", "RawDrive")
+
+    # Legacy SendGrid (deprecated — kept for backward compat)
     SENDGRID_API_KEY: str = os.getenv("SENDGRID_API_KEY", "")
     EMAIL_FROM_ADDRESS: str = os.getenv("EMAIL_FROM_ADDRESS", "noreply@example.com")
     EMAIL_FROM_NAME: str = os.getenv("EMAIL_FROM_NAME", "Digital Invitations")
