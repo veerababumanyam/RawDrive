@@ -48,7 +48,7 @@ Plans:
   2. DNS records (SPF, DKIM, DMARC) are configured and a test email passes deliverability checks
   3. EmailService abstraction exists as single interface replacing all scattered TODO stubs
   4. Email sending via Postal HTTP API works with retry logic and delivery status webhooks
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 02-01: Postal Docker deployment and DNS configuration
