@@ -604,3 +604,12 @@ router.include_router(
     tags=["album-collaboration"],
 )
 
+# Postal webhook endpoint (Phase 02: Email Infrastructure)
+# Receives delivery status callbacks from self-hosted Postal mail server
+from app.api.v1.webhooks.postal_webhook import router as postal_webhook_router
+router.include_router(
+    postal_webhook_router,
+    prefix="/api/v1",
+    tags=["webhooks"],
+)
+

@@ -130,6 +130,7 @@ class EmailType(str, Enum):
 class EmailProvider(str, Enum):
     """Email provider types."""
 
+    POSTAL = "postal"
     SENDGRID = "sendgrid"
     SMTP = "smtp"
     CONSOLE = "console"  # For development/testing
@@ -331,6 +332,88 @@ class SendGridProvider(EmailProviderInterface):
             raise EmailRateLimitError(retry_after=e.retry_after)
         except SendGridAPIError as e:
             raise EmailSendError(str(e), "sendgrid")
+
+
+# ---------------------------------------------------------------------------
+# Postal Provider
+# ---------------------------------------------------------------------------
+
+
+class PostalProvider(EmailProviderInterface):
+    """Postal email provider using the self-hosted Postal mail server."""
+
+    def __init__(self) -> None:
+        """Initialize Postal provider."""
+        self._settings = get_settings()
+        self._client = None
+
+    @property
+    def name(self) -> EmailProvider:
+        return EmailProvider.POSTAL
+
+    @property
+    def is_configured(self) -> bool:
+        return self._settings.postal_api_key is not None
+
+    def _get_client(self):
+        """Lazy load Postal client."""
+        if self._client is None:
+            from app.services.postal_client import get_postal_client
+            self._client = get_postal_client()
+        return self._client
+
+    async def send(self, message: EmailMessage) -> EmailResult:
+        """Send email via Postal."""
+        client = self._get_client()
+        if client is None:
+            raise EmailNotConfiguredError()
+
+        import base64
+
+        attachments = None
+        if message.attachments:
+            attachments = [
+                {
+                    "name": a.filename,
+                    "content_type": a.mime_type,
+                    "data": base64.b64encode(a.content).decode(),
+                }
+                for a in message.attachments
+            ]
+
+        from_name = message.from_name or self._settings.postal_from_name or "RawDrive"
+        from_email = message.from_email or self._settings.postal_from_email or self._settings.sendgrid_from_email
+        from_addr = f"{from_name} <{from_email}>"
+
+        try:
+            from app.services.postal_client import PostalAPIError
+
+            result = await client.send_message(
+                to=[r.email for r in message.to],
+                subject=message.subject,
+                from_addr=from_addr,
+                html_body=message.html_content,
+                plain_body=message.text_content,
+                cc=[r.email for r in message.cc] if message.cc else None,
+                bcc=[r.email for r in message.bcc] if message.bcc else None,
+                attachments=attachments,
+                tag=message.email_type.value,
+                reply_to=message.reply_to,
+            )
+            return EmailResult(
+                message_id=result["message_id"],
+                provider=EmailProvider.POSTAL,
+                status=EmailStatus.SENT,
+                recipients=[r.email for r in message.to],
+                sent_at=datetime.now(timezone.utc),
+                metadata={"postal_messages": result.get("messages", {})},
+            )
+        except Exception as e:
+            from app.services.postal_client import PostalAPIError
+
+            if isinstance(e, PostalAPIError):
+                raise EmailSendError(str(e), "postal")
+            raise EmailSendError(str(e), "postal")
 
 
 # ---------------------------------------------------------------------------
@@ -603,6 +686,7 @@ class EmailService:
     def _initialize_providers(self) -> None:
         """Initialize available email providers."""
         # Register all providers
+        self._providers[EmailProvider.POSTAL] = PostalProvider()
         self._providers[EmailProvider.SENDGRID] = SendGridProvider()
         self._providers[EmailProvider.SMTP] = SMTPProvider()
         self._providers[EmailProvider.CONSOLE] = ConsoleProvider()
@@ -637,8 +721,9 @@ class EmailService:
             if provider.is_configured:
                 return provider
 
-        # Priority order: SendGrid > SMTP > Console (dev only)
-        priority = [EmailProvider.SENDGRID, EmailProvider.SMTP]
+        # Priority order: Postal > SendGrid > SMTP > Console (dev only)
+        # Postal is preferred when configured (self-hosted, no per-email cost)
+        priority = [EmailProvider.POSTAL, EmailProvider.SENDGRID, EmailProvider.SMTP]
 
         for provider_type in priority:
             if provider_type in self._providers:
