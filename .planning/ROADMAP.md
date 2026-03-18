@@ -139,11 +139,11 @@ Plans:
   1. WebSocket connection delivers real-time notifications to connected clients
   2. Notifications-service publishes events via Redis pub/sub
   3. Churn intervention and curation session status notifications fire when triggered
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: WebSocket notification infrastructure
-- [ ] 08-02: Churn intervention and curation notification wiring
+- [ ] 08-01-PLAN.md -- WebSocket + notifications-service Redis pub/sub pipeline (NOTF-01, NOTF-02)— WebSocket + notifications-service Redis pub/sub pipeline (NOTF-01, NOTF-02)
+- [ ] 08-02-PLAN.md -- Churn intervention + curation session notification wiring (NOTF-03, NOTF-04)— Churn intervention + curation session notification wiring (NOTF-03, NOTF-04)
 
 ### Phase 9: Shared Packages & Test Coverage
 **Goal**: Shared packages build cleanly and critical paths have integration/component test coverage
@@ -154,7 +154,7 @@ Plans:
   2. Backend integration tests cover auth flows, multi-tenant isolation, and email sending
   3. Backend tests cover AI worker concurrency and security enforcement
   4. Frontend component tests cover gallery viewing, upload workflows, and auth pages
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 09-01: Shared package builds (api-types, database-utils)
