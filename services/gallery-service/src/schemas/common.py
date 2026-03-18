@@ -116,6 +116,13 @@ class SlideshowConfig(BaseModel):
     loop: Optional[bool] = Field(default=True, description="Loop slideshow")
     autoplay: Optional[bool] = Field(default=False, description="Autoplay slideshow on gallery open")
 
+    # Music/audio fields (matches frontend SlideshowConfig type)
+    music_enabled: Optional[bool] = Field(default=False, description="Whether background music is enabled")
+    music_url: Optional[str] = Field(default=None, description="URL of the music track")
+    music_volume: Optional[float] = Field(default=0.7, ge=0.0, le=1.0, description="Music volume (0.0-1.0)")
+    music_autoplay: Optional[bool] = Field(default=False, description="Autoplay music on gallery open")
+    music_loop: Optional[bool] = Field(default=True, description="Loop music track")
+
 
 class ActivityTrackingConfig(BaseModel):
     """Activity tracking configuration for galleries."""

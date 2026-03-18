@@ -109,6 +109,12 @@ class Settings(BaseSettings):
     PASSWORD_MAX_ATTEMPTS: int = 5
     PASSWORD_LOCKOUT_MINUTES: int = 30
 
+    # Email (Postal -- self-hosted transactional email)
+    POSTAL_API_URL: str = os.getenv("POSTAL_API_URL", "")
+    POSTAL_API_KEY: str = os.getenv("POSTAL_API_KEY", "")
+    POSTAL_SENDER_EMAIL: str = os.getenv("POSTAL_SENDER_EMAIL", "noreply@rawdrive.io")
+    APP_BASE_URL: str = os.getenv("APP_BASE_URL", "https://rawdrive.io")
+
     # Circuit Breaker
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 5
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = 30
