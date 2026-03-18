@@ -26,6 +26,7 @@ celery_app = Celery(
     backend=str(settings.REDIS_URL),
     include=[
         "workers.face_detection_worker",
+        "workers.embedding_worker",
     ],
 )
 
@@ -73,6 +74,9 @@ celery_app.conf.task_routes = {
     "workers.face_detection_worker.process_face_detection": {"queue": "face_detection"},
     "workers.face_detection_worker.process_batch_face_detection": {"queue": "face_detection"},
     "workers.face_detection_worker.process_gallery_face_scan": {"queue": "face_detection"},
+    # Embedding tasks go to dedicated embedding queue
+    "workers.embedding_worker.compute_embedding": {"queue": "embedding"},
+    "workers.embedding_worker.compute_batch_embeddings": {"queue": "embedding"},
 }
 
 # =============================================================================
@@ -84,6 +88,10 @@ celery_app.conf.task_queues = {
     "face_detection": {
         "exchange": "face_detection",
         "routing_key": "face_detection",
+    },
+    "embedding": {
+        "exchange": "embedding",
+        "routing_key": "embedding",
     },
     "celery": {
         "exchange": "celery",
