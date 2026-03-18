@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Security Hardening** - Fix timing-safe comparison, permission checks, and state machine locking (completed 2026-03-18)
 - [ ] **Phase 2: Email Infrastructure** - Deploy Postal and build the EmailService abstraction
-- [x] **Phase 3: AI Service Stabilization** - Fix crash-looping ai-processing-service container (completed 2026-03-18)
+- [ ] **Phase 3: AI Service Stabilization** - Fix crash-looping ai-processing-service container
 - [ ] **Phase 4: Rate Limiting** - Implement Redis sliding window rate limiter for A2A API keys
 - [ ] **Phase 5: Email Features** - Wire verification, password reset, invitations, and delivery tracking
 - [ ] **Phase 6: AI/ML Pipeline** - Wire CLIP model, embeddings, duplicate detection, and clustering
@@ -62,10 +62,11 @@ Plans:
   1. ai-processing-service container starts and /health/live returns 200
   2. Service starts without Milvus or gracefully falls back to pgvector
   3. Heavy ML imports (InsightFace, Real-ESRGAN) load lazily and don't crash startup
-**Plans**: 1 plan
+**Plans**: 2 plans
 
 Plans:
 - [x] 03-01: Fix crash-loop -- health endpoints, lazy imports, Milvus fallback, and requirements cleanup
+- [ ] 03-02: Gap closure -- lazy imports for api/v1/faces.py (cv2/numpy/PIL)
 
 ### Phase 4: Rate Limiting
 **Goal**: A2A API keys are rate-limited with Redis sliding window enforcement
@@ -169,7 +170,7 @@ Phases 1-4 are parallelizable. Phases 5+ follow dependency chains: 2->5->7, 3->6
 |-------|----------------|--------|-----------|
 | 1. Security Hardening | 2/2 | Complete   | 2026-03-18 |
 | 2. Email Infrastructure | 0/2 | Not started | - |
-| 3. AI Service Stabilization | 0/1 | Not started | - |
+| 3. AI Service Stabilization | 1/2 | Gap closure | - |
 | 4. Rate Limiting | 0/1 | Not started | - |
 | 5. Email Features | 0/3 | Not started | - |
 | 6. AI/ML Pipeline | 0/5 | Not started | - |
