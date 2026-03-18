@@ -1,0 +1,41 @@
+postal:
+  web_hostname: postal.localhost
+  web_protocol: http
+  smtp_hostname: postal.localhost
+  use_ip_pools: false
+  default_maximum_delivery_attempts: 5
+  default_maximum_hold_expiry_days: 7
+  default_suppression_list_automatic_removal_days: 30
+
+main_db:
+  host: postal-mariadb
+  port: 3306
+  username: postal
+  password: postal
+  database: postal
+
+message_db:
+  host: postal-mariadb
+  port: 3306
+  username: postal
+  password: postal
+  prefix: postal
+
+rabbitmq:
+  host: postal-rabbitmq
+  port: 5672
+  username: postal
+  password: postal
+  vhost: /postal
+
+logging:
+  stdout: true
+
+dns:
+  mx_records:
+    - mx.postal.localhost
+  smtp_server_hostname: postal.localhost
+  spf_include: spf.postal.localhost
+  return_path_domain: rp.postal.localhost
+  route_domain: routes.postal.localhost
+  track_domain: track.postal.localhost

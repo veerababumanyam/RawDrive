@@ -1600,6 +1600,66 @@ services:
       timeout: 10s
       retries: 3
 
+  # ==========================================================================
+  # Postal Mail Server (self-hosted transactional email)
+  # ==========================================================================
+  # NOTE: After first deploy, run: docker exec rawdrive-postal postal initialize
+  # Then create an admin user: docker exec rawdrive-postal postal make-user
+
+  postal-mariadb:
+    image: mariadb:10.11
+    container_name: rawdrive-postal-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${POSTAL_MYSQL_ROOT_PASSWORD:-postal}
+      MYSQL_DATABASE: postal
+      MYSQL_USER: postal
+      MYSQL_PASSWORD: ${POSTAL_MYSQL_PASSWORD:-postal}
+    volumes:
+      - postal_mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${POSTAL_MYSQL_ROOT_PASSWORD:-postal}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  postal-rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rawdrive-postal-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${POSTAL_RABBITMQ_USER:-postal}
+      RABBITMQ_DEFAULT_PASS: ${POSTAL_RABBITMQ_PASSWORD:-postal}
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  postal:
+    image: ghcr.io/postalserver/postal:3
+    container_name: rawdrive-postal
+    restart: unless-stopped
+    command: ["postal", "web-server"]
+    ports:
+      - "127.0.0.1:${PORT_POSTAL_WEB:-5000}:5000"
+    depends_on:
+      postal-mariadb:
+        condition: service_healthy
+      postal-rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./postal/postal.yml:/config/postal.yml:ro
+      - postal_data:/opt/postal/storage
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/health" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
 volumes:
   pg_data:
   loki_data:
@@ -1613,6 +1673,8 @@ volumes:
   etcd_data:
   minio_data:
   milvus_data:
+  postal_mariadb_data:
+  postal_data:
 
 
 networks:
