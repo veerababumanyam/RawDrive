@@ -111,6 +111,8 @@ Recent decisions affecting current work:
 - [Phase 08]: Subscriber runs as asyncio.create_task in lifespan with graceful cancellation on shutdown
 - [Phase 08]: Wrap emit_event in try/except so WebSocket failure never breaks core notification logic
 - [Phase 09]: Used pnpm directory filter {packages/**} instead of package name glob for cross-platform compatibility
+- [Phase 09-03]: Tested UploadQueue as class unit tests since it is not a React component
+- [Phase 09-03]: Mocked framer-motion to render children directly for auth page tests
 
 ### Pending Todos
 

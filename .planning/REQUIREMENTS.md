@@ -78,8 +78,8 @@
 - [ ] **TEST-02**: Backend integration tests for multi-tenant isolation (workspace_id enforcement)
 - [ ] **TEST-03**: Backend integration tests for email sending (verification, reset, invitations)
 - [ ] **TEST-04**: Backend tests for AI worker concurrency (CLIP embedding, clustering)
-- [ ] **TEST-05**: Frontend component tests for gallery viewing and upload workflows
-- [ ] **TEST-06**: Frontend component tests for auth pages (signin, signup, forgot password)
+- [x] **TEST-05**: Frontend component tests for gallery viewing and upload workflows
+- [x] **TEST-06**: Frontend component tests for auth pages (signin, signup, forgot password)
 - [ ] **TEST-07**: Security enforcement tests — permission checks, workspace isolation, timing-safe comparison
 
 ## v2 Requirements
@@ -160,8 +160,8 @@
 | TEST-02 | Phase 9 | Pending |
 | TEST-03 | Phase 9 | Pending |
 | TEST-04 | Phase 9 | Pending |
-| TEST-05 | Phase 9 | Pending |
-| TEST-06 | Phase 9 | Pending |
+| TEST-05 | Phase 9 | Complete |
+| TEST-06 | Phase 9 | Complete |
 | TEST-07 | Phase 9 | Pending |
 
 **Coverage:**
