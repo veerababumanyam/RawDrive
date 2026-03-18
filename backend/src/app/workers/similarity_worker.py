@@ -26,6 +26,7 @@ from app.services.curation_session_service import (
     STAGE_SIMILARITY_GROUPING,
 )
 from app.services.embedding_client import get_embedding_client
+from app.services.similarity_cache_service import get_similarity_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,13 @@ class SimilarityWorker:
         if self._group_repo is None:
             self._group_repo = get_similarity_group_repository()
         return self._group_repo
+
+    @property
+    def cache_service(self):
+        """Lazy load similarity cache service."""
+        if not hasattr(self, "_cache_service") or self._cache_service is None:
+            self._cache_service = get_similarity_cache_service()
+        return self._cache_service
 
     @property
     def quality_repo(self):
@@ -264,6 +272,9 @@ class SimilarityWorker:
         await self.group_repo.bulk_create_groups(
             workspace_id, session_id, groups_data
         )
+
+        # Cache groups in Redis for fast curation UI reads
+        await self.cache_service.cache_similarity_groups(session_id, groups_data)
 
         groups_count = len(groups_data)
         logger.info(f"Created {groups_count} similarity groups for session {session_id}")

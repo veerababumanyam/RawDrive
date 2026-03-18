@@ -15,8 +15,10 @@ from uuid import UUID
 
 from app.config.settings import get_settings
 from app.db.redis import get_redis_client
+from app.repositories.similarity_group_repository import get_similarity_group_repository
 from app.services.ai_usage_service import get_ai_usage_service, AIFeatureType
 from app.services.gallery_service import get_gallery_service as _get_gallery_service
+from app.services.similarity_cache_service import get_similarity_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +75,65 @@ class SmartCurationService:
     def __init__(self):
         self.settings = get_settings()
         self.ai_usage = get_ai_usage_service()
+        self._cache_service = None
+        self._group_repo = None
+
+    @property
+    def cache_service(self):
+        """Lazy load similarity cache service."""
+        if self._cache_service is None:
+            self._cache_service = get_similarity_cache_service()
+        return self._cache_service
+
+    @property
+    def group_repo(self):
+        """Lazy load similarity group repository."""
+        if self._group_repo is None:
+            self._group_repo = get_similarity_group_repository()
+        return self._group_repo
+
+    async def get_similarity_groups(
+        self,
+        workspace_id: UUID,
+        session_id: UUID,
+    ) -> Optional[list[dict[str, Any]]]:
+        """Get similarity groups for a curation session.
+
+        Uses cache-first pattern: reads from Redis first, falls back to
+        database on cache miss, and populates cache on DB fallback.
+
+        Args:
+            workspace_id: Workspace ID for tenant isolation
+            session_id: Curation session ID
+
+        Returns:
+            List of similarity group dicts, or None if no groups found
+        """
+        # Try Redis cache first
+        cached = await self.cache_service.get_cached_groups(session_id)
+        if cached is not None:
+            logger.info(
+                "Similarity groups cache hit",
+                extra={"session_id": str(session_id)},
+            )
+            return cached
+
+        # Cache miss -- fall back to database
+        logger.info(
+            "Similarity groups cache miss, querying DB",
+            extra={"session_id": str(session_id)},
+        )
+        groups, total, _ = await self.group_repo.list_by_session(
+            workspace_id, session_id, include_members=True
+        )
+
+        if not groups:
+            return None
+
+        # Populate cache for next read
+        await self.cache_service.cache_similarity_groups(session_id, groups)
+
+        return groups
 
     def _get_cache_key(
         self,
