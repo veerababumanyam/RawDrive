@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Comment endpoints return only data belonging to the requesting workspace
   3. Curation session state transitions are atomic with advisory locks preventing race conditions
   4. Each security fix has a regression test that fails when the fix is reverted
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 01-01: Timing-safe A2A comparison and comment permission checks
