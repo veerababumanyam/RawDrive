@@ -90,10 +90,18 @@ async def test_churn_in_app_notification_emits_websocket(worker, action_data):
     """Verify _create_in_app_notification calls emit_event for real-time
     WebSocket delivery after DB insert."""
 
-    mock_pool = AsyncMock()
     mock_conn = AsyncMock()
-    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    # Build a proper async context manager for pool.acquire()
+    class FakeAcquire:
+        async def __aenter__(self):
+            return mock_conn
+
+        async def __aexit__(self, *args):
+            return False
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value = FakeAcquire()
 
     with patch(
         "app.workers.churn_intervention_worker.get_postgres_pool",

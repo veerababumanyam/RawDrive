@@ -30,6 +30,7 @@ from app.repositories.similarity_group_repository import (
     get_similarity_group_repository,
 )
 from app.services.audit_service import AuditService, AuditEventType
+from app.services.websocket_service import emit_event
 
 logger = logging.getLogger(__name__)
 
@@ -527,8 +528,21 @@ class CurationSessionService:
 
         session = await self.session_repo.update(workspace_id, session_id, **updates)
 
-        # TODO: Send WebSocket notification
-        # await self._notify_progress(session)
+        # Emit WebSocket event for real-time progress updates
+        try:
+            await emit_event(
+                workspace_id=workspace_id,
+                event_type="curation:status_changed",
+                data={
+                    "session_id": str(session_id),
+                    "progress": percent,
+                    "stage": stage,
+                    "status": status if status else session.get("status", "processing"),
+                    "analyzed_count": analyzed_count,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to emit curation progress event: {e}")
 
         return self._format_session_response(session)
 

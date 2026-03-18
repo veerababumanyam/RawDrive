@@ -41,6 +41,8 @@ from app.services.intervention_campaign_service import (
     DeliveryStatus,
     ActionType,
 )
+from app.services.notification_event_publisher import publish_notification_event
+from app.services.websocket_service import emit_event
 
 
 logger = logging.getLogger(__name__)
@@ -514,10 +516,16 @@ class ChurnInterventionWorker:
                 **content.get("extra_data", {}),
             }
 
-            # In production, this would use the notification microservice
-            # For now, log the intent
+            await publish_notification_event(
+                event_type="churn.intervention.email",
+                workspace_id=workspace_id,
+                recipient_email=client_email,
+                payload=payload,
+                priority="high",
+            )
+
             logger.info(
-                f"Would send email intervention to {client_email}",
+                f"Published churn email intervention event for {client_email}",
                 extra={
                     "action_id": str(action["action_id"]),
                     "template": template,
@@ -525,14 +533,6 @@ class ChurnInterventionWorker:
                     "offer_code": offer_code,
                 },
             )
-
-            # TODO: Integrate with notifications-service
-            # await notification_service.send_event_notification(
-            #     workspace_id=workspace_id,
-            #     event_type="churn.intervention.email",
-            #     recipient_email=client_email,
-            #     payload=payload,
-            # )
 
             return True
 
@@ -597,6 +597,21 @@ class ChurnInterventionWorker:
                 f"Created in-app notification for client {client_id}",
                 extra={"action_id": str(action["action_id"])},
             )
+
+            # Emit WebSocket event for real-time in-app delivery
+            try:
+                await emit_event(
+                    workspace_id=workspace_id,
+                    event_type="churn:intervention_created",
+                    data={
+                        "client_id": str(client_id),
+                        "title": title,
+                        "body": body,
+                        "notification_type": "churn_intervention",
+                    },
+                )
+            except Exception as ws_err:
+                logger.warning(f"Failed to emit churn intervention WebSocket event: {ws_err}")
 
             return True
 
