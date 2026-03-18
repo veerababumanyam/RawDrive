@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     # ==========================================================================
     # Milvus Configuration (Vector Database)
     # ==========================================================================
-    MILVUS_ENABLED: bool = Field(default=True)
+    MILVUS_ENABLED: bool = Field(default=False)
     MILVUS_HOST: str = Field(default="localhost")
     MILVUS_PORT: int = Field(default=19530)
     MILVUS_USER: str = Field(default="")

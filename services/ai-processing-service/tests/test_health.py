@@ -55,8 +55,8 @@ async def test_readiness_healthy():
     app = await _get_app()
     transport = ASGITransport(app=app)
     with (
-        patch("main.database_healthcheck", new_callable=AsyncMock, return_value=True),
-        patch("main.redis_healthcheck", new_callable=AsyncMock, return_value=True),
+        patch("core.database.database_healthcheck", new_callable=AsyncMock, return_value=True),
+        patch("core.redis.redis_healthcheck", new_callable=AsyncMock, return_value=True),
     ):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.get("/health/ready")
@@ -71,8 +71,8 @@ async def test_readiness_unhealthy():
     app = await _get_app()
     transport = ASGITransport(app=app)
     with (
-        patch("main.database_healthcheck", new_callable=AsyncMock, return_value=False),
-        patch("main.redis_healthcheck", new_callable=AsyncMock, return_value=True),
+        patch("core.database.database_healthcheck", new_callable=AsyncMock, return_value=False),
+        patch("core.redis.redis_healthcheck", new_callable=AsyncMock, return_value=True),
     ):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.get("/health/ready")

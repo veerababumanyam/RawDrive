@@ -8,9 +8,25 @@ Verifies:
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+def _make_pool_mock(fetchval_return=1):
+    """Create a mock asyncpg pool with proper async context manager for acquire()."""
+    mock_conn = AsyncMock()
+    mock_conn.fetchval = AsyncMock(return_value=fetchval_return)
+
+    pool = MagicMock()
+
+    @asynccontextmanager
+    async def mock_acquire():
+        yield mock_conn
+
+    pool.acquire = mock_acquire
+    return pool, mock_conn
 
 
 @pytest.mark.asyncio
@@ -18,22 +34,16 @@ async def test_database_healthcheck_success():
     """database_healthcheck returns True when pool is connected."""
     from core.database import Database, database_healthcheck
 
-    # Create a database instance with a mock pool
     db = Database.__new__(Database)
-    db.pool = AsyncMock()
+    pool, mock_conn = _make_pool_mock(fetchval_return=1)
+    db.pool = pool
     db._initialized = True
     db.settings = MagicMock()
 
-    # Mock the pool.acquire context manager
-    mock_conn = AsyncMock()
-    mock_conn.fetchval = AsyncMock(return_value=1)
-    db.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-    db.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-
-    # Patch the global _database
     with patch("core.database._database", db):
         result = await database_healthcheck(timeout=2.0)
     assert result is True
+    mock_conn.fetchval.assert_awaited_once_with("SELECT 1")
 
 
 @pytest.mark.asyncio
@@ -41,7 +51,6 @@ async def test_database_healthcheck_failure():
     """database_healthcheck returns False when pool is None."""
     from core.database import database_healthcheck
 
-    # Patch the global _database to None (no connection)
     with patch("core.database._database", None):
         result = await database_healthcheck(timeout=2.0)
     assert result is False
@@ -53,18 +62,12 @@ async def test_pgvector_fallback():
     from core.database import Database
 
     db = Database.__new__(Database)
-    db.pool = AsyncMock()
+    db.pool = MagicMock()
     db._initialized = True
     db.settings = MagicMock()
     db.settings.MILVUS_ENABLED = False
 
-    # Mock fetch_all to return empty results
-    mock_conn = AsyncMock()
-    mock_conn.fetch = AsyncMock(return_value=[])
-    db.pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-    db.pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-
-    # Patch fetch_all
+    # Patch fetch_all to return empty results
     db.fetch_all = AsyncMock(return_value=[])
 
     # Call find_similar_by_clip -- should NOT attempt milvus import

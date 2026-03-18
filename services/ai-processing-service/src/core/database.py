@@ -12,7 +12,6 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import asyncpg
 
 from config import get_settings
-from services.milvus_service import get_milvus_service
 
 logger = logging.getLogger(__name__)
 
@@ -179,16 +178,18 @@ class Database:
                 query, asset_id, workspace_id, perceptual_hash, clip_embedding
             )
 
-        # Dual-write to Milvus
-        milvus = get_milvus_service()
-        if milvus.enabled:
-            milvus.upsert_vectors(
-                collection_name=self.settings.MILVUS_COLLECTION_ASSET,
-                ids=[str(asset_id)],
-                workspace_id=str(workspace_id),
-                embeddings=[clip_embedding],
-                metadatas=[{"perceptual_hash": perceptual_hash}],
-            )
+        # Dual-write to Milvus (lazy import)
+        if self.settings.MILVUS_ENABLED:
+            from services.milvus_service import get_milvus_service
+            milvus = get_milvus_service()
+            if milvus.enabled:
+                milvus.upsert_vectors(
+                    collection_name=self.settings.MILVUS_COLLECTION_ASSET,
+                    ids=[str(asset_id)],
+                    workspace_id=str(workspace_id),
+                    embeddings=[clip_embedding],
+                    metadatas=[{"perceptual_hash": perceptual_hash}],
+                )
 
         logger.debug(f"Stored embeddings for asset {asset_id}")
 
@@ -246,9 +247,13 @@ class Database:
         Returns:
             List of similar assets with similarity scores
         """
-        # Hybrid Search: Use Milvus if enabled
-        milvus = get_milvus_service()
-        if milvus.enabled:
+        # Hybrid Search: Use Milvus if enabled (lazy import)
+        milvus_enabled = False
+        if self.settings.MILVUS_ENABLED:
+            from services.milvus_service import get_milvus_service
+            milvus = get_milvus_service()
+            milvus_enabled = milvus.enabled
+        if milvus_enabled:
             logger.info(f"Using Milvus for CLIP similarity search in workspace {workspace_id}")
             milvus_results = milvus.search_vectors(
                 collection_name=self.settings.MILVUS_COLLECTION_ASSET,
@@ -395,3 +400,23 @@ def get_database() -> Database:
     if _database is None:
         raise RuntimeError("Database not initialized. Call init_database() first.")
     return _database
+
+
+async def database_healthcheck(timeout: float = 2.0) -> bool:
+    """Check if database is reachable.
+
+    Args:
+        timeout: Query timeout in seconds.
+
+    Returns:
+        True if database responds to SELECT 1, False otherwise.
+    """
+    if _database is None or _database.pool is None:
+        return False
+    try:
+        async with _database.pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+        return True
+    except Exception as e:
+        logger.warning(f"Database healthcheck failed: {e}")
+        return False

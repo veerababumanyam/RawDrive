@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-import sys
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -21,7 +20,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
 from config import get_settings
-from models.clip_embedder import get_clip_embedder
 
 # Configure logging
 logging.basicConfig(
@@ -49,6 +47,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info(f"Service: {settings.SERVICE_NAME}")
     logger.info(f"AI Provider: {settings.AI_PROVIDER.value}")
 
+    app.state.startup_errors = []
+
     # Initialize database connection
     try:
         from core.database import init_database
@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Database initialized")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
-        sys.exit(1)
+        app.state.startup_errors.append(f"database: {e}")
 
     # Initialize Redis connection
     try:
@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Redis initialized")
     except Exception as e:
         logger.error(f"Failed to initialize Redis: {e}")
-        sys.exit(1)
+        app.state.startup_errors.append(f"redis: {e}")
 
     # Initialize Milvus connection (if enabled)
     if settings.MILVUS_ENABLED:
@@ -113,6 +113,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception as e:
             logger.warning(f"Failed to start MCP server: {e}")
 
+    app.state.startup_complete = True
     logger.info("AI Processing Service startup complete")
 
     # ==========================================================================
@@ -198,60 +199,52 @@ app.add_middleware(
 # =============================================================================
 
 
-@app.get("/health", status_code=status.HTTP_200_OK)
+@app.get("/health/live", status_code=status.HTTP_200_OK)
 async def health_check() -> dict:
     """Liveness probe for Kubernetes.
 
     Returns:
         dict: Service health status.
     """
-    return {"status": "ok", "service": settings.SERVICE_NAME}
+    return {"status": "alive", "service": settings.SERVICE_NAME}
 
 
-@app.get("/ready", status_code=status.HTTP_200_OK)
-async def readiness_check() -> dict:
+@app.get("/health/ready")
+async def readiness_check():
     """Readiness probe for Kubernetes.
 
     Checks if service dependencies are available.
 
     Returns:
-        dict: Service readiness status.
+        dict: Service readiness status with 200 or 503.
     """
-    checks = {"database": False, "redis": False, "kafka": False}
+    from core.database import database_healthcheck
+    from core.redis import redis_healthcheck
+
+    checks = {"database": False, "redis": False}
 
     # Check database
     try:
-        from core.database import database_healthcheck
-
         checks["database"] = await database_healthcheck(timeout=2.0)
     except Exception:
         pass
 
     # Check Redis
     try:
-        from core.redis import redis_healthcheck
-
         checks["redis"] = await redis_healthcheck(timeout=2.0)
     except Exception:
         pass
 
-    # Check Kafka (if not in test mode)
-    if not settings.is_test:
-        try:
-            # TODO: Implement Kafka health check
-            checks["kafka"] = True
-        except Exception:
-            pass
-    else:
-        checks["kafka"] = True  # Skip in test mode
-
     all_healthy = all(checks.values())
     status_code = status.HTTP_200_OK if all_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
 
-    return {
-        "status": "ready" if all_healthy else "not_ready",
-        "checks": checks,
-    }
+    return ORJSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ready" if all_healthy else "not_ready",
+            "checks": checks,
+        },
+    )
 
 
 # =============================================================================
@@ -327,7 +320,7 @@ app.include_router(api_router, prefix="/api/v1")
 def handle_shutdown(signum, frame):
     """Handle shutdown signals gracefully."""
     logger.info(f"Received signal {signum}, shutting down...")
-    sys.exit(0)
+    raise SystemExit(0)
 
 
 signal.signal(signal.SIGTERM, handle_shutdown)

@@ -353,3 +353,21 @@ def get_redis() -> RedisClient:
     if _redis_client is None:
         raise RuntimeError("Redis not initialized. Call init_redis() first.")
     return _redis_client
+
+
+async def redis_healthcheck(timeout: float = 2.0) -> bool:
+    """Check if Redis is reachable.
+
+    Args:
+        timeout: Ping timeout in seconds.
+
+    Returns:
+        True if Redis responds to ping, False otherwise.
+    """
+    if _redis_client is None or _redis_client.client is None:
+        return False
+    try:
+        return await _redis_client.client.ping()
+    except Exception as e:
+        logger.warning(f"Redis healthcheck failed: {e}")
+        return False
