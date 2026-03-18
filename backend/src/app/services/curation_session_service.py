@@ -59,6 +59,16 @@ MAX_TARGET_COUNT = 10000
 # Session timeout (stale sessions are auto-marked as failed)
 SESSION_TIMEOUT_MINUTES = 30
 
+# Valid state transitions: {target_status: [allowed_source_statuses]}
+VALID_TRANSITIONS = {
+    STATUS_ANALYZING: [STATUS_PENDING],
+    STATUS_GROUPING: [STATUS_ANALYZING],
+    STATUS_CURATING: [STATUS_GROUPING],
+    STATUS_COMPLETED: [STATUS_ANALYZING, STATUS_GROUPING, STATUS_CURATING],
+    STATUS_FAILED: [STATUS_PENDING, STATUS_ANALYZING, STATUS_GROUPING, STATUS_CURATING],
+    STATUS_PENDING: [STATUS_ANALYZING, STATUS_GROUPING, STATUS_CURATING],  # pause
+}
+
 
 class CurationSessionError(Exception):
     """Base exception for curation session errors."""
@@ -86,6 +96,12 @@ class SessionNotPausableError(CurationSessionError):
 
 class InvalidSessionParametersError(CurationSessionError):
     """Raised when session parameters are invalid."""
+
+    pass
+
+
+class InvalidStateTransitionError(CurationSessionError):
+    """Raised when a state transition is not allowed from the current state."""
 
     pass
 
@@ -267,14 +283,19 @@ class CurationSessionService:
         Raises:
             SessionNotFoundError: If session not found
         """
-        session = await self.session_repo.get_by_id(workspace_id, session_id)
-        if not session:
-            raise SessionNotFoundError(f"Session not found: {session_id}")
-
-        # Update status to analyzing
-        session = await self.session_repo.update_status(
-            workspace_id, session_id, STATUS_ANALYZING
+        session = await self.session_repo.update_status_atomic(
+            workspace_id, session_id,
+            new_status=STATUS_ANALYZING,
+            allowed_from_statuses=VALID_TRANSITIONS[STATUS_ANALYZING],
         )
+        if not session:
+            # Check if session exists at all
+            existing = await self.session_repo.get_by_id(workspace_id, session_id)
+            if not existing:
+                raise SessionNotFoundError(f"Session not found: {session_id}")
+            raise InvalidStateTransitionError(
+                f"Cannot start session in status '{existing['status']}' — must be 'pending'"
+            )
 
         # Queue the analysis task
         await self._queue_analysis_task(session, resume_from_step)
@@ -309,20 +330,18 @@ class CurationSessionService:
             SessionNotFoundError: If session not found
             SessionNotPausableError: If session is not in progress
         """
-        session = await self.session_repo.get_by_id(workspace_id, session_id)
-        if not session:
-            raise SessionNotFoundError(f"Session not found: {session_id}")
-
-        # Only allow pausing active sessions
-        if session["status"] not in (STATUS_ANALYZING, STATUS_GROUPING, STATUS_CURATING):
-            raise SessionNotPausableError(
-                f"Cannot pause session with status: {session['status']}"
-            )
-
-        # Update status to pending (paused)
-        session = await self.session_repo.update_status(
-            workspace_id, session_id, STATUS_PENDING
+        session = await self.session_repo.update_status_atomic(
+            workspace_id, session_id,
+            new_status=STATUS_PENDING,
+            allowed_from_statuses=VALID_TRANSITIONS[STATUS_PENDING],
         )
+        if not session:
+            existing = await self.session_repo.get_by_id(workspace_id, session_id)
+            if not existing:
+                raise SessionNotFoundError(f"Session not found: {session_id}")
+            raise SessionNotPausableError(
+                f"Cannot pause session with status: {existing['status']}"
+            )
 
         logger.info(
             "Curation session paused",
@@ -355,16 +374,24 @@ class CurationSessionService:
         Returns:
             Updated session with final stats
         """
-        session = await self.session_repo.update(
-            workspace_id,
-            session_id,
-            status=STATUS_COMPLETED,
-            selected_count=selected_count,
-            groups_count=groups_count,
-            completed_at=datetime.now(timezone.utc),
-            progress_percent=100,
-            progress_stage="completed",
+        session = await self.session_repo.update_status_atomic(
+            workspace_id, session_id,
+            new_status=STATUS_COMPLETED,
+            allowed_from_statuses=VALID_TRANSITIONS[STATUS_COMPLETED],
+            extra_updates={
+                "selected_count": selected_count,
+                "groups_count": groups_count,
+                "progress_percent": 100,
+                "progress_stage": "completed",
+            },
         )
+        if not session:
+            existing = await self.session_repo.get_by_id(workspace_id, session_id)
+            if not existing:
+                raise SessionNotFoundError(f"Session not found: {session_id}")
+            raise InvalidStateTransitionError(
+                f"Cannot complete session in status '{existing['status']}'"
+            )
 
         logger.info(
             "Curation session completed",
@@ -414,12 +441,19 @@ class CurationSessionService:
         Returns:
             Updated session with error info
         """
-        session = await self.session_repo.update_status(
-            workspace_id,
-            session_id,
-            STATUS_FAILED,
+        session = await self.session_repo.update_status_atomic(
+            workspace_id, session_id,
+            new_status=STATUS_FAILED,
+            allowed_from_statuses=VALID_TRANSITIONS[STATUS_FAILED],
             error_message=error_message,
         )
+        if not session:
+            existing = await self.session_repo.get_by_id(workspace_id, session_id)
+            if not existing:
+                raise SessionNotFoundError(f"Session not found: {session_id}")
+            raise InvalidStateTransitionError(
+                f"Cannot fail session in status '{existing['status']}'"
+            )
 
         logger.error(
             "Curation session failed",

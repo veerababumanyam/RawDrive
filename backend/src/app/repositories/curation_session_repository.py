@@ -314,6 +314,10 @@ class CurationSessionRepository:
     ) -> Optional[dict[str, Any]]:
         """Update session status with appropriate timestamps.
 
+        .. deprecated::
+            Use :meth:`update_status_atomic` instead for safe, lock-protected
+            state transitions that prevent race conditions.
+
         Args:
             workspace_id: Workspace ID for tenant isolation
             session_id: Session ID to update
@@ -333,6 +337,110 @@ class CurationSessionRepository:
                 updates["error_message"] = error_message
 
         return await self.update(workspace_id, session_id, **updates)
+
+    async def update_status_atomic(
+        self,
+        workspace_id: UUID,
+        session_id: UUID,
+        new_status: str,
+        allowed_from_statuses: list[str],
+        *,
+        error_message: Optional[str] = None,
+        extra_updates: Optional[dict[str, Any]] = None,
+    ) -> Optional[dict[str, Any]]:
+        """Atomically update session status with advisory lock and state validation.
+
+        Acquires a PostgreSQL advisory lock on the session_id, validates
+        the current status is in allowed_from_statuses, then updates.
+
+        Args:
+            workspace_id: Workspace ID for tenant isolation
+            session_id: Session ID to update
+            new_status: Target status
+            allowed_from_statuses: List of statuses that allow this transition
+            error_message: Optional error message (for failed status)
+            extra_updates: Additional fields to update atomically
+
+        Returns:
+            Updated session record, or None if transition was rejected
+        """
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                # Acquire advisory lock scoped to this transaction
+                # Use hashtext() on session_id to get a stable int for the lock key
+                await conn.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext($1::text))",
+                    str(session_id),
+                )
+
+                # Read current status under lock
+                current = await conn.fetchrow(
+                    """SELECT status FROM curation_sessions
+                    WHERE workspace_id = $1 AND session_id = $2""",
+                    workspace_id, session_id,
+                )
+
+                if not current:
+                    return None
+
+                if current["status"] not in allowed_from_statuses:
+                    logger.warning(
+                        "Invalid state transition rejected",
+                        extra={
+                            "session_id": str(session_id),
+                            "current_status": current["status"],
+                            "target_status": new_status,
+                            "allowed_from": allowed_from_statuses,
+                        },
+                    )
+                    return None
+
+                # Build SET clause
+                set_parts = ["status = $3", "updated_at = $4"]
+                params: list[Any] = [
+                    workspace_id, session_id, new_status,
+                    datetime.now(timezone.utc),
+                ]
+                param_idx = 5
+
+                if new_status == "analyzing":
+                    set_parts.append(f"started_at = ${param_idx}")
+                    params.append(datetime.now(timezone.utc))
+                    param_idx += 1
+                elif new_status in ("completed", "failed"):
+                    set_parts.append(f"completed_at = ${param_idx}")
+                    params.append(datetime.now(timezone.utc))
+                    param_idx += 1
+
+                if error_message is not None:
+                    set_parts.append(f"error_message = ${param_idx}")
+                    params.append(error_message)
+                    param_idx += 1
+
+                if extra_updates:
+                    for field, value in extra_updates.items():
+                        if field in self._allowed_update_fields():
+                            set_parts.append(f"{field} = ${param_idx}")
+                            params.append(value)
+                            param_idx += 1
+
+                row = await conn.fetchrow(
+                    f"""UPDATE curation_sessions
+                    SET {", ".join(set_parts)}
+                    WHERE workspace_id = $1 AND session_id = $2
+                    RETURNING *""",
+                    *params,
+                )
+
+                return self._row_to_dict(row) if row else None
+
+    def _allowed_update_fields(self) -> set[str]:
+        """Fields allowed in extra_updates for atomic status transitions."""
+        return {
+            "progress_percent", "progress_stage", "total_photos",
+            "analyzed_count", "groups_count", "selected_count",
+        }
 
     async def update_progress(
         self,
