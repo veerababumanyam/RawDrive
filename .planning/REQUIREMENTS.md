@@ -20,7 +20,7 @@
 - [x] **MAIL-04**: Postal HTTP API client integrated into EmailService with retry logic and delivery tracking
 - [x] **MAIL-05**: User receives email verification after signup with secure token link
 - [x] **MAIL-06**: User can reset password via email link with time-limited token
-- [ ] **MAIL-07**: Bulk wedding invitation emails sent to guest lists via invitations-service
+- [x] **MAIL-07**: Bulk wedding invitation emails sent to guest lists via invitations-service
 - [x] **MAIL-08**: Email templates created for verification, password reset, invitation, and gallery delivery
 - [x] **MAIL-09**: Email delivery status tracked in database with webhook callbacks from Postal
 
@@ -133,7 +133,7 @@
 | RATE-04 | Phase 4 | Complete |
 | MAIL-05 | Phase 5 | Complete |
 | MAIL-06 | Phase 5 | Complete |
-| MAIL-07 | Phase 5 | Pending |
+| MAIL-07 | Phase 5 | Complete |
 | MAIL-08 | Phase 5 | Complete |
 | MAIL-09 | Phase 5 | Complete |
 | AI-01 | Phase 6 | Pending |

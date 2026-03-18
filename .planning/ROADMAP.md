@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 2: Email Infrastructure** - Deploy Postal and build the EmailService abstraction
 - [ ] **Phase 3: AI Service Stabilization** - Fix crash-looping ai-processing-service container
 - [ ] **Phase 4: Rate Limiting** - Implement Redis sliding window rate limiter for A2A API keys
-- [ ] **Phase 5: Email Features** - Wire verification, password reset, invitations, and delivery tracking
+- [x] **Phase 5: Email Features** - Wire verification, password reset, invitations, and delivery tracking (completed 2026-03-18)
 - [ ] **Phase 6: AI/ML Pipeline** - Wire CLIP model, embeddings, duplicate detection, and clustering
 - [ ] **Phase 7: Gallery Completion** - Implement slideshow, delivery emails, and gallery branding
 - [ ] **Phase 8: Notifications** - WebSocket real-time notifications and event wiring
@@ -172,7 +172,7 @@ Phases 1-4 are parallelizable. Phases 5+ follow dependency chains: 2->5->7, 3->6
 | 2. Email Infrastructure | 0/2 | Not started | - |
 | 3. AI Service Stabilization | 1/2 | Gap closure | - |
 | 4. Rate Limiting | 0/1 | Planning complete | - |
-| 5. Email Features | 0/3 | Planning complete | - |
+| 5. Email Features | 3/3 | Complete   | 2026-03-18 |
 | 6. AI/ML Pipeline | 0/5 | Not started | - |
 | 7. Gallery Completion | 0/1 | Not started | - |
 | 8. Notifications | 0/2 | Not started | - |
