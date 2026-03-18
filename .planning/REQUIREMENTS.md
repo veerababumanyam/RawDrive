@@ -74,9 +74,9 @@
 
 ### Test Coverage
 
-- [ ] **TEST-01**: Backend integration tests for auth flows (login, signup, token refresh, logout)
-- [ ] **TEST-02**: Backend integration tests for multi-tenant isolation (workspace_id enforcement)
-- [ ] **TEST-03**: Backend integration tests for email sending (verification, reset, invitations)
+- [x] **TEST-01**: Backend integration tests for auth flows (login, signup, token refresh, logout)
+- [x] **TEST-02**: Backend integration tests for multi-tenant isolation (workspace_id enforcement)
+- [x] **TEST-03**: Backend integration tests for email sending (verification, reset, invitations)
 - [x] **TEST-04**: Backend tests for AI worker concurrency (CLIP embedding, clustering)
 - [x] **TEST-05**: Frontend component tests for gallery viewing and upload workflows
 - [x] **TEST-06**: Frontend component tests for auth pages (signin, signup, forgot password)
@@ -156,9 +156,9 @@
 | NOTF-04 | Phase 8 | Complete |
 | PKG-01 | Phase 9 | Complete |
 | PKG-02 | Phase 9 | Complete |
-| TEST-01 | Phase 9 | Pending |
-| TEST-02 | Phase 9 | Pending |
-| TEST-03 | Phase 9 | Pending |
+| TEST-01 | Phase 9 | Complete |
+| TEST-02 | Phase 9 | Complete |
+| TEST-03 | Phase 9 | Complete |
 | TEST-04 | Phase 9 | Complete |
 | TEST-05 | Phase 9 | Complete |
 | TEST-06 | Phase 9 | Complete |
