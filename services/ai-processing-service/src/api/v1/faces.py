@@ -10,17 +10,19 @@ Feature: Face Detection and Identification
 Task: T009 - Create face detection API endpoint
 """
 
+from __future__ import annotations
+
 import base64
 import logging
 import time
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import cv2
-import numpy as np
 from fastapi import APIRouter, HTTPException, status
-from PIL import Image
+
+if TYPE_CHECKING:
+    import numpy as np
 
 from config import get_settings
 from schemas.face_detection import (
@@ -74,6 +76,10 @@ def _decode_base64_image(base64_data: str) -> np.ndarray:
     Raises:
         ValueError: If image cannot be decoded
     """
+    import cv2
+    import numpy as np
+    from PIL import Image
+
     try:
         # Remove data URL prefix if present
         if "," in base64_data:
@@ -104,6 +110,10 @@ def _load_image_from_url(url: str) -> np.ndarray:
     Raises:
         ValueError: If image cannot be loaded from URL
     """
+    import cv2
+    import numpy as np
+    from PIL import Image
+
     try:
         import urllib.request
 
@@ -144,6 +154,8 @@ def _get_image_source(
     Raises:
         HTTPException: If no valid source provided or image cannot be loaded
     """
+    import cv2
+
     if not any([image_path, image_base64, image_url]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -293,6 +305,8 @@ def _convert_embedding_result_to_response(
     Returns:
         FaceEmbeddingResponse object
     """
+    import cv2
+
     face_response = _convert_detected_face_to_response(
         result.face, image_width, image_height
     )
@@ -522,6 +536,8 @@ async def compare_faces(request: CompareFacesRequest) -> CompareFacesResponse:
     - Threshold used
     """
     try:
+        import numpy as np
+
         service = get_face_embedding_service()
 
         # Convert to numpy arrays
