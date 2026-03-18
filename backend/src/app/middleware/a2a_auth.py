@@ -11,6 +11,8 @@ Phase 4: Google A2A ADKS Integration
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import uuid
 from dataclasses import dataclass
@@ -180,12 +182,16 @@ async def validate_api_key(api_key: str) -> A2AContext:
     except ValueError:
         raise A2AAuthError("Invalid workspace ID in API key")
 
-    # Query database for API key
+    # Compute SHA-256 hash of incoming key (matches hash stored on creation)
+    incoming_hash = hashlib.sha256(api_key.encode()).hexdigest()
+
+    # Query database for active keys in this workspace
     pool = await get_postgres_pool()
-    row = await pool.fetchrow(
+    rows = await pool.fetch(
         """
         SELECT
             key_id,
+            key_hash,
             workspace_id,
             scopes,
             rate_limit_rpm,
@@ -193,21 +199,21 @@ async def validate_api_key(api_key: str) -> A2AContext:
             last_used_at,
             is_active
         FROM agent_api_keys
-        WHERE key_hash = crypt($1, key_hash)
-        AND workspace_id = $2
+        WHERE workspace_id = $1 AND is_active = TRUE
         """,
-        api_key,
         workspace_id,
     )
+
+    # Find matching key using timing-safe comparison
+    row = None
+    for candidate in rows:
+        if hmac.compare_digest(incoming_hash, candidate["key_hash"]):
+            row = candidate
+            break
 
     if row is None:
         logger.warning("API key not found", extra={"workspace_id": str(workspace_id)})
         raise A2AAuthError("Invalid API key")
-
-    # Check if active
-    if not row["is_active"]:
-        logger.warning("API key is inactive", extra={"key_id": str(row["key_id"])})
-        raise A2AAuthError("API key is inactive")
 
     # Check expiration
     if row["expires_at"] and row["expires_at"] < datetime.now(timezone.utc):

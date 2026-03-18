@@ -100,8 +100,9 @@ class CommentService:
                 try:
                     # Get gallery name for activity
                     gallery_name = await conn.fetchval(
-                        "SELECT title FROM galleries WHERE gallery_id = $1",
+                        "SELECT title FROM galleries WHERE gallery_id = $1 AND workspace_id = $2",
                         gallery_id,
+                        workspace_id,
                     )
                     await record_comment_added(
                         workspace_id=workspace_id,
