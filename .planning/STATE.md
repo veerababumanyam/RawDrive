@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-03-18T22:26:34.125Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-03-18T22:29:00.176Z"
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 ## Current Position
 
 Phase: 06 (ai-ml-pipeline) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Plan: 2 of 5
 | Phase 05 P01 | 8min | 2 tasks | 5 files |
 | Phase 05 P02 | 9min | 2 tasks | 7 files |
 | Phase 06 P01 | 4min | 2 tasks | 8 files |
+| Phase 06 P02 | 6min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 05-02]: Invitation email tests run locally (not Docker) because invitations-service files not mounted in backend container
 - [Phase 06]: Pre-bake CLIP model in Docker build stage using TRANSFORMERS_CACHE env var
 - [Phase 06]: Batch embedding endpoint with per-image error handling (partial failures OK)
+- [Phase 06]: HNSW with m=16, ef_construction=64 balances recall and build speed for photo embedding workloads
+- [Phase 06]: Inline boto3 client in duplicate_detector avoids cross-plan import dependency (Wave 1 parallel)
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T22:26:34.123Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-03-18T22:29:00.173Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
