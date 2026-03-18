@@ -108,14 +108,14 @@ Plans:
   3. Duplicate photos are detected via both hash-based and embedding-based methods
   4. DBSCAN clustering groups similar photos for curation review
   5. Similarity groups persist in database/Redis instead of in-memory storage
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 06-01: CLIP model integration and Celery task wiring
-- [ ] 06-02: Embedding storage with pgvector HNSW index
-- [ ] 06-03: Duplicate detection (hash-based and embedding-based)
-- [ ] 06-04: DBSCAN clustering and similarity group persistence
-- [ ] 06-05: Image processing offload to ai-processing-service
+- [ ] 06-01-PLAN.md — CLIP model Docker pre-bake, embedding REST API, R2 download service (AI-01, AI-03, PERF-01)
+- [ ] 06-02-PLAN.md — HNSW pgvector index migration, EmbeddingRepository, R2 duplicate detector fix (AI-04, AI-05, PERF-02)
+- [ ] 06-03-PLAN.md — Wire similarity_worker to ai-processing-service HTTP + Celery embedding task (AI-02, AI-06)
+- [ ] 06-04-PLAN.md — DBSCAN clustering service with TDD (AI-07)
+- [ ] 06-05-PLAN.md — Redis similarity group persistence and cache-first reads (AI-08, PERF-03)
 
 ### Phase 7: Gallery Completion
 **Goal**: Photographers can deliver galleries to clients with slideshow and branded experience
@@ -173,7 +173,7 @@ Phases 1-4 are parallelizable. Phases 5+ follow dependency chains: 2->5->7, 3->6
 | 3. AI Service Stabilization | 1/2 | Gap closure | - |
 | 4. Rate Limiting | 0/1 | Planning complete | - |
 | 5. Email Features | 3/3 | Complete   | 2026-03-18 |
-| 6. AI/ML Pipeline | 0/5 | Not started | - |
+| 6. AI/ML Pipeline | 0/5 | Planning complete | - |
 | 7. Gallery Completion | 0/1 | Not started | - |
 | 8. Notifications | 0/2 | Not started | - |
 | 9. Shared Packages & Test Coverage | 0/4 | Not started | - |
