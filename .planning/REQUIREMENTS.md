@@ -56,10 +56,10 @@
 
 ### Rate Limiting
 
-- [ ] **RATE-01**: Redis sliding window rate limiter implemented for A2A API keys (~50 lines)
-- [ ] **RATE-02**: Rate limiter checks agent_api_keys.rate_limit_rpm per request
-- [ ] **RATE-03**: Returns 429 with Retry-After header when limit exceeded
-- [ ] **RATE-04**: Rate limiter deployed in log-only mode first, then enforced after soak period
+- [x] **RATE-01**: Redis sliding window rate limiter implemented for A2A API keys (~50 lines)
+- [x] **RATE-02**: Rate limiter checks agent_api_keys.rate_limit_rpm per request
+- [x] **RATE-03**: Returns 429 with Retry-After header when limit exceeded
+- [x] **RATE-04**: Rate limiter deployed in log-only mode first, then enforced after soak period
 
 ### Performance
 
@@ -127,10 +127,10 @@
 | AIS-01 | Phase 3 | Complete |
 | AIS-02 | Phase 3 | Complete |
 | AIS-03 | Phase 3 | Complete |
-| RATE-01 | Phase 4 | Pending |
-| RATE-02 | Phase 4 | Pending |
-| RATE-03 | Phase 4 | Pending |
-| RATE-04 | Phase 4 | Pending |
+| RATE-01 | Phase 4 | Complete |
+| RATE-02 | Phase 4 | Complete |
+| RATE-03 | Phase 4 | Complete |
+| RATE-04 | Phase 4 | Complete |
 | MAIL-05 | Phase 5 | Pending |
 | MAIL-06 | Phase 5 | Pending |
 | MAIL-07 | Phase 5 | Pending |
