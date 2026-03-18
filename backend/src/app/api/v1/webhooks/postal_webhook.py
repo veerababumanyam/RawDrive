@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from app.config.settings import get_settings
+from app.db.postgres import acquire_conn, get_postgres_pool
 from app.db.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,37 @@ async def postal_webhook(request: Request) -> dict[str, str]:
             "last_event": event_type,
         },
     )
+
+    # Persist to PostgreSQL for durable, queryable delivery history
+    recipient_email = message_data.get("to", "")
+    try:
+        pool = await get_postgres_pool()
+        async with acquire_conn(pool) as conn:
+            await conn.execute(
+                """
+                INSERT INTO email_delivery_log
+                    (postal_message_id, status, event_type, recipient_email, occurred_at, payload)
+                VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+                ON CONFLICT (postal_message_id, event_type) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    occurred_at = EXCLUDED.occurred_at,
+                    payload = EXCLUDED.payload
+                """,
+                postal_message_id,
+                status,
+                event_type,
+                recipient_email,
+                datetime.now(timezone.utc),
+                json.dumps(payload),
+            )
+    except Exception:
+        logger.exception(
+            "Failed to persist delivery event to PostgreSQL",
+            extra={
+                "postal_message_id": postal_message_id,
+                "event": event_type,
+            },
+        )
 
     logger.info(
         "Processed Postal webhook",

@@ -12,7 +12,7 @@ Validates that the webhook handler:
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,6 +24,7 @@ from app.api.v1.webhooks.postal_webhook import router
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def app():
@@ -42,7 +43,11 @@ def mock_settings():
     return settings
 
 
-def _make_postal_payload(event_type: str, message_id: str = "msg-123", rcpt_to: str = "user@example.com"):
+def _make_postal_payload(
+    event_type: str,
+    message_id: str = "msg-123",
+    rcpt_to: str = "user@example.com",
+):
     """Build a Postal webhook payload."""
     return {
         "event": event_type,
@@ -62,9 +67,43 @@ def _sign_payload(payload_bytes: bytes, secret: str) -> str:
     return hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
 
 
+def _make_mock_acquire(mock_conn):
+    """Create a mock acquire_conn async context manager that yields mock_conn."""
+
+    @asynccontextmanager
+    async def _mock_acquire_conn(pool):
+        yield mock_conn
+
+    return _mock_acquire_conn
+
+
+def _standard_patches(mock_settings, mock_redis, mock_conn):
+    """Return a tuple of patch context managers for the webhook module."""
+    mock_pool = AsyncMock()
+    return (
+        patch(
+            "app.api.v1.webhooks.postal_webhook.get_settings",
+            return_value=mock_settings,
+        ),
+        patch(
+            "app.api.v1.webhooks.postal_webhook.get_redis_client",
+            return_value=mock_redis,
+        ),
+        patch(
+            "app.api.v1.webhooks.postal_webhook.get_postgres_pool",
+            return_value=mock_pool,
+        ),
+        patch(
+            "app.api.v1.webhooks.postal_webhook.acquire_conn",
+            _make_mock_acquire(mock_conn),
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestPostalWebhookPostgresPersistence:
     """Tests for PostgreSQL persistence in Postal webhook."""
@@ -72,36 +111,36 @@ class TestPostalWebhookPostgresPersistence:
     @pytest.mark.asyncio
     async def test_webhook_persists_to_postgres(self, app, mock_settings):
         """Webhook with valid signature persists event to email_delivery_log table."""
-        payload = _make_postal_payload("MessageDelivered", "msg-001", "alice@example.com")
+        payload = _make_postal_payload(
+            "MessageDelivered", "msg-001", "alice@example.com"
+        )
         body = json.dumps(payload).encode()
         sig = _sign_payload(body, "test-secret")
 
-        mock_pool = AsyncMock()
         mock_conn = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-
         mock_redis = AsyncMock()
 
-        with (
-            patch("app.api.v1.webhooks.postal_webhook.get_settings", return_value=mock_settings),
-            patch("app.api.v1.webhooks.postal_webhook.get_redis_client", return_value=mock_redis),
-            patch("app.api.v1.webhooks.postal_webhook.get_postgres_pool", return_value=mock_pool),
-        ):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        p1, p2, p3, p4 = _standard_patches(mock_settings, mock_redis, mock_conn)
+        with p1, p2, p3, p4:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 resp = await client.post(
                     "/webhooks/postal",
                     content=body,
-                    headers={"X-Postal-Signature": sig, "Content-Type": "application/json"},
+                    headers={
+                        "X-Postal-Signature": sig,
+                        "Content-Type": "application/json",
+                    },
                 )
 
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
         # Verify PostgreSQL execute was called with INSERT containing email_delivery_log
         mock_conn.execute.assert_called_once()
-        call_args = mock_conn.execute.call_args
-        assert "email_delivery_log" in call_args[0][0]
-        assert "msg-001" in call_args[0]
+        call_args = mock_conn.execute.call_args[0]
+        assert "email_delivery_log" in call_args[0]
+        assert "msg-001" in call_args
 
     @pytest.mark.asyncio
     async def test_webhook_still_updates_redis(self, app, mock_settings):
@@ -110,23 +149,21 @@ class TestPostalWebhookPostgresPersistence:
         body = json.dumps(payload).encode()
         sig = _sign_payload(body, "test-secret")
 
-        mock_pool = AsyncMock()
         mock_conn = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-
         mock_redis = AsyncMock()
 
-        with (
-            patch("app.api.v1.webhooks.postal_webhook.get_settings", return_value=mock_settings),
-            patch("app.api.v1.webhooks.postal_webhook.get_redis_client", return_value=mock_redis),
-            patch("app.api.v1.webhooks.postal_webhook.get_postgres_pool", return_value=mock_pool),
-        ):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        p1, p2, p3, p4 = _standard_patches(mock_settings, mock_redis, mock_conn)
+        with p1, p2, p3, p4:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 resp = await client.post(
                     "/webhooks/postal",
                     content=body,
-                    headers={"X-Postal-Signature": sig, "Content-Type": "application/json"},
+                    headers={
+                        "X-Postal-Signature": sig,
+                        "Content-Type": "application/json",
+                    },
                 )
 
         assert resp.status_code == 200
@@ -142,27 +179,25 @@ class TestPostalWebhookPostgresPersistence:
         body = json.dumps(payload).encode()
         sig = _sign_payload(body, "test-secret")
 
-        mock_pool = AsyncMock()
         mock_conn = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-
         mock_redis = AsyncMock()
 
-        with (
-            patch("app.api.v1.webhooks.postal_webhook.get_settings", return_value=mock_settings),
-            patch("app.api.v1.webhooks.postal_webhook.get_redis_client", return_value=mock_redis),
-            patch("app.api.v1.webhooks.postal_webhook.get_postgres_pool", return_value=mock_pool),
-        ):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        p1, p2, p3, p4 = _standard_patches(mock_settings, mock_redis, mock_conn)
+        with p1, p2, p3, p4:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 resp = await client.post(
                     "/webhooks/postal",
                     content=body,
-                    headers={"X-Postal-Signature": sig, "Content-Type": "application/json"},
+                    headers={
+                        "X-Postal-Signature": sig,
+                        "Content-Type": "application/json",
+                    },
                 )
 
         assert resp.status_code == 200
-        # Check the SQL has correct status "delivered"
+        # Check the SQL args contain correct status "delivered"
         call_args = mock_conn.execute.call_args[0]
         assert "delivered" in call_args
 
@@ -173,23 +208,21 @@ class TestPostalWebhookPostgresPersistence:
         body = json.dumps(payload).encode()
         sig = _sign_payload(body, "test-secret")
 
-        mock_pool = AsyncMock()
         mock_conn = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-
         mock_redis = AsyncMock()
 
-        with (
-            patch("app.api.v1.webhooks.postal_webhook.get_settings", return_value=mock_settings),
-            patch("app.api.v1.webhooks.postal_webhook.get_redis_client", return_value=mock_redis),
-            patch("app.api.v1.webhooks.postal_webhook.get_postgres_pool", return_value=mock_pool),
-        ):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        p1, p2, p3, p4 = _standard_patches(mock_settings, mock_redis, mock_conn)
+        with p1, p2, p3, p4:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 resp = await client.post(
                     "/webhooks/postal",
                     content=body,
-                    headers={"X-Postal-Signature": sig, "Content-Type": "application/json"},
+                    headers={
+                        "X-Postal-Signature": sig,
+                        "Content-Type": "application/json",
+                    },
                 )
 
         assert resp.status_code == 200
@@ -203,23 +236,21 @@ class TestPostalWebhookPostgresPersistence:
         body = json.dumps(payload).encode()
         sig = _sign_payload(body, "test-secret")
 
-        mock_pool = AsyncMock()
         mock_conn = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-
         mock_redis = AsyncMock()
 
-        with (
-            patch("app.api.v1.webhooks.postal_webhook.get_settings", return_value=mock_settings),
-            patch("app.api.v1.webhooks.postal_webhook.get_redis_client", return_value=mock_redis),
-            patch("app.api.v1.webhooks.postal_webhook.get_postgres_pool", return_value=mock_pool),
-        ):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        p1, p2, p3, p4 = _standard_patches(mock_settings, mock_redis, mock_conn)
+        with p1, p2, p3, p4:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 resp = await client.post(
                     "/webhooks/postal",
                     content=body,
-                    headers={"X-Postal-Signature": sig, "Content-Type": "application/json"},
+                    headers={
+                        "X-Postal-Signature": sig,
+                        "Content-Type": "application/json",
+                    },
                 )
 
         assert resp.status_code == 200
@@ -233,12 +264,20 @@ class TestPostalWebhookPostgresPersistence:
         payload = _make_postal_payload("MessageDelivered", "msg-006")
         body = json.dumps(payload).encode()
 
-        with patch("app.api.v1.webhooks.postal_webhook.get_settings", return_value=mock_settings):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch(
+            "app.api.v1.webhooks.postal_webhook.get_settings",
+            return_value=mock_settings,
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 resp = await client.post(
                     "/webhooks/postal",
                     content=body,
-                    headers={"X-Postal-Signature": "invalid-sig", "Content-Type": "application/json"},
+                    headers={
+                        "X-Postal-Signature": "invalid-sig",
+                        "Content-Type": "application/json",
+                    },
                 )
 
         assert resp.status_code == 401
@@ -246,28 +285,28 @@ class TestPostalWebhookPostgresPersistence:
     @pytest.mark.asyncio
     async def test_webhook_pg_failure_does_not_break_redis(self, app, mock_settings):
         """PostgreSQL failure does not break Redis tracking (graceful degradation)."""
-        payload = _make_postal_payload("MessageDelivered", "msg-007", "bob@example.com")
+        payload = _make_postal_payload(
+            "MessageDelivered", "msg-007", "bob@example.com"
+        )
         body = json.dumps(payload).encode()
         sig = _sign_payload(body, "test-secret")
 
-        mock_pool = AsyncMock()
         mock_conn = AsyncMock()
         mock_conn.execute.side_effect = Exception("PG connection failed")
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-
         mock_redis = AsyncMock()
 
-        with (
-            patch("app.api.v1.webhooks.postal_webhook.get_settings", return_value=mock_settings),
-            patch("app.api.v1.webhooks.postal_webhook.get_redis_client", return_value=mock_redis),
-            patch("app.api.v1.webhooks.postal_webhook.get_postgres_pool", return_value=mock_pool),
-        ):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        p1, p2, p3, p4 = _standard_patches(mock_settings, mock_redis, mock_conn)
+        with p1, p2, p3, p4:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 resp = await client.post(
                     "/webhooks/postal",
                     content=body,
-                    headers={"X-Postal-Signature": sig, "Content-Type": "application/json"},
+                    headers={
+                        "X-Postal-Signature": sig,
+                        "Content-Type": "application/json",
+                    },
                 )
 
         # Should still return ok because Redis succeeded
