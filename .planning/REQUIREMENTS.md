@@ -110,65 +110,65 @@
 | Google Search Console integration | Not critical for photographer workflows |
 | Real-time collaborative editing | Not needed for photography use case |
 | Email receiving/inbox | Postal used for sending only, not full mailbox |
-| PDF gallery export | Deferred to v2 — slideshow covers presentation need |
+| PDF gallery export | Deferred to v2 -- slideshow covers presentation need |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AIS-01 | TBD | Pending |
-| AIS-02 | TBD | Pending |
-| AIS-03 | TBD | Pending |
-| SEC-01 | TBD | Pending |
-| SEC-02 | TBD | Pending |
-| SEC-03 | TBD | Pending |
-| SEC-04 | TBD | Pending |
-| MAIL-01 | TBD | Pending |
-| MAIL-02 | TBD | Pending |
-| MAIL-03 | TBD | Pending |
-| MAIL-04 | TBD | Pending |
-| MAIL-05 | TBD | Pending |
-| MAIL-06 | TBD | Pending |
-| MAIL-07 | TBD | Pending |
-| MAIL-08 | TBD | Pending |
-| MAIL-09 | TBD | Pending |
-| AI-01 | TBD | Pending |
-| AI-02 | TBD | Pending |
-| AI-03 | TBD | Pending |
-| AI-04 | TBD | Pending |
-| AI-05 | TBD | Pending |
-| AI-06 | TBD | Pending |
-| AI-07 | TBD | Pending |
-| AI-08 | TBD | Pending |
-| GAL-01 | TBD | Pending |
-| GAL-02 | TBD | Pending |
-| GAL-03 | TBD | Pending |
-| NOTF-01 | TBD | Pending |
-| NOTF-02 | TBD | Pending |
-| NOTF-03 | TBD | Pending |
-| NOTF-04 | TBD | Pending |
-| RATE-01 | TBD | Pending |
-| RATE-02 | TBD | Pending |
-| RATE-03 | TBD | Pending |
-| RATE-04 | TBD | Pending |
-| PERF-01 | TBD | Pending |
-| PERF-02 | TBD | Pending |
-| PERF-03 | TBD | Pending |
-| PKG-01 | TBD | Pending |
-| PKG-02 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| TEST-04 | TBD | Pending |
-| TEST-05 | TBD | Pending |
-| TEST-06 | TBD | Pending |
-| TEST-07 | TBD | Pending |
+| SEC-01 | Phase 1 | Pending |
+| SEC-02 | Phase 1 | Pending |
+| SEC-03 | Phase 1 | Pending |
+| SEC-04 | Phase 1 | Pending |
+| MAIL-01 | Phase 2 | Pending |
+| MAIL-02 | Phase 2 | Pending |
+| MAIL-03 | Phase 2 | Pending |
+| MAIL-04 | Phase 2 | Pending |
+| AIS-01 | Phase 3 | Pending |
+| AIS-02 | Phase 3 | Pending |
+| AIS-03 | Phase 3 | Pending |
+| RATE-01 | Phase 4 | Pending |
+| RATE-02 | Phase 4 | Pending |
+| RATE-03 | Phase 4 | Pending |
+| RATE-04 | Phase 4 | Pending |
+| MAIL-05 | Phase 5 | Pending |
+| MAIL-06 | Phase 5 | Pending |
+| MAIL-07 | Phase 5 | Pending |
+| MAIL-08 | Phase 5 | Pending |
+| MAIL-09 | Phase 5 | Pending |
+| AI-01 | Phase 6 | Pending |
+| AI-02 | Phase 6 | Pending |
+| AI-03 | Phase 6 | Pending |
+| AI-04 | Phase 6 | Pending |
+| AI-05 | Phase 6 | Pending |
+| AI-06 | Phase 6 | Pending |
+| AI-07 | Phase 6 | Pending |
+| AI-08 | Phase 6 | Pending |
+| PERF-01 | Phase 6 | Pending |
+| PERF-02 | Phase 6 | Pending |
+| PERF-03 | Phase 6 | Pending |
+| GAL-01 | Phase 7 | Pending |
+| GAL-02 | Phase 7 | Pending |
+| GAL-03 | Phase 7 | Pending |
+| NOTF-01 | Phase 8 | Pending |
+| NOTF-02 | Phase 8 | Pending |
+| NOTF-03 | Phase 8 | Pending |
+| NOTF-04 | Phase 8 | Pending |
+| PKG-01 | Phase 9 | Pending |
+| PKG-02 | Phase 9 | Pending |
+| TEST-01 | Phase 9 | Pending |
+| TEST-02 | Phase 9 | Pending |
+| TEST-03 | Phase 9 | Pending |
+| TEST-04 | Phase 9 | Pending |
+| TEST-05 | Phase 9 | Pending |
+| TEST-06 | Phase 9 | Pending |
+| TEST-07 | Phase 9 | Pending |
 
 **Coverage:**
-- v1 requirements: 45 total
-- Mapped to phases: 0
-- Unmapped: 45 ⚠️
+- v1 requirements: 47 total
+- Mapped to phases: 47
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-18*
-*Last updated: 2026-03-18 after initial definition*
+*Last updated: 2026-03-18 after roadmap creation*
