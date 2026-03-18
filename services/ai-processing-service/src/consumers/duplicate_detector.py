@@ -17,6 +17,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import boto3
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
 from config import get_settings
@@ -32,6 +33,23 @@ from schemas.events import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Module-level boto3 S3 client singleton for R2 downloads
+_s3_client = None
+
+
+def _get_s3_client():
+    """Get or create a boto3 S3 client for R2 storage."""
+    global _s3_client
+    if _s3_client is None:
+        settings = get_settings()
+        _s3_client = boto3.client(
+            "s3",
+            endpoint_url=settings.R2_ENDPOINT_URL,
+            aws_access_key_id=settings.R2_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
+        )
+    return _s3_client
 
 
 class DuplicateDetector:
@@ -249,22 +267,52 @@ class DuplicateDetector:
 
     async def _download_asset(self, event: AssetProcessingEvent) -> Path:
         """
-        Download asset from storage for processing.
+        Download asset from R2 storage for processing.
+
+        Uses an inline boto3 S3 client (module-level singleton) to download
+        the image bytes from Cloudflare R2 and write them to a temp file.
 
         Args:
-            event: Asset processing event
+            event: Asset processing event with storage_key
 
         Returns:
             Path to downloaded temporary file
+
+        Raises:
+            Exception: If R2 download fails
         """
+        object_key = getattr(event, "storage_key", None) or f"assets/{event.asset_id}"
+
+        logger.info(
+            f"Downloading asset {event.asset_id} from R2",
+            extra={"object_key": object_key},
+        )
+
+        loop = asyncio.get_event_loop()
+        client = _get_s3_client()
+
+        # Run synchronous boto3 call in executor to avoid blocking event loop
+        response = await loop.run_in_executor(
+            None,
+            lambda: client.get_object(
+                Bucket=self.settings.R2_BUCKET_NAME,
+                Key=object_key,
+            ),
+        )
+
+        image_bytes = response["Body"].read()
+
+        # Write to a named temp file
         temp_dir = Path(tempfile.gettempdir()) / "ai-processing"
         temp_dir.mkdir(exist_ok=True)
 
         temp_file = temp_dir / f"{event.asset_id}.tmp"
+        temp_file.write_bytes(image_bytes)
 
-        logger.debug(f"Downloading asset {event.asset_id} to {temp_file}")
-
-        await asyncio.sleep(0.1)
+        logger.info(
+            f"Downloaded asset {event.asset_id} ({len(image_bytes)} bytes)",
+            extra={"temp_path": str(temp_file)},
+        )
 
         return temp_file
 
