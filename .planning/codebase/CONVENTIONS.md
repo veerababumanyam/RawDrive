@@ -1,604 +1,222 @@
-# RawDrive Codebase Conventions
+# Coding Conventions
 
-This document outlines the coding conventions and patterns used throughout the RawDrive codebase.
+**Analysis Date:** 2025-03-18
 
----
+## Naming Patterns
 
-## 📋 Table of Contents
+**Files:**
+- React/TypeScript components: PascalCase with .tsx extension (e.g., `ErrorBoundary.tsx`, `FavoritesPanel.tsx`)
+- Services: camelCase with Service suffix (e.g., `favoritesService.ts`, `authService.ts`)
+- Hooks: camelCase with use prefix (e.g., `useFavorites.ts`, `useSelection.ts`)
+- Test files: Same name as source with .test.ts/.test.tsx suffix or in `__tests__` directory
+  - Pattern 1: co-located in `__tests__` subdirectory (preferred): `src/components/features/gallery/__tests__/GalleryCard.test.tsx`
+  - Pattern 2: parallel structure alongside source
+- Python modules: snake_case (e.g., `auth_service.py`, `session_service.py`)
+- Python test files: test_*.py or *_test.py (e.g., `test_session_service.py`)
 
-- [Naming Conventions](#naming-conventions)
-- [File Placement Rules](#file-placement-rules)
-- [Multi-Tenant Patterns](#multi-tenant-patterns)
-- [Shared Types Usage](#shared-types-usage)
-- [Security Patterns](#security-patterns)
-- [Git Conventions](#git-conventions)
-- [Import Patterns](#import-patterns)
-- [Architecture Patterns](#architecture-patterns)
-- [Error Handling](#error-handling)
+**Functions:**
+- TypeScript: camelCase (e.g., `getFavorites()`, `toggleFavorite()`, `getClientToken()`)
+- Python: snake_case (e.g., `create_session()`, `verify_password()`, `extract_permissions()`)
+- Helper functions: Prefix with underscore for module-private (e.g., `_hash_email_for_audit()`, `_get_auth_service()`)
+- React hooks: `use` prefix followed by feature name in camelCase (e.g., `useFavorites`, `useSelection`, `useGalleryAssets`)
 
----
+**Variables:**
+- TypeScript: camelCase for all variables and constants (e.g., `mockGalleryId`, `mockFavorites`, `CLIENT_TOKEN_KEY`)
+- Constants: UPPER_SNAKE_CASE (e.g., `CLIENT_TOKEN_KEY`, `API_BASE`)
+- Python: snake_case for all variables (e.g., `user_id`, `workspace_id`, `expires_at`)
+- Mock data in tests: camelCase prefix with "mock" (e.g., `mockFavorite`, `mockList`, `mockPool`)
 
-## 🏷️ Naming Conventions
+**Types:**
+- TypeScript interfaces: PascalCase (e.g., `ErrorInfo`, `Props`, `State`, `ToggleFavoriteRequest`)
+- Python dataclasses: PascalCase (e.g., `AuthResponse`, `UserCreate`, `TokenResponse`)
+- Pydantic models: PascalCase (e.g., `UserLanguageSettings`, `User`, `LoginRequest`)
 
-### Frontend (React/TypeScript)
+## Code Style
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Components | `PascalCase.tsx` | `GalleryCard.tsx` |
-| Hooks | `useCamelCase.ts` | `useGalleryAssets.ts` |
-| Services | `camelCase.ts` | `galleryService.ts` |
-| Utilities | `camelCase.ts` | `formatFileSize.ts` |
-| Constants | `SCREAMING_SNAKE` | `API_BASE.ts` |
-| Files | `kebab-case` | `gallery-upload.tsx` |
+**Formatting:**
+- **Frontend:** Vite + TypeScript with TSC compiler
+  - Line length: No explicit config detected, follows standard practices (~80-100 chars)
+  - Indentation: 2 spaces (Vite default)
+  - Tool: Prettier (implied by Vite setup, no explicit .prettierrc but configured)
+  - Run: `cd frontend && pnpm lint`
 
-### Backend (Python)
+- **Backend:** Python 3.11+
+  - Line length: 100 characters (ruff configured)
+  - Indentation: 4 spaces (Python standard)
+  - Tool: ruff for linting and formatting
+  - Run: `cd backend && ruff check src`
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Classes | `PascalCase` | `FaceRepository` |
-| Methods | `snake_case` | `get_by_id` |
-| Functions | `snake_case` | `create_gallery` |
-| Variables | `snake_case` | `workspace_id` |
-| Constants | `SCREAMING_SNAKE` | `JWT_SECRET` |
-| Files | `snake_case.py` | `face_repository.py` |
+**Linting:**
+- **Frontend ESLint:**
+  - Config: `.eslintrc.cjs` in frontend root
+  - Rules:
+    - `@typescript-eslint/no-unused-vars`: warn with `argsIgnorePattern: '^_'` (unused args prefixed with _ are allowed)
+    - `@typescript-eslint/no-explicit-any`: warn (discouraged but allowed)
+    - `react-refresh/only-export-components`: warn with `allowConstantExport: true`
+  - Extends: eslint:recommended, @typescript-eslint/recommended, react-hooks/recommended
+  - Command: `pnpm lint` enforces zero warnings (`--max-warnings 0`)
 
-### APIs
+- **Backend Ruff:**
+  - Config: pyproject.toml `[tool.ruff]`
+  - Line-length: 100
+  - Select rules: E (errors), F (pyflakes), I (imports), B (bugbear), UP (upgrades), SIM (simplify), ASYNC
+  - Command: `cd backend && ruff check src && mypy src`
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Routes | `/api/v1/kebab-case` | `/api/v1/gallery-items` |
-| Query Params | `snake_case` | `?page_size=20` |
-| Path Params | `kebab-case` | `/galleries/{gallery_id}` |
+## Import Organization
 
-### Database
+**TypeScript/React Order:**
+1. React and third-party libraries (`import React`, `import { ... } from 'react'`)
+2. Third-party UI libraries (`import { ... } from 'lucide-react'`, `import { AppButton } from '@/components/ui/AppButton'`)
+3. Local absolute imports from `@rawdrive` workspace packages
+4. Local relative imports (components, services, utils, hooks, contexts)
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Tables | `snake_case` | `gallery_items` |
-| Columns | `snake_case` | `created_at` |
-| Foreign Keys | `snake_case_id` | `gallery_id` |
-
----
-
-## 📁 File Placement Rules
-
-### CRITICAL: Never Create Files in Random Locations
-
-### Frontend Files
-
-```
-frontend/src/
-├── components/
-│   ├── ui/              # Design system components
-│   │   ├── AppButton.tsx
-│   │   ├── AppInput.tsx
-│   │   └── ...
-│   ├── layout/          # Layout components
-│   │   ├── Header.tsx
-│   │   ├── Sidebar.tsx
-│   │   └── ...
-│   └── features/        # Feature-specific components
-│       ├── gallery/     # Gallery components
-│       │   ├── GalleryCard.tsx
-│       │   ├── GalleryGrid.tsx
-│       │   ├── __tests__/    # Unit tests
-│       │   │   ├── GalleryCard.test.tsx
-│       │   │   └── ...
-│       ├── upload/      # Upload components
-│       │   ├── UploadDropzone.tsx
-│       │   └── ...
-│       └── [feature]/   # Other features
-├── pages/               # Page components (route handlers)
-│   ├── Dashboard.tsx
-│   ├── Galleries.tsx
-│   └── Settings.tsx
-├── hooks/               # Custom React hooks
-│   ├── useGalleryAssets.ts
-│   └── useAuth.ts
-├── services/            # API client services
-│   ├── galleryService.ts
-│   └── authService.ts
-├── contexts/            # React contexts
-│   ├── AuthContext.tsx
-│   └── ThemeContext.tsx
-└── utils/               # Utility functions
-    ├── formatDate.ts
-    └── validateEmail.ts
-```
-
-### Backend Files
-
-```
-backend/src/app/
-├── api/v1/              # API endpoints
-│   ├── faces.py
-│   ├── galleries.py
-│   └── auth.py
-├── models/              # SQLAlchemy models
-│   ├── asset.py
-│   ├── gallery.py
-│   └── user.py
-├── repositories/        # Data access layer
-│   ├── face_repository.py
-│   └── gallery_repository.py
-├── services/            # Business logic
-│   ├── face_detection_service.py
-│   └── gallery_service.py
-├── middleware/          # FastAPI middleware
-│   ├── auth.py
-│   └── rate_limit.py
-└── workers/             # Background workers
-    └── celery_tasks.py
-```
-
-### Microservices Files
-
-```
-services/[service-name]/
-├── src/
-│   ├── api/v1/          # API endpoints
-│   ├── services/        # Business logic
-│   ├── repositories/    # Database access
-│   ├── schemas/         # Pydantic schemas
-│   ├── observability/   # Health checks, metrics
-│   └── config.py        # Configuration
-└── tests/               # Unit, integration, load tests
-    ├── unit/
-    └── integration/
-```
-
----
-
-## 🏢 Multi-Tenant Patterns
-
-### Workspace Isolation (MANDATORY)
-
-ALL database queries MUST include `workspace_id` for multi-tenant isolation:
-
-```python
-# ✅ CORRECT - Always include workspace_id
-async def get_gallery_by_id(
-    self,
-    gallery_id: UUID,
-    workspace_id: UUID
-) -> Gallery:
-    result = await db.execute(
-        select(Gallery)
-        .where(
-            Gallery.gallery_id == gallery_id,
-            Gallery.workspace_id == workspace_id
-        )
-    )
-    return result.scalar_one_or_none()
-
-# ❌ WRONG - No workspace_id isolation
-async def get_gallery_by_id(self, gallery_id: UUID) -> Gallery:
-    result = await db.execute(
-        select(Gallery).where(Gallery.gallery_id == gallery_id)
-    )
-    return result.scalar_one_or_none()
-```
-
-### JWT Token Extraction
-
-Never trust client-provided `workspace_id`. Extract from JWT token:
-
-```python
-from fastapi import Depends, HTTPException
-from app.api.dependencies.auth import CurrentUserDep
-
-async def get_workspace_user(
-    current_user: CurrentUserDep = Depends()
-) -> tuple[UUID, UUID]:
-    """Extract workspace_id and user_id from JWT token."""
-    return current_user.workspace_id, current_user.user_id
-```
-
----
-
-## 🔄 Shared Types Usage
-
-RawDrive uses a monorepo with pnpm workspaces for shared code:
-
-### Available Shared Packages
-
-| Package | Purpose | Example Usage |
-|---------|---------|---------------|
-| `@rawdrive/shared-types` | Domain types | `import { InvitationStatus }` |
-| `@rawdrive/shared-constants` | Configuration | `import { API_BASE, PAGINATION }` |
-| `@rawdrive/shared-validation` | Validation | `import { isValidHexColor }` |
-| `@rawdrive/shared-utils` | Utilities | `import { formatRelativeDate }` |
-
-### Frontend Usage
-
+**Example:**
 ```typescript
-// Import from shared packages
-import { InvitationStatus, GalleryStatus } from '@rawdrive/shared-types';
-import { API_BASE, PAGINATION, AI_THRESHOLDS } from '@rawdrive/shared-constants';
-import { isValidHexColor, sanitizeHtml } from '@rawdrive/shared-validation';
-import { formatRelativeDate, formatFileSize } from '@rawdrive/shared-utils';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { AlertTriangle, RefreshCw, Home, ChevronDown, ChevronUp } from 'lucide-react';
+import { AppButton } from '@/components/ui/AppButton';
+import { AppCard } from '@/components/ui/AppCard';
+// local imports follow
 ```
 
-### Backend Usage
+**Path Aliases:**
+- `@/` → `src/` (absolute path alias for cleaner imports)
+- `@rawdrive/shared-types` → workspace package
+- `@rawdrive/shared-constants` → workspace package
+- `@rawdrive/shared-utils` → workspace package
+- `@rawdrive/shared-validation` → workspace package
 
-Python types are generated from TypeScript:
+**Python Imports:**
+- Group 1: Standard library (`import logging`, `from typing import ...`)
+- Group 2: Third-party (`from fastapi import ...`, `import asyncpg`, `from pydantic import ...`)
+- Group 3: Local app imports (`from app.services import ...`, `from app.api.schemas import ...`)
 
-```python
-# Import generated Python modules
-from app.shared.types import InvitationStatus, GalleryStatus
-from app.shared.constants import API_BASE, PAGINATION, AI_THRESHOLDS
-```
+## Error Handling
 
----
+**Patterns:**
+- **Custom exception classes:** Inherit from base exceptions with descriptive names and error codes
+  - Pattern: `class XyzError(BaseException): def __init__(self, message: str, code: str, status: int = 401)`
+  - Examples: `InvalidCredentialsError`, `TokenExpiredError`, `UserExistsError`, `AuthError`
+  - Each error has a code (e.g., `AUTH_INVALID_CREDENTIALS`) and HTTP status code
+  - Error messages should be opaque for security (avoid revealing internals)
 
-## 🔒 Security Patterns
+- **TypeScript/React:** Try-catch blocks in services, error state in hooks and components
+  - Error boundaries for React component trees: `ErrorBoundary` component catches errors in children
+  - Inline error fallbacks: `InlineErrorFallback` component for non-critical components
+  - Error state in hooks: `{ isLoading, error, data }` tuple pattern
 
-### JWT Authentication
+- **Python async functions:** Use explicit exception raising with context
+  - Example: `if not user: raise InvalidCredentialsError()`
+  - Log errors with audit context (hashed PII for compliance)
+  - Never expose sensitive details in error messages
 
-```python
-# Validate JWT tokens in all microservices
-from fastapi import Depends, HTTPException, status
-from app.api.dependencies.auth import CurrentUserDep
+## Logging
 
-@router.get("/galleries/{gallery_id}")
-async def get_gallery(
-    gallery_id: UUID,
-    current_user: CurrentUserDep = Depends()
-) -> Gallery:
-    # workspace_id is extracted from JWT and validated
-    return await gallery_service.get_gallery(gallery_id, current_user.workspace_id)
-```
+**Framework:**
+- **Frontend:** `console.error()`, `console.warn()`, `console.log()` in development mode
+- **Backend:** `structlog` with `logging.getLogger(__name__)`
 
-### RBAC Separation
+**Patterns:**
+- **Frontend:** Log errors only in development (guarded by `import.meta.env.DEV`)
+  - Example: `if (import.meta.env.DEV) { console.error(...) }`
+- **Backend:** Use module-level logger: `logger = logging.getLogger(__name__)`
+  - Structured logging for audit trail (see `app/logging.py`)
+  - Hash PII before logging (e.g., hashed email with `_hash_email_for_audit()`)
+  - Log auth events with `log_auth_event()` for audit
 
-- **Workspace RBAC ≠ Platform RBAC** - Keep permission systems separate
-- Auth: Google OAuth primary; local fallback
-- Client portal & share links: capability-based; respect per-link download policy
-- Download policies: `view_only|web_only|watermarked_only|original_allowed`
+## Comments
 
-### Input Validation
+**When to Comment:**
+- JSDoc/TSDoc for public functions, types, and components
+- Inline comments for non-obvious logic or workarounds
+- Feature flags: Reference feature/task IDs (e.g., "Feature: 012-client-favorites")
+- Security/compliance notes: Mark with reasons and reference GDPR/SOC2
 
-```python
-from pydantic import BaseModel, Field, validator
-from app.shared.validation import sanitize_html
-
-class CreateGalleryRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=100)
-    description: str = Field(..., max_length=1000)
-
-    @validator('description')
-    def validate_description(cls, v):
-        # Sanitize HTML to prevent XSS
-        return sanitize_html(v)
-```
-
-### Never Hardcode
-
-- ❌ API keys, secrets, credentials
-- ❌ LLM provider names or model identifiers
-- ❌ Colors (use design tokens from `@rawdrive/shared-constants`)
-- ❌ User-facing strings (use i18n)
-- ❌ Magic numbers (use named constants)
-
----
-
-## 📝 Git Conventions
-
-### Conventional Commits
-
-Use the following format:
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-
-[optional footer]
-```
-
-### Commit Types
-
-| Type | Description | Example |
-|------|-------------|---------|
-| `feat` | New feature | `feat(gallery): add bulk upload functionality` |
-| `fix` | Bug fix | `fix(auth): resolve JWT token expiration issue` |
-| `docs` | Documentation | `docs: update API documentation` |
-| `style` | Code formatting | `style: fix linting issues` |
-| `refactor` | Code restructuring | `refactor: extract gallery service` |
-| `perf` | Performance improvement | `perf: optimize database queries` |
-| `test` | Test additions/fixes | `test: add unit tests for gallery service` |
-| `chore` | Maintenance tasks | `chore: update dependencies` |
-| `ci` | CI/CD changes | `ci: add GitHub Actions workflow` |
-
-### Commit Examples
-
-```
-feat(ai): implement face detection endpoint
-
-- Add POST /api/v1/faces/detect endpoint
-- Support batch processing of images
-- Return face embeddings with 512 dimensions
-
-Closes #123
-
-fix(gallery): resolve race condition in asset uploads
-
-- Add transaction to prevent partial uploads
-- Implement retry mechanism for failed uploads
-- Add proper error handling
-
-perf: optimize gallery loading with virtual scrolling
-
-- Implement react-window for large galleries
-- Reduce initial bundle size by 40%
-- Improve load time from 3s to 800ms
-```
-
----
-
-## 📦 Import Patterns
-
-### External → Shared → Local
-
-Always follow this import order:
-
+**JSDoc/TSDoc:**
+- Required for exported components, hooks, services, and types
+- Format: `/** ... */` above exports
+- Example:
 ```typescript
-// 1. External dependencies
-import React, { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import axios from 'axios';
-
-// 2. Shared packages (from monorepo)
-import { GalleryStatus } from '@rawdrive/shared-types';
-import { API_BASE } from '@rawdrive/shared-constants';
-import { sanitizeHtml } from '@rawdrive/shared-validation';
-
-// 3. Local imports (relative)
-import { useGalleryAssets } from '../../hooks/useGalleryAssets';
-import { GalleryCard } from '../components/GalleryCard';
-import { galleryService } from '../services/galleryService';
+/**
+ * Error Boundary Component
+ *
+ * Catches JavaScript errors in child component tree and displays
+ * a fallback UI. Provides error reporting and recovery options.
+ *
+ * Feature: 016-save-the-date Phase 13
+ */
 ```
 
-### Python Imports
-
+**Python Docstrings:**
+- Required for modules, classes, and public functions
+- Format: Triple-quoted strings at top of module/class/function
+- Example:
 ```python
-# 1. Standard library
-import os
-from typing import Optional, List
-from uuid import UUID
+"""AuthService: signup, login, refresh, logout operations.
 
-# 2. Third-party dependencies
-import fastapi
-import sqlalchemy
-from pydantic import BaseModel, Field
+Implements local email/password authentication with Argon2id hashing and
+JWT token issuance (EdDSA). Google OAuth is handled separately.
 
-# 3. Internal imports
-from app.db.postgres import get_postgres_pool
-from app.models.gallery import Gallery
-from app.repositories.gallery_repository import GalleryRepository
-from app.services.gallery_service import GalleryService
-from app.api.schemas import GalleryResponse
+Correctness Properties enforced:
+- Property 2: Password Hashing Consistency
+- Property 3: JWT Token Claims Completeness
+"""
 ```
 
----
+## Function Design
 
-## 🏗️ Architecture Patterns
+**Size:**
+- Keep functions focused on single responsibility
+- Frontend components should be under 300 lines
+- Backend service methods should be under 50 lines (extract async calls to helpers)
 
-### Backend 3-Layer Architecture
+**Parameters:**
+- Use destructuring for objects (TypeScript/React)
+- Python: explicit parameters with type hints
+- Avoid parameter proliferation; use config objects/dataclasses if >5 params
 
-```python
-# 1. Repository (database access)
-class FaceRepository:
-    async def create_face(
-        self,
-        workspace_id: UUID,
-        face_data: dict
-    ) -> Face:
-        # Database query with workspace isolation
-        pass
+**Return Values:**
+- TypeScript services return typed objects or tuples
+- Python async functions return explicit types (use type hints)
+- Hooks follow `{ state, loading, error, actions }` pattern
+- Avoid returning undefined/None without explicit intent
 
-# 2. Service (business logic)
-class FaceService:
-    async def detect_faces(
-        self,
-        workspace_id: UUID,
-        image_data: bytes
-    ) -> List[Face]:
-        # Business logic + validation
-        pass
+## Module Design
 
-# 3. API (HTTP handling)
-@router.post("/faces/detect")
-async def detect_faces(
-    request: DetectFacesRequest,
-    current_user: CurrentUserDep = Depends(),
-    face_service: FaceService = Depends(get_face_service)
-) -> DetectFacesResponse:
-    return await face_service.detect_faces(
-        current_user.workspace_id,
-        request.image_data
-    )
-```
+**Exports:**
+- TypeScript: Named exports preferred over default exports (except for React components)
+- Python: Explicit `__all__` for public API
+- Barrel files (index.ts) used for feature-level exports
 
-### Frontend Service Pattern
+**Barrel Files:**
+- Used: `src/components/features/gallery/__tests__/` → exports commonly tested components
+- Used: Service/hook index files export all public functions
+- Pattern: Collect related exports in `index.ts` for cleaner imports
 
+**Example barrel file:**
 ```typescript
-// Service layer
-class GalleryService {
-  async getGalleries(workspaceId: string): Promise<Gallery[]> {
-    const response = await axios.get<Gallery[]>(
-      `${API_BASE}/api/v1/galleries`,
-      { params: { workspace_id: workspaceId } }
-    );
-    return response.data;
-  }
-}
-
-// Component usage
-function useGalleries() {
-  const { workspace } = useAuth();
-  const { data, error, isLoading } = useQuery({
-    queryKey: ['galleries', workspace?.workspace_id],
-    queryFn: () => galleryService.getGalleries(workspace?.workspace_id),
-  });
-  return { data, error, isLoading };
-}
+export { ErrorBoundary, withErrorBoundary, InlineErrorFallback } from './ErrorBoundary';
+export { withErrorBoundary } from './ErrorBoundary';
 ```
+
+## Project-Specific Conventions
+
+**Workspace packages:**
+- Types: `@rawdrive/shared-types` - Domain enums and types
+- Constants: `@rawdrive/shared-constants` - Config values (API_BASE, THRESHOLDS)
+- Validation: `@rawdrive/shared-validation` - Zod/Pydantic schemas
+- Utils: `@rawdrive/shared-utils` - Helper functions (formatDate, formatSize)
+
+**Multi-tenant isolation:**
+- Every database query MUST filter by `workspace_id`
+- Extract from JWT claims, never from request body
+- Python example: `select(Asset).where(Asset.workspace_id == workspace_id)`
+
+**Authentication context:**
+- Frontend: Extract JWT from localStorage or request
+- Backend: Validate JWT with shared `JWT_SECRET` in all services
+- Dependency injection: Use `Depends()` for auth in FastAPI routes
 
 ---
 
-## 🚨 Error Handling
-
-### Frontend Error Handling
-
-```typescript
-// Custom hook for error handling
-function useErrorHandler() {
-  const [error, setError] = useState<Error | null>(null);
-
-  const handleError = (err: Error) => {
-    console.error('Error:', err);
-    setError(err);
-    // Show user-friendly error message
-    toast.error(err.message || 'An error occurred');
-  };
-
-  return { error, handleError, clearError: () => setError(null) };
-}
-
-// Service error handling
-class GalleryService {
-  async createGallery(gallery: CreateGalleryRequest): Promise<Gallery> {
-    try {
-      const response = await axios.post<Gallery>(
-        `${API_BASE}/api/v1/galleries`,
-        gallery,
-        { withCredentials: true }
-      );
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.detail || 'Failed to create gallery');
-      }
-      throw error;
-    }
-  }
-}
-```
-
-### Backend Error Handling
-
-```python
-from fastapi import HTTPException, status
-from app.services.face_exceptions import FaceNotFoundError
-
-class FaceService:
-    async def get_face(self, face_id: UUID, workspace_id: UUID) -> Face:
-        face = await self.face_repository.get_by_id(face_id, workspace_id)
-        if not face:
-            raise FaceNotFoundError(f"Face {face_id} not found")
-        return face
-
-# Custom exception
-class FaceDetectionError(Exception):
-    """Raised when face detection fails."""
-    pass
-
-# API endpoint error handling
-@router.get("/faces/{face_id}")
-async def get_face(
-    face_id: UUID,
-    current_user: CurrentUserDep = Depends(),
-    face_service: FaceService = Depends(get_face_service)
-):
-    try:
-        face = await face_service.get_face(face_id, current_user.workspace_id)
-        return face
-    except FaceNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Face not found"
-        )
-```
-
----
-
-## 📊 Additional Patterns
-
-### Logging
-
-```python
-import logging
-
-logger = logging.getLogger(__name__)
-
-class GalleryService:
-    async def create_gallery(self, gallery: CreateGalleryRequest) -> Gallery:
-        logger.info("Creating gallery", extra={
-            "workspace_id": workspace_id,
-            "title": gallery.title
-        })
-
-        try:
-            # ... business logic ...
-            logger.info("Gallery created successfully", extra={
-                "gallery_id": new_gallery.gallery_id
-            })
-        except Exception as e:
-            logger.error("Failed to create gallery", extra={
-                "error": str(e),
-                "workspace_id": workspace_id
-            })
-            raise
-```
-
-### Caching
-
-```python
-import redis
-from functools import wraps
-
-# Redis client
-redis_client = redis.Redis(
-    host=os.getenv('REDIS_HOST', 'localhost'),
-    port=int(os.getenv('REDIS_PORT', 6379)),
-    db=0
-)
-
-def cache_with_expiry(expiry: int = 300):
-    """Decorator for Redis caching with expiry."""
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            cache_key = f"{func.__name__}:{hash(str(args) + str(kwargs))}"
-            cached = redis_client.get(cache_key)
-
-            if cached:
-                return json.loads(cached)
-
-            result = await func(*args, **kwargs)
-            redis_client.setex(cache_key, expiry, json.dumps(result))
-            return result
-        return wrapper
-    return decorator
-```
-
----
-
-## 🔍 Best Practices
-
-1. **Always include workspace_id** in all database queries
-2. **Validate input** at all layers (API, Service, Repository)
-3. **Use shared packages** for common functionality
-4. **Follow conventional commits** for consistent history
-5. **Write tests** before implementation (TDD)
-6. **Document** complex business logic
-7. **Use type hints** in Python and TypeScript
-8. **Handle errors gracefully** with user-friendly messages
-9. **Log important operations** for debugging
-10. **Cache frequently accessed data** for performance
-
----
-
-**Last Updated**: 2026-02-08
-**Maintained by**: RawDrive Development Team
+*Convention analysis: 2025-03-18*

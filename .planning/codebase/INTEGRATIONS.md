@@ -1,425 +1,226 @@
-# RawDrive Integrations
+# External Integrations
 
-## Overview
+**Analysis Date:** 2026-03-18
 
-RawDrive integrates with a comprehensive stack of external services, databases, and internal microservices to deliver a professional photography platform with AI-powered features, client management, and seamless workflows.
+## APIs & External Services
 
----
+**Payment Processing:**
+- Razorpay - Payment gateway for Indian customers
+  - SDK/Client: `razorpay` (Python)
+  - Auth: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`
+  - Webhooks: `RAZORPAY_WEBHOOK_SECRET`
+  - Files: `backend/src/app/services/razorpay_service.py`
 
-## Database Integrations
+**AI & Vision Services:**
+- Google Cloud Vision - Face detection (primary)
+  - SDK/Client: `google-cloud-vision` Python client
+  - Auth: Via Google Cloud service account (configured in backend)
+  - Fallback provider with Gemini vision capabilities
+  - Files: `backend/src/app/services/ai/providers/google_vision_provider.py`
 
-### Primary Database
-- **PostgreSQL 16**
-  - Location: `C:\Users\admin\Desktop\RawDrive2\infrastructure\docker\docker-compose.yml`
-  - Connection: `postgresql://rawdrive:rawdrive@postgres:5432/rawdrive`
-  - Features: TimescaleDB extension, pgvector for vector search, pgvectorscale for StreamingDiskANN indexes
-  - Tables: assets, users, workspaces, clients, galleries, invitations, etc.
-  - Connection pooling: PgBouncer for 5000+ concurrent users
+- Google Gemini - Face detection fallback, vision analysis
+  - SDK/Client: `google-generativeai` Python package
+  - Auth: `GEMINI_API_KEY`
+  - Models: gemini-2.5-flash (default), gemini-3-flash-preview, gemini-3-pro-preview
+  - Files: `backend/src/app/services/ai/providers/gemini_provider.py`
 
-### Vector Database
-- **Milvus 2.3.4**
-  - Purpose: Face and image embeddings storage
-  - Configuration: `C:\Users\admin\Desktop\RawDrive2\services\ai-processing-service\src\services\gemini_vision_service.py`
-  - Features:
-    - Face embedding storage for facial recognition
-    - Image similarity search
-    - High-performance vector operations
-    - Supports various distance metrics (L2, Inner Product, IP, Cosine)
+- OpenAI - Optional LLM integration
+  - SDK/Client: `openai` Python client (not explicitly in deps, loaded dynamically)
+  - Auth: `OPENAI_API_KEY`
+  - Purpose: Alternative LLM provider
 
-### Cache & Session Storage
-- **Redis 7**
-  - Location: `C:\Users\admin\Desktop\RawDrive2\infrastructure\docker\docker-compose.yml`
-  - Configuration: `redis://redis:6379/0`
-  - Uses cases:
-    - Session management
-    - Rate limiting
-    - Celery message broker
-    - Multi-tier caching (L1: 5min, L2: 2min, L3: 30sec)
-    - WebSocket state management
+- Anthropic - Optional Claude integration
+  - SDK/Client: `anthropic` Python client (not explicitly in deps)
+  - Auth: `ANTHROPIC_API_KEY`
+  - Purpose: Alternative LLM provider
 
----
+- Azure OpenAI - Optional enterprise LLM
+  - SDK/Client: Via OpenAI library with Azure configuration
+  - Auth: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`
+  - Config: `AZURE_OPENAI_DEPLOYMENT`
 
-## External Service Integrations
+- Ollama - Local LLM fallback
+  - SDK/Client: HTTP API
+  - Base URL: `OLLAMA_BASE_URL` (default: http://localhost:11434)
+  - Purpose: Local AI inference
 
-### Cloud Storage
-- **Cloudflare R2**
-  - Purpose: Object storage for photos, videos, and other assets
-  - Configuration:
-    - Endpoint: `R2_ENDPOINT` in environment
-    - Bucket: `R2_BUCKET_NAME`
-    - SDK: Boto3 1.35.0
-  - Implementation:
-    - Backend: `backend/src/app/services/storage_service.py`
-    - Services: Upload, Gallery, Client (all use R2)
+- LM Studio - Local LLM alternative
+  - SDK/Client: HTTP API
+  - Base URL: `LM_STUDIO_BASE_URL` (default: http://localhost:1234)
 
-### AI & Machine Learning
-- **Google Cloud Vision API**
-  - Purpose: Face detection, landmark recognition, image labeling
-  - Configuration: `GOOGLE_APPLICATION_CREDENTIALS`
-  - Implementation: `backend/src/app/services/ai/face_detection_service.py`
-  - Features:
-    - Face detection and landmarking
-    - Image quality assessment
-    - Content moderation
+**Email Delivery:**
+- SendGrid - Primary email service
+  - SDK/Client: `sendgrid` Python package
+  - Auth: `SENDGRID_API_KEY`
+  - Config: `SENDGRID_FROM_EMAIL`, `SENDGRID_FROM_NAME`
+  - Files: `backend/src/app/services/email_service.py`
+  - Features: Template-based email, delivery tracking
 
-- **Google Gemini AI**
-  - Purpose: AI content analysis, image tagging, caption generation
-  - Configuration: `AI_API_KEY`, `AI_MODEL`
-  - Implementation:
-    - Backend: `backend/src/app/services/ai/image_analysis_service.py`
-    - AI Processing: `services/ai-processing-service/src/services/gemini_vision_service.py`
-    - Features:
-      - Image captioning
-      - Content-based tagging
-      - AI-powered search suggestions
+- SMTP - Fallback email provider
+  - Auth: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`
+  - Config: `SMTP_USE_TLS`, `SMTP_USE_SSL`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SMTP_TIMEOUT`
+  - Supports both TLS (587) and SSL (465) connections
 
-### Authentication
-- **Google OAuth**
-  - Purpose: User authentication and identity verification
-  - Configuration: Google Cloud Console credentials
-  - Implementation: `backend/src/app/services/oauth_service.py`
-  - Features:
-    - Social login integration
-    - Profile data synchronization
-    - Token management and refresh
+**Authentication:**
+- Google OAuth 2.0 - User authentication
+  - Client ID/Secret: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+  - Redirect URI: `GOOGLE_REDIRECT_URI`
+  - Scope: Login/signup only (NOT for gallery sync)
+  - Control: `GALLERY_SETTINGS_SYNC_ENABLED` (disabled by default)
+  - Note: Gallery settings remain independent per security/privacy requirements
 
-### Payment Processing
-- **Stripe**
-  - Purpose: Subscription management, payment processing, invoicing
-  - Configuration: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
-  - Implementation: `services/billing-service/src/services/payment_service.py`
-  - Features:
-    - Subscription billing
-    - One-time payments
-    - Webhook-based event handling
-    - Stripe Connect for partners
+**GeoIP Services:**
+- MaxMind GeoIP2 - IP geolocation
+  - SDK/Client: `geoip2` Python package (4.7+)
+  - Purpose: Geo-location lookups, analytics
 
-- **Razorpay**
-  - Purpose: Indian payment gateway integration
-  - Configuration: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`
-  - Implementation: `services/billing-service/src/services/razorpay_service.py`
-  - Features:
-    - UPI payments
-    - Credit/debit card processing
-    - Net banking integration
+## Data Storage
 
-### Email Services
-- **SendGrid**
-  - Purpose: Transactional emails, notifications, marketing emails
-  - Configuration: `SENDGRID_API_KEY`
-  - Implementation:
-    - Backend: `backend/src/app/services/email_service.py`
-    - Services: Notifications, Onboarding, Invitations
-  - Features:
-    - Template-based email delivery
-    - Delivery tracking and analytics
-    - Webhook event handling
+**Databases:**
+- PostgreSQL 16 (TimescaleDB variant)
+  - Client: `asyncpg` (async driver), `SQLAlchemy` (ORM), `psycopg2-binary` (fallback)
+  - Connection: `DATABASE_URL` or via `PGBOUNCER_HOST`/`PGBOUNCER_PORT` if enabled
+  - Extensions: pgvector, pgvectorscale, TimescaleDB
+  - Use: All structured data, vector embeddings, time-series metrics
+  - Pool: asyncpg with min/max size config, PgBouncer for scaling 5000+ concurrent
 
-- **Twilio (Planned)**
-  - Purpose: SMS notifications
-  - Configuration: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`
-  - Implementation: `services/notifications-service/src/services/sms_service.py`
-  - Status: Placeholder for Phase 1
+- Redis 7+
+  - Client: `redis[hiredis]` Python package (5.0+)
+  - Connection: `REDIS_URL`
+  - Pool: Configurable (max 50 connections default)
+  - Use: Caching, session storage, task queue (Celery)
 
-### Analytics & Monitoring
-- **Prometheus**
-  - Purpose: Metrics collection and monitoring
-  - Configuration: `C:\Users\admin\Desktop\RawDrive2\infrastructure\docker\docker-compose.yml`
-  - Implementation: All services expose `/metrics` endpoints
-  - Features:
-    - Custom metrics per service
-    - Rate limiting metrics
-    - Error rate tracking
+- Milvus Vector Database (optional)
+  - Enabled: `MILVUS_ENABLED` (false by default)
+  - Config: `MILVUS_HOST` (localhost), `MILVUS_PORT` (19530)
+  - Purpose: Vector similarity search (alternative to pgvector)
 
-- **Grafana**
-  - Purpose: Visualization and dashboarding
-  - Configuration: `C:\Users\admin\Desktop\RawDrive2\infrastructure\docker\docker-compose.yml`
-  - Implementation: Pre-configured dashboards for each service
-  - Features:
-    - Performance monitoring
-    - Business metrics
-    - Alerting integration
+**File Storage:**
+- Cloudflare R2 (S3-compatible)
+  - Auth: `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+  - Config: `R2_BUCKET_NAME`, `R2_ENDPOINT_URL` (template), `R2_ACCOUNT_ID`
+  - Purpose: Media storage (photos, exports, assets)
+  - Signed URLs: `SIGNED_URL_SECRET` for pre-signed downloads
 
-- **Loki**
-  - Purpose: Log aggregation and analysis
-  - Configuration: `C:\Users\admin\Desktop\RawDrive2\infrastructure\docker\docker-compose.yml`
-  - Implementation: Structured logging with labels
-  - Features:
-    - Context-aware logging
-    - Log retention policies
-    - Kibana-style queries
+**Caching:**
+- Redis 7+ (in-memory)
+  - Connection: `REDIS_URL`
+  - Use: Session caching, rate limiting, Celery broker
 
----
+## Authentication & Identity
 
-## Internal Service Integrations
+**Auth Provider:**
+- Custom JWT-based
+  - Implementation: `python-jose` with EdDSA algorithm
+  - Keys: `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` (RSA or EdDSA)
+  - Tokens: Access (15 min), Refresh (7 days), Extended refresh (30 days)
+  - Storage: JWT in HTTP-only cookies (secure)
+  - Multi-tenant: Each user tied to workspace_id (extracted from JWT, never client-provided)
 
-### Service Communication
-- **HTTP/REST APIs**
-  - Pattern: All services expose RESTful APIs
-  - Authentication: JWT tokens with public key verification
-  - Configuration: Traefik routing and load balancing
+**OAuth:**
+- Google OAuth 2.0
+  - Endpoint: `GOOGLE_REDIRECT_URI`
+  - Purpose: Social login only
 
-- **WebSocket**
-  - Services: Gallery, LiveSync
-  - Purpose: Real-time updates, collaboration
-  - Implementation: WebSocket API with authentication
+**Password Security:**
+- Argon2 hashing
+  - Library: `argon2-cffi`
+  - Params: `ARGON2_MEMORY_COST` (65536), `ARGON2_TIME_COST` (3), `ARGON2_PARALLELISM` (4)
 
-- **Kafka (Optional)**
-  - Services: Upload, AI Processing, Webhooks
-  - Purpose: Event streaming and decoupling
-  - Configuration: `KAFKA_BOOTSTRAP_SERVERS`
+**2FA/TOTP:**
+- TOTP support via `pyotp`
 
-### Shared Infrastructure
-- **Service Registry**
-  - Implementation: A2A (Application-to-Application) registry
-  - Location: `backend/src/app/services/service_registry.py`
-  - Features:
-    - Service discovery
-    - Health checks
-    - Capability advertising
+## Monitoring & Observability
 
-- **Circuit Breaker**
-  - Pattern: Hystrix-style circuit breaking
-  - Implementation: `services/*/src/services/resilience/circuit_breaker_factory.py`
-  - Features:
-    - Failure threshold detection
-    - Automatic recovery
-    - Fallback strategies
+**Error Tracking:**
+- Sentry (optional)
+  - Config: `SENTRY_DSN` (if set, error tracking enabled)
 
-### Authentication & Authorization
-- **JWT (JSON Web Tokens)**
-  - Algorithm: EdDSA (Ed25519) for security
-  - Configuration:
-    - Private key: `backend/secrets/jwtEd25519.key`
-    - Public key: `backend/secrets/ed25519_public_key.pem`
-  - Services: All services validate JWT tokens
-  - Scopes: Workspace-level permissions
+**Logs:**
+- Structured logging: `structlog` 24.1.0+
+  - Format: Configurable (`LOG_FORMAT`: 'json', 'console', 'plain')
+  - Default: JSON in prod/staging, console in dev
+  - Aggregation: Loki (via Promtail) in Docker Compose
 
-- **RBAC (Role-Based Access Control)**
-  - Pattern: Platform RBAC ≠ Workspace RBAC
-  - Implementation: `backend/src/app/services/rbac_service.py`
-  - Features:
-    - Role definitions at platform level
-    - Workspace-level permissions
-    - Capability-based access for share links
+**Metrics:**
+- Prometheus
+  - Endpoint: `/metrics` on all services
+  - Collection: Prometheus scrapes at :9090
+  - Visualization: Grafana (:3000, admin/admin)
 
----
+**Alerting:**
+- AlertManager (via Prometheus)
+  - Config: `infrastructure/monitoring/prometheus/alertmanager.yaml`
 
-## Database Schema Integration
+**Log Aggregation:**
+- Grafana Loki
+  - Port: :3100
+  - Collection: Promtail from Docker logs
+  - Retention: Configured in `infrastructure/loki/loki-config.yaml`
 
-### Core Tables
-- **assets**: Photo/video storage with metadata
-- **users**: User accounts and preferences
-- **workspaces**: Multi-tenant isolation
-- **clients**: Client relationship management
-- **galleries**: Photo collection organization
-- **invitations**: Digital invitation system
-- **face_embeddings**: Facial recognition data
-- **asset_embeddings_cache**: AI embedding caching
+## CI/CD & Deployment
 
-### Relationships
-```python
-# Multi-tenant pattern enforced everywhere
-asset.workspace_id = workspace.id  # Always filter by workspace
-client.workspace_id = workspace.id
-gallery.workspace_id = workspace.id
-```
+**Hosting:**
+- Docker containers
+- Docker Compose orchestration for local dev
+- Production: Kubernetes-ready (12-factor app compliant)
 
-### Migration System
-- **Alembic**: Database migration management
-- Location: `backend/migrations/versions/`
-- Recent migrations: Face embedding cache, referral system, portfolio recommendations
-- Pattern: Versioned migrations with downgrade support
+**API Gateway:**
+- Traefik 3.0
+  - Dashboard: :8080 (localhost only)
+  - HTTP → HTTPS redirect
+  - Service discovery: Docker labels + dynamic config
+  - Config files: `infrastructure/docker/traefik/traefik.dev.yaml`, `dynamic.dev.yaml`
+
+**Reverse Proxy:**
+- Traefik routes all microservices
+- Port mapping: Backend :8000, Gallery :8004, Billing :8005, etc.
+
+**CI Pipeline:**
+- Not detected (likely external, GitHub Actions or similar)
+
+## Environment Configuration
+
+**Required env vars:**
+- `DATABASE_URL` - PostgreSQL connection string
+- `REDIS_URL` - Redis connection string
+- `JWT_PRIVATE_KEY_PATH` - EdDSA private key file path
+- `JWT_PUBLIC_KEY_PATH` - EdDSA public key file path
+- `GOOGLE_CLIENT_ID` - OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - OAuth client secret
+- `GOOGLE_REDIRECT_URI` - OAuth callback URL
+- `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` - Object storage
+- `SIGNED_URL_SECRET` - 32-byte hex for signed URL generation
+- `ENCRYPTION_MASTER_KEY` - 32-byte hex for data encryption
+
+**Optional but recommended:**
+- `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` - Payments
+- `SENDGRID_API_KEY` or SMTP config - Email delivery
+- `GEMINI_API_KEY` - AI features
+- `SENTRY_DSN` - Error tracking
+
+**Secrets location:**
+- `.env` file (local development, not committed)
+- Environment variables (Docker, CI/CD)
+- Kubernetes Secrets (production)
+
+## Webhooks & Callbacks
+
+**Incoming:**
+- Razorpay webhooks (payment events)
+  - Endpoint: `backend/src/app/api/v1/webhooks` (likely)
+  - Verification: HMAC signature via `RAZORPAY_WEBHOOK_SECRET`
+
+**Outgoing:**
+- Webhooks service (microservice :8003)
+  - Purpose: Event-driven webhook delivery to third parties
+  - Pattern: Service publishes events → Webhooks service delivers to registered endpoints
+
+**Inter-service Communication:**
+- Direct HTTP via microservice URLs
+- JWT validation for all requests (shared `JWT_SECRET`)
+- Example: Invitations service at `INVITATIONS_SERVICE_URL`
 
 ---
 
-## MCP (Model Context Protocol) Integration
-
-### MCP Server
-- **Location**: `services/ai-service/src/rawdrive_mcp/`
-- **Components**:
-  - `server.py`: MCP server implementation
-  - `milvus_client.py`: Vector database integration
-  - `upload_monitoring.py`: File upload tracking
-  - `cache.py`: Response caching
-  - `db.py`: Database operations
-
-### MCP Capabilities
-1. **Workspace Agent Tools**
-   - Upload monitoring
-   - Asset management
-   - Client interaction
-   - Gallery operations
-
-2. **RAG Integration**
-   - Knowledge base access
-   - Context retrieval
-   - Query enhancement
-
-3. **Vector Search**
-   - Face similarity search
-   - Content-based retrieval
-   - Semantic search
-
----
-
-## Webhook Integration
-
-### Webhooks Service
-- **Location**: `services/webhooks-service/`
-- **Purpose**: Event-driven integration with external services
-- **Features**:
-  - HMAC-SHA256 signature verification
-  - Exponential backoff retry
-  - Circuit breaker pattern
-  - Template-based payloads
-
-### Supported Webhooks
-- **Stripe**: Payment events, subscription changes
-- **SendGrid**: Email delivery events
-- **Custom**: Business events from internal services
-
-### Configuration
-```python
-# services/webhooks-service/src/config/webhook_config.py
-WEBHOOK_SIGNATURE_MAX_TIMESTAMP_AGE: 300
-DELIVERY_MAX_RETRIES: 5
-DELIVERY_RETRY_SCHEDULE: "10,60,300,1800,3600"
-```
-
----
-
-## API Integration Patterns
-
-### Standard Response Format
-```typescript
-// All APIs follow this pattern
-{
-  "success": boolean,
-  "data": T,
-  "message": string, // Optional error message
-  "pagination": { // Optional for list responses
-    "page": number,
-    "limit": number,
-    "total": number
-  }
-}
-```
-
-### Error Handling
-```python
-# Backend exception handling
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"success": False, "message": exc.detail}
-    )
-```
-
-### Rate Limiting
-- **Implementation**: `backend/src/app/middleware/rate_limit.py`
-- **Pattern**: Per-service configuration
-- **Redis-based**: Token bucket algorithm
-- **Example**: Gallery service: 1000/minute, Upload: 100/minute
-
----
-
-## Integration Testing
-
-### End-to-End Testing
-- **Playwright**: 1.57.0
-- **Configuration**: `C:\Users\admin\Desktop\RawDrive2\frontend/package.json`
-- **Features**:
-  - Multi-browser testing
-  - Visual regression testing
-  - Performance testing
-
-### Service Testing
-```bash
-# Backend tests
-docker exec rawdrive-backend pytest -v
-
-# Service tests
-cd services/gallery-service
-docker compose up -d
-docker compose exec pytest
-
-# Integration tests
-docker compose -f docker-compose.test.yml up
-```
-
-### Test Data
-- **Fixtures**: `tests/fixtures/` directory
-- **Test Users**: `docs/TEST_USERS.md`
-- **Mock Services**: Docker-compose test configurations
-
----
-
-## Security Integrations
-
-### Multi-Layer Security
-1. **Transport Layer**: HTTPS with Traefik
-2. **Authentication**: JWT with EdDSA
-3. **Authorization**: RBAC with workspace isolation
-4. **Data Encryption**: AES-256 at rest
-5. **Input Validation**: Zod schemas + Pydantic
-
-### CORS Configuration
-```python
-# Per-service CORS origins
-CORS_ORIGINS: [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://rawdrive.in"
-]
-```
-
-### Audit Logging
-- **Implementation**: `backend/src/app/services/audit_service.py`
-- **Destination**: Loki via structured logs
-- **Format**: JSON with correlation IDs
-- **Retention**: 30 days
-
----
-
-## Performance Integrations
-
-### Caching Strategies
-1. **Browser PWA**: Cache-first for media, stale-while-revalidate for APIs
-2. **Service Cache**: Redis multi-tier (5min/2min/30sec)
-3. **CDN**: Cloudflare R2 with custom TTLs
-
-### Database Optimization
-- **Connection Pooling**: PgBouncer for 5000+ concurrent users
-- **Indexing**: pgvector for similarity search
-- **Read Replicas**: Configurable per service
-
-### Load Testing
-- **Tools**: Locust, Artillery
-- **Metrics**: Response times, error rates, throughput
-- **Auto-scaling**: KEDA based on CPU/memory/queue length
-
----
-
-## Monitoring & Alerting
-
-### Metrics Collection
-```python
-# Prometheus metrics pattern
-from prometheus_client import Counter, Histogram, Gauge
-
-REQUEST_COUNT = Counter('requests_total', 'Total requests')
-REQUEST_DURATION = Histogram('request_duration_seconds', 'Request duration')
-ACTIVE_CONNECTIONS = Gauge('active_connections', 'Active connections')
-```
-
-### Alert Rules
-- **Critical**: Database unresponsive, Redis down, payment failures
-- **Warning**: High error rates, slow response times, resource exhaustion
-- **Info**: Usage patterns, growth trends
-
-### Alertmanager Configuration
-- **Notifications**: Email, Slack, PagerDuty
-- **Routing**: By severity and service
-- **Silences**: Maintenance windows
+*Integration audit: 2026-03-18*

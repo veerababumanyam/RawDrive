@@ -1,388 +1,191 @@
-# RawDrive Technology Stack
+# Technology Stack
 
-## Overview
+**Analysis Date:** 2026-03-18
 
-RawDrive is an enterprise SaaS professional photography platform built with a modern microservices architecture, designed for high performance, scalability, and reliability.
+## Languages
 
----
+**Primary:**
+- TypeScript 5.3.3 - Frontend (React), shared packages, build scripts
+- Python 3.11+ - Backend (FastAPI), microservices, data processing
 
-## Frontend Stack
+**Secondary:**
+- JavaScript - Runtime transpilation, utility scripts
+- SQL - PostgreSQL queries, Alembic migrations
 
-### Core Technologies
-- **React**: 18.3.0 - Modern React with hooks, concurrent features, and suspense
-- **TypeScript**: 5.3.3 - Strongly typed JavaScript for better developer experience
-- **Vite**: 5.0.8 - Next-generation frontend tooling for fast builds and hot reload
-- **TailwindCSS**: 4.0.0 - Utility-first CSS framework for rapid UI development
+## Runtime
 
-### State Management & Data Fetching
-- **TanStack Query**: 5.90.16 - Server state management with caching, retries, and background updates
-- **React Router**: 6.21.0 - Declarative routing for React applications
+**Environment:**
+- Node.js (via pnpm) - Frontend and shared package execution
+- Python 3.11+ - Backend and microservices
 
-### UI Components & Libraries
-- **Lucide React**: 0.294.0 - Beautiful & consistent icon library
-- **Heroicons**: 2.2.0 - SVG icons from the Heroicons set
-- **Radix UI**: Accessible, unstyled UI components (via @radix-ui/*)
+**Package Manager:**
+- pnpm 10.18.3 - Frontend and monorepo workspace management
+- pip/setuptools - Python backend dependencies
 
-### Animation & Interaction
-- **Framer Motion**: 11.0.0 - Production-ready motion library for animations
-- **DnD Kit**: 6.3.1 - Modern, accessible drag and drop library
+**Lockfiles:**
+- pnpm-lock.yaml - Present
+- requirements files managed via pyproject.toml
 
-### Specialized Libraries
-- **Face API.js**: 0.22.2 - Face detection and recognition in the browser
-- **HEIC2Any**: 0.0.4 - Convert HEIC/HEIF images to JPEG/PNG
-- **React Easy Crop**: 5.5.6 - Image cropping component with multi-touch support
-- **QR Code.react**: 4.2.0 - QR code generation component
+## Frameworks
 
-### Internationalization
-- **i18next**: 25.7.3 - Internationalization framework
-- **react-i18next**: 16.5.0 - React integration for i18next
-- **i18next-browser-languagedetector**: 8.2.0 - Language detection
+**Frontend:**
+- React 18.3.0 - Core UI framework
+- Vite 5.0.8 - Build tool and dev server
+- React Router DOM 6.21.0 - Client-side routing
 
-### Performance & Optimization
-- **Vite PWA**: Progressive Web App support with offline caching
-- **Virtualized Scrolling**: react-window, react-virtualized-auto-sizer
-- **Code Splitting**: Manual chunk configuration for optimal loading
+**Backend:**
+- FastAPI 0.115+ - REST API framework
+- Uvicorn 0.30+ - ASGI server
 
----
+**Testing:**
+- Vitest 1.6.1 - TypeScript/JavaScript unit tests
+- Playwright 1.57.0 - E2E and integration testing
+- Jest DOM - DOM testing utilities (React testing)
+- pytest 8.3+ - Python unit/integration tests
+- pytest-asyncio 0.24+ - Async test support
 
-## Backend Stack
+**Build/Dev:**
+- TypeScript 5.3.3 - Type checking
+- ESLint 8.55.0 - Linting
+- Tailwind CSS 4.0.0 - Utility-first styling
+- Ruff 0.6+ - Python linting
+- mypy 1.11+ - Python type checking
+- Alembic 1.13+ - Database migrations
 
-### Core Framework
-- **Python**: 3.11 - Fast, modern Python with async support
-- **FastAPI**: 0.115.5 - High-performance web framework with automatic API docs
-- **Uvicorn**: 0.32.0 - ASGI server with hot reload and SSL support
+## Key Dependencies
 
-### Database & ORM
-- **PostgreSQL**: 16 - Advanced relational database with JSON support
-- **SQLAlchemy**: 2.0.36 - Modern Python ORM with async support
-- **Alembic**: 1.13.2 - Database migrations and schema management
-- **pgvector**: 0.8.1 - Vector similarity search for face embeddings
+**Frontend - UI & State:**
+- @tanstack/react-query 5.90.16 - Server state management
+- @tanstack/react-virtual 3.13.18 - Virtual list optimization
+- framer-motion 11.0.0 - Animation library
+- react-hook-form 7.69.0 - Form state management
+- zod 4.3.5 - Schema validation
+- lucide-react 0.294.0 - Icon library
+- @heroicons/react 2.2.0 - Hero icons
 
-### Async & Concurrency
-- **asyncpg**: 0.30.0 - PostgreSQL driver for asyncio
-- **Celery**: Distributed task queue for background processing
-- **Redis**: 7.0 - Message broker and cache layer
+**Frontend - Image/File Handling:**
+- react-easy-crop 5.5.6 - Image cropping
+- heic2any 0.0.4 - HEIC image conversion
+- face-api.js 0.22.2 - Client-side face detection (TensorFlow.js based)
+- qrcode.react 4.2.0 - QR code generation
+- dompurify 3.3.1 - HTML sanitization
 
-### Authentication & Security
-- **PyJWT**: 2.9.0 - JSON Web Token implementation
-- **cryptography**: 43.0.3 - Cryptographic recipes
-- **argon2-cffi**: 23.1.0 - Secure password hashing
-- **python-multipart**: 0.0.9 - Multipart form parsing
+**Frontend - Internationalization:**
+- i18next 25.7.3 - Translation framework
+- react-i18next 16.5.0 - React binding
+- i18next-browser-languagedetector 8.2.0 - Language detection
+- i18next-http-backend 3.0.2 - Backend translation loader
 
-### AI & Machine Learning
-- **Google Cloud Vision**: 3.5.0 - Image analysis and face detection
-- **Google Gemini**: 0.8.0 - AI/ML integration and content analysis
-- **OpenCV**: 4.8.0 - Computer vision library (headless)
-- **NumPy**: 1.24.0 - Numerical computing library
-- **Milvus**: 2.3.4 - Vector database for similarity search
+**Frontend - Utilities:**
+- axios 1.13.2 - HTTP client
+- date-fns 4.1.0 - Date utility library
+- react-helmet-async 2.0.4 - Document head management
+- js-sha256 0.11.1 - SHA256 hashing
+- @fingerprintjs/fingerprintjs 5.0.1 - Browser fingerprinting
 
-### Image Processing
-- **Pillow**: 10.4.0 - Image manipulation and processing
-- **Pillow-HEIF**: 0.18.0 - HEIC/HEIF format support
-- **Pillow-AVIF**: 1.4.2 - AVIF format support
-- **ExifRead**: 3.0.0 - EXIF metadata extraction
-- **RawPy**: 0.25.1 - RAW file processing
+**Frontend - Performance:**
+- react-window 2.2.4 - Virtual scrolling
+- react-window-infinite-loader 2.0.0 - Infinite list loading
+- workbox-window 7.4.0 - Service worker client
+- vite-plugin-pwa 0.20.0 - PWA manifest generation
 
-### Storage
-- **Cloudflare R2**: S3-compatible object storage
-- **Boto3**: 1.35.0 - AWS SDK for Python
+**Frontend - Drag & Drop:**
+- @dnd-kit/core 6.3.1 - Accessible drag-drop library
+- @dnd-kit/sortable 10.0.0 - Sortable extension
+- @use-gesture/react 10.3.1 - Gesture recognition
 
-### Payments
-- **Stripe**: Payment processing and billing
-- **Razorpay**: 1.4.1 - Indian payment gateway
+**Backend - Database:**
+- asyncpg 0.29+ - Async PostgreSQL driver
+- SQLAlchemy 2.0+ - ORM
+- psycopg2-binary 2.9+ - PostgreSQL adapter
+- alembic 1.13+ - Database migrations
+- asyncpg-stubs 0.29+ - Type hints for asyncpg
 
-### Monitoring & Observability
-- **Prometheus**: Metrics collection and monitoring
-- **Grafana**: 10.2.0 - Visualization and dashboarding
-- **Loki**: 2.9.0 - Log aggregation
-- **OpenTelemetry**: Distributed tracing
+**Backend - Caching & Queuing:**
+- redis 5.0+ (with hiredis) - In-memory cache
+- celery 5.3.6+ with redis - Task queue and background jobs
 
-### Development Tools
-- **pytest**: 8.3.3 - Testing framework
-- **pytest-asyncio**: 0.24.0 - Async test support
-- **pytest-cov**: 4.1.0 - Coverage reporting
-- **ruff**: 0.6.9 - Fast Python linter and formatter
-- **mypy**: 1.11.2 - Static type checker
+**Backend - Authentication & Security:**
+- python-jose 3.3+ with cryptography - JWT handling
+- argon2-cffi 23.1+ - Password hashing (Argon2)
+- pyotp 2.9+ - TOTP/2FA support
 
----
+**Backend - Configuration & Validation:**
+- pydantic 2.7+ - Data validation and settings
+- pydantic-settings 2.4+ - Environment configuration
+- email-validator 2.1+ - Email validation
 
-## Microservices Architecture
+**Backend - HTTP & Web:**
+- httpx 0.27+ - Async HTTP client
+- fastapi 0.115+ - Framework (includes Starlette)
 
-### Core Services
-1. **Backend** (Port 8000)
-   - Main API gateway and core services
-   - Authentication, user management, workspace handling
-   - Asset management, client management, search
+**Backend - Image Processing:**
+- opencv-python-headless 4.8+ - Computer vision (no GUI)
+- Pillow 10.0+ - Image manipulation
+- numpy 1.24+ - Numerical computing
 
-2. **Gallery Service** (Port 8004)
-   - High-performance gallery viewing and proofing
-   - KEDA autoscaling for 50K concurrent magic link views
-   - WebSocket support for real-time collaboration
+**Backend - Observability:**
+- structlog 24.1.0+ - Structured logging
+- prometheus-client (via Uvicorn) - Metrics
 
-3. **Billing Service** (Port 8005)
-   - Subscription and payment processing
-   - Stripe/Razorpay integration
-   - Invoice management and billing analytics
+**Backend - AI/ML:**
+- google-generativeai - Google Gemini API client (for fallback face detection)
+- geoip2 4.7+ - GeoIP lookups
 
-4. **Upload Service** (Port 8008)
-   - TUS resumable file uploads
-   - Chunked upload with Redis buffering
-   - KEDA autoscaling for high-volume uploads
+**Backend - Utilities:**
+- qrcode 7.4+ - QR code generation
+- geoip2 4.7+ - IP geolocation
 
-5. **Webhooks Service** (Port 8003)
-   - Event-driven webhook delivery
-   - HMAC-SHA256 signatures for security
-   - Exponential backoff retry mechanism
+**Shared Packages (pnpm workspaces):**
+- `@rawdrive/shared-types` - TypeScript domain types
+- `@rawdrive/shared-constants` - Configuration constants
+- `@rawdrive/shared-validation` - Validation utilities
+- `@rawdrive/shared-utils` - Utility functions
+- `@rawdrive/database-utils` - Database helpers
+- `@rawdrive/api-types` - Generated OpenAPI types
+- `@rawdrive/shared-api` - API client utilities
 
-6. **Notifications Service** (Port 8010)
-   - Multi-channel notifications (email, SMS, in-app)
-   - SendGrid integration
-   - Template-based messaging with delivery tracking
+## Configuration
 
-7. **Onboarding Service** (Port 8006)
-   - User registration and workspace setup
-   - Welcome email sequence
-   - Feature introduction workflows
+**Environment:**
+- `.env` file (not committed) - Development configuration
+- Environment variables for all secrets and configuration
+- `pydantic-settings` in backend for type-safe config loading
+- `tsconfig.json` in frontend for TypeScript configuration
 
-8. **Invitations Service** (Port 8007)
-   - Digital wedding invitations
-   - RSVP management
-   - Guest tracking and analytics
+**Build:**
+- `vite.config.ts` - Frontend bundler configuration
+- `pyproject.toml` - Backend project metadata and dependencies
+- `eslint.config.mjs` - Linting rules
+- `tailwind.config.ts` - Tailwind CSS configuration
+- `playwright.config.ts` - E2E test configuration
+- `pytest.ini` settings in `pyproject.toml` - Test runner config
 
-9. **Client Service** (Port 8009)
-   - Client relationship management
-   - Gallery sharing and proofing
-   - Activity tracking and insights
+**Frontend Path Aliases:**
+- TypeScript path mapping in `tsconfig.json` (if configured)
 
-10. **AI Service** (Port 8011)
-    - AI orchestration and workspace agent tools
-    - RAG integration for knowledge base
-    - MCP (Model Context Protocol) support
+## Platform Requirements
 
-11. **AI Processing Service** (Port 8012)
-    - Duplicate detection and deduplication
-    - Content moderation
-    - AI tagging and metadata extraction
+**Development:**
+- Node.js 18+ (for pnpm)
+- Python 3.11+
+- Docker & Docker Compose (recommended for full dev environment)
+- PostgreSQL 16 with pgvector and TimescaleDB extensions
+- Redis 7+
 
-12. **LiveSync Service** (Port 8013)
-    - Real-time file synchronization
-    - WebSocket-based live updates
-    - Conflict resolution
+**Production:**
+- Containerized deployment (Docker)
+- PostgreSQL 16+ with pgvector, pgvectorscale, TimescaleDB
+- Redis 7+ for caching and Celery
+- Traefik 3.0 for reverse proxy/API gateway
+- TimescaleDB for time-series data storage and pgvector for embeddings
 
-13. **Growth Service** (Port 8016)
-    - Referral programs and partner management
-    - Credit ledger system
-    - Analytics and gamification
-
-### Background Workers
-- **Face Worker**: Face detection and embedding generation
-- **Content Worker**: Image processing and metadata extraction
-- **Quality Worker**: Image quality assessment
-- **Asset Processing Worker**: Asset transformation and optimization
-
----
-
-## Infrastructure & DevOps
-
-### Containerization & Orchestration
-- **Docker**: Containerization for all services
-- **Docker Compose**: Local development and multi-container orchestration
-- **Kubernetes**: Production orchestration (planned)
-- **KEDA**: Kubernetes Event-driven Autoscaling
-
-### API Gateway & Routing
-- **Traefik v3**: Cloud-native API gateway
-- - Automatic service discovery
-- - SSL termination with Let's Encrypt
-- - Request routing and middleware
-- - Metrics collection
-
-### Databases
-- **PostgreSQL**: 16 with TimescaleDB extension
-- - pgvector for vector search
-- - pgvectorscale for StreamingDiskANN indexes
-- - Connection pooling with PgBouncer
-
-### Caching & Message Broker
-- **Redis**: 7.0
-- - Multi-tier caching strategy
-- - Session storage
-- - Celery message broker
-- - Rate limiting
-
-### Monitoring & Logging
-- **Prometheus**: Metrics collection and alerting
-- **Grafana**: 10.2.0 - Dashboards and visualization
-- **Loki**: 2.9.0 - Log aggregation
-- **Alertmanager**: Notification management
-
-### Vector Database
-- **Milvus**: 2.3.4 - Vector similarity search
-- - Face and image embeddings storage
-- - High-performance similarity search
-- - Supports various distance metrics
+**Microservices Architecture:**
+- 14 independent services (see CLAUDE.md for port mapping)
+- Shared PostgreSQL database with workspace-level isolation
+- Shared Redis for caching and task queue
+- JWT-based inter-service authentication
 
 ---
 
-## Shared Packages
-
-### Monorepo Structure (pnpm Workspaces)
-
-1. **@rawdrive/shared-types**
-   - Domain types and interfaces
-   - Cross-service type definitions
-   - Auto-generated Python types
-
-2. **@rawdrive/shared-constants**
-   - Application constants and configuration
-   - Feature flags and thresholds
-   - Environment-specific settings
-
-3. **@rawdrive/shared-utils**
-   - Common utility functions
-   - Date/time formatting
-   - File size utilities
-   - Validation helpers
-
-4. **@rawdrive/shared-validation**
-   - Input validation schemas
-   - Sanitization helpers
-   - Business rule validation
-
-5. **@rawdrive/shared-api**
-   - API client utilities
-   - Request/response interceptors
-   - Error handling patterns
-
-6. **@rawdrive/api-types**
-   - OpenAPI schema definitions
-   - Auto-generated API clients
-
-7. **@rawdrive/database-utils**
-   - Database connection pooling
-   - Query builders
-   - Migration utilities
-
----
-
-## Key Dependencies & Versions
-
-### Frontend Dependencies
-```json
-{
-  "react": "^18.3.0",
-  "typescript": "^5.3.3",
-  "vite": "^5.0.8",
-  "tailwindcss": "^4.0.0",
-  "@tanstack/react-query": "^5.90.16",
-  "framer-motion": "^11.0.0",
-  "lucide-react": "^0.294.0",
-  "react-router-dom": "^6.21.0"
-}
-```
-
-### Backend Dependencies
-```python
-fastapi==0.115.5
-uvicorn[standard]==0.32.0
-SQLAlchemy==2.0.36
-asyncpg==0.30.0
-pgvector>=0.3.0
-redis[hiredis]==5.1.1
-pymilvus==2.3.4
-google-cloud-vision>=3.5.0
-google-generativeai>=0.8.0
-opencv-python-headless>=4.8.0
-Pillow==10.4.0
-stripe>=8.0.0
-razorpay>=1.4.1
-prometheus-client>=0.20.0
-structlog>=24.1.0
-```
-
-### Infrastructure Dependencies
-```yaml
-services:
-  traefik: v3.0
-  postgres: timescale/timescaledb-ha:pg16
-  redis: redis:7-alpine
-  grafana: grafana/grafana:10.2.0
-  prometheus: prom/prometheus:v2.47.0
-  loki: grafana/loki:2.9.0
-  milvus: milvusdb/milvus:v2.3.4
-```
-
----
-
-## File Structure
-
-### Frontend Structure
-```
-frontend/src/
-├── components/         # UI components
-│   ├── ui/           # Design system
-│   ├── layout/       # Layout components
-│   └── features/     # Feature-specific components
-├── pages/           # Page components (route handlers)
-├── hooks/           # Custom React hooks
-├── services/        # API client services
-├── contexts/        # React contexts
-└── utils/           # Utility functions
-```
-
-### Backend Structure
-```
-backend/src/app/
-├── api/v1/          # API endpoints
-├── models/          # SQLAlchemy models
-├── repositories/    # Data access layer
-├── services/        # Business logic
-├── middleware/      # FastAPI middleware
-└── workers/         # Background workers
-```
-
-### Microservices Structure
-```
-services/[name]/
-├── src/
-│   ├── api/v1/      # API endpoints
-│   ├── services/    # Business logic
-│   ├── repositories/# Database access
-│   └── schemas/     # Pydantic schemas
-└── tests/           # Unit and integration tests
-```
-
----
-
-## Build & Development Commands
-
-### Frontend
-```bash
-cd frontend
-pnpm dev              # Start dev server (localhost:5173)
-pnpm build            # Production build
-pnpm test             # Run tests
-pnpm lint             # Lint code
-```
-
-### Backend
-```bash
-cd backend
-uvicorn app.main:app --reload  # Dev server
-docker exec rawdrive-backend pytest  # Run tests
-docker exec rawdrive-backend alembic upgrade head  # Run migrations
-```
-
-### Services
-```bash
-cd services/[service-name]
-docker build -t rawdrive-[name] .
-docker-compose up [service-name]  # Start service
-```
-
-### Shared Packages
-```bash
-pnpm build:packages      # Build all shared packages
-pnpm generate:python     # Generate Python types
-pnpm test:packages       # Test shared packages
-```
+*Stack analysis: 2026-03-18*

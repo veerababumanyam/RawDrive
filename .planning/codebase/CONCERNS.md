@@ -1,426 +1,396 @@
-# RawDrive Technical Concerns
+# Codebase Concerns
 
-This document documents technical concerns and areas of focus for the RawDrive codebase as of 2026-02-08.
+**Analysis Date:** 2026-03-18
 
----
+## Tech Debt
 
-## 🔒 Security Concerns
+### Unimplemented AI/ML Features
+**Area:** Similarity Detection & Image Processing
 
-### 1. Workspace Isolation Enforcement
-**Critical: High**
+- **Issue:** Multiple core AI features are scaffolded but not implemented
+- **Files:**
+  - `backend/src/app/workers/similarity_worker.py` (lines 277-293)
+  - `backend/src/app/workers/gallery_export_worker.py` (lines 456-536)
+  - `backend/src/app/services/duplicate_detection_service.py` (line 992)
+  - `backend/src/app/services/geo_search_service.py` (lines 365, 391)
 
-While workspace isolation is implemented in most queries, there are areas of concern:
+- **Impact:** Critical features that users expect are non-functional:
+  - CLIP model loading returns placeholder (`self._clip_model = "placeholder"`)
+  - Batch embedding computation skipped (returns empty embeddings)
+  - Clustering algorithm not implemented
+  - PDF/slideshow generation stubbed
+  - Duplicate detection via hashing depends on image byte fetching that doesn't work
 
-**Files of Concern:**
-- `backend/src/app/api/dependencies/auth.py` (lines 100-120) - workspace_id extraction from JWT could be more robust
-- Multiple service implementations may not consistently validate workspace_id
+- **Fix approach:**
+  - T031: Implement actual CLIP model loading (ViT-B/32) with proper memory management
+  - Batch embeddings through GPU-accelerated inference (consider separate AI service)
+  - Clustering algorithm implementation (cosine similarity threshold-based)
+  - Move image processing to AI Processing service to avoid blocking main backend
 
-**Specific Issues:**
-- JWT tokens contain multiple workspace identifiers (`wids` vs `workspace_id`) - potential confusion in token parsing
-- Some microservices may not validate workspace isolation consistently across all endpoints
-- Public gallery endpoints bypass workspace checks entirely - verify download policy enforcement
+### Rate Limiting Not Enforced
+**Area:** API Security & A2A Communication
 
-**Recommended Actions:**
-1. Implement centralized workspace ID validation middleware
-2. Add automated testing for workspace isolation in all services
-3. Create a dedicated workspace isolation validation library
+- **Issue:** Redis-based rate limiting for API keys is stubbed with TODO comment
+- **Files:** `backend/src/app/middleware/a2a_auth.py` (line 450)
 
-### 2. Secret Management
-**Critical: Medium**
+- **Impact:** External agents can exceed configured rate limits without enforcement. Security/denial-of-service risk.
 
-**Files of Concern:**
-- Environment variables contain secrets in Docker compose files
-- JWT key loading depends on file system access without additional validation
+- **Fix approach:**
+  - Implement sliding window rate limiter in Redis
+  - Check `agent_api_keys.rate_limit_rpm` on each API key request
+  - Return 429 when limit exceeded
+  - Use rate_limit_key pattern: `a2a:ratelimit:{api_key_id}:{endpoint}`
 
-**Specific Issues:**
-- `infrastructure/docker/docker-compose.yml` - POSTGRES_PASSWORD hardcoded in file
-- Redis password potentially exposed in environment variables
-- JWT secret key loading lacks additional integrity checks
+### Email Sending Stubbed
+**Area:** Communication & Notifications
 
-**Recommended Actions:**
-1. Implement proper secrets management (HashiCorp Vault or equivalent)
-2. Remove all hardcoded credentials from Docker compose files
-3. Add file integrity checks for JWT keys
+- **Issue:** Multiple email-sending operations are TODO placeholders
+- **Files:**
+  - `backend/src/app/services/task_queue.py` (lines 499, 523, 630, 754)
+  - `backend/src/app/services/auth_service.py` (lines 773, 858)
+  - `backend/src/app/services/email_verification_service.py` (line 218)
+  - `backend/src/app/services/onboarding_service.py` (line 587)
+  - `backend/src/app/services/invitation_auto_deletion_service.py` (line 441)
+  - `backend/src/app/api/v1/auth.py` (line 393)
 
-### 3. Authentication & Authorization
-**High: Medium**
+- **Impact:** Critical user journeys broken:
+  - Email verification not sent (users can't verify new emails)
+  - Password reset emails not sent
+  - Bulk invitation emails not sent
+  - Account recovery emails not sent
+  - Invitation deletion notifications not sent
 
-**Files of Concern:**
-- `backend/src/app/utils/security.py` - JWT decoding logic could be more defensive
-- `backend/src/app/api/dependencies/auth.py` - workspace permission checking lacks granularity
+- **Fix approach:**
+  - Integrate SendGrid/SES API client (referenced but unused)
+  - Queue email tasks through task queue with retry logic
+  - Template system for each email type
+  - Track email delivery status in database
 
-**Specific Issues:**
-- Token decoding assumes specific payload structure without validation
-- No rate limiting on authentication endpoints visible in codebase
-- Refresh token rotation logic not fully audited
+### Incomplete Notification System
+**Area:** Real-time & Async Communication
 
-**Recommended Actions:**
-1. Implement stricter JWT payload validation
-2. Add authentication rate limiting
-3. Audit refresh token handling across all services
+- **Issue:** Notification service integration is stubbed in churn intervention and curation workflows
+- **Files:**
+  - `backend/src/app/workers/churn_intervention_worker.py` (line 529)
+  - `backend/src/app/services/curation_session_service.py` (line 496)
 
----
+- **Impact:** Users don't receive important notifications about:
+  - Churn intervention opportunities
+  - Curation session status updates
+  - Smart AI recommendations
 
-## 🚀 Performance Concerns
-
-### 1. Database Query Optimization
-**High: High**
-
-**Files of Concern:**
-- Recent migrations show performance optimizations but concerns remain
-- `backend/migrations/versions/0193_add_face_embedding_cache_tables.py` - good indexing but potential for complex queries
-
-**Specific Issues:**
-- Face detection queries on large galleries could be optimized further
-- Full-text search on galleries may need additional optimization for millions of assets
-- N+1 query patterns not consistently identified in service layer
-
-**Recommended Actions:**
-1. Add database query performance monitoring
-2. Implement read replicas for analytics/reporting queries
-3. Add connection pooling configuration review
-
-### 2. Caching Strategy
-**High: Medium**
-
-**Recent Improvements:**
-- Face embedding cache tables added in migration 0193 - excellent L3 cache implementation
-
-**Remaining Concerns:**
-- Redis caching strategy not consistently applied across services
-- Cache invalidation patterns could be more robust
-- No visible cache warming strategy for frequently accessed data
-
-**Files of Concern:**
-- Multiple services implement their own caching without coordination
-- No global cache strategy visible
-
-**Recommended Actions:**
-1. Implement a unified caching service
-2. Add cache hit ratio monitoring
-3. Implement proactive cache warming for key data
-
-### 3. N+1 Query Patterns
-**Medium: Medium**
-
-**Files of Concern:**
-- Service layer files may contain N+1 patterns not caught in reviews
-- Recent face detection service additions could benefit from query optimization review
-
-**Recommended Actions:**
-1. Add SQLAlchemy query logging for N+1 detection
-2. Implement regular performance reviews of service methods
-3. Use asyncpg's connection pooling efficiently
+- **Fix approach:**
+  - Implement WebSocket handler for real-time notifications
+  - Queue notifications through notifications-service (port 8010)
+  - Add SMS integration (line 634: Twilio SMS stubbed)
 
 ---
 
-## 🏗️ Architecture Concerns
+## Known Bugs
 
-### 1. Service Boundaries
-**Medium: Medium**
+### Debug Logging Left in Production Code
+**Area:** Frontend Performance & Observability
 
-**Microservices Count:** 13 services
-**Ports:** 8000-8014 + additional infrastructure ports
+- **Issue:** Temporary debug logging in `useClientAvatars` hook left in codebase
+- **Files:** `frontend/src/hooks/useClientAvatars.ts` (lines 71-79, 101-117)
 
-**Concerns:**
-- Service dependencies becoming complex (e.g., gallery-service depends on multiple internal services)
-- No clear circuit breaker pattern implementation visible
-- Error propagation between services could be improved
+- **Symptoms:**
+  - Console spam when avatars fetch (multiple clients listed in every render)
+  - Performance degradation on lists with many clients
+  - Debugging information leaked to production users
 
-**Files of Concern:**
-- `services/gallery-service/src/api/v1/galleries.py` - multiple service calls without clear error handling strategy
-- `services/gallery-service/src/services/resilience/` - resilience patterns implemented but could be standardized
+- **Workaround:** Client browser consoles show debug output; disable in browser console settings
 
-**Recommended Actions:**
-1. Implement standardized service communication patterns
-2. Add circuit breakers for all inter-service calls
-3. Create service health dashboard
-
-### 2. Database Contention
-**Medium: High**
-
-**Database:** PostgreSQL 16 with TimescaleDB extensions
-**Connection Settings:** max_connections=300 in Docker compose
-
-**Concerns:**
-- Connection pooling with PgBouncer configured but may need optimization
-- Vector search operations (pgvector) could under heavy load
-- TimescaleDB hypertables need proper configuration for time-series data
-
-**Files of Concern:**
-- `infrastructure/docker/docker-compose.yml` (lines 98-130) - PgBouncer configuration needs review
-- Recent face embedding cache tables add additional load
-
-**Recommended Actions:**
-1. Implement database connection monitoring
-2. Optimize query patterns for vector operations
-3. Add read replicas for analytical queries
-
-### 3. Service Configuration
-**Low: Medium**
-
-**Concerns:**
-- Configuration management varies between services
-- No centralized configuration management system
-- Environment-specific configurations not well organized
-
-**Files of Concern:**
-- Individual service `config.py` files handle configuration differently
-- No shared configuration patterns across services
-
-**Recommended Actions:**
-1. Implement centralized configuration management
-2. Add configuration validation
-3. Create environment-specific configuration templates
+- **Trigger:** Render any page with `useClientAvatars` hook (ClientsList, PeoplePage, etc.)
 
 ---
 
-## 🧹 Technical Debt
+## Security Considerations
 
-### 1. TODO Comments & Workarounds
-**Medium: High**
+### Missing Permission Validation in Comments
+**Area:** Multi-tenant Data Access Control
 
-**Count:** 50+ files contain TODO/FIXME/HACK patterns
-**Most Affected:** Services, backend API layer
+- **Risk:** Comments API endpoint doesn't validate user's admin status before setting `is_admin` flag
+- **Files:** `backend/src/app/api/v1/comments.py` (lines 261-266)
 
-**Critical Areas:**
-- Face detection service has multiple optimization TODOs
-- Authentication service needs token refresh logic improvements
-- Gallery service has caching strategy incomplete
+- **Current mitigation:**
+  - Hard-coded `is_admin=False` fallback prevents privilege escalation
+  - TODO comment flags the gap
+  - Requests are still scoped to workspace (workspace_id isolation intact)
 
-**Files with High Technical Debt:**
-- `backend/src/app/services/face_detection_service.py`
-- `backend/src/app/services/auth_service.py`
-- `services/gallery-service/src/services/gallery_recommendation_service.py`
+- **Recommendations:**
+  - Implement proper RBAC check: `await rbac_service.can_perform("comments:admin", user_id, workspace_id)`
+  - Test with non-admin users to ensure they can't set is_admin flag via API
 
-**Recommended Actions:**
-1. Create technical debt backlog with priority ratings
-2. Address highest priority TODOs first (security-related)
-3. Refactor temporary workarounds
+### A2A API Key Database Query Uses String Comparison
+**Area:** Cryptographic Authentication
 
-### 2. Code Consistency
-**Low: Medium**
+- **Risk:** API key validation uses `crypt()` function in SQL query, but no explicit bcrypt/argon2 verification
+- **Files:** `backend/src/app/middleware/a2a_auth.py` (line 196)
 
-**Concerns:**
-- Different code patterns across services
-- Inconsistent error handling patterns
-- Mixed approaches to similar problems
+- **Current mitigation:**
+  - SQL uses PostgreSQL's `crypt()` function for hash comparison
+  - Keys are hashed with pgcrypto before storage
 
-**Recommended Actions:**
-1. Implement coding standards enforcement
-2. Add code review checklist
-3. Create shared utilities library
-
-### 3. Legacy Code
-**Low: Low**
-
-**Concerns:**
-- Some older migration files may need cleanup
-- Deprecated API endpoints not properly documented
-
-**Files of Concern:**
-- Migration files before v0.3.0 may need review
-- Some API endpoints marked as deprecated but not removed
-
-**Recommended Actions:**
-1. Create deprecated API sunset plan
-2. Archive or remove unused migration files
-3. Document legacy code dependencies
+- **Recommendations:**
+  - Verify bcrypt library version and iteration count
+  - Add audit logging when API key validation fails (currently logs but no alert)
+  - Implement key rotation policy enforcement
 
 ---
 
-## 🧪 Testing Gaps
+## Performance Bottlenecks
 
-### 1. Test Coverage
-**Critical: High**
+### Image Processing Blocks Main Request Loop
+**Area:** Asset Processing & Scalability
 
-**Statistics:**
-- Python test files: 237
-- Non-test Python files: 1,305
-- TypeScript/TSX files: 19,048
-- Documentation files: 935
+- **Problem:** Gallery exports and asset processing run synchronously in worker
+- **Files:**
+  - `backend/src/app/workers/gallery_export_worker.py` (full file)
+  - `backend/src/app/workers/similarity_worker.py` (embedding computation)
 
-**Coverage Concerns:**
-- Estimated test coverage: ~15-20% (based on file count ratios)
-- Integration testing appears minimal
-- No end-to testing framework visible
+- **Cause:**
+  - CLIP model loading happens in-process
+  - No batch queueing to external service
+  - Memory usage unbounded for large galleries (all embeddings in RAM)
 
-**Recommended Actions:**
-1. Target 80% test coverage for critical paths
-2. Add integration tests for all microservices
-3. Implement end-to-end testing with Cypress/Puppeteer
+- **Improvement path:**
+  - Move CLIP model to separate AI Processing service (port 8012)
+  - Implement streaming/chunking for embeddings (process 100 at a time vs all)
+  - Add memory limits and circuit breaker
 
-### 2. Security Testing
-**High: High**
+### Duplicate Detection Full Table Scan
+**Area:** Database Query Performance
 
-**Gaps:**
-- No penetration testing framework
-- Security testing appears manual only
-- No automated security scanning in CI/CD
+- **Problem:** Finding duplicates requires scanning all clients for name similarity
+- **Files:** `backend/src/app/services/duplicate_detection_service.py` (lines 132-150)
 
-**Recommended Actions:**
-1. Implement automated security scanning in CI
-2. Add penetration testing schedule
-3. Include security tests in pull requests
+- **Cause:**
+  - No full-text search index on client names
+  - Levenshtein distance computed in application code (not SQL)
+  - No pagination for large result sets
 
-### 3. Performance Testing
-**High: Medium**
-
-**Gaps:**
-- No load testing framework visible
-- Performance testing appears ad-hoc
-- No canary deployment testing
-
-**Recommended Actions:**
-1. Implement k6 or similar for load testing
-2. Add performance budgets to PRs
-3. Create performance regression tests
+- **Improvement path:**
+  - Add PostgreSQL trigram indexes on `full_name` column
+  - Use SQL `similarity()` function instead of Python loop
+  - Implement limit/offset pagination (currently returns all up to 20)
 
 ---
 
-## 📚 Documentation Gaps
+## Fragile Areas
 
-### 1. Outdated Specifications
-**Medium: High**
+### Curation Session State Machine
+**Area:** Complex Workflow Management
 
-**Concerns:**
-- PRD shows version 0.3.2 but current version appears higher
-- Some migration files contain outdated references
-- Technical specifications may not match implementation
+- **Files:**
+  - `backend/src/app/services/curation_session_service.py`
+  - `backend/src/app/workers/similarity_worker.py`
+  - `backend/src/app/workers/churn_intervention_worker.py`
 
-**Files of Concern:**
-- `.claude/PRD.md` - version discrepancy
-- Recent face embedding cache features not fully documented
+- **Why fragile:**
+  - Multiple workers depend on shared session state (progress_stage, status)
+  - No locking/versioning on state transitions
+  - Race condition if two workers update same session simultaneously
+  - Status transitions not validated (can jump from any state to any state)
 
-**Recommended Actions:**
-1. Update all version references
-2. Document all new features in PRD
-3. Create architecture decision records (ADRs)
+- **Safe modification:**
+  - Add state machine validator before transitions
+  - Use database row-level locking for concurrent updates
+  - Test with concurrent worker instances
+  - Add state-to-transition whitelist (e.g., only `analyzing` → `grouping`, not `grouping` → `analyzing`)
 
-### 2. Missing Documentation
-**Medium: High**
+- **Test coverage:**
+  - Concurrent session processing not tested
+  - Edge case: session deleted while worker processing
+  - Edge case: worker crash during embedding computation (orphaned state)
 
-**Gaps:**
-- No API documentation for all microservices
-- Deployment guides incomplete
-- Troubleshooting guides missing
+### JWT Token Claim Extraction
+**Area:** Authentication & Authorization
 
-**Recommended Actions:**
-1. Implement OpenAPI documentation for all services
-2. Create deployment automation with documentation
-3. Add troubleshooting section to PRD
+- **Files:** `backend/src/app/middleware/a2a_auth.py` (lines 125-141)
 
-### 3. Technical Debt Documentation
-**Low: Low**
+- **Why fragile:**
+  - Multiple fallback claim names (`sub` or `user_id`, `perms` or `permissions`)
+  - If JWT format changes, silent fallback to empty permissions
+  - No validation that required claims exist before use
+  - Service name extracted from `iss` or falls back to "unknown"
 
-**Gaps:**
-- No architectural decision records
-- Design documents incomplete
-- Tech debt not tracked
+- **Safe modification:**
+  - Define strict JWT schema upfront
+  - Fail early if required claims missing (don't fallback)
+  - Add validation tests for each claim combination
+  - Deprecate alternative claim names after service migration
 
-**Recommended Actions:**
-1. Start architectural decision records
-2. Create design documents for major features
-3. Implement tech debt tracking system
-
----
-
-## 📦 Dependencies
-
-### 1. Outdated Packages
-**High: Medium**
-
-**Concerns:**
-- Some dependencies have minor version updates available
-- Security updates may be needed
-
-**Examples:**
-- `fastapi>=0.115.0` - check if updates available
-- `redis>=5.0.1` - newer versions available
-- Python 3.11 used - check if newer versions compatible
-
-**Recommended Actions:**
-1. Implement dependency scanning in CI/CD
-2. Schedule monthly dependency reviews
-3. Create security update alerts
-
-### 2. Known Vulnerabilities
-**Critical: High**
-
-**Scanning Needed:**
-- No visible vulnerability scanning in CI/CD
-- Dependencies should be checked for CVEs
-
-**Recommended Actions:**
-1. Implement Snyk or similar for vulnerability scanning
-2. Add security alerts to CI/CD pipeline
-3. Create security patch process
-
-### 3. Package Management
-**Medium: Medium**
-
-**Concerns:**
-- Mixed package management (pip/pnpm/npm)
-- No centralized dependency management
-- Version pinning inconsistent
-
-**Recommended Actions:**
-1. Centralize dependency management
-2. Implement strict version pinning
-3. Add dependency review process
+- **Test coverage:**
+  - Missing tests for malformed JWTs
+  - Missing tests for missing optional claims
+  - Missing tests for service_id extraction
 
 ---
 
-## 🎯 Priority Actions
+## Scaling Limits
 
-### Immediate (Next 30 Days)
-1. **Security Review** - Complete workspace isolation audit
-2. **Test Coverage** - Start with critical path testing
-3. **Documentation Update** - Align PRD with current version
-4. **Dependency Scanning** - Implement security scanning
+### Similarity Groups In-Memory Storage
+**Area:** Large Gallery Processing
 
-### Short Term (Next 90 Days)
-1. **Performance Optimization** - Add monitoring and optimize queries
-2. **Technical Debt** - Address high-priority TODOs
-3. **Testing Infrastructure** - Build comprehensive test suite
-4. **Documentation** - Complete API and deployment docs
+- **Current capacity:** Tested up to 500 photos per gallery
+- **Limit:**
+  - CLIP embeddings (512-dim float32) = 2KB per photo
+  - 5000 photos = 10MB embeddings + clustering overhead
+  - Worker memory ~500MB becomes bottleneck at ~1000 photos
 
-### Long Term (Next 180 Days)
-1. **Architecture Review** - Refactor service boundaries
-2. **Caching Strategy** - Implement unified caching
-3. **Monitoring** - Add comprehensive observability
-4. **Automation** - Increase CI/CD coverage
+- **Scaling path:**
+  - Move embeddings to PostgreSQL pgvector column
+  - Batch query embeddings (100 at a time)
+  - Use Milvus/Weaviate for vector similarity search (scales to millions)
+  - Stream results instead of loading all into memory
 
----
+### Database Connection Pool
+**Area:** Concurrent Requests
 
-## 📊 Metrics to Track
+- **Current capacity:** Default pool size 10 connections
+- **Limit:** ~100 concurrent requests before connection exhaustion
 
-1. **Security**
-   - Number of security vulnerabilities found
-   - Test coverage for security paths
-   - Authentication error rates
-
-2. **Performance**
-   - Database query times
-   - API response times (p95, p99)
-   - Cache hit ratios
-
-3. **Reliability**
-   - Error rates per service
-   - Uptime metrics
-   - Deployment success rates
-
-4. **Development**
-   - Code coverage percentage
-   - Technical debt reduction
-   - Documentation completeness
+- **Scaling path:**
+  - Increase pool size based on worker concurrency (`TASK_WORKER_CONCURRENCY` env var)
+  - Implement connection pooling at Traefik level
+  - Monitor pool utilization in Grafana
 
 ---
 
-## 📝 Notes
+## Dependencies at Risk
 
-- Last Updated: 2026-02-08
-- RawDrive Version: v0.3.6 (based on git history)
-- This document should be reviewed quarterly
-- Add new concerns as they are discovered
-- Resolve and remove resolved concerns from this document
+### CLIP Model Download & Caching
+**Area:** AI Model Management
+
+- **Risk:**
+  - No offline fallback if HuggingFace/model CDN down
+  - Model binary not cached (re-downloads on container restart)
+  - No version pinning for model updates
+
+- **Impact:** Worker startup fails, curation features unavailable
+
+- **Migration plan:**
+  - Pre-download model into Docker image (adds 500MB, but guaranteed availability)
+  - Or: use model from local S3-compatible bucket as fallback
+  - Pin model version explicitly (not `latest`)
+
+### SendGrid/Email Service Integration
+**Area:** External Communication
+
+- **Risk:**
+  - No fallback if SendGrid down (emails silently drop)
+  - Rate limits not enforced by client (relies on API rate limiting)
+
+- **Impact:** Users can't receive password resets, invitations, notifications
+
+- **Migration plan:**
+  - Implement queue + retry logic (exponential backoff)
+  - Add circuit breaker pattern (fail-open or fail-closed?)
+  - Support multiple email providers (SendGrid primary, SES fallback)
+
+---
+
+## Missing Critical Features
+
+### PDF Export Not Implemented
+**Area:** Gallery Features
+
+- **Problem:** Users expect to download galleries as PDF but feature is stubbed
+- **Blocks:** Gallery export workflows, print functionality
+
+- **Files:** `backend/src/app/workers/gallery_export_worker.py` (line 456)
+
+### Slideshow Generation Not Implemented
+**Area:** Gallery Features
+
+- **Problem:** Users expect slideshow playback but feature is stubbed
+- **Blocks:** Presentation mode, client viewing experience
+
+- **Files:** `backend/src/app/workers/gallery_export_worker.py` (line 497)
+
+### OAuth/Cloud Sync Not Implemented
+**Area:** Gallery Features
+
+- **Problem:** Export to Google Drive, Dropbox, etc. is stubbed
+- **Blocks:** Integration workflows, data portability
+
+- **Files:**
+  - `backend/src/app/api/v1/gallery_exports.py` (lines 517, 534)
+  - `backend/src/app/workers/gallery_export_worker.py` (line 536)
+
+### Google Search Console Integration Not Implemented
+**Area:** SEO & Analytics
+
+- **Problem:** Gallery SEO monitoring not functional
+- **Blocks:** SEO features, organic discovery tracking
+
+- **Files:** `backend/src/app/api/v1/search_console.py` (lines 108, 178)
+
+### Password Reset Flow Not Implemented
+**Area:** User Authentication
+
+- **Problem:** Users can't reset forgotten passwords
+- **Blocks:** Account recovery, critical user journey
+
+- **Files:** `backend/src/app/api/v1/auth.py` (lines 407, 423)
+
+---
+
+## Test Coverage Gaps
+
+### AI Worker Concurrency Not Tested
+**Area:** Similarity & Curation Workers
+
+- **What's not tested:**
+  - Two workers processing same session simultaneously
+  - Race conditions on state transitions
+  - Worker crash during embedding computation (orphaned state recovery)
+  - Memory limits exceeded with large galleries
+
+- **Files:** `backend/src/app/workers/similarity_worker.py`
+
+- **Risk:**
+  - Silent data corruption (same photo in multiple groups)
+  - Infinite loops if worker hangs
+  - Orphaned sessions if worker crashes
+
+- **Priority:** High (affects all Smart Curate features)
+
+### Permission Enforcement Not Tested
+**Area:** Authorization
+
+- **What's not tested:**
+  - Non-admin users trying to set is_admin flag
+  - API key scope validation
+  - Cross-workspace access attempts
+
+- **Files:**
+  - `backend/src/app/api/v1/comments.py`
+  - `backend/src/app/middleware/a2a_auth.py`
+
+- **Risk:**
+  - Privilege escalation vulnerabilities
+  - Multi-tenant data leakage
+
+- **Priority:** Critical
+
+### Email Service Not Tested
+**Area:** Communication
+
+- **What's not tested:**
+  - Email sending actually queued
+  - Retry logic on failures
+  - Template rendering with user data
+
+- **Files:** `backend/src/app/services/task_queue.py`
+
+- **Risk:**
+  - Silent email failures
+  - No audit trail of attempts
+
+- **Priority:** High (affects user onboarding)
+
+---
+
+*Concerns audit: 2026-03-18*

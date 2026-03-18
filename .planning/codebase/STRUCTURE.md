@@ -1,518 +1,385 @@
-# RawDrive Codebase Structure
+# Codebase Structure
 
-## Overview
+**Analysis Date:** 2026-03-18
 
-This document describes the file structure and organization of the RawDrive codebase, following established patterns and conventions for an enterprise SaaS photography platform.
-
-## Root Directory Structure
+## Directory Layout
 
 ```
 RawDrive2/
-├── .planning/                    # Planning documentation
-│   └── codebase/                # Architecture and structure docs
-├── .claude/                      # Claude Code configuration
-│   ├── skills/                   # Context-aware development skills
-│   ├── commands/                 # Development workflow commands
-│   ├── agents/                   # Specialized AI agents
-│   ├── hooks/                    # Git hooks
-│   ├── reference/                # Technical best practices
-│   ├── PRD.md                    # Product requirements document
-│   └── settings.json             # Claude configuration
-├── backend/                       # Main backend API service
-│   ├── migrations/versions/     # Database migrations
+├── backend/                          # Main FastAPI backend (monolithic + workers)
+│   ├── src/app/
+│   │   ├── main.py                  # Entry point, app initialization
+│   │   ├── api/v1/                  # HTTP endpoints (auth, users, workspaces, albums, etc.)
+│   │   ├── models/                  # Pydantic models (User, Album, Gallery, etc.)
+│   │   ├── repositories/            # Data access layer (AlbumRepository, etc.)
+│   │   ├── services/                # Business logic services
+│   │   ├── schemas/                 # Request/response validation schemas
+│   │   ├── middleware/              # Correlation, rate limit, timeout, audit logging
+│   │   ├── config/                  # Environment config, settings
+│   │   ├── db/                      # PostgreSQL pool, Alembic migrations
+│   │   ├── core/                    # JWT, RBAC, permissions
+│   │   ├── api/dependencies/        # Dependency injection (auth, workspace)
+│   │   ├── workers/                 # Background job handlers
+│   │   ├── events/                  # Event system (webhooks, listeners)
+│   │   ├── metrics/                 # Prometheus metrics, observability
+│   │   ├── logging/                 # Structured logging config
+│   │   ├── utils/                   # Helpers (errors, validators, etc.)
+│   │   └── shared/                  # Shared types, constants (Python equivalents)
+│   ├── models/                      # Old SQLAlchemy models (being migrated)
+│   ├── migrations/                  # Alembic migration history
+│   ├── tests/                       # pytest tests
+│   ├── requirements.txt             # Dependencies
+│   ├── pyproject.toml              # Poetry/pip config
+│   ├── alembic.ini                 # Alembic config
+│   └── Dockerfile                  # Container image
+│
+├── frontend/                         # React SPA (Vite + TypeScript)
 │   ├── src/
-│   │   └── app/
-│   │       ├── api/v1/          # API endpoints
-│   │       ├── models/          # SQLAlchemy models
-│   │       ├── repositories/    # Data access layer
-│   │       ├── services/        # Business logic
-│   │       ├── middleware/      # HTTP middleware
-│   │       ├── api/             # API schemas
-│   │       └── workers/         # Background workers
-│   ├── tests/                   # Unit and integration tests
-│   └── secrets/                  # JWT keys and credentials
-├── frontend/                      # React frontend application
-│   ├── src/
-│   │   ├── components/          # React components
-│   │   │   ├── ui/              # Design system components
-│   │   │   ├── layout/          # Layout components
-│   │   │   └── features/        # Feature-specific components
-│   │   ├── pages/               # Page components (route handlers)
-│   │   ├── hooks/               # Custom React hooks
-│   │   ├── services/            # API client services
-│   │   ├── contexts/            # React contexts
-│   │   ├── utils/               # Utility functions
-│   │   └── types/               # TypeScript type definitions
-│   ├── public/                  # Static assets
-│   ├── dist/                   # Build output
-│   └── .cache/                 # Build cache
-├── services/                     # Microservices
-│   ├── gallery-service/          # High-performance gallery viewing
-│   ├── billing-service/          # Payment processing
-│   ├── upload-service/           # TUS resumable uploads
-│   ├── webhooks-service/         # Event-driven webhook delivery
-│   ├── notifications-service/   # Multi-channel notifications
-│   ├── onboarding-service/       # User registration & setup
-│   ├── invitations-service/     # Digital wedding invitations
-│   ├── client-service/           # Client/contact management
-│   ├── ai-service/              # AI orchestration & MCP
-│   ├── ai-processing-service/    # Heavy AI workloads
-│   ├── livesync-service/        # Real-time file sync
-│   ├── llm-service/             # LLM integration
-│   ├── growth-service/          # Referrals & partner programs
-│   └── photo-livesync-service/  # Photo-specific sync
-├── packages/                     # Shared packages (monorepo)
-│   ├── shared-types/            # Domain types (TypeScript)
-│   ├── shared-constants/        # Configuration constants
-│   ├── shared-validation/       # Validation utilities
-│   ├── shared-utils/            # General utilities
-│   ├── shared-api/              # API client shared code
-│   └── database-utils/          # Database utilities
-├── infrastructure/               # Infrastructure configuration
-│   └── docker/                  # Docker configuration
-│       └── docker-compose.yml   # All services configuration
-├── docs/                        # Documentation
-│   ├── Features/               # Detailed feature specifications
-│   ├── Business_Features/       # Business feature specs
-│   ├── TechnicalSpecs/          # Technical specifications
-│   ├── ARCHITECTURE_QUICK_REFERENCE.md
-│   ├── troubleshooting/        # Debugging guides
-│   └── runbooks/               # Operational guides
-├── .cache/                     # Build cache
-├── .gitignore                  # Git ignore rules
-├── FACEID_ANALYSIS_AND_PLAN.md  # Face ID analysis document
-├── migration_error.txt         # Migration error logs
-├── migration_output.txt        # Migration output logs
-├── packages/                   # Additional packages
-└── services/                   # Additional services
-```
-
-## Frontend Structure
-
-### Component Organization
-
-```
-frontend/src/components/
-├── ui/                         # Design system components
-│   ├── AppButton.tsx           # Reusable button component
-│   ├── AppInput.tsx            # Reusable input component
-│   ├── AppModal.tsx            # Modal dialog component
-│   ├── LoadingSpinner.tsx       # Loading indicator
-│   └── Alert.tsx               # Alert/notification component
+│   │   ├── main.tsx                # Entry point
+│   │   ├── App.tsx                 # Root component with providers
+│   │   ├── index.css               # Global styles
+│   │   ├── pages/                  # Page components (Gallery, Album, Settings, etc.)
+│   │   ├── components/             # UI components
+│   │   │   ├── ui/                # Reusable UI (Button, Modal, etc.)
+│   │   │   ├── features/          # Feature-specific components
+│   │   │   ├── layout/            # Layout components
+│   │   │   └── error/             # Error boundaries, fallbacks
+│   │   ├── contexts/              # React Context (AuthContext, PWAProvider)
+│   │   ├── hooks/                 # Custom hooks (useAuth, useTheme, etc.)
+│   │   ├── services/              # API client (api.ts, tokenStorage.ts)
+│   │   ├── router/                # React Router config, routes
+│   │   ├── types/                 # TypeScript interfaces/types
+│   │   ├── utils/                 # Helper functions
+│   │   ├── validation/            # Input validation helpers
+│   │   ├── constants/             # Magic numbers, config
+│   │   ├── i18n/                  # i18n config and translations
+│   │   ├── styles/                # CSS files
+│   │   ├── workers/               # Web Workers (background tasks)
+│   │   ├── lib/                   # Third-party integrations
+│   │   └── __tests__/             # Unit/integration tests
+│   ├── public/                    # Static assets
+│   ├── vite.config.ts            # Vite build config
+│   ├── tsconfig.json             # TypeScript config
+│   └── package.json              # Dependencies
 │
-├── layout/                     # Layout components
-│   ├── Header.tsx              # Application header
-│   ├── Sidebar.tsx             # Navigation sidebar
-│   ├── Footer.tsx              # Application footer
-│   └── Layout.tsx              # Main layout container
+├── services/                       # 13 Independent microservices
+│   ├── gallery-service/           # Reference microservice (high-perf gallery viewing)
+│   ├── ai-service/                # AI orchestration
+│   ├── ai-processing-service/     # Heavy AI (embeddings, CLIP)
+│   ├── billing-service/           # Stripe/Razorpay payments
+│   ├── upload-service/            # TUS resumable uploads
+│   ├── webhooks-service/          # Event delivery
+│   ├── notifications-service/     # Multi-channel notifications
+│   ├── onboarding-service/        # Registration, workspace setup
+│   ├── invitations-service/       # Wedding invitations
+│   ├── client-service/            # CRM/contact management
+│   ├── livesync-service/          # Real-time file sync
+│   ├── llm-service/               # LLM integration, chat
+│   └── growth-service/            # Growth metrics, analytics
 │
-└── features/                   # Feature-specific components
-    ├── gallery/                # Gallery functionality
-    │   ├── GalleryGrid.tsx     # Photo grid display
-    │   ├── GalleryViewer.tsx   # Full-screen viewer
-    │   ├── GalleryToolbar.tsx  # Gallery actions
-    │   └── UploadPanel.tsx     # Photo upload
-    │
-    ├── album-design/          # Album design studio
-    │   ├── DesignCanvas.tsx    # Design surface
-    │   ├── TemplateGrid.tsx     # Template selection
-    │   ├── CoverStyleGrid.tsx  # Cover style selection
-    │   └── CommentPanel.tsx    # Comment system
-    │
-    ├── ai/                     # AI features
-    │   ├── UnifiedAIPanel.tsx  # Main AI interface
-    │   ├── AskSection.tsx      # AI ask interface
-    │   ├── AnalyzeSection.tsx  # AI analysis tools
-    │   └── CurateSection.tsx   # AI curation tools
-    │
-    ├── upload/                 # Upload functionality
-    │   ├── DropZone.tsx        # Drag & drop zone
-    │   ├── ProgressTracker.tsx # Upload progress
-    │   └── FilePreview.tsx     # File preview
-    │
-    ├── client-management/      # Client management
-    │   ├── ClientList.tsx      # Client listing
-    │   ├── ClientForm.tsx      # Add/edit client
-    │   └── ActivityTimeline.tsx # Client activity
-    │
-    └── webhooks/              # Webhooks management
-        └── WorkflowBuilder.tsx # Visual workflow editor
-```
-
-### Frontend Conventions
-
-```typescript
-// Component naming: PascalCase.tsx
-// Hook naming: useCamelCase.ts
-// Service naming: camelCase.ts
-// Type naming: PascalCase
-// Constant naming: SCREAMING_SNAKE_CASE
-```
-
-### Page Structure
-
-```
-frontend/src/pages/
-├── DashboardPage.tsx           # Main dashboard
-├── GalleriesPage.tsx           # Galleries listing
-├── GalleryPage.tsx            # Individual gallery
-├── DesignStudioPage.tsx        # Album design studio
-├── ClientsPage.tsx            # Client management
-├── SettingsPage.tsx            # Workspace settings
-└── ProfilePage.tsx             # User profile
-```
-
-## Backend Structure
-
-### Layered Architecture
-
-```
-backend/src/app/
-├── api/v1/                     # API endpoints
-│   ├── auth.py                # Authentication endpoints
-│   ├── galleries.py           # Gallery management
-│   ├── assets.py              # Asset operations
-│   ├── clients.py             # Client management
-│   ├── faces.py               # Face detection
-│   └── webhooks.py            # Webhook handling
+│   Each service follows: src/{api/v1/, services/, repositories/, schemas/, config.py}
 │
-├── models/                     # SQLAlchemy models
-│   ├── user.py                # User model
-│   ├── workspace.py           # Workspace model
-│   ├── gallery.py             # Gallery model
-│   ├── asset.py               # Asset model
-│   ├── face.py                # Face detection model
-│   └── webhook.py             # Webhook model
+├── packages/                       # Shared npm packages (pnpm workspaces)
+│   ├── shared-types/              # Domain types (InvitationStatus, GalleryStatus)
+│   ├── shared-constants/          # Config (API_BASE, STORAGE, AI_THRESHOLDS)
+│   ├── shared-validation/         # Validation (isValidHexColor, sanitizeHtml)
+│   ├── shared-utils/              # Utilities (formatRelativeDate, formatFileSize)
+│   ├── api-types/                 # OpenAPI-generated client types
+│   └── database-utils/            # Database utilities
 │
-├── repositories/               # Data access layer
-│   ├── user_repository.py     # User data access
-│   ├── gallery_repository.py  # Gallery data access
-│   ├── asset_repository.py    # Asset data access
-│   └── face_repository.py     # Face data access
+├── infrastructure/                 # Docker, Kubernetes, deployment
+│   ├── docker/                    # docker-compose.yml, Dockerfiles
+│   ├── kubernetes/                # K8s manifests (optional)
+│   └── traefik/                   # Reverse proxy config
 │
-├── services/                   # Business logic
-│   ├── auth_service.py        # Authentication logic
-│   ├── gallery_service.py     # Gallery operations
-│   ├── asset_service.py       # Asset management
-│   ├── face_service.py        # Face detection
-│   ├── ai_service.py          # AI orchestration
-│   └── notification_service.py # Notifications
+├── tests/                         # E2E tests
+│   └── *.spec.ts                 # Playwright tests
 │
-├── middleware/                 # HTTP middleware
-│   ├── auth.py                # Authentication middleware
-│   ├── cors.py                # CORS handling
-│   └── rate_limit.py          # Rate limiting
+├── docs/                          # Documentation
+│   ├── TechnicalSpecs/           # Tech specs (JSON validated by _schema.json)
+│   └── GOOGLE_CLOUD_VISION_FACEID_TECH_SPEC.md
 │
-└── workers/                   # Background workers
-    ├── face_worker.py         # Face detection worker
-    ├── content_worker.py      # Content analysis worker
-    └── quality_worker.py      # Quality assessment worker
-```
-
-### Backend Conventions
-
-```python
-# Service naming: snake_case_service.py
-# Repository naming: snake_case_repository.py
-# Model naming: PascalCase (SQLAlchemy)
-# API route naming: snake_case.py
-# Constant naming: SCREAMING_SNAKE_CASE
-```
-
-## Microservices Structure
-
-Each microservice follows a consistent structure:
-
-```
-services/[service-name]/
-├── src/
-│   ├── api/v1/                # API endpoints
-│   │   ├── __init__.py       # API router initialization
-│   │   ├── endpoints.py      # Route definitions
-│   │   └── schemas.py        # Request/response models
-│   ├── services/             # Business logic
-│   │   ├── __init__.py       # Service registration
-│   │   └── [service]_service.py
-│   ├── repositories/          # Data access
-│   │   ├── __init__.py       # Repository registration
-│   │   └── [entity]_repository.py
-│   ├── schemas/               # Pydantic models
-│   ├── middleware/            # Service-specific middleware
-│   ├── observability/        # Health checks, metrics
-│   │   ├── health.py         # Health check endpoints
-│   │   └── metrics.py        # Prometheus metrics
-│   ├── config.py             # Service configuration
-│   └── main.py               # FastAPI application
-├── tests/                     # Unit and integration tests
-│   ├── unit/                 # Unit tests
-│   └── integration/          # Integration tests
-├── Dockerfile                # Container definition
-├── requirements.txt          # Python dependencies
-├── alembic/                 # Database migrations
-│   └── versions/            # Migration files
-└── .env.example             # Environment template
-```
-
-### Service-Specific Patterns
-
-```python
-# Gallery Service Pattern
-src/
-├── api/v1/galleries.py      # Gallery CRUD operations
-├── services/gallery_service.py     # Business logic
-├── repositories/gallery_repository.py # Data access
-└── schemas/gallery.py      # Gallery models
-
-# Billing Service Pattern
-src/
-├── api/v1/billing.py        # Subscription management
-├── services/billing_service.py     # Payment processing
-├── repositories/billing_repository.py # Billing data
-└── schemas/billing.py       # Billing models
-```
-
-## Shared Packages Structure
-
-### Monorepo with pnpm Workspaces
-
-```
-packages/
-├── shared-types/             # Domain types (TypeScript)
-│   ├── src/
-│   │   ├── index.ts         # Type exports
-│   │   ├── gallery.ts      # Gallery types
-│   │   ├── user.ts          # User types
-│   │   └── asset.ts        # Asset types
-│   └── package.json
+├── scripts/                       # Automation scripts
+│   ├── generate-python-types.ts  # TypeScript → Python types
+│   ├── generate-openapi-schemas.ts
+│   └── *.py                      # Utility scripts
 │
-├── shared-constants/         # Configuration constants
-│   ├── src/
-│   │   ├── index.ts         # Constant exports
-│   │   ├── api.ts           # API constants
-│   │   └── storage.ts       # Storage constants
-│   └── package.json
+├── .claude/                      # Claude AI context
+│   ├── skills/                   # 20+ skills for code generation
+│   ├── agents/                   # Agent definitions
+│   ├── commands/                 # Command workflows
+│   ├── settings.json            # Claude configuration
+│   └── PRD.md                   # Product requirements
 │
-├── shared-validation/        # Validation utilities
-│   ├── src/
-│   │   ├── index.ts         # Validation exports
-│   │   ├── validators.ts   # Custom validators
-│   │   └── sanitizers.ts   # Input sanitizers
-│   └── package.json
+├── .planning/                   # GSD (Get Shit Done) planning
+│   ├── codebase/               # This directory (ARCHITECTURE.md, STRUCTURE.md, etc.)
+│   └── milestones/            # Milestone tracking
 │
-└── shared-utils/            # General utilities
-    ├── src/
-    │   ├── index.ts         # Utility exports
-    │   ├── formatters.ts   # Data formatters
-    │   └── helpers.ts       # General helpers
-    └── package.json
+├── CLAUDE.md                   # Project instructions (MANDATORY - override all defaults)
+├── package.json               # Root workspace config
+├── pnpm-workspace.yaml       # pnpm workspace definition
+└── .env.example              # Environment variable template
 ```
 
-### Python Integration
+## Directory Purposes
 
-Shared Python modules are generated from TypeScript:
+**backend/**
+- Purpose: Monolithic FastAPI backend with 3-layer architecture
+- Contains: API endpoints, business logic, data access, worker processes, migrations
+- Key entry: `src/app/main.py`
+- Shared resources: PostgreSQL, Redis, JWT auth
 
-```
-# Backend imports
-from app.shared.types import GalleryStatus, UserRole
-from app.shared.constants import API_BASE, PAGINATION
-```
+**backend/src/app/api/v1/**
+- Purpose: All HTTP endpoint handlers (routes)
+- Contains: Files like `albums.py`, `galleries.py`, `users.py` (one per resource)
+- Pattern: Each file is an APIRouter with GET, POST, PUT, DELETE handlers
+- Calls: Service layer methods from `app.services.*`
 
-## Database Structure
+**backend/src/app/repositories/**
+- Purpose: Data access abstraction
+- Contains: Async methods that execute raw SQL/asyncpg queries
+- Pattern: One Repository class per domain entity (Album, Gallery, User)
+- Rule: All queries must include `workspace_id` filter
+- Example: `AlbumRepository.create_album(workspace_id, ...)`
 
-### Migration Pattern
+**backend/src/app/services/**
+- Purpose: Business logic implementation
+- Contains: Service classes with methods that orchestrate repositories + external APIs
+- Pattern: Services receive workspace_id from API handlers, pass to repositories
+- Example: `AlbumService.create_album(workspace_id, create_request)` → calls repository
 
-```
-backend/migrations/versions/
-├── 0001_initial_schema.py              # Initial schema
-├── 0002_add_galleries.py                # Add galleries table
-├── 0003_add_assets_table.py            # Add assets table
-└── 0004_add_face_detection.py          # Add face detection
-```
+**backend/src/app/middleware/**
+- Purpose: Cross-request concerns
+- Contains: `correlation.py` (trace IDs), `rate_limit.py`, `timeout.py`, `request_id.py`, `audit_logging.py`
+- Pattern: Starlette BaseHTTPMiddleware subclasses registered in FastAPI lifespan
+- Execution: Wraps all requests, adds context to response headers
 
-### Model Relationships
+**backend/src/app/db/**
+- Purpose: Database connection management
+- Contains: asyncpg pool initialization, Alembic migration runner, health checks
+- Key file: `postgres.py` (pool creation, acquire, transaction context manager)
+- Alembic config: `alembic.ini` at backend root
 
-```python
-# Workspace-level isolation
-class Workspace(Base):
-    id = UUID primary key
-    name = string
-    settings = JSONB
+**frontend/src/pages/**
+- Purpose: Page-level components (route targets)
+- Contains: Components like `GalleryPage.tsx`, `AlbumPage.tsx`, `SettingsPage.tsx`
+- Pattern: Each page imports smaller feature/ui components
+- Routing: Registered in `router/index.ts`, mounted in App.tsx
 
-class Gallery(Base):
-    id = UUID primary key
-    workspace_id = UUID foreign key
-    name = string
-    status = enum
+**frontend/src/components/ui/**
+- Purpose: Reusable UI components
+- Contains: Button, Modal, Input, Table, etc.
+- Pattern: Unstyled (use Tailwind classes or style prop)
+- No logic: Pure presentational, accept data via props
 
-class Asset(Base):
-    id = UUID primary key
-    workspace_id = UUID foreign key
-    gallery_id = UUID foreign key
-    file_path = string
-    metadata = JSONB
+**frontend/src/services/api.ts**
+- Purpose: Centralized API client with auth interceptors
+- Contains: HTTP methods (GET, POST, PUT, DELETE), token refresh logic
+- Pattern: Single fetch wrapper with error handling + 401 refresh flow
+- Used by: React Query hooks in pages/components
 
-class Face(Base):
-    id = UUID primary key
-    workspace_id = UUID foreign key
-    asset_id = UUID foreign key
-    embedding = vector(512)
-    bounding_box = JSONB
-```
+**frontend/src/contexts/**
+- Purpose: React Context providers
+- Contains: AuthContext (login state, token), PWAProvider (offline capability)
+- Pattern: Context.Provider wraps children, useContext(AuthContext) in components
+- Lifespan: Persist across route changes (at App level)
 
-## Documentation Structure
+**frontend/src/hooks/**
+- Purpose: Custom React hooks
+- Contains: `useAuth()` (access AuthContext), `useTheme()`, `useLocalStorage()`
+- Pattern: Encapsulate logic reused across multiple components
+- Example: `useAuth()` returns current user, login/logout functions
 
-### Product Documentation
+**services/gallery-service/src/**
+- Purpose: Reference implementation for all other microservices
+- Structure: Mirrors backend 3-layer (`api/v1/`, `services/`, `repositories/`, `schemas/`, `config.py`)
+- Health: `/health/live`, `/health/ready`, `/metrics` endpoints required
 
-```
-docs/
-├── Features/                    # Feature specifications
-│   ├── Gallery_System.md       # Gallery feature details
-│   ├── AI_Features.md          # AI capabilities
-│   └── Client_Management.md    # CRM features
-│
-├── Business_Features/          # Business feature specs
-│   ├── Subscription_Tiers.md    # Pricing plans
-│   └── Partner_Program.md      # Affiliate program
-│
-└── TechnicalSpecs/             # Technical specifications
-    ├── API_Specification.json  # API contract
-    ├── Database_Schema.json    # Database schema
-    └── Security_Model.md       # Security implementation
-```
+**packages/shared-types/**
+- Purpose: Domain types shared by frontend and backend
+- Contains: `InvitationStatus = "pending" | "accepted" | "declined"`, `GalleryStatus`, etc.
+- Build: TypeScript source compiled to both JS (for frontend) and Python (via script)
+- Updated: When domain enums/types change, regenerate Python and rebuild
 
-### Operational Documentation
+**infrastructure/docker/**
+- Purpose: Containerization and local dev environment
+- Contains: `docker-compose.yml` (all services), individual Dockerfiles
+- Key services: postgres, redis, backend, gallery-service, frontend (in dev)
+- Volumes: postgres data, source code for hot reload
 
-```
-docs/
-├── troubleshooting/             # Debugging guides
-│   ├── common_issues.md        # Common problems
-│   └── debugging_ai.md         # AI debugging
-│
-├── runbooks/                   # Operational guides
-│   ├── deployment.md          # Deployment process
-│   └── monitoring.md           # Monitoring setup
-│
-└── ARCHITECTURE_QUICK_REFERENCE.md  # Quick architecture guide
-```
+## Key File Locations
 
-## Configuration Structure
+**Entry Points:**
+- Backend: `backend/src/app/main.py` (FastAPI app, startup/shutdown)
+- Frontend: `frontend/src/main.tsx` (React mount) + `frontend/src/App.tsx` (root component)
+- Services: `services/*/src/main.py` (each microservice entry point)
 
-### Environment Variables
+**Configuration:**
+- Backend settings: `backend/src/app/config/settings.py` (env var parsing)
+- Frontend env: `frontend/.env.local` (VITE_API_URL, etc.)
+- Service config: `services/*/src/config.py`
 
-```
-# .env configuration
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/rawdrive
-REDIS_URL=redis://localhost:6379/0
+**Core Logic:**
+- Album feature: `backend/src/app/repositories/album_repository.py`, `backend/src/app/services/album_service.py`, `backend/src/app/api/v1/albums.py`
+- Gallery feature: `services/gallery-service/src/` (reference implementation)
+- Auth: `backend/src/app/api/dependencies/auth.py` (JWT validation)
 
-# Authentication
-JWT_SECRET=64-byte-hex-string
-JWT_ALGORITHM=EdDSA
+**Testing:**
+- Backend tests: `backend/tests/` (pytest)
+- Frontend tests: `frontend/src/__tests__/` or `*.test.tsx` (Vitest)
+- E2E tests: `tests/` (Playwright)
 
-# Storage
-R2_ACCESS_KEY_ID=cloudflare-r2-key
-R2_SECRET_ACCESS_KEY=cloudflare-r2-secret
-R2_BUCKET_NAME=rawdrive-assets
+**Database:**
+- Migrations: `backend/migrations/` (Alembic versions)
+- Models (old): `backend/models/` (legacy, being migrated to `src/app/models/`)
 
-# AI Services
-AI_PROVIDER=openai
-AI_API_KEY=ai-service-key
-AI_MODEL=gpt-4
+**Shared Packages:**
+- Types: `packages/shared-types/src/index.ts`
+- Constants: `packages/shared-constants/src/index.ts`
+- Validation: `packages/shared-validation/src/index.ts`
 
-# Payment
-STRIPE_SECRET_KEY=stripe-secret-key
-RAZORPAY_KEY_ID=razorpay-key
-```
+## Naming Conventions
 
-### Docker Configuration
+**Files:**
+- Python: `snake_case.py` (e.g., `album_service.py`, `user_repository.py`)
+- TypeScript: `camelCase.ts` for utils, `PascalCase.tsx` for React components
+- Tests: `*.test.ts` (Vitest) or `test_*.py` (pytest)
 
-```yaml
-# docker-compose.yml
-services:
-  backend:
-    build: ../../backend
-    environment:
-      DATABASE_URL: postgresql+asyncpg://rawdrive:rawdrive@postgres:5432/rawdrive
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-```
+**Directories:**
+- Plural for collections: `services/`, `repositories/`, `components/`
+- Feature-based: `pages/GalleryPage/`, `components/ui/`, `services/api.ts`
+- No uppercase except React components
 
-## Claude Tooling Structure
+**Functions:**
+- Python: `snake_case` (e.g., `def create_album()`, `async def fetch_data()`)
+- TypeScript: `camelCase` (e.g., `const fetchData = ()`, `export function validateEmail()`)
 
-### Skills Organization
+**Classes:**
+- Python: `PascalCase` (e.g., `class AlbumRepository`, `class AlbumService`)
+- TypeScript: `PascalCase` (e.g., `class AuthProvider`, `class Album`)
 
-```
-.claude/skills/
-├── accessibility.ts           # WCAG compliance
-├── api-standards.ts          # API conventions
-├── design-system.ts          # UI components
-├── frontend-design.ts        # UI/UX patterns
-├── security.ts              # Security practices
-└── testing.ts               # Testing patterns
-```
+**Constants:**
+- Python: `UPPER_SNAKE_CASE` (e.g., `DEFAULT_PAGE_SIZE = 20`)
+- TypeScript: `UPPER_SNAKE_CASE` (e.g., `export const API_BASE_URL = ...`)
 
-### Commands Organization
+**Types/Interfaces:**
+- TypeScript: `PascalCase` with `I` prefix for interfaces (e.g., `interface IAlbum`, `type Album`)
 
-```
-.claude/commands/
-├── dev/
-│   ├── start-dev.ts         # Start development
-│   ├── run-tests.ts         # Run tests
-│   └── deploy.ts            # Deploy to production
-│
-└── code/
-    ├── format.ts            # Code formatting
-    ├── lint.ts              # Linting
-    └── type-check.ts        # Type checking
-```
+## Where to Add New Code
 
-### Agents Organization
+**New Feature (e.g., Tagging System):**
+- Primary code:
+  - Repository: `backend/src/app/repositories/tag_repository.py`
+  - Service: `backend/src/app/services/tag_service.py`
+  - API: `backend/src/app/api/v1/tags.py`
+  - Schema: `backend/src/app/schemas/tag.py`
+- Tests:
+  - Backend: `backend/tests/test_tags.py`
+- Frontend (if UI needed):
+  - Pages: `frontend/src/pages/TagsPage.tsx`
+  - Components: `frontend/src/components/features/TagList.tsx`
+  - Hooks: `frontend/src/hooks/useTagSearch.ts`
+  - Tests: `frontend/src/__tests__/tags.test.tsx`
 
-```
-.claude/agents/
-├── database-architect.ts    # Schema design
-├── debugger.ts             # Root cause analysis
-├── devops-engineer.ts      # Deployment
-├── performance-optimizer.ts # Performance tuning
-├── security-auditor.ts    # Security review
-├── ui-component-designer.ts # UI design
-└── auth-troubleshooter.ts  # Auth debugging
-```
+**New Component/Module:**
+- UI Component: `frontend/src/components/ui/MyComponent.tsx`
+- Feature Component: `frontend/src/components/features/MyFeature.tsx`
+- Custom Hook: `frontend/src/hooks/useMyHook.ts`
+- Utility: `frontend/src/utils/myHelper.ts` or `packages/shared-utils/src/myHelper.ts`
 
-## Best Practices
+**New Microservice:**
+- Template: Copy `services/gallery-service/src/` structure
+- Config: Create `src/config.py` with environment variables
+- Main: Create `src/main.py` with FastAPI lifespan, health endpoints, A2A registry
+- API: Create `src/api/v1/__init__.py` with routers
+- Services: Create `src/services/` with business logic
+- Repositories: Create `src/repositories/` with data access (use shared PostgreSQL)
+- Schemas: Create `src/schemas/` with Pydantic models
+- Tests: Create `tests/` with pytest tests
 
-### File Placement Rules
+**Shared Utilities:**
+- Cross-package helpers: `packages/shared-utils/src/`
+- Build and include in both frontend (`@rawdrive/shared-utils`) and backend (`from app.shared.utils import`)
 
-1. **Never create files in random locations**
-2. **Follow established patterns** for each service type
-3. **Use shared packages** for cross-cutting concerns
-4. **Keep documentation** in designated directories
-5. **Separate concerns** between layers and services
+## Special Directories
 
-### Naming Conventions
+**backend/models/ (Legacy):**
+- Purpose: Old SQLAlchemy models
+- Generated: From database schema introspection
+- Committed: Yes, but being migrated
+- Status: Deprecated; new code uses Pydantic models in `src/app/models/`
 
-| Type | Convention | Example |
-|------|------------|---------|
-| React components | `PascalCase.tsx` | `GalleryUpload.tsx` |
-| React hooks | `useCamelCase.ts` | `useUpload.ts` |
-| Python services | `snake_case_service.py` | `gallery_service.py` |
-| Python classes | `PascalCase` | `GalleryService` |
-| API routes | `/api/v1/kebab-case` | `/api/v1/gallery-items` |
-| Database tables | `snake_case` | `gallery_items` |
-| Environment variables | `SCREAMING_SNAKE` | `JWT_SECRET` |
+**backend/migrations/**
+- Purpose: Alembic migration history
+- Generated: By `alembic revision -m "message"`
+- Committed: Yes, always commit migrations
+- Run: `docker exec rawdrive-backend alembic upgrade head`
 
-### Code Organization
+**frontend/src/_orphaned/**
+- Purpose: Old/unused code awaiting cleanup
+- Generated: No
+- Committed: Yes (historical reference)
+- Status: Do not import from here; delete eventually
 
-1. **Frontend**: Component-based organization with clear feature boundaries
-2. **Backend**: Layered architecture with separation of concerns
-3. **Microservices**: Consistent structure across all services
-4. **Shared packages**: Reusable code with clear interfaces
-5. **Documentation**: Comprehensive and up-to-date
+**frontend/public/**
+- Purpose: Static assets (icons, logos, PWA manifest)
+- Generated: No (but PWA manifest is auto-generated by Vite plugin)
+- Committed: Yes
+- Served: As-is at root URL (e.g., `/favicon.ico`)
 
----
+**.planning/**
+- Purpose: GSD (Get Shit Done) planning artifacts
+- Generated: By Claude via `/gsd:map-codebase`, `/gsd:plan-phase`, etc.
+- Committed: Yes
+- Consumed by: Downstream GSD commands for context
 
-*This structure document provides a comprehensive guide to navigating and understanding the RawDrive codebase. Follow these patterns when adding new features or making changes to the codebase.*
+**.claude/skills/**
+- Purpose: AI skills for code generation (20+ domain skills)
+- Generated: No (maintained manually)
+- Committed: Yes
+- Loaded: By Claude for `/gsd:execute-phase` context
+
+**infrastructure/docker/docker-compose.yml**
+- Purpose: Local development environment
+- Services: postgres, redis, backend, gallery-service, etc.
+- Run: `docker compose up -d`
+- Volumes: Source code (hot reload), database data
+
+## Critical Rules for New Code
+
+1. **Multi-tenant isolation (MANDATORY):**
+   - Every query MUST filter by `workspace_id`
+   - Extract workspace_id from JWT token (via `CurrentUserDep`), never from request body
+   - Example: `select(Album).where(Album.workspace_id == workspace_id)`
+
+2. **3-layer architecture:**
+   - API layer: Only HTTP parsing + calling services
+   - Service layer: Business logic + repository orchestration
+   - Repository layer: Only SQL queries
+   - Never put logic in models; never skip repository layer
+
+3. **No hardcoding:**
+   - API keys → environment variables
+   - Magic numbers → constants in `constants/` or `.py`
+   - Strings (user-facing) → i18n translations in `i18n/`
+   - Colors → design tokens from shared-constants
+
+4. **Error handling:**
+   - Raise custom domain exceptions (e.g., `AlbumNotFoundError`)
+   - Include code, message, status_code, user_message
+   - Global handler converts to JSON response
+
+5. **Testing:**
+   - Every repository method: unit test with mocked asyncpg
+   - Every service method: unit test with mocked repository
+   - Every endpoint: integration test with test database
+   - Coverage target: 80%+ (enforced by CI/CD)
+
+6. **Shared packages must be built:**
+   - After updating `packages/shared-types/`, run `pnpm build:packages`
+   - Frontend cannot use old types until rebuilt
+
+7. **Migrations are immutable:**
+   - Never delete or edit migration files
+   - Create new migration for schema changes
+   - Run inside Docker: `docker exec rawdrive-backend alembic upgrade head`
