@@ -39,6 +39,7 @@ class RateLimitType(str, Enum):
     FACE_SEARCH = "face_search"  # Face similarity search (per workspace)
     FACE_DETECT = "face_detect"  # Face detection triggers (per workspace, daily)
     FACE_BULK = "face_bulk"  # Bulk face operations (per workspace)
+    A2A = "a2a"  # External agent API key requests (per key, per minute)
 
 
 @dataclass

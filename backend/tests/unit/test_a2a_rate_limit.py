@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -35,7 +36,26 @@ def in_memory_redis():
 
 
 @pytest.fixture()
-def _patch_redis(in_memory_redis, monkeypatch):
+def _monotonic_time(monkeypatch):
+    """Ensure time.time() returns unique, incrementing values for each call.
+
+    The sliding window algorithm uses f"{now}" as the sorted-set member key.
+    When calls happen faster than float resolution, members collide and zadd
+    overwrites instead of adding.  This fixture avoids that.
+    """
+    _base = time.time()
+    _counter = 0
+
+    def _tick():
+        nonlocal _counter
+        _counter += 1
+        return _base + _counter * 0.001  # 1 ms apart
+
+    monkeypatch.setattr("app.services.rate_limit_service.time.time", _tick)
+
+
+@pytest.fixture()
+def _patch_redis(in_memory_redis, monkeypatch, _monotonic_time):
     """Monkeypatch get_redis_client to return in-memory redis."""
     async def _get():
         return in_memory_redis

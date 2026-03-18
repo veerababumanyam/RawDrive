@@ -54,6 +54,9 @@ class A2AContext:
     api_key_id: uuid.UUID | None = None
     api_key_scopes: list[str] | None = None
 
+    # Rate limiting
+    rate_limit_rpm: int = 100  # Requests per minute (matches DB column default)
+
     # Request metadata
     request_id: str | None = None
     source_ip: str | None = None
@@ -239,6 +242,7 @@ async def validate_api_key(api_key: str) -> A2AContext:
         permissions=[],  # Agents use scopes, not permissions
         api_key_id=row["key_id"],
         api_key_scopes=row["scopes"],
+        rate_limit_rpm=row["rate_limit_rpm"],
     )
 
 
@@ -430,34 +434,55 @@ A2AWorkspaceAccessDep = Annotated[tuple[A2AContext, uuid.UUID], Depends(require_
 async def check_a2a_rate_limit(context: A2AContext, endpoint: str) -> None:
     """Check rate limit for A2A calls.
 
-    For API keys, enforces rate_limit_rpm from database.
-    For service-to-service calls, applies default rate limits.
+    For API keys, enforces rate_limit_rpm from database via Redis sliding window.
+    For service-to-service calls, bypasses rate limiting entirely (trusted).
 
     Raises:
-        HTTPException: 429 if rate limit exceeded
+        HTTPException: 429 with Retry-After header if rate limit exceeded
+            and mode is "enforcing"
     """
     if not context.is_agent_call:
         # Service-to-service calls: no rate limiting (trusted)
         return
 
-    # API key: check rate limit
-    # This would integrate with Redis for sliding window rate limiting
-    # For now, we'll skip the implementation and just log
+    from app.services.rate_limit_service import (
+        RateLimitConfig,
+        RateLimitService,
+        RateLimitType,
+    )
+    from app.config.settings import get_settings
 
-    logger.debug(
-        "A2A rate limit check",
-        extra={
-            "api_key_id": str(context.api_key_id),
-            "workspace_id": str(context.workspace_id),
-            "endpoint": endpoint,
-        },
+    config = RateLimitConfig(
+        requests=context.rate_limit_rpm,
+        window_seconds=60,
+    )
+    service = RateLimitService()
+    result = await service.check_rate_limit(
+        identifier=f"a2a:{context.api_key_id}",
+        limit_type=RateLimitType.A2A,
+        custom_config=config,
     )
 
-    # TODO: Implement Redis-based rate limiting
-    # Example:
-    # rate_limit_key = f"a2a:ratelimit:{context.api_key_id}:{endpoint}"
-    # current_count = await redis.incr(rate_limit_key)
-    # if current_count == 1:
-    #     await redis.expire(rate_limit_key, 60)  # 1 minute window
-    # if current_count > rate_limit_rpm:
-    #     raise HTTPException(status_code=429, detail="Rate limit exceeded")
+    if not result.allowed:
+        settings = get_settings()
+        if settings.a2a_rate_limit_mode == "log_only":
+            logger.warning(
+                "A2A rate limit would block request",
+                extra={
+                    "api_key_id": str(context.api_key_id),
+                    "workspace_id": str(context.workspace_id),
+                    "endpoint": endpoint,
+                    "rate_limit_rpm": context.rate_limit_rpm,
+                    "retry_after": result.retry_after,
+                    "would_block": True,
+                },
+            )
+            return
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "retry_after": result.retry_after,
+            },
+            headers={"Retry-After": str(result.retry_after)},
+        )

@@ -350,6 +350,13 @@ class AppSettings(BaseSettings):
         description="LM Studio base URL for local AI",
     )
 
+    # A2A rate limiting
+    a2a_rate_limit_mode: str = Field(
+        "log_only",
+        alias="A2A_RATE_LIMIT_MODE",
+        description="A2A rate limit mode: 'log_only' (default, safe rollout) or 'enforcing' (returns 429)",
+    )
+
     # CORS / security
     allowed_cors_origins: list[str] = Field(default_factory=list, alias="ALLOWED_CORS_ORIGINS")
 
