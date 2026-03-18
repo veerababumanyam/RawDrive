@@ -16,6 +16,7 @@ from uuid import UUID
 
 from app.db.postgres import get_postgres_pool
 from app.repositories.curation_session_repository import get_curation_session_repository
+from app.repositories.embedding_repository import get_embedding_repository
 from app.repositories.similarity_group_repository import get_similarity_group_repository
 from app.repositories.photo_quality_repository import get_photo_quality_repository
 from app.services.curation_session_service import (
@@ -24,6 +25,7 @@ from app.services.curation_session_service import (
     STAGE_EMBEDDING_COMPUTE,
     STAGE_SIMILARITY_GROUPING,
 )
+from app.services.embedding_client import get_embedding_client
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,7 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 3
 EMBEDDING_BATCH_SIZE = 64  # Photos per CLIP batch
 SIMILARITY_THRESHOLD = 0.85  # Default cosine similarity threshold
+DUPLICATE_CLIP_THRESHOLD = 0.95  # Cosine similarity for duplicate detection
 
 
 class SimilarityWorker:
@@ -55,7 +58,8 @@ class SimilarityWorker:
         self._session_service = None
         self._group_repo = None
         self._quality_repo = None
-        self._clip_model = None
+        self._embedding_client = None
+        self._workspace_id: Optional[UUID] = None
 
     @property
     def session_service(self):
@@ -189,7 +193,8 @@ class SimilarityWorker:
             await self._transition_to_grouping_stage(workspace_id, session_id)
             return
 
-        # Load CLIP model (lazy)
+        # Initialize embedding client (lazy)
+        self._workspace_id = workspace_id
         await self._ensure_clip_model()
 
         # Process photos in batches
@@ -267,39 +272,55 @@ class SimilarityWorker:
         await self._transition_to_curation_stage(workspace_id, session_id, groups_count)
 
     async def _ensure_clip_model(self) -> None:
-        """Ensure CLIP model is loaded.
+        """Ensure EmbeddingClient is ready.
 
-        Loads ViT-B/32 model on first call.
+        Creates an HTTP client to ai-processing-service for CLIP inference.
+        No local model loading -- all ML is offloaded via HTTP.
         """
-        if self._clip_model is not None:
+        if self._embedding_client is not None:
             return
 
-        # TODO: Implement actual CLIP model loading
-        # Real implementation in T031
-        logger.info("Loading CLIP model (ViT-B/32)")
-        self._clip_model = "placeholder"  # Will be actual model
+        logger.info("Initializing EmbeddingClient (HTTP to ai-processing-service)")
+        self._embedding_client = get_embedding_client()
 
     async def _compute_batch_embeddings(
         self, photos: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Compute CLIP embeddings for a batch of photos.
+        """Compute CLIP embeddings for a batch of photos via ai-processing-service.
 
         Args:
             photos: List of photo dicts with asset_id and object_key
 
         Returns:
-            List of dicts with asset_id and embedding vector
+            List of dicts with asset_id and embedding vector (512-dim)
         """
-        # TODO: Implement actual CLIP embedding computation
-        # Real implementation in T031
+        # Extract object keys (prefer processed, fall back to thumbnail)
+        object_keys = []
+        key_to_asset = {}
+        for photo in photos:
+            key = photo.get("processed_object_key") or photo.get("thumbnail_object_key", "")
+            object_keys.append(key)
+            key_to_asset[key] = photo["asset_id"]
 
-        # Skeleton returns empty embeddings
+        workspace_id_str = str(self._workspace_id) if self._workspace_id else ""
+
+        # Call ai-processing-service via HTTP
+        api_results = await self._embedding_client.embed_images(
+            object_keys, workspace_id_str
+        )
+
+        # Map API results back to asset_id -> embedding format
+        url_to_embedding = {r["url"]: r["embedding"] for r in api_results}
+
         results = []
         for photo in photos:
+            key = photo.get("processed_object_key") or photo.get("thumbnail_object_key", "")
+            embedding = url_to_embedding.get(key, [0.0] * 512)
             results.append({
                 "asset_id": photo["asset_id"],
-                "embedding": [0.0] * 512,  # 512-dim placeholder
+                "embedding": embedding,
             })
+
         return results
 
     async def _store_embeddings(
@@ -308,31 +329,51 @@ class SimilarityWorker:
         session_id: UUID,
         embeddings: list[dict[str, Any]],
     ) -> None:
-        """Store computed embeddings in database.
+        """Store computed embeddings and run duplicate detection.
+
+        Uses EmbeddingRepository for pgvector-backed storage and cosine
+        similarity queries. After storing, checks each embedding against
+        existing embeddings for near-duplicate detection.
 
         Args:
             workspace_id: Workspace ID
             session_id: Session ID
-            embeddings: List of embedding dicts
+            embeddings: List of embedding dicts with asset_id and embedding
         """
-        pool = await get_postgres_pool()
-        async with pool.acquire() as conn:
-            for emb in embeddings:
-                # Store in image_embeddings table
-                await conn.execute(
-                    """
-                    INSERT INTO image_embeddings (
-                        workspace_id, asset_id, session_id,
-                        embedding_vector, model_version
-                    )
-                    VALUES ($1, $2, $3, $4, 'clip-vit-b-32')
-                    ON CONFLICT (asset_id, session_id)
-                    DO UPDATE SET embedding_vector = EXCLUDED.embedding_vector
-                    """,
-                    workspace_id,
+        emb_repo = get_embedding_repository()
+
+        # Batch store via repository
+        store_entries = [
+            {
+                "asset_id": emb["asset_id"],
+                "session_id": session_id,
+                "embedding": emb["embedding"],
+                "model_version": "clip-vit-b-32",
+            }
+            for emb in embeddings
+        ]
+        await emb_repo.batch_store_embeddings(workspace_id, store_entries)
+
+        # Duplicate detection: check each new embedding against existing ones
+        for emb in embeddings:
+            duplicates = await emb_repo.find_similar_by_embedding(
+                workspace_id=workspace_id,
+                embedding=emb["embedding"],
+                exclude_asset_id=emb["asset_id"],
+                threshold=DUPLICATE_CLIP_THRESHOLD,
+                limit=5,
+            )
+            if duplicates:
+                logger.info(
+                    "Duplicate candidates found for asset %s: %d matches (threshold=%.2f)",
                     emb["asset_id"],
-                    session_id,
-                    emb["embedding"],
+                    len(duplicates),
+                    DUPLICATE_CLIP_THRESHOLD,
+                    extra={
+                        "asset_id": str(emb["asset_id"]),
+                        "duplicate_count": len(duplicates),
+                        "top_similarity": duplicates[0]["similarity_score"],
+                    },
                 )
 
     async def _get_session_embeddings(
