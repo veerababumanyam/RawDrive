@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-02-PLAN.md (Phase 01 fully complete)
-last_updated: "2026-03-18T20:21:51.499Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-18T20:31:20.144Z"
 progress:
   total_phases: 9
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow must function end-to-end without stubbed or broken steps.
-**Current focus:** Phase 01 — security-hardening (COMPLETE)
+**Current focus:** Phase 02 — email-infrastructure
 
 ## Current Position
 
-Phase: 01 (security-hardening) — COMPLETE
-Plan: 2 of 2 (all plans complete)
+Phase: 02 (email-infrastructure) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Plan: 2 of 2 (all plans complete)
 - Trend: stable
 
 *Updated after each plan completion*
+| Phase 02-01 P01 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,7 @@ Recent decisions affecting current work:
 - [01-02] Used pg_advisory_xact_lock(hashtext(session_id)) for curation state machine locking
 - [01-02] Kept deprecated update_status for backward compat; new code uses update_status_atomic
 - [Phase 01]: Fetch all active keys per workspace then loop with hmac.compare_digest for timing-safe A2A key validation
+- [Phase 02-01]: Used Postal v3 as self-hosted transactional email server with MariaDB + RabbitMQ
 
 ### Pending Todos
 
@@ -73,6 +75,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T20:19:36Z
-Stopped at: Completed 01-02-PLAN.md (Phase 01 fully complete)
+Last session: 2026-03-18T20:31:20.141Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None

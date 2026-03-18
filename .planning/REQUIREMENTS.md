@@ -14,8 +14,8 @@
 
 ### Email Infrastructure
 
-- [ ] **MAIL-01**: Postal deployed as Docker container with MariaDB and RabbitMQ in docker-compose
-- [ ] **MAIL-02**: DNS records configured for sending domain (SPF, DKIM, DMARC)
+- [x] **MAIL-01**: Postal deployed as Docker container with MariaDB and RabbitMQ in docker-compose
+- [x] **MAIL-02**: DNS records configured for sending domain (SPF, DKIM, DMARC)
 - [ ] **MAIL-03**: EmailService abstraction created as single interface for all email sending (replacing 6+ scattered TODO stubs)
 - [ ] **MAIL-04**: Postal HTTP API client integrated into EmailService with retry logic and delivery tracking
 - [ ] **MAIL-05**: User receives email verification after signup with secure token link
@@ -120,8 +120,8 @@
 | SEC-02 | Phase 1 | Complete |
 | SEC-03 | Phase 1 | Complete |
 | SEC-04 | Phase 1 | Complete |
-| MAIL-01 | Phase 2 | Pending |
-| MAIL-02 | Phase 2 | Pending |
+| MAIL-01 | Phase 2 | Complete |
+| MAIL-02 | Phase 2 | Complete |
 | MAIL-03 | Phase 2 | Pending |
 | MAIL-04 | Phase 2 | Pending |
 | AIS-01 | Phase 3 | Pending |
