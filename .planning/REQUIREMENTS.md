@@ -26,9 +26,9 @@
 
 ### AI Processing Service
 
-- [ ] **AIS-01**: ai-processing-service container starts and passes health checks (currently crash-looping)
-- [ ] **AIS-02**: Milvus dependency resolved — either fix Milvus health check or make it optional with pgvector fallback
-- [ ] **AIS-03**: Heavy ML imports (InsightFace, Real-ESRGAN) made lazy-loading to prevent startup crashes
+- [x] **AIS-01**: ai-processing-service container starts and passes health checks (currently crash-looping)
+- [x] **AIS-02**: Milvus dependency resolved — either fix Milvus health check or make it optional with pgvector fallback
+- [x] **AIS-03**: Heavy ML imports (InsightFace, Real-ESRGAN) made lazy-loading to prevent startup crashes
 
 ### AI/ML Features
 
@@ -124,9 +124,9 @@
 | MAIL-02 | Phase 2 | Complete |
 | MAIL-03 | Phase 2 | Complete |
 | MAIL-04 | Phase 2 | Complete |
-| AIS-01 | Phase 3 | Pending |
-| AIS-02 | Phase 3 | Pending |
-| AIS-03 | Phase 3 | Pending |
+| AIS-01 | Phase 3 | Complete |
+| AIS-02 | Phase 3 | Complete |
+| AIS-03 | Phase 3 | Complete |
 | RATE-01 | Phase 4 | Pending |
 | RATE-02 | Phase 4 | Pending |
 | RATE-03 | Phase 4 | Pending |

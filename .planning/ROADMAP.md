@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Security Hardening** - Fix timing-safe comparison, permission checks, and state machine locking (completed 2026-03-18)
 - [ ] **Phase 2: Email Infrastructure** - Deploy Postal and build the EmailService abstraction
-- [ ] **Phase 3: AI Service Stabilization** - Fix crash-looping ai-processing-service container
+- [x] **Phase 3: AI Service Stabilization** - Fix crash-looping ai-processing-service container (completed 2026-03-18)
 - [ ] **Phase 4: Rate Limiting** - Implement Redis sliding window rate limiter for A2A API keys
 - [ ] **Phase 5: Email Features** - Wire verification, password reset, invitations, and delivery tracking
 - [ ] **Phase 6: AI/ML Pipeline** - Wire CLIP model, embeddings, duplicate detection, and clustering
@@ -65,7 +65,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: Fix crash-loop -- health endpoints, lazy imports, Milvus fallback, and requirements cleanup
+- [x] 03-01: Fix crash-loop -- health endpoints, lazy imports, Milvus fallback, and requirements cleanup
 
 ### Phase 4: Rate Limiting
 **Goal**: A2A API keys are rate-limited with Redis sliding window enforcement
