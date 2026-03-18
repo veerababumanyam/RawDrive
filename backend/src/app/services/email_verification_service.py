@@ -215,8 +215,8 @@ class EmailVerificationService:
             "1",
         )
 
-        # TODO: Queue email sending via background task
-        # For now, just log (email service not implemented yet)
+        # Email sending is handled by the caller (auth endpoint) after receiving
+        # the raw_token back. This keeps the service focused on token management.
         logger.info(
             "Email verification token generated",
             extra={

@@ -7,6 +7,7 @@ Implements Requirements: 3.1, 3.2, 3.4, 4.1, 4.2, 22.1, 22.2
 from __future__ import annotations
 
 import hashlib
+import html
 import logging
 from typing import Annotated, Optional
 
@@ -46,6 +47,14 @@ from app.services.audit_service import (
     AuditEventType,
     log_auth_event,
 )
+from app.services.email_verification_service import (
+    EmailVerificationService,
+    TokenExpiredError as EVTokenExpiredError,
+    TokenInvalidError as EVTokenInvalidError,
+    TokenAlreadyUsedError,
+    EmailVerificationError,
+)
+from app.services import email_service as email_service_module
 from app.services.oauth_service import (
     GoogleOAuthService,
     OAuthCodeExchangeError,
@@ -107,6 +116,28 @@ async def signup(
             user_agent=user_agent,
             details={"email_hash": _hash_email_for_audit(user.email), "outcome": "success"},
         )
+
+        # Send verification email (graceful degradation - signup succeeds even if this fails)
+        try:
+            settings = get_settings()
+            ev_service = EmailVerificationService()
+            raw_token = await ev_service.send_verification_email(
+                user_id=user.user_id,
+                email=user.email,
+                force=True,
+            )
+            verification_url = f"{settings.public_url}/verify-email?token={raw_token}"
+            safe_name = html.escape(user.display_name) if user.display_name else None
+            await email_service_module.send_verification_email(
+                to_email=user.email,
+                verification_url=verification_url,
+                user_name=safe_name,
+            )
+        except Exception as email_err:
+            logger.warning(
+                "Failed to send verification email during signup",
+                extra={"user_id": str(user.user_id), "error": str(email_err)},
+            )
     except UserExistsError as e:
         # Log failed signup attempt
         await log_auth_event(
@@ -390,8 +421,21 @@ async def verify_email(
     token: str = Query(..., description="Email verification token"),
 ) -> MessageResponse:
     """Verify email with token."""
-    # TODO: Implement email verification service
-    return MessageResponse(message="Email verification not yet implemented")
+    ev_service = EmailVerificationService()
+    try:
+        user_id = await ev_service.verify_email(token)
+        logger.info("Email verified via endpoint", extra={"user_id": str(user_id)})
+        return MessageResponse(message="Email successfully verified")
+    except EVTokenExpiredError as e:
+        raise ConflictError(message=str(e), code=e.code) from e
+    except EVTokenInvalidError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except TokenAlreadyUsedError as e:
+        raise ConflictError(message=str(e), code=e.code) from e
+    except EmailVerificationError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
 
 
 @router.post(
