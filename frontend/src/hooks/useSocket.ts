@@ -9,13 +9,27 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 export interface WebSocketEvent {
-  type: 'asset:created' | 'asset:processed' | 'asset:deleted' | 'activity:created' | 'connected';
+  type:
+    | 'asset:created'
+    | 'asset:processed'
+    | 'asset:deleted'
+    | 'activity:created'
+    | 'connected'
+    | 'notification:new'
+    | 'curation:status_changed'
+    | 'churn:intervention_created';
   workspace_id: string;
   gallery_id?: string;
   asset_id?: string;
   status?: string;
   activity?: Record<string, unknown>;
   data?: Record<string, unknown>;
+  notification_id?: string;
+  session_id?: string;
+  title?: string;
+  body?: string;
+  category?: string;
+  progress?: number;
 }
 
 export interface UseSocketOptions {
@@ -148,6 +162,39 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
                 gallery_id: data.gallery_id,
                 status: data.status,
               },
+            })
+          );
+        }
+
+        if (data.type === 'notification:new') {
+          window.dispatchEvent(
+            new CustomEvent('ws:notification:new', {
+              detail: {
+                notification_id: data.notification_id,
+                title: data.title,
+                body: data.body,
+                category: data.category,
+              },
+            })
+          );
+        }
+
+        if (data.type === 'curation:status_changed') {
+          window.dispatchEvent(
+            new CustomEvent('ws:curation:status_changed', {
+              detail: {
+                session_id: data.session_id,
+                status: data.status,
+                progress: data.progress,
+              },
+            })
+          );
+        }
+
+        if (data.type === 'churn:intervention_created') {
+          window.dispatchEvent(
+            new CustomEvent('ws:churn:intervention_created', {
+              detail: data.data ?? {},
             })
           );
         }

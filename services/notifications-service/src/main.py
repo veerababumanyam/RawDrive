@@ -15,6 +15,7 @@ Features:
 Port: 8007 (configurable via SERVICE_PORT)
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
@@ -23,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.config import settings
 from src.database import get_pool, close_pools, check_health as db_check_health
 from src.cache.redis_client import redis_client
+from src.events.redis_subscriber import subscribe_to_notification_events
 from src.log_config import configure_logging, get_logger
 from src.services.email_delivery_service import close_http_client
 
@@ -53,9 +55,16 @@ async def lifespan(app: FastAPI):
         raise
 
     # Initialize Redis connection
+    subscriber_task = None
     try:
         await redis_client.connect()
         logger.info("Redis connection initialized")
+
+        # Start background subscriber for notification events -> WebSocket bridging
+        subscriber_task = asyncio.create_task(
+            subscribe_to_notification_events(redis_client)
+        )
+        logger.info("Notification event subscriber started")
     except Exception as e:
         # Redis failure is non-fatal - service operates in degraded mode
         logger.warning(f"Redis connection failed: {e}. Service will run without caching.")
@@ -69,6 +78,16 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down...")
+
+    # Cancel subscriber task before disconnecting Redis
+    if subscriber_task is not None:
+        subscriber_task.cancel()
+        try:
+            await subscriber_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Notification event subscriber stopped")
+
     await close_http_client()  # Close SendGrid HTTP client
     await redis_client.disconnect()
     await close_pools()
