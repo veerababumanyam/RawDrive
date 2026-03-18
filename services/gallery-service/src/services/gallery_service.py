@@ -24,6 +24,7 @@ from src.cache.redis_client import (
 from src.config import settings
 from src.log_config import get_logger
 from src.observability.metrics import get_metrics
+from src.services.postal_client import get_postal_client
 
 logger = get_logger(__name__)
 metrics = get_metrics()
@@ -1153,6 +1154,125 @@ class GalleryService:
         
         await invalidate_gallery_cache(str(gallery_id))
 
+    async def _send_delivery_email_if_client(
+        self, workspace_id: UUID, gallery_id: UUID
+    ) -> None:
+        """Send a delivery email with magic link if the gallery has a client with an email.
+
+        Silently skips when:
+        - Gallery has no client_id
+        - delivery_email_sent_at is already set (re-publish guard)
+        - Client has no primary email contact
+
+        Errors are logged but never propagate -- must not block publish.
+        """
+        try:
+            async with get_connection() as conn:
+                # Fetch gallery + photographer info
+                gallery_row = await conn.fetchrow(
+                    """
+                    SELECT g.title, g.client_id, g.cover_asset_id,
+                           g.delivery_email_sent_at,
+                           u.display_name AS photographer_name,
+                           g.created_by_user_id
+                    FROM galleries g
+                    LEFT JOIN users u ON g.created_by_user_id = u.user_id
+                    WHERE g.gallery_id = $1 AND g.workspace_id = $2
+                    """,
+                    UUID(str(gallery_id)),
+                    UUID(str(workspace_id)),
+                )
+
+                if not gallery_row:
+                    return
+
+                # Skip if no client or already sent
+                if not gallery_row["client_id"]:
+                    return
+                if gallery_row["delivery_email_sent_at"]:
+                    return
+
+                # Fetch client primary email
+                email_row = await conn.fetchrow(
+                    """
+                    SELECT cc.value AS email FROM client_contacts cc
+                    WHERE cc.client_id = $1 AND cc.contact_type = 'email'
+                          AND cc.is_primary = true
+                    LIMIT 1
+                    """,
+                    gallery_row["client_id"],
+                )
+
+                if not email_row:
+                    return
+
+                client_email = email_row["email"]
+                photographer_name = gallery_row["photographer_name"] or "Your photographer"
+
+                # Create magic link
+                magic_link_result = await self.magic_link_service.create_magic_link(
+                    workspace_id=str(workspace_id),
+                    gallery_id=str(gallery_id),
+                    created_by_user_id=str(gallery_row["created_by_user_id"]),
+                    label="Gallery delivery email",
+                )
+
+                full_url = f"{settings.APP_BASE_URL}{magic_link_result['url']}"
+
+                # Send email via Postal
+                postal_client = get_postal_client()
+                if postal_client is None:
+                    logger.info(
+                        "Postal not configured, skipping gallery delivery email",
+                        extra={"gallery_id": str(gallery_id)},
+                    )
+                    return
+
+                await postal_client.send_gallery_delivery(
+                    to_email=client_email,
+                    gallery_name=gallery_row["title"] or "Untitled Gallery",
+                    photographer_name=photographer_name,
+                    magic_link_url=full_url,
+                )
+
+                # Mark as sent (graceful if column doesn't exist yet)
+                try:
+                    await conn.execute(
+                        """
+                        UPDATE galleries
+                        SET delivery_email_sent_at = NOW()
+                        WHERE gallery_id = $1 AND workspace_id = $2
+                        """,
+                        UUID(str(gallery_id)),
+                        UUID(str(workspace_id)),
+                    )
+                except Exception as col_err:
+                    logger.warning(
+                        "Could not update delivery_email_sent_at (column may not exist yet)",
+                        extra={"error": str(col_err), "gallery_id": str(gallery_id)},
+                    )
+
+                logger.info(
+                    "Gallery delivery email sent",
+                    extra={
+                        "gallery_id": str(gallery_id),
+                        "workspace_id": str(workspace_id),
+                        "to_email": client_email,
+                    },
+                )
+
+        except Exception as exc:
+            # Never fail the publish operation due to email errors
+            logger.error(
+                "Failed to send gallery delivery email",
+                extra={
+                    "gallery_id": str(gallery_id),
+                    "workspace_id": str(workspace_id),
+                    "error": str(exc),
+                },
+                exc_info=True,
+            )
+
     async def publish_gallery(self, workspace_id: UUID, gallery_id: UUID, publish: bool = True) -> dict:
         """Publish or unpublish a gallery."""
         with metrics.track_db_query("publish_gallery"):
@@ -1198,6 +1318,11 @@ class GalleryService:
                     )
         
         await invalidate_gallery_cache(str(gallery_id))
+
+        # Trigger delivery email on publish (not unpublish)
+        if publish:
+            await self._send_delivery_email_if_client(workspace_id, gallery_id)
+
         return await self.get_gallery(str(workspace_id), str(gallery_id))
 
     async def remove_assets(self, workspace_id: UUID, gallery_id: UUID, asset_ids: List[UUID]) -> None:

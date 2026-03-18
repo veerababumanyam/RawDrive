@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -56,6 +57,23 @@ class TestSlideshowConfigMusicFields:
 
 
 # ---------------------------------------------------------------------------
+# Helper: mock get_connection context manager
+# ---------------------------------------------------------------------------
+
+
+def _mock_get_connection(mock_conn):
+    """Return a patched get_connection that yields mock_conn."""
+    @asynccontextmanager
+    async def _fake_get_connection():
+        yield mock_conn
+
+    return patch(
+        "src.services.gallery_service.get_connection",
+        new=_fake_get_connection,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Delivery email trigger tests
 # ---------------------------------------------------------------------------
 
@@ -88,15 +106,7 @@ class TestSendDeliveryEmailIfClient:
 
         svc = GalleryService.__new__(GalleryService)
 
-        # Mock DB pool
         mock_conn = AsyncMock()
-        mock_pool = MagicMock()
-        mock_pool.acquire = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-        svc.pool = mock_pool
-
-        # Gallery row: has client_id, no delivery_email_sent_at
         mock_conn.fetchrow = AsyncMock(side_effect=[
             # First call: gallery info
             {
@@ -126,13 +136,14 @@ class TestSendDeliveryEmailIfClient:
         mock_postal = AsyncMock()
         mock_postal.send_gallery_delivery = AsyncMock()
 
-        with patch("src.services.gallery_service.get_postal_client", return_value=mock_postal):
+        with _mock_get_connection(mock_conn), \
+             patch("src.services.gallery_service.get_postal_client", return_value=mock_postal):
             await svc._send_delivery_email_if_client(workspace_id, gallery_id)
 
         # Verify email was sent
         mock_postal.send_gallery_delivery.assert_called_once()
         call_kwargs = mock_postal.send_gallery_delivery.call_args
-        assert call_kwargs[1]["to_email"] == "client@example.com" or call_kwargs[0][0] == "client@example.com"
+        assert call_kwargs[1]["to_email"] == "client@example.com"
 
         # Verify magic link was created with correct workspace_id and gallery_id
         mock_magic_link_svc.create_magic_link.assert_called_once()
@@ -147,12 +158,6 @@ class TestSendDeliveryEmailIfClient:
         svc = GalleryService.__new__(GalleryService)
 
         mock_conn = AsyncMock()
-        mock_pool = MagicMock()
-        mock_pool.acquire = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-        svc.pool = mock_pool
-
         # Gallery row: no client_id
         mock_conn.fetchrow = AsyncMock(return_value={
             "title": "Wedding Photos",
@@ -163,10 +168,13 @@ class TestSendDeliveryEmailIfClient:
             "created_by_user_id": str(uuid4()),
         })
 
-        with patch("src.services.gallery_service.get_postal_client") as mock_get_postal:
+        mock_postal = AsyncMock()
+
+        with _mock_get_connection(mock_conn), \
+             patch("src.services.gallery_service.get_postal_client", return_value=mock_postal):
             await svc._send_delivery_email_if_client(workspace_id, gallery_id)
             # Postal client should never be used
-            mock_get_postal.return_value.send_gallery_delivery.assert_not_called()
+            mock_postal.send_gallery_delivery.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_skips_when_no_email_contact(
@@ -178,12 +186,6 @@ class TestSendDeliveryEmailIfClient:
         svc = GalleryService.__new__(GalleryService)
 
         mock_conn = AsyncMock()
-        mock_pool = MagicMock()
-        mock_pool.acquire = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-        svc.pool = mock_pool
-
         mock_conn.fetchrow = AsyncMock(side_effect=[
             # Gallery info with client_id
             {
@@ -198,9 +200,12 @@ class TestSendDeliveryEmailIfClient:
             None,
         ])
 
-        with patch("src.services.gallery_service.get_postal_client") as mock_get_postal:
+        mock_postal = AsyncMock()
+
+        with _mock_get_connection(mock_conn), \
+             patch("src.services.gallery_service.get_postal_client", return_value=mock_postal):
             await svc._send_delivery_email_if_client(workspace_id, gallery_id)
-            mock_get_postal.return_value.send_gallery_delivery.assert_not_called()
+            mock_postal.send_gallery_delivery.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_skips_if_delivery_email_already_sent(
@@ -213,12 +218,6 @@ class TestSendDeliveryEmailIfClient:
         svc = GalleryService.__new__(GalleryService)
 
         mock_conn = AsyncMock()
-        mock_pool = MagicMock()
-        mock_pool.acquire = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-        svc.pool = mock_pool
-
         # Gallery row: delivery_email_sent_at already set
         mock_conn.fetchrow = AsyncMock(return_value={
             "title": "Wedding Photos",
@@ -229,9 +228,12 @@ class TestSendDeliveryEmailIfClient:
             "created_by_user_id": str(uuid4()),
         })
 
-        with patch("src.services.gallery_service.get_postal_client") as mock_get_postal:
+        mock_postal = AsyncMock()
+
+        with _mock_get_connection(mock_conn), \
+             patch("src.services.gallery_service.get_postal_client", return_value=mock_postal):
             await svc._send_delivery_email_if_client(workspace_id, gallery_id)
-            mock_get_postal.return_value.send_gallery_delivery.assert_not_called()
+            mock_postal.send_gallery_delivery.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_creates_magic_link_with_correct_ids(
@@ -243,12 +245,6 @@ class TestSendDeliveryEmailIfClient:
         svc = GalleryService.__new__(GalleryService)
 
         mock_conn = AsyncMock()
-        mock_pool = MagicMock()
-        mock_pool.acquire = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
-        svc.pool = mock_pool
-
         mock_conn.fetchrow = AsyncMock(side_effect=[
             {
                 "title": "Wedding Photos",
@@ -274,7 +270,8 @@ class TestSendDeliveryEmailIfClient:
         mock_postal = AsyncMock()
         mock_postal.send_gallery_delivery = AsyncMock()
 
-        with patch("src.services.gallery_service.get_postal_client", return_value=mock_postal):
+        with _mock_get_connection(mock_conn), \
+             patch("src.services.gallery_service.get_postal_client", return_value=mock_postal):
             await svc._send_delivery_email_if_client(workspace_id, gallery_id)
 
         # Verify magic link created with correct IDs
