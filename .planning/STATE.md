@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-03-18T22:29:00.176Z"
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-03-18T22:35:03.659Z"
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 ## Current Position
 
 Phase: 06 (ai-ml-pipeline) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Plan: 3 of 5
 | Phase 05 P02 | 9min | 2 tasks | 7 files |
 | Phase 06 P01 | 4min | 2 tasks | 8 files |
 | Phase 06 P02 | 6min | 2 tasks | 5 files |
+| Phase 06 P03 | 5min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,9 @@ Recent decisions affecting current work:
 - [Phase 06]: Batch embedding endpoint with per-image error handling (partial failures OK)
 - [Phase 06]: HNSW with m=16, ef_construction=64 balances recall and build speed for photo embedding workloads
 - [Phase 06]: Inline boto3 client in duplicate_detector avoids cross-plan import dependency (Wave 1 parallel)
+- [Phase 06-03]: HTTP client with 120s timeout and 1 retry for batch CLIP processing
+- [Phase 06-03]: DUPLICATE_CLIP_THRESHOLD=0.95 for near-duplicate detection (stricter than grouping 0.85)
+- [Phase 06-03]: Celery embedding tasks routed to dedicated "embedding" queue for resource isolation
 
 ### Pending Todos
 
@@ -100,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T22:29:00.173Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-03-18T22:35:00Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None
