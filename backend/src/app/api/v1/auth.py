@@ -54,6 +54,7 @@ from app.services.email_verification_service import (
     TokenAlreadyUsedError,
     EmailVerificationError,
 )
+from app.services.password_reset_service import PasswordResetService
 from app.services import email_service as email_service_module
 from app.services.oauth_service import (
     GoogleOAuthService,
@@ -447,8 +448,18 @@ async def verify_email(
 async def forgot_password(
     email: str = Query(..., description="User email address"),
 ) -> MessageResponse:
-    """Request password reset."""
-    # TODO: Implement password reset flow
+    """Request password reset.
+
+    Always returns the same response regardless of whether the email exists
+    to prevent email enumeration attacks.
+    """
+    try:
+        service = PasswordResetService()
+        await service.request_password_reset(email)
+    except Exception as e:
+        # Log but never expose whether email exists
+        logger.warning("Error during password reset request: %s", str(e))
+
     return MessageResponse(message="If the email exists, a reset link has been sent")
 
 
@@ -464,5 +475,18 @@ async def reset_password(
     new_password: str = Query(..., min_length=8, description="New password"),
 ) -> MessageResponse:
     """Reset password with token."""
-    # TODO: Implement password reset
-    return MessageResponse(message="Password reset not yet implemented")
+    service = PasswordResetService()
+    try:
+        user_id = await service.reset_password(token, new_password)
+        logger.info("Password reset via endpoint", extra={"user_id": str(user_id)})
+        return MessageResponse(message="Password has been reset successfully")
+    except EVTokenExpiredError as e:
+        raise ConflictError(message=str(e), code=e.code) from e
+    except EVTokenInvalidError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except TokenAlreadyUsedError as e:
+        raise ConflictError(message=str(e), code=e.code) from e
+    except EmailVerificationError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
