@@ -22,7 +22,7 @@
 - [ ] **MAIL-06**: User can reset password via email link with time-limited token
 - [ ] **MAIL-07**: Bulk wedding invitation emails sent to guest lists via invitations-service
 - [ ] **MAIL-08**: Email templates created for verification, password reset, invitation, and gallery delivery
-- [ ] **MAIL-09**: Email delivery status tracked in database with webhook callbacks from Postal
+- [x] **MAIL-09**: Email delivery status tracked in database with webhook callbacks from Postal
 
 ### AI Processing Service
 
@@ -135,7 +135,7 @@
 | MAIL-06 | Phase 5 | Pending |
 | MAIL-07 | Phase 5 | Pending |
 | MAIL-08 | Phase 5 | Pending |
-| MAIL-09 | Phase 5 | Pending |
+| MAIL-09 | Phase 5 | Complete |
 | AI-01 | Phase 6 | Pending |
 | AI-02 | Phase 6 | Pending |
 | AI-03 | Phase 6 | Pending |
