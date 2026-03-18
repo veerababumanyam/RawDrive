@@ -62,10 +62,10 @@ Plans:
   1. ai-processing-service container starts and /health/live returns 200
   2. Service starts without Milvus or gracefully falls back to pgvector
   3. Heavy ML imports (InsightFace, Real-ESRGAN) load lazily and don't crash startup
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: Fix crash-loop -- lazy imports and Milvus dependency resolution
+- [ ] 03-01: Fix crash-loop -- health endpoints, lazy imports, Milvus fallback, and requirements cleanup
 
 ### Phase 4: Rate Limiting
 **Goal**: A2A API keys are rate-limited with Redis sliding window enforcement
