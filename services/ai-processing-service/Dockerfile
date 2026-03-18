@@ -40,6 +40,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Pre-bake CLIP model into image (no runtime download)
+ENV TRANSFORMERS_CACHE=/app/.cache/huggingface
+RUN python -c "from transformers import CLIPModel, CLIPProcessor; CLIPModel.from_pretrained('openai/clip-vit-base-patch32'); CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32'); print('CLIP model pre-baked successfully')"
+
 # =============================================================================
 # Production stage
 # =============================================================================
@@ -48,6 +52,10 @@ FROM base as production
 # Copy installed packages from dependencies stage
 COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=dependencies /usr/local/bin /usr/local/bin
+
+# Copy pre-baked CLIP model cache from dependencies stage
+COPY --from=dependencies /app/.cache /app/.cache
+ENV TRANSFORMERS_CACHE=/app/.cache/huggingface
 
 # Copy application code
 COPY --chown=aiprocessor:aiprocessor src/ /app/src/

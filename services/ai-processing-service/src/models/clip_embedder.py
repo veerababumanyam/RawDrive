@@ -58,7 +58,7 @@ class CLIPEmbedder:
             self.model = CLIPModel.from_pretrained(self.settings.CLIP_MODEL_NAME)
             self.processor = CLIPProcessor.from_pretrained(self.settings.CLIP_MODEL_NAME)
             self.model.to(self.device)
-            self.model.set_training_mode(False)
+            self.model.train(False)
             self._initialized = True
             logger.info("CLIP model loaded successfully")
         except Exception as e:

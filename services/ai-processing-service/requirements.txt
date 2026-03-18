@@ -27,6 +27,7 @@ pillow==11.0.0  # Image processing
 imagehash==4.3.1  # Perceptual hashing for duplicate detection
 numpy==2.2.1
 scipy==1.15.0
+scikit-learn>=1.4.0,<2.0.0  # DBSCAN clustering for face grouping
 
 # Face Detection (InsightFace)
 insightface==0.7.3  # Face detection, recognition, and analysis
