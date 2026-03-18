@@ -125,10 +125,11 @@ Plans:
   1. Client can view a slideshow of gallery photos via the public gallery link
   2. Photographer receives a delivery email notification when gallery is published (with magic link for client)
   3. Slideshow respects gallery branding settings (colors, logo, music preference)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 07-01: Slideshow generation and gallery delivery emails
+- [ ] 07-01-PLAN.md — Delivery email on publish + SlideshowConfig music fields (GAL-02, GAL-03)
+- [ ] 07-02-PLAN.md — Wire slideshow branding to CinematicViewer settings (GAL-01, GAL-03)
 
 ### Phase 8: Notifications
 **Goal**: Users receive real-time notifications for platform events
@@ -174,6 +175,6 @@ Phases 1-4 are parallelizable. Phases 5+ follow dependency chains: 2->5->7, 3->6
 | 4. Rate Limiting | 0/1 | Planning complete | - |
 | 5. Email Features | 3/3 | Complete   | 2026-03-18 |
 | 6. AI/ML Pipeline | 0/5 | Planning complete | - |
-| 7. Gallery Completion | 0/1 | Not started | - |
+| 7. Gallery Completion | 0/2 | Planning complete | - |
 | 8. Notifications | 0/2 | Not started | - |
 | 9. Shared Packages & Test Coverage | 0/4 | Not started | - |
