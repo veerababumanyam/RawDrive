@@ -30,6 +30,7 @@ Task: T003 - Create email service with SMTP/SendGrid support
 from __future__ import annotations
 
 import asyncio
+import html as html_mod
 import logging
 import smtplib
 import ssl
@@ -125,6 +126,7 @@ class EmailType(str, Enum):
     TRANSACTIONAL = "transactional"
     MARKETING = "marketing"
     SYSTEM = "system"
+    GALLERY_DELIVERY = "gallery_delivery"
 
 
 class EmailProvider(str, Enum):
@@ -675,6 +677,9 @@ class EmailService:
         EmailType.INVITATION: {
             "subject": "You've been invited to RawDrive",
         },
+        EmailType.GALLERY_DELIVERY: {
+            "subject": "Your gallery is ready!",
+        },
     }
 
     def __init__(self) -> None:
@@ -1149,6 +1154,118 @@ If you don't want to accept this invitation, you can ignore this email.
                 "inviter_name": inviter_name,
                 "workspace_name": workspace_name,
                 "invitation_url": invitation_url,
+            },
+        )
+
+    async def send_gallery_delivery_email(
+        self,
+        to_email: str,
+        gallery_name: str,
+        photographer_name: str,
+        magic_link_url: str,
+        preview_image_url: str | None = None,
+        message: str | None = None,
+    ) -> EmailResult:
+        """Send a gallery delivery email to a client.
+
+        Used when a photographer publishes/delivers a gallery to a client.
+        Contains a magic link for password-less gallery access.
+
+        Args:
+            to_email: Client email address
+            gallery_name: Name of the gallery
+            photographer_name: Name of the photographer
+            magic_link_url: Magic link URL for gallery access
+            preview_image_url: Optional preview thumbnail URL
+            message: Optional personal message from photographer
+
+        Returns:
+            EmailResult with delivery information
+        """
+        # Escape all user-provided fields to prevent XSS
+        safe_gallery = html_mod.escape(gallery_name)
+        safe_photographer = html_mod.escape(photographer_name)
+        safe_magic_url = html_mod.escape(magic_link_url)
+
+        # Optional preview image block
+        preview_block = ""
+        if preview_image_url:
+            safe_preview = html_mod.escape(preview_image_url)
+            preview_block = f"""
+            <div style="text-align: center; margin: 20px 0;">
+                <img src="{safe_preview}" alt="Gallery preview"
+                     style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+            </div>
+            """
+
+        # Optional personal message block
+        message_block = ""
+        if message:
+            safe_message = html_mod.escape(message)
+            message_block = f"""
+            <div style="background-color: #f3f4f6; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                <p style="color: #4b5563; margin: 0; font-style: italic;">"{safe_message}"</p>
+                <p style="color: #9ca3af; margin: 10px 0 0 0; font-size: 13px;">- {safe_photographer}</p>
+            </div>
+            """
+
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+    <div style="background-color: white; border-radius: 8px; padding: 40px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #4F46E5; margin: 0; font-size: 28px;">RawDrive</h1>
+        </div>
+        <h2 style="color: #1f2937; margin-bottom: 20px;">Your gallery is ready!</h2>
+        <p style="color: #4b5563; line-height: 1.6;">
+            {safe_photographer} has shared the gallery <strong>{safe_gallery}</strong> with you.
+        </p>
+        {message_block}
+        {preview_block}
+        <div style="text-align: center; margin: 40px 0;">
+            <a href="{safe_magic_url}"
+               style="background-color: #4F46E5; color: white; padding: 14px 32px;
+                      text-decoration: none; border-radius: 8px; display: inline-block;
+                      font-weight: 600; font-size: 16px;">
+                View Gallery
+            </a>
+        </div>
+        <p style="color: #9ca3af; font-size: 13px; margin-top: 40px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+            If you no longer wish to receive gallery notifications, please contact the photographer directly.
+        </p>
+    </div>
+</body>
+</html>
+        """
+
+        text_message = f'\n\n"{message}"\n- {photographer_name}' if message else ""
+        text_content = f"""
+Your gallery is ready!
+
+{photographer_name} has shared the gallery "{gallery_name}" with you.{text_message}
+
+Click the link below to view your gallery:
+
+{magic_link_url}
+
+If you no longer wish to receive gallery notifications, please contact the photographer directly.
+        """
+
+        return await self.send_email(
+            to_email=to_email,
+            email_type=EmailType.GALLERY_DELIVERY,
+            subject=f"{photographer_name} shared a gallery with you",
+            html_content=html_content,
+            text_content=text_content,
+            metadata={
+                "gallery_name": gallery_name,
+                "photographer_name": photographer_name,
+                "magic_link_url": magic_link_url,
             },
         )
 
