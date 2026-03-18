@@ -16,8 +16,8 @@
 
 - [x] **MAIL-01**: Postal deployed as Docker container with MariaDB and RabbitMQ in docker-compose
 - [x] **MAIL-02**: DNS records configured for sending domain (SPF, DKIM, DMARC)
-- [ ] **MAIL-03**: EmailService abstraction created as single interface for all email sending (replacing 6+ scattered TODO stubs)
-- [ ] **MAIL-04**: Postal HTTP API client integrated into EmailService with retry logic and delivery tracking
+- [x] **MAIL-03**: EmailService abstraction created as single interface for all email sending (replacing 6+ scattered TODO stubs)
+- [x] **MAIL-04**: Postal HTTP API client integrated into EmailService with retry logic and delivery tracking
 - [ ] **MAIL-05**: User receives email verification after signup with secure token link
 - [ ] **MAIL-06**: User can reset password via email link with time-limited token
 - [ ] **MAIL-07**: Bulk wedding invitation emails sent to guest lists via invitations-service
@@ -122,8 +122,8 @@
 | SEC-04 | Phase 1 | Complete |
 | MAIL-01 | Phase 2 | Complete |
 | MAIL-02 | Phase 2 | Complete |
-| MAIL-03 | Phase 2 | Pending |
-| MAIL-04 | Phase 2 | Pending |
+| MAIL-03 | Phase 2 | Complete |
+| MAIL-04 | Phase 2 | Complete |
 | AIS-01 | Phase 3 | Pending |
 | AIS-02 | Phase 3 | Pending |
 | AIS-03 | Phase 3 | Pending |
