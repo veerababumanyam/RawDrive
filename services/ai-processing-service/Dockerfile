@@ -59,8 +59,8 @@ USER aiprocessor
 EXPOSE 8009
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
-    CMD curl -f http://localhost:${PORT:-8012}/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=30s \
+    CMD curl -f http://localhost:${PORT:-8012}/health/live || exit 1
 
 # Set Python path
 ENV PYTHONPATH=/app/src

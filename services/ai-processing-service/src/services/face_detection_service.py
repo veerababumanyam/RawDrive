@@ -1,5 +1,4 @@
-"""
-Face Detection Service using InsightFace
+"""Face Detection Service using InsightFace
 
 Provides GPU-accelerated face detection and landmark extraction using InsightFace.
 Detects faces in images and returns bounding boxes, confidence scores, landmarks,
@@ -9,18 +8,22 @@ Feature: Face Detection and Identification
 Task: T007 - Add InsightFace model loader and face detection service
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import cv2
-import numpy as np
-import torch
-from PIL import Image
-
 from config import get_settings
+
+from typing import TYPE_CHECKING as _TC
+if _TC:
+    import cv2
+    import numpy as np
+    import torch
+    from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +252,7 @@ class FaceDetectionService:
         self._providers = providers
         self.model = None
         self._initialized = False
-        self.device = self._get_device()
+        self.device: Optional[str] = None
 
         # Get configuration values with defaults
         self.min_confidence = getattr(
@@ -260,9 +263,8 @@ class FaceDetectionService:
         )
 
         logger.info(
-            f"Face detection service initialized "
-            f"(model: {self.model_name}, device: {self.device}, "
-            f"det_size: {self.det_size})"
+            f"Face detection service created "
+            f"(model: {self.model_name}, det_size: {self.det_size})"
         )
 
     def _get_device(self) -> str:
@@ -271,6 +273,8 @@ class FaceDetectionService:
         Returns:
             Device string: "cuda", "mps", or "cpu"
         """
+        import torch
+
         if torch.cuda.is_available():
             return "cuda"
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -310,6 +314,9 @@ class FaceDetectionService:
         """
         if self._initialized:
             return
+
+        if self.device is None:
+            self.device = self._get_device()
 
         logger.info(f"Loading InsightFace model: {self.model_name}")
         start_time = time.time()
@@ -427,8 +434,8 @@ class FaceDetectionService:
             raise RuntimeError(f"Face detection failed: {e}")
 
     def _load_image(
-        self, image_source: Union[str, Path, np.ndarray, Image.Image]
-    ) -> Tuple[np.ndarray, int, int]:
+        self, image_source
+    ) -> Tuple["np.ndarray", int, int]:
         """Load image from various sources.
 
         Args:
@@ -441,6 +448,10 @@ class FaceDetectionService:
             FileNotFoundError: If file doesn't exist
             ValueError: If image cannot be loaded
         """
+        import cv2
+        import numpy as np
+        from PIL import Image
+
         if isinstance(image_source, (str, Path)):
             path = Path(image_source)
             if not path.exists():
@@ -588,11 +599,11 @@ class FaceDetectionService:
 
     def get_face_crop(
         self,
-        image_source: Union[str, Path, np.ndarray, Image.Image],
+        image_source,
         face: DetectedFace,
         margin: float = 0.2,
         target_size: Optional[Tuple[int, int]] = None,
-    ) -> np.ndarray:
+    ):
         """Crop a detected face from the image.
 
         Args:
@@ -604,6 +615,8 @@ class FaceDetectionService:
         Returns:
             Cropped face image as numpy array (BGR)
         """
+        import cv2
+
         image, img_width, img_height = self._load_image(image_source)
 
         # Calculate crop region with margin
@@ -645,9 +658,11 @@ class FaceDetectionService:
 
     def clear_cache(self) -> None:
         """Clear GPU memory cache."""
-        if self.device == "cuda" and torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            logger.debug("GPU cache cleared")
+        if self.device == "cuda":
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.debug("GPU cache cleared")
 
     def unload_model(self) -> None:
         """Unload model from memory.
@@ -660,6 +675,7 @@ class FaceDetectionService:
             self._initialized = False
 
             if self.device == "cuda":
+                import torch
                 torch.cuda.empty_cache()
 
             logger.info("InsightFace model unloaded from memory")

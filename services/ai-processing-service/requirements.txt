@@ -31,7 +31,6 @@ scipy==1.15.0
 # Face Detection (InsightFace)
 insightface==0.7.3  # Face detection, recognition, and analysis
 onnxruntime==1.19.2  # ONNX Runtime for CPU inference
-onnxruntime-gpu==1.19.2  # ONNX Runtime with GPU (CUDA) support
 opencv-python-headless==4.10.0.84  # OpenCV for image processing (headless - no libGL needed)
 
 # Google Cloud AI
@@ -69,7 +68,6 @@ pytest==8.3.4
 pytest-asyncio==0.25.2
 pytest-cov==6.0.0
 pytest-mock==3.15.0
-httpx==0.28.1  # For AsyncClient testing
 
 # Development
 ruff==0.8.5

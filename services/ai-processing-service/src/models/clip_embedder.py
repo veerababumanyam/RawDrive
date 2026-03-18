@@ -1,20 +1,22 @@
-"""
-CLIP Embedder Module
+"""CLIP Embedder Module
 
 Generates CLIP embeddings for semantic image similarity search.
 Uses OpenAI's CLIP-ViT-Base-Patch32 model for 512-dimensional embeddings.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import List, Optional, Union
-
-import numpy as np
-import torch
-from PIL import Image
-from transformers import CLIPModel, CLIPProcessor
+from typing import TYPE_CHECKING, List, Optional, Union
 
 from config import get_settings
+
+if TYPE_CHECKING:
+    import numpy as np
+    import torch
+    from PIL import Image
+    from transformers import CLIPModel, CLIPProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +27,16 @@ class CLIPEmbedder:
     def __init__(self):
         """Initialize CLIP embedder (model loaded lazily)."""
         self.settings = get_settings()
-        self.model: Optional[CLIPModel] = None
-        self.processor: Optional[CLIPProcessor] = None
-        self.device = self._get_device()
+        self.model = None
+        self.processor = None
+        self.device: Optional[str] = None
         self._initialized = False
-        logger.info(f"CLIP embedder initialized (device: {self.device})")
+        logger.info("CLIP embedder created (model will load on first use)")
 
     def _get_device(self) -> str:
         """Determine the best available device."""
+        import torch
+
         if torch.cuda.is_available():
             return "cuda"
         elif torch.backends.mps.is_available():
@@ -45,7 +49,10 @@ class CLIPEmbedder:
         if self._initialized:
             return
 
-        logger.info(f"Loading CLIP model: {self.settings.CLIP_MODEL_NAME}")
+        from transformers import CLIPModel, CLIPProcessor
+
+        self.device = self._get_device()
+        logger.info(f"Loading CLIP model: {self.settings.CLIP_MODEL_NAME} (device: {self.device})")
 
         try:
             self.model = CLIPModel.from_pretrained(self.settings.CLIP_MODEL_NAME)
@@ -88,6 +95,9 @@ class CLIPEmbedder:
         cleaned_text = text.strip()
 
         try:
+            import numpy as np
+            import torch
+
             # Tokenize text using CLIP processor
             # CLIP processor handles truncation automatically (max 77 tokens)
             inputs = self.processor(
@@ -121,11 +131,14 @@ class CLIPEmbedder:
             )
             raise RuntimeError(f"CLIP text embedding failed: {e}")
 
-    def embed_image(self, image_path: Union[str, Path]) -> np.ndarray:
+    def embed_image(self, image_path: Union[str, Path]):
         """Generate CLIP embedding for a single image."""
         self._ensure_initialized()
 
         try:
+            import torch
+            from PIL import Image
+
             image = Image.open(image_path).convert("RGB")
             inputs = self.processor(images=image, return_tensors="pt")
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
@@ -145,7 +158,7 @@ class CLIPEmbedder:
             logger.error(f"Failed to generate CLIP embedding: {e}")
             raise RuntimeError(f"CLIP embedding failed: {e}")
 
-    def embed_images(self, image_paths: List[Union[str, Path]]) -> List[np.ndarray]:
+    def embed_images(self, image_paths: List[Union[str, Path]]) -> list:
         """Generate CLIP embeddings for multiple images (batched)."""
         self._ensure_initialized()
 
@@ -153,6 +166,9 @@ class CLIPEmbedder:
             return []
 
         try:
+            import torch
+            from PIL import Image
+
             images = []
             for path in image_paths:
                 try:
@@ -189,21 +205,25 @@ class CLIPEmbedder:
             raise RuntimeError(f"Batch CLIP embedding failed: {e}")
 
     @staticmethod
-    def cosine_similarity(embedding1: np.ndarray, embedding2: np.ndarray) -> float:
+    def cosine_similarity(embedding1, embedding2) -> float:
         """Calculate cosine similarity between two embeddings."""
+        import numpy as np
+
         emb1_norm = embedding1 / np.linalg.norm(embedding1)
         emb2_norm = embedding2 / np.linalg.norm(embedding2)
         similarity = np.dot(emb1_norm, emb2_norm)
         return float(np.clip(similarity, 0.0, 1.0))
 
     @staticmethod
-    def embedding_to_list(embedding: np.ndarray) -> List[float]:
+    def embedding_to_list(embedding) -> List[float]:
         """Convert numpy embedding to Python list for database storage."""
         return embedding.tolist()
 
     @staticmethod
-    def list_to_embedding(embedding_list: List[float]) -> np.ndarray:
+    def list_to_embedding(embedding_list: List[float]):
         """Convert Python list back to numpy embedding."""
+        import numpy as np
+
         return np.array(embedding_list, dtype=np.float32)
 
     def unload_model(self) -> None:
@@ -216,6 +236,7 @@ class CLIPEmbedder:
             self._initialized = False
 
             if self.device == "cuda":
+                import torch
                 torch.cuda.empty_cache()
 
             logger.info("CLIP model unloaded from memory")

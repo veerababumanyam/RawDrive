@@ -1,21 +1,23 @@
-"""
-Real-ESRGAN Model Wrapper
+"""Real-ESRGAN Model Wrapper
 
 GPU-accelerated image super-resolution using Real-ESRGAN.
 Supports 2x and 4x upscaling with pre-trained models.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from pathlib import Path
-from typing import Optional, Tuple, Union
-
-import cv2
-import numpy as np
-import torch
-from PIL import Image
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from config import get_settings
+
+if TYPE_CHECKING:
+    import cv2
+    import numpy as np
+    import torch
+    from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,8 @@ class RealESRGANUpscaler:
         """
         self.settings = get_settings()
         self.model_name = model_name
-        self.device = self._get_device(device)
+        self._requested_device = device
+        self.device: Optional[str] = None
         self.model = None
         self._initialized = False
 
@@ -51,7 +54,7 @@ class RealESRGANUpscaler:
             },
         }
 
-        logger.info(f"Real-ESRGAN upscaler initialized (model: {model_name}, device: {self.device})")
+        logger.info(f"Real-ESRGAN upscaler created (model: {model_name}, will load on first use)")
 
     def _get_device(self, device: str) -> str:
         """
@@ -64,6 +67,8 @@ class RealESRGANUpscaler:
             Device string
         """
         if device == "auto":
+            import torch
+
             if torch.cuda.is_available():
                 return "cuda"
             elif torch.backends.mps.is_available():
@@ -76,6 +81,9 @@ class RealESRGANUpscaler:
         """Lazy load Real-ESRGAN model."""
         if self._initialized:
             return
+
+        if self.device is None:
+            self.device = self._get_device(self._requested_device)
 
         if self.model_name not in self.model_configs:
             raise ValueError(f"Unknown model: {self.model_name}")
@@ -158,6 +166,9 @@ class RealESRGANUpscaler:
         """
         self._ensure_initialized()
 
+        import cv2
+        import torch
+
         start_time = time.time()
 
         try:
@@ -213,7 +224,7 @@ class RealESRGANUpscaler:
                 "processing_time_sec": time.time() - start_time,
             }
 
-    def upscale_pil(self, image: Image.Image) -> Tuple[Optional[Image.Image], dict]:
+    def upscale_pil(self, image) -> Tuple[Optional["Image.Image"], dict]:
         """
         Upscale PIL Image object.
 
@@ -224,6 +235,10 @@ class RealESRGANUpscaler:
             Tuple of (upscaled_image, metadata)
         """
         self._ensure_initialized()
+
+        import cv2
+        import numpy as np
+        from PIL import Image
 
         start_time = time.time()
 
@@ -269,6 +284,8 @@ class RealESRGANUpscaler:
         Returns:
             Dict with GPU memory info
         """
+        import torch
+
         if self.device != "cuda" or not torch.cuda.is_available():
             return {"gpu_available": False}
 
@@ -281,9 +298,11 @@ class RealESRGANUpscaler:
 
     def clear_cache(self) -> None:
         """Clear GPU cache."""
-        if self.device == "cuda" and torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            logger.debug("GPU cache cleared")
+        if self.device == "cuda":
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.debug("GPU cache cleared")
 
     def unload_model(self) -> None:
         """Unload model from memory."""
@@ -293,6 +312,7 @@ class RealESRGANUpscaler:
             self._initialized = False
 
             if self.device == "cuda":
+                import torch
                 torch.cuda.empty_cache()
 
             logger.info("Real-ESRGAN model unloaded")

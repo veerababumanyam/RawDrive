@@ -1,5 +1,4 @@
-"""
-Face Embedding Extraction Service
+"""Face Embedding Extraction Service
 
 Extracts 512-dimensional face embeddings using InsightFace's recognition model.
 Embeddings are L2-normalized vectors suitable for cosine similarity comparison
@@ -9,18 +8,22 @@ Feature: Face Detection and Identification
 Task: T008 - Create face embedding extraction service
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import cv2
-import numpy as np
-import torch
-from PIL import Image
-
 from config import get_settings
+
+from typing import TYPE_CHECKING as _TC
+if _TC:
+    import cv2
+    import numpy as np
+    import torch
+    from PIL import Image
 from services.face_detection_service import (
     DetectedFace,
     FaceDetectionService,
@@ -162,7 +165,7 @@ class FaceEmbeddingService:
         """
         self.settings = get_settings()
         self._detection_service = detection_service
-        self.device = self._get_device()
+        self.device: Optional[str] = None
         self._initialized = False
 
         # Get embedding dimension from config (default 512)
@@ -171,8 +174,8 @@ class FaceEmbeddingService:
         )
 
         logger.info(
-            f"Face embedding service initialized "
-            f"(device: {self.device}, embedding_dim: {self.embedding_dim})"
+            f"Face embedding service created "
+            f"(embedding_dim: {self.embedding_dim})"
         )
 
     def _get_device(self) -> str:
@@ -181,6 +184,8 @@ class FaceEmbeddingService:
         Returns:
             Device string: "cuda", "mps", or "cpu"
         """
+        import torch
+
         if torch.cuda.is_available():
             return "cuda"
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -206,6 +211,8 @@ class FaceEmbeddingService:
         component which is used for embedding extraction.
         """
         if not self._initialized:
+            if self.device is None:
+                self.device = self._get_device()
             # Force model initialization via detection service
             self.detection_service._ensure_initialized()
             self._initialized = True
@@ -330,8 +337,8 @@ class FaceEmbeddingService:
         )
 
     def _get_insightface_embedding(
-        self, image: np.ndarray, face: DetectedFace
-    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        self, image, face: DetectedFace
+    ) -> Tuple[Optional["np.ndarray"], Optional["np.ndarray"]]:
         """Get embedding using InsightFace's recognition model.
 
         InsightFace uses ArcFace for face recognition which produces
@@ -345,6 +352,8 @@ class FaceEmbeddingService:
             Tuple of (embedding array, aligned face array) or (None, None)
         """
         try:
+            import numpy as np
+
             # Re-run InsightFace detection to get embedding
             # The InsightFace model populates the 'embedding' attribute
             model = self.detection_service.model
@@ -442,7 +451,7 @@ class FaceEmbeddingService:
 
         return intersection / union
 
-    def _normalize_embedding(self, embedding: np.ndarray) -> np.ndarray:
+    def _normalize_embedding(self, embedding):
         """L2 normalize embedding to unit length.
 
         Args:
@@ -451,13 +460,15 @@ class FaceEmbeddingService:
         Returns:
             L2-normalized embedding vector
         """
+        import numpy as np
+
         norm = np.linalg.norm(embedding)
         if norm > 0:
             embedding = embedding / norm
         return embedding.astype(np.float32)
 
     def _estimate_quality(
-        self, face: DetectedFace, embedding: np.ndarray
+        self, face: DetectedFace, embedding
     ) -> float:
         """Estimate quality score for the embedding.
 
@@ -504,6 +515,8 @@ class FaceEmbeddingService:
             # Assume moderate quality if no pose info
             scores.append(0.7)
 
+        import numpy as np
+
         # Calculate weighted average
         # Detection confidence is most important
         weights = [0.4, 0.3, 0.3]
@@ -512,8 +525,8 @@ class FaceEmbeddingService:
         return float(np.clip(quality, 0.0, 1.0))
 
     def _load_image(
-        self, image_source: Union[str, Path, np.ndarray, Image.Image]
-    ) -> Tuple[np.ndarray, int, int]:
+        self, image_source
+    ) -> Tuple["np.ndarray", int, int]:
         """Load image from various sources.
 
         Args:
@@ -526,6 +539,10 @@ class FaceEmbeddingService:
             FileNotFoundError: If file doesn't exist
             ValueError: If image cannot be loaded
         """
+        import cv2
+        import numpy as np
+        from PIL import Image
+
         if isinstance(image_source, (str, Path)):
             path = Path(image_source)
             if not path.exists():
@@ -616,7 +633,7 @@ class FaceEmbeddingService:
         return results
 
     def compute_similarity(
-        self, embedding1: np.ndarray, embedding2: np.ndarray
+        self, embedding1, embedding2
     ) -> float:
         """Compute cosine similarity between two embeddings.
 
@@ -631,6 +648,8 @@ class FaceEmbeddingService:
         emb1 = self._normalize_embedding(embedding1)
         emb2 = self._normalize_embedding(embedding2)
 
+        import numpy as np
+
         # Cosine similarity (dot product of normalized vectors)
         similarity = float(np.dot(emb1, emb2))
 
@@ -638,7 +657,7 @@ class FaceEmbeddingService:
         return float(np.clip(similarity, 0.0, 1.0))
 
     def compute_distance(
-        self, embedding1: np.ndarray, embedding2: np.ndarray
+        self, embedding1, embedding2
     ) -> float:
         """Compute cosine distance between two embeddings.
 
@@ -654,8 +673,8 @@ class FaceEmbeddingService:
 
     def are_same_person(
         self,
-        embedding1: np.ndarray,
-        embedding2: np.ndarray,
+        embedding1,
+        embedding2,
         threshold: float = 0.6,
     ) -> Tuple[bool, float]:
         """Determine if two face embeddings belong to the same person.
@@ -672,7 +691,7 @@ class FaceEmbeddingService:
         return similarity >= threshold, similarity
 
     @staticmethod
-    def embedding_to_list(embedding: np.ndarray) -> List[float]:
+    def embedding_to_list(embedding) -> List[float]:
         """Convert numpy embedding to Python list for database storage.
 
         Args:
@@ -684,7 +703,7 @@ class FaceEmbeddingService:
         return embedding.tolist()
 
     @staticmethod
-    def list_to_embedding(embedding_list: List[float]) -> np.ndarray:
+    def list_to_embedding(embedding_list: List[float]):
         """Convert Python list back to numpy embedding.
 
         Args:
@@ -693,6 +712,8 @@ class FaceEmbeddingService:
         Returns:
             numpy array embedding
         """
+        import numpy as np
+
         return np.array(embedding_list, dtype=np.float32)
 
     def get_embedding_dim(self) -> int:
@@ -721,9 +742,11 @@ class FaceEmbeddingService:
 
     def clear_cache(self) -> None:
         """Clear GPU memory cache."""
-        if self.device == "cuda" and torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            logger.debug("GPU cache cleared")
+        if self.device == "cuda":
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.debug("GPU cache cleared")
 
     def unload_model(self) -> None:
         """Unload models from memory.
@@ -737,6 +760,7 @@ class FaceEmbeddingService:
                 self._detection_service.unload_model()
 
             if self.device == "cuda":
+                import torch
                 torch.cuda.empty_cache()
 
             logger.info("Face embedding service models unloaded")
