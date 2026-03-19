@@ -244,74 +244,74 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FNDN-01 | TBD | Pending |
-| FNDN-02 | TBD | Pending |
-| FNDN-03 | TBD | Pending |
-| LYOT-01 | TBD | Pending |
-| LYOT-02 | TBD | Pending |
-| LYOT-03 | TBD | Pending |
-| LYOT-04 | TBD | Pending |
-| PLYR-01 | TBD | Pending |
-| PLYR-02 | TBD | Pending |
-| PLYR-03 | TBD | Pending |
-| PLYR-04 | TBD | Pending |
-| INTR-01 | TBD | Pending |
-| INTR-02 | TBD | Pending |
-| INTR-03 | TBD | Pending |
-| INTR-04 | TBD | Pending |
-| DWNL-01 | TBD | Pending |
-| DWNL-02 | TBD | Pending |
-| DWNL-03 | TBD | Pending |
-| DWNL-04 | TBD | Pending |
-| SHAR-01 | TBD | Pending |
-| SHAR-02 | TBD | Pending |
-| SHAR-03 | TBD | Pending |
-| SHAR-04 | TBD | Pending |
-| PROG-01 | TBD | Pending |
-| PROG-02 | TBD | Pending |
-| PROG-03 | TBD | Pending |
-| GANLT-01 | TBD | Pending |
-| GANLT-02 | TBD | Pending |
-| GANLT-03 | TBD | Pending |
-| GDISC-01 | TBD | Pending |
-| GDISC-02 | TBD | Pending |
-| GALUX-01 | TBD | Pending |
-| GALUX-02 | TBD | Pending |
-| GALUX-03 | TBD | Pending |
-| GALUX-04 | TBD | Pending |
-| GALUX-05 | TBD | Pending |
+| FNDN-01 | Phase 15 | Pending |
+| FNDN-02 | Phase 15 | Pending |
+| FNDN-03 | Phase 15 | Pending |
+| LYOT-01 | Phase 16 | Pending |
+| LYOT-02 | Phase 16 | Pending |
+| LYOT-03 | Phase 16 | Pending |
+| LYOT-04 | Phase 16 | Pending |
+| PLYR-01 | Phase 17 | Pending |
+| PLYR-02 | Phase 17 | Pending |
+| PLYR-03 | Phase 17 | Pending |
+| PLYR-04 | Phase 17 | Pending |
+| INTR-01 | Phase 18 | Pending |
+| INTR-02 | Phase 18 | Pending |
+| INTR-03 | Phase 18 | Pending |
+| INTR-04 | Phase 18 | Pending |
+| DWNL-01 | Phase 19 | Pending |
+| DWNL-02 | Phase 19 | Pending |
+| DWNL-03 | Phase 19 | Pending |
+| DWNL-04 | Phase 19 | Pending |
+| SHAR-01 | Phase 20 | Pending |
+| SHAR-02 | Phase 20 | Pending |
+| SHAR-03 | Phase 20 | Pending |
+| SHAR-04 | Phase 20 | Pending |
+| PROG-01 | Phase 16 | Pending |
+| PROG-02 | Phase 20 | Pending |
+| PROG-03 | Phase 20 | Pending |
+| GANLT-01 | Phase 20 | Pending |
+| GANLT-02 | Phase 20 | Pending |
+| GANLT-03 | Phase 20 | Pending |
+| GDISC-01 | Phase 20 | Pending |
+| GDISC-02 | Phase 20 | Pending |
+| GALUX-01 | Phase 18 | Pending |
+| GALUX-02 | Phase 18 | Pending |
+| GALUX-03 | Phase 18 | Pending |
+| GALUX-04 | Phase 18 | Pending |
+| GALUX-05 | Phase 18 | Pending |
 
 ### v1.3 Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MONTZ-01 | TBD | Pending |
-| MONTZ-02 | TBD | Pending |
-| MONTZ-03 | TBD | Pending |
-| MONTZ-04 | TBD | Pending |
-| ONBRD-01 | TBD | Pending |
-| ONBRD-02 | TBD | Pending |
-| ONBRD-03 | TBD | Pending |
-| ONBRD-04 | TBD | Pending |
-| BKPI-01 | TBD | Pending |
-| BKPI-02 | TBD | Pending |
-| BKPI-03 | TBD | Pending |
-| BKPI-04 | TBD | Pending |
-| INTGR-01 | TBD | Pending |
-| INTGR-02 | TBD | Pending |
-| INTGR-03 | TBD | Pending |
-| INTGR-04 | TBD | Pending |
-| FDISC-01 | TBD | Pending |
-| FDISC-02 | TBD | Pending |
-| FDISC-03 | TBD | Pending |
+| MONTZ-01 | Phase 22 | Pending |
+| MONTZ-02 | Phase 22 | Pending |
+| MONTZ-03 | Phase 22 | Pending |
+| MONTZ-04 | Phase 22 | Pending |
+| ONBRD-01 | Phase 21 | Pending |
+| ONBRD-02 | Phase 21 | Pending |
+| ONBRD-03 | Phase 21 | Pending |
+| ONBRD-04 | Phase 21 | Pending |
+| BKPI-01 | Phase 23 | Pending |
+| BKPI-02 | Phase 23 | Pending |
+| BKPI-03 | Phase 23 | Pending |
+| BKPI-04 | Phase 23 | Pending |
+| INTGR-01 | Phase 24 | Pending |
+| INTGR-02 | Phase 24 | Pending |
+| INTGR-03 | Phase 24 | Pending |
+| INTGR-04 | Phase 24 | Pending |
+| FDISC-01 | Phase 21 | Pending |
+| FDISC-02 | Phase 21 | Pending |
+| FDISC-03 | Phase 21 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 30 total (25 original + 5 FACE), 30 mapped, 0 unmapped
-- v1.2 requirements: 36 total (22 new gallery/player + 5 gallery analytics/discovery + 5 gallery UX from BA review + 4 pending phase mapping), pending roadmap
-- v1.3 requirements: 19 (monetization, onboarding, KPIs, integrations, feature discovery), pending roadmap
+- v1.2 requirements: 36 total, 36 mapped, 0 unmapped (Phases 15-20)
+- v1.3 requirements: 19 total, 19 mapped, 0 unmapped (Phases 21-24)
 - v2+ backlog: 12 items (gallery templates/commerce/collaboration/AI, advanced content, analytics, platform expansion)
 - **Grand total: 97 requirements across all milestones**
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 — v1.2 gallery/player modernization requirements added (22 new + existing 10)*
+*Last updated: 2026-03-19 -- v1.2 roadmap mapped (36 requirements to Phases 15-20), v1.3 renumbered to Phases 21-24*
