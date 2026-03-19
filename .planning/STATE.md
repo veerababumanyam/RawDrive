@@ -64,5 +64,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: Roadmap created for v1.1 -- Phase 10 ready to plan
+Stopped at: v1.2 milestone defined -- completing v1.1 research/requirements/roadmap next
 Resume file: None
+
+### Upcoming Milestones
+
+- **v1.2** Public Gallery & Gallery Player Modernization — defined, pending research/requirements/roadmap after v1.1 ships

@@ -73,6 +73,26 @@ Photographers can reliably upload, organize, curate, and deliver photos to clien
 - Responsive, elegant, attractive design across all devices
 - Consolidate and fix theme engine, social links, custom links, vCard/QR exports
 
+## Next Milestone: v1.2 Public Gallery & Gallery Player Modernization
+
+**Goal:** Research competitor photography platforms and completely modernize the public gallery viewing experience and gallery player — making it modern, trendy, attractive, feature-rich, and on par with or exceeding Pixieset, ShootProof, Pic-Time, SmugMug, Zenfolio, Pass, and Narrative.
+
+**Target features:**
+- Research and benchmark against top photography gallery platforms (Pixieset, ShootProof, Pic-Time, SmugMug, Zenfolio, Pass, Narrative)
+- Modern gallery layouts (masonry, grid, justified, slideshow, filmstrip, mosaic)
+- Fullscreen gallery player with touch gestures, keyboard navigation, and swipe support
+- Client favorites/selections workflow within public galleries
+- Polished download flows (single, batch, full gallery) with progress indicators
+- Social sharing (Open Graph previews, direct share links, embed codes)
+- Responsive mobile-first design with fluid animations and transitions
+- Modern lightbox with zoom, pan, EXIF display, and filmstrip navigation
+- LQIP/blur-up progressive image loading for perceived performance
+- Password protection UX with branded entry pages
+- Gallery branding customization (colors, logos, fonts, watermark positioning)
+- Dark/light mode gallery themes with customizable accent colors
+- Client comments and proofing interactions within galleries
+- Gallery expiration and download policies with clear client communication
+
 ### Out of Scope
 
 - OAuth/social login (Google, GitHub) — defer to v2, email/password sufficient
@@ -115,4 +135,4 @@ Photographers can reliably upload, organize, curate, and deliver photos to clien
 - **Compatibility**: All services share PostgreSQL and validate JWT with shared JWT_SECRET
 
 ---
-*Last updated: 2026-03-19 after v1.1 milestone started*
+*Last updated: 2026-03-19 after v1.2 milestone defined*
