@@ -48,8 +48,8 @@
 ### Face Identification
 
 - [x] **FACE-01**: Face detection runs on uploaded photos and correctly identifies/groups faces with >90% accuracy (no 500 errors, consent enforced, model validated)
-- [ ] **FACE-02**: Users can view, name, merge, and split face groups through an intuitive management interface (responsive grid, context menu, confidence filter, error boundaries)
-- [ ] **FACE-03**: Face search allows finding all photos of a specific person across all galleries in a workspace
+- [x] **FACE-02**: Users can view, name, merge, and split face groups through an intuitive management interface (responsive grid, context menu, confidence filter, error boundaries)
+- [x] **FACE-03**: Face search allows finding all photos of a specific person across all galleries in a workspace
 - [x] **FACE-04**: Face recognition works reliably across different lighting, angles, and photo qualities (consent bypass removed, deadlock prevention, cache coherence, cascade delete verified)
 - [x] **FACE-05**: Face processing completes within acceptable time and doesn't block uploads (HNSW index, batched centroids, eager model loading, enforced worker timeouts)
 
@@ -188,8 +188,8 @@
 | SEO-03 | Phase 11 | Pending |
 | SEO-04 | Phase 11 | Pending |
 | FACE-01 | Phase 14 | Complete |
-| FACE-02 | Phase 14 | Pending |
-| FACE-03 | Phase 14 | Pending |
+| FACE-02 | Phase 14 | Complete |
+| FACE-03 | Phase 14 | Complete |
 | FACE-04 | Phase 14 | Complete |
 | FACE-05 | Phase 14 | Complete |
 
