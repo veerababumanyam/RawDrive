@@ -61,7 +61,17 @@ Photographers can reliably upload, organize, curate, and deliver photos to clien
 
 ### Active
 
-(None — next milestone requirements TBD via `/gsd:new-milestone`)
+## Current Milestone: v1.1 Profile & Public Page Modernization
+
+**Goal:** Fix broken functionality and redesign both personal photographer profile (`/u/:slug`) and company/branding profile (`/p/:slug`) pages — editors, live previews, and public views — to be modern, responsive, and premium (Linktree/Bento-level polish).
+
+**Target features:**
+- Fix avatar loading, broken UI/UX, and non-functional features across both profile systems
+- Modernize public pages (`/u/:slug` personal, `/p/:slug` company) with premium design
+- Redesign profile editors (`/workspace/profile`, `/workspace/branding`) with working live preview
+- Deep research into Linktree, Bento, and similar link-in-bio platforms for design inspiration
+- Responsive, elegant, attractive design across all devices
+- Consolidate and fix theme engine, social links, custom links, vCard/QR exports
 
 ### Out of Scope
 
@@ -105,4 +115,4 @@ Photographers can reliably upload, organize, curate, and deliver photos to clien
 - **Compatibility**: All services share PostgreSQL and validate JWT with shared JWT_SECRET
 
 ---
-*Last updated: 2026-03-19 after v1.0 milestone*
+*Last updated: 2026-03-19 after v1.1 milestone started*
