@@ -50,11 +50,12 @@
   3. Both `/u/:slug` and `/p/:slug` public pages render using the same shared PublicProfileRenderer component
   4. Theme selection on either profile type applies consistently via CSS custom properties (no legacy theme engine code remains)
   5. Smoke tests pass verifying both profile pages load, avatar displays, and themes render without errors
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
+- [ ] 10-01-PLAN.md — R2 avatar pipeline + AvatarDisplay component with fallback
+- [ ] 10-02-PLAN.md — UnifiedThemeEngine + SectionRegistry + PublicProfileRenderer
+- [ ] 10-03-PLAN.md — Wire pages to shared renderer, delete legacy files, smoke tests
 
 ### Phase 11: Public Page Redesign
 **Goal**: Both public profile pages are modern, responsive, visually premium, and discoverable by search engines
