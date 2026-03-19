@@ -56,6 +56,15 @@ Progress: [░░░░░░░░░░] 0%
 - v1.2 renumbered from Phases 14-17 to Phases 15-18
 - v1.3 renumbered from Phases 18-21 to Phases 19-22
 
+### BA Review Insights (2026-03-19)
+
+- Gallery module scored 8.5/10 — weakest areas: Documentation/Support (6/10), Analytics (7/10)
+- 5 new GALUX requirements added to v1.2 (tooltips, bulk ops, presets, AI status, sub-gallery permissions)
+- 4 new v2+ backlog items (gallery templates, commerce, collaboration, AI learning)
+- Competitive edge: only platform combining gallery + CRM + AI curation
+- Competitive gaps: design flexibility (vs Showit), commerce (vs Zenfolio), print partnerships (vs SmugMug)
+- Full review archived: .planning/research/BA-GALLERY-REVIEW.md
+
 ### Pending Todos
 
 None.
@@ -70,7 +79,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: v1.2 milestone defined -- completing v1.1 research/requirements/roadmap next
+Stopped at: BA review indexed, gaps extracted to requirements, roadmap updated -- ready for Phase 10 execution
 Resume file: None
 
 ### Upcoming Milestones

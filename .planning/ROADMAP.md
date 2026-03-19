@@ -132,8 +132,8 @@ Plans:
 
 - [ ] **Phase 15: Gallery Research & Foundation** - Benchmark against Pixieset/ShootProof/Pic-Time/SmugMug, audit current gallery code, define design system tokens for gallery views
 - [ ] **Phase 16: Gallery Layouts & Lightbox** - Modern layout engine (masonry, grid, justified, filmstrip), fullscreen lightbox with zoom/pan/EXIF, LQIP progressive loading
-- [ ] **Phase 17: Client Interaction & Delivery** - Favorites/selections workflow, download flows (single/batch/full), password protection UX, gallery comments/proofing
-- [ ] **Phase 18: Gallery Analytics & Polish** - Per-gallery engagement metrics (GANLT-01/02/03), gallery discovery ranking (GDISC-01/02), sharing OG previews, dark/light themes, performance budget
+- [ ] **Phase 17: Client Interaction & Delivery** - Favorites/selections workflow, download flows (single/batch/full), password protection UX, gallery comments/proofing, bulk actions toolbar (GALUX-02), settings presets (GALUX-03), sub-gallery permissions (GALUX-05)
+- [ ] **Phase 18: Gallery Analytics & Polish** - Per-gallery engagement metrics (GANLT-01/02/03), gallery discovery ranking (GDISC-01/02), AI tool tooltips (GALUX-01), AI processing status UX (GALUX-04), sharing OG previews, dark/light themes, performance budget
 
 #### Phase 15: Gallery Research & Foundation
 **Goal**: Current gallery codebase is audited, competitor benchmarks documented, and shared design tokens established for gallery views
@@ -157,26 +157,31 @@ Plans:
 **Plans**: TBD
 
 #### Phase 17: Client Interaction & Delivery
-**Goal**: Clients can interact with galleries (favorites, comments, downloads) through polished, branded experiences
+**Goal**: Clients can interact with galleries (favorites, comments, downloads) through polished, branded experiences with professional bulk workflows
 **Depends on**: Phase 16
-**Requirements**: Client favorites, downloads, password protection, comments (from v1.2 PROJECT.md scope)
+**Requirements**: Client favorites, downloads, password protection, comments (from v1.2 PROJECT.md scope), GALUX-02, GALUX-03, GALUX-05
 **Success Criteria** (what must be TRUE):
   1. Client marks photos as favorites within a public gallery and photographer sees the selection list in their dashboard
   2. Client downloads single photo, batch selection, or full gallery with progress indicator and completion notification
   3. Password-protected gallery shows branded entry page with clear instructions
   4. Gallery expiration date displays prominently with countdown and download reminder
+  5. Multi-select activates visible bulk action toolbar with batch edit, tag, download, and delete operations
+  6. Gallery settings offer one-click presets (Proofing, Delivery, Sharing, Premium Delivery) configuring access+downloads+watermark
+  7. Sub-gallery permissions show clear inheritance indicator with per-sub-gallery override option
 **Plans**: TBD
 
 #### Phase 18: Gallery Analytics & Polish
-**Goal**: Gallery owners see per-gallery engagement metrics and all galleries meet performance and SEO targets
+**Goal**: Gallery owners see per-gallery engagement metrics, AI tools are discoverable, and all galleries meet performance and SEO targets
 **Depends on**: Phase 17
-**Requirements**: GANLT-01, GANLT-02, GANLT-03, GDISC-01, GDISC-02
+**Requirements**: GANLT-01, GANLT-02, GANLT-03, GDISC-01, GDISC-02, GALUX-01, GALUX-04
 **Success Criteria** (what must be TRUE):
   1. Gallery detail page shows views, unique visitors, avg. time spent, and device/geo breakdown
   2. Download tracking shows per-photo download counts, batch vs single breakdown, and total bandwidth
   3. Gallery list supports filtering by date range, status, client, and tags simultaneously
   4. Gallery ranking view shows galleries ordered by engagement rate (most viewed, most downloaded)
   5. Public gallery pages include OG meta tags and render correctly in link previews
+  6. Every AI tool in gallery toolbar shows tooltip with description on hover and link to help docs
+  7. AI processing shows progress bar with estimated completion and per-photo status (no generic "failed" messages)
 **Plans**: TBD
 
 ### v1.3 Monetization, Onboarding & Growth

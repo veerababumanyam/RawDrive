@@ -45,7 +45,73 @@
 - [ ] **SEO-03**: Public profile pages include JSON-LD Person/Organization structured data
 - [ ] **SEO-04**: Public profile pages are crawlable by search engines (not blocked by client-side rendering)
 
-## v2 Requirements
+## v1.2 Requirements
+
+### Gallery Analytics
+
+- [ ] **GANLT-01**: Each gallery shows per-gallery engagement metrics (views, unique visitors, avg. time spent)
+- [ ] **GANLT-02**: Gallery dashboard shows download tracking detail (per-photo downloads, batch vs single, total bandwidth)
+- [ ] **GANLT-03**: Gallery owner can see device and geographic breakdown per gallery (not just workspace-wide)
+
+### Gallery Discovery
+
+- [ ] **GDISC-01**: Gallery search supports filtering by date range, status, client, and tags simultaneously
+- [ ] **GDISC-02**: Galleries surface engagement rate ranking (most viewed, most downloaded, most shared)
+
+## v1.3 Requirements
+
+### Monetization & Pricing
+
+- [ ] **MONTZ-01**: Public pricing page displays tier comparison with feature matrix, storage limits, and AI credit allocations
+- [ ] **MONTZ-02**: Upgrade flow from free tier shows clear value proposition with feature diff between current and target plan
+- [ ] **MONTZ-03**: Premium features (themes, AI credits, storage) show lock icon with contextual upgrade prompt when accessed on free tier
+- [ ] **MONTZ-04**: Trial management shows days remaining, usage stats, and what happens after expiry
+
+### Onboarding & Activation
+
+- [ ] **ONBRD-01**: New user completes guided onboarding wizard (upload first photo, create gallery, set profile) with progress tracking
+- [ ] **ONBRD-02**: Dashboard shows contextual "next steps" cards that adapt based on which features user has activated
+- [ ] **ONBRD-03**: Interactive feature tooltips appear on first visit to each major module (galleries, clients, FaceIDs, analytics)
+- [ ] **ONBRD-04**: Profile setup wizard prioritizes highest-impact fields first (avatar, title, portfolio link) with skip option
+
+### Business Analytics & KPIs
+
+- [ ] **BKPI-01**: Analytics dashboard shows conversion funnel metrics (gallery view -> download -> inquiry -> booking)
+- [ ] **BKPI-02**: Client lifecycle dashboard tracks stages (lead, active, completed, churned) with transition dates
+- [ ] **BKPI-03**: Revenue metrics panel shows monthly recurring revenue, plan distribution, and upgrade/downgrade trends
+- [ ] **BKPI-04**: Weekly email digest summarizes key metrics (new visitors, downloads, client activity, storage usage)
+
+### Integration Ecosystem
+
+- [ ] **INTGR-01**: Email marketing integration allows syncing client list to Mailchimp or ConvertKit with tag mapping
+- [ ] **INTGR-02**: Calendar integration (Google Calendar, Calendly) shows booking availability on public profile with real-time slots
+- [ ] **INTGR-03**: Cloud storage import allows one-time bulk import from Google Drive or Dropbox into galleries
+- [ ] **INTGR-04**: Zapier/webhook triggers fire on key events (new client, gallery published, download completed) for third-party automation
+
+### Feature Discovery & Help
+
+- [ ] **FDISC-01**: In-app help center provides searchable knowledge base with context-aware suggestions
+- [ ] **FDISC-02**: Each major feature shows "Learn more" expandable with use case examples and best practices
+- [ ] **FDISC-03**: Empty states across all modules include video walkthroughs or animated tutorials (not just text CTAs)
+
+## v1.2 Gallery UX Requirements (from BA Review)
+
+### Gallery Usability
+
+- [ ] **GALUX-01**: Each AI tool in gallery toolbar shows tooltip with 1-2 sentence description on hover
+- [ ] **GALUX-02**: Gallery provides visible bulk action toolbar when multiple photos selected (batch edit, tag, download, delete)
+- [ ] **GALUX-03**: Gallery settings offer one-click presets (Proofing, Delivery, Sharing, Premium Delivery) that configure access, downloads, and watermark together
+- [ ] **GALUX-04**: AI processing shows progress bar with estimated completion time and per-photo status (replacing "Some analyses failed" generic message)
+- [ ] **GALUX-05**: Sub-galleries show clear permission inheritance indicator and allow override per sub-gallery
+
+## v2+ Requirements (Backlog)
+
+### Gallery Templates & Commerce
+
+- **GTMPL-01**: Gallery templates with pre-built structures (Wedding: Ceremony/Reception/Details/Portraits; Event: Candids/Groups/Highlights; Product: Hero/Details/Lifestyle)
+- **GCOMM-01**: Direct print ordering from gallery with album builder, gift print options, and lab fulfillment integration
+- **GCOLB-01**: Real-time client collaboration with markup tools, revision tracking, and approval workflow
+- **GAILR-01**: AI style-based recommendations ("show me outdoor portraits"), seasonal suggestions, and client preference learning
 
 ### Advanced Content
 
@@ -53,24 +119,38 @@
 - **ACNT-02**: User can schedule profile publish/unpublish times
 - **ACNT-03**: User can A/B test different profile layouts
 
-### Analytics
+### Advanced Analytics
 
 - **ANLT-01**: User can view detailed profile analytics dashboard (views, clicks, geography)
 - **ANLT-02**: User can see click-through rates on individual links
 - **ANLT-03**: User receives weekly profile performance email digest
 
-## Out of Scope
+### Platform Expansion
 
-| Feature | Reason |
-|---------|--------|
-| Commerce/store features | Stan Store/Beacons territory -- not core to photography platform |
-| Newsletter/email signup blocks | Scope creep -- photographers use external email tools |
-| Video background themes | Bandwidth costs, mobile performance risk |
-| SSR framework migration | Too invasive -- prerendering service sufficient for SEO |
-| Custom domain for profiles | Infrastructure complexity, defer to v2+ |
-| Profile versioning/history | Nice-to-have, not needed for modernization |
+- **PLAT-01**: Video content upload and streaming support
+- **PLAT-02**: Multi-language UI beyond i18n (auto-detect visitor language for public pages)
+- **PLAT-03**: White-label B2B solution for agencies and studios
+- **PLAT-04**: Native mobile app (iOS/Android) beyond PWA
+- **PLAT-05**: Print commerce integration (lab fulfillment, print pricing, client ordering)
+
+## Out of Scope (Current Milestones)
+
+| Feature | Reason | Revisit |
+|---------|--------|---------|
+| Commerce/store features | Stan Store/Beacons territory -- not core to photography platform | v2+ |
+| Newsletter/email signup blocks | Scope creep -- photographers use external email tools | v2+ |
+| Video background themes | Bandwidth costs, mobile performance risk | v2+ |
+| SSR framework migration | Too invasive -- prerendering service sufficient for SEO | v2+ |
+| Custom domain for profiles | Infrastructure complexity | v2+ |
+| Profile versioning/history | Nice-to-have, not needed for modernization | v2+ |
+| Native mobile app | PWA covers mobile; native adds maintenance burden | v2+ |
+| Real-time collaborative editing | Not needed for photography use case | v2+ |
+| Gamification (badges, achievements) | Engagement feature -- revisit after core monetization | v2+ |
+| Community/marketplace features | Platform play -- requires critical mass first | v2+ |
 
 ## Traceability
+
+### v1.1 Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -100,11 +180,52 @@
 | SEO-03 | Phase 11 | Pending |
 | SEO-04 | Phase 11 | Pending |
 
+### v1.2 Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| GANLT-01 | TBD | Pending |
+| GANLT-02 | TBD | Pending |
+| GANLT-03 | TBD | Pending |
+| GDISC-01 | TBD | Pending |
+| GDISC-02 | TBD | Pending |
+| GALUX-01 | Phase 18 | Pending |
+| GALUX-02 | Phase 17 | Pending |
+| GALUX-03 | Phase 17 | Pending |
+| GALUX-04 | Phase 18 | Pending |
+| GALUX-05 | Phase 17 | Pending |
+
+### v1.3 Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| MONTZ-01 | TBD | Pending |
+| MONTZ-02 | TBD | Pending |
+| MONTZ-03 | TBD | Pending |
+| MONTZ-04 | TBD | Pending |
+| ONBRD-01 | TBD | Pending |
+| ONBRD-02 | TBD | Pending |
+| ONBRD-03 | TBD | Pending |
+| ONBRD-04 | TBD | Pending |
+| BKPI-01 | TBD | Pending |
+| BKPI-02 | TBD | Pending |
+| BKPI-03 | TBD | Pending |
+| BKPI-04 | TBD | Pending |
+| INTGR-01 | TBD | Pending |
+| INTGR-02 | TBD | Pending |
+| INTGR-03 | TBD | Pending |
+| INTGR-04 | TBD | Pending |
+| FDISC-01 | TBD | Pending |
+| FDISC-02 | TBD | Pending |
+| FDISC-03 | TBD | Pending |
+
 **Coverage:**
-- v1.1 requirements: 25 total
-- Mapped to phases: 25
-- Unmapped: 0
+- v1.1 requirements: 25 total, 25 mapped, 0 unmapped
+- v1.2 requirements: 10 total (5 gallery analytics/discovery + 5 gallery UX from BA review), mapped to Phases 17-18
+- v1.3 requirements: 19 (monetization, onboarding, KPIs, integrations, feature discovery), pending roadmap
+- v2+ backlog: 12 items (gallery templates/commerce/collaboration/AI, advanced content, analytics, platform expansion)
+- **Grand total: 66 requirements across all milestones**
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 after roadmap creation*
+*Last updated: 2026-03-19 after BA review gap analysis*
