@@ -184,14 +184,18 @@ class FaceDetectionWorker:
                 return True
             except asyncio.TimeoutError:
                 logger.error(
-                    "Job timed out",
+                    "Job timed out — TIMEOUT error_code",
                     extra={
                         "job_id": str(job["id"]),
                         "photo_id": str(job["photo_id"]),
                         "timeout_seconds": JOB_TIMEOUT_SECONDS,
+                        "error_code": "TIMEOUT",
                     },
                 )
-                await self._handle_job_failure(job, f"Job timed out after {JOB_TIMEOUT_SECONDS}s")
+                await self._handle_job_failure(
+                    job,
+                    f"TIMEOUT: Job timed out after {JOB_TIMEOUT_SECONDS}s",
+                )
                 return False
             except Exception as e:
                 logger.exception(

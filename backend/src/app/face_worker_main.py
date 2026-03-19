@@ -25,6 +25,7 @@ from app.services.face_detection_worker import (
     FaceDetectionWorker,
     get_face_detection_worker,
 )
+from app.services.ai.face_embedder import initialize_model, is_model_loaded
 from app.config.settings import ensure_settings_loaded
 
 
@@ -50,6 +51,17 @@ async def lifespan(app: FastAPI):
     await init_postgres_pool(settings)
     logger.info("Database pool initialized")
     
+    # Eagerly load face recognition model BEFORE accepting jobs
+    logger.info("Pre-loading face recognition model...")
+    model_loaded = await initialize_model()
+    if not model_loaded:
+        logger.error(
+            "Face recognition model failed to load. "
+            "Worker will not start accepting jobs with broken model."
+        )
+        raise RuntimeError("Face recognition model initialization failed")
+    logger.info("Face worker ready - model pre-loaded")
+
     # Start the face detection worker
     _worker = get_face_detection_worker()
     _worker_task = asyncio.create_task(_worker.start())
@@ -95,9 +107,11 @@ async def health_check():
 
 @app.get("/ready")
 async def readiness_check():
-    """Readiness check - only ready when worker is actively running."""
+    """Readiness check - only ready when worker is actively running and model loaded."""
     if _worker is None or not _worker._running:
         return {"status": "not_ready", "reason": "Worker not running"}, 503
+    if not is_model_loaded():
+        return {"status": "not_ready", "reason": "Model not loaded"}, 503
     return {"status": "ready"}
 
 

@@ -32,8 +32,15 @@ MODEL_DIR = Path("/app/models/face_recognition")
 MODEL_FILENAME = "w600k_r50.onnx"
 
 # Expected model file hash for validation (SHA-256 of w600k_r50.onnx)
-# This is a security measure to ensure the downloaded model is intact
-EXPECTED_MODEL_HASH = None  # Set to actual hash if available
+# Configurable via FACE_MODEL_SHA256 env var. When set, model integrity
+# is validated on load. When None, validation is skipped with a warning.
+EXPECTED_MODEL_HASH = os.getenv("FACE_MODEL_SHA256", None)
+
+if EXPECTED_MODEL_HASH is None:
+    logger.warning(
+        "ONNX model hash not configured - integrity validation skipped. "
+        "Set FACE_MODEL_SHA256 env var to enable model validation."
+    )
 
 # Retry configuration
 MAX_DOWNLOAD_RETRIES = 3
@@ -523,3 +530,49 @@ async def preload_face_embedder() -> bool:
     """
     embedder = get_face_embedder()
     return await embedder.preload_model()
+
+
+async def initialize_model() -> bool:
+    """Initialize the ONNX face recognition model eagerly.
+
+    Should be called during worker startup, BEFORE accepting any jobs.
+    Loads the model, validates it, and runs a dummy inference to warm
+    up the ONNX runtime.
+
+    Returns:
+        True if initialization successful, False otherwise
+    """
+    start_time = time.time()
+    embedder = get_face_embedder()
+
+    try:
+        result = await embedder.preload_model()
+        elapsed = time.time() - start_time
+
+        if result:
+            logger.info(f"ONNX model loaded in {elapsed:.2f}s")
+
+            # Run dummy inference to warm up ONNX runtime
+            try:
+                import numpy as _np
+                dummy_face = _np.zeros((112, 112, 3), dtype=_np.uint8)
+                await embedder.generate_embedding(dummy_face)
+                logger.info("ONNX runtime warmed up with dummy inference")
+            except Exception as warmup_err:
+                logger.warning(f"Warmup inference failed (non-fatal): {warmup_err}")
+
+        return result
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(f"Model initialization failed after {elapsed:.2f}s: {e}")
+        return False
+
+
+def is_model_loaded() -> bool:
+    """Check if the face recognition model is currently loaded and ready.
+
+    Returns:
+        True if model is loaded and ready for inference
+    """
+    embedder = get_face_embedder()
+    return embedder.is_ready
