@@ -33,7 +33,7 @@
 - Decimal phases (10.1, 11.1): Urgent insertions if needed (marked with INSERTED)
 
 - [x] **Phase 10: Foundation & Fixes** - Fix avatar/R2 pipeline, consolidate theme engine, scaffold shared components, add smoke tests (completed 2026-03-19)
-- [ ] **Phase 11: Public Page Redesign** - Mobile-first layouts for both profiles, animated themes, bento grid, dark mode, SEO metadata
+- [x] **Phase 11: Public Page Redesign** - Mobile-first layouts for both profiles, animated themes, bento grid, dark mode, SEO metadata (completed 2026-03-19)
 - [ ] **Phase 12: Editor Redesign** - Live preview, DnD section reordering, visual color picker, device frames, auto-save
 - [ ] **Phase 13: Content Blocks & Performance** - Gallery preview, booking CTA, testimonials, social links, LCP budget enforcement
 - [x] **Phase 14: FaceID Deep Dive & Enhancement** - Debug face identification issues, research competitive face recognition, fix broken functionality, enhance face management UX (completed 2026-03-19)
@@ -311,7 +311,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 08. Notifications | v1.0 | 2/2 | Complete | 2026-03-19 |
 | 09. Shared Packages & Test Coverage | v1.0 | 4/4 | Complete | 2026-03-19 |
 | 10. Foundation & Fixes | v1.1 | Complete    | 2026-03-19 | 2026-03-19 |
-| 11. Public Page Redesign | 2/3 | In Progress|  | - |
+| 11. Public Page Redesign | 3/3 | Complete   | 2026-03-19 | - |
 | 12. Editor Redesign | v1.1 | 0/? | Not started | - |
 | 13. Content Blocks & Performance | v1.1 | 0/? | Not started | - |
 | 14. FaceID Deep Dive & Enhancement | v1.1 | 5/5 | Complete | 2026-03-19 |
