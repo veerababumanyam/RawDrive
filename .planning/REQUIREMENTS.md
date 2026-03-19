@@ -1,7 +1,7 @@
 # Requirements: RawDrive v1.1
 
 **Defined:** 2026-03-19
-**Core Value:** Photographers can reliably upload, organize, curate, and deliver photos to clients — every core workflow functions end-to-end with AI assistance and real-time feedback.
+**Core Value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow functions end-to-end with AI assistance and real-time feedback.
 
 ## v1.1 Requirements
 
@@ -63,10 +63,10 @@
 
 | Feature | Reason |
 |---------|--------|
-| Commerce/store features | Stan Store/Beacons territory — not core to photography platform |
-| Newsletter/email signup blocks | Scope creep — photographers use external email tools |
+| Commerce/store features | Stan Store/Beacons territory -- not core to photography platform |
+| Newsletter/email signup blocks | Scope creep -- photographers use external email tools |
 | Video background themes | Bandwidth costs, mobile performance risk |
-| SSR framework migration | Too invasive — prerendering service sufficient for SEO |
+| SSR framework migration | Too invasive -- prerendering service sufficient for SEO |
 | Custom domain for profiles | Infrastructure complexity, defer to v2+ |
 | Profile versioning/history | Nice-to-have, not needed for modernization |
 
@@ -74,37 +74,37 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FNDTN-01 | TBD | Pending |
-| FNDTN-02 | TBD | Pending |
-| FNDTN-03 | TBD | Pending |
-| FNDTN-04 | TBD | Pending |
-| FNDTN-05 | TBD | Pending |
-| PUBPG-01 | TBD | Pending |
-| PUBPG-02 | TBD | Pending |
-| PUBPG-03 | TBD | Pending |
-| PUBPG-04 | TBD | Pending |
-| PUBPG-05 | TBD | Pending |
-| PUBPG-06 | TBD | Pending |
-| EDITR-01 | TBD | Pending |
-| EDITR-02 | TBD | Pending |
-| EDITR-03 | TBD | Pending |
-| EDITR-04 | TBD | Pending |
-| EDITR-05 | TBD | Pending |
-| EDITR-06 | TBD | Pending |
-| CNTNT-01 | TBD | Pending |
-| CNTNT-02 | TBD | Pending |
-| CNTNT-03 | TBD | Pending |
-| CNTNT-04 | TBD | Pending |
-| SEO-01 | TBD | Pending |
-| SEO-02 | TBD | Pending |
-| SEO-03 | TBD | Pending |
-| SEO-04 | TBD | Pending |
+| FNDTN-01 | Phase 10 | Pending |
+| FNDTN-02 | Phase 10 | Pending |
+| FNDTN-03 | Phase 10 | Pending |
+| FNDTN-04 | Phase 10 | Pending |
+| FNDTN-05 | Phase 10 | Pending |
+| PUBPG-01 | Phase 11 | Pending |
+| PUBPG-02 | Phase 11 | Pending |
+| PUBPG-03 | Phase 11 | Pending |
+| PUBPG-04 | Phase 11 | Pending |
+| PUBPG-05 | Phase 13 | Pending |
+| PUBPG-06 | Phase 11 | Pending |
+| EDITR-01 | Phase 12 | Pending |
+| EDITR-02 | Phase 12 | Pending |
+| EDITR-03 | Phase 12 | Pending |
+| EDITR-04 | Phase 12 | Pending |
+| EDITR-05 | Phase 12 | Pending |
+| EDITR-06 | Phase 12 | Pending |
+| CNTNT-01 | Phase 13 | Pending |
+| CNTNT-02 | Phase 13 | Pending |
+| CNTNT-03 | Phase 13 | Pending |
+| CNTNT-04 | Phase 13 | Pending |
+| SEO-01 | Phase 11 | Pending |
+| SEO-02 | Phase 11 | Pending |
+| SEO-03 | Phase 11 | Pending |
+| SEO-04 | Phase 11 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 25 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 25
+- Mapped to phases: 25
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 after initial definition*
+*Last updated: 2026-03-19 after roadmap creation*

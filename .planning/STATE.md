@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Profile & Public Page Modernization
-status: defining_requirements
-stopped_at: Milestone v1.1 started - research phase next
-last_updated: "2026-03-19T21:30:00.000Z"
+status: ready_to_plan
+stopped_at: Roadmap created - Phase 10 ready to plan
+last_updated: "2026-03-19T22:00:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,26 +18,37 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-03-19)
 
-**Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients — every core workflow functions end-to-end with AI assistance and real-time feedback.
-**Current focus:** v1.1 Profile & Public Page Modernization
+**Core value:** Photographers can reliably upload, organize, curate, and deliver photos to clients -- every core workflow functions end-to-end with AI assistance and real-time feedback.
+**Current focus:** Phase 10 - Foundation & Fixes
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-19 — Milestone v1.1 started
+Phase: 10 of 13 (Foundation & Fixes) -- first phase of v1.1
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-03-19 -- Roadmap created for v1.1 (4 phases, 25 requirements)
+
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 23 (v1.0)
+- Average duration: --
+- Total execution time: --
+
+**By Phase:** See v1.0 archives
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
 ### Decisions
 
-- Both personal (`/u/:slug`) and company (`/p/:slug`) profile systems need fixing and modernization
-- Public pages: Linktree-level premium design (modern, attractive, stylish)
-- Internal editors: User-friendly, consistent with existing RawDrive app pages
-- Deep research into Linktree, Bento, and similar platforms for public page design
-- Existing 25+ components need fixing, not rewriting from scratch
-- Avatar loading is broken, multiple UI/UX issues across both systems
+- PUBPG-05 (LCP <2s) placed in Phase 13 after content blocks, not Phase 11 -- adding blocks would regress perf
+- SEO requirements grouped with Phase 11 (public page redesign) not deferred -- bolting on SEO after animations is expensive
+- 4 phases derived from natural requirement clustering (foundation/public/editor/content)
+- Research completed with HIGH confidence -- one new package needed (react-best-gradient-color-picker)
 
 ### Pending Todos
 
@@ -45,12 +56,13 @@ None.
 
 ### Blockers/Concerns
 
-- Avatar upload/display broken (likely R2 path or serving issue)
-- Two separate profile systems with overlapping but different feature sets
-- 20+ themed backgrounds exist but may not all render correctly
+- Avatar upload/display broken (P0 -- Phase 10 fixes this)
+- Two separate profile systems with divergent component trees (Phase 10 unifies renderer)
+- SSR/prerendering strategy for SEO needs concrete decision at Phase 11 planning
+- @dnd-kit resize handle capability needs confirmation at Phase 12 planning
 
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: Milestone v1.1 started - research phase next
+Stopped at: Roadmap created for v1.1 -- Phase 10 ready to plan
 Resume file: None
