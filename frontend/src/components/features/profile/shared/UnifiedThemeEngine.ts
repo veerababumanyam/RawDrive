@@ -164,7 +164,7 @@ export function resolveThemeTokens(themeId: string, prefersDark: boolean): Theme
  * Apply theme tokens as CSS custom properties on a DOM element.
  * Defaults to document.documentElement if no element is provided.
  */
-export function applyThemeToRoot(tokens: ThemeTokens, element?: HTMLElement): void {
+export function applyThemeToContainer(tokens: ThemeTokens, element?: HTMLElement): void {
   const el = element ?? document.documentElement;
   for (const [key, value] of Object.entries(tokens)) {
     el.style.setProperty(key, value);
@@ -175,9 +175,14 @@ export function applyThemeToRoot(tokens: ThemeTokens, element?: HTMLElement): vo
  * Remove all theme CSS custom properties from a DOM element.
  * Call on unmount to prevent styles leaking into other pages.
  */
-export function removeThemeFromRoot(element?: HTMLElement): void {
+export function removeThemeFromContainer(element?: HTMLElement): void {
   const el = element ?? document.documentElement;
   for (const key of THEME_CSS_KEYS) {
     el.style.removeProperty(key);
   }
 }
+
+/** @deprecated Use applyThemeToContainer */
+export const applyThemeToRoot = applyThemeToContainer;
+/** @deprecated Use removeThemeFromContainer */
+export const removeThemeFromRoot = removeThemeFromContainer;

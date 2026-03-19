@@ -7,7 +7,7 @@
  */
 
 import React, { useEffect, useRef, useMemo, useCallback } from 'react';
-import { resolveThemeTokens, applyThemeToRoot, removeThemeFromRoot } from './UnifiedThemeEngine';
+import { resolveThemeTokens, applyThemeToContainer, removeThemeFromContainer } from './UnifiedThemeEngine';
 import { getSectionsForProfile, type ProfileType } from './SectionRegistry';
 import { ProfileBentoGrid } from '../ProfileBentoGrid';
 import { ProfileGridItem } from '../ProfileGridItem';
@@ -57,12 +57,12 @@ export const PublicProfileRenderer: React.FC<PublicProfileRendererProps> = ({
     const tokens = resolveThemeTokens(themeId ?? '', prefersDark);
     const el = wrapperRef.current;
     if (el) {
-      applyThemeToRoot(tokens, el);
+      applyThemeToContainer(tokens, el);
     }
 
     return () => {
       if (el) {
-        removeThemeFromRoot(el);
+        removeThemeFromContainer(el);
       }
     };
   }, [themeId, prefersDark]);

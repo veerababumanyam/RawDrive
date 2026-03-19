@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   resolveThemeId,
   resolveThemeTokens,
-  applyThemeToRoot,
-  removeThemeFromRoot,
+  applyThemeToContainer,
+  removeThemeFromContainer,
   LEGACY_TO_PREBUILT_MAP,
   type ThemeTokens,
 } from '../UnifiedThemeEngine';
@@ -89,7 +89,7 @@ describe('UnifiedThemeEngine', () => {
     });
   });
 
-  describe('applyThemeToRoot', () => {
+  describe('applyThemeToContainer', () => {
     it('sets CSS custom properties on provided element', () => {
       const mockElement = {
         style: {
@@ -98,7 +98,7 @@ describe('UnifiedThemeEngine', () => {
       } as unknown as HTMLElement;
 
       const tokens = resolveThemeTokens('theme-clean-slate', false);
-      applyThemeToRoot(tokens, mockElement);
+      applyThemeToContainer(tokens, mockElement);
 
       // Should have called setProperty for each token
       const callCount = mockElement.style.setProperty.mock.calls.length;
@@ -114,7 +114,7 @@ describe('UnifiedThemeEngine', () => {
     });
   });
 
-  describe('removeThemeFromRoot', () => {
+  describe('removeThemeFromContainer', () => {
     it('removes all --theme-* properties from element', () => {
       const mockElement = {
         style: {
@@ -122,7 +122,7 @@ describe('UnifiedThemeEngine', () => {
         },
       } as unknown as HTMLElement;
 
-      removeThemeFromRoot(mockElement);
+      removeThemeFromContainer(mockElement);
 
       const calledProps = (mockElement.style.removeProperty as ReturnType<typeof vi.fn>).mock.calls.map(
         (call: unknown[]) => call[0]

@@ -36,8 +36,8 @@ const mockResolveThemeTokens = vi.fn().mockReturnValue({
 
 vi.mock('../UnifiedThemeEngine', () => ({
   resolveThemeTokens: (...args: unknown[]) => mockResolveThemeTokens(...args),
-  applyThemeToRoot: (...args: unknown[]) => mockApplyThemeToRoot(...args),
-  removeThemeFromRoot: (...args: unknown[]) => mockRemoveThemeFromRoot(...args),
+  applyThemeToContainer: (...args: unknown[]) => mockApplyThemeToRoot(...args),
+  removeThemeFromContainer: (...args: unknown[]) => mockRemoveThemeFromRoot(...args),
   resolveThemeId: (id: string) => id || 'theme-clean-slate',
 }));
 
@@ -116,7 +116,7 @@ describe('PublicProfileRenderer', () => {
       />
     );
     expect(mockResolveThemeTokens).toHaveBeenCalled();
-    // applyThemeToRoot should have been called with tokens and a scoped element
+    // applyThemeToContainer should have been called with tokens and a scoped element
     expect(mockApplyThemeToRoot).toHaveBeenCalled();
   });
 
