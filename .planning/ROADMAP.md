@@ -135,7 +135,7 @@ Plans:
 - Integer phases (15, 16, 17, 18, 19, 20): Planned v1.2 work
 - Decimal phases (15.1, 16.1): Urgent insertions if needed
 
-- [ ] **Phase 15: Foundation Refactor & Data Model** - Decompose PublicGalleryPage monolith, visitor-scoped proofing table, LayoutStyle enum sync, shared lightbox hooks
+- [x] **Phase 15: Foundation Refactor & Data Model** - Decompose PublicGalleryPage monolith, visitor-scoped proofing table, LayoutStyle enum sync, shared lightbox hooks (completed 2026-03-19)
 - [ ] **Phase 16: Gallery Layout Engine & Progressive Loading** - Justified, mosaic, enhanced masonry layouts, layout switcher, LQIP blur-up pipeline
 - [ ] **Phase 17: Gallery Player** - Fullscreen lightbox with zoom/pan/swipe, EXIF overlay, filmstrip navigation, mobile touch gestures
 - [ ] **Phase 18: Client Interactions & Gallery UX** - Favorites, selections with quotas, comments, WebSocket sync, AI tooltips, bulk actions, settings presets, sub-gallery permissions
@@ -315,7 +315,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 12. Editor Redesign | v1.1 | 0/? | Not started | - |
 | 13. Content Blocks & Performance | v1.1 | 0/? | Not started | - |
 | 14. FaceID Deep Dive & Enhancement | v1.1 | 5/5 | Complete | 2026-03-19 |
-| 15. Foundation Refactor & Data Model | 2/3 | In Progress|  | - |
+| 15. Foundation Refactor & Data Model | 3/3 | Complete   | 2026-03-19 | - |
 | 16. Gallery Layout Engine & Progressive Loading | v1.2 | 0/? | Not started | - |
 | 17. Gallery Player | v1.2 | 0/? | Not started | - |
 | 18. Client Interactions & Gallery UX | v1.2 | 0/? | Not started | - |

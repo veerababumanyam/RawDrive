@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Profile & Public Page Modernization
 status: unknown
-stopped_at: Completed 15-03-PLAN.md
-last_updated: "2026-03-19T23:24:25Z"
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-03-19T23:39:28.741Z"
 progress:
   total_phases: 5
   completed_phases: 3
@@ -55,6 +55,7 @@ Plan: 3 of 3 (COMPLETE)
 - [Phase 11]: Used window.location.origin for OG image URLs; data-attributes on AnimatedBackgroundRenderer for testability
 - [Phase 15]: Visitor-scoped proofing via gallery_visitor_actions upsert; gallery_assets.is_favorited/is_selected preserved as aggregates; visitor_token defaults to 'anonymous'
 - [Phase 15]: Lightbox hooks already auth-agnostic by design; documented intent for GalleryPlayer reuse rather than refactoring
+- [Phase 15]: [Phase 15]: Extracted lightbox to PublicGalleryLightbox.tsx and body to PublicGalleryContent.tsx to meet 400-line constraint; GalleryPlayerContext minimal for Phase 17 extension
 
 ### Roadmap Evolution
 
@@ -81,8 +82,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T23:24:25Z
-Stopped at: Completed 15-03-PLAN.md
+Last session: 2026-03-19T23:39:26.377Z
+Stopped at: Completed 15-02-PLAN.md
 Resume file: None
 
 ### Upcoming Milestones
