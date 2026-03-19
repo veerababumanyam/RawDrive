@@ -156,6 +156,56 @@ class FaceTaggingCacheManager:
         }
 
     # =========================================================================
+    # CACHE VERSION COUNTERS (L1/L2 coherence)
+    # =========================================================================
+
+    CACHE_VERSION_KEY = "face:cache_version:{workspace_id}"
+
+    async def increment_cache_version(self, workspace_id: UUID) -> int:
+        """Increment the cache version counter for a workspace.
+
+        Called after every face group mutation (merge, split, assign, delete)
+        to signal that cached data may be stale.
+
+        Args:
+            workspace_id: The workspace ID
+
+        Returns:
+            The new version number
+        """
+        if not self.redis:
+            return 0
+        try:
+            key = self.CACHE_VERSION_KEY.format(workspace_id=workspace_id)
+            return await self.redis.incr(key)
+        except Exception as e:
+            logger.warning(f"Failed to increment cache version: {e}")
+            return 0
+
+    async def get_cache_version(self, workspace_id: UUID) -> int:
+        """Get current cache version for a workspace.
+
+        Used by L1 cache reads to detect staleness — if the Redis version
+        is newer than the version stored with the L1 entry, the L1 data
+        is stale and must be refreshed.
+
+        Args:
+            workspace_id: The workspace ID
+
+        Returns:
+            Current version number (0 if not set or Redis unavailable)
+        """
+        if not self.redis:
+            return 0
+        try:
+            key = self.CACHE_VERSION_KEY.format(workspace_id=workspace_id)
+            val = await self.redis.get(key)
+            return int(val) if val else 0
+        except Exception as e:
+            logger.warning(f"Failed to get cache version: {e}")
+            return 0
+
+    # =========================================================================
     # CACHE LOOKUP (Multi-tier)
     # =========================================================================
 

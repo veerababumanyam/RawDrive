@@ -379,25 +379,30 @@ class FaceClusterService:
         workspace_id: UUID,
     ) -> dict[str, Any]:
         """Merge source group into target group.
-        
+
         All faces from the source group are reassigned to the target group.
         The source group is deleted after the merge. The target group's
         name and representative face are preserved.
-        
+
+        Row-level locks are acquired in deterministic sorted UUID order to
+        prevent deadlocks when two concurrent merges involve overlapping groups.
+
         Args:
             source_group_id: ID of the group to merge from (will be deleted)
             target_group_id: ID of the group to merge into (will be preserved)
             workspace_id: Workspace ID for tenant isolation
-            
+
         Returns:
             The updated target group
-            
+
         Raises:
             FaceGroupNotFoundError: If either group doesn't exist
             InvalidMergeOperationError: If trying to merge a group into itself
-            
+
         Requirements: 2.7, 16.5
         """
+        from app.db.postgres import get_postgres_pool
+
         # Validate: can't merge into self
         if source_group_id == target_group_id:
             raise InvalidMergeOperationError(
@@ -405,11 +410,11 @@ class FaceClusterService:
                 target_group_id=target_group_id,
                 reason="Cannot merge a group into itself",
             )
-        
+
         # Verify both groups exist
         source_group = await self.group_repo.get_by_id(source_group_id, workspace_id)
         target_group = await self.group_repo.get_by_id(target_group_id, workspace_id)
-        
+
         logger.info(
             "Merging face groups",
             extra={
@@ -418,30 +423,41 @@ class FaceClusterService:
                 "source_face_count": source_group["face_count"],
             },
         )
-        
+
+        # Acquire row-level locks in sorted UUID order to prevent deadlocks
+        all_group_ids = sorted([source_group_id, target_group_id], key=str)
+        pool = await get_postgres_pool()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                for group_id in all_group_ids:
+                    await conn.execute(
+                        "SELECT id FROM face_groups WHERE id = $1 FOR UPDATE",
+                        group_id,
+                    )
+
         # Get all faces in source group
         source_faces = await self.face_repo.find_by_group_id(
             source_group_id, workspace_id, limit=10000
         )
-        
+
         if source_faces:
             # Bulk reassign faces to target group
             face_ids = [f["id"] for f in source_faces]
             await self.face_repo.bulk_assign_to_group(
                 face_ids, workspace_id, target_group_id
             )
-            
+
             # Update target group's face count
             await self.group_repo.increment_face_count(
                 target_group_id, workspace_id, delta=len(source_faces)
             )
-        
+
         # Delete the source group (faces already reassigned)
         await self.group_repo.delete(source_group_id, workspace_id)
-        
+
         # Recalculate centroid for the merged group
         await self.recalculate_centroid(target_group_id, workspace_id)
-        
+
         logger.info(
             "Face groups merged successfully",
             extra={
@@ -449,7 +465,7 @@ class FaceClusterService:
                 "faces_moved": len(source_faces),
             },
         )
-        
+
         return await self.group_repo.get_by_id(target_group_id, workspace_id)
     
     async def multi_merge_groups(
@@ -524,6 +540,16 @@ class FaceClusterService:
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             async with conn.transaction():
+                # Acquire row-level locks in sorted UUID order to prevent deadlocks
+                all_group_ids = sorted(
+                    [target_group_id] + list(source_group_ids), key=str
+                )
+                for group_id in all_group_ids:
+                    await conn.execute(
+                        "SELECT id FROM face_groups WHERE id = $1 FOR UPDATE",
+                        group_id,
+                    )
+
                 # Merge each source group sequentially
                 for source_id in source_group_ids:
                     # Get source group faces
