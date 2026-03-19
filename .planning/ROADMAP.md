@@ -32,7 +32,7 @@
 - Integer phases (10, 11, 12, 13): Planned v1.1 work
 - Decimal phases (10.1, 11.1): Urgent insertions if needed (marked with INSERTED)
 
-- [ ] **Phase 10: Foundation & Fixes** - Fix avatar/R2 pipeline, consolidate theme engine, scaffold shared components, add smoke tests
+- [x] **Phase 10: Foundation & Fixes** - Fix avatar/R2 pipeline, consolidate theme engine, scaffold shared components, add smoke tests (completed 2026-03-19)
 - [ ] **Phase 11: Public Page Redesign** - Mobile-first layouts for both profiles, animated themes, bento grid, dark mode, SEO metadata
 - [ ] **Phase 12: Editor Redesign** - Live preview, DnD section reordering, visual color picker, device frames, auto-save
 - [ ] **Phase 13: Content Blocks & Performance** - Gallery preview, booking CTA, testimonials, social links, LCP budget enforcement
@@ -261,7 +261,7 @@ Phases execute in numeric order: 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 ->
 | 07. Gallery Completion | v1.0 | 2/2 | Complete | 2026-03-18 |
 | 08. Notifications | v1.0 | 2/2 | Complete | 2026-03-19 |
 | 09. Shared Packages & Test Coverage | v1.0 | 4/4 | Complete | 2026-03-19 |
-| 10. Foundation & Fixes | 2/3 | In Progress|  | - |
+| 10. Foundation & Fixes | 3/3 | Complete   | 2026-03-19 | - |
 | 11. Public Page Redesign | v1.1 | 0/? | Not started | - |
 | 12. Editor Redesign | v1.1 | 0/? | Not started | - |
 | 13. Content Blocks & Performance | v1.1 | 0/? | Not started | - |

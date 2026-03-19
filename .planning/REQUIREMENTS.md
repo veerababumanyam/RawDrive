@@ -11,7 +11,7 @@
 - [x] **FNDTN-02**: Avatar has proper fallback (initials/placeholder) when image fails to load
 - [x] **FNDTN-03**: Theme engine consolidated into single UnifiedThemeEngine with CSS custom properties (legacy themes deleted)
 - [x] **FNDTN-04**: Personal and company profiles share a unified PublicProfileRenderer component
-- [ ] **FNDTN-05**: Smoke tests verify both profile pages load, avatar displays, and themes render correctly
+- [x] **FNDTN-05**: Smoke tests verify both profile pages load, avatar displays, and themes render correctly
 
 ### Public Page
 
@@ -166,7 +166,7 @@
 | FNDTN-02 | Phase 10 | Complete |
 | FNDTN-03 | Phase 10 | Complete |
 | FNDTN-04 | Phase 10 | Complete |
-| FNDTN-05 | Phase 10 | Pending |
+| FNDTN-05 | Phase 10 | Complete |
 | PUBPG-01 | Phase 11 | Pending |
 | PUBPG-02 | Phase 11 | Pending |
 | PUBPG-03 | Phase 11 | Pending |
