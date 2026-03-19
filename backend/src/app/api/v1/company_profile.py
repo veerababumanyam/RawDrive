@@ -168,6 +168,10 @@ async def get_public_profile_logo(
         if not image_data:
             raise NotFoundError("Logo", slug)
 
+        if isinstance(image_data, dict) and "redirect_url" in image_data:
+            from starlette.responses import RedirectResponse
+            return RedirectResponse(url=image_data["redirect_url"], status_code=302)
+
         return Response(
             content=image_data,
             media_type="image/webp",
@@ -350,6 +354,10 @@ async def get_company_logo(
 
         if not image_data:
             raise NotFoundError("Logo", str(workspace_id))
+
+        if isinstance(image_data, dict) and "redirect_url" in image_data:
+            from starlette.responses import RedirectResponse
+            return RedirectResponse(url=image_data["redirect_url"], status_code=302)
 
         return Response(
             content=image_data,
