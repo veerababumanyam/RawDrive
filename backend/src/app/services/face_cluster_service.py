@@ -672,6 +672,55 @@ class FaceClusterService:
 
         return await self.group_repo.get_by_id(group_id, workspace_id)
 
+    async def ensure_representative_face(
+        self,
+        group_id: UUID,
+        workspace_id: UUID,
+    ) -> None:
+        """Ensure a face group has a representative face set.
+
+        Queries all faces in the group ordered by confidence descending
+        and sets the highest-confidence face as representative. This is
+        called after clustering operations to guarantee every group has
+        a valid representative for display thumbnails.
+
+        Args:
+            group_id: ID of the face group
+            workspace_id: Workspace ID for tenant isolation
+        """
+        faces = await self.face_repo.find_by_group_id(
+            group_id=group_id,
+            workspace_id=workspace_id,
+            limit=500,
+            offset=0,
+        )
+
+        if not faces:
+            logger.warning(
+                "No faces found in group for representative selection",
+                extra={"group_id": str(group_id)},
+            )
+            return
+
+        # Sort by confidence descending, pick highest
+        sorted_faces = sorted(faces, key=lambda f: f.get("confidence", 0), reverse=True)
+        best_face = sorted_faces[0]
+
+        await self.group_repo.update(
+            group_id,
+            workspace_id,
+            representative_face_id=best_face["id"],
+        )
+
+        logger.info(
+            "Representative face set automatically",
+            extra={
+                "group_id": str(group_id),
+                "face_id": str(best_face["id"]),
+                "confidence": best_face.get("confidence"),
+            },
+        )
+
     # =========================================================================
     # CLUSTER SPLIT
     # =========================================================================

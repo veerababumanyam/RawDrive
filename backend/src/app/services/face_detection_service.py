@@ -62,9 +62,27 @@ DEFAULT_MIN_CONFIDENCE = 0.5
 MIN_PHOTO_WIDTH = 50
 MIN_PHOTO_HEIGHT = 50
 
-# Development mode: bypass consent checks
-# WARNING: NEVER set to True in production!
-BYPASS_CONSENT_CHECKS = os.getenv("RAWDRIVE_BYPASS_BIOMETRIC_CONSENT", "false").lower() == "true"
+def _evaluate_consent_bypass() -> bool:
+    """Evaluate whether biometric consent checks can be bypassed.
+
+    Consent bypass is ONLY allowed in development or test environments.
+    In production (the default), bypass is always False regardless of
+    the RAWDRIVE_BYPASS_BIOMETRIC_CONSENT env var.
+
+    Returns:
+        True if bypass is allowed, False otherwise.
+    """
+    _env = os.getenv("RAWDRIVE_ENV", "production").lower()
+    if _env not in ("development", "test"):
+        return False
+    return os.getenv("RAWDRIVE_BYPASS_BIOMETRIC_CONSENT", "false").lower() == "true"
+
+
+# Development mode: bypass consent checks (environment-gated)
+BYPASS_CONSENT_CHECKS = _evaluate_consent_bypass()
+
+if BYPASS_CONSENT_CHECKS:
+    logger.warning("BIOMETRIC CONSENT BYPASS ENABLED - dev/test only")
 
 
 class FaceDetectionService:
