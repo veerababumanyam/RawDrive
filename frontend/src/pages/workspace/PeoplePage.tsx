@@ -27,6 +27,9 @@ import { useToast } from '../../components/ui/Toast';
 import { faceApiService, FaceApiError, FaceGroup, MergeSuggestion } from '../../services/faceApiService';
 import { FaceGroupMergeModal } from '../../components/features/gallery/FaceGroupMergeModal';
 import { FaceErrorBoundary } from '../../components/features/face/FaceErrorBoundary';
+import { FaceConfidenceFilter } from '../../components/features/face/FaceConfidenceFilter';
+import { FaceContextMenu } from '../../components/features/face/FaceContextMenu';
+import { useFaceSearch } from '../../hooks/useFaceSearch';
 
 /* =============================================================================
    PeoplePage Component
@@ -52,6 +55,17 @@ const PeoplePage: React.FC = () => {
   // View and filter state
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    group: FaceGroup;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  // Face search state
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const faceSearch = useFaceSearch(workspace?.workspace_id, selectedPersonId);
 
   // Data state
   const [groups, setGroups] = useState<FaceGroup[]>([]);
@@ -220,15 +234,39 @@ const PeoplePage: React.FC = () => {
     }
   }, [workspace?.workspace_id, selectedIds, addToast, fetchGroups, fetchSuggestions]);
 
-  // Filter groups by search - uses person_name (canonical) or legacy name field
+  // Filter groups by search and confidence threshold
   const filteredGroups = useMemo(() => {
-    if (!searchQuery) return groups;
-    const query = searchQuery.toLowerCase();
-    return groups.filter((group, index) => {
-      const name = group.person_name || group.name || `Person ${index + 1}`;
-      return name.toLowerCase().includes(query);
-    });
-  }, [groups, searchQuery]);
+    let result = groups;
+
+    // Confidence filter: groups without confidence default to 100% (included)
+    if (confidenceThreshold > 0) {
+      result = result.filter((group) => {
+        const confidence = (group as any).average_confidence ?? 1;
+        return confidence * 100 >= confidenceThreshold;
+      });
+    }
+
+    // Text search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((group, index) => {
+        const name = group.person_name || group.name || `Person ${index + 1}`;
+        return name.toLowerCase().includes(query);
+      });
+    }
+
+    return result;
+  }, [groups, searchQuery, confidenceThreshold]);
+
+  // Context menu handler
+  const handleContextMenu = useCallback((e: React.MouseEvent, group: FaceGroup) => {
+    e.preventDefault();
+    setContextMenu({ group, position: { x: e.clientX, y: e.clientY } });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
 
   // Handlers
   const handlePersonClick = (groupId: string) => {
@@ -462,6 +500,18 @@ const PeoplePage: React.FC = () => {
           </div>
         )}
 
+        {/* Confidence Filter */}
+        {groups.length > 0 && !loading && (
+          <div className="mb-4">
+            <FaceConfidenceFilter
+              value={confidenceThreshold}
+              onChange={setConfidenceThreshold}
+              totalGroups={groups.length}
+              filteredGroups={filteredGroups.length}
+            />
+          </div>
+        )}
+
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 text-text-secondary">
             <Loader2 className="w-10 h-10 animate-spin mb-4 text-primary" />
@@ -565,6 +615,8 @@ const PeoplePage: React.FC = () => {
                 onDelete={() => handleDeleteClick(group)}
                 isSelected={selectedIds.has(group.id)}
                 onToggleSelection={() => toggleSelection(group.id)}
+                onContextMenu={(e) => handleContextMenu(e, group)}
+                onViewPhotos={() => setSelectedPersonId(group.id)}
               />
             ))}
           </motion.div>
@@ -702,6 +754,73 @@ const PeoplePage: React.FC = () => {
         onConfirm={handleMergeConfirm}
       />
 
+      {/* Face Context Menu */}
+      {contextMenu && (
+        <FaceContextMenu
+          group={contextMenu.group}
+          isOpen={true}
+          position={contextMenu.position}
+          onRename={(g) => {
+            const name = g.person_name || g.name || '';
+            setEditingName(g.id);
+            setNewName(name);
+          }}
+          onMerge={(g) => {
+            toggleSelection(g.id);
+            setShowMergeModal(true);
+          }}
+          onDelete={(g) => handleDeleteClick(g)}
+          onViewPhotos={(g) => setSelectedPersonId(g.id)}
+          onClose={closeContextMenu}
+        />
+      )}
+
+      {/* Face Search Results Panel */}
+      {selectedPersonId && (
+        <div className="fixed inset-0 z-30 bg-black/50 flex items-center justify-center" onClick={() => setSelectedPersonId(null)}>
+          <div className="bg-surface rounded-2xl shadow-xl max-w-3xl w-full max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="text-lg font-semibold text-text-primary">All photos of this person</h2>
+              <button onClick={() => setSelectedPersonId(null)} className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[calc(80vh-64px)]">
+              {faceSearch.loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : faceSearch.error ? (
+                <p className="text-center text-error py-8">{faceSearch.error}</p>
+              ) : faceSearch.data.length === 0 ? (
+                <p className="text-center text-text-secondary py-8">No photos found for this person.</p>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                  {faceSearch.data.map((photo) => (
+                    <div
+                      key={photo.asset_id}
+                      className="relative aspect-square rounded-lg overflow-hidden bg-surface-hover cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                      onClick={() => navigate(`/workspace/galleries/${photo.gallery_id}?asset=${photo.asset_id}`)}
+                      title={`Gallery: ${photo.gallery_name}`}
+                    >
+                      <img
+                        src={photo.asset_thumbnail_url}
+                        alt={`Photo in ${photo.gallery_name}`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1">
+                        <span className="text-xs text-white truncate block">{photo.gallery_name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmationDialog
         isOpen={deleteDialogOpen}
@@ -801,6 +920,8 @@ interface PersonCardProps {
   onDelete: () => void;
   isSelected: boolean;
   onToggleSelection: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onViewPhotos?: () => void;
 }
 
 const PersonCard: React.FC<PersonCardProps> = ({
@@ -816,6 +937,8 @@ const PersonCard: React.FC<PersonCardProps> = ({
   onDelete,
   isSelected,
   onToggleSelection,
+  onContextMenu,
+  onViewPhotos,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const displayName = group.person_name || group.name || `Person ${index + 1}`;
@@ -843,6 +966,7 @@ const PersonCard: React.FC<PersonCardProps> = ({
           : 'bg-surface hover:bg-surface-hover border-border/50 hover:border-primary/30 hover:shadow-lg'
         }`}
       onClick={handleCardClick}
+      onContextMenu={onContextMenu}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();

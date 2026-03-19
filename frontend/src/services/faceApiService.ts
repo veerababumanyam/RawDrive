@@ -108,6 +108,17 @@ export interface SimilarFace {
     thumbnail_url?: string;
 }
 
+// Cross-gallery person photo search result
+export interface PersonPhotoResult {
+    asset_id: string;
+    asset_thumbnail_url: string;
+    gallery_id: string;
+    gallery_name: string;
+    face_bounding_box: BoundingBox;
+    confidence: number;
+    created_at: string;
+}
+
 export interface WorkspaceDetectionStats {
     total_photos: number;
     photos_processed: number;
@@ -700,6 +711,26 @@ class FaceApiService {
     // =========================================================================
     // PHOTOS BY PERSON
     // =========================================================================
+
+    /**
+     * Search for all photos of a person across all galleries in the workspace
+     */
+    async searchPhotosByPerson(
+        workspaceId: string,
+        personId: string,
+        page = 1,
+        perPage = 50
+    ): Promise<NormalizedPaginatedResponse<PersonPhotoResult>> {
+        const params = new URLSearchParams();
+        params.set('page', String(page));
+        params.set('per_page', String(perPage));
+
+        const response = await apiClient.get<unknown>(
+            `${this.baseUrl}/workspaces/${workspaceId}/face-groups/${personId}/search-photos?${params}`
+        );
+        const raw = extractData(response);
+        return normalizePaginatedResponse<PersonPhotoResult>(raw);
+    }
 
     /**
      * Get all photos containing a specific person/group
