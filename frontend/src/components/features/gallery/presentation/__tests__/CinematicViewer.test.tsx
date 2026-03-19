@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapSlideshowConfigToSettings } from '../../../../../pages/public/PublicGalleryPage';
+import { mapSlideshowConfigToSettings } from '../../../../../pages/public/PublicGalleryShell';
 import type { SlideshowConfig } from '../../../../../types/gallery';
 
 describe('mapSlideshowConfigToSettings', () => {
