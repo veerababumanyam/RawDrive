@@ -21,6 +21,7 @@ from app.api.company_profile_schemas import (
     CompanyAddress
 )
 from app.services.visibility_service import VisibilityFilterService
+from app.services.r2_storage import R2Client
 from app.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -291,18 +292,30 @@ class CompanyProfileService:
                 profile_id = profile["profile_id"]
                 slug = profile["slug"]
 
+                # Upload to R2 (non-fatal -- PG blob fallback for resilience)
+                r2_keys: dict[int, str] = {}
+                try:
+                    r2_client = R2Client()
+                    for size in [64, 128, 256, 512]:
+                        key = f"avatars/{workspace_id}/company/{profile_id}/{size}.webp"
+                        await r2_client.upload_bytes(key, thumbnails[str(size)], "image/webp")
+                        r2_keys[size] = key
+                except Exception as e:
+                    logger.warning(f"R2 upload failed for company logo, falling back to PG: {e}")
+
                 # Build logo URL - use public endpoint so it works for both authenticated and public views
                 logo_url = f"/api/v1/public/profiles/{slug}/logo/256"
 
-                # Store logo thumbnails in company_logo_images table
+                # Store logo thumbnails in company_logo_images table (with R2 keys when available)
                 await conn.execute(
                     """
                     INSERT INTO company_logo_images (
                         logo_id, workspace_id, profile_id,
                         image_64, image_128, image_256, image_512,
+                        r2_key_64, r2_key_128, r2_key_256, r2_key_512,
                         content_type
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, 'image/webp')
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'image/webp')
                     ON CONFLICT (workspace_id, profile_id)
                     DO UPDATE SET
                         logo_id = EXCLUDED.logo_id,
@@ -310,6 +323,10 @@ class CompanyProfileService:
                         image_128 = EXCLUDED.image_128,
                         image_256 = EXCLUDED.image_256,
                         image_512 = EXCLUDED.image_512,
+                        r2_key_64 = EXCLUDED.r2_key_64,
+                        r2_key_128 = EXCLUDED.r2_key_128,
+                        r2_key_256 = EXCLUDED.r2_key_256,
+                        r2_key_512 = EXCLUDED.r2_key_512,
                         updated_at = NOW()
                     """,
                     logo_id,
@@ -319,6 +336,10 @@ class CompanyProfileService:
                     thumbnails.get("128"),
                     thumbnails.get("256"),
                     thumbnails.get("512"),
+                    r2_keys.get(64),
+                    r2_keys.get(128),
+                    r2_keys.get(256),
+                    r2_keys.get(512),
                 )
 
                 # Update profile with logo URL
@@ -353,15 +374,15 @@ class CompanyProfileService:
         self,
         workspace_id: UUID,
         size: int = 256
-    ) -> Optional[bytes]:
-        """Get the logo image bytes for a workspace.
+    ):
+        """Get the logo image for a workspace.
 
         Args:
             workspace_id: Workspace for tenant isolation
             size: Requested thumbnail size (64, 128, 256, or 512)
 
         Returns:
-            Image bytes (WebP format) or None if no logo
+            dict with redirect_url (R2 path) or bytes (PG fallback) or None
         """
         if size not in LOGO_THUMBNAIL_SIZES:
             size = 256  # Default to medium size
@@ -369,9 +390,10 @@ class CompanyProfileService:
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             column = f"image_{size}"
+            r2_column = f"r2_key_{size}"
             row = await conn.fetchrow(
                 f"""
-                SELECT {column} as image_data
+                SELECT {column} as image_data, {r2_column} as r2_key
                 FROM company_logo_images cli
                 JOIN company_profiles cp ON cli.profile_id = cp.profile_id
                 WHERE cli.workspace_id = $1
@@ -379,7 +401,17 @@ class CompanyProfileService:
                 workspace_id,
             )
 
-            if row and row["image_data"]:
+            if not row:
+                return None
+
+            # Prefer R2 redirect when key exists
+            r2_key = row.get("r2_key")
+            if r2_key:
+                r2_client = R2Client()
+                redirect_url = r2_client.get_public_url(r2_key)
+                return {"redirect_url": redirect_url}
+
+            if row["image_data"]:
                 return bytes(row["image_data"])
 
             return None
@@ -388,15 +420,15 @@ class CompanyProfileService:
         self,
         slug: str,
         size: int = 256
-    ) -> Optional[bytes]:
-        """Get the logo image bytes for a profile by slug (public access).
+    ):
+        """Get the logo image for a profile by slug (public access).
 
         Args:
             slug: Profile slug
             size: Requested thumbnail size (64, 128, 256, or 512)
 
         Returns:
-            Image bytes (WebP format) or None if no logo
+            dict with redirect_url (R2 path) or bytes (PG fallback) or None
         """
         if size not in LOGO_THUMBNAIL_SIZES:
             size = 256  # Default to medium size
@@ -404,9 +436,10 @@ class CompanyProfileService:
         pool = await get_postgres_pool()
         async with pool.acquire() as conn:
             column = f"image_{size}"
+            r2_column = f"r2_key_{size}"
             row = await conn.fetchrow(
                 f"""
-                SELECT {column} as image_data
+                SELECT {column} as image_data, {r2_column} as r2_key
                 FROM company_logo_images cli
                 JOIN company_profiles cp ON cli.profile_id = cp.profile_id
                 WHERE cp.slug = $1
@@ -414,7 +447,17 @@ class CompanyProfileService:
                 slug,
             )
 
-            if row and row["image_data"]:
+            if not row:
+                return None
+
+            # Prefer R2 redirect when key exists
+            r2_key = row.get("r2_key")
+            if r2_key:
+                r2_client = R2Client()
+                redirect_url = r2_client.get_public_url(r2_key)
+                return {"redirect_url": redirect_url}
+
+            if row["image_data"]:
                 return bytes(row["image_data"])
 
             return None
