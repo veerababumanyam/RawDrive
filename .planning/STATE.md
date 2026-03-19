@@ -6,7 +6,7 @@ status: ready_to_plan
 stopped_at: Roadmap created - Phase 10 ready to plan
 last_updated: "2026-03-19T22:00:00.000Z"
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -50,6 +50,12 @@ Progress: [░░░░░░░░░░] 0%
 - 4 phases derived from natural requirement clustering (foundation/public/editor/content)
 - Research completed with HIGH confidence -- one new package needed (react-best-gradient-color-picker)
 
+### Roadmap Evolution
+- Phase 14 added: FaceID Deep Dive & Enhancement (debug face identification, competitive research, fix broken features, enhance face management UX)
+- v1.1 extended from Phases 10-13 to Phases 10-14
+- v1.2 renumbered from Phases 14-17 to Phases 15-18
+- v1.3 renumbered from Phases 18-21 to Phases 19-22
+
 ### Pending Todos
 
 None.
@@ -69,4 +75,5 @@ Resume file: None
 
 ### Upcoming Milestones
 
-- **v1.2** Public Gallery & Gallery Player Modernization — defined, pending research/requirements/roadmap after v1.1 ships
+- **v1.2** Public Gallery & Gallery Player Modernization (Phases 15-18) — 5 new requirements (GANLT + GDISC), pending detailed research after v1.1 ships
+- **v1.3** Monetization, Onboarding & Growth (Phases 19-22) — 19 new requirements from BA review gap analysis, pending roadmap refinement after v1.2
