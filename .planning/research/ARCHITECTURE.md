@@ -1,315 +1,544 @@
 # Architecture Patterns
 
-**Domain:** Enterprise SaaS photography platform (stabilization & completion)
-**Researched:** 2026-03-18
-**Confidence:** HIGH (based on direct codebase analysis of 14 existing microservices)
+**Domain:** Profile & Public Page Modernization (v1.1)
+**Researched:** 2026-03-19
+**Confidence:** HIGH (based on direct codebase analysis)
 
-## Current Architecture Overview
+## Current State Analysis
 
-RawDrive is a brownfield microservices platform with 14 FastAPI services behind a Traefik v3 gateway, sharing PostgreSQL 16 (with pgvector/TimescaleDB), Redis 7, and PgBouncer. Services communicate via:
+### Two Divergent Profile Systems
 
-1. **Traefik routing** -- external HTTP traffic routed by path prefix to individual services
-2. **A2A service registry** -- Redis-backed discovery with capability-based lookup and circuit breakers
-3. **Direct HTTP** -- internal service-to-service calls via Docker network hostnames (e.g., `http://invitations-api:8007`)
-4. **Redis pub/sub + Celery** -- async task dispatch (ai-processing-service uses Celery with Redis broker)
+The codebase has two parallel profile systems that evolved independently:
 
-## Recommended Architecture for New Capabilities
+| Aspect | Personal Profile (`/u/:slug`) | Company Profile (`/p/:slug`) |
+|--------|-------------------------------|------------------------------|
+| Editor page | `ProfileSettingsPage.tsx` (settings) | `BrandingPage.tsx` (workspace) |
+| Public page | `PublicPersonalProfilePage.tsx` | `PublicProfileView.tsx` |
+| Rendering | `ProfileContainer` + Bento grid components | `PublicProfileLayout` + Glass components |
+| Theme engine | `ProfileThemeEngine.ts` (legacy + PREBUILT_THEMES) | `themeTransformer.ts` (backend theme data) |
+| Backend service | `personal_profile_service.py` | `company_profile_service.py` |
+| API service (FE) | `personalProfileService.ts` | `companyProfileService.ts` |
+| Image handling | Avatar stored in DB as WebP thumbnails (64/128/256/512) | Logo stored in DB as WebP thumbnails (same sizes) |
+| Preview | None (no live preview in editor) | `CompanyProfilePreview.tsx` with device frames |
+| Data fetching | `useEffect` + `useState` (manual) | `useEffect` + `useState` (manual) |
 
-### Integration Map
+**Key problems:**
+1. Personal profile editor has NO live preview; company profile editor does
+2. Two completely different rendering pipelines for similar data
+3. Theme engine split: legacy themes in `ProfileThemeEngine.ts` vs. new `PREBUILT_THEMES` in `constants/themes.ts` vs. backend theme transformer
+4. Avatar/logo stored in PostgreSQL (not R2) -- works but does not scale
+5. No shared section abstraction -- cannot reorder sections
 
-```
-                         EXTERNAL
-                            |
-                      [Traefik :80/443]
-                    rate-limit middlewares
-                            |
-        +-------------------+-------------------+
-        |                   |                   |
-   [Frontend]         [Backend :8000]    [Gallery :8004]
-                            |
-        +--------+----------+----------+--------+
-        |        |          |          |        |
-   [Notif.   [Webhooks  [AI Svc   [Upload  [Billing
-    :8010]    :8003]     :8011]    :8008]   :8005]
-        |                  |
-        |            [AI Processing :8012]
-        |              (Celery workers)
-        |
-   [Postal :25/80]
-    (Docker container)
-```
+---
+
+## Recommended Architecture
 
 ### Component Boundaries
 
-| Component | Responsibility | Communicates With | Protocol |
-|-----------|---------------|-------------------|----------|
-| **Traefik** | Gateway, TLS, path routing, rate limiting (L7) | All services (downstream) | HTTP reverse proxy |
-| **Backend** | Core API, auth, admin, workers (similarity, curation) | PostgreSQL, Redis, AI Processing, Notifications | HTTP, SQL, Redis |
-| **Notifications Service** | Multi-channel dispatch (email, SMS, in-app, push), preferences, templates, delivery tracking | Postal (SMTP/API), Redis, PostgreSQL | SMTP, HTTP, SQL |
-| **Webhooks Service** | External webhook subscriptions, event delivery with retry, circuit breaker, dead letter queue | PostgreSQL, Redis, external endpoints | HTTP, SQL |
-| **AI Processing Service** | CLIP embeddings, face detection, duplicate detection, content moderation (GPU-heavy) | PostgreSQL, Redis (Celery broker), R2 storage | Celery tasks, SQL |
-| **AI Service** | AI orchestration, smart tagging, LLM coordination | AI Processing (Celery dispatch), Gemini API | HTTP, Celery |
-| **Postal** | Transactional email delivery, bounce handling, delivery webhooks | Notifications Service (receives SMTP/API), sends to internet | SMTP, HTTP API |
-| **Redis** | Session cache, rate limit counters, service registry, Celery broker, pub/sub | All services | Redis protocol |
-| **PostgreSQL** | Persistent storage, pgvector embeddings, shared across all services | All services via PgBouncer | SQL |
+| Component | Responsibility | Communicates With |
+|-----------|---------------|-------------------|
+| `ProfileEditorShell` | Editor layout with sidebar panels + preview area | Form panels, Preview, Profile API hooks |
+| `ProfileFormPanels` | Tabbed form sections (Identity, Contact, Links, Theme, SEO) | Editor state (useReducer) |
+| `ProfilePreview` | Device-framed live preview rendering | Shared render components, editor state |
+| `ProfileSection` | Abstract section wrapper (draggable, collapsible) | Section registry, DnD context |
+| `PublicProfileRenderer` | Renders public page from profile data + theme | Section registry, theme engine |
+| `UnifiedThemeEngine` | Single theme resolution: preset -> customization -> CSS vars | Theme constants, font service |
+| `ProfileAPIHooks` | TanStack Query hooks for both profile types | Backend API services |
+| `ImageOptimizationPipeline` | Avatar/logo upload -> R2 -> CDN URL | R2 storage, backend image service |
 
-## Data Flow Diagrams
-
-### 1. Email via Postal
+### Data Flow
 
 ```
-User action (signup/password-reset/invitation)
-  --> Backend API
-    --> POST /api/v1/notifications/send (A2A internal call)
-      --> Notifications Service
-        --> Check user preferences (PostgreSQL)
-        --> Render template (Jinja2)
-        --> Queue to email_worker (Redis)
-          --> Email Worker
-            --> Postal HTTP API (http://postal:5000/api/v1/send/message)
-              --> Postal MTA --> Internet --> Recipient
-            --> Postal fires delivery webhook
-              --> Notifications Service /webhooks/postal
-                --> Update delivery status (PostgreSQL)
+EDITOR FLOW:
+  EditorShell
+    -> FormPanels (user edits)
+    -> editorState (useReducer)
+    -> ProfilePreview (same-component rendering, not iframe)
+    -> PublicProfileRenderer (shared with public page)
+    -> Auto-save via debounced mutation
+
+PUBLIC PAGE FLOW:
+  /u/:slug or /p/:slug route
+    -> TanStack Query: usePublicProfile(slug, type)
+    -> PublicProfileRenderer
+    -> ThemeEngine resolves theme -> CSS custom properties
+    -> Section registry renders ordered sections
+    -> View tracking (existing analytics)
 ```
 
-**Key decisions:**
-- Notifications-service owns ALL email sending. Backend never sends email directly.
-- Replace SendGrid HTTP client in `email_delivery_service.py` with Postal API client. The interface (`send_email`, `check_delivery_status`) stays the same.
-- Postal runs as a Docker container in the compose stack with its own MariaDB (Postal requirement) and exposes port 25 (SMTP) + port 5000 (HTTP API) on the Docker network only.
-- Postal webhook callbacks go to `notifications-service /api/v1/notifications/webhooks/postal` for bounce/delivery tracking.
+---
 
-### 2. CLIP Model Serving
+## Decision 1: Unify or Keep Separate Profile Systems
 
-```
-Curation session triggered (user clicks "Smart Curate")
-  --> Backend API creates curation_session record
-    --> similarity_worker polls for pending sessions
-      --> Dispatches Celery task to ai-processing-service
-        --> ai-processing-service Celery worker:
-          1. Fetches photo URLs from PostgreSQL
-          2. Downloads images from R2
-          3. Loads CLIP ViT-B/32 (lazy singleton)
-          4. Batch-computes 512-dim embeddings
-          5. Stores embeddings in PostgreSQL (pgvector column)
-          6. Returns task result via Redis
-      --> similarity_worker reads embeddings from PostgreSQL
-      --> Runs cosine similarity clustering in-process
-      --> Stores similarity_groups in PostgreSQL (not in-memory)
-      --> Selects best shot per group using quality scores
-```
+**Recommendation: Shared rendering layer, separate data models.**
 
-**Key decisions:**
-- The `similarity_worker` in backend should NOT load CLIP itself. It should dispatch embedding computation to `ai-processing-service` via Celery tasks, then read results from PostgreSQL.
-- `ai-processing-service` already has `CLIPEmbedder` class with proper lazy loading, batch processing, and device detection (CUDA/MPS/CPU). This code is functional -- it just needs to be wired as a Celery task.
-- Add a new Celery task `compute_clip_embeddings` in ai-processing-service alongside existing `face_detection_worker`. Route to a `clip_embeddings` queue.
-- Embeddings stored in PostgreSQL using pgvector `vector(512)` column on assets table. Use StreamingDiskANN index (available via pgvectorscale in the TimescaleDB image) for similarity search at scale.
-- Similarity groups move from in-memory dict to PostgreSQL table (already has `similarity_groups` table) with Redis cache for hot lookups during active sessions.
+The personal and company profiles have genuinely different data shapes (personal has bio, categories, service_areas, booking_calendar; company has tagline, logo, brand identity). Forcing them into one model creates awkward optionality. But the **rendering** should be unified.
 
-### 3. Real-Time Notifications
+**Architecture:**
 
 ```
-Event occurs (upload complete, curation done, invitation RSVP)
-  --> Backend publishes to Redis channel: "notifications:{workspace_id}"
-    --> Notifications Service subscribes to Redis channels
-      --> Persists notification event (PostgreSQL)
-      --> Checks user preferences
-      --> Routes to channels:
-        [in-app] --> Redis pub/sub --> Backend WebSocket handler
-                   --> Frontend receives via existing WS connection
-        [email]  --> Queue to email_worker --> Postal
-        [push]   --> Queue to push_worker (future)
+types/
+  profileBase.ts          # Shared: slug, socials, custom_links, visibility, theme
+  personalProfile.ts      # Extends base: bio, categories, avatar, service_areas
+  companyProfile.ts       # Extends base: tagline, logo, brand_color
+
+components/features/profile/
+  sections/               # Shared section components
+    HeroSection.tsx        # Avatar/logo + name + title/tagline
+    ContactSection.tsx     # Email, phone, address, secondary contacts
+    SocialLinksSection.tsx  # Social media icons
+    CustomLinksSection.tsx  # Custom link cards (Linktree-style)
+    GalleryPreviewSection.tsx  # Featured gallery embed
+    MediaEmbedSection.tsx     # TikTok, Spotify embeds
+    ServicesSection.tsx        # Service areas (personal only)
+    BioSection.tsx             # Bio/about text
+    BookingSection.tsx         # Booking calendar embed
+
+  renderer/
+    PublicProfileRenderer.tsx  # Unified public page renderer
+    SectionRegistry.ts         # Maps section types to components
+    SectionWrapper.tsx          # Themed section container
+
+  editor/
+    ProfileEditorShell.tsx     # Split-pane: form left, preview right
+    EditorSidebar.tsx          # Tabbed form panels
+    PreviewFrame.tsx           # Device-framed preview (reuse existing frames)
+    DragDropContext.tsx         # Section reordering DnD
+
+  theme/
+    UnifiedThemeEngine.ts      # Single source of truth for theme resolution
+    ThemePicker.tsx            # Theme selection UI with preview cards
+    ThemeCustomizer.tsx        # Color/typography/layout overrides
+    cssVarInjector.ts          # Converts theme to CSS custom properties
 ```
 
-**Key decisions:**
-- WebSocket connections stay on Backend (port 8000) because Traefik already routes `/api/v1/ws` there (priority 160). Do NOT add WebSocket to notifications-service.
-- Backend maintains WebSocket connections. Notifications-service publishes to Redis pub/sub. Backend's WebSocket handler subscribes and forwards to connected clients.
-- This avoids the complexity of routing WebSocket connections to a separate service and keeps the existing Traefik config intact.
-- Notifications-service is the orchestrator (decides what to send, to whom, via which channel). Backend is the WebSocket transport for in-app notifications.
-- The `digest_worker` in notifications-service already exists for batching -- use it for non-urgent notifications.
+**Why not merge data models:**
+- Backend already has separate tables, repositories, and API endpoints
+- Different business logic (personal profile is per-user, company profile is per-workspace)
+- Merging would require a complex migration for zero user benefit
 
-### 4. Rate Limiting Across A2A Service Mesh
+**Why merge rendering:**
+- Eliminates 2x maintenance burden for visual components
+- Ensures both profile types get the same quality of design
+- Makes theme engine work consistently across both
+- Section-based architecture enables drag-and-drop for both
+
+---
+
+## Decision 2: Live Preview -- Same-Component vs. Iframe
+
+**Recommendation: Same-component rendering (NOT iframe).**
+
+**Why same-component:**
+1. **Already proven** -- `CompanyProfilePreview.tsx` already renders `PublicProfileLayout` directly with device frame wrappers. This works.
+2. **Performance** -- No iframe overhead, shared React context, instant re-renders on state change
+3. **Theme consistency** -- CSS custom properties propagate naturally through React tree
+4. **Simpler DX** -- One component tree to debug, no postMessage complexity
+
+**Why NOT iframe:**
+- Iframe requires message-passing protocol for every state change
+- Font loading must happen twice (parent + iframe)
+- Theme CSS must be duplicated or injected
+- More complex testing setup
+- Only benefit (CSS isolation) is already handled by scoped CSS vars
+
+**Implementation pattern:**
+
+```tsx
+// PreviewFrame wraps the renderer in a scaled container with device chrome
+<PreviewFrame device={selectedDevice}>
+  <div style={{ transform: `scale(${scaleFactor})`, transformOrigin: 'top center' }}>
+    <PublicProfileRenderer
+      profile={editorState}
+      theme={resolvedTheme}
+      sections={sectionOrder}
+      mode="preview"  // Disables analytics tracking, click handlers
+    />
+  </div>
+</PreviewFrame>
+```
+
+The existing `CompanyProfilePreview.tsx` already has iPhone, iPad, and MacBook frame components -- these should be extracted to shared `components/ui/DeviceFrame/` and reused.
+
+---
+
+## Decision 3: Theme Engine Restructuring
+
+**Recommendation: Single `UnifiedThemeEngine` that replaces all three current systems.**
+
+**Current mess (3 theme paths):**
+1. `ProfileThemeEngine.ts` -- Legacy themes (`minimal`, `dark`, `pastel`, `bold`, `cinematic`) + conversion from `PREBUILT_THEMES`
+2. `constants/themes.ts` -- 20+ `PREBUILT_THEMES` with full color/typography/layout config
+3. `themeTransformer.ts` -- Transforms backend API theme data to `ProfileCard` props
+
+**New unified flow:**
 
 ```
-                    Layer 1: Traefik (L7)
-                    ----------------------
-                    Per-route rate limits via middleware
-                    (rate-limit-api, rate-limit-uploads, etc.)
-                    Applied to external traffic only
-                            |
-                    Layer 2: Service Middleware (Application)
-                    -----------------------------------------
-                    Redis sliding window per (workspace_id, endpoint)
-                    Each service has rate_limiter.py middleware
-                    Applied to both external and A2A traffic
-                            |
-                    Layer 3: A2A API Key Rate Limits
-                    --------------------------------
-                    Per API key quotas stored in Redis
-                    Enforced in a2a_auth.py middleware
-                    Applied to inter-service calls only
+Theme Selection (theme_id)
+  -> UnifiedThemeEngine.resolve(themeId, customizations?)
+  -> Returns: ThemeConfig {
+       colors: Record<string, string>     // CSS custom property values
+       typography: { heading, body }       // Font family + weights
+       effects: { glass, blur, shadow }    // Visual effects
+       layout: { spacing, heroStyle }      // Layout preferences
+     }
+  -> cssVarInjector(themeConfig)
+  -> Sets CSS custom properties on container element
+  -> All child components use var(--theme-*) references
 ```
 
-**Key decisions:**
-- Two-tier rate limiting is already partially implemented. Traefik handles L7 rate limiting for external traffic. Each service has `rate_limiter.py` middleware with Redis sliding window.
-- For A2A (service-to-service) calls: use the existing `a2a_auth.py` middleware with timing-safe API key comparison (`hmac.compare_digest`). Add per-key rate limits stored in Redis.
-- Rate limit config lives in each service's `config.py` (not centralized). This is correct -- each service knows its own capacity.
-- Shared rate limit library: extract the `rate_limiter.py` pattern (already identical across notifications-service and webhooks-service) into a shared Python package to avoid drift.
-- Redis key pattern: `ratelimit:{service}:{workspace_id}:{endpoint}:{window}` for application-level limits, `ratelimit:a2a:{api_key_id}:{window}` for A2A limits.
+**Premium themes:**
+- `is_premium: boolean` flag already exists on `Theme` type in `profileEditor.ts`
+- Gate in the theme picker UI, not the engine -- the engine renders any theme
+- Store premium unlock status on workspace (billing service already exists)
+- Premium themes = richer gradient configs, more font choices, animated backgrounds
 
-## Patterns to Follow
+**Migration path:**
+1. Keep `LEGACY_PROFILE_THEMES` as a compatibility map in `UnifiedThemeEngine`
+2. All new themes use `PREBUILT_THEMES` format from `constants/themes.ts`
+3. `getTheme()` function becomes `UnifiedThemeEngine.resolve()` -- same lookup logic, cleaner interface
+4. Delete `themeTransformer.ts` -- the unified engine handles backend data directly
 
-### Pattern 1: Celery Task Dispatch for Heavy Computation
+---
 
-**What:** Offload CPU/GPU-intensive work to ai-processing-service via Celery tasks through Redis broker.
+## Decision 4: Section-Based Architecture for Drag-and-Drop
 
-**When:** Any operation involving CLIP inference, face detection, image processing, or batch operations exceeding 500ms.
+**Recommendation: Section registry pattern with ordered section config stored in profile data.**
 
-**Example:**
+**Data model addition (both profile types):**
+
 ```python
-# In backend similarity_worker.py -- dispatch to ai-processing-service
-from celery import Celery
-
-celery_app = Celery("backend", broker=settings.REDIS_URL)
-
-async def _compute_embeddings(self, session_id: UUID, photo_ids: list[UUID]):
-    """Dispatch embedding computation to ai-processing-service."""
-    result = celery_app.send_task(
-        "workers.clip_worker.compute_batch_embeddings",
-        args=[str(session_id), [str(pid) for pid in photo_ids]],
-        queue="clip_embeddings",
-    )
-    # Poll for result or use callback
-    return result.id
+# Backend: add to personal_profiles and company_profiles tables
+section_order: list[str] = [
+    "hero", "bio", "contact", "social_links",
+    "custom_links", "gallery_preview", "media_embed", "booking"
+]
+section_config: dict[str, dict] = {
+    "hero": { "variant": "centered", "show_badge": true },
+    "bio": { "collapsed": false },
+    # per-section display options
+}
 ```
 
-### Pattern 2: Event-Driven Notifications via Redis Pub/Sub
+**Frontend section registry:**
 
-**What:** Services publish domain events to Redis channels. Notifications-service subscribes and orchestrates delivery.
-
-**When:** Any user-visible event that may trigger email, in-app, or push notification.
-
-**Example:**
-```python
-# In any service -- publish event
-await redis.publish(
-    f"events:{workspace_id}",
-    json.dumps({
-        "type": "gallery.published",
-        "workspace_id": str(workspace_id),
-        "actor_id": str(user_id),
-        "payload": {"gallery_id": str(gallery_id), "gallery_name": name},
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
-)
+```typescript
+// SectionRegistry.ts
+const SECTION_REGISTRY: Record<string, SectionDefinition> = {
+  hero: {
+    component: HeroSection,
+    label: 'Header',
+    icon: UserCircle,
+    required: true,        // Cannot remove, always first
+    draggable: false,
+  },
+  bio: {
+    component: BioSection,
+    label: 'About',
+    icon: FileText,
+    required: false,
+    draggable: true,
+    profileTypes: ['personal'],  // Only for personal profiles
+  },
+  contact: {
+    component: ContactSection,
+    label: 'Contact Info',
+    icon: Mail,
+    required: false,
+    draggable: true,
+  },
+  // ...etc
+};
 ```
 
-### Pattern 3: A2A Internal HTTP with Circuit Breaker
+**Drag-and-drop library: @dnd-kit/core + @dnd-kit/sortable**
 
-**What:** Service-to-service calls use the existing `A2AClient` with circuit breaker, timeout, and retry.
+Use `@dnd-kit` because:
+- Standard for React DnD in 2026 (replaces unmaintained react-beautiful-dnd)
+- Accessible by default (keyboard DnD built-in)
+- Small bundle (~12KB gzipped)
+- Works with any layout (vertical list, grid)
 
-**When:** Synchronous cross-service calls (e.g., backend asking notifications-service to send an email).
-
-**Example:**
-```python
-from app.services.a2a_client import get_a2a_client
-
-client = get_a2a_client()
-response = await client.call_service(
-    capability="notification:send",
-    method="POST",
-    path="/api/v1/notifications/send",
-    json={"event_type": "email.verification", "recipient_id": str(user_id), ...},
-)
+```tsx
+// In editor sidebar: draggable section list
+<DndContext onDragEnd={handleReorder}>
+  <SortableContext items={sectionOrder}>
+    {sectionOrder.map(sectionId => (
+      <SortableSectionItem
+        key={sectionId}
+        id={sectionId}
+        section={SECTION_REGISTRY[sectionId]}
+        onToggle={() => toggleSection(sectionId)}
+        onConfigure={() => openSectionConfig(sectionId)}
+      />
+    ))}
+  </SortableContext>
+</DndContext>
 ```
+
+---
+
+## Decision 5: Avatar/Image Optimization Pipeline
+
+**Recommendation: Migrate from PostgreSQL blob storage to R2 with CDN URLs.**
+
+**Current state:** Avatars and logos are stored as binary WebP data directly in PostgreSQL rows (`save_avatar_images` stores image_64, image_128, image_256, image_512 columns). This works at small scale but:
+- Bloats the database
+- No CDN caching
+- Every avatar request hits the DB
+- Cannot serve responsive images via srcset
+
+**Target architecture:**
+
+```
+Upload Flow:
+  1. Client uploads image via multipart form
+  2. Backend receives, validates (format, size, dimensions)
+  3. Backend processes with PIL:
+     - EXIF rotation correction (existing logic)
+     - Optional crop (existing logic)
+     - Generate WebP variants: 64, 128, 256, 512, 1024
+  4. Upload all variants to R2: /profiles/{workspace_id}/{profile_id}/avatar/{size}.webp
+  5. Store R2 key prefix in profile record (not binary data)
+  6. Return CDN URL
+
+Serving Flow:
+  1. Public page requests avatar via CDN URL
+  2. R2 serves with cache headers (Cache-Control: public, max-age=31536000, immutable)
+  3. Use content-hash in filename for cache busting on update
+  4. Frontend uses <picture> with srcset for responsive loading
+```
+
+**R2 integration already available:**
+- `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_ENDPOINT_URL` are in env vars
+- Upload service (`rawdrive-upload-service` port 8008) already handles R2 uploads for gallery photos
+- Reuse its R2 client configuration for profile images
+
+**Migration strategy:**
+1. Add R2 upload path to personal_profile_service and company_profile_service
+2. On first access, if avatar_url is a `/api/v1/public/...` path (old format), serve from DB
+3. On next upload, store to R2 and update avatar_url to CDN path
+4. Background migration job: iterate profiles, upload existing DB blobs to R2
+5. After migration, remove binary columns from profiles table
+
+---
+
+## Decision 6: Editor Architecture
+
+**Recommendation: Split-pane editor with form panels on left, device-framed preview on right.**
+
+**State management:**
+
+```typescript
+// useProfileEditor.ts -- custom hook managing all editor state
+interface ProfileEditorState {
+  // Profile data (form fields)
+  profile: Partial<PersonalProfile | CompanyProfile>;
+  // Dirty tracking
+  dirtyFields: Set<string>;
+  // Theme
+  selectedThemeId: string;
+  themeCustomizations: ThemeCustomization | null;
+  resolvedTheme: ThemeConfig;
+  // Sections
+  sectionOrder: string[];
+  sectionConfig: Record<string, SectionConfig>;
+  // UI
+  activePanel: EditorPanel;
+  previewDevice: DeviceMode;
+  // Status
+  isSaving: boolean;
+  lastSaved: Date | null;
+}
+
+// Use useReducer for complex state transitions
+// Auto-save via debounced TanStack Query mutation (500ms debounce)
+```
+
+**Editor panel tabs:**
+
+| Tab | Contents |
+|-----|----------|
+| Identity | Name, title/tagline, avatar/logo, slug |
+| Contact | Email, phone, address, secondary contacts |
+| Links | Social media URLs, custom links (add/remove/reorder) |
+| Sections | Drag-and-drop section ordering, per-section config |
+| Theme | Theme picker grid, color customizer, typography, layout |
+| SEO | Meta title, description, OG image, indexability toggle |
+| Visibility | Per-field toggle switches (existing pattern) |
+
+**Auto-save pattern:**
+
+```typescript
+const debouncedSave = useDebouncedCallback(
+  async (state: ProfileEditorState) => {
+    const updates = buildUpdatePayload(state.dirtyFields, state.profile);
+    await mutation.mutateAsync(updates);
+    dispatch({ type: 'MARK_SAVED' });
+  },
+  500
+);
+// Show save indicator: "Saving..." -> "Saved" -> fade out
+```
+
+---
+
+## Component Architecture for New Public Page
+
+**Public page component tree:**
+
+```
+PublicProfilePage (route: /u/:slug or /p/:slug)
+  -> usePublicProfile(slug, type) -- TanStack Query
+  -> Helmet (SEO meta tags, structured data)
+  -> ThemeProvider (CSS custom properties)
+     -> PublicProfileRenderer
+        -> SectionRenderer (iterates section_order)
+           -> HeroSection
+              -> Avatar/Logo (responsive <picture>)
+              -> Name + Title/Tagline
+              -> Verification badge
+              -> CTA buttons (Book Now, View Portfolio)
+           -> BioSection
+              -> Rich text bio with theme typography
+           -> ContactSection
+              -> Glass card grid with email, phone, address
+              -> Click-to-copy, click-to-call
+           -> SocialLinksSection
+              -> Animated icon grid (Framer Motion)
+           -> CustomLinksSection
+              -> Linktree-style stacked link cards
+              -> Animated hover states
+           -> GalleryPreviewSection
+              -> Image carousel from featured gallery
+           -> MediaEmbedSection
+              -> TikTok, Spotify embeds (existing components)
+           -> BookingSection
+              -> Calendar embed iframe
+        -> ProfileActions (sticky bottom bar)
+           -> vCard download, QR code, Share
+        -> ProfileFooter
+           -> "Powered by RawDrive" + theme toggle
+  -> ViewTracker (analytics, existing)
+```
+
+---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Backend Loading ML Models Directly
+### Anti-Pattern 1: Dual Rendering Paths
+**What:** Maintaining separate component trees for personal vs. company public pages
+**Why bad:** Every design improvement must be applied twice, visual inconsistency creeps in
+**Instead:** Single `PublicProfileRenderer` that receives normalized profile data + section config
 
-**What:** Importing CLIP/torch/transformers in the backend process.
-**Why bad:** Backend serves API requests. Loading a 600MB model blocks the event loop, consumes RAM on the API server, and cannot leverage GPU workers. The similarity_worker currently tries to do this.
-**Instead:** Dispatch to ai-processing-service via Celery. Read results from PostgreSQL.
+### Anti-Pattern 2: Iframe Preview
+**What:** Using iframe for live editor preview
+**Why bad:** Double rendering cost, complex message passing, font loading duplication
+**Instead:** Same-component rendering with CSS transform scaling inside device frames
 
-### Anti-Pattern 2: Each Service Sending Email Independently
+### Anti-Pattern 3: Theme Logic in Components
+**What:** Individual components interpreting theme data differently
+**Why bad:** Inconsistent theming, hard to add new themes
+**Instead:** Theme engine resolves once, injects CSS custom properties, components only use `var(--theme-*)` references
 
-**What:** Backend, invitations-service, or onboarding-service each having their own SMTP/email logic.
-**Why bad:** Inconsistent templates, no centralized delivery tracking, duplicate suppression list management, rate limit bypass.
-**Instead:** All email goes through notifications-service. Other services call it via A2A HTTP or publish events to Redis.
+### Anti-Pattern 4: Storing Images in PostgreSQL
+**What:** Binary avatar/logo data in database columns
+**Why bad:** Database bloat, no CDN, every request hits DB, no responsive images
+**Instead:** R2 storage with CDN URLs and content-hash cache busting
 
-### Anti-Pattern 3: In-Memory State for Multi-Instance Services
+### Anti-Pattern 5: Manual useEffect Data Fetching
+**What:** Raw `useState` + `useEffect` for API calls (current pattern in both public pages)
+**Why bad:** No caching, no deduplication, no background refetch, manual loading/error states
+**Instead:** TanStack Query hooks (already used elsewhere in the app)
 
-**What:** Storing similarity groups, rate limit counters, or session state in Python dicts.
-**Why bad:** Lost on restart, not shared across instances, breaks horizontal scaling.
-**Instead:** PostgreSQL for durable state, Redis for ephemeral/cache state.
+---
 
-### Anti-Pattern 4: WebSocket on Every Service
+## Integration Points with Existing Code
 
-**What:** Adding WebSocket endpoints to notifications-service, gallery-service, etc.
-**Why bad:** Traefik routing complexity, connection management overhead, client must maintain multiple WS connections.
-**Instead:** Single WebSocket endpoint on backend. Other services publish to Redis pub/sub. Backend fans out to connected clients.
+### Modified Files (Existing)
+
+| File | Change | Risk |
+|------|--------|------|
+| `frontend/src/router/routes.tsx` | Update `/u/:slug` and `/p/:slug` to use new renderer | LOW |
+| `frontend/src/pages/settings/ProfileSettingsPage.tsx` | Replace with redirect to new editor or rebuild | MEDIUM |
+| `frontend/src/pages/workspace/BrandingPage.tsx` | Replace with redirect to new editor | MEDIUM |
+| `frontend/src/components/features/profile/ProfileThemeEngine.ts` | Replace with `UnifiedThemeEngine` | MEDIUM |
+| `frontend/src/constants/themes.ts` | Keep as data source, consumed by new engine | LOW |
+| `frontend/src/utils/themeTransformer.ts` | Delete after migration | LOW |
+| `backend/src/app/services/personal_profile_service.py` | Add R2 upload, section_order field | MEDIUM |
+| `backend/src/app/services/company_profile_service.py` | Add R2 upload, section_order field | MEDIUM |
+| `backend/src/app/repositories/personal_profile_repository.py` | Add section_order/section_config columns | LOW |
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/components/features/profile/renderer/PublicProfileRenderer.tsx` | Unified public page renderer |
+| `frontend/src/components/features/profile/renderer/SectionRegistry.ts` | Section type -> component map |
+| `frontend/src/components/features/profile/renderer/SectionWrapper.tsx` | Themed section container |
+| `frontend/src/components/features/profile/sections/*.tsx` | 8-9 shared section components |
+| `frontend/src/components/features/profile/editor/ProfileEditorShell.tsx` | Split-pane editor layout |
+| `frontend/src/components/features/profile/editor/EditorSidebar.tsx` | Tabbed form panels |
+| `frontend/src/components/features/profile/editor/DragDropContext.tsx` | Section reordering |
+| `frontend/src/components/features/profile/theme/UnifiedThemeEngine.ts` | Single theme resolution |
+| `frontend/src/components/features/profile/theme/ThemePicker.tsx` | Theme selection grid |
+| `frontend/src/components/features/profile/theme/cssVarInjector.ts` | Theme -> CSS variables |
+| `frontend/src/components/ui/DeviceFrame/*.tsx` | Extracted device frame components |
+| `frontend/src/hooks/useProfileEditor.ts` | Editor state management hook |
+| `frontend/src/hooks/usePublicProfile.ts` | TanStack Query hook for public profile |
+| `backend/alembic/versions/*_add_section_order.py` | Migration for section_order columns |
+
+### Existing Code to Reuse
+
+| Existing | Reuse As |
+|----------|----------|
+| `CompanyProfilePreview.tsx` device frames | Extract to `components/ui/DeviceFrame/` |
+| `PublicProfileLayout` glass components | Migrate to section components |
+| `ProfileBentoGrid` + `ProfileGridItem` | Integrate into section wrapper |
+| `PREBUILT_THEMES` constant | Data source for unified theme engine |
+| `fontService.ts` | Keep as-is, used by theme engine |
+| `profileEditorService.ts` API paths | Keep for backend communication |
+| Avatar PIL processing in `personal_profile_service.py` | Keep pipeline, change storage to R2 |
+
+---
+
+## Suggested Build Order
+
+Based on dependency analysis:
+
+1. **UnifiedThemeEngine + CSS var injector** -- Foundation everything else depends on
+2. **Section components** (HeroSection, BioSection, etc.) -- Portable, testable in isolation
+3. **SectionRegistry + PublicProfileRenderer** -- Assembles sections, replaces both public pages
+4. **TanStack Query hooks** (`usePublicProfile`) -- Replaces manual fetching
+5. **DeviceFrame extraction** -- From CompanyProfilePreview to shared UI
+6. **ProfileEditorShell + EditorSidebar** -- Editor layout
+7. **DnD section reordering** -- Requires @dnd-kit install + section_order backend migration
+8. **R2 image migration** -- Backend changes, can run in parallel with frontend
+9. **Premium theme gating** -- UI-only, depends on billing service check
+10. **Auto-save + dirty tracking** -- Polish, comes after editor is functional
+
+**Critical path:** Steps 1-3 unblock the new public pages. Steps 4-6 unblock the new editor. Steps 7-10 are enhancements.
+
+---
 
 ## Scalability Considerations
 
-| Concern | At 100 users | At 10K users | At 1M users |
-|---------|--------------|--------------|-------------|
-| Email volume | Postal single instance, no queue needed | Postal with Redis queue, 2 email workers | Postal cluster, dedicated queue service, domain reputation management |
-| CLIP inference | CPU on single ai-processing worker | GPU instance, 2-3 Celery workers, batch size 64 | Multiple GPU workers, model sharding, embedding cache in Redis |
-| WebSocket connections | Backend handles directly | Backend with Redis pub/sub adapter, sticky sessions | Dedicated WebSocket gateway, Redis Streams for fan-out |
-| Rate limiting | In-memory counters acceptable | Redis sliding window (current design) | Redis Cluster, distributed rate limit with Lua scripts |
-| PostgreSQL connections | Direct connections fine | PgBouncer (already configured, max 300 connections) | PgBouncer + read replicas, connection routing by service |
-
-## Suggested Build Order (Dependencies)
-
-The integration work has clear dependencies that dictate phase ordering:
-
-```
-Phase 1: Security Hardening (no dependencies)
-  - timing-safe A2A key comparison
-  - workspace_id permission checks
-  - curation state machine locking
-  |
-Phase 2: Rate Limiting (depends on: security hardening for A2A auth)
-  - Extract shared rate_limiter.py package
-  - Add A2A per-key rate limits in a2a_auth.py
-  - Verify Traefik L7 limits cover all routes
-  |
-Phase 3: Email Infrastructure (depends on: nothing, can parallel with Phase 2)
-  - Deploy Postal container in docker-compose
-  - Replace SendGrid client in notifications-service with Postal API
-  - Wire backend email_service.py to call notifications-service via A2A
-  - Implement verification, password reset, invitation email flows
-  |
-Phase 4: CLIP Model Serving (depends on: nothing, can parallel with Phase 2-3)
-  - Add clip_worker.py Celery task in ai-processing-service
-  - Add clip_embeddings queue to celery_app.py config
-  - Modify similarity_worker to dispatch via Celery instead of inline
-  - Store embeddings in pgvector column, add StreamingDiskANN index
-  - Move similarity_groups from in-memory to PostgreSQL + Redis cache
-  |
-Phase 5: Real-Time Notifications (depends on: Phase 3 for email channel)
-  - Implement Redis pub/sub publisher in backend for domain events
-  - Implement Redis subscriber in notifications-service
-  - Wire backend WebSocket handler to forward in-app notifications
-  - Connect existing digest_worker for batched notifications
-  - Wire churn intervention and curation completion notifications
-  |
-Phase 6: Integration Testing & Hardening (depends on: all above)
-  - End-to-end tests for email flows
-  - Load test CLIP pipeline
-  - WebSocket reconnection and failover testing
-  - Rate limit validation across service mesh
-```
-
-**Parallelization opportunities:** Phases 2, 3, and 4 have no mutual dependencies and can be built concurrently by different engineers.
+| Concern | At 100 users | At 10K users | At 100K users |
+|---------|--------------|--------------|---------------|
+| Avatar serving | DB blobs OK | DB connection pressure | Must be on R2/CDN |
+| Theme resolution | Client-side, instant | Same | Same (no server cost) |
+| Public page load | ~800ms acceptable | Redis cache handles it | Add CDN for static assets |
+| Font loading | Google Fonts CDN | Same | Consider self-hosting popular fonts |
+| Section config | JSON column in PG | Same | Same (small payload) |
+| Analytics tracking | One INSERT per view | Batch via queue | Move to ClickHouse/TimescaleDB |
 
 ## Sources
 
-- Direct codebase analysis of existing service implementations
-- `infrastructure/docker/docker-compose.yml` -- service definitions and networking
-- `infrastructure/docker/traefik/dynamic.dev.yaml` -- routing and rate limit middleware config
-- `services/notifications-service/src/` -- email delivery, notification orchestration, rate limiting
-- `services/ai-processing-service/src/` -- CLIP embedder, Celery config, face detection workers
-- `services/webhooks-service/src/` -- delivery service with circuit breaker pattern
-- `backend/src/app/services/` -- A2A client, service registry, email service
-- `backend/src/app/workers/` -- similarity worker, curation worker patterns
+- Direct codebase analysis of 30+ files across frontend and backend
+- Existing `ProfileThemeEngine.ts`, `PublicProfileView.tsx`, `CompanyProfilePreview.tsx`
+- `personal_profile_service.py`, `company_profile_service.py` backend services
+- `constants/themes.ts` PREBUILT_THEMES structure (20+ themes with full config)
+- `profileEditor.ts` type definitions (Theme, ThemeCustomization, LayoutPreferences)
+- Route definitions in `router/routes.tsx`
+- @dnd-kit: widely adopted, actively maintained React DnD library (HIGH confidence)
+- R2/S3 compatible storage patterns (HIGH confidence -- standard approach)
