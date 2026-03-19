@@ -4,10 +4,13 @@ Routes for managing personal profile digital visiting cards.
 """
 
 import logging
+from pathlib import Path as FilePath
 from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, status, Response, UploadFile, File
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
 from app.api.personal_profile_schemas import (
@@ -41,6 +44,131 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 public_router = APIRouter()
+
+# Jinja2 templates for server-rendered HTML shell (SEO / social crawlers)
+_templates_dir = FilePath(__file__).parent.parent.parent / "templates"
+templates = Jinja2Templates(directory=str(_templates_dir))
+
+
+@public_router.get(
+    "/{slug}/page",
+    response_class=HTMLResponse,
+    summary="Get personal profile HTML shell for SEO",
+)
+async def get_personal_profile_html_shell(
+    request: Request,
+    slug: Annotated[str, Path(..., description="Profile slug")],
+):
+    """Serve server-rendered HTML shell with OG/Twitter/JSON-LD meta tags.
+
+    This endpoint is targeted by social media crawlers (Facebook, Twitter,
+    iMessage, Slack, Discord) which do NOT execute JavaScript. All meta
+    tags are rendered server-side via Jinja2 template.
+    """
+    service = get_personal_profile_service()
+    try:
+        data = await service.get_public_profile(slug)
+    except PublicProfileNotFoundError:
+        raise NotFoundError("Profile", slug)
+    except Exception:
+        logger.exception("Failed to get profile for HTML shell")
+        raise InternalError("Failed to retrieve profile")
+
+    # Build template context
+    display_name = data.get("display_name") or "Photographer"
+    bio = data.get("bio") or ""
+    description = bio[:160] if bio else f"{display_name} - Photographer on RawDrive"
+    categories = data.get("categories") or []
+    service_areas = data.get("service_areas") or []
+    keywords = ", ".join(categories + service_areas) if (categories or service_areas) else ""
+
+    from app.config.settings import get_settings
+    settings = get_settings()
+    base_url = getattr(settings, "public_url", None) or "https://rawdrive.ai"
+    canonical_url = f"{base_url}/u/{slug}"
+    og_image_url = f"{base_url}/api/v1/u/{slug}/og-image"
+
+    # JSON-LD structured data
+    json_ld = "{}"
+    try:
+        from app.services.seo_service import SEOSchemaService
+        from app.api.personal_profile_schemas import PersonalProfileResponse
+        # Build a PersonalProfileResponse if possible for schema generation
+        profile_response = PersonalProfileResponse(**data)
+        json_ld = SEOSchemaService.generate_person_schema(profile_response, canonical_url)
+    except Exception:
+        logger.warning("Failed to generate JSON-LD for profile %s", slug, exc_info=True)
+
+    # Check indexability
+    indexable = False
+    workspace_id = data.get("workspace_id")
+    if workspace_id:
+        try:
+            from app.services.seo_service import get_seo_service
+            seo_service = get_seo_service()
+            indexable = await seo_service.is_profile_indexable(workspace_id)
+        except Exception:
+            logger.warning("Failed to check indexable status", exc_info=True)
+
+    return templates.TemplateResponse("profile_shell.html", {
+        "request": request,
+        "title": display_name,
+        "description": description,
+        "keywords": keywords,
+        "canonical_url": canonical_url,
+        "og_image": og_image_url,
+        "json_ld": json_ld,
+        "indexable": indexable,
+        "dev_mode": False,
+    })
+
+
+@public_router.get(
+    "/{slug}/og-image",
+    summary="Get personal profile OG image",
+)
+async def get_personal_profile_og_image(
+    slug: Annotated[str, Path(..., description="Profile slug")],
+):
+    """Generate and serve a 1200x630 PNG Open Graph image for social sharing."""
+    service = get_personal_profile_service()
+    try:
+        data = await service.get_public_profile(slug)
+    except PublicProfileNotFoundError:
+        raise NotFoundError("Profile", slug)
+    except Exception:
+        logger.exception("Failed to get profile for OG image")
+        raise InternalError("Failed to retrieve profile")
+
+    name = data.get("display_name") or ""
+    title = data.get("profile_title") or ""
+    accent_color = data.get("brand_color") or "#3B82F6"
+    primary_color = "#1A1A1A"
+
+    # Try to fetch avatar bytes
+    avatar_bytes = None
+    try:
+        result = await service.get_avatar_image_by_slug(slug, 256)
+        if result:
+            avatar_bytes, _ = result
+    except Exception:
+        logger.debug("No avatar available for OG image: %s", slug)
+
+    from app.services.og_image_service import get_og_image_service
+    og_service = get_og_image_service()
+    img_bytes = og_service.generate_og_image(
+        name=name,
+        title=title,
+        avatar_bytes=avatar_bytes,
+        accent_color=accent_color,
+        primary_color=primary_color,
+    )
+
+    return Response(
+        content=img_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @public_router.get(

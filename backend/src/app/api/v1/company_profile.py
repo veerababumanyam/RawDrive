@@ -4,11 +4,13 @@ Routes for managing company branding and profile settings.
 """
 
 import logging
+from pathlib import Path as FilePath
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, status, HTTPException, Response, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Path, Query, Request, status, HTTPException, Response, UploadFile, File
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
 
 from app.api.dependencies.auth import CurrentUserDep, WorkspaceAccessDep
 from app.api.company_profile_schemas import (
@@ -46,6 +48,122 @@ logger = logging.getLogger(__name__)
 
 
 public_router = APIRouter()
+
+# Jinja2 templates for server-rendered HTML shell (SEO / social crawlers)
+_templates_dir = FilePath(__file__).parent.parent.parent / "templates"
+_company_templates = Jinja2Templates(directory=str(_templates_dir))
+
+
+@public_router.get(
+    "/{slug}/page",
+    response_class=HTMLResponse,
+    summary="Get company profile HTML shell for SEO",
+)
+async def get_company_profile_html_shell(
+    request: Request,
+    slug: Annotated[str, Path(..., description="Profile slug")],
+):
+    """Serve server-rendered HTML shell with OG/Twitter/JSON-LD meta tags for company profiles."""
+    service = get_company_profile_service()
+    try:
+        data = await service.get_public_profile(slug)
+    except CompanyProfileError as e:
+        if e.status == 404:
+            raise NotFoundError("Profile", slug)
+        raise AppError(message=str(e), code=e.code, status_code=e.status)
+    except Exception:
+        logger.exception("Failed to get company profile for HTML shell")
+        raise InternalError("Failed to retrieve profile")
+
+    name = data.get("name") or "Photography Studio"
+    tagline = data.get("tagline") or ""
+    description = tagline[:160] if tagline else f"{name} - Photography Studio on RawDrive"
+
+    from app.config.settings import get_settings
+    settings = get_settings()
+    base_url = getattr(settings, "public_url", None) or "https://rawdrive.ai"
+    canonical_url = f"{base_url}/p/{slug}"
+    og_image_url = f"{base_url}/api/v1/p/{slug}/og-image"
+
+    # JSON-LD structured data
+    json_ld = "{}"
+    try:
+        profile_obj = CompanyProfileResponse(**data)
+        json_ld = SEOSchemaService.generate_business_schema(profile_obj)
+    except Exception:
+        logger.warning("Failed to generate JSON-LD for company profile %s", slug, exc_info=True)
+
+    # Check indexability
+    indexable = False
+    workspace_id = data.get("workspace_id")
+    if workspace_id:
+        try:
+            seo_svc = get_seo_service()
+            indexable = await seo_svc.is_profile_indexable(workspace_id)
+        except Exception:
+            logger.warning("Failed to check indexable status", exc_info=True)
+
+    return _company_templates.TemplateResponse("profile_shell.html", {
+        "request": request,
+        "title": name,
+        "description": description,
+        "keywords": "",
+        "canonical_url": canonical_url,
+        "og_image": og_image_url,
+        "json_ld": json_ld,
+        "indexable": indexable,
+        "dev_mode": False,
+    })
+
+
+@public_router.get(
+    "/{slug}/og-image",
+    summary="Get company profile OG image",
+)
+async def get_company_profile_og_image(
+    slug: Annotated[str, Path(..., description="Profile slug")],
+):
+    """Generate and serve a 1200x630 PNG Open Graph image for company profile sharing."""
+    service = get_company_profile_service()
+    try:
+        data = await service.get_public_profile(slug)
+    except CompanyProfileError as e:
+        if e.status == 404:
+            raise NotFoundError("Profile", slug)
+        raise AppError(message=str(e), code=e.code, status_code=e.status)
+    except Exception:
+        logger.exception("Failed to get company profile for OG image")
+        raise InternalError("Failed to retrieve profile")
+
+    name = data.get("name") or ""
+    tagline = data.get("tagline") or ""
+    accent_color = data.get("brand_color") or "#3B82F6"
+
+    # Try to fetch logo bytes
+    logo_bytes = None
+    try:
+        result = await service.get_logo_image_by_slug(slug, 256)
+        if result and isinstance(result, bytes):
+            logo_bytes = result
+    except Exception:
+        logger.debug("No logo available for company OG image: %s", slug)
+
+    from app.services.og_image_service import get_og_image_service
+    og_service = get_og_image_service()
+    img_bytes = og_service.generate_og_image(
+        name=name,
+        title=tagline,
+        avatar_bytes=logo_bytes,
+        accent_color=accent_color,
+        primary_color="#1A1A1A",
+    )
+
+    return Response(
+        content=img_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
 
 @public_router.get(
     "/{slug}",
